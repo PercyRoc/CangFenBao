@@ -32,7 +32,7 @@ public class UploadSettingsViewModel : BindableBase
 
     private void ExecuteSaveConfiguration()
     {
-        _settingsService.SaveConfiguration("UploadSettings", Configuration);
+        _settingsService.SaveConfiguration(Configuration);
     }
 
     private void LoadSettings()

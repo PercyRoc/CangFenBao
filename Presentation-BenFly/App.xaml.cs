@@ -18,6 +18,7 @@ using Presentation_CommonLibrary.Extensions;
 using Prism.Ioc;
 using Serilog;
 using SortingService.Extensions;
+using SortSettingsView = Presentation_BenFly.Views.Settings.SortSettingsView;
 
 namespace Presentation_BenFly;
 
@@ -39,21 +40,23 @@ public partial class App
         containerRegistry.AddDeviceServices();
 
         containerRegistry.AddSortingServices();
-
-        // 注册设置窗口
-        containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
-        containerRegistry.Register<SettingsDialogViewModel>();
-
+        
         // 注册设置页面
         containerRegistry.Register<CameraSettingsView>();
         containerRegistry.Register<SortSettingsView>();
         containerRegistry.Register<UploadSettingsView>();
+        containerRegistry.Register<ChuteSettingsView>();
+        containerRegistry.Register<ChuteSettingsViewModel>();
 
         // 注册设置页面的ViewModel
         containerRegistry.Register<CameraSettingsViewModel>();
         containerRegistry.Register<SortSettingsViewModel>();
         containerRegistry.Register<UploadSettingsViewModel>();
 
+        // 注册设置窗口
+        containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
+        containerRegistry.Register<SettingsDialogViewModel>();
+        
         // 注册 HttpClient
         var services = new ServiceCollection();
         var settingsService = Container.Resolve<ISettingsService>();

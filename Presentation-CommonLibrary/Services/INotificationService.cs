@@ -51,7 +51,7 @@ public interface INotificationService
     /// </summary>
     /// <param name="message">消息内容</param>
     /// <param name="token">目标窗口的Token</param>
-    void ShowWarningWithToken(string message, string token);
+    void ShowWarningWithToken(string? message, string token);
 
     /// <summary>
     ///     在指定窗口显示信息通知

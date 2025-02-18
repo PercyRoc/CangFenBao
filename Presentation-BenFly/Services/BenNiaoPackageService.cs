@@ -134,6 +134,7 @@ public class BenNiaoPackageService(
             var url = "/api/openApi/dataUpload";
             var uploadItem = new DataUploadItem
             {
+                NetworkName = _config.BenNiaoDistributionCenterName,
                 WaybillNum = package.Barcode,
                 ScanTime = uploadTime.ToString("yyyy-MM-dd HH:mm:ss"),
                 Weight = Math.Round(Convert.ToDecimal(package.Weight) / 1000m, 2), // 转换为千克并保留2位小数
@@ -196,7 +197,7 @@ public class BenNiaoPackageService(
             var fileName = $"{waybillNum}_{scanTime:yyyyMMddHHmmss}.jpg";
 
             // 创建FTP客户端
-            using var ftpClient = new AsyncFtpClient(_config.BenNiaoFtpHost, _config.BenNiaoFtpUsername,
+            await using var ftpClient = new AsyncFtpClient(_config.BenNiaoFtpHost, _config.BenNiaoFtpUsername,
                 _config.BenNiaoFtpPassword);
 
             try

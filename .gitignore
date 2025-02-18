@@ -4,6 +4,7 @@ obj/
 riderModule.iml
 /_ReSharper.Caches/
 *.dll
+*.xml
 .idea/
 *.iml
 *.ipr

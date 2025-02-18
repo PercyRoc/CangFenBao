@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -7,6 +8,7 @@ using CommonLibrary.Models.Settings.Sort;
 using CommonLibrary.Services;
 using DeviceService;
 using DeviceService.Camera;
+using DeviceService.Camera.Models;
 using Presentation_BenFly.Services;
 using Presentation_CommonLibrary.Models;
 using Presentation_CommonLibrary.Services;
@@ -14,6 +16,8 @@ using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
 using SortingService.Interfaces;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace Presentation_BenFly.ViewModels.Windows;
 
@@ -26,7 +30,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly BenNiaoPreReportService _preReportService;
     private readonly ISettingsService _settingsService;
     private readonly IPendulumSortService _sortService;
-    private readonly INotificationService _notificationService;
 
     private readonly DispatcherTimer _timer;
 
@@ -44,7 +47,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         ISettingsService settingsService,
         IPendulumSortService sortService,
         PackageTransferService packageTransferService,
-        BenNiaoPackageService benNiaoService, INotificationService notificationService)
+        BenNiaoPackageService benNiaoService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
@@ -53,7 +56,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _sortService = sortService;
         _packageTransferService = packageTransferService;
         _benNiaoService = benNiaoService;
-        _notificationService = notificationService;
 
         // 初始化命令
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
@@ -84,6 +86,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
         // 订阅包裹数据事件
         _packageTransferService.OnPackageInfo += OnPackageInfo;
 
+        // 订阅相机图像流事件
+        _cameraService.OnImageReceived += OnImageReceived;
+
         // 启动预报数据更新
         _ = StartPreReportUpdateAsync();
 
@@ -92,7 +97,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         // 主动获取一次设备状态
         _ = UpdateDeviceStatusesAsync();
-        _notificationService.ShowSuccess("启动成功");
     }
 
     public DelegateCommand OpenSettingsCommand { get; }
@@ -106,7 +110,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     public BitmapSource? CurrentImage
     {
         get => _currentImage;
-        set => SetProperty(ref _currentImage, value);
+        private set => SetProperty(ref _currentImage, value);
     }
 
     public SystemStatus SystemStatus
@@ -299,7 +303,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         });
     }
 
-    private void OnCameraConnectionChanged(string cameraId, bool isConnected)
+    private void OnCameraConnectionChanged(string cameraId, bool isConnected                                    )
     {
         Application.Current.Dispatcher.Invoke(() =>
         {
@@ -325,7 +329,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             Log.Information("收到包裹信息：{Barcode}", package.Barcode);
-
             // 1. 通过笨鸟系统服务获取三段码并处理上传
             var benNiaoResult = await _benNiaoService.ProcessPackageAsync(package);
             if (!benNiaoResult)
@@ -334,13 +337,40 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 package.SetError("笨鸟系统处理失败");
             }
 
+            // 笨鸟系统处理完成后释放图像资源
+            if (package.Image != null)
+            {
+                package.Image.Dispose();
+                package.Image = null;
+                Log.Debug("已释放包裹 {Barcode} 的图像资源", package.Barcode);
+            }
+
+            // 2. 如果获取到段码，根据段码获取格口号
+            if (benNiaoResult && !string.IsNullOrEmpty(package.SegmentCode))
+            {
+                try
+                {
+                    var chuteConfig = _settingsService.LoadConfiguration<ChuteConfiguration>();
+                    var chute = chuteConfig.GetChuteByConnectedSegments(package.SegmentCode);
+                    package.ChuteName = chute;
+                    Log.Information("包裹 {Barcode} 分配到格口 {Chute}，段码：{SegmentCode}",
+                        package.Barcode, chute, package.SegmentCode);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "获取格口号时发生错误：{Barcode}, {SegmentCode}",
+                        package.Barcode, package.SegmentCode);
+                    package.SetError($"获取格口号失败：{ex.Message}");
+                }
+            }
+
             Application.Current.Dispatcher.Invoke(() =>
             {
                 try
                 {
-                    // 2. 更新当前条码和图像
+                    // 3. 更新当前条码和图像
                     CurrentBarcode = package.Barcode;
-                    // 3. 更新实时包裹数据
+                    // 4. 更新实时包裹数据
                     UpdatePackageInfoItems(package);
                 }
                 catch (Exception ex)
@@ -349,16 +379,19 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 }
             });
 
-            // 4. 调用分检服务
-            if (benNiaoResult && !string.IsNullOrEmpty(package.SegmentCode)) _sortService.ProcessPackage(package);
+            // 5. 调用分检服务
+            if (benNiaoResult && !string.IsNullOrEmpty(package.SegmentCode) && !string.IsNullOrEmpty(package.ChuteName))
+            {
+                _sortService.ProcessPackage(package);
+            }
 
             Application.Current.Dispatcher.Invoke(() =>
             {
                 try
                 {
-                    // 5. 更新统计信息和历史包裹列表
+                    // 6. 更新统计信息和历史包裹列表
                     PackageHistory.Insert(0, package);
-                    while (PackageHistory.Count > 1000) // 保持最近100条记录
+                    while (PackageHistory.Count > 1000) // 保持最近1000条记录
                         PackageHistory.RemoveAt(PackageHistory.Count - 1);
 
                     // 更新统计数据
@@ -450,7 +483,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         if (avgTimeItem == null) return;
         {
             var recentPackages = PackageHistory.Take(100).ToList();
-            if (recentPackages.Any())
+            if (recentPackages.Count != 0)
             {
                 var avgTime = recentPackages.Average(p => p.ProcessingTime);
                 avgTimeItem.Value = avgTime.ToString("F0");
@@ -557,6 +590,41 @@ public class MainWindowViewModel : BindableBase, IDisposable
         return Task.CompletedTask;
     }
 
+    private void OnImageReceived(Image<Rgba32> image, IReadOnlyList<DahuaBarcodeLocation> barcodeLocations)
+    {
+        try
+        {
+            // 将Image<Rgba32>转换为BitmapSource
+            using var memoryStream = new MemoryStream();
+            image.SaveAsJpeg(memoryStream);
+            memoryStream.Position = 0;
+
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.StreamSource = memoryStream;
+            bitmap.EndInit();
+            bitmap.Freeze(); // 使图像可以跨线程访问
+
+            // 在UI线程中更新图像
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                try
+                {
+                    CurrentImage = bitmap;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "更新相机图像时发生错误");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "处理相机图像时发生错误");
+        }
+    }
+
     protected virtual void Dispose(bool disposing)
     {
         if (_disposed) return;
@@ -569,6 +637,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             _cameraService.OnCameraConnectionChanged -= OnCameraConnectionChanged;
             _sortService.DeviceConnectionStatusChanged -= OnDeviceConnectionStatusChanged;
             _packageTransferService.OnPackageInfo -= OnPackageInfo;
+            _cameraService.OnImageReceived -= OnImageReceived;
 
             // 停止分拣服务
             _sortService.StopAsync().Wait();

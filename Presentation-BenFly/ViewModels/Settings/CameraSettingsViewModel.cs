@@ -146,7 +146,7 @@ public class CameraSettingsViewModel : BindableBase
             SelectedCameras = AvailableCameras.Where(c => c.IsSelected).ToList()
         };
 
-        _settingsService.SaveConfiguration("CameraSettings", settings);
+        _settingsService.SaveConfiguration(settings);
     }
 
     private void LoadSettings()

@@ -17,6 +17,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
     private readonly INotificationService _notificationService;
     private readonly SortSettingsViewModel _sortSettingsViewModel;
     private readonly UploadSettingsViewModel _uploadSettingsViewModel;
+    private readonly ChuteSettingsViewModel _chuteSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
@@ -28,6 +29,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
         _cameraSettingsViewModel = containerProvider.Resolve<CameraSettingsViewModel>();
         _sortSettingsViewModel = containerProvider.Resolve<SortSettingsViewModel>();
         _uploadSettingsViewModel = containerProvider.Resolve<UploadSettingsViewModel>();
+        _chuteSettingsViewModel = containerProvider.Resolve<ChuteSettingsViewModel>();
 
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
@@ -72,6 +74,9 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
             case UploadSettingsView uploadView:
                 uploadView.DataContext = _uploadSettingsViewModel;
                 break;
+            case ChuteSettingsView chuteView:
+                chuteView.DataContext = _chuteSettingsViewModel;
+                break;
         }
     }
 
@@ -83,6 +88,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
             _cameraSettingsViewModel.SaveConfigurationCommand.Execute();
             _sortSettingsViewModel.SaveConfigurationCommand.Execute();
             _uploadSettingsViewModel.SaveConfigurationCommand.Execute();
+            _chuteSettingsViewModel.SaveCommand.Execute(null);
 
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");

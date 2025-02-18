@@ -9,6 +9,7 @@ public class JsonSettingsService : ISettingsService
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
     private readonly Dictionary<Type, string> _configurationKeys = [];
+    private readonly Dictionary<string, object> _configurationCache = [];
     private readonly string _settingsDirectory;
 
     public JsonSettingsService(string settingsDirectory = "Settings")
@@ -35,9 +36,9 @@ public class JsonSettingsService : ISettingsService
         var filePath = GetSettingsFilePath(key);
         if (!File.Exists(filePath)) return new T();
 
-        var json = File.ReadAllText(filePath);
         try
         {
+            var json = File.ReadAllText(filePath);
             return JsonSerializer.Deserialize<T>(json, JsonOptions) ?? new T();
         }
         catch
@@ -50,6 +51,7 @@ public class JsonSettingsService : ISettingsService
     {
         var filePath = GetSettingsFilePath(key);
         if (File.Exists(filePath)) File.Delete(filePath);
+        _configurationCache.Remove(key);
     }
 
     public bool HasSettings(string key)
@@ -59,21 +61,39 @@ public class JsonSettingsService : ISettingsService
 
     public T LoadConfiguration<T>() where T : class, new()
     {
-        if (!_configurationKeys.TryGetValue(typeof(T), out var key))
-            throw new ArgumentException($"未找到类型 {typeof(T).Name} 的配置键名");
+        var key = GetConfigurationKey<T>();
+        
+        // 尝试从缓存中获取
+        if (_configurationCache.TryGetValue(key, out var cached) && cached is T config)
+        {
+            return config;
+        }
 
-        return LoadSettings<T>(key);
+        // 从文件加载
+        var result = LoadSettings<T>(key);
+        _configurationCache[key] = result;
+        return result;
     }
 
     public void SaveConfiguration<T>(string key, T configuration) where T : class
     {
+        ArgumentNullException.ThrowIfNull(configuration);
         SaveToFile(key, configuration);
+        _configurationCache[key] = configuration;
+    }
+
+    public void SaveConfiguration<T>(T configuration) where T : class
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        
+        var key = GetConfigurationKey<T>();
+        SaveToFile(key, configuration);
+        _configurationCache[key] = configuration;
     }
 
     public void ReloadAll()
     {
-        // 目前没有需要重新加载的内容
-        // 如果将来需要在内存中缓存配置，可以在这里清除缓存
+        _configurationCache.Clear();
     }
 
     /// <summary>
@@ -83,6 +103,7 @@ public class JsonSettingsService : ISettingsService
     {
         var assemblies = AppDomain.CurrentDomain.GetAssemblies();
         foreach (var assembly in assemblies)
+        {
             try
             {
                 var configTypes = assembly.GetTypes()
@@ -91,13 +112,27 @@ public class JsonSettingsService : ISettingsService
                 foreach (var type in configTypes)
                 {
                     var attribute = type.GetCustomAttribute<ConfigurationAttribute>();
-                    if (attribute != null) _configurationKeys[type] = attribute.Key;
+                    if (attribute != null)
+                    {
+                        _configurationKeys[type] = attribute.Key;
+                    }
                 }
             }
             catch (Exception)
             {
                 // 忽略无法加载的程序集
             }
+        }
+    }
+
+    private string GetConfigurationKey<T>()
+    {
+        var type = typeof(T);
+        if (!_configurationKeys.TryGetValue(type, out var key))
+        {
+            throw new ArgumentException($"未找到类型 {type.Name} 的配置键名");
+        }
+        return key;
     }
 
     private string GetSettingsFilePath(string key)
@@ -107,8 +142,6 @@ public class JsonSettingsService : ISettingsService
 
     private void SaveToFile<T>(string key, T configuration) where T : class
     {
-        ArgumentNullException.ThrowIfNull(configuration);
-
         var filePath = GetSettingsFilePath(key);
         var json = JsonSerializer.Serialize(configuration, JsonOptions);
         File.WriteAllText(filePath, json);

@@ -1,4 +1,5 @@
 using System.Net.Http;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using CommonLibrary.Services;
@@ -17,7 +18,6 @@ public class BenNiaoPreReportService(
 {
     private const string SettingsKey = "UploadSettings";
     private readonly HttpClient _httpClient = httpClientFactory.CreateClient("BenNiao");
-    private DateTime _lastUpdateTime;
     private List<PreReportDataResponse>? _preReportData;
 
     /// <summary>
@@ -67,35 +67,18 @@ public class BenNiaoPreReportService(
 
             response.EnsureSuccessStatusCode();
 
-            // 使用 JsonDocument 解析响应
-            using var document = JsonDocument.Parse(responseContent);
-            var root = document.RootElement;
+            var result = await response.Content.ReadFromJsonAsync<BenNiaoResponse<List<PreReportDataResponse>>>();
 
-            if (root.TryGetProperty("success", out var success) && success.GetBoolean())
+            if (result is { IsSuccess: true, Result: not null })
             {
-                var resultArray = root.GetProperty("result");
-                var newData = new List<PreReportDataResponse>();
-
-                foreach (var item in resultArray.EnumerateArray())
-                    try
-                    {
-                        var preReportData = PreReportDataResponse.FromArray(item);
-                        newData.Add(preReportData);
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Warning(ex, "解析预报数据项时发生错误：{@Item}", item);
-                    }
-
-                _preReportData = newData;
-                _lastUpdateTime = DateTime.Now;
+                _preReportData = result.Result;
 
                 Log.Information("成功获取笨鸟预报数据，数量：{Count}", _preReportData.Count);
                 if (_preReportData.Count != 0) Log.Information("笨鸟预报数据示例：{@FirstItem}", _preReportData.First());
             }
             else
             {
-                var message = root.TryGetProperty("message", out var msg) ? msg.GetString() : "未知错误";
+                var message = result?.Message ?? "未知错误";
                 Log.Error("获取笨鸟预报数据失败：{Message}", message);
             }
         }
@@ -103,13 +86,5 @@ public class BenNiaoPreReportService(
         {
             Log.Error(ex, "获取笨鸟预报数据时发生错误");
         }
-    }
-
-    /// <summary>
-    ///     获取最后更新时间
-    /// </summary>
-    public DateTime GetLastUpdateTime()
-    {
-        return _lastUpdateTime;
     }
 }

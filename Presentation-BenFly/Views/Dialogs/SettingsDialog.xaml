@@ -137,6 +137,16 @@
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
 
+                        <ui:NavigationViewItem Content="格口设置"
+                                               Tag="Chute">
+                            <ui:NavigationViewItem.Icon>
+                                <ui:SymbolIcon Symbol="Grid24" />
+                            </ui:NavigationViewItem.Icon>
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="local:ChuteSettingsView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
+
                         <ui:NavigationViewItem Content="笨鸟服务配置"
                                                Tag="Upload">
                             <ui:NavigationViewItem.Icon>

@@ -99,7 +99,7 @@ public class NotificationService : INotificationService
         });
     }
 
-    public void ShowWarningWithToken(string message, string token)
+    public void ShowWarningWithToken(string? message, string token)
     {
         Application.Current.Dispatcher.Invoke(() =>
         {

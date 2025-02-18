@@ -44,6 +44,13 @@ public interface ISettingsService
     void SaveConfiguration<T>(string key, T configuration) where T : class;
 
     /// <summary>
+    ///     保存配置（使用ConfigurationAttribute中的Key）
+    /// </summary>
+    /// <param name="configuration">配置对象</param>
+    /// <typeparam name="T">配置类型</typeparam>
+    void SaveConfiguration<T>(T configuration) where T : class;
+
+    /// <summary>
     ///     重新加载所有配置
     /// </summary>
     void ReloadAll();

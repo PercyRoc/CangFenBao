@@ -11,11 +11,13 @@ public class PreReportDataResponse
     /// <summary>
     ///     运单号
     /// </summary>
+    [JsonPropertyName("waybillNum")]
     public string WaybillNum { get; set; } = string.Empty;
 
     /// <summary>
     ///     三段码
     /// </summary>
+    [JsonPropertyName("segmentCode")]
     public string SegmentCode { get; set; } = string.Empty;
 
     /// <summary>
@@ -61,6 +63,12 @@ public class RealTimeQueryRequest
 /// </summary>
 public class DataUploadItem
 {
+    /// <summary>
+    ///     设备扫描分拨中心名称
+    /// </summary>
+    [JsonPropertyName("netWorkName")]
+    public string NetworkName { get; set; } = string.Empty;
+
     /// <summary>
     ///     运单号
     /// </summary>

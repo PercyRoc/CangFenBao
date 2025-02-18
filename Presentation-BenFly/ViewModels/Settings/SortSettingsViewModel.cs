@@ -49,7 +49,7 @@ public class SortSettingsViewModel : BindableBase
 
     private void ExecuteSaveConfiguration()
     {
-        _settingsService.SaveConfiguration("SortConfiguration", Configuration);
+        _settingsService.SaveConfiguration(Configuration);
     }
 
     private void LoadSettings()
