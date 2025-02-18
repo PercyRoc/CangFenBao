@@ -1,0 +1,55 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- 基础颜色定义 -->
+    <Color x:Key="PrimaryDark">#FF1A2F4A</Color>  <!-- 主深蓝 -->
+    <Color x:Key="AccentOrange">#FFD35400</Color>   <!-- 橙色 -->
+    <Color x:Key="SecondaryDark">#FF2C5364</Color>  <!-- 辅助青灰 -->
+
+    <!-- 标题栏渐变 -->
+    <LinearGradientBrush x:Key="TitleBarGradient" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#FFD4EEF0" Offset="0" />   <!-- 中等青色 -->
+        <GradientStop Color="#FFE5F4F5" Offset="0.4" /> <!-- 淡青色 -->
+        <GradientStop Color="#FF008891" Offset="0.6" /> <!-- 品牌青 -->
+        <GradientStop Color="#FF1C2E3D" Offset="0.8" /> <!-- 层次过渡 -->
+        <GradientStop Color="#FF0F1A25" Offset="1" />   <!-- 对称闭合 -->
+    </LinearGradientBrush>
+
+    <!-- 全局背景渐变 -->
+    <LinearGradientBrush x:Key="MainBackground" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#FFD4EEF0" Offset="0" />   <!-- 中等青色 -->
+        <GradientStop Color="#FFE5F4F5" Offset="0.5" /> <!-- 淡青色 -->
+        <GradientStop Color="#FFFFFFFF" Offset="1" />   <!-- 纯白色 -->
+    </LinearGradientBrush>
+
+    <!-- 功能区域配色 -->
+    <SolidColorBrush x:Key="CardBackground" Color="#FFF5F5F5" Opacity="0.95" />  <!-- 卡片背景改为淡灰色 -->
+    <SolidColorBrush x:Key="BorderBrush" Color="#20008891" />  <!-- 边框颜色 -->
+    <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentOrange}" />  <!-- 强调色 -->
+    <SolidColorBrush x:Key="SecondaryBrush" Color="{StaticResource SecondaryDark}" />  <!-- 次要色 -->
+
+    <!-- 阴影效果 -->
+    <DropShadowEffect x:Key="IconGlowEffect"
+                      BlurRadius="12"
+                      Color="White"
+                      Opacity="0.3"
+                      ShadowDepth="0" />
+
+    <!-- 统一卡片样式 -->
+    <Style x:Key="CardStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource CardBackground}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Margin" Value="4" />
+        <Setter Property="Effect">
+            <Setter.Value>
+                <DropShadowEffect BlurRadius="16"
+                                  Opacity="0.2"
+                                  Direction="270"
+                                  ShadowDepth="4"
+                                  Color="{StaticResource PrimaryDark}" />
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>

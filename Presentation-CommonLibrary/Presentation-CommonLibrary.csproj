@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0-windows</TargetFramework>
+        <RootNamespace>Presentation_CommonLibrary</RootNamespace>
+        <Nullable>enable</Nullable>
+        <UseWPF>true</UseWPF>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <AssemblyName>Presentation-CommonLibrary</AssemblyName>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Resource Include="Resources\Icon\*.png"/>
+        <Resource Include="Resources\Icon\*.ico"/>
+        <Resource Include="Resources\Styles\**\*.xaml">
+            <SubType>Designer</SubType>
+            <Generator>MSBuild:Compile</Generator>
+        </Resource>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="FluentFTP"/>
+        <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
+        <PackageReference Include="Prism.Wpf"/>
+        <PackageReference Include="WPF-UI"/>
+        <PackageReference Include="HandyControl"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Folder Include="Resources\Styles\"/>
+    </ItemGroup>
+
+</Project>

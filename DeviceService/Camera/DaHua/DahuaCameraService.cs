@@ -1,0 +1,516 @@
+using System.Runtime.InteropServices;
+using CommonLibrary.Models;
+using CommonLibrary.Models.Settings.Camera;
+using DeviceService.Camera.Models;
+using LogisticsBaseCSharp;
+using Microsoft.Extensions.ObjectPool;
+using Serilog;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
+using TurboJpegWrapper;
+
+namespace DeviceService.Camera.DaHua;
+
+/// <summary>
+///     大华相机服务
+/// </summary>
+public class DahuaCameraService : ICameraService
+{
+    private static readonly DefaultObjectPool<TJDecompressor> DecompressorPool =
+        new(new DefaultPooledObjectPolicy<TJDecompressor>(), 2);
+
+    private readonly object _cameraIdLock = new();
+    private readonly SemaphoreSlim _imageProcessingSemaphore = new(1, 1);
+    private readonly LogisticsWrapper _logisticsWrapper;
+    private bool _disposed;
+    private string? _firstCameraId;
+
+    /// <summary>
+    ///     构造函数
+    /// </summary>
+    public DahuaCameraService()
+    {
+        _logisticsWrapper = LogisticsWrapper.Instance;
+    }
+
+    /// <summary>
+    ///     包裹信息事件
+    /// </summary>
+    public event Action<PackageInfo>? OnPackageInfo;
+
+    /// <summary>
+    ///     图像信息事件
+    /// </summary>
+    public event Action<Image<Rgba32>, IReadOnlyList<DahuaBarcodeLocation>>? OnImageReceived;
+
+    /// <summary>
+    ///     相机连接状态改变事件
+    /// </summary>
+    public event Action<string, bool>? OnCameraConnectionChanged;
+
+    /// <summary>
+    ///     相机是否已连接
+    /// </summary>
+    public bool IsConnected { get; private set; }
+
+    /// <summary>
+    ///     启动相机服务
+    /// </summary>
+    public bool Start()
+    {
+        if (IsConnected)
+        {
+            Log.Warning("相机服务已经启动");
+            return true;
+        }
+
+        try
+        {
+            Log.Information("正在启动相机服务...");
+
+            // 初始化SDK
+            var initResult = Initialize();
+            if (initResult != 0)
+            {
+                Log.Error("初始化SDK失败：{Result}", initResult);
+                return false;
+            }
+
+            // 注册相机断线回调
+            _logisticsWrapper.CameraDisconnectEventHandler += (_, args) =>
+            {
+                if (args == null) return;
+                Log.Information("相机 {CameraId} 连接状态变更：{Status}", args.CameraKey, args.IsOnline ? "已连接" : "已断开");
+                OnCameraConnectionChanged?.Invoke(args.CameraKey, args.IsOnline);
+            };
+
+            // 注册读码信息回调
+            try
+            {
+                _logisticsWrapper.AllCameraCodeInfoEventHandler += (_, _) => { };
+                _logisticsWrapper.AttachAllCameraCodeinfoCB();
+                Log.Information("已注册读码信息回调");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "注册读码回调时发生错误");
+            }
+
+            // 注册包裹信息回调
+            _logisticsWrapper.CodeHandle += (_, args) =>
+            {
+                try
+                {
+                    // 检查原始图像数据是否有效
+                    if (args.OriginalImage.ImageData == IntPtr.Zero || args.OriginalImage.dataSize <= 0)
+                    {
+                        Log.Warning("相机 {IP} 的原始图像数据无效", args.CameraID);
+                        return;
+                    }
+
+                    // 记录第一次收到的相机ID，用于实时图像处理
+                    if (_firstCameraId == null)
+                        lock (_cameraIdLock)
+                        {
+                            if (_firstCameraId == null)
+                            {
+                                _firstCameraId = args.CameraID;
+                                Log.Information("设置首次处理图像的相机ID: {CameraId}", _firstCameraId);
+                            }
+                        }
+
+                    if (args.OutputResult == 1)
+                    {
+                        // 处理包裹数据（处理所有相机）
+                        var startTime = DateTime.Now;
+                        var barcode = args.CodeList?.FirstOrDefault() ?? string.Empty;
+                        Log.Information("开始处理包裹项 - 条码: {Barcode} 时间: {Time} 相机: {CameraId}", barcode, startTime,
+                            args.CameraID);
+
+                        var packageInfo = new PackageInfo
+                        {
+                            Barcode = barcode,
+                            CreatedAt = startTime
+                        };
+
+                        // 设置重量和尺寸数据
+                        if (args.Weight > 0) packageInfo.Weight = args.Weight;
+
+                        if (args.VolumeInfo is { length: > 0, width: > 0, height: > 0 })
+                        {
+                            packageInfo.Length = Math.Round(args.VolumeInfo.length, 2);
+                            packageInfo.Width = Math.Round(args.VolumeInfo.width, 2);
+                            packageInfo.Height = Math.Round(args.VolumeInfo.height, 2);
+                        }
+
+                        // 处理图像数据
+                        try
+                        {
+                            var imageStartTime = DateTime.Now;
+
+                            // 复制图像数据到托管内存
+                            var imageData = new byte[args.OriginalImage.dataSize];
+                            Marshal.Copy(args.OriginalImage.ImageData, imageData, 0, args.OriginalImage.dataSize);
+
+                            var (image, _) = ProcessImageData(
+                                imageData,
+                                args.OriginalImage.width,
+                                args.OriginalImage.height,
+                                args.AreaList?.Select(points => points.Select(p => new Point(p.X, p.Y)).ToList())
+                                    .ToList(),
+                                (LogisticsAPIStruct.EImageType)args.OriginalImage.type
+                            );
+
+                            // 设置包裹图像
+                            packageInfo.Image = image.Clone();
+
+                            // 如果是第一个相机，则发布图像事件
+                            if (args.CameraID == _firstCameraId)
+                            {
+                                var locations = args.AreaList?
+                                    .Select(points =>
+                                        new DahuaBarcodeLocation(points.Select(p => new Point(p.X, p.Y)).ToList()))
+                                    .ToList() ?? [];
+                                OnImageReceived?.Invoke(image, locations);
+                            }
+
+                            var imageProcessTime = DateTime.Now - imageStartTime;
+                            Log.Debug("图像处理耗时: {Time}ms", imageProcessTime.TotalMilliseconds);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error(ex, "处理图像数据失败");
+                        }
+
+                        OnPackageInfo?.Invoke(packageInfo);
+                    }
+                    else
+                    {
+                        // 实时图像只处理第一个相机的数据
+                        if (args.CameraID == _firstCameraId) ProcessRealTimeImage(args);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "处理包裹信息回调时发生错误");
+                }
+            };
+
+            // 启动SDK
+            var startResult = _logisticsWrapper.Start();
+            if (startResult != 0)
+            {
+                Log.Error("启动SDK失败：{Result}", startResult);
+                return false;
+            }
+
+            IsConnected = true;
+            Log.Information("相机服务启动成功");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "启动相机服务失败");
+            return false;
+        }
+    }
+
+    /// <summary>
+    ///     停止相机服务
+    /// </summary>
+    public void Stop()
+    {
+        if (!IsConnected)
+        {
+            Log.Warning("相机服务尚未启动");
+            return;
+        }
+
+        try
+        {
+            Log.Information("正在停止相机服务...");
+
+            // 清理回调
+            DetachAllCallbacks();
+
+            IsConnected = false;
+            Log.Information("相机服务已停止");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "停止相机服务时发生错误");
+        }
+    }
+
+    /// <summary>
+    ///     获取相机信息列表
+    /// </summary>
+    public IEnumerable<DeviceCameraInfo>? GetCameraInfos()
+    {
+        try
+        {
+            var cameraInfos = _logisticsWrapper.GetWorkCameraInfo();
+
+            return cameraInfos?.Select(info => new DeviceCameraInfo
+            {
+                SerialNumber = info.camDevSerialNumber,
+                Model = info.camDevModelName,
+                IpAddress = info.camDevID,
+                MacAddress = info.camDevExtraInfo
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "获取相机信息列表失败");
+            return null;
+        }
+    }
+
+    /// <summary>
+    ///     更新相机配置
+    /// </summary>
+    public void UpdateConfiguration(CameraSettings config)
+    {
+        try
+        {
+            // TODO: 实现配置更新逻辑
+            Log.Information("相机配置已更新");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "更新相机配置失败");
+        }
+    }
+
+    /// <summary>
+    ///     释放资源
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed) return;
+
+        Stop();
+        _imageProcessingSemaphore.Dispose();
+        _disposed = true;
+
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    ///     初始化SDK
+    /// </summary>
+    /// <param name="cfgPath">配置文件路径</param>
+    /// <returns>初始化结果</returns>
+    private int Initialize(string cfgPath = @"Cfg\LogisticsBase.cfg")
+    {
+        var fullPath = Path.Combine(AppContext.BaseDirectory, cfgPath);
+        try
+        {
+            if (!File.Exists(fullPath)) throw new FileNotFoundException($"大华相机配置文件不存在：{fullPath}");
+
+            // 清理现有的事件处理程序
+            DetachAllCallbacks();
+
+            // 设置初始化超时
+            var initTask = Task.Run(() => _logisticsWrapper.Initialization(fullPath));
+            if (!initTask.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException("SDK初始化超时");
+
+            return initTask.Result;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "初始化SDK失败");
+            throw;
+        }
+    }
+
+    /// <summary>
+    ///     清理所有回调
+    /// </summary>
+    private void DetachAllCallbacks()
+    {
+        try
+        {
+            Log.Information("正在清理所有回调...");
+
+            // 停止处理线程
+            IsConnected = false;
+
+            // 取消相机断线回调
+            _logisticsWrapper.DetachCameraDisconnectCB();
+            Log.Debug("已取消相机断线回调");
+
+            // 取消读码信息回调
+            _logisticsWrapper.DetachAllCameraCodeinfoCB();
+            Log.Debug("已取消读码信息回调");
+
+            // 取消包裹信息回调
+            OnPackageInfo = null;
+            Log.Debug("已取消包裹信息回调");
+
+            Log.Information("所有回调已清理");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "清理回调时发生错误");
+        }
+    }
+
+    /// <summary>
+    ///     处理图像数据
+    /// </summary>
+    private static (Image<Rgba32> image, IReadOnlyList<DahuaBarcodeLocation> barcodes) ProcessImageData(
+        byte[] imageData,
+        int width,
+        int height,
+        List<List<Point>>? barcodeLocations,
+        LogisticsAPIStruct.EImageType imageType)
+    {
+        try
+        {
+            // 验证输入参数
+            if (imageData == null || imageData.Length == 0)
+                throw new ArgumentException("图像数据为空");
+
+            if (width <= 0 || height <= 0)
+                throw new ArgumentException($"无效的图像尺寸: {width}x{height}");
+
+            Image<Rgba32> image;
+            switch (imageType)
+            {
+                case LogisticsAPIStruct.EImageType.eImageTypeJpeg:
+                {
+                    // 获取解压缩器
+                    var decompressor = DecompressorPool.Get();
+                    try
+                    {
+                        // 解压缩JPEG数据
+                        var retImg = decompressor.Decompress(imageData, TJPixelFormats.TJPF_BGR, TJFlags.NONE);
+                        // 验证解压后的图像尺寸
+                        if (retImg.Data == null || retImg.Data.Length == 0)
+                            throw new InvalidOperationException("JPEG解压缩后的数据为空");
+
+                        // 从BGR数据创建ImageSharp图像
+                        using var bgrImage = Image.LoadPixelData<Bgr24>(retImg.Data, retImg.Width, retImg.Height);
+                        image = bgrImage.CloneAs<Rgba32>();
+                    }
+                    finally
+                    {
+                        DecompressorPool.Return(decompressor);
+                    }
+
+                    break;
+                }
+                case LogisticsAPIStruct.EImageType.eImageTypeBGR:
+                {
+                    // 验证BGR数据大小
+                    var expectedSize = width * height * 3; // BGR格式每像素3字节
+                    if (imageData.Length < expectedSize)
+                        throw new ArgumentException($"BGR数据大小不足: 期望{expectedSize}字节，实际{imageData.Length}字节");
+
+                    using var bgrImage = Image.LoadPixelData<Bgr24>(imageData, width, height);
+                    image = bgrImage.CloneAs<Rgba32>();
+                    break;
+                }
+                case LogisticsAPIStruct.EImageType.eImageTypeNormal:
+                {
+                    // 检测每像素字节数
+                    var bytesPerPixel = imageData.Length / (width * height);
+                    if (imageData.Length % (width * height) != 0)
+                        throw new ArgumentException($"图像数据大小({imageData.Length})与尺寸({width}x{height})不匹配");
+
+                    switch (bytesPerPixel)
+                    {
+                        case 1:
+                        {
+                            // 处理灰度图像
+                            using var grayImage = Image.LoadPixelData<L8>(imageData, width, height);
+                            image = grayImage.CloneAs<Rgba32>();
+                            break;
+                        }
+                        case 3:
+                        {
+                            // 处理BGR图像
+                            using var bgrImage = Image.LoadPixelData<Bgr24>(imageData, width, height);
+                            image = bgrImage.CloneAs<Rgba32>();
+                            break;
+                        }
+                        default:
+                            throw new ArgumentException($"不支持的像素格式: {bytesPerPixel}字节/像素");
+                    }
+
+                    break;
+                }
+                default:
+                    throw new ArgumentException($"不支持的图像类型：{imageType}");
+            }
+
+            var locations = barcodeLocations?
+                .Select(points => new DahuaBarcodeLocation(points))
+                .ToList() ?? [];
+
+            return (image, locations);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "处理图像数据时发生错误: 宽度={Width}, 高度={Height}, 数据大小={DataSize}, 图像类型={ImageType}",
+                width, height, imageData?.Length ?? 0, imageType);
+            throw;
+        }
+    }
+
+    /// <summary>
+    ///     处理实时图像
+    /// </summary>
+    private void ProcessRealTimeImage(LogisticsCodeEventArgs args)
+    {
+        try
+        {
+            // 复制图像数据到托管内存
+            byte[]? imageData;
+            try
+            {
+                imageData = new byte[args.OriginalImage.dataSize];
+                Marshal.Copy(args.OriginalImage.ImageData, imageData, 0, args.OriginalImage.dataSize);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "复制图像数据时发生错误");
+                return;
+            }
+
+            // 启动新线程处理图像流
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    // 使用信号量控制图像处理的并发
+                    _imageProcessingSemaphore.Wait();
+                    try
+                    {
+                        var (image, barcodeLocations) = ProcessImageData(
+                            imageData,
+                            args.OriginalImage.width,
+                            args.OriginalImage.height,
+                            args.AreaList?.Select(points => points.Select(p => new Point(p.X, p.Y)).ToList()).ToList(),
+                            (LogisticsAPIStruct.EImageType)args.OriginalImage.type
+                        );
+                        OnImageReceived?.Invoke(image, barcodeLocations);
+                    }
+                    finally
+                    {
+                        _imageProcessingSemaphore.Release();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "图像流处理线程发生错误");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "处理实时图像时发生错误");
+        }
+    }
+}
