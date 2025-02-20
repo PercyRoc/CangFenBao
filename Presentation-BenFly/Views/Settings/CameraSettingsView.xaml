@@ -47,7 +47,7 @@
                                        Margin="0,0,8,0" />
                             <ComboBox Width="120"
                                       ItemsSource="{Binding Manufacturers}"
-                                      SelectedItem="{Binding SelectedManufacturer}">
+                                      SelectedItem="{Binding Configuration.Manufacturer}">
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Converter={StaticResource EnumDescriptionConverter}}" />
@@ -63,7 +63,7 @@
                                        Margin="0,0,8,0" />
                             <ComboBox Width="120"
                                       ItemsSource="{Binding CameraTypes}"
-                                      SelectedItem="{Binding SelectedCameraType}">
+                                      SelectedItem="{Binding Configuration.CameraType}">
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Converter={StaticResource EnumDescriptionConverter}}" />
@@ -124,7 +124,7 @@
 
                     <!-- 启用条码重复过滤 -->
                     <ui:ToggleSwitch Content="启用条码重复过滤"
-                                     IsChecked="{Binding BarcodeRepeatFilterEnabled}"
+                                     IsChecked="{Binding Configuration.BarcodeRepeatFilterEnabled}"
                                      Margin="0,0,0,16" />
 
                     <!-- 重复次数和时间设置 -->
@@ -142,8 +142,8 @@
                                    Margin="0,0,8,0" />
                         <ui:NumberBox Grid.Column="1"
                                       ClearButtonEnabled="False"
-                                      Value="{Binding RepeatCount}"
-                                      IsEnabled="{Binding BarcodeRepeatFilterEnabled}" />
+                                      Value="{Binding Configuration.RepeatCount}"
+                                      IsEnabled="{Binding Configuration.BarcodeRepeatFilterEnabled}" />
 
                         <TextBlock Grid.Column="2"
                                    Text="重复时间(ms)："
@@ -151,8 +151,8 @@
                                    Margin="16,0,8,0" />
                         <ui:NumberBox Grid.Column="3"
                                       ClearButtonEnabled="False"
-                                      Value="{Binding RepeatTimeMs}"
-                                      IsEnabled="{Binding BarcodeRepeatFilterEnabled}" />
+                                      Value="{Binding Configuration.RepeatTimeMs}"
+                                      IsEnabled="{Binding Configuration.BarcodeRepeatFilterEnabled}" />
                     </Grid>
                 </StackPanel>
             </ui:Card>

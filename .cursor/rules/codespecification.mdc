@@ -1,0 +1,150 @@
+---
+description: This rule helps generate C# code with a unified style.
+globs: .cs
+---
+# C# 开发规范与最佳实践 (C#12 新特性集成)
+
+## 一、C#12 核心新特性规范
+
+### 1. 主构造函数 (Primary Constructors)
+```csharp
+// 类级别主构造函数
+public class Person(string firstName, string lastName)
+{
+    public string FirstName { get; } = firstName;
+    public string LastName => lastName;
+    
+    public void Deconstruct(out string fName, out string lName) 
+        => (fName, lName) = (FirstName, LastName);
+}
+
+// 结构体主构造函数
+public readonly struct Point(int x, int y)
+{
+    public int X => x;
+    public int Y => y;
+}
+```
+- 优先用于DTO/值对象等简单类型
+- 避免在需要复杂初始化的类中使用
+- 与解构方法配合使用提升可读性
+
+### 2. 集合表达式 (Collection Expressions)
+```csharp
+// 统一集合初始化语法
+int[] array = [1, 2, 3];
+List<int> list = [4, 5, 6];
+Span<int> span = [7, 8, 9];
+
+// 集合合并运算符
+int[] combined = [.. array, .. list, 10];
+```
+- 替代传统`new[] { ... }`初始化方式
+- 支持跨集合类型合并操作
+- 注意Span类型的内存安全使用
+
+### 3. 内联数组 (Inline Arrays)
+```csharp
+[System.Runtime.CompilerServices.InlineArray(10)]
+public struct Buffer
+{
+    private int _element0;
+}
+
+// 使用示例
+var buffer = new Buffer();
+for (int i = 0; i < 10; i++)
+{
+    buffer[i] = i * 2;
+}
+```
+- 适用于高性能场景
+- 固定长度数组声明
+- 需配合unsafe上下文使用
+
+### 4. Lambda增强
+```csharp
+// 默认参数支持
+var add = (int x, int y = 1) => x + y;
+
+// params参数支持
+var sum = (params int[] values) => values.Sum();
+```
+- 提升Lambda表达灵活性
+- 保持参数数量可控（建议≤3个）
+- 避免过度复杂化Lambda体
+
+## 二、通用开发规范
+
+### 1. 类型系统规范
+```csharp
+// 记录类型规范
+public record DeliveryPackage(
+    string Barcode,
+    double Weight) 
+    : IEquatable<DeliveryPackage>;
+    
+// 模式匹配规范
+if (package is { Weight: > 0 and < 10, Barcode.Length: 12 })
+{
+    // 轻量包裹处理
+}
+```
+
+### 2. 异常处理规范
+```csharp
+try 
+{
+    // 可能失败的操作
+}
+catch (NetworkException ex) when (ex.IsTransient)
+{
+    // 可恢复异常处理
+    Log.Warning(ex, "网络暂时不可用");
+    await Task.Delay(1000);
+    Retry();
+}
+catch (InvalidOperationException ex)
+{
+    // 业务逻辑异常
+    throw new BusinessException("无效操作", ex);
+}
+finally
+{
+    // 资源清理
+}
+```
+
+### 3. 异步编程规范
+```csharp
+public async ValueTask<Image?> ProcessImageAsync(Stream stream)
+{
+    await using var memoryStream = new MemoryStream();
+    await stream.CopyToAsync(memoryStream);
+    return await Image.LoadAsync(memoryStream);
+}
+```
+
+
+## 四、现代化编码实践
+
+### 1. 空安全规范
+```csharp
+public void ProcessPackage(Package package!!) // 空参数检查
+{
+    ArgumentNullException.ThrowIfNull(package.Barcode);
+    
+    var length = package.Barcode?.Length ?? 0; // 空合并
+    var weight = package.Weight ?? throw new InvalidDataException();
+}
+```
+
+### 2. 模式匹配增强
+```csharp
+public string GetPackageType(object package) => package switch
+{
+    SmallPackage p when p.Weight < 1 => "轻小件",
+    LargePackage { Volume: > 1 }      => "大件货",
+    _                                 => "标准件"
+};
+```

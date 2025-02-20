@@ -13,7 +13,7 @@ public enum CameraType
 {
     [Description("智能相机")] Smart,
 
-    [Description("工业相机")] 工业的
+    [Description("工业相机")] Industrial
 }
 
 public enum CameraStatus

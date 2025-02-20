@@ -134,11 +134,6 @@
                             </GridView>
                         </ui:ListView.View>
                     </ui:ListView>
-
-                    <!-- 底部按钮 -->
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-                        <ui:Button Command="{Binding SaveCommand}" Content="保存" />
-                    </StackPanel>
                 </StackPanel>
             </ui:Card>
         </StackPanel>

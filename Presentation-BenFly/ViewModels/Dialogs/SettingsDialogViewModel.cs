@@ -1,12 +1,10 @@
 using Presentation_BenFly.ViewModels.Settings;
-using Presentation_BenFly.Views.Settings;
 using Presentation_CommonLibrary.Services;
 using Prism.Commands;
 using Prism.Ioc;
 using Prism.Mvvm;
 using Prism.Services.Dialogs;
 using Serilog;
-using Wpf.Ui.Controls;
 
 namespace Presentation_BenFly.ViewModels.Dialogs;
 
@@ -53,31 +51,6 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
 
     public void OnDialogOpened(IDialogParameters parameters)
     {
-    }
-
-    public void OnNavigating(NavigatingCancelEventArgs e)
-    {
-        // 如果需要，可以在这里处理导航前的逻辑
-        // 例如：阻止导航、保存当前页面的更改等
-    }
-
-    public void OnNavigated(NavigatedEventArgs e)
-    {
-        switch (e.Page)
-        {
-            case CameraSettingsView cameraView:
-                cameraView.DataContext = _cameraSettingsViewModel;
-                break;
-            case SortSettingsView sortView:
-                sortView.DataContext = _sortSettingsViewModel;
-                break;
-            case UploadSettingsView uploadView:
-                uploadView.DataContext = _uploadSettingsViewModel;
-                break;
-            case ChuteSettingsView chuteView:
-                chuteView.DataContext = _chuteSettingsViewModel;
-                break;
-        }
     }
 
     private void ExecuteSave()

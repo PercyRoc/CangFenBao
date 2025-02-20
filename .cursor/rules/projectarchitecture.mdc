@@ -1,0 +1,444 @@
+---
+description: This rule mainly helps standardize the program architecture.
+globs: 
+---
+# CommonLibrary 项目说明
+
+## 项目定位
+作为解决方案的核心共享库，提供以下核心功能：
+
+## 主要功能模块
+
+### 1. 基础服务架构
+```csharp
+// ServiceCollectionExtensions.cs
+services.RegisterSingleton<ISettingsService>(() => 
+    new JsonSettingsService(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Settings")));
+```
+- 实现依赖注入扩展
+- 提供配置服务注册入口
+
+### 2. 配置管理系统
+```csharp
+// JsonSettingsService.cs
+public class JsonSettingsService : ISettingsService
+{
+    // 实现配置的JSON序列化存储
+    // 支持自动扫描带[Configuration]特性的配置类
+}
+```
+- 基于JSON的配置持久化
+- 支持动态配置注册/加载
+- 配置版本管理
+
+### 3. 物流分拣数据模型
+```csharp
+// PackageInfo.cs
+public class PackageInfo : IDisposable
+{
+    public string Barcode { get; set; }
+    public double Weight { get; set; }
+    public Image<Rgba32>? Image { get; set; }
+    // 包含完整的物流包裹元数据
+}
+```
+- 包裹全生命周期数据建模
+- 图像数据管理
+- 资源自动释放机制
+
+### 4. 设备配置管理
+```csharp
+// CameraSettings.cs
+[Configuration("CameraSettings")]
+public class CameraSettings
+{
+    public CameraManufacturer Manufacturer { get; set; }
+    public List<DeviceCameraInfo> SelectedCameras { get; set; } = [];
+}
+```
+- 相机设备配置管理
+- 光电传感器网络配置
+- 设备状态监控
+
+### 5. 基础设施扩展
+```csharp
+// ISettingsService.cs
+public interface ISettingsService
+{
+    T LoadConfiguration<T>() where T : class, new();
+    void SaveConfiguration<T>(string key, T configuration);
+}
+```
+- 通用配置接口设计
+- 类型安全配置访问
+- 跨模块配置共享
+
+## 技术特性
+- **跨平台支持**：基于.NET 8.0构建
+- **模块化设计**：通过Prism实现松耦合架构
+- **高性能图像处理**：集成ImageSharp库
+- **响应式配置**：使用ObservableCollection实现配置动态更新
+- **设备抽象**：支持多厂商相机设备接入
+
+## 依赖关系
+```xml
+<!-- CommonLibrary.csproj -->
+<PackageReference Include="Prism.Wpf" />
+<PackageReference Include="SixLabors.ImageSharp" />
+<PackageReference Include="Serilog" />
+```
+- 界面框架：Prism.Wpf
+- 图像处理：ImageSharp
+- 日志记录：Serilog
+- 界面组件：MahApps.Metro
+
+
+# DeviceService 项目说明
+
+## 项目定位
+作为解决方案的设备接入层，负责硬件设备的管理与控制，主要实现以下核心能力：
+
+## 主要功能模块
+
+### 1. 相机服务管理
+```csharp
+// CameraFactory.cs
+public class CameraFactory : IDisposable
+{
+    public ICameraService CreateCameraByManufacturer(CameraManufacturer manufacturer)
+    {
+        // 支持多厂商相机设备动态创建
+        // 实现设备服务生命周期管理
+    }
+}
+```
+- 多厂商相机设备支持（大华/海康）
+- 设备服务工厂模式
+- 异常恢复机制
+
+### 2. 图像处理引擎
+```csharp
+// DahuaCameraService.cs
+private static (Image<Rgba32> image, IReadOnlyList<DahuaBarcodeLocation> barcodes) ProcessImageData(...)
+{
+    // 支持JPEG/BGR/灰度图像处理
+    // 集成TurboJPEG高性能解码
+    // 对象池优化资源利用率
+}
+```
+- 多格式图像解码（JPEG/BGR/灰度）
+- 条码区域识别与标注
+- 图像数据内存优化
+
+### 3. 包裹数据管道
+```csharp
+// PackageTransferService.cs
+private void HandlePackageInfo(PackageInfo package)
+{
+    // 条码重复过滤机制
+    // 包裹数据完整性校验
+    // 异步事件处理管道
+}
+```
+- 实时包裹数据处理
+- 智能条码去重
+- 数据质量校验
+
+### 4. 设备配置管理
+```csharp
+// CameraSettings.cs
+[Configuration("CameraSettings")]
+public class CameraSettings
+{
+    // 设备厂商配置
+    // 相机选择策略
+    // 条码过滤规则
+}
+```
+- 动态配置更新
+- 多相机管理策略
+- 设备状态监控
+
+### 5. 服务启动管理
+```csharp
+// CameraStartupService.cs
+public class CameraStartupService : IHostedService
+{
+    // 后台服务生命周期管理
+    // 异常通知机制
+    // 服务状态维护
+}
+```
+- 后台服务托管
+- 启动/停止流程控制
+- 错误恢复策略
+
+## 技术特性
+- **多线程优化**：使用SemaphoreSlim控制并发，ThreadPool处理图像流
+- **内存管理**：实现IDisposable模式，采用对象池复用资源
+- **实时处理**：事件驱动架构，支持毫秒级响应
+- **厂商兼容**：通过抽象接口支持多品牌设备扩展
+- **健壮性设计**：完备的异常处理和日志记录
+
+## 依赖关系
+```xml
+<!-- DeviceService.csproj -->
+<PackageReference Include="SixLabors.ImageSharp" />
+<PackageReference Include="TurboJpegWrapper" />
+<PackageReference Include="Serilog" />
+```
+- 图像处理：ImageSharp + TurboJPEG
+- 日志系统：Serilog
+- 设备SDK：大华LogisticsBaseCSharp
+- 异步处理：Task Parallel Library
+
+## 核心交互流程
+```mermaid
+graph TD
+    A[相机启动服务] --> B[加载配置]
+    B --> C[初始化SDK]
+    C --> D[注册事件回调]
+    D --> E[图像采集]
+    E --> F[图像解码]
+    F --> G[条码识别]
+    G --> H[包裹数据生成]
+    H --> I[数据过滤校验]
+    I --> J[业务系统对接]
+```
+# Presentation-BenFly 项目说明
+这是一个基于WPF开发的物流分拣管理系统，主要用于对接笨鸟服务
+主要功能模块和特点如下：
+
+1. **核心架构**：
+- 使用Prism框架实现模块化开发
+- 采用DryIoc作为依赖注入容器
+- 基于MVVM模式进行架构设计
+- 使用Serilog进行全链路日志记录
+
+2. **主要功能模块**：
+```csharp
+// 核心服务
+├── BenNiaoPackageService // 笨鸟包裹数据服务（HTTP/FTP通信）
+├── BenNiaoPreReportService // 预报数据服务
+├── CameraService // 相机设备管理
+├── SortService // 分拣控制服务
+└── PackageTransferService // 包裹传输处理
+```
+
+# Presentation-CommonLibrary 项目说明
+
+## 项目定位
+作为解决方案的WPF通用组件库，提供以下核心能力：
+
+## 主要功能模块
+
+### 1. 数据转换器体系
+```csharp:Presentation-CommonLibrary/Converters/BooleanToBrushConverter.cs
+public class BooleanToBrushConverter : IValueConverter
+{
+    // 实现布尔值到画刷的转换（用于导航图标状态切换）
+    // 动态绑定应用程序资源字典中的样式
+}
+```
+- 提供枚举描述转换 (EnumDescriptionConverter)
+- 枚举-布尔双向绑定 (EnumToBooleanConverter)
+- 状态可视化转换 (BooleanToBrushConverter)
+
+### 2. 服务扩展体系
+```csharp:Presentation-CommonLibrary/Extensions/ServiceCollectionExtensions.cs
+public static class ServiceCollectionExtensions
+{
+    public static IContainerRegistry AddPresentationCommonServices(this IContainerRegistry services)
+    {
+        // 统一服务注册入口
+        // 集成对话框/通知等基础服务
+    }
+}
+```
+- Prism服务容器扩展
+- 统一服务注册规范
+- 模块化服务配置
+
+### 3. 数据模型体系
+```csharp:Presentation-CommonLibrary/Models/DeviceStatus.cs
+public class DeviceStatus : BindableBase
+{
+    // 设备状态绑定模型
+    // 支持动态状态颜色变更
+    // 图标资源绑定支持
+}
+```
+- 设备状态模型 (DeviceStatus)
+- 包裹信息项模型 (PackageInfoItem)
+- 统计项模型 (StatisticsItem)
+- 系统状态监控模型 (SystemStatus)
+
+### 4. 交互服务体系
+```csharp:Presentation-CommonLibrary/Services/CustomDialogService.cs
+public class CustomDialogService : ICustomDialogService
+{
+    // 基于Prism的对话框服务
+    // 支持ViewModel-first对话框模式
+    // 生命周期管理
+}
+```
+- 通知服务 (NotificationService)
+- 对话框服务 (CustomDialogService)
+- 消息框服务 (DialogService)
+
+### 5. 样式资源体系
+```xml:Presentation-CommonLibrary/Resources/Styles/ColorStyles.xaml
+<LinearGradientBrush x:Key="TitleBarGradient">
+    <!-- 统一标题栏渐变样式 -->
+</LinearGradientBrush>
+```
+- 颜色主题系统 (ColorStyles)
+- DataGrid样式规范 (DataGridStyles)
+- 卡片式布局系统
+- 阴影/动效系统
+
+## 技术特性
+- **MVVM增强**：深度集成Prism框架，提供开箱即用的绑定支持
+- **主题系统**：支持动态换肤和样式覆盖
+- **响应式设计**：所有模型继承BindableBase实现属性通知
+- **组件化**：提供可复用的UI控件和服务组件
+- **性能优化**：采用资源字典按需加载策略
+
+## 依赖关系
+```xml:Presentation-CommonLibrary/Presentation-CommonLibrary.csproj
+<PackageReference Include="HandyControl" />
+<PackageReference Include="MahApps.Metro.IconPacks.Material" />
+<PackageReference Include="Prism.Wpf" />
+<PackageReference Include="WPF-UI" />
+```
+- UI框架：HandyControl + WPF-UI
+- 图标系统：MahApps.Metro.IconPacks
+- MVVM框架：Prism.Wpf
+- 异步处理：Task Parallel Library
+
+## 核心交互模式
+```
+graph TD
+    A[业务模块] --> B[注册公共服务]
+    B --> C[使用数据转换器]
+    C --> D[绑定数据模型]
+    D --> E[调用交互服务]
+    E --> F[应用样式资源]
+```
+
+## 典型应用场景
+1. WPF应用程序基础框架搭建
+2. 企业级UI组件开发
+3. 统一样式规范制定
+4. 复杂数据绑定场景
+5. 模块化服务架构实现
+6. 跨项目通用组件共享
+
+# SortingService 项目说明
+
+## 项目定位
+物流分拣控制核心服务，实现以下核心能力：
+
+## 主要功能模块
+
+### 1. TCP通信管理
+```csharp:SortingService/Services/TcpConnection.cs
+public class TcpConnection : IDisposable
+{
+    // 实现TCP连接全生命周期管理
+    // 支持异步数据收发
+    // 自动重连机制
+}
+```
+- 连接状态管理
+- 数据收发管道
+- 异常恢复机制
+
+### 2. 分拣服务核心
+```csharp:SortingService/Services/PendulumSortService.cs
+public class PendulumSortService : IPendulumSortService
+{
+    // 摆轮分拣状态机管理
+    // 包裹处理队列优化
+    // 多设备协同控制
+}
+```
+- 触发光电与分拣光电协同
+- 包裹时序管理
+- 摆轮控制策略
+
+### 3. 设备状态管理
+```csharp:SortingService/Models/PhotoelectricConfig.cs
+public class PhotoelectricConfig
+{
+    // 光电设备配置模型
+    // 时间窗口控制
+    // 延迟参数配置
+}
+```
+- 设备连接状态监控
+- 配置动态更新
+- 设备异常通知
+
+### 4. 分拣控制管道
+```csharp:SortingService/Services/PendulumSortService.cs
+private async Task ExecuteSortingAction(PackageInfo package, string photoelectricName)
+{
+    // 分拣动作执行流程
+    // 摆轮状态决策
+    // 延迟补偿机制
+}
+```
+- 触发信号处理
+- 分拣时序控制
+- 回正策略决策
+
+### 5. 异常处理机制
+```csharp:SortingService/Services/PendulumSortService.cs
+private void CheckTimeoutPackages(object? sender, ElapsedEventArgs e)
+{
+    // 超时包裹清理
+    // 资源回收
+    // 异常状态恢复
+}
+```
+- 包裹超时处理
+- 连接异常恢复
+- 资源泄漏防护
+
+## 技术特性
+- **高并发处理**：采用ConcurrentDictionary实现线程安全队列
+- **精确时序控制**：基于触发时间戳的包裹匹配算法
+- **动态配置**：支持运行时配置热更新
+- **状态持久化**：摆轮最后处理位置记忆
+- **资源优化**：对象池模式管理TCP连接
+
+## 依赖关系
+```language:SortingService/SortingService.csproj
+<ProjectReference Include="CommonLibrary"/>  // 配置模型/基础服务
+<ProjectReference Include="DeviceService"/>  // 设备通信基础
+<PackageReference Include="FluentFTP"/>      // FTP传输支持
+```
+
+## 核心控制流程
+```
+graph TD
+    A[触发光电信号] --> B[记录触发时间]
+    B --> C[包裹数据到达]
+    C --> D[时间窗口匹配]
+    D --> E[分拣光电选择]
+    E --> F[摆轮动作决策]
+    F --> G[TCP指令发送]
+    G --> H[状态反馈]
+```
+
+## 典型应用场景
+1. 物流分拣线摆轮控制
+2. 光电传感器网络管理
+3. 包裹分拣时序优化
+4. 设备异常自动恢复
+5. 分拣效率实时监控
+6. 多设备协同工作场景
+
+
+

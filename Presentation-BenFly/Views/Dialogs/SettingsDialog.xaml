@@ -113,8 +113,7 @@
                                    Margin="0"
                                    Padding="0"
                                    FrameMargin="0"
-                                   Navigating="RootNavigation_OnNavigating"
-                                   Navigated="RootNavigation_OnNavigated">
+                                   Name="RootNavigation">
 
                     <ui:NavigationView.MenuItems>
                         <ui:NavigationViewItem Content="相机设置"

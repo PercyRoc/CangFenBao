@@ -5,7 +5,6 @@ using CommonLibrary.Services;
 using DeviceService;
 using DeviceService.Camera;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Presentation_BenFly.Models.Upload;
 using Presentation_BenFly.Services;
 using Presentation_BenFly.ViewModels.Dialogs;
@@ -18,6 +17,7 @@ using Presentation_CommonLibrary.Extensions;
 using Prism.Ioc;
 using Serilog;
 using SortingService.Extensions;
+using SortingService.Interfaces;
 using SortSettingsView = Presentation_BenFly.Views.Settings.SortSettingsView;
 
 namespace Presentation_BenFly;
@@ -35,10 +35,7 @@ public partial class App
         // 注册公共服务
         containerRegistry.AddCommonServices();
         containerRegistry.AddPresentationCommonServices();
-
-        // 注册设备服务
-        containerRegistry.AddDeviceServices();
-
+        containerRegistry.AddPhotoCamera();
         containerRegistry.AddSortingServices();
         
         // 注册设置页面
@@ -94,19 +91,18 @@ public partial class App
             .CreateLogger();
 
         Log.Information("应用程序启动");
-        // 先调用基类方法初始化容器
         base.OnStartup(e);
 
         try
         {
-            // 启动托管服务
-            var hostedService = Container.Resolve<IHostedService>();
-            hostedService.StartAsync(CancellationToken.None).Wait();
-            Log.Information("托管服务启动成功");
+            // 启动相机托管服务
+            var cameraStartupService = Container.Resolve<CameraStartupService>();
+            cameraStartupService.StartAsync(CancellationToken.None).Wait();
+            Log.Information("相机托管服务启动成功");
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "启动托管服务时发生错误");
+            Log.Error(ex, "启动相机托管服务时发生错误");
             throw;
         }
     }
@@ -115,18 +111,46 @@ public partial class App
     {
         try
         {
-            // 停止托管服务
-            var hostedService = Container.Resolve<IHostedService>();
-            hostedService.StopAsync(CancellationToken.None).Wait();
+            // 停止相机托管服务
+            var cameraStartupService = Container.Resolve<CameraStartupService>();
+            cameraStartupService.StopAsync(CancellationToken.None).Wait();
+            Log.Information("相机托管服务已停止");
+
+            // 释放主窗口 ViewModel（包含摆轮分拣服务的释放）
+            if (MainWindow?.DataContext is MainWindowViewModel viewModel)
+            {
+                viewModel.Dispose();
+                Log.Information("主窗口ViewModel已释放");
+            }
+
+            // 确保摆轮分拣服务已停止（双重保障）
+            try
+            {
+                var sortService = Container.Resolve<IPendulumSortService>();
+                if (sortService.IsRunning())
+                {
+                    sortService.StopAsync().Wait();
+                    Log.Information("摆轮分拣服务已强制停止");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "强制停止摆轮分拣服务时发生错误");
+            }
 
             // 释放相机工厂
-            if (Container.Resolve<CameraFactory>() is IDisposable cameraFactory) cameraFactory.Dispose();
+            if (Container.Resolve<CameraFactory>() is IDisposable cameraFactory)
+            {
+                cameraFactory.Dispose();
+                Log.Information("相机工厂已释放");
+            }
 
             // 释放相机服务
-            if (Container.Resolve<ICameraService>() is IDisposable cameraService) cameraService.Dispose();
-
-            // 释放主窗口 ViewModel
-            if (MainWindow?.DataContext is IDisposable disposable) disposable.Dispose();
+            if (Container.Resolve<ICameraService>() is IDisposable cameraService)
+            {
+                cameraService.Dispose();
+                Log.Information("相机服务已释放");
+            }
 
             // 等待所有日志写入完成
             Log.Information("应用程序关闭");

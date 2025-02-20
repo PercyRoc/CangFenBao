@@ -1,0 +1,77 @@
+using CangFenBao_SangNeng.ViewModels.Settings;
+using Presentation_CommonLibrary.Services;
+using Prism.Commands;
+using Prism.Ioc;
+using Prism.Mvvm;
+using Prism.Services.Dialogs;
+using Serilog;
+
+namespace CangFenBao_SangNeng.ViewModels.Dialogs;
+
+public class SettingsDialogViewModel : BindableBase, IDialogAware
+{
+    // 保存各个设置页面的ViewModel实例
+    private readonly CameraSettingsViewModel _cameraSettingsViewModel;
+    private readonly VolumeSettingsViewModel _volumeSettingsViewModel;
+    private readonly WeightSettingsViewModel _weightSettingsViewModel;
+    private readonly INotificationService _notificationService;
+    
+    public SettingsDialogViewModel(
+        IContainerProvider containerProvider,
+        INotificationService notificationService)
+    {
+        _notificationService = notificationService;
+
+        // 创建各个设置页面的ViewModel实例
+        _cameraSettingsViewModel = containerProvider.Resolve<CameraSettingsViewModel>();
+        _volumeSettingsViewModel = containerProvider.Resolve<VolumeSettingsViewModel>();
+        _weightSettingsViewModel = containerProvider.Resolve<WeightSettingsViewModel>();
+
+        SaveCommand = new DelegateCommand(ExecuteSave);
+        CancelCommand = new DelegateCommand(ExecuteCancel);
+    }
+
+    public DelegateCommand SaveCommand { get; }
+    public DelegateCommand CancelCommand { get; }
+
+    public string Title => "System Settings";
+
+    public event Action<IDialogResult>? RequestClose;
+
+    public bool CanCloseDialog()
+    {
+        return true;
+    }
+
+    public void OnDialogClosed()
+    {
+    }
+
+    public void OnDialogOpened(IDialogParameters parameters)
+    {
+    }
+
+    private void ExecuteSave()
+    {
+        try
+        { // 保存所有设置
+            _cameraSettingsViewModel.SaveConfigurationCommand.Execute();
+            _volumeSettingsViewModel.SaveConfigurationCommand.Execute();
+            _weightSettingsViewModel.SaveConfigurationCommand.Execute();
+
+            Log.Information("All settings saved");
+            _notificationService.ShowSuccess("Settings saved");
+            RequestClose?.Invoke(new DialogResult(ButtonResult.OK));
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to save settings");
+            _notificationService.ShowError($"Failed to save settings: {ex.Message}");
+        }
+    }
+
+    private void ExecuteCancel()
+    {
+        RequestClose?.Invoke(new DialogResult(ButtonResult.Cancel));
+    }
+} 

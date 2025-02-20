@@ -1,3 +1,5 @@
+using System.Reactive.Linq;
+using System.Reactive.Subjects;
 using System.Runtime.InteropServices;
 using CommonLibrary.Models;
 using CommonLibrary.Models.Settings.Camera;
@@ -22,6 +24,8 @@ public class DahuaCameraService : ICameraService
     private readonly object _cameraIdLock = new();
     private readonly SemaphoreSlim _imageProcessingSemaphore = new(1, 1);
     private readonly LogisticsWrapper _logisticsWrapper;
+    private readonly Subject<PackageInfo> _packageSubject = new();
+    private readonly Subject<(Image<Rgba32> image, IReadOnlyList<BarcodeLocation> barcodes)> _imageSubject = new();
     private bool _disposed;
     private string? _firstCameraId;
 
@@ -34,24 +38,25 @@ public class DahuaCameraService : ICameraService
     }
 
     /// <summary>
-    ///     包裹信息事件
-    /// </summary>
-    public event Action<PackageInfo>? OnPackageInfo;
-
-    /// <summary>
-    ///     图像信息事件
-    /// </summary>
-    public event Action<Image<Rgba32>, IReadOnlyList<DahuaBarcodeLocation>>? OnImageReceived;
-
-    /// <summary>
     ///     相机连接状态改变事件
     /// </summary>
-    public event Action<string, bool>? OnCameraConnectionChanged;
+    public event Action<string, bool>? ConnectionChanged;
 
     /// <summary>
     ///     相机是否已连接
     /// </summary>
     public bool IsConnected { get; private set; }
+
+    /// <summary>
+    ///     包裹信息流
+    /// </summary>
+    public IObservable<PackageInfo> PackageStream => _packageSubject.AsObservable();
+
+    /// <summary>
+    ///     图像信息流
+    /// </summary>
+    public IObservable<(Image<Rgba32> image, IReadOnlyList<BarcodeLocation> barcodes)> ImageStream => 
+        _imageSubject.AsObservable();
 
     /// <summary>
     ///     启动相机服务
@@ -75,14 +80,6 @@ public class DahuaCameraService : ICameraService
                 Log.Error("初始化SDK失败：{Result}", initResult);
                 return false;
             }
-
-            // 注册相机断线回调
-            _logisticsWrapper.CameraDisconnectEventHandler += (_, args) =>
-            {
-                if (args == null) return;
-                Log.Information("相机 {CameraId} 连接状态变更：{Status}", args.CameraKey, args.IsOnline ? "已连接" : "已断开");
-                OnCameraConnectionChanged?.Invoke(args.CameraKey, args.IsOnline);
-            };
 
             // 注册读码信息回调
             try
@@ -130,7 +127,7 @@ public class DahuaCameraService : ICameraService
                         var packageInfo = new PackageInfo
                         {
                             Barcode = barcode,
-                            CreatedAt = startTime
+                            CreateTime = startTime
                         };
 
                         // 设置重量和尺寸数据
@@ -169,9 +166,9 @@ public class DahuaCameraService : ICameraService
                             {
                                 var locations = args.AreaList?
                                     .Select(points =>
-                                        new DahuaBarcodeLocation(points.Select(p => new Point(p.X, p.Y)).ToList()))
+                                        new BarcodeLocation(points.Select(p => new Point(p.X, p.Y)).ToList()))
                                     .ToList() ?? [];
-                                OnImageReceived?.Invoke(image, locations);
+                                _imageSubject.OnNext((image, locations));
                             }
 
                             var imageProcessTime = DateTime.Now - imageStartTime;
@@ -182,7 +179,7 @@ public class DahuaCameraService : ICameraService
                             Log.Error(ex, "处理图像数据失败");
                         }
 
-                        OnPackageInfo?.Invoke(packageInfo);
+                        _packageSubject.OnNext(packageInfo);
                     }
                     else
                     {
@@ -205,6 +202,7 @@ public class DahuaCameraService : ICameraService
             }
 
             IsConnected = true;
+            ConnectionChanged?.Invoke(_firstCameraId ?? string.Empty, true);
             Log.Information("相机服务启动成功");
             return true;
         }
@@ -234,6 +232,7 @@ public class DahuaCameraService : ICameraService
             DetachAllCallbacks();
 
             IsConnected = false;
+            ConnectionChanged?.Invoke(_firstCameraId ?? string.Empty, false);
             Log.Information("相机服务已停止");
         }
         catch (Exception ex)
@@ -291,6 +290,8 @@ public class DahuaCameraService : ICameraService
 
         Stop();
         _imageProcessingSemaphore.Dispose();
+        _packageSubject.Dispose();
+        _imageSubject.Dispose();
         _disposed = true;
 
         GC.SuppressFinalize(this);
@@ -335,19 +336,9 @@ public class DahuaCameraService : ICameraService
 
             // 停止处理线程
             IsConnected = false;
-
-            // 取消相机断线回调
-            _logisticsWrapper.DetachCameraDisconnectCB();
-            Log.Debug("已取消相机断线回调");
-
             // 取消读码信息回调
             _logisticsWrapper.DetachAllCameraCodeinfoCB();
             Log.Debug("已取消读码信息回调");
-
-            // 取消包裹信息回调
-            OnPackageInfo = null;
-            Log.Debug("已取消包裹信息回调");
-
             Log.Information("所有回调已清理");
         }
         catch (Exception ex)
@@ -359,7 +350,7 @@ public class DahuaCameraService : ICameraService
     /// <summary>
     ///     处理图像数据
     /// </summary>
-    private static (Image<Rgba32> image, IReadOnlyList<DahuaBarcodeLocation> barcodes) ProcessImageData(
+    private static (Image<Rgba32> image, IReadOnlyList<BarcodeLocation> barcodes) ProcessImageData(
         byte[] imageData,
         int width,
         int height,
@@ -446,7 +437,7 @@ public class DahuaCameraService : ICameraService
             }
 
             var locations = barcodeLocations?
-                .Select(points => new DahuaBarcodeLocation(points))
+                .Select(points => new BarcodeLocation(points))
                 .ToList() ?? [];
 
             return (image, locations);
@@ -495,7 +486,7 @@ public class DahuaCameraService : ICameraService
                             args.AreaList?.Select(points => points.Select(p => new Point(p.X, p.Y)).ToList()).ToList(),
                             (LogisticsAPIStruct.EImageType)args.OriginalImage.type
                         );
-                        OnImageReceived?.Invoke(image, barcodeLocations);
+                        _imageSubject.OnNext((image, barcodeLocations));
                     }
                     finally
                     {

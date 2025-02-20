@@ -37,4 +37,19 @@ public class CameraSettings
     ///     已选择的相机列表
     /// </summary>
     public List<DeviceCameraInfo> SelectedCameras { get; set; } = [];
+
+    /// <summary>
+    ///     是否启用图像保存
+    /// </summary>
+    public bool EnableImageSaving { get; set; }
+
+    /// <summary>
+    ///     图像保存路径
+    /// </summary>
+    public string ImageSavePath { get; set; } = "Images";
+
+    /// <summary>
+    ///     图像保存格式
+    /// </summary>
+    public ImageFormat ImageFormat { get; set; } = ImageFormat.Jpeg;
 }

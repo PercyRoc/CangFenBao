@@ -1,6 +1,10 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
+using System.Reactive.Concurrency;
+using System.Reactive.Linq;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using CommonLibrary.Models;
@@ -8,7 +12,6 @@ using CommonLibrary.Models.Settings.Sort;
 using CommonLibrary.Services;
 using DeviceService;
 using DeviceService.Camera;
-using DeviceService.Camera.Models;
 using Presentation_BenFly.Services;
 using Presentation_CommonLibrary.Models;
 using Presentation_CommonLibrary.Services;
@@ -17,7 +20,6 @@ using Prism.Mvvm;
 using Serilog;
 using SortingService.Interfaces;
 using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
 
 namespace Presentation_BenFly.ViewModels.Windows;
 
@@ -26,12 +28,13 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly BenNiaoPackageService _benNiaoService;
     private readonly ICameraService _cameraService;
     private readonly ICustomDialogService _dialogService;
-    private readonly PackageTransferService _packageTransferService;
-    private readonly BenNiaoPreReportService _preReportService;
     private readonly ISettingsService _settingsService;
     private readonly IPendulumSortService _sortService;
+    private readonly List<IDisposable> _subscriptions = [];
 
     private readonly DispatcherTimer _timer;
+
+    private int _currentPackageIndex = 0;
 
     private string _currentBarcode = string.Empty;
 
@@ -40,21 +43,20 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     private SystemStatus _systemStatus = new();
 
+    private bool _isInitialized;
+
     public MainWindowViewModel(
         ICustomDialogService dialogService,
         ICameraService cameraService,
-        BenNiaoPreReportService preReportService,
         ISettingsService settingsService,
         IPendulumSortService sortService,
         PackageTransferService packageTransferService,
-        BenNiaoPackageService benNiaoService)
+        BenNiaoPackageService benNiaoService, BenNiaoPreReportService benNiaoPreReportService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
-        _preReportService = preReportService;
         _settingsService = settingsService;
         _sortService = sortService;
-        _packageTransferService = packageTransferService;
         _benNiaoService = benNiaoService;
 
         // 初始化命令
@@ -77,26 +79,134 @@ public class MainWindowViewModel : BindableBase, IDisposable
         // 初始化包裹信息
         InitializePackageInfoItems();
 
-        // 订阅相机连接事件
-        _cameraService.OnCameraConnectionChanged += OnCameraConnectionChanged;
-
         // 订阅分拣设备连接事件
         _sortService.DeviceConnectionStatusChanged += OnDeviceConnectionStatusChanged;
 
-        // 订阅包裹数据事件
-        _packageTransferService.OnPackageInfo += OnPackageInfo;
+        // 订阅相机连接状态事件
+        _cameraService.ConnectionChanged += OnCameraConnectionChanged;
 
-        // 订阅相机图像流事件
-        _cameraService.OnImageReceived += OnImageReceived;
+        // 订阅包裹流
+        _subscriptions.Add(packageTransferService.PackageStream
+            .ObserveOn(Scheduler.CurrentThread)
+            .Subscribe(OnPackageInfo));
 
-        // 启动预报数据更新
-        _ = StartPreReportUpdateAsync();
+        // 订阅图像流
+        _subscriptions.Add(_cameraService.ImageStream
+            .ObserveOn(Scheduler.CurrentThread)
+            .Subscribe(imageData =>
+            {
+                try
+                {
+                    var image = imageData.image;
+                    var barcodeLocations = imageData.barcodes;
 
-        // 启动摆轮分拣服务
-        _ = StartSortServiceAsync();
+                    // 创建内存流并将其所有权转移给BitmapImage
+                    var memoryStream = new MemoryStream();
+                    image.SaveAsJpeg(memoryStream);
+                    memoryStream.Position = 0;
 
-        // 主动获取一次设备状态
-        _ = UpdateDeviceStatusesAsync();
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        try
+                        {
+                            var bitmap = new BitmapImage();
+                            bitmap.BeginInit();
+                            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                            bitmap.StreamSource = memoryStream;
+                            bitmap.EndInit();
+                            bitmap.Freeze(); // 使图像可以跨线程访问
+
+                            // 创建可绘制的图像
+                            var drawingVisual = new DrawingVisual();
+                            using (var drawingContext = drawingVisual.RenderOpen())
+                            {
+                                // 绘制原始图像
+                                drawingContext.DrawImage(bitmap, new Rect(0, 0, bitmap.PixelWidth, bitmap.PixelHeight));
+
+                                // 绘制条码位置
+                                foreach (var barcode in barcodeLocations)
+                                {
+                                    var pen = new Pen(Brushes.LimeGreen, 2);
+                                    pen.Freeze();
+
+                                    // 创建条码框的路径
+                                    var points = barcode.Points.Select(p => new System.Windows.Point(p.X, p.Y))
+                                        .ToList();
+                                    if (points.Count != 4) continue;
+                                    {
+                                        var geometry = new PathGeometry();
+                                        var figure = new PathFigure(points[0], [
+                                            new LineSegment(points[1], true),
+                                            new LineSegment(points[2], true),
+                                            new LineSegment(points[3], true),
+                                            new LineSegment(points[0], true)
+                                        ], true);
+                                        geometry.Figures.Add(figure);
+                                        geometry.Freeze();
+
+                                        drawingContext.DrawGeometry(null, pen, geometry);
+
+                                        // 只有在条码内容不为空时才绘制文本
+                                        if (string.IsNullOrWhiteSpace(barcode.Code)) continue;
+                                        // 绘制条码文本
+                                        var formattedText = new FormattedText(
+                                            barcode.Code,
+                                            CultureInfo.CurrentCulture,
+                                            FlowDirection.LeftToRight,
+                                            new Typeface("Arial"),
+                                            14,
+                                            Brushes.LimeGreen,
+                                            VisualTreeHelper.GetDpi(Application.Current.MainWindow).PixelsPerDip);
+                                        formattedText.SetFontWeight(FontWeights.Bold);
+
+                                        // 计算文本位置（在条码框的左上角）
+                                        var textPoint = new System.Windows.Point(
+                                            points.Min(p => p.X),
+                                            points.Min(p => p.Y) - formattedText.Height);
+
+                                        // 绘制文本背景
+                                        var textBackground = new RectangleGeometry(new Rect(
+                                            textPoint.X - 2,
+                                            textPoint.Y - 2,
+                                            formattedText.Width + 4,
+                                            formattedText.Height + 4));
+                                        drawingContext.DrawGeometry(Brushes.Black, null, textBackground);
+
+                                        // 绘制文本
+                                        drawingContext.DrawText(formattedText, textPoint);
+                                    }
+                                }
+                            }
+
+                            // 创建RenderTargetBitmap并渲染DrawingVisual
+                            var renderBitmap = new RenderTargetBitmap(
+                                bitmap.PixelWidth,
+                                bitmap.PixelHeight,
+                                96,
+                                96,
+                                PixelFormats.Pbgra32);
+                            renderBitmap.Render(drawingVisual);
+                            renderBitmap.Freeze();
+
+                            // 更新UI
+                            CurrentImage = renderBitmap;
+                        }
+                        finally
+                        {
+                            memoryStream.Dispose();
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "处理图像数据时发生错误");
+                }
+            }));
+
+        // 初始化摆轮分拣服务
+        _ = InitializeSortServiceAsync();
+
+        _ = benNiaoPreReportService.UpdatePreReportDataAsync();
     }
 
     public DelegateCommand OpenSettingsCommand { get; }
@@ -303,11 +413,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
         });
     }
 
-    private void OnCameraConnectionChanged(string cameraId, bool isConnected                                    )
+    private void OnCameraConnectionChanged(string cameraId, bool isConnected)
     {
         Application.Current.Dispatcher.Invoke(() =>
         {
-            var cameraStatus = DeviceStatuses.FirstOrDefault(x => x.Name == "相机");
+            var cameraStatus = DeviceStatuses.FirstOrDefault(s => s.Name == "相机");
             if (cameraStatus == null) return;
 
             cameraStatus.Status = isConnected ? "已连接" : "已断开";
@@ -315,12 +425,35 @@ public class MainWindowViewModel : BindableBase, IDisposable
         });
     }
 
-    private async Task StartPreReportUpdateAsync()
+    private async Task InitializeSortServiceAsync()
     {
-        while (!_disposed)
+        try
         {
-            await _preReportService.UpdatePreReportDataAsync();
-            await Task.Delay(TimeSpan.FromMinutes(1)); // 每分钟更新一次
+            if (_isInitialized) return;
+
+            Log.Information("正在初始化摆轮分拣服务...");
+
+            // 加载分拣配置
+            var configuration = _settingsService.LoadSettings<SortConfiguration>("SortConfiguration");
+
+            // 初始化分拣服务
+            await _sortService.InitializeAsync(configuration);
+            Log.Information("摆轮分拣服务初始化完成");
+
+            // 启动分拣服务
+            await _sortService.StartAsync();
+            Log.Information("摆轮分拣服务已启动");
+
+            // 更新设备状态
+            await UpdateDeviceStatusesAsync();
+            Log.Information("设备状态已更新");
+
+            _isInitialized = true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "初始化摆轮分拣服务时发生错误");
+            throw;
         }
     }
 
@@ -328,7 +461,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            Log.Information("收到包裹信息：{Barcode}", package.Barcode);
+            // 设置包裹序号
+            package.Index = Interlocked.Increment(ref _currentPackageIndex);
+            Log.Information("收到包裹信息：{Barcode}, 序号：{Index}", package.Barcode, package.Index);
+
             // 1. 通过笨鸟系统服务获取三段码并处理上传
             var benNiaoResult = await _benNiaoService.ProcessPackageAsync(package);
             if (!benNiaoResult)
@@ -344,25 +480,22 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 package.Image = null;
                 Log.Debug("已释放包裹 {Barcode} 的图像资源", package.Barcode);
             }
-
-            // 2. 如果获取到段码，根据段码获取格口号
-            if (benNiaoResult && !string.IsNullOrEmpty(package.SegmentCode))
+            
+            try
             {
-                try
-                {
-                    var chuteConfig = _settingsService.LoadConfiguration<ChuteConfiguration>();
-                    var chute = chuteConfig.GetChuteByConnectedSegments(package.SegmentCode);
-                    package.ChuteName = chute;
-                    Log.Information("包裹 {Barcode} 分配到格口 {Chute}，段码：{SegmentCode}",
-                        package.Barcode, chute, package.SegmentCode);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "获取格口号时发生错误：{Barcode}, {SegmentCode}",
-                        package.Barcode, package.SegmentCode);
-                    package.SetError($"获取格口号失败：{ex.Message}");
-                }
+                var chuteConfig = _settingsService.LoadConfiguration<ChuteConfiguration>();
+                var chute = chuteConfig.GetChuteBySpaceSeparatedSegments(package.SegmentCode);
+                package.ChuteName = chute;
+                Log.Information("包裹 {Barcode} 分配到格口 {Chute}，段码：{SegmentCode}",
+                    package.Barcode, chute, package.SegmentCode);
             }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "获取格口号时发生错误：{Barcode}, {SegmentCode}",
+                    package.Barcode, package.SegmentCode);
+                package.SetError($"获取格口号失败：{ex.Message}");
+            }
+
 
             Application.Current.Dispatcher.Invoke(() =>
             {
@@ -378,13 +511,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     Log.Error(ex, "更新UI时发生错误");
                 }
             });
-
-            // 5. 调用分检服务
-            if (benNiaoResult && !string.IsNullOrEmpty(package.SegmentCode) && !string.IsNullOrEmpty(package.ChuteName))
-            {
-                _sortService.ProcessPackage(package);
-            }
-
+            
+            _sortService.ProcessPackage(package);
+            
             Application.Current.Dispatcher.Invoke(() =>
             {
                 try
@@ -415,15 +544,15 @@ public class MainWindowViewModel : BindableBase, IDisposable
         var weightItem = PackageInfoItems.FirstOrDefault(x => x.Label == "重量");
         if (weightItem != null)
         {
-            weightItem.Value = package.WeightDisplay.Split(' ')[0]; // 假设格式为 "2.5 kg"
-            weightItem.Unit = "kg";
+            weightItem.Value = package.Weight.ToString(CultureInfo.InvariantCulture);
+            weightItem.Unit = "g";
         }
 
         var sizeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "尺寸");
         if (sizeItem != null)
         {
             sizeItem.Value = package.VolumeDisplay;
-            sizeItem.Unit = "cm";
+            sizeItem.Unit = "mm";
         }
 
         var segmentItem = PackageInfoItems.FirstOrDefault(x => x.Label == "段码");
@@ -436,15 +565,15 @@ public class MainWindowViewModel : BindableBase, IDisposable
         var chuteItem = PackageInfoItems.FirstOrDefault(x => x.Label == "分拣口");
         if (chuteItem != null)
         {
-            chuteItem.Value = package.ChuteName;
-            chuteItem.Description = string.IsNullOrEmpty(package.ChuteName) ? "等待分配..." : "目标分拣位置";
+            chuteItem.Value = package.ChuteName.ToString();
+            chuteItem.Description = string.IsNullOrEmpty(package.ChuteName.ToString()) ? "等待分配..." : "目标分拣位置";
         }
 
         var timeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "时间");
         if (timeItem != null)
         {
-            timeItem.Value = package.CreatedAt.ToString("HH:mm:ss");
-            timeItem.Description = $"处理于 {package.CreatedAt:yyyy-MM-dd}";
+            timeItem.Value = package.CreateTime.ToString("HH:mm:ss");
+            timeItem.Description = $"处理于 {package.CreateTime:yyyy-MM-dd}";
         }
 
         var processingTimeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "处理时间");
@@ -465,7 +594,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         var errorItem = StatisticsItems.FirstOrDefault(x => x.Label == "异常数");
         if (errorItem != null)
         {
-            var errorCount = PackageHistory.Count(p => !string.IsNullOrEmpty(p.Error));
+            var errorCount = PackageHistory.Count(p => !string.IsNullOrEmpty(p.ErrorMessage));
             errorItem.Value = errorCount.ToString();
             errorItem.Description = $"共有 {errorCount} 个异常包裹";
         }
@@ -474,7 +603,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         if (efficiencyItem != null)
         {
             var hourAgo = DateTime.Now.AddHours(-1);
-            var hourlyCount = PackageHistory.Count(p => p.CreatedAt > hourAgo);
+            var hourlyCount = PackageHistory.Count(p => p.CreateTime > hourAgo);
             efficiencyItem.Value = hourlyCount.ToString();
             efficiencyItem.Description = $"最近一小时处理 {hourlyCount} 个";
         }
@@ -498,51 +627,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    ///     启动摆轮分拣服务
-    /// </summary>
-    private async Task StartSortServiceAsync()
-    {
-        try
-        {
-            // 加载分拣配置
-            var sortConfig = _settingsService.LoadConfiguration<SortConfiguration>();
-
-            // 初始化分拣服务
-            await _sortService.InitializeAsync(sortConfig);
-
-            // 启动分拣服务
-            await _sortService.StartAsync();
-
-            Log.Information("摆轮分拣服务已启动");
-            
-            // 更新设备状态
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                // 更新触发光电状态
-                var triggerStatus = DeviceStatuses.FirstOrDefault(x => x.Name == "触发光电");
-                if (triggerStatus != null)
-                {
-                    triggerStatus.Status = "已连接";
-                    triggerStatus.StatusColor = "#4CAF50";
-                }
-
-                // 更新分检光电状态
-                foreach (var photoelectric in sortConfig.SortingPhotoelectrics)
-                {
-                    var status = DeviceStatuses.FirstOrDefault(x => x.Name == photoelectric.Name);
-                    if (status == null) continue;
-                    status.Status = "已连接";
-                    status.StatusColor = "#4CAF50";
-                }
-            });
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "启动摆轮分拣服务时发生错误");
-        }
-    }
-
-    /// <summary>
     ///     更新设备连接状态
     /// </summary>
     private Task UpdateDeviceStatusesAsync()
@@ -561,24 +645,36 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // 更新分拣设备状态
             if (_sortService.IsRunning())
             {
-                // 获取分拣配置
-                var sortConfig = _settingsService.LoadConfiguration<SortConfiguration>();
+                // 获取所有设备的连接状态
+                var deviceStates = _sortService.GetAllDeviceConnectionStates();
 
                 // 更新触发光电状态
                 var triggerStatus = DeviceStatuses.FirstOrDefault(x => x.Name == "触发光电");
-                if (triggerStatus != null)
+                if (triggerStatus != null && deviceStates.TryGetValue("触发光电", out var triggerConnected))
                 {
-                    triggerStatus.Status = "已连接";
-                    triggerStatus.StatusColor = "#4CAF50";
+                    triggerStatus.Status = triggerConnected ? "已连接" : "已断开";
+                    triggerStatus.StatusColor = triggerConnected ? "#4CAF50" : "#F44336";
                 }
 
                 // 更新分检光电状态
-                foreach (var photoelectric in sortConfig.SortingPhotoelectrics)
+                foreach (var status in DeviceStatuses.Where(x => x.Name != "相机" && x.Name != "触发光电"))
                 {
-                    var status = DeviceStatuses.FirstOrDefault(x => x.Name == photoelectric.Name);
-                    if (status == null) continue;
-                    status.Status = "已连接";
-                    status.StatusColor = "#4CAF50";
+                    if (!deviceStates.TryGetValue(status.Name, out var isConnected)) continue;
+                    status.Status = isConnected ? "已连接" : "已断开";
+                    status.StatusColor = isConnected ? "#4CAF50" : "#F44336";
+
+                    Log.Debug("更新分拣光电状态: {Name} -> {Status}",
+                        status.Name,
+                        isConnected ? "已连接" : "已断开");
+                }
+            }
+            else
+            {
+                // 如果服务未运行，将所有设备状态设置为未连接
+                foreach (var status in DeviceStatuses.Where(x => x.Name != "相机"))
+                {
+                    status.Status = "未连接";
+                    status.StatusColor = "#F44336";
                 }
             }
         }
@@ -590,60 +686,47 @@ public class MainWindowViewModel : BindableBase, IDisposable
         return Task.CompletedTask;
     }
 
-    private void OnImageReceived(Image<Rgba32> image, IReadOnlyList<DahuaBarcodeLocation> barcodeLocations)
-    {
-        try
-        {
-            // 将Image<Rgba32>转换为BitmapSource
-            using var memoryStream = new MemoryStream();
-            image.SaveAsJpeg(memoryStream);
-            memoryStream.Position = 0;
-
-            var bitmap = new BitmapImage();
-            bitmap.BeginInit();
-            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.StreamSource = memoryStream;
-            bitmap.EndInit();
-            bitmap.Freeze(); // 使图像可以跨线程访问
-
-            // 在UI线程中更新图像
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                try
-                {
-                    CurrentImage = bitmap;
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "更新相机图像时发生错误");
-                }
-            });
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "处理相机图像时发生错误");
-        }
-    }
-
     protected virtual void Dispose(bool disposing)
     {
         if (_disposed) return;
+
         if (disposing)
         {
-            // 停止定时器
-            _timer.Stop();
+            try
+            {
+                // 停止分拣服务
+                if (_sortService.IsRunning())
+                {
+                    _sortService.StopAsync().Wait();
+                    Log.Information("摆轮分拣服务已停止");
+                }
 
-            // 取消事件订阅
-            _cameraService.OnCameraConnectionChanged -= OnCameraConnectionChanged;
-            _sortService.DeviceConnectionStatusChanged -= OnDeviceConnectionStatusChanged;
-            _packageTransferService.OnPackageInfo -= OnPackageInfo;
-            _cameraService.OnImageReceived -= OnImageReceived;
+                // 释放分拣服务资源
+                if (_sortService is IDisposable disposableSortService)
+                {
+                    disposableSortService.Dispose();
+                    Log.Information("摆轮分拣服务资源已释放");
+                }
 
-            // 停止分拣服务
-            _sortService.StopAsync().Wait();
+                // 取消订阅事件
+                _sortService.DeviceConnectionStatusChanged -= OnDeviceConnectionStatusChanged;
+                _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
 
-            // 释放相机服务
-            _cameraService.Dispose();
+                // 释放订阅
+                foreach (var subscription in _subscriptions)
+                {
+                    subscription.Dispose();
+                }
+
+                _subscriptions.Clear();
+
+                // 停止定时器
+                _timer.Stop();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "释放资源时发生错误");
+            }
         }
 
         _disposed = true;

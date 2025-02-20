@@ -15,18 +15,8 @@ public class CameraSettingsViewModel : BindableBase
     private readonly ISettingsService _settingsService;
     private readonly CameraFactory _cameraFactory;
     private readonly INotificationService _notificationService;
-
-    private bool _barcodeRepeatFilterEnabled;
-
+    private CameraSettings _configuration = new();
     private bool _isRefreshing;
-
-    private int _repeatCount;
-
-    private int _repeatTimeMs;
-
-    private CameraType _selectedCameraType;
-
-    private CameraManufacturer _selectedManufacturer;
 
     public CameraSettingsViewModel(
         ISettingsService settingsService,
@@ -44,40 +34,16 @@ public class CameraSettingsViewModel : BindableBase
         LoadSettings();
     }
 
-    public CameraManufacturer SelectedManufacturer
+    public CameraSettings Configuration
     {
-        get => _selectedManufacturer;
-        set => SetProperty(ref _selectedManufacturer, value);
-    }
-
-    public CameraType SelectedCameraType
-    {
-        get => _selectedCameraType;
-        set => SetProperty(ref _selectedCameraType, value);
+        get => _configuration;
+        set => SetProperty(ref _configuration, value);
     }
 
     public bool IsRefreshing
     {
         get => _isRefreshing;
         set => SetProperty(ref _isRefreshing, value);
-    }
-
-    public bool BarcodeRepeatFilterEnabled
-    {
-        get => _barcodeRepeatFilterEnabled;
-        set => SetProperty(ref _barcodeRepeatFilterEnabled, value);
-    }
-
-    public int RepeatCount
-    {
-        get => _repeatCount;
-        set => SetProperty(ref _repeatCount, value);
-    }
-
-    public int RepeatTimeMs
-    {
-        get => _repeatTimeMs;
-        set => SetProperty(ref _repeatTimeMs, value);
     }
 
     public static Array Manufacturers => Enum.GetValues(typeof(CameraManufacturer));
@@ -93,10 +59,10 @@ public class CameraSettingsViewModel : BindableBase
         IsRefreshing = true;
         try
         {
-            Log.Information("开始刷新相机列表，当前选择的厂商：{Manufacturer}", SelectedManufacturer);
+            Log.Information("开始刷新相机列表，当前选择的厂商：{Manufacturer}", Configuration.Manufacturer);
             
             // 创建相机服务
-            using var cameraService = _cameraFactory.CreateCameraByManufacturer(SelectedManufacturer);
+            using var cameraService = _cameraFactory.CreateCameraByManufacturer(Configuration.Manufacturer);
             
             // 获取相机列表
             var cameraInfos = cameraService.GetCameraInfos();
@@ -136,30 +102,28 @@ public class CameraSettingsViewModel : BindableBase
 
     private void ExecuteSaveConfiguration()
     {
-        var settings = new CameraSettings
+        try
         {
-            Manufacturer = SelectedManufacturer,
-            CameraType = SelectedCameraType,
-            BarcodeRepeatFilterEnabled = BarcodeRepeatFilterEnabled,
-            RepeatCount = RepeatCount,
-            RepeatTimeMs = RepeatTimeMs,
-            SelectedCameras = AvailableCameras.Where(c => c.IsSelected).ToList()
-        };
-
-        _settingsService.SaveConfiguration(settings);
+            Configuration.SelectedCameras = AvailableCameras.Where(c => c.IsSelected).ToList();
+            _settingsService.SaveConfiguration(Configuration);
+            _notificationService.ShowSuccessWithToken("相机设置已保存", "SettingWindowGrowl");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "保存相机配置失败");
+            _notificationService.ShowErrorWithToken("保存相机配置失败", "SettingWindowGrowl");
+        }
     }
 
     private void LoadSettings()
     {
-        var settings = _settingsService.LoadConfiguration<CameraSettings>();
-
-        SelectedManufacturer = settings.Manufacturer;
-        SelectedCameraType = settings.CameraType;
-        BarcodeRepeatFilterEnabled = settings.BarcodeRepeatFilterEnabled;
-        RepeatCount = settings.RepeatCount;
-        RepeatTimeMs = settings.RepeatTimeMs;
-
+        Configuration = _settingsService.LoadConfiguration<CameraSettings>();
+        
+        // 更新相机列表
         AvailableCameras.Clear();
-        foreach (var camera in settings.SelectedCameras) AvailableCameras.Add(camera);
+        foreach (var camera in Configuration.SelectedCameras)
+        {
+            AvailableCameras.Add(camera);
+        }
     }
 }

@@ -17,19 +17,19 @@ public interface ICameraService : IDisposable
     bool IsConnected { get; }
 
     /// <summary>
-    ///     包裹信息事件
+    ///     包裹信息流
     /// </summary>
-    event Action<PackageInfo>? OnPackageInfo;
+    IObservable<PackageInfo> PackageStream { get; }
 
     /// <summary>
-    ///     图像信息事件
+    ///     图像信息流
     /// </summary>
-    event Action<Image<Rgba32>, IReadOnlyList<DahuaBarcodeLocation>>? OnImageReceived;
+    IObservable<(Image<Rgba32> image, IReadOnlyList<BarcodeLocation> barcodes)> ImageStream { get; }
 
     /// <summary>
     ///     相机连接状态改变事件
     /// </summary>
-    event Action<string, bool>? OnCameraConnectionChanged;
+    event Action<string, bool>? ConnectionChanged;
 
     /// <summary>
     ///     启动相机服务

@@ -43,4 +43,17 @@ public interface IPendulumSortService : IDisposable
     /// </summary>
     /// <param name="package">包裹信息</param>
     void ProcessPackage(PackageInfo package);
+
+    /// <summary>
+    ///     获取设备连接状态
+    /// </summary>
+    /// <param name="deviceName">设备名称</param>
+    /// <returns>true表示已连接，false表示未连接</returns>
+    bool GetDeviceConnectionState(string deviceName);
+
+    /// <summary>
+    ///     获取所有设备的连接状态
+    /// </summary>
+    /// <returns>设备名称和连接状态的字典</returns>
+    Dictionary<string, bool> GetAllDeviceConnectionStates();
 }

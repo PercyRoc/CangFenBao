@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Input;
 using Presentation_CommonLibrary.Services;
 using Serilog;
 using MessageBoxResult = System.Windows.MessageBoxResult;
@@ -20,6 +21,25 @@ public partial class MainWindow
 
         // 注册Growl容器
         notificationService.Register("MainWindowGrowl", GrowlPanel);
+
+        // 添加标题栏鼠标事件处理
+        MouseDown += OnWindowMouseDown;
+    }
+
+    private void OnWindowMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        try
+        {
+            // 当在标题栏区域按下左键时允许拖动窗口
+            if (e.ChangedButton == MouseButton.Left && e.GetPosition(this).Y <= 32)
+            {
+                DragMove();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "拖动窗口时发生错误");
+        }
     }
 
     private async void MetroWindow_Closing(object sender, CancelEventArgs e)

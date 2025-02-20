@@ -2,6 +2,7 @@ using CommonLibrary.Models.Settings.Camera;
 using CommonLibrary.Models.Settings.Camera.Enums;
 using CommonLibrary.Services;
 using DeviceService.Camera.DaHua;
+using DeviceService.Camera.Hikvision;
 using Serilog;
 
 namespace DeviceService.Camera;
@@ -9,13 +10,19 @@ namespace DeviceService.Camera;
 /// <summary>
 ///     相机工厂
 /// </summary>
-/// <remarks>
-///     构造函数
-/// </remarks>
-public class CameraFactory(ISettingsService settingsService) : IDisposable
+public class CameraFactory : IDisposable
 {
+    private readonly ISettingsService _settingsService;
     private ICameraService? _currentCamera;
     private bool _disposed;
+
+    /// <summary>
+    ///     初始化相机工厂
+    /// </summary>
+    public CameraFactory(ISettingsService settingsService)
+    {
+        _settingsService = settingsService;
+    }
 
     public void Dispose()
     {
@@ -51,13 +58,15 @@ public class CameraFactory(ISettingsService settingsService) : IDisposable
             _currentCamera = manufacturer switch
             {
                 CameraManufacturer.Dahua => new DahuaCameraService(),
-                CameraManufacturer.Hikvision => throw new NotImplementedException("海康相机暂未实现"),
+                CameraManufacturer.Hikvision => new HikvisionIndustrialCameraSdkClient(),
                 _ => throw new ArgumentException($"不支持的相机厂商: {manufacturer}")
             };
+            
+            Log.Information("已创建 {Manufacturer} 相机服务", manufacturer);
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "创建相机服务失败，将使用大华相机作为默认选项");
+            Log.Error(ex, "创建 {Manufacturer} 相机服务失败，将使用大华相机作为默认选项", manufacturer);
             _currentCamera = new DahuaCameraService();
         }
 
@@ -71,7 +80,7 @@ public class CameraFactory(ISettingsService settingsService) : IDisposable
     {
         try
         {
-            return settingsService.LoadSettings<CameraSettings>("CameraSettings");
+            return _settingsService.LoadSettings<CameraSettings>("CameraSettings");
         }
         catch (Exception ex)
         {

@@ -48,7 +48,7 @@ public interface ISettingsService
     /// </summary>
     /// <param name="configuration">配置对象</param>
     /// <typeparam name="T">配置类型</typeparam>
-    void SaveConfiguration<T>(T configuration) where T : class;
+    void SaveConfiguration<T>(T configuration) where T : class?;
 
     /// <summary>
     ///     重新加载所有配置

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Reactive.Linq;
 using CommonLibrary.Models;
 using CommonLibrary.Models.Settings.Camera;
 using CommonLibrary.Services;
@@ -16,6 +17,7 @@ public class PackageTransferService : IDisposable
     private readonly CameraSettings _cameraSettings;
     private readonly ConcurrentDictionary<string, (DateTime Time, int Count)> _processedBarcodes = new();
     private readonly ISettingsService _settingsService;
+    private readonly IDisposable _packageSubscription;
     private bool _isDisposed;
 
     /// <summary>
@@ -28,7 +30,9 @@ public class PackageTransferService : IDisposable
         _cameraService = cameraService;
         _settingsService = settingsService;
         _cameraSettings = LoadCameraSettings();
-        _cameraService.OnPackageInfo += HandlePackageInfo;
+        
+        // 订阅包裹流
+        _packageSubscription = _cameraService.PackageStream.Subscribe(HandlePackageInfo);
     }
 
     /// <summary>
@@ -39,7 +43,7 @@ public class PackageTransferService : IDisposable
         if (_isDisposed)
             return;
 
-        _cameraService.OnPackageInfo -= HandlePackageInfo;
+        _packageSubscription.Dispose();
         _processedBarcodes.Clear();
         _isDisposed = true;
 
@@ -47,9 +51,23 @@ public class PackageTransferService : IDisposable
     }
 
     /// <summary>
-    ///     包裹信息事件
+    ///     包裹信息流
     /// </summary>
-    public event Action<PackageInfo>? OnPackageInfo;
+    public IObservable<PackageInfo> PackageStream => _cameraService.PackageStream
+        .Where(package => !string.IsNullOrWhiteSpace(package.Barcode))
+        .Where(package => !_cameraSettings.BarcodeRepeatFilterEnabled || IsValidBarcode(package.Barcode))
+        .Do(package =>
+        {
+            // 更新条码处理记录
+            _processedBarcodes.AddOrUpdate(
+                package.Barcode,
+                (package.CreateTime, 1),
+                (_, record) => (package.CreateTime, record.Count + 1)
+            );
+
+            // 处理包裹信息
+            ProcessPackage(package);
+        });
 
     /// <summary>
     ///     加载相机设置
@@ -92,15 +110,12 @@ public class PackageTransferService : IDisposable
             // 更新条码处理记录
             _processedBarcodes.AddOrUpdate(
                 package.Barcode,
-                (package.CreatedAt, 1),
-                (_, record) => (package.CreatedAt, record.Count + 1)
+                (package.CreateTime, 1),
+                (_, record) => (package.CreateTime, record.Count + 1)
             );
 
             // 处理包裹信息
             ProcessPackage(package);
-
-            // 发布包裹信息
-            OnPackageInfo?.Invoke(package);
         }
         catch (Exception ex)
         {
@@ -120,14 +135,9 @@ public class PackageTransferService : IDisposable
         var maxRepeatCount = _cameraSettings.RepeatCount;
 
         // 如果超过时间窗口，重置计数
-        if (timeSinceLastProcess.TotalMilliseconds > timeWindowMs)
-        {
-            _processedBarcodes.TryRemove(barcode, out _);
-            return true;
-        }
-
-        // 检查是否超过重复次数
-        return record.Count < maxRepeatCount;
+        if (!(timeSinceLastProcess.TotalMilliseconds > timeWindowMs)) return record.Count < maxRepeatCount;
+        _processedBarcodes.TryRemove(barcode, out _);
+        return true;
     }
 
     /// <summary>
@@ -137,33 +147,13 @@ public class PackageTransferService : IDisposable
     {
         try
         {
-            // 验证包裹数据
-            ValidatePackage(package);
-
             // 清理过期的条码记录
             CleanupExpiredBarcodes();
-
-            // TODO: 添加其他处理逻辑
-            // 例如：数据转换、图像处理、数据存储等
         }
         catch (Exception ex)
         {
             Log.Error(ex, "处理包裹 {Barcode} 时发生错误", package.Barcode);
         }
-    }
-
-    /// <summary>
-    ///     验证包裹数据
-    /// </summary>
-    private static void ValidatePackage(PackageInfo package)
-    {
-        if (package.Image == null) Log.Warning("包裹 {Barcode} 缺少图像数据", package.Barcode);
-
-        if (package.Weight <= 0) Log.Warning("包裹 {Barcode} 重量异常: {Weight}", package.Barcode, package.Weight);
-
-        if (package.Length <= 0 || package.Width <= 0 || package.Height <= 0)
-            Log.Warning("包裹 {Barcode} 尺寸异常: {Length}x{Width}x{Height}",
-                package.Barcode, package.Length, package.Width, package.Height);
     }
 
     /// <summary>

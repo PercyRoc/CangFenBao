@@ -10,6 +10,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeviceService", "DeviceServ
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SortingService", "SortingService\SortingService.csproj", "{75982A12-DE04-43F1-8E59-8C2C623340AC}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CangFenBao-SangNeng", "CangFenBao-SangNeng\CangFenBao-SangNeng.csproj", "{7BC10AEE-CFDB-4AC2-ACC0-7EEA2B5101D0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -36,5 +38,9 @@ Global
 		{75982A12-DE04-43F1-8E59-8C2C623340AC}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{75982A12-DE04-43F1-8E59-8C2C623340AC}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{75982A12-DE04-43F1-8E59-8C2C623340AC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7BC10AEE-CFDB-4AC2-ACC0-7EEA2B5101D0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7BC10AEE-CFDB-4AC2-ACC0-7EEA2B5101D0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7BC10AEE-CFDB-4AC2-ACC0-7EEA2B5101D0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7BC10AEE-CFDB-4AC2-ACC0-7EEA2B5101D0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

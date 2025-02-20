@@ -11,9 +11,6 @@ public static class ContainerRegistryExtensions
     /// </summary>
     public static IContainerRegistry AddSortingServices(this IContainerRegistry containerRegistry)
     {
-        // 注册 TCP 客户端服务
-        containerRegistry.Register<ITcpClientService, TcpClientService>();
-
         // 注册摆轮分拣服务
         containerRegistry.RegisterSingleton<IPendulumSortService, PendulumSortService>();
 

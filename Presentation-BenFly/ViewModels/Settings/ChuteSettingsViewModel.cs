@@ -104,7 +104,7 @@ public class ChuteSettingsViewModel : BindableBase
 
                 var rule = new ChuteRule
                 {
-                    Chute = chute,
+                    Chute = Convert.ToInt32(chute),
                     FirstSegment = firstSegment,
                     SecondSegment = secondSegment,
                     ThirdSegment = thirdSegment

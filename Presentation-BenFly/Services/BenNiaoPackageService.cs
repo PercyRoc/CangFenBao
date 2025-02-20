@@ -9,6 +9,8 @@ using Presentation_BenFly.Models.Upload;
 using Serilog;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
+using System.Text;
+using System.Text.Json;
 
 namespace Presentation_BenFly.Services;
 
@@ -37,10 +39,11 @@ public class BenNiaoPackageService(
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(package.Barcode))
+            // 检查是否为Noread或空条码
+            if (string.IsNullOrWhiteSpace(package.Barcode) || package.Barcode.Equals("Noread", StringComparison.OrdinalIgnoreCase))
             {
-                Log.Warning("包裹条码为空，无法处理");
-                return false;
+                Log.Warning("包裹条码为空或Noread，将使用异常数据上传接口");
+                return await UploadNoReadDataAsync(package);
             }
 
             // 从预报数据服务中获取预报数据
@@ -69,11 +72,8 @@ public class BenNiaoPackageService(
             }
 
             // 异步上传包裹数据和图片
-            if (package is { Length: not null, Width: not null, Height: not null })
-                _ = UploadPackageDataAndImageAsync(package);
-            else
-                Log.Warning("包裹 {Barcode} 缺少必要的数据（重量或尺寸），跳过上传", package.Barcode);
-
+            _ = UploadPackageDataAndImageAsync(package);
+            
             Log.Information("包裹 {Barcode} 处理完成", package.Barcode);
             return true;
         }
@@ -93,13 +93,24 @@ public class BenNiaoPackageService(
         {
             Log.Information("开始实时查询运单 {WaybillNum} 的三段码", waybillNum);
 
-            var url = "/api/openApi/realTimeQuery";
+            const string url = "/api/openApi/realTimeQuery";
             var request = BenNiaoSignHelper.CreateRequest(
                 _config.BenNiaoAppId,
                 _config.BenNiaoAppSecret,
                 new { waybillNum });
 
-            var response = await _httpClient.PostAsJsonAsync(url, request);
+            // 序列化请求并记录日志
+            var jsonContent = JsonSerializer.Serialize(request);
+
+            // 使用 StringContent 发送请求
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+            var response = await _httpClient.PostAsync(url, content);
+
+            // 记录响应状态和内容
+            Log.Information("实时查询三段码响应状态码：{StatusCode}", response.StatusCode);
+            var responseContent = await response.Content.ReadAsStringAsync();
+            Log.Information("实时查询三段码响应内容：{@Response}", responseContent);
+
             response.EnsureSuccessStatusCode();
 
             var result = await response.Content.ReadFromJsonAsync<BenNiaoResponse<string>>();
@@ -123,24 +134,17 @@ public class BenNiaoPackageService(
         {
             Log.Information("开始上传包裹 {Barcode} 的数据", package.Barcode);
 
-            // 检查必要的数据
-            if (!package.Length.HasValue || !package.Width.HasValue || !package.Height.HasValue)
-            {
-                Log.Warning("包裹 {Barcode} 缺少必要的数据（重量或尺寸），无法上传", package.Barcode);
-                return (false, DateTime.MinValue);
-            }
-
             var uploadTime = DateTime.Now;
-            var url = "/api/openApi/dataUpload";
+            const string url = "/api/openApi/dataUpload";
             var uploadItem = new DataUploadItem
             {
                 NetworkName = _config.BenNiaoDistributionCenterName,
                 WaybillNum = package.Barcode,
                 ScanTime = uploadTime.ToString("yyyy-MM-dd HH:mm:ss"),
                 Weight = Math.Round(Convert.ToDecimal(package.Weight) / 1000m, 2), // 转换为千克并保留2位小数
-                GoodsLength = (int)Math.Round(package.Length.Value / 10.0), // 转换为厘米
-                GoodsWidth = (int)Math.Round(package.Width.Value / 10.0), // 转换为厘米
-                GoodsHeight = (int)Math.Round(package.Height.Value / 10.0), // 转换为厘米
+                GoodsLength = package.Length.HasValue ? (int)Math.Round(package.Length.Value / 10.0) : 0, // 转换为厘米，空值时为0
+                GoodsWidth = package.Width.HasValue ? (int)Math.Round(package.Width.Value / 10.0) : 0, // 转换为厘米，空值时为0
+                GoodsHeight = package.Height.HasValue ? (int)Math.Round(package.Height.Value / 10.0) : 0, // 转换为厘米，空值时为0
                 DeviceId = _config.DeviceId // 添加设备号
             };
 
@@ -158,7 +162,7 @@ public class BenNiaoPackageService(
             response.EnsureSuccessStatusCode();
 
             var result = await response.Content.ReadFromJsonAsync<BenNiaoResponse<object>>();
-            if (result == null || !result.IsSuccess)
+            if (result is not { IsSuccess: true })
             {
                 Log.Error("上传包裹 {Barcode} 数据失败：{Message}", package.Barcode, result?.Message);
                 return (false, DateTime.MinValue);
@@ -284,6 +288,68 @@ public class BenNiaoPackageService(
         catch (Exception ex)
         {
             Log.Error(ex, "异步上传包裹 {Barcode} 数据和图片时发生错误", package.Barcode);
+        }
+    }
+
+    /// <summary>
+    ///     上传异常数据（Noread或空条码）
+    /// </summary>
+    private async Task<bool> UploadNoReadDataAsync(PackageInfo package)
+    {
+        try
+        {
+            Log.Information("开始上传异常包裹数据");
+            var uploadTime = DateTime.Now;
+            const string url = "/api/openApi/noReadDataUpload";
+
+            // 将图片转换为Base64
+            string? base64Image = null;
+            if (package.Image != null)
+            {
+                using var memoryStream = new MemoryStream();
+                await package.Image.SaveAsJpegAsync(memoryStream);
+                base64Image = Convert.ToBase64String(memoryStream.ToArray());
+            }
+
+            var uploadItem = new
+            {
+                networkName = _config.BenNiaoDistributionCenterName,
+                deviceId = _config.DeviceId,
+                waybillNum = package.Barcode, // 可以为空
+                scanTime = uploadTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                weight = Math.Round(Convert.ToDecimal(package.Weight) / 1000m, 2), // 转换为千克并保留2位小数
+                goodsLength = package.Length.HasValue ? (int)Math.Round(package.Length.Value / 10.0) : 0, // 转换为厘米，空值时为0
+                goodsWidth = package.Width.HasValue ? (int)Math.Round(package.Width.Value / 10.0) : 0, // 转换为厘米，空值时为0
+                goodsHeight = package.Height.HasValue ? (int)Math.Round(package.Height.Value / 10.0) : 0, // 转换为厘米，空值时为0
+                picture = base64Image // Base64格式图片
+            };
+
+            var request = BenNiaoSignHelper.CreateRequest(
+                _config.BenNiaoAppId,
+                _config.BenNiaoAppSecret,
+                new[] { uploadItem });
+
+            var response = await _httpClient.PostAsJsonAsync(url, request);
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+            Log.Information("上传异常包裹数据响应：{@Response}", responseContent);
+
+            response.EnsureSuccessStatusCode();
+
+            var result = await response.Content.ReadFromJsonAsync<BenNiaoResponse<object>>();
+            if (result is not { IsSuccess: true })
+            {
+                Log.Error("上传异常包裹数据失败：{Message}", result?.Message);
+                return false;
+            }
+
+            Log.Information("成功上传异常包裹数据");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "上传异常包裹数据时发生错误");
+            return false;
         }
     }
 }

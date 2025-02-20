@@ -12,6 +12,10 @@ public static class ServiceCollectionExtensions
 
         // 注册通知服务
         services.RegisterSingleton<INotificationService, NotificationService>();
+        
+        // 注册通知服务
+        services.RegisterSingleton<INotificationService, NotificationService>();
+        services.RegisterSingleton<IDialogService, DialogService>();
 
         return services;
     }

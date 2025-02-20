@@ -68,7 +68,6 @@
             <!-- 系统设置按钮 -->
             <ui:Button Grid.Column="1"
                        Appearance="Primary"
-                       Icon="Settings24"
                        Command="{Binding OpenSettingsCommand}"
                        Margin="0,0,8,0"
                        Padding="8,6"
@@ -432,7 +431,7 @@
                                                     Binding="{Binding ProcessingTime, StringFormat={}{0:0}ms}"
                                                     Width="100" />
                                 <DataGridTextColumn Header="时间"
-                                                    Binding="{Binding CreatedAt, StringFormat={}{0:HH:mm:ss}}"
+                                                    Binding="{Binding CreateTime, StringFormat={}{0:HH:mm:ss}}"
                                                     Width="100" />
                                 <DataGridTextColumn Header="备注" Binding="{Binding Information}" Width="*" />
                             </DataGrid.Columns>

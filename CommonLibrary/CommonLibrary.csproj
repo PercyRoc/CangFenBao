@@ -11,8 +11,10 @@
     <ItemGroup>
         <PackageReference Include="FluentFTP"/>
         <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite"/>
         <PackageReference Include="Prism.Wpf"/>
         <PackageReference Include="Serilog"/>
         <PackageReference Include="SixLabors.ImageSharp"/>
+        <PackageReference Include="System.IO.Ports"/>
     </ItemGroup>
 </Project>

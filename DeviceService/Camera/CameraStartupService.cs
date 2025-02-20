@@ -12,7 +12,6 @@ namespace DeviceService.Camera;
 /// </remarks>
 public class CameraStartupService(
     CameraFactory cameraFactory,
-    INotificationService notificationService,
     IDialogService dialogService) : IHostedService
 {
     private readonly SemaphoreSlim _initLock = new(1, 1);

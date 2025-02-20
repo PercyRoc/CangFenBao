@@ -86,7 +86,7 @@
 
                             <ui:NumberBox Grid.Column="0"
                                           ClearButtonEnabled="False"
-                                          Width="100"
+                                          Width="120"
                                           HorizontalAlignment="Left"
                                           Value="{Binding Configuration.TriggerPhotoelectric.TimeRangeLower, UpdateSourceTrigger=PropertyChanged}" />
 
@@ -96,7 +96,7 @@
                                        VerticalAlignment="Center" />
 
                             <ui:NumberBox Grid.Column="2"
-                                          Width="100"
+                                          Width="120"
                                           ClearButtonEnabled="False"
                                           Value="{Binding Configuration.TriggerPhotoelectric.TimeRangeUpper, UpdateSourceTrigger=PropertyChanged}" />
 
@@ -125,8 +125,12 @@
                         <ui:Button Grid.Column="1"
                                    Appearance="Primary"
                                    Command="{Binding AddPhotoelectricCommand}"
-                                   Icon="Add24">
-                            <TextBlock Text="添加光电" />
+                                   Padding="8,6"
+                                   ToolTip="添加光电">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Add24" Margin="0,0,8,0" />
+                                <TextBlock Text="添加光电" VerticalAlignment="Center" />
+                            </StackPanel>
                         </ui:Button>
                     </Grid>
 
@@ -238,7 +242,7 @@
 
                                             <ui:NumberBox Grid.Column="0"
                                                           ClearButtonEnabled="False"
-                                                          Width="100"
+                                                          Width="120"
                                                           HorizontalAlignment="Left"
                                                           Value="{Binding TimeRangeLower, UpdateSourceTrigger=PropertyChanged}" />
 
@@ -249,7 +253,7 @@
 
                                             <ui:NumberBox Grid.Column="2"
                                                           ClearButtonEnabled="False"
-                                                          Width="100"
+                                                          Width="120"
                                                           HorizontalAlignment="Left"
                                                           Value="{Binding TimeRangeUpper, UpdateSourceTrigger=PropertyChanged}" />
 
@@ -267,7 +271,13 @@
                                                    Appearance="Danger"
                                                    Command="{Binding DataContext.RemovePhotoelectricCommand, RelativeSource={RelativeSource AncestorType=Page}}"
                                                    CommandParameter="{Binding}"
-                                                   Icon="Delete24" />
+                                                   Padding="8,6"
+                                                   ToolTip="删除光电">
+                                            <StackPanel Orientation="Horizontal">
+                                                <ui:SymbolIcon Symbol="Delete24" Margin="0,0,8,0" />
+                                                <TextBlock Text="删除" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </ui:Button>
                                     </Grid>
                                 </ui:Card>
                             </DataTemplate>

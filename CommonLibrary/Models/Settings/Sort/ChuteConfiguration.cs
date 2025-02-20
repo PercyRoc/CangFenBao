@@ -1,17 +1,18 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using Prism.Mvvm;
+using Serilog;
 
 namespace CommonLibrary.Models.Settings.Sort;
 
 [Configuration("ChuteConfiguration")]
 public class ChuteConfiguration : BindableBase
 {
-    private string _exceptionChute = string.Empty;
+    private int _exceptionChute;
     private ObservableCollection<ChuteRule> _rules = [];
 
     [RegularExpression(@"^[1-9]\d{0,2}$", ErrorMessage = "异常格口号必须是1-999之间的数字")]
-    public string ExceptionChute
+    public int ExceptionChute
     {
         get => _exceptionChute;
         set => SetProperty(ref _exceptionChute, value);
@@ -29,15 +30,53 @@ public class ChuteConfiguration : BindableBase
     /// <param name="firstSegment">一段码</param>
     /// <param name="secondSegment">二段码</param>
     /// <returns>格口号，如果未找到匹配规则则返回异常格口号</returns>
-    private string GetChute(string firstSegment, string secondSegment)
+    private int GetChute(string firstSegment, string secondSegment)
     {
         // 先匹配一段码
         var matchedRule = Rules.FirstOrDefault(rule =>
-            // 如果一段码没有匹配到，则匹配二段码
-            !string.IsNullOrWhiteSpace(rule.FirstSegment) && rule.FirstSegment == firstSegment) ?? Rules.FirstOrDefault(rule =>
-            !string.IsNullOrWhiteSpace(rule.SecondSegment) && rule.SecondSegment == secondSegment);
+            !string.IsNullOrWhiteSpace(rule.FirstSegment) && rule.FirstSegment == firstSegment);
 
-        return matchedRule?.Chute ?? ExceptionChute;
+        if (matchedRule != null)
+        {
+            return matchedRule.Chute;
+        }
+
+        // 如果二段码包含横杠，先尝试匹配二级网点段码
+        if (!string.IsNullOrWhiteSpace(secondSegment) && secondSegment.Contains('-'))
+        {
+            var segments = secondSegment.Split('-');
+            if (segments.Length != 2) return ExceptionChute;
+            // 先尝试匹配二级网点段码
+            matchedRule = Rules.FirstOrDefault(rule =>
+                !string.IsNullOrWhiteSpace(rule.SecondSegment) && rule.SecondSegment == segments[1]);
+
+            if (matchedRule != null)
+            {
+                return matchedRule.Chute;
+            }
+
+            // 如果二级网点段码没有匹配到，尝试匹配一级网点段码
+            matchedRule = Rules.FirstOrDefault(rule =>
+                !string.IsNullOrWhiteSpace(rule.SecondSegment) && rule.SecondSegment == segments[0]);
+
+            if (matchedRule != null)
+            {
+                return matchedRule.Chute;
+            }
+        }
+        else
+        {
+            // 如果二段码不包含横杠，直接匹配
+            matchedRule = Rules.FirstOrDefault(rule =>
+                !string.IsNullOrWhiteSpace(rule.SecondSegment) && rule.SecondSegment == secondSegment);
+
+            if (matchedRule != null)
+            {
+                return matchedRule.Chute;
+            }
+        }
+
+        return ExceptionChute;
     }
 
     /// <summary>
@@ -45,10 +84,12 @@ public class ChuteConfiguration : BindableBase
     /// </summary>
     /// <param name="barcode">使用-连接的段码，例如：123-456-789</param>
     /// <returns>格口号，如果未找到匹配规则则返回异常格口号</returns>
-    public string GetChuteByConnectedSegments(string barcode)
+    public int GetChuteByConnectedSegments(string barcode)
     {
-        if (string.IsNullOrWhiteSpace(barcode))
+        // 如果条码为Noread或段码为空，直接返回异常格口
+        if (string.IsNullOrWhiteSpace(barcode) || barcode.Equals("Noread", StringComparison.OrdinalIgnoreCase))
         {
+            Log.Warning("条码为Noread或段码为空，使用异常格口");
             return ExceptionChute;
         }
 
@@ -71,18 +112,48 @@ public class ChuteConfiguration : BindableBase
             return ExceptionChute;
         }
     }
+
+    /// <summary>
+    /// 根据空格分隔的段码获取格口号
+    /// </summary>
+    /// <param name="barcode">使用空格分隔的段码，例如：551 A01-B01 00 或 551 A01 00</param>
+    /// <returns>格口号，如果未找到匹配规则则返回异常格口号</returns>
+    public int GetChuteBySpaceSeparatedSegments(string barcode)
+    {
+        // 如果条码为Noread或段码为空，直接返回异常格口
+        if (string.IsNullOrWhiteSpace(barcode) || barcode.Equals("Noread", StringComparison.OrdinalIgnoreCase))
+        {
+            Log.Warning("条码为Noread或段码为空，使用异常格口");
+            return ExceptionChute;
+        }
+
+        try
+        {
+            // 分割段码
+            var segments = barcode.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+            // 如果段码数量小于2，返回异常格口
+            return segments.Length < 2 ? ExceptionChute :
+                // 使用前两段进行匹配
+                GetChute(segments[0], segments[1]);
+        }
+        catch
+        {
+            return ExceptionChute;
+        }
+    }
 }
 
 public class ChuteRule : BindableBase, IValidatableObject
 {
-    private string _chute = string.Empty;
+    private int _chute;
     private string _firstSegment = string.Empty;
     private string _secondSegment = string.Empty;
     private string _thirdSegment = string.Empty;
     private bool _hasError;
     private string _errorMessage = string.Empty;
 
-    public string Chute
+    public int Chute
     {
         get => _chute;
         set
@@ -126,14 +197,7 @@ public class ChuteRule : BindableBase, IValidatableObject
 
     private void ValidateChute()
     {
-        if (string.IsNullOrWhiteSpace(Chute))
-        {
-            HasError = true;
-            ErrorMessage = "格口号不能为空";
-            return;
-        }
-
-        if (!int.TryParse(Chute, out var chuteNumber) || chuteNumber < 1 || chuteNumber > 999)
+        if (Chute is < 1 or > 999)
         {
             HasError = true;
             ErrorMessage = "格口号必须是1-999之间的数字";
@@ -146,11 +210,7 @@ public class ChuteRule : BindableBase, IValidatableObject
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        if (string.IsNullOrWhiteSpace(Chute))
-        {
-            yield return new ValidationResult("格口号不能为空", [nameof(Chute)]);
-        }
-        else if (!int.TryParse(Chute, out var chuteNumber) || chuteNumber < 1 || chuteNumber > 999)
+        if (Chute is < 1 or > 999)
         {
             yield return new ValidationResult("格口号必须是1-999之间的数字", [nameof(Chute)]);
         }
