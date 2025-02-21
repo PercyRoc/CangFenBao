@@ -6,7 +6,7 @@ namespace CommonLibrary.Models.Settings.Camera;
 ///     体积相机设置
 /// </summary>
 [Configuration("VolumeSettings")]
-public class VolumeSettings
+public class VolumeSettings : CameraSettings
 {
     /// <summary>
     ///     已选择的相机

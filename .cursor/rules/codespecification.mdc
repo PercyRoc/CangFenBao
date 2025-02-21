@@ -3,148 +3,69 @@ description: This rule helps generate C# code with a unified style.
 globs: .cs
 ---
 # C# 开发规范与最佳实践 (C#12 新特性集成)
+### **一、代码安全与可靠性**
+1. **值类型强化**  
+   - 用结构体（`struct`）封装特定类型数据（如金额），通过类型系统防止逻辑错误  
+   - 使用`readonly struct`强制不可变性，避免意外修改
 
-## 一、C#12 核心新特性规范
+2. **空值处理**  
+   - 避免返回`null`，改用`Option<T>`或空对象模式（如`NoUser`实例）消除空指针异常
 
-### 1. 主构造函数 (Primary Constructors)
-```csharp
-// 类级别主构造函数
-public class Person(string firstName, string lastName)
-{
-    public string FirstName { get; } = firstName;
-    public string LastName => lastName;
-    
-    public void Deconstruct(out string fName, out string lName) 
-        => (fName, lName) = (FirstName, LastName);
-}
+3. **异常预防**  
+   - 优先使用`TryParse()`代替`Parse()`减少异常开销
+   - 使用`Dictionary.TryAdd()`避免键冲突检查时的双重查找
 
-// 结构体主构造函数
-public readonly struct Point(int x, int y)
-{
-    public int X => x;
-    public int Y => y;
-}
-```
-- 优先用于DTO/值对象等简单类型
-- 避免在需要复杂初始化的类中使用
-- 与解构方法配合使用提升可读性
+---
 
-### 2. 集合表达式 (Collection Expressions)
-```csharp
-// 统一集合初始化语法
-int[] array = [1, 2, 3];
-List<int> list = [4, 5, 6];
-Span<int> span = [7, 8, 9];
+### **二、性能优化技巧**
+4. **内存管理**  
+   - 使用`Span<T>/Memory<T>`操作数据缓冲区，减少堆分配和复制  
+   - 用`string.Create()`直接操作内存构建字符串，替代`StringBuilder`
 
-// 集合合并运算符
-int[] combined = [.. array, .. list, 10];
-```
-- 替代传统`new[] { ... }`初始化方式
-- 支持跨集合类型合并操作
-- 注意Span类型的内存安全使用
+5. **异步与并发**  
+   - 异步方法始终传递`CancellationToken`支持取消操作  
+   - 使用`Task.WhenAll()`并行执行异步任务，`Parallel.ForEachAsync()`处理异步并行I/O
 
-### 3. 内联数组 (Inline Arrays)
-```csharp
-[System.Runtime.CompilerServices.InlineArray(10)]
-public struct Buffer
-{
-    private int _element0;
-}
+6. **资源复用**  
+   - 延迟初始化缓存用`Dictionary<TKey, Lazy<TValue>>`避免预先计算  
+   - 高频返回已完成任务时，用`ValueTask<T>`替代`Task<T>`减少内存分配
 
-// 使用示例
-var buffer = new Buffer();
-for (int i = 0; i < 10; i++)
-{
-    buffer[i] = i * 2;
-}
-```
-- 适用于高性能场景
-- 固定长度数组声明
-- 需配合unsafe上下文使用
+---
 
-### 4. Lambda增强
-```csharp
-// 默认参数支持
-var add = (int x, int y = 1) => x + y;
+### **三、编码规范与可维护性**
+7. **API设计**  
+   - 依赖注入多实现时，用`.NET 8键控服务`（`AddKeyedSingleton`）简化解析  
+   - 日志记录通过`[CallerMemberName]`自动捕获方法名，减少硬编码错误
 
-// params参数支持
-var sum = (params int[] values) => values.Sum();
-```
-- 提升Lambda表达灵活性
-- 保持参数数量可控（建议≤3个）
-- 避免过度复杂化Lambda体
+8. **代码表达**  
+   - 用`nameof()`代替字符串字面量，提升重构安全性  
+   - 使用`Enumerable.Range()`替代传统`for`循环，增强可读性
 
-## 二、通用开发规范
+9. **线程安全**  
+   - 多线程数据共享用`BlockingCollection<T>`实现生产者-消费者模式，替代普通队列  
+   - 对象元数据关联使用`ConditionalWeakTable`防止内存泄漏
 
-### 1. 类型系统规范
-```csharp
-// 记录类型规范
-public record DeliveryPackage(
-    string Barcode,
-    double Weight) 
-    : IEquatable<DeliveryPackage>;
-    
-// 模式匹配规范
-if (package is { Weight: > 0 and < 10, Barcode.Length: 12 })
-{
-    // 轻量包裹处理
-}
-```
+---
 
-### 2. 异常处理规范
-```csharp
-try 
-{
-    // 可能失败的操作
-}
-catch (NetworkException ex) when (ex.IsTransient)
-{
-    // 可恢复异常处理
-    Log.Warning(ex, "网络暂时不可用");
-    await Task.Delay(1000);
-    Retry();
-}
-catch (InvalidOperationException ex)
-{
-    // 业务逻辑异常
-    throw new BusinessException("无效操作", ex);
-}
-finally
-{
-    // 资源清理
-}
-```
+### **四、高级语言特性应用**
+10. **类型系统**  
+    - 使用`record struct`定义高性能不可变数据传输对象（DTO）  
+    - 密封无需继承的类（`sealed`），优化JIT编译性能
 
-### 3. 异步编程规范
-```csharp
-public async ValueTask<Image?> ProcessImageAsync(Stream stream)
-{
-    await using var memoryStream = new MemoryStream();
-    await stream.CopyToAsync(memoryStream);
-    return await Image.LoadAsync(memoryStream);
-}
-```
+11. **字符串与日志**  
+    - 用插值字符串处理器（`.NET 6+`）实现零分配格式化日志
 
+12. **执行控制**  
+    - 异步库代码统一加`ConfigureAwait(false)`避免上下文死锁
 
-## 四、现代化编码实践
+---
 
-### 1. 空安全规范
-```csharp
-public void ProcessPackage(Package package!!) // 空参数检查
-{
-    ArgumentNullException.ThrowIfNull(package.Barcode);
-    
-    var length = package.Barcode?.Length ?? 0; // 空合并
-    var weight = package.Weight ?? throw new InvalidDataException();
-}
-```
+### **五、工具与测量**
+13. **性能监控**  
+    - 用`Stopwatch`替代`DateTime`精确测量耗时，避免系统时钟误差
 
-### 2. 模式匹配增强
-```csharp
-public string GetPackageType(object package) => package switch
-{
-    SmallPackage p when p.Weight < 1 => "轻小件",
-    LargePackage { Volume: > 1 }      => "大件货",
-    _                                 => "标准件"
-};
+---
+
+### **总结**
+这些实践从类型安全、内存管理、异步控制到编码规范，覆盖了提升代码质量、性能和可维护性的关键领域。通过结构体强化类型约束、利用现代API（如`Span<T>`）、优化异步上下文控制及合理使用语言特性（如`record struct`），开发者能显著提升C#项目的健壮性和效率。
 ```

@@ -119,21 +119,49 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
                 return true;
             }
 
-            // 2. 确保设备已经绑定
+            // 2. 检查设备状态
             if (_device == null)
             {
                 Log.Warning("设备未初始化，尝试重新初始化...");
-                ConnectDeviceInternalAsync().Wait();
+                ConnectDeviceInternalAsync().GetAwaiter().GetResult();
             }
-            // 3. 检查设备是否已经绑定
-            if (_device == null) throw new InvalidOperationException("设备未正确初始化，无法开始采集");
 
-            // 4. 尝试开始采集，最多重试3次
+            // 3. 再次检查设备是否已经初始化
+            if (_device == null)
+            {
+                Log.Error("设备初始化失败，无法开始采集");
+                return false;
+            }
+
+            // 4. 检查设备连接状态
+            if (!IsConnected)
+            {
+                Log.Warning("设备未连接，尝试重新连接...");
+                ConnectDeviceInternalAsync().GetAwaiter().GetResult();
+                
+                if (!IsConnected)
+                {
+                    Log.Error("设备连接失败，无法开始采集");
+                    return false;
+                }
+            }
+
+            // 5. 尝试开始采集，最多重试3次
             const int maxRetries = 3;
             for (var i = 1; i <= maxRetries; i++)
             {
                 try
                 {
+                    Log.Debug("正在尝试开始采集（第{Attempt}次尝试）...", i);
+                    
+                    // 在每次尝试前检查设备状态
+                    if (_device == null)
+                    {
+                        Log.Error("设备句柄无效，重新初始化设备");
+                        ConnectDeviceInternalAsync().GetAwaiter().GetResult();
+                        if (_device == null) continue;
+                    }
+
                     var result = _device.MVID_CR_CAM_StartGrabbing_NET();
                     if (result == MVIDCodeReader.MVID_CR_OK)
                     {
@@ -145,12 +173,14 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
                     Log.Warning("开始采集失败（第{Attempt}次尝试）：0x{Result:X}, {Message}",
                         i, result, GetErrorMessage(result));
 
-                    // 如果是调用顺序错误，尝试重新初始化
-                    if (unchecked((int)0x80000003) == result) // MVID_CR_E_CALLORDER
+                    // 如果是调用顺序错误或句柄无效，尝试重新初始化
+                    if (result == unchecked((int)0x80000003) || // MVID_CR_E_CALLORDER
+                        result == unchecked((int)0x80000000))   // MVID_CR_INVALID_HANDLE
                     {
-                        Log.Information("检测到调用顺序错误，尝试重新初始化...");
-                        StopGrabbingInternalAsync().Wait();
-                        ConnectDeviceInternalAsync().Wait();
+                        Log.Information("检测到调用顺序错误或句柄无效，尝试重新初始化...");
+                        StopGrabbingInternalAsync().GetAwaiter().GetResult();
+                        Thread.Sleep(500); // 等待设备状态稳定
+                        ConnectDeviceInternalAsync().GetAwaiter().GetResult();
                     }
                 }
                 catch (Exception ex)
@@ -159,8 +189,11 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
                     if (i == maxRetries) throw;
                 }
 
-                // 在重试之前等待一小段时间
-                if (i < maxRetries) Thread.Sleep(500);
+                // 在重试之前等待一段时间
+                if (i < maxRetries)
+                {
+                    Thread.Sleep(1000 * i); // 递增等待时间
+                }
             }
 
             return false;
@@ -581,87 +614,6 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
     }
 
     /// <summary>
-    ///     枚举相机设备
-    /// </summary>
-    public async Task<IEnumerable<DeviceCameraInfo>> EnumerateDevicesAsync()
-    {
-        try
-        {
-            Log.Information("正在枚举海康工业相机...");
-
-            // 枚举设备
-            var nRet = await Task.Run(() => MVIDCodeReader.MVID_CR_CAM_EnumDevices_NET(ref _deviceList));
-            if (nRet != MVIDCodeReader.MVID_CR_OK)
-            {
-                Log.Error("枚举设备失败：{Error}", nRet);
-                return [];
-            }
-
-            if (_deviceList.nDeviceNum == 0)
-            {
-                Log.Warning("未发现任何相机");
-                return [];
-            }
-
-            // 转换为通用相机信息
-            var cameras = new List<DeviceCameraInfo>();
-            for (var i = 0; i < _deviceList.nDeviceNum; i++)
-            {
-                var deviceInfo = (MVIDCodeReader.MVID_CAMERA_INFO)Marshal.PtrToStructure(
-                    _deviceList.pstCamInfo[i],
-                    typeof(MVIDCodeReader.MVID_CAMERA_INFO))!;
-
-                var info = new DeviceCameraInfo()
-                {
-                    SerialNumber = deviceInfo.chSerialNumber.Trim('\0'),
-                    Model = deviceInfo.chModelName.Trim('\0')
-                };
-
-                if (deviceInfo.nCamType == MVIDCodeReader.MVID_GIGE_CAM)
-                {
-                    info.IpAddress = deviceInfo.ToString()
-                        ?.Split(',')
-                        .FirstOrDefault(x => x.Contains("IP"))?.Split(':').LastOrDefault()?.Trim() ?? "Unknown";
-
-                    // 如果序列号为空，尝试使用MAC地址
-                    if (string.IsNullOrEmpty(info.SerialNumber))
-                    {
-                        var macAddress = deviceInfo.ToString()
-                            ?.Split(',')
-                            .FirstOrDefault(x => x.Contains("MAC"))?.Split(':').LastOrDefault()?.Trim();
-                        info.SerialNumber = !string.IsNullOrEmpty(macAddress) ? macAddress : deviceInfo.chSerialNumber;
-                        Log.Warning("相机序列号为空，使用MAC地址作为备选：{Mac}", macAddress);
-                    }
-
-                    info.MacAddress = deviceInfo.ToString()
-                                          ?.Split(',')
-                                          .FirstOrDefault(x => x.Contains("MAC"))?.Split(':').LastOrDefault()?.Trim() ??
-                                      deviceInfo.chSerialNumber;
-                }
-                else
-                {
-                    info.IpAddress = "USB";
-                    info.MacAddress = deviceInfo.chSerialNumber;
-                }
-
-                // 记录详细的设备信息
-                Log.Information("发现相机：{Model} (SN:{SerialNumber}, IP:{IP}, MAC:{MAC})",
-                    info.Model, info.SerialNumber, info.IpAddress, info.MacAddress);
-
-                cameras.Add(info);
-            }
-
-            Log.Information("发现 {Count} 台相机", cameras.Count);
-            return cameras;
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "枚举海康工业相机失败");
-            throw;
-        }
-    }
-
-    /// <summary>
     ///     获取图像参数
     /// </summary>
     private bool GetImageParameters()
@@ -718,45 +670,64 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
         {
             Log.Information("开始连接设备，目标序列号：{SerialNumber}", _deviceIdentifier);
 
-            // 释放旧设备
+            // 1. 释放旧设备
             if (_device != null)
             {
+                Log.Debug("正在释放旧设备...");
                 await ReleaseDeviceAsync();
+                Log.Debug("旧设备已释放");
             }
 
-            // 创建新的设备实例
+            // 2. 创建新的设备实例
+            Log.Debug("正在创建新的设备实例...");
             _device = new MVIDCodeReader();
+            Log.Debug("新设备实例已创建");
 
-            // 枚举并查找目标设备
+            // 3. 枚举并查找目标设备
+            Log.Debug("正在枚举设备...");
             var deviceIndex = await FindTargetDeviceAsync();
             if (deviceIndex < 0)
             {
+                Log.Error("未找到目标设备");
                 return false;
             }
+            Log.Debug("已找到目标设备，索引：{Index}", deviceIndex);
 
-            // 创建设备句柄
+            // 4. 创建设备句柄
+            Log.Debug("正在创建设备句柄...");
             if (!await CreateDeviceHandleAsync())
             {
+                Log.Error("创建设备句柄失败");
                 return false;
             }
+            Log.Debug("设备句柄创建成功");
 
-            // 绑定设备
+            // 5. 绑定设备
+            Log.Debug("正在绑定设备...");
             if (!await BindDeviceAsync(deviceIndex))
             {
+                Log.Error("绑定设备失败");
                 return false;
             }
+            Log.Debug("设备绑定成功");
 
-            // 获取图像参数
+            // 6. 获取图像参数
+            Log.Debug("正在获取图像参数...");
             if (!GetImageParameters())
             {
+                Log.Error("获取图像参数失败");
                 return false;
             }
+            Log.Debug("图像参数获取成功：宽度={Width}, 高度={Height}", _imageWidth, _imageHeight);
 
-            // 注册回调函数
+            // 7. 注册回调函数
+            Log.Debug("正在注册回调函数...");
             if (!RegisterCallbacks())
             {
+                Log.Error("注册回调函数失败");
                 return false;
             }
+            Log.Debug("回调函数注册成功");
 
             IsConnected = true;
             ConnectionChanged?.Invoke(_deviceIdentifier!, true);
@@ -769,15 +740,69 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
     /// </summary>
     private async Task ReleaseDeviceAsync()
     {
+        if (_device == null)
+        {
+            Log.Debug("设备实例为空，无需释放");
+            return;
+        }
+
         try
         {
-            _device!.MVID_CR_DestroyHandle_NET();
+            // 先重置状态
+            var oldDevice = _device;
             _device = null;
-            await Task.Delay(100); // 等待资源释放
+            IsConnected = false;
+            
+            try
+            {
+                Log.Debug("正在停止可能的采集...");
+                if (_isGrabbing)
+                {
+                    var stopResult = oldDevice.MVID_CR_CAM_StopGrabbing_NET();
+                    if (stopResult != MVIDCodeReader.MVID_CR_OK)
+                    {
+                        Log.Warning("停止采集失败：0x{Error:X}, {Message}", stopResult, GetErrorMessage(stopResult));
+                    }
+                    _isGrabbing = false;
+                    // 等待采集完全停止
+                    await Task.Delay(200);
+                }
+
+                // 尝试销毁句柄
+                Log.Debug("正在销毁设备句柄...");
+                var result = oldDevice.MVID_CR_DestroyHandle_NET();
+                if (result != MVIDCodeReader.MVID_CR_OK)
+                {
+                    if (result == unchecked((int)0x80000000)) // 句柄已经无效
+                    {
+                        Log.Debug("设备句柄已经无效，跳过销毁");
+                    }
+                    else
+                    {
+                        Log.Warning("销毁设备句柄返回错误：0x{Error:X}, {Message}", result, GetErrorMessage(result));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "清理设备资源时发生错误，继续执行清理流程");
+            }
+            finally
+            {
+                // 确保状态被重置
+                _device = null;
+                IsConnected = false;
+                _isGrabbing = false;
+            }
+            Log.Information("设备资源已释放");
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "释放旧设备句柄时发生错误");
+            Log.Error(ex, "释放设备资源时发生错误");
+            // 确保设备实例被清空
+            _device = null;
+            IsConnected = false;
+            _isGrabbing = false;
         }
     }
 
@@ -786,18 +811,22 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
     /// </summary>
     private async Task<int> FindTargetDeviceAsync()
     {
+        Log.Debug("开始枚举设备...");
         var nRet = await Task.Run(() => MVIDCodeReader.MVID_CR_CAM_EnumDevices_NET(ref _deviceList));
         if (nRet != MVIDCodeReader.MVID_CR_OK)
         {
-            Log.Error("枚举设备失败：{Error}", nRet);
+            Log.Error("枚举设备失败：{Error}, {Message}", nRet, GetErrorMessage(nRet));
             return -1;
         }
-
+    
         if (_deviceList.nDeviceNum == 0)
         {
             Log.Error("未发现任何相机");
             return -1;
+                
         }
+
+        Log.Debug("发现 {Count} 台相机，开始查找目标设备...", _deviceList.nDeviceNum);
 
         for (var i = 0; i < _deviceList.nDeviceNum; i++)
         {
@@ -806,7 +835,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
                 typeof(MVIDCodeReader.MVID_CAMERA_INFO))!;
 
             var currentSerialNumber = deviceInfo.chSerialNumber.Trim('\0');
-            Log.Debug("比较序列号：当前={Current}, 目标={Target}", currentSerialNumber, _deviceIdentifier);
+            Log.Debug("检查设备 {Index}: 序列号={Current}, 目标={Target}", i, currentSerialNumber, _deviceIdentifier);
 
             if (!string.Equals(currentSerialNumber, _deviceIdentifier, StringComparison.OrdinalIgnoreCase)) continue;
             Log.Information("找到目标相机：{SerialNumber}", currentSerialNumber);
@@ -827,6 +856,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
         {
             try
             {
+                Log.Debug("正在创建设备句柄（第{Attempt}次尝试）...", retry + 1);
                 var nRet = await Task.Run(() =>
                     _device!.MVID_CR_CreateHandle_NET(MVIDCodeReader.MVID_BCR | MVIDCodeReader.MVID_TDCR));
                 
@@ -840,6 +870,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
                     retry + 1, nRet, GetErrorMessage(nRet));
 
                 if (retry >= maxRetries - 1) continue;
+                Log.Debug("等待1秒后重试...");
                 await Task.Delay(1000);
                 _device = new MVIDCodeReader();
             }
@@ -848,6 +879,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
                 Log.Error(ex, "创建设备句柄时发生错误（第{Attempt}次尝试）", retry + 1);
                 if (retry < maxRetries - 1)
                 {
+                    Log.Debug("等待1秒后重试...");
                     await Task.Delay(1000);
                     _device = new MVIDCodeReader();
                 }
@@ -868,11 +900,16 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
             return false;
         }
 
+        Log.Debug("正在绑定设备（索引：{Index}）...", deviceIndex);
         var nRet = await Task.Run(() => _device!.MVID_CR_CAM_BindDevice_NET(_deviceList.pstCamInfo[deviceIndex]));
-        if (nRet == MVIDCodeReader.MVID_CR_OK) return true;
+        if (nRet == MVIDCodeReader.MVID_CR_OK)
+        {
+            Log.Information("设备绑定成功");
+            return true;
+        }
+        
         Log.Error("绑定设备失败：0x{Error:X8}, {Message}", nRet, GetErrorMessage(nRet));
         return false;
-
     }
 
     /// <summary>
@@ -1005,11 +1042,22 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
             Log.Information("正在释放海康工业相机资源...");
 
             // 1. 停止处理线程
-            _processingCancellation.Cancel();
             try
             {
-                _processingTask?.Wait(TimeSpan.FromSeconds(5));
-                Log.Information("处理线程已停止");
+                if (_processingCancellation is { IsCancellationRequested: false, Token.IsCancellationRequested: false })
+                {
+                    _processingCancellation.Cancel();
+                }
+                
+                if (_processingTask is { IsCompleted: false })
+                {
+                    _processingTask.Wait(TimeSpan.FromSeconds(5));
+                    Log.Information("处理线程已停止");
+                }
+            }
+            catch (ObjectDisposedException ex)
+            {
+                Log.Debug(ex, "处理线程已经被释放");
             }
             catch (Exception ex)
             {
@@ -1017,13 +1065,13 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
             }
 
             // 2. 停止采集
-            if (_device != null)
+            if (_device != null && _isGrabbing)
             {
-                Stop();
-                Thread.Sleep(500); // 等待采集完全停止
-
                 try
                 {
+                    Stop();
+                    Thread.Sleep(100); // 等待采集完全停止
+
                     // 3. 销毁设备句柄
                     _device.MVID_CR_DestroyHandle_NET();
                     Log.Information("设备句柄已销毁");
@@ -1039,29 +1087,56 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
             }
 
             // 4. 释放回调函数句柄
-            if (_imageCallbackHandle.IsAllocated)
+            try
             {
-                _imageCallbackHandle.Free();
-                Log.Information("图像回调句柄已释放");
+                if (_imageCallbackHandle.IsAllocated)
+                {
+                    _imageCallbackHandle.Free();
+                    Log.Information("图像回调句柄已释放");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "释放图像回调句柄时发生错误");
             }
 
             // 5. 释放其他资源
-            _processingCancellation.Dispose();
-            _packageSubject.Dispose();
-            _realtimeImageSubject.Dispose();
-            _processingSemaphore.Dispose();
-            Log.Information("其他资源已释放");
+            try
+            {
+                if (!_processingCancellation.Token.IsCancellationRequested)
+                {
+                    _processingCancellation.Dispose();
+                }
+                _packageSubject.Dispose();
+                _realtimeImageSubject.Dispose();
+                _processingSemaphore.Dispose();
+                Log.Information("其他资源已释放");
+            }
+            catch (ObjectDisposedException ex)
+            {
+                Log.Debug(ex, "某些资源已经被释放");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "释放其他资源时发生错误");
+            }
 
             // 6. 更新连接状态
             IsConnected = false;
-            ConnectionChanged?.Invoke(_deviceIdentifier ?? string.Empty, false);
+            try
+            {
+                ConnectionChanged?.Invoke(_deviceIdentifier ?? string.Empty, false);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "触发连接状态改变事件时发生错误");
+            }
 
             Log.Information("海康工业相机资源已释放完成");
         }
         catch (Exception ex)
         {
             Log.Error(ex, "释放海康工业相机资源时发生错误");
-            throw;
         }
         finally
         {

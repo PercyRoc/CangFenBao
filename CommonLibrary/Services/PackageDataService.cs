@@ -37,6 +37,7 @@ public interface IPackageDataService
 public class PackageDataService : IPackageDataService
 {
     private readonly string _dbPath;
+    private DateTime _lastInitializedDate;
 
     /// <summary>
     /// 构造函数
@@ -45,20 +46,41 @@ public class PackageDataService : IPackageDataService
     {
         _dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "packages.db");
         Directory.CreateDirectory(Path.GetDirectoryName(_dbPath)!);
+        _lastInitializedDate = DateTime.MinValue;
+        InitializeDatabase(DateTime.Today).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// 初始化数据库
+    /// </summary>
+    private async Task InitializeDatabase(DateTime date)
+    {
+        if (date.Date == _lastInitializedDate.Date) return;
+        
+        await using var dbContext = CreateDbContext(date);
+        await dbContext.Database.EnsureCreatedAsync();
+        _lastInitializedDate = date.Date;
     }
 
     private PackageDbContext CreateDbContext(DateTime? date = null)
     {
         var optionsBuilder = new DbContextOptionsBuilder<PackageDbContext>();
         optionsBuilder.UseSqlite($"Data Source={_dbPath}");
-        return new PackageDbContext(optionsBuilder.Options, date);
+        var context = new PackageDbContext(optionsBuilder.Options, date);
+        
+        // 确保当日表存在
+        if (date.HasValue && date.Value.Date != _lastInitializedDate.Date)
+        {
+            InitializeDatabase(date.Value).GetAwaiter().GetResult();
+        }
+        
+        return context;
     }
 
     /// <inheritdoc />
     public async Task AddPackageAsync(PackageInfo package)
     {
         await using var dbContext = CreateDbContext(package.CreateTime);
-        await dbContext.Database.EnsureCreatedAsync();
         var record = PackageRecord.FromPackageInfo(package);
         await dbContext.Packages.AddAsync(record);
         await dbContext.SaveChangesAsync();

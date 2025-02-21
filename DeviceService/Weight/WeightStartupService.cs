@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Hosting;
 using Presentation_CommonLibrary.Services;
+using CommonLibrary.Models.Settings.Weight;
+using CommonLibrary.Services;
 using Serilog;
 
 namespace DeviceService.Weight;
@@ -9,16 +11,20 @@ namespace DeviceService.Weight;
 /// </summary>
 public class WeightStartupService : IHostedService
 {
-    private readonly IDialogService _dialogService;
+    private readonly INotificationService _notificationService;
+    private readonly ISettingsService _settingsService;
     private readonly SemaphoreSlim _initLock = new(1, 1);
     private IWeightService? _weightService;
 
     /// <summary>
     ///     构造函数
     /// </summary>
-    public WeightStartupService(IDialogService dialogService)
+    public WeightStartupService(
+        INotificationService notificationService,
+        ISettingsService settingsService)
     {
-        _dialogService = dialogService;
+        _notificationService = notificationService;
+        _settingsService = settingsService;
     }
 
     /// <summary>
@@ -28,24 +34,41 @@ public class WeightStartupService : IHostedService
     {
         try
         {
-            Log.Information("正在启动重量称服务...");
+            Log.Information("Starting weight scale service...");
             var weight = GetWeightService();
 
+            // Load configuration
+            Log.Debug("Loading weight scale configuration...");
+            var config = _settingsService.LoadConfiguration<WeightSettings>();
+            if (config == null)
+            {
+                const string message = "Failed to load weight scale configuration";
+                Log.Warning(message);
+                _notificationService.ShowError(message, "Weight Scale Service Error");
+                return;
+            }
+
+            // Update configuration
+            Log.Debug("Updating weight scale configuration...");
+            await weight.UpdateConfigurationAsync(config);
+
+            // Start service
             if (!await weight.StartAsync(cancellationToken))
             {
-                const string message = "重量称服务启动失败";
+                const string message = "Failed to start weight scale service";
                 Log.Warning(message);
-                await _dialogService.ShowErrorAsync(message, "重量称服务错误");
+                _notificationService.ShowError(message, "Weight Scale Service Error");
             }
             else
             {
-                Log.Information("重量称服务启动成功");
+                Log.Information("Weight scale service started successfully");
+                _notificationService.ShowSuccess("Weight scale service started successfully");
             }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "启动重量称服务时发生错误");
-            await _dialogService.ShowErrorAsync(ex.Message, "重量称服务错误");
+            _notificationService.ShowError(ex.Message, "重量称服务错误");
         }
     }
 

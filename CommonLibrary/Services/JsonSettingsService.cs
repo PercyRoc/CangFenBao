@@ -1,13 +1,20 @@
 using System.IO;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using CommonLibrary.Models.Settings;
 
 namespace CommonLibrary.Services;
 
 public class JsonSettingsService : ISettingsService
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Converters = { new JsonStringEnumConverter() },
+        PropertyNameCaseInsensitive = true
+    };
     private readonly Dictionary<Type, string> _configurationKeys = [];
     private readonly Dictionary<string, object> _configurationCache = [];
     private readonly string _settingsDirectory;

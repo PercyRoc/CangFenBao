@@ -18,8 +18,7 @@ public record MeasureResult(
     string? ErrorMessage = null,
     float Length = 0,
     float Width = 0,
-    float Height = 0,
-    string? ImageId = null);
+    float Height = 0);
 
 /// <summary>
 ///     人加体积相机服务
@@ -31,6 +30,9 @@ public class RenJiaCameraService : ICameraService
     private readonly CancellationTokenSource _processingCancellation = new();
     private bool _disposed;
     private bool _isConnected;
+    private VolumeSettings? _settings;
+
+    public event Action<string, bool>? ConnectionChanged;
 
     public bool IsConnected
     {
@@ -47,8 +49,6 @@ public class RenJiaCameraService : ICameraService
 
     public IObservable<(Image<Rgba32> image, IReadOnlyList<BarcodeLocation> barcodes)> ImageStream =>
         _imageSubject.AsObservable();
-
-    public event Action<string, bool>? ConnectionChanged;
 
     public bool Start()
     {
@@ -74,7 +74,6 @@ public class RenJiaCameraService : ICameraService
                 Log.Error("未发现人加体积相机设备");
                 return false;
             }
-            Log.Information("发现 {Count} 台人加体积相机", deviceNum);
 
             // 4. 打开设备
             var result = NativeMethods.OpenDevice();
@@ -155,11 +154,15 @@ public class RenJiaCameraService : ICameraService
 
     public void UpdateConfiguration(CameraSettings config)
     {
-        ArgumentNullException.ThrowIfNull(config);
+        if (config is not VolumeSettings volumeSettings)
+        {
+            Log.Warning("配置类型错误，期望 VolumeSettings 类型");
+            return;
+        }
         
         try
         {
-            Log.Information("更新人加体积相机配置");
+            _settings = volumeSettings;
         }
         catch (Exception ex)
         {
@@ -175,118 +178,105 @@ public class RenJiaCameraService : ICameraService
     {
         try
         {
-            // 1. 获取系统状态
-            var systemState = new int[1];
-            var stateResult = NativeMethods.GetSystemState(systemState);
-            if (stateResult != 0)
-            {
-                var error = "获取系统状态失败";
-                Log.Warning(error + "：{Result}", stateResult);
-                return new MeasureResult(false, error);
-            }
+            var startTime = DateTime.Now;
+            var timeoutMs = _settings?.TimeoutMs ?? 500;
 
-            // 2. 检查系统是否空闲
-            if (systemState[0] != 0)
+            // 创建测量任务
+            var measureTask = Task.Run(() =>
             {
-                var error = "系统当前不是空闲状态";
-                Log.Warning(error + "：{State}", systemState[0]);
-                return new MeasureResult(false, error);
-            }
-
-            // 3. 触发测量
-            var computeResult = NativeMethods.ComputeOnce();
-            if (computeResult != 0)
-            {
-                var error = "触发测量失败";
-                Log.Warning(error + "：{Result}", computeResult);
-                return new MeasureResult(false, error);
-            }
-
-            // 4. 等待测量完成
-            var waitStart = DateTime.Now;
-            while (DateTime.Now - waitStart < TimeSpan.FromSeconds(5))
-            {
-                stateResult = NativeMethods.GetSystemState(systemState);
-                if (stateResult != 0)
+                try
                 {
-                    var error = "等待测量完成时获取系统状态失败";
-                    Log.Warning(error + "：{Result}", stateResult);
-                    return new MeasureResult(false, error);
+                    // 1. 执行测量（非阻塞）
+                    var computeResult = NativeMethods.ComputeOnce();
+                    if (computeResult != 0)
+                    {
+                        Log.Warning("触发测量失败：{Result}", computeResult);
+                        return new MeasureResult(false, "触发测量失败");
+                    }
+
+                    // 等待设备准备就绪
+                    Thread.Sleep(50);
+
+                    // 检查设备状态
+                    var state = new int[1];
+                    NativeMethods.GetSystemState(state);
+
+                    // 2. 获取测量结果
+                    var dimensionData = new float[3];
+                    var imageDataBuffer = new byte[10 * 1024 * 1024];
+
+                    var len = NativeMethods.GetDmsResult(dimensionData, imageDataBuffer);
+                    if (len <= 0)
+                    {
+                        var error = GetErrorMessage();
+                        Log.Warning("获取测量结果失败：{Error}", error);
+                        return new MeasureResult(false, error);
+                    }
+
+                    // 3. 验证测量结果
+                    if (dimensionData.Any(d => float.IsNaN(d) || float.IsInfinity(d) || d <= 0 || d > 2000))
+                    {
+                        var error = $"测量结果无效：L={dimensionData[0]}, W={dimensionData[1]}, H={dimensionData[2]}";
+                        Log.Warning(error);
+                        return new MeasureResult(false, error);
+                    }
+
+                    // 4. 处理图像数据
+                    try
+                    {
+                        var imageData = new byte[len];
+                        Array.Copy(imageDataBuffer, imageData, len);
+                        
+                        using var image = Image.Load<Rgba32>(imageData);
+                        _imageSubject.OnNext((image.Clone(), new List<BarcodeLocation>()));
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "处理图像数据时发生错误");
+                        // 图像处理失败不影响尺寸测量结果
+                    }
+
+                    var duration = (DateTime.Now - startTime).TotalMilliseconds;
+                    Log.Information("测量成功：{Length}x{Width}x{Height}mm，耗时：{Duration:F2}ms",
+                        dimensionData[0], dimensionData[1], dimensionData[2], duration);
+
+                    return new MeasureResult(
+                        true,
+                        Length: dimensionData[0],
+                        Width: dimensionData[1],
+                        Height: dimensionData[2]
+                    );
                 }
-
-                if (systemState[0] != 2) continue;
-                
-                // 获取测量结果
-                var dimensionData = new float[3]; // 存储长、宽、高数据
-                var len = NativeMethods.GetDmsResult(dimensionData, []);  // 只获取尺寸数据
-
-                if (len <= 0)
+                catch (AccessViolationException ex)
                 {
-                    var error = "获取测量结果失败";
-                    Log.Warning(error);
-                    return new MeasureResult(false, error);
+                    Log.Fatal(ex, "测量过程中发生内存访问冲突");
+                    return new MeasureResult(false, "硬件通信异常");
                 }
-
-                // 检查测量结果是否有效
-                if (dimensionData[0] == 0 || dimensionData[1] == 0)
+                catch (Exception ex)
                 {
-                    var error = GetErrorMessage();
-                    Log.Warning("测量结果无效：{Error}", error);
-                    return new MeasureResult(false, error);
+                    Log.Error(ex, "测量过程中发生异常");
+                    return new MeasureResult(false, ex.Message);
                 }
+            });
 
-                Log.Debug("测量完成：L={Length}, W={Width}, H={Height}",
-                    dimensionData[0], dimensionData[1], dimensionData[2]);
+            // 等待测量任务完成或超时
+            if (measureTask.Wait(timeoutMs)) return measureTask.Result;
+            Log.Warning("体积测量操作超时（{Timeout}ms）", timeoutMs);
 
-                return new MeasureResult(
-                    true,
-                    Length: dimensionData[0],
-                    Width: dimensionData[1],
-                    Height: dimensionData[2],
-                    ImageId: "0" // 使用第一个相机
-                );
-            }
+            // 在后台继续等待测量任务完成，避免资源泄漏
+            _ = measureTask.ContinueWith(t =>
+            {
+                if (t.IsFaulted)
+                    Log.Error(t.Exception, "超时后的测量任务发生异常");
+            }, TaskScheduler.Default);
 
-            return new MeasureResult(false, "测量超时");
+            return new MeasureResult(false, "测量操作超时");
+
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "触发测量时发生错误");
+            Log.Error(ex, "执行测量时发生异常");
             return new MeasureResult(false, ex.Message);
-        }
-    }
-
-    /// <summary>
-    /// 根据图像ID获取测量图像
-    /// </summary>
-    /// <param name="imageId">图像ID</param>
-    /// <returns>图像数据</returns>
-    public byte[]? GetMeasureImageFromId(string? imageId)
-    {
-        if (string.IsNullOrEmpty(imageId))
-        {
-            Log.Warning("图像ID为空");
-            return null;
-        }
-
-        try
-        {
-            var measureImageData = new byte[5120000];
-            var imageLen = NativeMethods.GetMeasureImageFromId(measureImageData, int.Parse(imageId));
-            if (imageLen <= 0)
-            {
-                Log.Warning("获取测量图像失败");
-                return null;
-            }
-
-            var result = new byte[imageLen];
-            Array.Copy(measureImageData, result, imageLen);
-            return result;
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "获取测量图像时发生错误");
-            return null;
         }
     }
 
@@ -302,20 +292,6 @@ public class RenJiaCameraService : ICameraService
         {
             Log.Error(ex, "获取错误信息时发生错误");
             return "获取错误信息失败";
-        }
-    }
-
-    private static async Task<Image<Rgba32>?> CreateImageFromData(byte[] imageData, int length)
-    {
-        try
-        {
-            using var memoryStream = new MemoryStream(imageData, 0, length);
-            return await Image.LoadAsync<Rgba32>(memoryStream);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "创建图像时发生错误");
-            return null;
         }
     }
 
@@ -375,7 +351,9 @@ internal static partial class NativeMethods
 
     // 获取体积测量结果
     [LibraryImport("VolumeMeasurementDll.dll", EntryPoint = "GetDmsResult")]
-    public static partial int GetDmsResult([Out] float[] dimensionData, [Out] byte[] imageData);
+    public static partial int GetDmsResult(
+        [Out] float[] dimensionData,
+        [Out, MarshalAs(UnmanagedType.LPArray, SizeConst = 10485760)] byte[] imageData);
 
     // 获取体积测量结果错误信息
     [LibraryImport("VolumeMeasurementDll.dll", EntryPoint = "GetErrorMes")]
@@ -383,7 +361,9 @@ internal static partial class NativeMethods
 
     // 获取测量时刻的图像信息
     [LibraryImport("VolumeMeasurementDll.dll", EntryPoint = "GetMeasureImageFromId")]
-    public static partial int GetMeasureImageFromId([Out] byte[] imageData, int cameraId);
+    public static partial int GetMeasureImageFromId(
+        IntPtr imageData,
+        int cameraId);
 
     // 获取系统状态
     [LibraryImport("VolumeMeasurementDll.dll", EntryPoint = "GetSystemState")]

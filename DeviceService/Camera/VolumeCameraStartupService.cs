@@ -1,6 +1,8 @@
 using DeviceService.Camera.RenJia;
 using Microsoft.Extensions.Hosting;
 using Presentation_CommonLibrary.Services;
+using CommonLibrary.Models.Settings.Camera;
+using CommonLibrary.Services;
 using Serilog;
 
 namespace DeviceService.Camera;
@@ -10,16 +12,20 @@ namespace DeviceService.Camera;
 /// </summary>
 public class VolumeCameraStartupService : IHostedService
 {
-    private readonly IDialogService _dialogService;
+    private readonly INotificationService _notificationService;
+    private readonly ISettingsService _settingsService;
     private readonly SemaphoreSlim _initLock = new(1, 1);
     private RenJiaCameraService? _cameraService;
 
     /// <summary>
     ///     构造函数
     /// </summary>
-    public VolumeCameraStartupService(IDialogService dialogService)
+    public VolumeCameraStartupService(
+        INotificationService notificationService,
+        ISettingsService settingsService)
     {
-        _dialogService = dialogService;
+        _notificationService = notificationService;
+        _settingsService = settingsService;
     }
 
     /// <summary>
@@ -29,24 +35,33 @@ public class VolumeCameraStartupService : IHostedService
     {
         try
         {
-            Log.Information("正在启动体积相机服务...");
+            Log.Information("Starting volume camera service...");
             var camera = GetCameraService();
+
+            // Load configuration
+            Log.Debug("Loading volume camera configuration...");
+            var config = _settingsService.LoadConfiguration<VolumeSettings>();
+
+            // Update configuration
+            Log.Debug("Updating volume camera configuration...");
+            camera.UpdateConfiguration(config);
 
             if (!camera.Start())
             {
-                const string message = "体积相机服务启动失败";
+                const string message = "Failed to start volume camera service";
                 Log.Warning(message);
-                await _dialogService.ShowErrorAsync(message, "体积相机服务错误");
+                _notificationService.ShowError(message, "Volume Camera Service Error");
             }
             else
             {
-                Log.Information("体积相机服务启动成功");
+                Log.Information("Volume camera service started successfully");
+                _notificationService.ShowSuccess("Volume camera service started successfully");
             }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "启动体积相机服务时发生错误");
-            await _dialogService.ShowErrorAsync(ex.Message, "体积相机服务错误");
+            _notificationService.ShowError(ex.Message, "体积相机服务错误");
         }
     }
 

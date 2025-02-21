@@ -23,8 +23,8 @@
     </LinearGradientBrush>
 
     <!-- 功能区域配色 -->
-    <SolidColorBrush x:Key="CardBackground" Color="#FFF5F5F5" Opacity="0.95" />  <!-- 卡片背景改为淡灰色 -->
-    <SolidColorBrush x:Key="BorderBrush" Color="#20008891" />  <!-- 边框颜色 -->
+    <SolidColorBrush x:Key="CardBackground" Color="#FFE8E8E8" />  <!-- 卡片背景改为深一点的灰色 -->
+    <SolidColorBrush x:Key="BorderBrush" Color="#40008891" />  <!-- 边框颜色 -->
     <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentOrange}" />  <!-- 强调色 -->
     <SolidColorBrush x:Key="SecondaryBrush" Color="{StaticResource SecondaryDark}" />  <!-- 次要色 -->
 

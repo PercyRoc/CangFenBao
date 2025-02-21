@@ -42,7 +42,9 @@ public class CameraFactory : IDisposable
     public ICameraService CreateCamera()
     {
         var settings = LoadCameraSettings();
-        return CreateCameraByManufacturer(settings.Manufacturer);
+        var camera = CreateCameraByManufacturer(settings.Manufacturer);
+        camera.UpdateConfiguration(settings);
+        return camera;
     }
 
     /// <summary>

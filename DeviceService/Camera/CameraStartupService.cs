@@ -12,7 +12,7 @@ namespace DeviceService.Camera;
 /// </remarks>
 public class CameraStartupService(
     CameraFactory cameraFactory,
-    IDialogService dialogService) : IHostedService
+    INotificationService notificationService) : IHostedService
 {
     private readonly SemaphoreSlim _initLock = new(1, 1);
     private ICameraService? _cameraService;
@@ -24,24 +24,25 @@ public class CameraStartupService(
     {
         try
         {
-            Log.Information("正在启动相机服务...");
+            Log.Information("Starting camera service...");
             var camera = GetCameraService();
 
             if (!camera.Start())
             {
-                const string message = "相机服务启动失败";
+                const string message = "Failed to start camera service";
                 Log.Warning(message);
-                await dialogService.ShowErrorAsync(message, "相机服务错误");
+                notificationService.ShowError(message, "Camera Service Error");
             }
             else
             {
-                Log.Information("相机服务启动成功");
+                Log.Information("Camera service started successfully");
+                notificationService.ShowSuccess("Camera service started successfully");
             }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "启动相机服务时发生错误");
-            await dialogService.ShowErrorAsync(ex.Message, "相机服务错误");
+            notificationService.ShowError(ex.Message, "相机服务错误");
         }
     }
 

@@ -1,0 +1,230 @@
+<ui:FluentWindow x:Class="Presentation_SangNeng.Views.Windows.HistoryWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:prism="http://prismlibrary.com/"
+                 xmlns:hc="https://handyorg.github.io/handycontrol"
+                 xmlns:windows="clr-namespace:Presentation_SangNeng.ViewModels.Windows"
+                 xmlns:converters="clr-namespace:Presentation_CommonLibrary.Converters;assembly=Presentation-CommonLibrary"
+                 prism:ViewModelLocator.AutoWireViewModel="True"
+                 mc:Ignorable="d"
+                 d:DataContext="{d:DesignInstance Type=windows:HistoryWindowViewModel}"
+                 Title="Package History"
+                 Height="720"
+                 Width="1280"
+                 WindowStartupLocation="CenterOwner"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Mica"
+                 WindowCornerPreference="Round"
+                 WindowStyle="SingleBorderWindow"
+                 ShowInTaskbar="False">
+
+    <ui:FluentWindow.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary
+                    Source="pack://application:,,,/Presentation-CommonLibrary;component/Resources/Styles/ColorStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            
+            <!-- Converters -->
+            <converters:StringNullOrEmptyToBooleanConverter x:Key="NullOrEmptyToBooleanConverter" IsInverted="True"/>
+        </ResourceDictionary>
+    </ui:FluentWindow.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="32" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Title Bar -->
+        <Grid Grid.Row="0" Background="{StaticResource TitleBarGradient}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- App Icon -->
+            <Border Grid.Column="0"
+                    Width="48"
+                    Height="32"
+                    Effect="{StaticResource IconGlowEffect}">
+            </Border>
+
+            <!-- Title -->
+            <TextBlock Grid.Column="1"
+                       Text="Package History"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Margin="0,0,8,0"
+                       FontSize="20"
+                       FontWeight="SemiBold"
+                       TextOptions.TextFormattingMode="Display"
+                       Foreground="black"
+                       TextOptions.TextRenderingMode="ClearType">
+                <TextBlock.Effect>
+                    <DropShadowEffect BlurRadius="4"
+                                      Opacity="0.2"
+                                      Direction="270"
+                                      ShadowDepth="1" />
+                </TextBlock.Effect>
+            </TextBlock>
+
+            <!-- TitleBar -->
+            <ui:TitleBar Grid.Column="2"
+                         Title=""
+                         ButtonsForeground="#FF008891"
+                         ShowMaximize="True"
+                         ShowMinimize="True"
+                         ShowClose="True" />
+
+            <Border Grid.Column="0"
+                    Grid.ColumnSpan="3"
+                    Height="1"
+                    VerticalAlignment="Bottom"
+                    Background="#20008080"
+                    BorderBrush="#40FFFFFF"
+                    BorderThickness="0,0,0,1" />
+        </Grid>
+
+        <!-- Main Content -->
+        <Border Grid.Row="1" Background="{StaticResource MainBackground}">
+            <Grid Margin="16">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- 查询条件 -->
+                <Border Grid.Row="0" 
+                        Margin="0,0,0,16"
+                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        Padding="16">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="200"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="200"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="200"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="200"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0" 
+                                  Text="Start Date:" 
+                                  VerticalAlignment="Center" 
+                                  Margin="0,0,8,0"
+                                  Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <DatePicker Grid.Column="1" 
+                                   SelectedDate="{Binding StartDate}" 
+                                   Margin="0,0,16,0"/>
+
+                        <TextBlock Grid.Column="2" 
+                                  Text="End Date:" 
+                                  VerticalAlignment="Center" 
+                                  Margin="0,0,8,0"
+                                  Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <DatePicker Grid.Column="3" 
+                                   SelectedDate="{Binding EndDate}" 
+                                   Margin="0,0,16,0"/>
+
+                        <TextBlock Grid.Column="4" 
+                                  Text="Status:" 
+                                  VerticalAlignment="Center" 
+                                  Margin="0,0,8,0"
+                                  Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <ComboBox Grid.Column="5" 
+                                 ItemsSource="{Binding StatusList}"
+                                 SelectedItem="{Binding SelectedStatus}"
+                                 DisplayMemberPath="DisplayName"
+                                 Margin="0,0,16,0"/>
+
+                        <TextBlock Grid.Column="6" 
+                                  Text="Barcode:" 
+                                  VerticalAlignment="Center" 
+                                  Margin="0,0,8,0"
+                                  Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <ui:TextBox Grid.Column="7"
+                                   Text="{Binding SearchBarcode, UpdateSourceTrigger=PropertyChanged}"
+                                   PlaceholderText="Enter barcode..."
+                                   ClearButtonEnabled="True"
+                                   Icon="Barcode24"
+                                   Margin="0,0,16,0"/>
+
+                        <ui:Button Grid.Column="8" 
+                                  Appearance="Primary"
+                                  Command="{Binding QueryCommand}"
+                                  HorizontalAlignment="Left">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Search24" Margin="0,0,8,0"/>
+                                <TextBlock Text="Search"/>
+                            </StackPanel>
+                        </ui:Button>
+                    </Grid>
+                </Border>
+
+                <!-- 数据列表 -->
+                <Border Grid.Row="1"
+                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4">
+                    <DataGrid Margin="1"
+                             ItemsSource="{Binding PackageRecords}"
+                             AutoGenerateColumns="False"
+                             IsReadOnly="True"
+                             CanUserSortColumns="True"
+                             CanUserResizeColumns="True"
+                             GridLinesVisibility="All"
+                             Style="{DynamicResource DefaultDataGridStyle}"
+                             ColumnHeaderStyle="{DynamicResource DefaultDataGridColumnHeaderStyle}"
+                             CellStyle="{DynamicResource DefaultDataGridCellStyle}"
+                             RowStyle="{DynamicResource DefaultDataGridRowStyle}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="No." Binding="{Binding Id}" Width="80"/>
+                            <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" Width="150"/>
+                            <DataGridTextColumn Header="Weight(kg)" Binding="{Binding Weight}" Width="100"/>
+                            <DataGridTextColumn Header="Length(mm)" Binding="{Binding Length}" Width="100"/>
+                            <DataGridTextColumn Header="Width(mm)" Binding="{Binding Width}" Width="100"/>
+                            <DataGridTextColumn Header="Height(mm)" Binding="{Binding Height}" Width="100"/>
+                            <DataGridTextColumn Header="Volume(mm³)" Binding="{Binding Volume}" Width="120"/>
+                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100"/>
+                            <DataGridTextColumn Header="Create Time" Binding="{Binding CreateTime, StringFormat=yyyy-MM-dd HH:mm:ss}" Width="*"/>
+                            <DataGridTemplateColumn Header="Image" Width="100">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ui:Button Appearance="Secondary"
+                                                  Command="{Binding DataContext.ViewImageCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                  CommandParameter="{Binding}"
+                                                  IsEnabled="{Binding ImagePath, Converter={StaticResource NullOrEmptyToBooleanConverter}}">
+                                            <ui:SymbolIcon Symbol="Image24"/>
+                                        </ui:Button>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Growl Message Container -->
+        <StackPanel Name="GrowlPanel"
+                    Grid.Row="1"
+                    hc:Growl.GrowlParent="True"
+                    hc:Growl.Token="HistoryWindowGrowl"
+                    VerticalAlignment="Top"
+                    HorizontalAlignment="Right"
+                    Margin="0,10,10,0"
+                    Panel.ZIndex="1000" />
+    </Grid>
+</ui:FluentWindow> 
