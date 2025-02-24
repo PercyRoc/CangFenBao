@@ -70,7 +70,7 @@ public partial class App
     /// <summary>
     /// 启动
     /// </summary>
-    protected override void OnStartup(StartupEventArgs e)
+    protected override async void OnStartup(StartupEventArgs e)
     {
         // 配置Serilog
         Log.Logger = new LoggerConfiguration()
@@ -90,13 +90,19 @@ public partial class App
         {
             // 启动相机托管服务
             var cameraStartupService = Container.Resolve<CameraStartupService>();
-            cameraStartupService.StartAsync(CancellationToken.None).Wait();
-            Log.Information("相机托管服务启动成功");
+            _ = Task.Run(async () =>
+            {
+                await cameraStartupService.StartAsync(CancellationToken.None);
+                Log.Information("相机托管服务启动成功");
+            });
 
             // 启动警示灯托管服务
             var warningLightStartupService = Container.Resolve<WarningLightStartupService>();
-            warningLightStartupService.StartAsync(CancellationToken.None).Wait();
-            Log.Information("警示灯托管服务启动成功");
+            _ = Task.Run(async () =>
+            {
+                await warningLightStartupService.StartAsync();
+                Log.Information("警示灯托管服务启动成功");
+            });
         }
         catch (Exception ex)
         {
@@ -108,19 +114,30 @@ public partial class App
     /// <summary>
     /// 退出
     /// </summary>
-    protected override void OnExit(ExitEventArgs e)
+    protected override async void OnExit(ExitEventArgs e)
     {
         try
         {
+            var tasks = new List<Task>();
+
             // 停止相机托管服务
             var cameraStartupService = Container.Resolve<CameraStartupService>();
-            cameraStartupService.StopAsync(CancellationToken.None).Wait();
-            Log.Information("相机托管服务已停止");
+            tasks.Add(Task.Run(async () =>
+            {
+                await cameraStartupService.StopAsync(CancellationToken.None);
+                Log.Information("相机托管服务已停止");
+            }));
 
             // 停止警示灯托管服务
             var warningLightStartupService = Container.Resolve<WarningLightStartupService>();
-            warningLightStartupService.StopAsync(CancellationToken.None).Wait();
-            Log.Information("警示灯托管服务已停止");
+            tasks.Add(Task.Run(async () =>
+            {
+                await warningLightStartupService.StopAsync(CancellationToken.None);
+                Log.Information("警示灯托管服务已停止");
+            }));
+
+            // 等待所有服务停止
+            await Task.WhenAll(tasks);
 
             // 释放主窗口 ViewModel
             if (MainWindow?.DataContext is MainWindowViewModel viewModel)
@@ -148,13 +165,13 @@ public partial class App
             Log.CloseAndFlush();
 
             // 确保所有后台线程都已完成
-            Thread.Sleep(500);
+            await Task.Delay(500);
         }
         catch (Exception ex)
         {
             Log.Error(ex, "应用程序关闭时发生错误");
             Log.CloseAndFlush();
-            Thread.Sleep(500);
+            await Task.Delay(500);
         }
         finally
         {

@@ -5,26 +5,19 @@ namespace Presentation_KuaiLv.Services.Warning;
 /// <summary>
 /// 警示灯托管服务
 /// </summary>
-public class WarningLightStartupService
+public class WarningLightStartupService(IWarningLightService warningLightService)
 {
-    private readonly IWarningLightService _warningLightService;
-
-    public WarningLightStartupService(IWarningLightService warningLightService)
-    {
-        _warningLightService = warningLightService;
-    }
-
     /// <summary>
     /// 启动服务
     /// </summary>
-    public async Task StartAsync(CancellationToken cancellationToken)
+    public async Task StartAsync()
     {
         try
         {
-            await _warningLightService.ConnectAsync();
-            if (_warningLightService.IsConnected)
+            await warningLightService.ConnectAsync();
+            if (warningLightService.IsConnected)
             {
-                await _warningLightService.ShowGreenLightAsync();
+                await warningLightService.ShowGreenLightAsync();
             }
             Log.Information("警示灯托管服务启动成功");
         }
@@ -41,10 +34,10 @@ public class WarningLightStartupService
     {
         try
         {
-            if (_warningLightService.IsConnected)
+            if (warningLightService.IsConnected)
             {
-                await _warningLightService.TurnOffAllLightsAsync();
-                await _warningLightService.DisconnectAsync();
+                await warningLightService.TurnOffAllLightsAsync();
+                await warningLightService.DisconnectAsync();
             }
             Log.Information("警示灯托管服务已停止");
         }

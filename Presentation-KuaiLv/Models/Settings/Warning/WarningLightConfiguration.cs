@@ -1,10 +1,12 @@
 using System.Text.Json.Serialization;
+using CommonLibrary.Models.Settings;
 
 namespace Presentation_KuaiLv.Models.Settings.Warning;
 
 /// <summary>
 /// 警示灯配置
 /// </summary>
+[Configuration("WarningLightSettings")]
 public class WarningLightConfiguration
 {
     /// <summary>
