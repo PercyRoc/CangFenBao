@@ -34,6 +34,7 @@ public class PackageDbContext : DbContext
         {
             entity.ToTable(tableName);
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
             entity.Property(e => e.Barcode).IsRequired();
             entity.Property(e => e.SegmentCode);
             entity.Property(e => e.Weight);
@@ -48,5 +49,11 @@ public class PackageDbContext : DbContext
             entity.Property(e => e.ErrorMessage);
             entity.Property(e => e.ImagePath);
         });
+
+        modelBuilder.Entity<PackageRecord>()
+            .HasIndex(p => p.CreateTime)
+            .HasDatabaseName($"IX_{tableName}_CreateTime");
+
+        base.OnModelCreating(modelBuilder);
     }
 } 

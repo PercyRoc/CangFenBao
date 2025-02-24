@@ -102,7 +102,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                     // 创建内存流并将其所有权转移给BitmapImage
                     var memoryStream = new MemoryStream();
-                    image.SaveAsJpeg(memoryStream);
+                    // 由于现在是灰度图像，需要调整保存格式
+                    image.SaveAsPng(memoryStream); // 使用PNG格式保持灰度图像质量
                     memoryStream.Position = 0;
 
                     Application.Current.Dispatcher.Invoke(() =>
@@ -123,10 +124,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                 // 绘制原始图像
                                 drawingContext.DrawImage(bitmap, new Rect(0, 0, bitmap.PixelWidth, bitmap.PixelHeight));
 
-                                // 绘制条码位置
+                                // 绘制条码位置，使用更明显的颜色
                                 foreach (var barcode in barcodeLocations)
                                 {
-                                    var pen = new Pen(Brushes.LimeGreen, 2);
+                                    var pen = new Pen(Brushes.Red, 3); // 使用红色和更粗的线条，在灰度图上更容易看见
                                     pen.Freeze();
 
                                     // 创建条码框的路径
@@ -148,14 +149,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                                         // 只有在条码内容不为空时才绘制文本
                                         if (string.IsNullOrWhiteSpace(barcode.Code)) continue;
-                                        // 绘制条码文本
+                                        // 绘制条码文本，使用更明显的颜色和大小
                                         var formattedText = new FormattedText(
                                             barcode.Code,
                                             CultureInfo.CurrentCulture,
                                             FlowDirection.LeftToRight,
                                             new Typeface("Arial"),
-                                            14,
-                                            Brushes.LimeGreen,
+                                            16, // 增大字号
+                                            Brushes.Red, // 使用红色
                                             VisualTreeHelper.GetDpi(Application.Current.MainWindow).PixelsPerDip);
                                         formattedText.SetFontWeight(FontWeights.Bold);
 
@@ -170,7 +171,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                             textPoint.Y - 2,
                                             formattedText.Width + 4,
                                             formattedText.Height + 4));
-                                        drawingContext.DrawGeometry(Brushes.Black, null, textBackground);
+                                        drawingContext.DrawGeometry(Brushes.White, null, textBackground); // 使用白色背景
 
                                         // 绘制文本
                                         drawingContext.DrawText(formattedText, textPoint);
@@ -205,8 +206,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         // 初始化摆轮分拣服务
         _ = InitializeSortServiceAsync();
-
-        _ = benNiaoPreReportService.UpdatePreReportDataAsync();
     }
 
     public DelegateCommand OpenSettingsCommand { get; }
@@ -545,14 +544,13 @@ public class MainWindowViewModel : BindableBase, IDisposable
         if (weightItem != null)
         {
             weightItem.Value = package.Weight.ToString(CultureInfo.InvariantCulture);
-            weightItem.Unit = "g";
+            weightItem.Unit = "kg";
         }
 
         var sizeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "尺寸");
         if (sizeItem != null)
         {
             sizeItem.Value = package.VolumeDisplay;
-            sizeItem.Unit = "mm";
         }
 
         var segmentItem = PackageInfoItems.FirstOrDefault(x => x.Label == "段码");

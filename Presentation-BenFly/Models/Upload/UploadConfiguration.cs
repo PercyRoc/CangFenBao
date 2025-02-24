@@ -22,7 +22,7 @@ public class UploadConfiguration : BindableBase
     private BenNiaoEnvironment _benNiaoEnvironment;
 
     private string _benNiaoFtpHost = string.Empty;
-
+    private int _benNiaoFtpPort = 22;
     private string _benNiaoFtpPassword = string.Empty;
 
     private string _benNiaoFtpUsername = string.Empty;
@@ -59,6 +59,12 @@ public class UploadConfiguration : BindableBase
     {
         get => _benNiaoFtpHost;
         set => SetProperty(ref _benNiaoFtpHost, value);
+    }
+
+    public int BenNiaoFtpPort
+    {
+        get => _benNiaoFtpPort;
+        set => SetProperty(ref _benNiaoFtpPort, value);
     }
 
     public string BenNiaoFtpUsername

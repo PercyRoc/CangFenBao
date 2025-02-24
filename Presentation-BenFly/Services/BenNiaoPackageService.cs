@@ -43,7 +43,8 @@ public class BenNiaoPackageService(
             if (string.IsNullOrWhiteSpace(package.Barcode) || package.Barcode.Equals("Noread", StringComparison.OrdinalIgnoreCase))
             {
                 Log.Warning("包裹条码为空或Noread，将使用异常数据上传接口");
-                return await UploadNoReadDataAsync(package);
+                _ = UploadNoReadDataAsync(package);
+                return true;
             }
 
             // 从预报数据服务中获取预报数据
@@ -141,10 +142,10 @@ public class BenNiaoPackageService(
                 NetworkName = _config.BenNiaoDistributionCenterName,
                 WaybillNum = package.Barcode,
                 ScanTime = uploadTime.ToString("yyyy-MM-dd HH:mm:ss"),
-                Weight = Math.Round(Convert.ToDecimal(package.Weight) / 1000m, 2), // 转换为千克并保留2位小数
-                GoodsLength = package.Length.HasValue ? (int)Math.Round(package.Length.Value / 10.0) : 0, // 转换为厘米，空值时为0
-                GoodsWidth = package.Width.HasValue ? (int)Math.Round(package.Width.Value / 10.0) : 0, // 转换为厘米，空值时为0
-                GoodsHeight = package.Height.HasValue ? (int)Math.Round(package.Height.Value / 10.0) : 0, // 转换为厘米，空值时为0
+                Weight = (decimal)package.Weight,
+                GoodsLength = package.Length.HasValue ? (int)Math.Round(package.Length.Value) : 0, // 已经是厘米，空值时为0
+                GoodsWidth = package.Width.HasValue ? (int)Math.Round(package.Width.Value) : 0, // 已经是厘米，空值时为0
+                GoodsHeight = package.Height.HasValue ? (int)Math.Round(package.Height.Value) : 0, // 已经是厘米，空值时为0
                 DeviceId = _config.DeviceId // 添加设备号
             };
 
@@ -202,7 +203,7 @@ public class BenNiaoPackageService(
 
             // 创建FTP客户端
             await using var ftpClient = new AsyncFtpClient(_config.BenNiaoFtpHost, _config.BenNiaoFtpUsername,
-                _config.BenNiaoFtpPassword);
+                _config.BenNiaoFtpPassword, _config.BenNiaoFtpPort);
 
             try
             {
@@ -317,10 +318,10 @@ public class BenNiaoPackageService(
                 deviceId = _config.DeviceId,
                 waybillNum = package.Barcode, // 可以为空
                 scanTime = uploadTime.ToString("yyyy-MM-dd HH:mm:ss"),
-                weight = Math.Round(Convert.ToDecimal(package.Weight) / 1000m, 2), // 转换为千克并保留2位小数
-                goodsLength = package.Length.HasValue ? (int)Math.Round(package.Length.Value / 10.0) : 0, // 转换为厘米，空值时为0
-                goodsWidth = package.Width.HasValue ? (int)Math.Round(package.Width.Value / 10.0) : 0, // 转换为厘米，空值时为0
-                goodsHeight = package.Height.HasValue ? (int)Math.Round(package.Height.Value / 10.0) : 0, // 转换为厘米，空值时为0
+                weight = (decimal)package.Weight, // 单位为kg
+                goodsLength = package.Length.HasValue ? (int)Math.Round(package.Length.Value) : 0, // 已经是厘米，空值时为0
+                goodsWidth = package.Width.HasValue ? (int)Math.Round(package.Width.Value) : 0, // 已经是厘米，空值时为0
+                goodsHeight = package.Height.HasValue ? (int)Math.Round(package.Height.Value) : 0, // 已经是厘米，空值时为0
                 picture = base64Image // Base64格式图片
             };
 

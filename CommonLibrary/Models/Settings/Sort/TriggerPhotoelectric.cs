@@ -12,6 +12,14 @@ public class TriggerPhotoelectric : BindableBase
 
     private int _timeRangeUpper;
 
+    private int _sortingDelay;
+
+    private int _resetDelay;
+
+    private int _sortingTimeRangeLower;
+
+    private int _sortingTimeRangeUpper;
+
     public string IpAddress
     {
         get => _ipAddress;
@@ -34,5 +42,29 @@ public class TriggerPhotoelectric : BindableBase
     {
         get => _timeRangeUpper;
         set => SetProperty(ref _timeRangeUpper, value);
+    }
+
+    public int SortingDelay
+    {
+        get => _sortingDelay;
+        set => SetProperty(ref _sortingDelay, value);
+    }
+
+    public int ResetDelay
+    {
+        get => _resetDelay;
+        set => SetProperty(ref _resetDelay, value);
+    }
+
+    public int SortingTimeRangeLower
+    {
+        get => _sortingTimeRangeLower;
+        set => SetProperty(ref _sortingTimeRangeLower, value);
+    }
+
+    public int SortingTimeRangeUpper
+    {
+        get => _sortingTimeRangeUpper;
+        set => SetProperty(ref _sortingTimeRangeUpper, value);
     }
 }

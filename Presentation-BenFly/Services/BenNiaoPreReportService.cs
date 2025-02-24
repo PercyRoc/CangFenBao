@@ -12,13 +12,43 @@ namespace Presentation_BenFly.Services;
 /// <summary>
 ///     笨鸟预报数据服务
 /// </summary>
-public class BenNiaoPreReportService(
-    IHttpClientFactory httpClientFactory,
-    ISettingsService settingsService)
+public class BenNiaoPreReportService : IDisposable
 {
     private const string SettingsKey = "UploadSettings";
-    private readonly HttpClient _httpClient = httpClientFactory.CreateClient("BenNiao");
+    private readonly HttpClient _httpClient;
+    private readonly ISettingsService _settingsService;
+    private readonly System.Timers.Timer _updateTimer;
     private List<PreReportDataResponse>? _preReportData;
+    private bool _disposed;
+
+    public BenNiaoPreReportService(
+        IHttpClientFactory httpClientFactory,
+        ISettingsService settingsService)
+    {
+        _httpClient = httpClientFactory.CreateClient("BenNiao");
+        _settingsService = settingsService;
+
+        // 初始化定时器
+        _updateTimer = new System.Timers.Timer();
+        _updateTimer.Elapsed += async (_, _) => await UpdatePreReportDataAsync();
+
+        // 立即执行一次预报数据更新
+        Task.Run(async () =>
+        {
+            try
+            {
+                Log.Information("启动时执行预报数据更新");
+                await UpdatePreReportDataAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "启动时更新预报数据失败");
+            }
+        });
+
+        // 启动定时更新
+        StartUpdateTimer();
+    }
 
     /// <summary>
     ///     获取预报数据
@@ -26,6 +56,27 @@ public class BenNiaoPreReportService(
     public List<PreReportDataResponse>? GetPreReportData()
     {
         return _preReportData;
+    }
+
+    /// <summary>
+    ///     启动定时更新
+    /// </summary>
+    private void StartUpdateTimer()
+    {
+        try
+        {
+            var config = _settingsService.LoadSettings<UploadConfiguration>(SettingsKey);
+            var interval = TimeSpan.FromSeconds(config.PreReportUpdateIntervalSeconds);
+            
+            _updateTimer.Interval = interval.TotalMilliseconds;
+            _updateTimer.Start();
+            
+            Log.Information("已启动预报数据定时更新，间隔：{Interval}秒", config.PreReportUpdateIntervalSeconds);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "启动预报数据定时更新失败");
+        }
     }
 
     /// <summary>
@@ -37,7 +88,7 @@ public class BenNiaoPreReportService(
         {
             Log.Information("开始获取笨鸟预报数据");
 
-            var config = settingsService.LoadSettings<UploadConfiguration>(SettingsKey);
+            var config = _settingsService.LoadSettings<UploadConfiguration>(SettingsKey);
             const string url = "/api/openApi/dataDownload";
 
             // 构建请求参数
@@ -86,5 +137,16 @@ public class BenNiaoPreReportService(
         {
             Log.Error(ex, "获取笨鸟预报数据时发生错误");
         }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        
+        _updateTimer.Stop();
+        _updateTimer.Dispose();
+        _disposed = true;
+        
+        GC.SuppressFinalize(this);
     }
 }

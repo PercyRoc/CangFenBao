@@ -31,7 +31,7 @@ public class VolumeCameraStartupService : IHostedService
     /// <summary>
     ///     启动服务
     /// </summary>
-    public async Task StartAsync(CancellationToken cancellationToken)
+    public Task StartAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -63,6 +63,8 @@ public class VolumeCameraStartupService : IHostedService
             Log.Error(ex, "启动体积相机服务时发生错误");
             _notificationService.ShowError(ex.Message, "体积相机服务错误");
         }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>

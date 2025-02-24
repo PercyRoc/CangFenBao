@@ -1,5 +1,6 @@
 using System.IO;
 using System.Reflection;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CommonLibrary.Models.Settings;
@@ -13,7 +14,8 @@ public class JsonSettingsService : ISettingsService
         WriteIndented = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Converters = { new JsonStringEnumConverter() },
-        PropertyNameCaseInsensitive = true
+        PropertyNameCaseInsensitive = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
     private readonly Dictionary<Type, string> _configurationKeys = [];
     private readonly Dictionary<string, object> _configurationCache = [];
@@ -82,20 +84,17 @@ public class JsonSettingsService : ISettingsService
         return result;
     }
 
-    public void SaveConfiguration<T>(string key, T configuration) where T : class
+    public void SaveConfiguration<T>(T configuration) where T : class?
     {
         ArgumentNullException.ThrowIfNull(configuration);
+        var key = GetConfigurationKey<T>();
         SaveToFile(key, configuration);
         _configurationCache[key] = configuration;
     }
 
-    public void SaveConfiguration<T>(T configuration) where T : class
+    void ISettingsService.SaveConfiguration<T>(string key, T configuration)
     {
-        ArgumentNullException.ThrowIfNull(configuration);
-        
-        var key = GetConfigurationKey<T>();
-        SaveToFile(key, configuration);
-        _configurationCache[key] = configuration;
+        SaveConfiguration(configuration);
     }
 
     public void ReloadAll()
@@ -147,8 +146,9 @@ public class JsonSettingsService : ISettingsService
         return Path.Combine(_settingsDirectory, $"{key}.json");
     }
 
-    private void SaveToFile<T>(string key, T configuration) where T : class
+    private void SaveToFile<T>(string key, T configuration) where T : class?
     {
+        ArgumentNullException.ThrowIfNull(configuration);
         var filePath = GetSettingsFilePath(key);
         var json = JsonSerializer.Serialize(configuration, JsonOptions);
         File.WriteAllText(filePath, json);

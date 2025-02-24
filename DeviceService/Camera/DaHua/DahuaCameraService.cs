@@ -131,13 +131,15 @@ public class DahuaCameraService : ICameraService
                         };
 
                         // 设置重量和尺寸数据
-                        if (args.Weight > 0) packageInfo.Weight = args.Weight;
+                        if (args.Weight > 0) packageInfo.Weight = (float)(args.Weight / 1000.0);
 
                         if (args.VolumeInfo is { length: > 0, width: > 0, height: > 0 })
                         {
-                            packageInfo.Length = Math.Round(args.VolumeInfo.length, 2);
-                            packageInfo.Width = Math.Round(args.VolumeInfo.width, 2);
-                            packageInfo.Height = Math.Round(args.VolumeInfo.height, 2);
+                            // 将毫米转换为厘米存储和显示
+                            packageInfo.Length = Math.Round(args.VolumeInfo.length / 10, 2);
+                            packageInfo.Width = Math.Round(args.VolumeInfo.width / 10, 2);
+                            packageInfo.Height = Math.Round(args.VolumeInfo.height / 10, 2);
+                            packageInfo.VolumeDisplay = $"{packageInfo.Length:F1} × {packageInfo.Width:F1} × {packageInfo.Height:F1}";
                         }
 
                         // 处理图像数据
@@ -366,6 +368,10 @@ public class DahuaCameraService : ICameraService
             if (width <= 0 || height <= 0)
                 throw new ArgumentException($"无效的图像尺寸: {width}x{height}");
 
+            // 记录图像信息
+            Log.Debug("处理图像数据: 类型={ImageType}, 宽度={Width}, 高度={Height}, 数据大小={DataSize}",
+                imageType, width, height, imageData.Length);
+
             Image<Rgba32> image;
             switch (imageType)
             {
@@ -376,60 +382,86 @@ public class DahuaCameraService : ICameraService
                     try
                     {
                         // 解压缩JPEG数据
-                        var retImg = decompressor.Decompress(imageData, TJPixelFormats.TJPF_BGR, TJFlags.NONE);
-                        // 验证解压后的图像尺寸
+                        var retImg = decompressor.Decompress(imageData, TJPixelFormats.TJPF_GRAY, TJFlags.NONE);
                         if (retImg.Data == null || retImg.Data.Length == 0)
                             throw new InvalidOperationException("JPEG解压缩后的数据为空");
 
-                        // 从BGR数据创建ImageSharp图像
-                        using var bgrImage = Image.LoadPixelData<Bgr24>(retImg.Data, retImg.Width, retImg.Height);
-                        image = bgrImage.CloneAs<Rgba32>();
+                        Log.Debug("JPEG解压完成: 宽度={Width}, 高度={Height}, 数据大小={DataSize}",
+                            retImg.Width, retImg.Height, retImg.Data.Length);
+
+                        // 创建新的图像数据，考虑4字节对齐
+                        var stride = (retImg.Width + 3) & ~3;
+                        var alignedData = new byte[stride * retImg.Height];
+
+                        // 逐行复制数据，处理非4字节对齐的情况
+                        if (retImg.Width % 4 != 0)
+                        {
+                            for (var i = 0; i < retImg.Height; i++)
+                            {
+                                Array.Copy(retImg.Data, i * retImg.Width, alignedData, i * stride, retImg.Width);
+                            }
+                        }
+                        else
+                        {
+                            Array.Copy(retImg.Data, alignedData, retImg.Data.Length);
+                        }
+
+                        // 从处理后的数据创建图像
+                        using var grayImage = Image.LoadPixelData<L8>(alignedData, retImg.Width, retImg.Height);
+                        image = grayImage.CloneAs<Rgba32>();
+
+                        #if DEBUG
+                        image.SaveAsPng($"debug_image_{DateTime.Now:yyyyMMdd_HHmmss}.png");
+                        #endif
                     }
                     finally
                     {
                         DecompressorPool.Return(decompressor);
                     }
-
                     break;
                 }
                 case LogisticsAPIStruct.EImageType.eImageTypeBGR:
-                {
-                    // 验证BGR数据大小
-                    var expectedSize = width * height * 3; // BGR格式每像素3字节
-                    if (imageData.Length < expectedSize)
-                        throw new ArgumentException($"BGR数据大小不足: 期望{expectedSize}字节，实际{imageData.Length}字节");
-
-                    using var bgrImage = Image.LoadPixelData<Bgr24>(imageData, width, height);
-                    image = bgrImage.CloneAs<Rgba32>();
-                    break;
-                }
                 case LogisticsAPIStruct.EImageType.eImageTypeNormal:
                 {
-                    // 检测每像素字节数
-                    var bytesPerPixel = imageData.Length / (width * height);
-                    if (imageData.Length % (width * height) != 0)
-                        throw new ArgumentException($"图像数据大小({imageData.Length})与尺寸({width}x{height})不匹配");
+                    // 检查数据大小是否匹配mono8格式
+                    var channels = imageType == LogisticsAPIStruct.EImageType.eImageTypeBGR ? 3 : 1;
+                    var stride = ((width * channels + 3) & ~3);
+                    var expectedSize = stride * height;
 
-                    switch (bytesPerPixel)
+                    if (imageData.Length < expectedSize)
                     {
-                        case 1:
-                        {
-                            // 处理灰度图像
-                            using var grayImage = Image.LoadPixelData<L8>(imageData, width, height);
-                            image = grayImage.CloneAs<Rgba32>();
-                            break;
-                        }
-                        case 3:
-                        {
-                            // 处理BGR图像
-                            using var bgrImage = Image.LoadPixelData<Bgr24>(imageData, width, height);
-                            image = bgrImage.CloneAs<Rgba32>();
-                            break;
-                        }
-                        default:
-                            throw new ArgumentException($"不支持的像素格式: {bytesPerPixel}字节/像素");
+                        Log.Warning("图像数据大小不匹配: 期望={Expected}, 实际={Actual}, 步幅={Stride}", 
+                            expectedSize, imageData.Length, stride);
+                        throw new ArgumentException($"图像数据大小不匹配: 期望{expectedSize}字节，实际{imageData.Length}字节");
                     }
 
+                    // 创建新的图像数据，考虑4字节对齐
+                    var alignedData = new byte[stride * height];
+
+                    // 逐行复制数据，处理非4字节对齐的情况
+                    if ((width * channels) % 4 != 0)
+                    {
+                        for (var i = 0; i < height; i++)
+                        {
+                            Array.Copy(imageData, i * (width * channels), alignedData, i * stride, width * channels);
+                        }
+                    }
+                    else
+                    {
+                        Array.Copy(imageData, alignedData, imageData.Length);
+                    }
+
+                    // 从处理后的数据创建图像
+                    if (channels == 1)
+                    {
+                        using var grayImage = Image.LoadPixelData<L8>(alignedData, width, height);
+                        image = grayImage.CloneAs<Rgba32>();
+                    }
+                    else
+                    {
+                        using var bgrImage = Image.LoadPixelData<Bgr24>(alignedData, width, height);
+                        image = bgrImage.CloneAs<Rgba32>();
+                    }
                     break;
                 }
                 default:

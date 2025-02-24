@@ -33,7 +33,7 @@ public class PackageInfo : IDisposable
     /// <summary>
     /// 重量显示
     /// </summary>
-    public string WeightDisplay => $"{Weight:F2}g";
+    public string WeightDisplay => $"{Weight:F2}kg";
     
     /// <summary>
     /// 体积显示

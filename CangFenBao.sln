@@ -14,6 +14,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Presentation-SangNeng", "Pr
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Presentation-KuaiLv", "Presentation-KuaiLv\Presentation-KuaiLv.csproj", "{DAEBCE9D-CA3A-490A-8CE7-6C740DA4120A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Presentation-XiYiGu", "Presentation-XiYiGu\Presentation-XiYiGu.csproj", "{28493FC2-DB18-42C9-8642-D8F042C10483}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -48,5 +50,9 @@ Global
 		{DAEBCE9D-CA3A-490A-8CE7-6C740DA4120A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DAEBCE9D-CA3A-490A-8CE7-6C740DA4120A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DAEBCE9D-CA3A-490A-8CE7-6C740DA4120A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{28493FC2-DB18-42C9-8642-D8F042C10483}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{28493FC2-DB18-42C9-8642-D8F042C10483}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{28493FC2-DB18-42C9-8642-D8F042C10483}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{28493FC2-DB18-42C9-8642-D8F042C10483}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

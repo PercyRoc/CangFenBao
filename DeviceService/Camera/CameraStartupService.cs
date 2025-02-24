@@ -20,7 +20,7 @@ public class CameraStartupService(
     /// <summary>
     ///     启动服务
     /// </summary>
-    public async Task StartAsync(CancellationToken cancellationToken)
+    public Task StartAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -44,6 +44,8 @@ public class CameraStartupService(
             Log.Error(ex, "启动相机服务时发生错误");
             notificationService.ShowError(ex.Message, "相机服务错误");
         }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>

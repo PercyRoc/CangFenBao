@@ -82,8 +82,36 @@ public class RenJiaCameraService : ICameraService
                 Log.Error("打开人加体积相机失败：{Result}", result);
                 return false;
             }
-            IsConnected = true;
-            return true;
+
+            // 5. 等待系统状态就绪
+            var maxRetries = 10; // 最多尝试10次
+            var retryInterval = 500; // 每次间隔500ms
+            var state = new int[1];
+
+            for (var i = 0; i < maxRetries; i++)
+            {
+                var stateResult = NativeMethods.GetSystemState(state);
+                if (stateResult != 0)
+                {
+                    Log.Warning("获取系统状态失败：{Result}", stateResult);
+                    Thread.Sleep(retryInterval);
+                    continue;
+                }
+
+                if (state[0] == 1)
+                {
+                    Log.Information("人加体积相机系统状态就绪");
+                    IsConnected = true;
+                    return true;
+                }
+
+                Log.Debug("等待系统状态就绪，当前状态：{State}，重试次数：{Count}", state[0], i + 1);
+                Thread.Sleep(retryInterval);
+            }
+
+            Log.Error("等待系统状态就绪超时");
+            Stop(); // 关闭设备
+            return false;
         }
         catch (Exception ex)
         {
@@ -179,7 +207,7 @@ public class RenJiaCameraService : ICameraService
         try
         {
             var startTime = DateTime.Now;
-            var timeoutMs = _settings?.TimeoutMs ?? 500;
+            var timeoutMs = _settings?.TimeoutMs ?? 5000;
 
             // 创建测量任务
             var measureTask = Task.Run(() =>
@@ -199,7 +227,12 @@ public class RenJiaCameraService : ICameraService
 
                     // 检查设备状态
                     var state = new int[1];
-                    NativeMethods.GetSystemState(state);
+                    var stateResult = NativeMethods.GetSystemState(state);
+                    if (stateResult != 0)
+                    {
+                        Log.Warning("获取设备状态失败：{Result}", stateResult);
+                        return new MeasureResult(false, "获取设备状态失败");
+                    }
 
                     // 2. 获取测量结果
                     var dimensionData = new float[3];
@@ -322,50 +355,50 @@ public class RenJiaCameraService : ICameraService
 /// <summary>
 ///     人加体积相机原生方法
 /// </summary>
-internal static partial class NativeMethods
+internal static class NativeMethods
 {
     // 关闭后台应用程序
-    [LibraryImport("VolumeMeasurementDll.dll", EntryPoint = "KillProcess")]
+    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "KillProcess", CallingConvention = CallingConvention.Cdecl)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool KillProcess();
+    public static extern bool KillProcess();
 
     // 开启后台应用程序
-    [LibraryImport("VolumeMeasurementDll.dll", EntryPoint = "StartProcess")]
-    public static partial void StartProcess();
+    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "StartProcess", CallingConvention = CallingConvention.Cdecl)]
+    public static extern void StartProcess();
 
     // 扫描设备，返回在线设备数量
-    [LibraryImport("VolumeMeasurementDll.dll", EntryPoint = "ScanDevice")]
-    public static partial int ScanDevice();
+    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "ScanDevice", CallingConvention = CallingConvention.Cdecl)]
+    public static extern int ScanDevice();
 
     // 开启设备
-    [LibraryImport("VolumeMeasurementDll.dll", EntryPoint = "OpenDevice")]
-    public static partial int OpenDevice();
+    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "OpenDevice", CallingConvention = CallingConvention.Cdecl)]
+    public static extern int OpenDevice();
 
     // 关闭设备
-    [LibraryImport("VolumeMeasurementDll.dll", EntryPoint = "CloseDevice")]
-    public static partial int CloseDevice();
+    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "CloseDevice", CallingConvention = CallingConvention.Cdecl)]
+    public static extern int CloseDevice();
 
     // 计算一次体积测量
-    [LibraryImport("VolumeMeasurementDll.dll", EntryPoint = "ComputeOnce")]
-    public static partial int ComputeOnce();
+    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "ComputeOnce", CallingConvention = CallingConvention.Cdecl)]
+    public static extern int ComputeOnce();
 
     // 获取体积测量结果
-    [LibraryImport("VolumeMeasurementDll.dll", EntryPoint = "GetDmsResult")]
-    public static partial int GetDmsResult(
+    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "GetDmsResult", CallingConvention = CallingConvention.Cdecl)]
+    public static extern int GetDmsResult(
         [Out] float[] dimensionData,
         [Out, MarshalAs(UnmanagedType.LPArray, SizeConst = 10485760)] byte[] imageData);
 
     // 获取体积测量结果错误信息
-    [LibraryImport("VolumeMeasurementDll.dll", EntryPoint = "GetErrorMes")]
-    public static partial int GetErrorMes([Out] byte[] errMes);
+    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "GetErrorMes", CallingConvention = CallingConvention.Cdecl)]
+    public static extern int GetErrorMes([Out] byte[] errMes);
 
     // 获取测量时刻的图像信息
-    [LibraryImport("VolumeMeasurementDll.dll", EntryPoint = "GetMeasureImageFromId")]
-    public static partial int GetMeasureImageFromId(
+    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "GetMeasureImageFromId", CallingConvention = CallingConvention.Cdecl)]
+    public static extern int GetMeasureImageFromId(
         IntPtr imageData,
         int cameraId);
 
     // 获取系统状态
-    [LibraryImport("VolumeMeasurementDll.dll", EntryPoint = "GetSystemState")]
-    public static partial int GetSystemState([Out] int[] systemState);
+    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "GetSystemState", CallingConvention = CallingConvention.Cdecl)]
+    public static extern int GetSystemState([Out] int[] systemState);
 } 
