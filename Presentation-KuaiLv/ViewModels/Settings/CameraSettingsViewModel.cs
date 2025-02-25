@@ -27,7 +27,16 @@ public class CameraSettingsViewModel : BindableBase
         _cameraFactory = cameraFactory;
         _notificationService = notificationService;
 
-        RefreshCameraListCommand = new DelegateCommand(ExecuteRefreshCameraList);
+        RefreshCameraListCommand = new DelegateCommand(() => {
+            var task = ExecuteRefreshCameraList();
+            task.ContinueWith(t =>
+            {
+                if (!t.IsFaulted || t.Exception == null) return;
+                Log.Error(t.Exception, "刷新相机列表时发生错误");
+                _notificationService.ShowErrorWithToken("刷新相机列表失败", "SettingWindowGrowl");
+            }, TaskScheduler.FromCurrentSynchronizationContext());
+        });
+        SaveConfigurationCommand = new DelegateCommand(ExecuteSaveConfiguration);
         SaveConfigurationCommand = new DelegateCommand(ExecuteSaveConfiguration);
 
         // 加载配置
@@ -37,7 +46,7 @@ public class CameraSettingsViewModel : BindableBase
     public CameraSettings Configuration
     {
         get => _configuration;
-        set => SetProperty(ref _configuration, value);
+        private set => SetProperty(ref _configuration, value);
     }
 
     public bool IsRefreshing
@@ -54,7 +63,7 @@ public class CameraSettingsViewModel : BindableBase
     public DelegateCommand RefreshCameraListCommand { get; }
     public DelegateCommand SaveConfigurationCommand { get; }
 
-    private void ExecuteRefreshCameraList()
+    private async Task ExecuteRefreshCameraList()
     {
         IsRefreshing = true;
         try
@@ -62,7 +71,7 @@ public class CameraSettingsViewModel : BindableBase
             Log.Information("开始刷新相机列表，当前选择的厂商：{Manufacturer}", Configuration.Manufacturer);
             
             // 创建相机服务
-            using var cameraService = _cameraFactory.CreateCameraByManufacturer(Configuration.Manufacturer);
+            await using var cameraService = _cameraFactory.CreateCameraByManufacturer(Configuration.Manufacturer);
             
             // 获取相机列表
             var cameraInfos = cameraService.GetCameraInfos();

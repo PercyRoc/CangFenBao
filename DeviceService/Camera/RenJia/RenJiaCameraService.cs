@@ -110,7 +110,7 @@ public class RenJiaCameraService : ICameraService
             }
 
             Log.Error("等待系统状态就绪超时");
-            Stop(); // 关闭设备
+            _ = StopAsync(); // 异步关闭设备，不等待完成
             return false;
         }
         catch (Exception ex)
@@ -120,31 +120,71 @@ public class RenJiaCameraService : ICameraService
         }
     }
 
-    public void Stop()
+    /// <summary>
+    /// 异步停止相机服务，带超时控制
+    /// </summary>
+    /// <param name="timeoutMs">超时时间（毫秒）</param>
+    /// <returns>操作是否成功</returns>
+    public async Task<bool> StopAsync(int timeoutMs = 3000)
     {
+        if (!IsConnected) return true;
+
         try
         {
-            Log.Information("正在停止人加体积相机服务...");
-
-            // 1. 关闭设备
-            var closeResult = NativeMethods.CloseDevice();
-            if (closeResult != 0)
+            Log.Information("正在异步停止体积相机服务(超时:{TimeoutMs}ms)...", timeoutMs);
+            
+            // 使用CancellationToken实现超时
+            using var cts = new CancellationTokenSource(timeoutMs);
+            
+            var success = await Task.Run(() => 
             {
-                Log.Warning("关闭设备失败：{Result}", closeResult);
-            }
+                try 
+                {
+                    // 1. 关闭设备
+                    var closeResult = NativeMethods.CloseDevice();
+                    if (closeResult != 0)
+                    {
+                        Log.Warning("关闭设备失败：{Result}", closeResult);
+                    }
 
-            // 2. 关闭后台程序
-            if (!NativeMethods.KillProcess())
+                    // 2. 关闭后台程序
+                    if (NativeMethods.KillProcess()) return true;
+                    Log.Warning("关闭后台程序失败");
+                    return false;
+
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "停止体积相机时发生异常");
+                    return false;
+                }
+            }, cts.Token).ContinueWith(t => 
             {
-                Log.Warning("关闭后台程序失败");
-            }
+                // 处理任务取消
+                if (t.IsCanceled)
+                {
+                    Log.Warning("停止体积相机操作超时");
+                    return false;
+                }
+                
+                // 处理任务异常
+                if (!t.IsFaulted) return t.Result;
+                Log.Error(t.Exception, "停止体积相机时发生异常");
+                return false;
 
+            }, TaskScheduler.Default);
+            
+            // 无论停止结果如何，重置状态
             IsConnected = false;
-            Log.Information("人加体积相机服务已停止");
+            
+            Log.Information("体积相机服务已异步停止");
+            return success;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "停止人加体积相机服务时发生错误");
+            Log.Error(ex, "异步停止体积相机服务时发生错误");
+            IsConnected = false; // 强制重置状态
+            return false;
         }
     }
 
@@ -328,23 +368,65 @@ public class RenJiaCameraService : ICameraService
         }
     }
 
+    /// <summary>
+    /// 异步释放资源
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed) return;
+
+        try
+        {
+            Log.Information("正在异步释放人加体积相机资源...");
+            
+            // 异步停止相机
+            try
+            {
+                await StopAsync(5000);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "异步停止相机时发生错误");
+            }
+            
+            // 释放其他资源
+            try
+            {
+                _packageSubject.Dispose();
+                _imageSubject.Dispose();
+                _processingCancellation.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "释放资源时发生错误");
+            }
+            
+            Log.Information("人加体积相机资源已异步释放完成");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "异步释放人加体积相机资源时发生错误");
+        }
+        finally
+        {
+            _disposed = true;
+        }
+        
+        GC.SuppressFinalize(this);
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
 
         try
         {
-            Stop();
-            _packageSubject.Dispose();
-            _imageSubject.Dispose();
-            _processingCancellation.Dispose();
+            // 调用异步Dispose并等待其完成
+            DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
             Log.Error(ex, "释放人加体积相机资源时发生错误");
-        }
-        finally
-        {
             _disposed = true;
         }
 

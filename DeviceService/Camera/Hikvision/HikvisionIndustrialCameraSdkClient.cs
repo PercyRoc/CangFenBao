@@ -10,6 +10,7 @@ using Serilog;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using System.Runtime.CompilerServices;
+using System.Collections.Concurrent;
 
 namespace DeviceService.Camera.Hikvision;
 
@@ -18,7 +19,8 @@ namespace DeviceService.Camera.Hikvision;
 /// </summary>
 public class HikvisionIndustrialCameraSdkClient : ICameraService
 {
-    private const int MaxConcurrentProcessing = 3;
+    // 根据CPU核心数调整并发处理数量
+    private readonly int _maxConcurrentProcessing = Math.Max(2, Environment.ProcessorCount / 2);
 
     // 保持委托的引用，防止被GC回收
     private readonly MVIDCodeReader.cbOutputdelegate _imageCallback;
@@ -30,6 +32,14 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
 
     private readonly Subject<(Image<Rgba32> image, IReadOnlyList<BarcodeLocation> barcodes)>
         _realtimeImageSubject = new();
+
+    // 添加图像对象池
+    private readonly ConcurrentQueue<Image<Rgba32>> _imagePool = new();
+    private const int MaxImagePoolSize = 10;
+
+    // 添加最新图像缓存
+    private Image<Rgba32>? _latestImage;
+    private readonly object _latestImageLock = new();
 
     // 添加SDK调用锁
     private readonly object _sdkLock = new();
@@ -61,7 +71,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
         });
 
         // 初始化信号量
-        _processingSemaphore = new SemaphoreSlim(MaxConcurrentProcessing);
+        _processingSemaphore = new SemaphoreSlim(_maxConcurrentProcessing);
         _processingCount = 0;
 
         // 初始化回调委托并保持引用
@@ -152,8 +162,6 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
             {
                 try
                 {
-                    Log.Debug("正在尝试开始采集（第{Attempt}次尝试）...", i);
-                    
                     // 在每次尝试前检查设备状态
                     if (_device == null)
                     {
@@ -206,74 +214,164 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
     }
 
     /// <summary>
-    /// 执行软触发并返回图像
+    /// 获取最新的图像
     /// </summary>
-    /// <returns>触发成功返回图像数据，失败返回 null</returns>
+    /// <returns>成功返回图像数据，失败返回 null</returns>
     public Image<Rgba32>? ExecuteSoftTrigger()
     {
-        Log.Debug("正在执行软触发...");
-
-        var tcs = new TaskCompletionSource<Image<Rgba32>?>();
-        IDisposable? subscription = null;
-
         try
         {
-            // 订阅图像流
-            subscription = ImageStream.Take(1).Subscribe(imageData =>
+            lock (_latestImageLock)
             {
-                try
+                if (_latestImage == null)
                 {
-                    var clonedImage = imageData.image.Clone();
-                    tcs.TrySetResult(clonedImage);
+                    Log.Warning("没有可用的图像");
+                    return null;
                 }
-                catch (Exception ex)
-                {
-                    tcs.TrySetException(ex);
-                }
-            });
 
-            // 执行软触发
-            var result = SafeSdkCall(() =>
-            {
-                lock (_sdkLock)
-                {
-                    if (_device == null)
-                    {
-                        Log.Error("设备未初始化");
-                        return false;
-                    }
-
-                    var triggerResult = _device.MVID_CR_CAM_SetCommandValue_NET("TriggerSoftware");
-                    if (triggerResult == MVIDCodeReader.MVID_CR_OK) return true;
-                    Log.Error("软触发失败：{Error}", GetErrorMessage(triggerResult));
-                    return false;
-                }
-            });
-
-            if (!result)
-            {
-                subscription.Dispose();
-                return null;
+                var image = _latestImage.Clone();
+                Log.Information("成功获取最新图像");
+                return image;
             }
-
-            // 等待图像数据（最多5秒）
-            if (Task.WaitAny([tcs.Task], 5000) != -1) return tcs.Task.Result;
-            Log.Warning("等待图像数据超时");
-            return null;
-
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "执行软触发时发生错误");
+            Log.Error(ex, "获取最新图像时发生错误");
             return null;
-        }
-        finally
-        {
-            subscription?.Dispose();
         }
     }
 
-    public void Stop()
+    /// <summary>
+    /// 异步停止相机采集并释放资源
+    /// </summary>
+    /// <param name="timeoutMs">超时时间（毫秒）</param>
+    /// <returns>操作是否成功</returns>
+    public Task<bool> StopAsync(int timeoutMs = 3000)
+    {
+        try
+        {
+            Log.Information("正在停止采集并释放资源...");
+            
+            // 检查设备是否已连接
+            if (!IsConnected || _device == null)
+            {
+                Log.Debug("设备未连接，无需停止");
+                return Task.FromResult(true);
+            }
+
+            // 首先停止图像处理线程和释放通道，避免资源竞争
+            try
+            {
+                // 1. 先完成图像通道写入，阻止新的图像处理请求
+                _imageChannel.Writer.TryComplete();
+                Log.Debug("图像通道已完成，不再接收新图像");
+                
+                // 2. 发送停止信号，确保处理线程能够安全退出
+                _processingCancellation.Cancel();
+                Log.Debug("已发送处理取消信号");
+                
+                // 3. 等待一段时间，确保不再有线程访问信号量
+                Thread.Sleep(100);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "停止图像处理线程时发生错误");
+            }
+
+            // 保存设备引用并重置状态，防止其他线程访问
+            var oldDevice = _device;
+            _device = null;
+            IsConnected = false;
+            
+            bool success;
+            try
+            {
+                // 1. 停止采集
+                if (_isGrabbing)
+                {
+                    try
+                    {
+                        // 使用同步方式停止采集
+                        lock (_sdkLock)
+                        {
+                            var result = oldDevice.MVID_CR_CAM_StopGrabbing_NET();
+                            if (result != MVIDCodeReader.MVID_CR_OK)
+                            {
+                                Log.Warning("停止采集返回错误: 0x{Error:X}, {Message}", 
+                                    result, GetErrorMessage(result));
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "停止采集时发生错误");
+                    }
+                    finally
+                    {
+                        _isGrabbing = false;
+                    }
+                }
+                
+                // 2. 销毁设备句柄
+                try
+                {
+                    Log.Debug("正在销毁设备句柄...");
+                    var result = oldDevice.MVID_CR_DestroyHandle_NET();
+                    if (result != MVIDCodeReader.MVID_CR_OK && 
+                        result != unchecked((int)0x80000000)) // 忽略句柄无效错误
+                    {
+                        Log.Warning("销毁设备句柄返回错误: 0x{Error:X}, {Message}",
+                            result, GetErrorMessage(result));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "销毁设备句柄时发生错误");
+                }
+                
+                Log.Information("设备资源已释放");
+                success = true;
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "停止过程中发生错误");
+                success = false;
+            }
+            finally
+            {
+                // 确保状态被重置
+                _device = null;
+                IsConnected = false;
+                _isGrabbing = false;
+                
+                // 触发连接状态改变事件
+                try
+                {
+                    ConnectionChanged?.Invoke(_deviceIdentifier ?? string.Empty, false);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "触发连接状态改变事件时发生错误");
+                }
+            }
+            
+            return Task.FromResult(success);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "执行停止时发生错误");
+            // 确保设备实例被清空
+            _device = null;
+            IsConnected = false;
+            _isGrabbing = false;
+            return Task.FromResult(false);
+        }
+    }
+
+    /// <summary>
+    /// 停止相机采集 (内部实现)
+    /// </summary>
+    private async Task StopGrabbingInternalAsync()
     {
         try
         {
@@ -281,7 +379,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
 
             Log.Information("正在停止采集...");
 
-            var result = _device.MVID_CR_CAM_StopGrabbing_NET();
+            var result = await Task.Run(() => _device.MVID_CR_CAM_StopGrabbing_NET());
             if (result != MVIDCodeReader.MVID_CR_OK)
             {
                 Log.Error("停止采集失败：0x{Error:X}, {Message}", result, GetErrorMessage(result));
@@ -297,12 +395,67 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
         }
     }
 
+    /// <summary>
+    /// 获取错误码对应的错误信息
+    /// </summary>
+    private static string GetErrorMessage(int errorCode)
+    {
+        return errorCode switch
+        {
+            MVIDCodeReader.MVID_CR_OK => "成功",
+            unchecked((int)0x80000000) => "错误或无效的句柄",
+            unchecked((int)0x80000001) => "功能不支持",
+            unchecked((int)0x80000002) => "缓冲区已满",
+            unchecked((int)0x80000003) => "调用顺序错误",
+            unchecked((int)0x80000004) => "参数错误",
+            unchecked((int)0x80000005) => "申请资源失败",
+            unchecked((int)0x80000006) => "无数据",
+            unchecked((int)0x80000007) => "前置条件错误，或运行环境改变",
+            unchecked((int)0x80000008) => "凭证错误，可能因为加密狗未安装或已过期",
+            unchecked((int)0x8000000A) => "过滤规则错误",
+            unchecked((int)0x8000000B) => "动态导入DLL文件失败",
+            unchecked((int)0x80000012) => "JPG编码错误",
+            unchecked((int)0x80000013) => "图像异常，可能由于丢包或图像格式、宽度、高度不正确",
+            unchecked((int)0x80000014) => "格式转换错误",
+            unchecked((int)0x800000FF) => "未知错误",
+            unchecked((int)0x80000100) => "通用错误",
+            unchecked((int)0x80000101) => "无效参数",
+            unchecked((int)0x80000102) => "值超出范围",
+            unchecked((int)0x80000103) => "属性错误",
+            unchecked((int)0x80000104) => "运行环境错误",
+            unchecked((int)0x80000105) => "逻辑错误",
+            unchecked((int)0x80000106) => "节点访问条件错误",
+            unchecked((int)0x80000107) => "超时",
+            unchecked((int)0x80000108) => "转换异常",
+            unchecked((int)0x800001FF) => "GeniCam未知错误",
+            unchecked((int)0x80000200) => "设备不支持的命令",
+            unchecked((int)0x80000201) => "目标地址不存在",
+            unchecked((int)0x80000202) => "目标地址不可写",
+            unchecked((int)0x80000203) => "无访问权限",
+            unchecked((int)0x80000204) => "设备忙或网络断开",
+            unchecked((int)0x80000205) => "网络包错误",
+            unchecked((int)0x80000206) => "网络错误",
+            unchecked((int)0x80000221) => "IP地址冲突",
+            unchecked((int)0x80000300) => "USB读取错误",
+            unchecked((int)0x80000301) => "USB写入错误",
+            unchecked((int)0x80000302) => "设备异常",
+            unchecked((int)0x80000303) => "GeniCam错误",
+            unchecked((int)0x80000304) => "带宽不足",
+            unchecked((int)0x80000305) => "驱动不匹配或未安装",
+            unchecked((int)0x800003FF) => "USB未知错误",
+            unchecked((int)0x80002100) => "相机错误",
+            unchecked((int)0x80002200) => "一维码错误",
+            unchecked((int)0x80002300) => "二维码错误",
+            unchecked((int)0x80002400) => "图像裁剪错误",
+            unchecked((int)0x80002500) => "脚本规则错误",
+            _ => $"未知错误码：0x{errorCode:X8}"
+        };
+    }
+
     public IEnumerable<DeviceCameraInfo>? GetCameraInfos()
     {
         try
         {
-            Log.Information("正在枚举海康工业相机...");
-
             // 枚举设备
             var nRet = MVIDCodeReader.MVID_CR_CAM_EnumDevices_NET(ref _deviceList);
             if (nRet != MVIDCodeReader.MVID_CR_OK)
@@ -391,12 +544,6 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
             }
 
             Log.Information("更新相机配置，目标序列号：{SerialNumber}", _deviceIdentifier);
-            
-            // 如果需要重新连接设备
-            if (IsConnected && _device != null && ShouldReconnect(config))
-            {
-                return ReconnectDevice();
-            }
 
             return true;
         }, "相机配置更新成功", "更新相机配置失败");
@@ -423,6 +570,12 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
                     {
                         break;
                     }
+                    catch (ChannelClosedException)
+                    {
+                        // 通道被关闭，这是正常的退出信号，不需要报错
+                        Log.Information("图像通道已关闭，处理线程准备退出");
+                        break;
+                    }
                     catch (Exception ex)
                     {
                         Log.Error(ex, "处理图像数据时发生错误");
@@ -431,6 +584,10 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
             catch (Exception ex)
             {
                 Log.Error(ex, "图像处理线程异常退出");
+            }
+            finally
+            {
+                Log.Debug("图像处理线程已退出");
             }
         }, _processingCancellation.Token);
     }
@@ -450,7 +607,28 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
 
         try
         {
-            await _processingSemaphore.WaitAsync();
+            // 安全获取信号量，检查是否已被释放
+            try
+            {
+                var semaphore = _processingSemaphore;
+                if (_processingCancellation.IsCancellationRequested)
+                {
+                    Log.Debug("信号量已释放或处理已取消，跳过处理");
+                    return;
+                }
+                
+                await semaphore.WaitAsync(_processingCancellation.Token);
+            }
+            catch (ObjectDisposedException)
+            {
+                Log.Debug("信号量已被释放，跳过处理");
+                return;
+            }
+            catch (OperationCanceledException)
+            {
+                Log.Debug("处理已被取消，跳过处理");
+                return;
+            }
 
             if (_device == null || !_isGrabbing)
             {
@@ -461,52 +639,36 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
             var imageData = new byte[nImageSize];
             Marshal.Copy(pImageData, imageData, 0, nImageSize);
 
-            using var image = CreateImageFromBuffer(imageData);
-
-            var procParam = new MVIDCodeReader.MVID_PROC_PARAM
-            {
-                pImageBuf = pImageData,
-                nImageLen = (uint)nImageSize,
-                enImageType = MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_MONO8,
-                nWidth = _imageWidth,
-                nHeight = _imageHeight
-            };
-
-            var pProcParam = IntPtr.Zero;
+            // 创建一个图像用于所有操作
+            var image = CreateImageFromBuffer(imageData);
+            
             try
             {
-                pProcParam = AllocateProcParam(procParam);
-
-                var result = SafeSdkCall(() => _device!.MVID_CR_Process_NET(pProcParam,
-                    MVIDCodeReader.MVID_BCR | MVIDCodeReader.MVID_TDCR));
-
-                if (result == MVIDCodeReader.MVID_CR_OK)
+                // 更新最新图像缓存
+                lock (_latestImageLock)
                 {
-                    procParam = (MVIDCodeReader.MVID_PROC_PARAM)Marshal.PtrToStructure(pProcParam,
-                        typeof(MVIDCodeReader.MVID_PROC_PARAM))!;
-
-                    var barcodeLocations = ProcessBarcodeResults(procParam);
-
-                    // 发布实时图像流
-                    _realtimeImageSubject.OnNext((image.Clone(), barcodeLocations));
-
-                    // 如果识别到条码，创建包裹信息
-                    if (barcodeLocations.Count > 0)
-                    {
-                        var package = new PackageInfo
-                        {
-                            Barcode = barcodeLocations[0].Code,
-                            CreateTime = DateTime.Now,
-                            Image = image.Clone()
-                        };
-                        package.SetTriggerTimestamp(DateTime.Now);
-                        _packageSubject.OnNext(package);
-                    }
+                    _latestImage?.Dispose();
+                    _latestImage = image.Clone(); // 这里必须克隆，因为image会被后续处理
                 }
+
+                // 使用原始数据处理图像
+                var procParam = new MVIDCodeReader.MVID_PROC_PARAM
+                {
+                    pImageBuf = pImageData,
+                    nImageLen = (uint)nImageSize,
+                    enImageType = MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_MONO8,
+                    nWidth = _imageWidth,
+                    nHeight = _imageHeight
+                };
+                
+                // 处理图像
+                ProcessWithParameters(image, procParam);
             }
-            finally
+            catch
             {
-                ReleaseProcParam(pProcParam);
+                // 确保图像资源被释放
+                image.Dispose();
+                throw;
             }
         }
         catch (Exception ex)
@@ -517,7 +679,20 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
         {
             try
             {
-                _processingSemaphore.Release();
+                // 安全释放信号量
+                SemaphoreSlim semaphore = _processingSemaphore;
+                if (!_processingCancellation.IsCancellationRequested)
+                {
+                    try
+                    {
+                        semaphore.Release();
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        // 忽略已释放的信号量异常
+                        Log.Debug("尝试释放已处置的信号量");
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -525,6 +700,47 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
             }
 
             Interlocked.Decrement(ref _processingCount);
+        }
+    }
+
+    /// <summary>
+    /// 使用指定参数处理图像
+    /// </summary>
+    private void ProcessWithParameters(Image<Rgba32> image, MVIDCodeReader.MVID_PROC_PARAM procParam)
+    {
+        var pProcParam = IntPtr.Zero;
+        try
+        {
+            pProcParam = AllocateProcParam(procParam);
+
+            var result = SafeSdkCall(() => _device!.MVID_CR_Process_NET(pProcParam,
+                MVIDCodeReader.MVID_BCR | MVIDCodeReader.MVID_TDCR));
+
+            if (result != MVIDCodeReader.MVID_CR_OK) return;
+            procParam = (MVIDCodeReader.MVID_PROC_PARAM)Marshal.PtrToStructure(pProcParam,
+                typeof(MVIDCodeReader.MVID_PROC_PARAM))!;
+
+            var barcodeLocations = ProcessBarcodeResults(procParam);
+
+            // 发布实时图像流 - 使用引用而不是克隆
+            _realtimeImageSubject.OnNext((image, barcodeLocations));
+
+            // 如果识别到条码，创建包裹信息
+            if (barcodeLocations.Count <= 0) return;
+            var package = new PackageInfo
+            {
+                Barcode = barcodeLocations[0].Code,
+                CreateTime = DateTime.Now,
+                Image = image // 直接使用图像，不再克隆
+            };
+            package.SetTriggerTimestamp(DateTime.Now);
+            _packageSubject.OnNext(package);
+        }
+        finally
+        {
+            ReleaseProcParam(pProcParam);
+            // 如果没有被发送到subject，则需要返回到对象池或释放
+            ReturnImageToPool(image);
         }
     }
 
@@ -541,13 +757,11 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
             }
 
             // 检查处理限制
-            if (Interlocked.CompareExchange(ref _processingCount, 0, 0) >= MaxConcurrentProcessing)
+            if (Interlocked.CompareExchange(ref _processingCount, 0, 0) >= _maxConcurrentProcessing)
             {
                 Log.Debug("当前处理数量已达上限({Count})，跳过当前帧", _processingCount);
                 return;
             }
-
-            Log.Debug("收到图像数据，大小：{Size} 字节", nImageSize);
 
             // 将图像数据写入通道
             if (!_imageChannel.Writer.TryWrite((pImageData, nImageSize)))
@@ -668,142 +882,49 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
 
         return await LogAndReturnAsync(async () =>
         {
-            Log.Information("开始连接设备，目标序列号：{SerialNumber}", _deviceIdentifier);
-
-            // 1. 释放旧设备
-            if (_device != null)
-            {
-                Log.Debug("正在释放旧设备...");
-                await ReleaseDeviceAsync();
-                Log.Debug("旧设备已释放");
-            }
-
             // 2. 创建新的设备实例
-            Log.Debug("正在创建新的设备实例...");
             _device = new MVIDCodeReader();
-            Log.Debug("新设备实例已创建");
 
             // 3. 枚举并查找目标设备
-            Log.Debug("正在枚举设备...");
             var deviceIndex = await FindTargetDeviceAsync();
             if (deviceIndex < 0)
             {
                 Log.Error("未找到目标设备");
                 return false;
             }
-            Log.Debug("已找到目标设备，索引：{Index}", deviceIndex);
 
             // 4. 创建设备句柄
-            Log.Debug("正在创建设备句柄...");
             if (!await CreateDeviceHandleAsync())
             {
                 Log.Error("创建设备句柄失败");
                 return false;
             }
-            Log.Debug("设备句柄创建成功");
 
             // 5. 绑定设备
-            Log.Debug("正在绑定设备...");
             if (!await BindDeviceAsync(deviceIndex))
             {
                 Log.Error("绑定设备失败");
                 return false;
             }
-            Log.Debug("设备绑定成功");
 
             // 6. 获取图像参数
-            Log.Debug("正在获取图像参数...");
             if (!GetImageParameters())
             {
                 Log.Error("获取图像参数失败");
                 return false;
             }
-            Log.Debug("图像参数获取成功：宽度={Width}, 高度={Height}", _imageWidth, _imageHeight);
 
             // 7. 注册回调函数
-            Log.Debug("正在注册回调函数...");
             if (!RegisterCallbacks())
             {
                 Log.Error("注册回调函数失败");
                 return false;
             }
-            Log.Debug("回调函数注册成功");
 
             IsConnected = true;
             ConnectionChanged?.Invoke(_deviceIdentifier!, true);
             return true;
         }, "相机连接成功", "连接海康工业相机失败");
-    }
-
-    /// <summary>
-    ///     释放设备资源
-    /// </summary>
-    private async Task ReleaseDeviceAsync()
-    {
-        if (_device == null)
-        {
-            Log.Debug("设备实例为空，无需释放");
-            return;
-        }
-
-        try
-        {
-            // 先重置状态
-            var oldDevice = _device;
-            _device = null;
-            IsConnected = false;
-            
-            try
-            {
-                Log.Debug("正在停止可能的采集...");
-                if (_isGrabbing)
-                {
-                    var stopResult = oldDevice.MVID_CR_CAM_StopGrabbing_NET();
-                    if (stopResult != MVIDCodeReader.MVID_CR_OK)
-                    {
-                        Log.Warning("停止采集失败：0x{Error:X}, {Message}", stopResult, GetErrorMessage(stopResult));
-                    }
-                    _isGrabbing = false;
-                    // 等待采集完全停止
-                    await Task.Delay(200);
-                }
-
-                // 尝试销毁句柄
-                Log.Debug("正在销毁设备句柄...");
-                var result = oldDevice.MVID_CR_DestroyHandle_NET();
-                if (result != MVIDCodeReader.MVID_CR_OK)
-                {
-                    if (result == unchecked((int)0x80000000)) // 句柄已经无效
-                    {
-                        Log.Debug("设备句柄已经无效，跳过销毁");
-                    }
-                    else
-                    {
-                        Log.Warning("销毁设备句柄返回错误：0x{Error:X}, {Message}", result, GetErrorMessage(result));
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "清理设备资源时发生错误，继续执行清理流程");
-            }
-            finally
-            {
-                // 确保状态被重置
-                _device = null;
-                IsConnected = false;
-                _isGrabbing = false;
-            }
-            Log.Information("设备资源已释放");
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "释放设备资源时发生错误");
-            // 确保设备实例被清空
-            _device = null;
-            IsConnected = false;
-            _isGrabbing = false;
-        }
     }
 
     /// <summary>
@@ -913,116 +1034,11 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
     }
 
     /// <summary>
-    ///     停止采集的具体实现
-    /// </summary>
-    private async Task StopGrabbingInternalAsync()
-    {
-        try
-        {
-            if (!_isGrabbing || _device == null) return;
-
-            Log.Information("正在停止采集...");
-
-            var result = await Task.Run(_device.MVID_CR_CAM_StopGrabbing_NET);
-            if (result != MVIDCodeReader.MVID_CR_OK)
-            {
-                Log.Error("停止采集失败：0x{Error:X}, {Message}", result, GetErrorMessage(result));
-                return;
-            }
-
-            _isGrabbing = false;
-            Log.Information("停止采集成功");
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "停止采集时发生错误");
-        }
-    }
-
-    /// <summary>
-    ///     获取错误码对应的错误信息
-    /// </summary>
-    private static string GetErrorMessage(int errorCode)
-    {
-        return errorCode switch
-        {
-            MVIDCodeReader.MVID_CR_OK => "成功",
-            unchecked((int)0x80000000) => "错误或无效的句柄",
-            unchecked((int)0x80000001) => "功能不支持",
-            unchecked((int)0x80000002) => "缓冲区已满",
-            unchecked((int)0x80000003) => "调用顺序错误",
-            unchecked((int)0x80000004) => "参数错误",
-            unchecked((int)0x80000005) => "申请资源失败",
-            unchecked((int)0x80000006) => "无数据",
-            unchecked((int)0x80000007) => "前置条件错误，或运行环境改变",
-            unchecked((int)0x80000008) => "凭证错误，可能因为加密狗未安装或已过期",
-            unchecked((int)0x8000000A) => "过滤规则错误",
-            unchecked((int)0x8000000B) => "动态导入DLL文件失败",
-            unchecked((int)0x80000012) => "JPG编码错误",
-            unchecked((int)0x80000013) => "图像异常，可能由于丢包或图像格式、宽度、高度不正确",
-            unchecked((int)0x80000014) => "格式转换错误",
-            unchecked((int)0x800000FF) => "未知错误",
-            unchecked((int)0x80000100) => "通用错误",
-            unchecked((int)0x80000101) => "无效参数",
-            unchecked((int)0x80000102) => "值超出范围",
-            unchecked((int)0x80000103) => "属性错误",
-            unchecked((int)0x80000104) => "运行环境错误",
-            unchecked((int)0x80000105) => "逻辑错误",
-            unchecked((int)0x80000106) => "节点访问条件错误",
-            unchecked((int)0x80000107) => "超时",
-            unchecked((int)0x80000108) => "转换异常",
-            unchecked((int)0x800001FF) => "GeniCam未知错误",
-            unchecked((int)0x80000200) => "设备不支持的命令",
-            unchecked((int)0x80000201) => "目标地址不存在",
-            unchecked((int)0x80000202) => "目标地址不可写",
-            unchecked((int)0x80000203) => "无访问权限",
-            unchecked((int)0x80000204) => "设备忙或网络断开",
-            unchecked((int)0x80000205) => "网络包错误",
-            unchecked((int)0x80000206) => "网络错误",
-            unchecked((int)0x80000221) => "IP地址冲突",
-            unchecked((int)0x80000300) => "USB读取错误",
-            unchecked((int)0x80000301) => "USB写入错误",
-            unchecked((int)0x80000302) => "设备异常",
-            unchecked((int)0x80000303) => "GeniCam错误",
-            unchecked((int)0x80000304) => "带宽不足",
-            unchecked((int)0x80000305) => "驱动不匹配或未安装",
-            unchecked((int)0x800003FF) => "USB未知错误",
-            unchecked((int)0x80002100) => "相机错误",
-            unchecked((int)0x80002200) => "一维码错误",
-            unchecked((int)0x80002300) => "二维码错误",
-            unchecked((int)0x80002400) => "图像裁剪错误",
-            unchecked((int)0x80002500) => "脚本规则错误",
-            _ => $"未知错误码：0x{errorCode:X8}"
-        };
-    }
-
-    /// <summary>
-    ///     检查是否需要重新连接设备
-    /// </summary>
-    private bool ShouldReconnect(CameraSettings newConfig)
-    {
-        var oldSerial = _configuration.SelectedCameras.FirstOrDefault()?.SerialNumber;
-        var newSerial = newConfig.SelectedCameras.FirstOrDefault()?.SerialNumber;
-        
-        return !string.Equals(oldSerial, newSerial, StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    ///     重新连接设备
-    /// </summary>
-    private bool ReconnectDevice()
-    {
-        Stop();
-        Thread.Sleep(100); // 等待设备完全停止
-        return ConnectDeviceInternalAsync().Result;
-    }
-
-    /// <summary>
     ///     验证相机配置
     /// </summary>
     private bool ValidateConfiguration()
     {
-        if (!_configuration.SelectedCameras.Any())
+        if (_configuration.SelectedCameras.Count == 0)
         {
             Log.Error("未选择任何相机");
             return false;
@@ -1035,111 +1051,159 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
 
     }
 
-    public void Dispose()
+    /// <summary>
+    /// 异步释放资源
+    /// </summary>
+    public async ValueTask DisposeAsync()
     {
         try
         {
-            Log.Information("正在释放海康工业相机资源...");
+            Log.Information("正在异步释放海康工业相机资源...");
 
-            // 1. 停止处理线程
+            // 设置总超时保护
+            using var overallTimeoutCts = new CancellationTokenSource(15000); // 15秒总超时
+
+            // 1. 先停止相机，防止新的图像进入处理队列
             try
             {
-                if (_processingCancellation is { IsCancellationRequested: false, Token.IsCancellationRequested: false })
+                if (_device != null || IsConnected)
                 {
-                    _processingCancellation.Cancel();
+                    await StopAsync(5000);
                 }
-                
-                if (_processingTask is { IsCompleted: false })
-                {
-                    _processingTask.Wait(TimeSpan.FromSeconds(5));
-                    Log.Information("处理线程已停止");
-                }
-            }
-            catch (ObjectDisposedException ex)
-            {
-                Log.Debug(ex, "处理线程已经被释放");
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "等待处理线程退出时发生错误");
+                Log.Error(ex, "在资源释放过程中停止设备时发生错误");
             }
 
-            // 2. 停止采集
-            if (_device != null && _isGrabbing)
+            // 2. 安全停止图像处理线程
+            try
             {
+                // 确保图像通道已关闭
+                if (!_imageChannel.Writer.TryComplete())
+                {
+                    Log.Debug("图像通道已经被关闭");
+                }
+
+                // 发送取消信号
+                if (!_processingCancellation.IsCancellationRequested)
+                {
+                    _processingCancellation.Cancel();
+                    Log.Debug("已发送处理取消信号");
+                }
+                
+                // 等待处理线程完成 - 使用短暂的超时，避免卡死
+                if (_processingTask is { IsCompleted: false })
+                {
+                    try
+                    {
+                        if (_processingTask.Wait(2000))
+                        {
+                            Log.Debug("处理线程已正常完成");
+                        }
+                        else
+                        {
+                            Log.Warning("等待处理线程完成超时");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning(ex, "等待处理线程时发生错误");
+                    }
+                }
+                
+                // 设置为null，不再引用
+                _processingTask = null;
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "停止图像处理线程时发生错误");
+            }
+
+            // 3. 释放最新图像缓存和图像对象池
+            try 
+            {
+                Log.Debug("正在释放图像资源...");
+                
+                // 释放最新图像
+                lock (_latestImageLock)
+                {
+                    _latestImage?.Dispose();
+                    _latestImage = null;
+                }
+                
+                // 清空图像对象池
+                int count = 0;
+                while (_imagePool.TryDequeue(out var pooledImage))
+                {
+                    pooledImage.Dispose();
+                    count++;
+                }
+                Log.Debug("已释放{Count}个图像对象", count);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "释放图像资源时出错");
+            }
+
+            // 4. 释放其他资源
+            try
+            {
+                // 释放资源的顺序很重要，确保不会出现未引用的对象
+                
+                // 1. 释放回调句柄
                 try
                 {
-                    Stop();
-                    Thread.Sleep(100); // 等待采集完全停止
-
-                    // 3. 销毁设备句柄
-                    _device.MVID_CR_DestroyHandle_NET();
-                    Log.Information("设备句柄已销毁");
+                    if (_imageCallbackHandle.IsAllocated)
+                    {
+                        _imageCallbackHandle.Free();
+                        Log.Debug("图像回调句柄已释放");
+                    }
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "释放设备资源时发生错误");
+                    Log.Error(ex, "释放图像回调句柄时出错");
                 }
-                finally
+                
+                // 2. 释放被订阅的对象
+                try
                 {
-                    _device = null;
+                    _packageSubject.Dispose();
+                    _realtimeImageSubject.Dispose();
+                    Log.Debug("事件流对象已释放");
                 }
-            }
-
-            // 4. 释放回调函数句柄
-            try
-            {
-                if (_imageCallbackHandle.IsAllocated)
+                catch (Exception ex)
                 {
-                    _imageCallbackHandle.Free();
-                    Log.Information("图像回调句柄已释放");
+                    Log.Warning(ex, "释放事件流对象时出错");
                 }
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "释放图像回调句柄时发生错误");
-            }
-
-            // 5. 释放其他资源
-            try
-            {
-                if (!_processingCancellation.Token.IsCancellationRequested)
+                
+                // 3. 最后释放可能被线程使用的对象
+                try
                 {
                     _processingCancellation.Dispose();
+                    Thread.Sleep(50); // 短暂等待，确保没有线程正在使用信号量
+                    _processingSemaphore.Dispose();
+                    Log.Debug("线程同步对象已释放");
                 }
-                _packageSubject.Dispose();
-                _realtimeImageSubject.Dispose();
-                _processingSemaphore.Dispose();
-                Log.Information("其他资源已释放");
-            }
-            catch (ObjectDisposedException ex)
-            {
-                Log.Debug(ex, "某些资源已经被释放");
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "释放线程同步对象时出错");
+                }
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "释放其他资源时发生错误");
+                Log.Error(ex, "释放资源时发生错误");
             }
-
-            // 6. 更新连接状态
-            IsConnected = false;
-            try
-            {
-                ConnectionChanged?.Invoke(_deviceIdentifier ?? string.Empty, false);
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "触发连接状态改变事件时发生错误");
-            }
-
-            Log.Information("海康工业相机资源已释放完成");
+            
+            Log.Information("海康工业相机资源异步释放过程已完成");
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "释放海康工业相机资源时发生错误");
+            Log.Error(ex, "异步释放海康工业相机资源时发生错误");
         }
         finally
         {
+            // 确保终结器不再运行
             GC.SuppressFinalize(this);
         }
     }
@@ -1151,19 +1215,52 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
     /// </summary>
     private Image<Rgba32> CreateImageFromBuffer(byte[] imageData)
     {
-        var image = new Image<Rgba32>(_imageWidth, _imageHeight);
+        var image = GetImageFromPool();
+        
+        // 确定图像是灰度还是彩色
+        var isGrayscale = imageData.Length <= _imageWidth * _imageHeight;
+        
         image.ProcessPixelRows(accessor =>
         {
-            for (var y = 0; y < _imageHeight; y++)
+            if (isGrayscale)
             {
-                var row = accessor.GetRowSpan(y);
-                for (var x = 0; x < _imageWidth; x++)
+                // 灰度图像处理 - 使用批量处理提高性能
+                for (var y = 0; y < _imageHeight; y++)
                 {
-                    var gray = imageData[y * _imageWidth + x];
-                    row[x] = new Rgba32(gray, gray, gray, 255);
+                    var row = accessor.GetRowSpan(y);
+                    var rowOffset = y * _imageWidth;
+                    
+                    for (var x = 0; x < _imageWidth; x++)
+                    {
+                        var gray = imageData[rowOffset + x];
+                        row[x] = new Rgba32(gray, gray, gray, 255);
+                    }
+                }
+            }
+            else
+            {
+                // RGB图像处理
+                for (var y = 0; y < _imageHeight; y++)
+                {
+                    var row = accessor.GetRowSpan(y);
+                    var rowOffset = y * _imageWidth * 3;
+                    
+                    for (var x = 0; x < _imageWidth; x++)
+                    {
+                        var pixelOffset = rowOffset + x * 3;
+                        if (pixelOffset + 2 < imageData.Length)
+                        {
+                            row[x] = new Rgba32(
+                                imageData[pixelOffset],      // R
+                                imageData[pixelOffset + 1],  // G
+                                imageData[pixelOffset + 2],  // B
+                                255);                      // A
+                        }
+                    }
                 }
             }
         });
+        
         return image;
     }
 
@@ -1274,6 +1371,25 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
         {
             Log.Error(ex, errorMsg);
             return false;
+        }
+    }
+
+    // 从对象池获取图像对象
+    private Image<Rgba32> GetImageFromPool()
+    {
+        return _imagePool.TryDequeue(out var image) ? image : new Image<Rgba32>(_imageWidth, _imageHeight);
+    }
+
+    // 将图像对象返回池中
+    private void ReturnImageToPool(Image<Rgba32> image)
+    {
+        if (_imagePool.Count < MaxImagePoolSize)
+        {
+            _imagePool.Enqueue(image);
+        }
+        else
+        {
+            image.Dispose();
         }
     }
 

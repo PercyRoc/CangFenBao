@@ -27,7 +27,15 @@ public class CameraSettingsViewModel : BindableBase
         _cameraFactory = cameraFactory;
         _notificationService = notificationService;
 
-        RefreshCameraListCommand = new DelegateCommand(ExecuteRefreshCameraList);
+        RefreshCameraListCommand = new DelegateCommand(() => {
+            var task = ExecuteRefreshCameraList();
+            task.ContinueWith(t =>
+            {
+                if (!t.IsFaulted || t.Exception == null) return;
+                Log.Error(t.Exception, "刷新相机列表时发生错误");
+                _notificationService.ShowErrorWithToken("刷新相机列表失败", "SettingWindowGrowl");
+            }, TaskScheduler.FromCurrentSynchronizationContext());
+        });
         SaveConfigurationCommand = new DelegateCommand(ExecuteSaveConfiguration);
         SelectImagePathCommand = new DelegateCommand(ExecuteSelectImagePath);
 
@@ -146,7 +154,7 @@ public class CameraSettingsViewModel : BindableBase
     public DelegateCommand SaveConfigurationCommand { get; }
     public DelegateCommand SelectImagePathCommand { get; }
 
-    private void ExecuteRefreshCameraList()
+    private async Task ExecuteRefreshCameraList()
     {
         IsRefreshing = true;
         try
@@ -155,7 +163,7 @@ public class CameraSettingsViewModel : BindableBase
             
             // 先获取相机列表，避免受服务释放影响
             List<DeviceCameraInfo> newCameras;
-            using (var cameraService = _cameraFactory.CreateCameraByManufacturer(SelectedManufacturer))
+            await using (var cameraService = _cameraFactory.CreateCameraByManufacturer(SelectedManufacturer))
             {
                 var cameraInfos = cameraService.GetCameraInfos();
                 if (cameraInfos == null)
@@ -240,7 +248,7 @@ public class CameraSettingsViewModel : BindableBase
             Log.Information("Available cameras count: {Count}", AvailableCameras.Count);
 
             // 如果当前列表为空但配置中有相机，保持配置中的相机不变
-            if (AvailableCameras.Count == 0 && Configuration.SelectedCameras?.Count > 0)
+            if (AvailableCameras.Count == 0 && Configuration.SelectedCameras.Count > 0)
             {
                 Log.Information("Keeping existing cameras in configuration: {Count}", Configuration.SelectedCameras.Count);
                 foreach (var camera in Configuration.SelectedCameras)

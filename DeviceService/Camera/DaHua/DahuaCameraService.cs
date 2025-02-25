@@ -216,30 +216,66 @@ public class DahuaCameraService : ICameraService
     }
 
     /// <summary>
-    ///     停止相机服务
+    ///     异步停止相机服务，带超时控制
     /// </summary>
-    public void Stop()
+    /// <param name="timeoutMs">超时时间（毫秒）</param>
+    /// <returns>操作是否成功</returns>
+    public async Task<bool> StopAsync(int timeoutMs = 3000)
     {
         if (!IsConnected)
         {
-            Log.Warning("相机服务尚未启动");
-            return;
+            Log.Debug("相机服务尚未启动，无需停止");
+            return true;
         }
 
         try
         {
-            Log.Information("正在停止相机服务...");
+            Log.Information("正在异步停止大华相机服务(超时:{TimeoutMs}ms)...", timeoutMs);
+            
+            // 使用CancellationToken实现超时
+            using var cts = new CancellationTokenSource(timeoutMs);
+            
+            var success = await Task.Run(() => 
+            {
+                try 
+                {
+                    // 清理回调
+                    DetachAllCallbacks();
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "停止大华相机时发生异常");
+                    return false;
+                }
+            }, cts.Token).ContinueWith(t => 
+            {
+                // 处理任务取消
+                if (t.IsCanceled)
+                {
+                    Log.Warning("停止大华相机操作超时");
+                    return false;
+                }
+                
+                // 处理任务异常
+                if (!t.IsFaulted) return t.Result;
+                Log.Error(t.Exception, "停止大华相机时发生异常");
+                return false;
 
-            // 清理回调
-            DetachAllCallbacks();
-
+            }, TaskScheduler.Default);
+            
+            // 无论成功与否，重置状态
             IsConnected = false;
             ConnectionChanged?.Invoke(_firstCameraId ?? string.Empty, false);
-            Log.Information("相机服务已停止");
+            
+            Log.Information("大华相机服务已异步停止");
+            return success;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "停止相机服务时发生错误");
+            Log.Error(ex, "异步停止大华相机服务时发生错误");
+            IsConnected = false; // 强制重置状态
+            return false;
         }
     }
 
@@ -283,22 +319,7 @@ public class DahuaCameraService : ICameraService
         }
     }
 
-    /// <summary>
-    ///     释放资源
-    /// </summary>
-    public void Dispose()
-    {
-        if (_disposed) return;
-
-        Stop();
-        _imageProcessingSemaphore.Dispose();
-        _packageSubject.Dispose();
-        _imageSubject.Dispose();
-        _disposed = true;
-
-        GC.SuppressFinalize(this);
-    }
-
+  
     /// <summary>
     ///     初始化SDK
     /// </summary>
@@ -535,5 +556,17 @@ public class DahuaCameraService : ICameraService
         {
             Log.Error(ex, "处理实时图像时发生错误");
         }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+       
+        if (_disposed) return;
+        await StopAsync();
+        _imageProcessingSemaphore.Dispose();
+        _packageSubject.Dispose();
+        _imageSubject.Dispose();
+        _disposed = true;
+        GC.SuppressFinalize(this);
     }
 }

@@ -24,6 +24,8 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using Presentation_SangNeng.ViewModels.Settings;
 using Prism.Events;
+using System.Reactive.Linq;
+using SixLabors.ImageSharp.Processing;
 
 namespace Presentation_SangNeng.ViewModels.Windows;
 
@@ -81,10 +83,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _audioService = audioService;
 
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
-        OpenHistoryWindowCommand = new DelegateCommand(() =>
-        {
-            _dialogService.ShowDialog("HistoryWindow");
-        });
+        OpenHistoryWindowCommand = new DelegateCommand(() => { _dialogService.ShowDialog("HistoryWindow"); });
         InitializePackageInfoItems();
         InitializeStatisticsItems();
         InitializeDeviceStatuses();
@@ -107,103 +106,148 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _timer.Start();
 
         // 订阅体积相机图像流
-        _volumeCamera.ImageStream.Subscribe(imageData =>
-        {
-            try
-            {
-                Log.Debug("收到体积相机图像流数据，尺寸：{Width}x{Height}",
-                    imageData.image.Width,
-                    imageData.image.Height);
-
-                UpdateImageDisplay(imageData.image, bitmap =>
-                {
-                    Log.Debug("从图像流更新VolumeImage");
-                    VolumeImage = bitmap;
-                });
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "处理体积相机图像流数据时发生错误");
-            }
-        });
-
-        // 订阅海康相机图像流
-        if (_cameraService is HikvisionIndustrialCameraSdkClient hikvisionCamera)
-        {
-            hikvisionCamera.ImageStream.Subscribe(imageData =>
+        _volumeCamera.ImageStream
+            .Sample(TimeSpan.FromMilliseconds(100)) // 限制刷新率，每秒最多10帧
+            .Subscribe(imageData =>
             {
                 try
                 {
-                    Log.Debug("收到海康相机图像流数据，尺寸：{Width}x{Height}",
+                    Log.Debug("收到体积相机图像流数据，尺寸：{Width}x{Height}",
                         imageData.image.Width,
                         imageData.image.Height);
 
                     UpdateImageDisplay(imageData.image, bitmap =>
                     {
-                        Log.Debug("从图像流更新CurrentImage");
-                        CurrentImage = bitmap;
+                        Log.Debug("从图像流更新VolumeImage");
+                        VolumeImage = bitmap;
                     });
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "处理海康相机图像流数据时发生错误");
+                    Log.Error(ex, "处理体积相机图像流数据时发生错误");
                 }
             });
+
+        // 订阅海康相机图像流
+        if (_cameraService is HikvisionIndustrialCameraSdkClient hikvisionCamera)
+        {
+            hikvisionCamera.ImageStream
+                .Sample(TimeSpan.FromMilliseconds(100)) // 限制刷新率，每秒最多10帧
+                .Subscribe(imageData =>
+                {
+                    try
+                    {
+                        UpdateImageDisplay(imageData.image, bitmap => { CurrentImage = bitmap; });
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "处理海康相机图像流数据时发生错误");
+                    }
+                });
         }
 
         _availableTrays = [];
-        
+
         SelectTrayCommand = new DelegateCommand<SelectableTrayModel>(ExecuteSelectTray);
-        
+
         // 订阅托盘设置更改事件
         eventAggregator.GetEvent<TraySettingsChangedEvent>().Subscribe(LoadAvailableTrays);
-        
+
         // Load available trays
         LoadAvailableTrays();
-    }
-
-    private static BitmapSource? ConvertToBitmapSource(Stream imageStream)
-    {
-        try
-        {
-            var bitmap = new BitmapImage();
-            bitmap.BeginInit();
-            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.StreamSource = imageStream;
-            bitmap.EndInit();
-            bitmap.Freeze(); // 使图像可以跨线程访问
-            return bitmap;
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "转换图像流到BitmapSource时发生错误");
-            return null;
-        }
     }
 
     private static void UpdateImageDisplay(Image<Rgba32> image, Action<BitmapSource> imageUpdater)
     {
         try
         {
-            Application.Current.Dispatcher.Invoke(() =>
+            // 创建仅在需要更新时才会执行的延迟操作
+            var updateOperation = new Action(() =>
             {
                 try
                 {
-                    using var memoryStream = new MemoryStream();
-                    image.SaveAsJpeg(memoryStream);
-                    memoryStream.Position = 0;
+                    // 对于过大的图像进行缩小处理，提高显示性能
+                    const int maxDisplayWidth = 1024; // 最大显示宽度
+                    const int maxDisplayHeight = 768; // 最大显示高度
 
-                    var bitmapSource = ConvertToBitmapSource(memoryStream);
-                    if (bitmapSource != null)
+                    var width = image.Width;
+                    var height = image.Height;
+                    var needsResize = false;
+
+                    // 计算缩放比例
+                    if (width > maxDisplayWidth || height > maxDisplayHeight)
                     {
-                        imageUpdater(bitmapSource);
+                        var scaleX = (double)maxDisplayWidth / width;
+                        var scaleY = (double)maxDisplayHeight / height;
+                        var scale = Math.Min(scaleX, scaleY);
+
+                        width = (int)(width * scale);
+                        height = (int)(height * scale);
+                        needsResize = true;
                     }
+
+                    var stride = width * 4; // RGBA每像素4字节
+                    var pixelData = new byte[stride * height];
+
+                    // 直接复制像素数据
+                    if (needsResize)
+                    {
+                        // 使用SixLabors.ImageSharp进行缩放
+                        using var resizedImage = image.Clone();
+                        resizedImage.Mutate(x => x.Resize(width, height));
+                        resizedImage.ProcessPixelRows(accessor =>
+                        {
+                            for (var y = 0; y < height; y++)
+                            {
+                                var row = accessor.GetRowSpan(y);
+                                for (var x = 0; x < width; x++)
+                                {
+                                    var pixel = row[x];
+                                    var offset = y * stride + x * 4;
+                                    pixelData[offset] = pixel.B; // B
+                                    pixelData[offset + 1] = pixel.G; // G
+                                    pixelData[offset + 2] = pixel.R; // R
+                                    pixelData[offset + 3] = pixel.A; // A
+                                }
+                            }
+                        });
+                    }
+                    else
+                    {
+                        // 不需要缩放，直接复制
+                        image.ProcessPixelRows(accessor =>
+                        {
+                            for (var y = 0; y < height; y++)
+                            {
+                                var row = accessor.GetRowSpan(y);
+                                for (var x = 0; x < width; x++)
+                                {
+                                    var pixel = row[x];
+                                    var offset = y * stride + x * 4;
+                                    pixelData[offset] = pixel.B; // B
+                                    pixelData[offset + 1] = pixel.G; // G
+                                    pixelData[offset + 2] = pixel.R; // R
+                                    pixelData[offset + 3] = pixel.A; // A
+                                }
+                            }
+                        });
+                    }
+
+                    // 在UI线程创建WriteableBitmap
+                    var bitmap = new WriteableBitmap(width, height, 96, 96, PixelFormats.Bgra32, null);
+                    bitmap.WritePixels(new Int32Rect(0, 0, width, height), pixelData, stride, 0);
+                    bitmap.Freeze(); // 使图像可以跨线程访问
+
+                    imageUpdater(bitmap);
                 }
                 catch (Exception ex)
                 {
                     Log.Error(ex, "在UI线程更新图像显示时发生错误");
                 }
             });
+
+            // 将操作排队到UI线程
+            Application.Current.Dispatcher.Invoke(updateOperation);
         }
         catch (Exception ex)
         {
@@ -216,18 +260,18 @@ public class MainWindowViewModel : BindableBase, IDisposable
         Application.Current.Dispatcher.Invoke(() =>
         {
             var items = StatisticsItems.ToList();
-            
+
             // 更新总数
             items[0].Value = PackageHistory.Count.ToString();
-            
+
             // 更新成功数
             var successCount = PackageHistory.Count(p => p.Status == PackageStatus.MeasureSuccess);
             items[1].Value = successCount.ToString();
-            
+
             // 更新失败数
             var failedCount = PackageHistory.Count(p => p.Status == PackageStatus.MeasureFailed);
             items[2].Value = failedCount.ToString();
-            
+
             // 计算处理速率（每小时）
             if (PackageHistory.Any())
             {
@@ -235,7 +279,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 var ratePerHour = PackageHistory.Count / timeSpan.TotalHours;
                 items[3].Value = $"{ratePerHour:F0}";
             }
-            
+
             StatisticsItems = [.. items];
         });
     }
@@ -246,17 +290,17 @@ public class MainWindowViewModel : BindableBase, IDisposable
         {
             // 重置错误音效播放标志
             _hasPlayedErrorSound = false;
-            
+
             Application.Current.Dispatcher.Invoke(() =>
             {
                 var items = PackageInfoItems.ToList();
                 items[2].Value = DateTime.Now.ToString("HH:mm:ss");
                 PackageInfoItems = [.. items];
-                
+
                 // 更新当前条码
                 CurrentBarcode = barcode;
             });
-            
+
             Log.Information("收到扫码信息：{Barcode}", barcode);
 
             // 创建新的包裹对象
@@ -270,7 +314,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
             // 并行执行相机拍照、体积测量和重量获取，添加超时处理
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10)); // 10秒超时
-            try 
+            try
             {
                 // 创建三个并行任务
                 Task<Image<Rgba32>?> photoTask;
@@ -306,11 +350,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         {
                             _currentPackage.Weight = (float)weight.Value / 1000;
                             Log.Information("获取到包裹重量：{Weight:F3}kg", weight.Value);
-                            
+
                             Application.Current.Dispatcher.Invoke(() =>
                             {
                                 var items = PackageInfoItems.ToList();
-                                items[0].Value = $"{weight.Value:F3}";
+                                items[0].Value = $"{_currentPackage.Weight:F3}";
                                 PackageInfoItems = [.. items];
                             });
                         }
@@ -318,6 +362,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         {
                             Log.Warning("未能获取到包裹重量");
                         }
+
                         return weight;
                     }
                     catch (Exception ex)
@@ -329,36 +374,38 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                 // 等待所有任务完成
                 await Task.WhenAll(photoTask, volumeTask, weightTask);
-                
+
                 // 获取相机拍照结果
                 var hikvisionImage = await photoTask;
 
                 // 处理体积数据
-                if (_currentPackage.Status == PackageStatus.MeasureSuccess && SelectedTray != null && SelectedTray.Name != "noTray")
+                if (_currentPackage.Status == PackageStatus.MeasureSuccess && SelectedTray != null &&
+                    SelectedTray.Name != "noTray")
                 {
                     var originalLength = _currentPackage.Length;
                     var originalWidth = _currentPackage.Width;
                     var originalHeight = _currentPackage.Height;
 
+                    // 托盘尺寸单位为cm，需要转换为mm进行比较
+                    var trayLengthInMm = SelectedTray.Length;
+                    var trayWidthInMm = SelectedTray.Width;
+                    var trayHeightInMm = SelectedTray.Height;
+
                     // 如果获取到的长度或宽度小于托盘尺寸，使用托盘尺寸
-                    if (originalLength < SelectedTray.Length || originalWidth < SelectedTray.Width)
+                    if (originalLength < trayLengthInMm || originalWidth < trayWidthInMm)
                     {
-                        _currentPackage.Length = (int)Math.Max(originalLength ?? 0, SelectedTray.Length);
-                        _currentPackage.Width = (int)Math.Max(originalWidth ?? 0, SelectedTray.Width);
-                        Log.Information("使用托盘尺寸，长度：{Length}cm，宽度：{Width}cm", 
-                            _currentPackage.Length / 10.0, _currentPackage.Width / 10.0);
+                        _currentPackage.Length = Math.Max(originalLength ?? 0, trayLengthInMm);
+                        _currentPackage.Width = Math.Max(originalWidth ?? 0, trayWidthInMm);
                     }
 
                     // 高度始终要加上托盘高度
-                    _currentPackage.Height = originalHeight + SelectedTray.Height;
-                    Log.Information("加上托盘高度 {TrayHeight}cm，最终高度：{FinalHeight}cm", 
-                        SelectedTray.Height / 10.0, _currentPackage.Height / 10.0);
-
+                    _currentPackage.Height = originalHeight + trayHeightInMm;
                     // 更新体积（保持使用mm³作为单位进行计算）
                     _currentPackage.Volume = _currentPackage.Length * _currentPackage.Width * _currentPackage.Height;
                     // 显示时转换为cm
-                    _currentPackage.VolumeDisplay = $"{_currentPackage.Length / 10.0:F1}cm × {_currentPackage.Width / 10.0:F1}cm × {_currentPackage.Height / 10.0:F1}cm";
-                    
+                    _currentPackage.VolumeDisplay =
+                        $"{_currentPackage.Length:F1}cm × {_currentPackage.Width:F1}cm × {_currentPackage.Height:F1}cm";
+
                     // 播放成功音效
                     _ = _audioService.PlayPresetAsync(AudioType.Success);
                 }
@@ -369,7 +416,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     try
                     {
                         var cameraSettings = _settingsService.LoadSettings<CameraSettings>("CameraSettings");
-                         _ = SaveImageAsync(hikvisionImage, cameraSettings, _currentPackage, cts.Token);
+                        _ = SaveImageAsync(hikvisionImage, cameraSettings, _currentPackage, cts.Token);
                     }
                     catch (Exception ex)
                     {
@@ -381,17 +428,18 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 {
                     var items = PackageInfoItems.ToList();
                     // 更新尺寸项，转换为cm显示
-                    items[1].Value = $"{_currentPackage.Length / 10.0:F1}x{_currentPackage.Width / 10.0:F1}x{_currentPackage.Height / 10.0:F1}";
+                    items[1].Value =
+                        $"{_currentPackage.Length:F1}x{_currentPackage.Width:F1}x{_currentPackage.Height:F1}";
                     PackageInfoItems = [.. items];
                 });
-                
+
                 UpdatePackageStatus("Complete");
 
                 // 添加到历史记录
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     PackageHistory.Insert(0, _currentPackage);
-                    
+
                     // 更新统计信息
                     UpdateStatistics();
                 });
@@ -399,7 +447,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 // 在后台保存到数据库，不等待完成
                 _ = Task.Run(async () =>
                 {
-                    try 
+                    try
                     {
                         await _packageDataService.AddPackageAsync(_currentPackage);
                         Log.Information("包裹数据已保存到数据库：{Barcode}", _currentPackage.Barcode);
@@ -466,11 +514,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 }
 
                 // 更新测量结果
-                _currentPackage.Length = result.Length;
-                _currentPackage.Width = result.Width;
-                _currentPackage.Height = result.Height;
+                _currentPackage.Length = result.Length / 10;
+                _currentPackage.Width = result.Width / 10;
+                _currentPackage.Height = result.Height / 10;
                 _currentPackage.Volume = result.Length * result.Width * result.Height;
-                _currentPackage.VolumeDisplay = $"{result.Length / 10.0:F1}cm × {result.Width / 10.0:F1}cm × {result.Height / 10.0:F1}cm";
+                _currentPackage.VolumeDisplay = $"{result.Length}cm × {result.Width}cm × {result.Height}cm";
                 _currentPackage.Status = PackageStatus.MeasureSuccess;
             }
             finally
@@ -490,7 +538,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    private static async Task SaveImageAsync(Image<Rgba32> image, CameraSettings settings, PackageInfo package, CancellationToken cancellationToken)
+    private static async Task SaveImageAsync(Image<Rgba32> image, CameraSettings settings, PackageInfo package,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -517,7 +566,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                 // 先保存原始图像到临时文件
                 var tempFilePath = Path.Combine(settings.ImageSavePath, $"temp_{fileName}{extension}");
-                await using (var fileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
+                await using (var fileStream =
+                             new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
                 {
                     await image.SaveAsJpegAsync(fileStream, cancellationToken);
                 }
@@ -525,8 +575,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 // 使用 System.Drawing 添加水印
                 using (var bitmap = new Bitmap(tempFilePath))
                 using (var graphics = Graphics.FromImage(bitmap))
-                using (var font = new Font("Arial", 32))
-                using (var brush = new SolidBrush(System.Drawing.Color.White))
+                using (var font = new Font("Arial", 40))
+                using (var brush = new SolidBrush(System.Drawing.Color.Green))
                 {
                     graphics.SmoothingMode = SmoothingMode.AntiAlias;
                     graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
@@ -536,12 +586,13 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     {
                         $"Barcode: {package.Barcode}",
                         $"Size: {package.Length / 10.0:F1}cm × {package.Width / 10.0:F1}cm × {package.Height / 10.0:F1}cm",
+                        $"Weight: {package.Weight:F3}kg",
                         $"Volume: {package.Volume / 1000.0:N0}cm³",
                         $"Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}"
                     };
 
                     var padding = 20;
-                    var lineSpacing = 40;
+                    var lineSpacing = 50;
                     var startY = padding;
 
                     foreach (var line in watermarkLines)
@@ -778,12 +829,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             var traySettings = _settingsService.LoadConfiguration<TraySettings>();
-            
+
             AvailableTrays.Clear();
-            
+
             // 添加空托盘选项
-            var emptyTray = new SelectableTrayModel(new TrayModel 
-            { 
+            var emptyTray = new SelectableTrayModel(new TrayModel
+            {
                 Name = "noTray",
                 Weight = 0,
                 Length = 0,

@@ -3,26 +3,14 @@ using Presentation_SangNeng.ViewModels.Settings;
 
 namespace Presentation_SangNeng.ViewModels.Windows;
 
-public class SelectableTrayModel : BindableBase
+public class SelectableTrayModel(TrayModel trayModel, bool isSelected = false) : BindableBase
 {
-    private bool _isSelected;
-    private readonly TrayModel _trayModel;
-    private string _name = string.Empty;
-    private double _weight;
-    private double _length;
-    private double _width;
-    private double _height;
-
-    public SelectableTrayModel(TrayModel trayModel, bool isSelected = false)
-    {
-        _trayModel = trayModel;
-        _isSelected = isSelected;
-        _name = trayModel.Name;
-        _weight = trayModel.Weight;
-        _length = trayModel.Length;
-        _width = trayModel.Width;
-        _height = trayModel.Height;
-    }
+    private bool _isSelected = isSelected;
+    private string _name = trayModel.Name;
+    private double _weight = trayModel.Weight;
+    private double _length = trayModel.Length;
+    private double _width = trayModel.Width;
+    private double _height = trayModel.Height;
 
     public bool IsSelected
     {
@@ -37,7 +25,7 @@ public class SelectableTrayModel : BindableBase
         {
             if (SetProperty(ref _name, value))
             {
-                _trayModel.Name = value;
+                trayModel.Name = value;
             }
         }
     }
@@ -49,7 +37,7 @@ public class SelectableTrayModel : BindableBase
         {
             if (SetProperty(ref _weight, value))
             {
-                _trayModel.Weight = value;
+                trayModel.Weight = value;
             }
         }
     }
@@ -61,7 +49,7 @@ public class SelectableTrayModel : BindableBase
         {
             if (SetProperty(ref _length, value))
             {
-                _trayModel.Length = value;
+                trayModel.Length = value;
             }
         }
     }
@@ -73,7 +61,7 @@ public class SelectableTrayModel : BindableBase
         {
             if (SetProperty(ref _width, value))
             {
-                _trayModel.Width = value;
+                trayModel.Width = value;
             }
         }
     }
@@ -85,10 +73,8 @@ public class SelectableTrayModel : BindableBase
         {
             if (SetProperty(ref _height, value))
             {
-                _trayModel.Height = value;
+                trayModel.Height = value;
             }
         }
     }
-
-    public TrayModel TrayModel => _trayModel;
 } 

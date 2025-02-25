@@ -70,7 +70,7 @@ public partial class App
     /// <summary>
     /// 启动
     /// </summary>
-    protected override async void OnStartup(StartupEventArgs e)
+    protected override void OnStartup(StartupEventArgs e)
     {
         // 配置Serilog
         Log.Logger = new LoggerConfiguration()

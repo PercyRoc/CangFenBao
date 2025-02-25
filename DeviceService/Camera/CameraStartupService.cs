@@ -51,14 +51,44 @@ public class CameraStartupService(
     /// <summary>
     ///     停止服务
     /// </summary>
-    public Task StopAsync(CancellationToken cancellationToken)
+    public async Task StopAsync(CancellationToken cancellationToken)
     {
         try
         {
             Log.Information("正在停止相机服务...");
-            _cameraService?.Stop();
-            _cameraService?.Dispose();
-            _cameraService = null;
+            
+            if (_cameraService != null)
+            {
+                try
+                {
+                    // 直接使用相机的StopAsync方法
+                    var stopTask = _cameraService.StopAsync(10000); // 使用10秒超时
+                    var timeoutTask = Task.Delay(11000, cancellationToken); // 额外给1秒缓冲时间
+                    
+                    if (await Task.WhenAny(stopTask, timeoutTask) == timeoutTask)
+                    {
+                        Log.Warning("相机停止操作超时");
+                    }
+                    else
+                    {
+                        var result = await stopTask;
+                        if (!result)
+                        {
+                            Log.Warning("相机停止操作未成功完成");
+                        }
+                    }
+                    
+                    // 异步释放资源
+                    await _cameraService.DisposeAsync();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "停止相机服务时发生错误");
+                }
+                
+                _cameraService = null;
+            }
+            
             Log.Information("相机服务已停止");
         }
         catch (Exception ex)
@@ -69,8 +99,6 @@ public class CameraStartupService(
         {
             _initLock.Dispose();
         }
-
-        return Task.CompletedTask;
     }
 
     /// <summary>

@@ -9,7 +9,7 @@ namespace DeviceService.Camera;
 /// <summary>
 ///     相机服务接口
 /// </summary>
-public interface ICameraService : IDisposable
+public interface ICameraService : IAsyncDisposable
 {
     /// <summary>
     ///     相机是否已连接
@@ -38,9 +38,11 @@ public interface ICameraService : IDisposable
     bool Start();
 
     /// <summary>
-    ///     停止相机服务
+    ///     异步停止相机服务
     /// </summary>
-    void Stop();
+    /// <param name="timeoutMs">超时时间（毫秒）</param>
+    /// <returns>操作是否成功</returns>
+    Task<bool> StopAsync(int timeoutMs = 3000);
 
     /// <summary>
     ///     获取相机信息列表

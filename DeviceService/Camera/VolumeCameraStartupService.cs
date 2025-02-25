@@ -70,14 +70,34 @@ public class VolumeCameraStartupService : IHostedService
     /// <summary>
     ///     停止服务
     /// </summary>
-    public Task StopAsync(CancellationToken cancellationToken)
+    public async Task StopAsync(CancellationToken cancellationToken)
     {
         try
         {
             Log.Information("正在停止体积相机服务...");
-            _cameraService?.Stop();
-            _cameraService?.Dispose();
-            _cameraService = null;
+            
+            if (_cameraService != null)
+            {
+                try
+                {
+                    // 使用异步停止方法并设置超时保护
+                    var stopResult = await _cameraService.StopAsync(5000);
+                    if (!stopResult)
+                    {
+                        Log.Warning("体积相机异步停止未成功完成");
+                    }
+                    
+                    // 使用异步释放资源
+                    await _cameraService.DisposeAsync();
+                    _cameraService = null;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "停止体积相机服务时发生错误");
+                    _cameraService = null;
+                }
+            }
+            
             Log.Information("体积相机服务已停止");
         }
         catch (Exception ex)
@@ -88,8 +108,6 @@ public class VolumeCameraStartupService : IHostedService
         {
             _initLock.Dispose();
         }
-
-        return Task.CompletedTask;
     }
 
     /// <summary>

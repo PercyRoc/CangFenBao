@@ -332,7 +332,7 @@
                                                 <Run Text="{Binding Width, StringFormat='{}{0:F1}'}" />
                                                 <Run Text="×" />
                                                 <Run Text="{Binding Height, StringFormat='{}{0:F1}'}" />
-                                                <Run Text="mm" />
+                                                <Run Text="cm" />
                                             </TextBlock>
                                             
                                             <TextBlock Grid.Row="2"

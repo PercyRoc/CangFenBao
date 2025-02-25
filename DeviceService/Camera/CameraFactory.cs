@@ -10,7 +10,7 @@ namespace DeviceService.Camera;
 /// <summary>
 ///     相机工厂
 /// </summary>
-public class CameraFactory : IDisposable
+public class CameraFactory : IAsyncDisposable
 {
     private readonly ISettingsService _settingsService;
     private ICameraService? _currentCamera;
@@ -22,18 +22,6 @@ public class CameraFactory : IDisposable
     public CameraFactory(ISettingsService settingsService)
     {
         _settingsService = settingsService;
-    }
-
-    public void Dispose()
-    {
-        if (!_disposed)
-        {
-            _currentCamera?.Dispose();
-            _currentCamera = null;
-            _disposed = true;
-        }
-
-        GC.SuppressFinalize(this);
     }
 
     /// <summary>
@@ -54,7 +42,7 @@ public class CameraFactory : IDisposable
     /// <returns>相机服务实例</returns>
     public ICameraService CreateCameraByManufacturer(CameraManufacturer manufacturer)
     {
-        _currentCamera?.Dispose();
+        _currentCamera?.DisposeAsync();
         try
         {
             _currentCamera = manufacturer switch
@@ -89,5 +77,18 @@ public class CameraFactory : IDisposable
             Log.Error(ex, "加载相机设置失败，使用默认设置");
             return new CameraSettings { Manufacturer = CameraManufacturer.Dahua };
         }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        if (!_disposed)
+        {
+             _currentCamera?.DisposeAsync();
+            _currentCamera = null;
+            _disposed = true;
+        }
+
+        GC.SuppressFinalize(this);
+        return ValueTask.CompletedTask;
     }
 }

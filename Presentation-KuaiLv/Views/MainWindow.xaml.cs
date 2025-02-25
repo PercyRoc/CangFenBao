@@ -1,39 +1,65 @@
-﻿using System.Windows;
+﻿using System.ComponentModel;
+using System.Windows;
 using System.Windows.Input;
+using Presentation_CommonLibrary.Services;
+using Serilog;
 
 namespace Presentation_KuaiLv.Views;
 
 /// <summary>
 /// Interaction logic for MainWindow.xaml
 /// </summary>
-public partial class MainWindow : Window
+public partial class MainWindow
 {
-    public MainWindow()
+    private readonly IDialogService _dialogService;
+
+    public MainWindow(IDialogService dialogService, INotificationService notificationService)
     {
+        _dialogService = dialogService;
         InitializeComponent();
-        
-        // 添加标题栏拖动功能
-        this.MouseLeftButtonDown += (s, e) =>
+
+        // 注册Growl容器
+        notificationService.Register("MainWindowGrowl", GrowlPanel);
+
+        // 添加标题栏鼠标事件处理
+        MouseDown += OnWindowMouseDown;
+    }
+
+    private void OnWindowMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        try
         {
-            if (e.ChangedButton == MouseButton.Left)
+            // 当在标题栏区域按下左键时允许拖动窗口
+            if (e.ChangedButton == MouseButton.Left && e.GetPosition(this).Y <= 32)
             {
-                this.DragMove();
+                DragMove();
             }
-        };
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "拖动窗口时发生错误");
+        }
     }
 
-    private void MinimizeButton_Click(object sender, RoutedEventArgs e)
+    private async void MetroWindow_Closing(object sender, CancelEventArgs e)
     {
-        WindowState = WindowState.Minimized;
-    }
+        try
+        {
+            e.Cancel = true;
+            var result = await _dialogService.ShowIconConfirmAsync(
+                "确定要关闭程序吗？",
+                "关闭确认",
+                MessageBoxImage.Question);
 
-    private void MaximizeButton_Click(object sender, RoutedEventArgs e)
-    {
-        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
-    }
-
-    private void CloseButton_Click(object sender, RoutedEventArgs e)
-    {
-        Close();
+            if (result != MessageBoxResult.Yes) return;
+            e.Cancel = false;
+            Application.Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "关闭程序时发生错误");
+            e.Cancel = true;
+            await _dialogService.ShowErrorAsync("关闭程序时发生错误，请重试", "错误");
+        }
     }
 }
