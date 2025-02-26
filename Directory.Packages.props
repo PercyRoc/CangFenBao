@@ -7,6 +7,8 @@
     <!-- Prism -->
     <PackageVersion Include="Prism.DryIoc" Version="8.1.97" />
     <PackageVersion Include="Prism.Wpf" Version="8.1.97" />
+    <!-- SSH.NET -->
+    <PackageVersion Include="SSH.NET" Version="2024.0.0" />
     <!-- Serilog -->
     <PackageVersion Include="Serilog" Version="4.2.0" />
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.0.0" />

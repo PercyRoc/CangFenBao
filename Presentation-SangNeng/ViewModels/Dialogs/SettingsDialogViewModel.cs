@@ -14,7 +14,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
     private readonly VolumeSettingsViewModel _volumeSettingsViewModel;
     private readonly WeightSettingsViewModel _weightSettingsViewModel;
-    private readonly TraySettingsViewModel _traySettingsViewModel;
+    private readonly PalletSettingsViewModel _palletSettingsViewModel;
     private readonly INotificationService _notificationService;
     
     public SettingsDialogViewModel(
@@ -27,7 +27,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
         _cameraSettingsViewModel = containerProvider.Resolve<CameraSettingsViewModel>();
         _volumeSettingsViewModel = containerProvider.Resolve<VolumeSettingsViewModel>();
         _weightSettingsViewModel = containerProvider.Resolve<WeightSettingsViewModel>();
-        _traySettingsViewModel = containerProvider.Resolve<TraySettingsViewModel>();
+        _palletSettingsViewModel = containerProvider.Resolve<PalletSettingsViewModel>();
 
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
@@ -60,7 +60,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
             _cameraSettingsViewModel.SaveConfigurationCommand.Execute();
             _volumeSettingsViewModel.SaveConfigurationCommand.Execute();
             _weightSettingsViewModel.SaveConfigurationCommand.Execute();
-            _traySettingsViewModel.SaveSettingsCommand.Execute();
+            _palletSettingsViewModel.SaveConfigurationCommand.Execute();
 
             Log.Information("All settings saved");
             _notificationService.ShowSuccess("Settings saved");

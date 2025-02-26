@@ -122,17 +122,6 @@ public class ChuteSettingsViewModel : BindableBase
                 rules.Add(rule);
             }
 
-            // 验证格口号唯一性
-            var duplicateChutes = rules.GroupBy(r => r.Chute)
-                .Where(g => g.Count() > 1)
-                .Select(g => g.Key)
-                .ToList();
-            if (duplicateChutes.Count != 0)
-            {
-                _notificationService.ShowWarningWithToken($"格口号 {string.Join(", ", duplicateChutes)} 重复", NotificationToken);
-                return;
-            }
-
             Configuration.Rules.Clear();
             foreach (var rule in rules)
             {
@@ -236,19 +225,7 @@ public class ChuteSettingsViewModel : BindableBase
             return;
         }
 
-        // 验证格口号唯一性
-        var duplicateChutes = Configuration.Rules.GroupBy(r => r.Chute)
-            .Where(g => g.Count() > 1)
-            .Select(g => g.Key)
-            .ToList();
-        if (duplicateChutes.Count != 0)
-        {
-            _notificationService.ShowWarningWithToken($"格口号 {string.Join(", ", duplicateChutes)} 重复", NotificationToken);
-            return;
-        }
-
         _settingsService.SaveConfiguration(Configuration);
-        _notificationService.ShowSuccessWithToken("格口设置已保存", NotificationToken);
     }
 
     private void LoadSettings()

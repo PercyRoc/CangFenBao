@@ -463,7 +463,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // 设置包裹序号
             package.Index = Interlocked.Increment(ref _currentPackageIndex);
             Log.Information("收到包裹信息：{Barcode}, 序号：{Index}", package.Barcode, package.Index);
-
+            _sortService.ProcessPackage(package);
             // 1. 通过笨鸟系统服务获取三段码并处理上传
             var benNiaoResult = await _benNiaoService.ProcessPackageAsync(package);
             if (!benNiaoResult)
@@ -495,7 +495,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 package.SetError($"获取格口号失败：{ex.Message}");
             }
 
-
             Application.Current.Dispatcher.Invoke(() =>
             {
                 try
@@ -511,7 +510,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 }
             });
             
-            _sortService.ProcessPackage(package);
             
             Application.Current.Dispatcher.Invoke(() =>
             {

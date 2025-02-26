@@ -125,66 +125,39 @@ public class RenJiaCameraService : ICameraService
     /// </summary>
     /// <param name="timeoutMs">超时时间（毫秒）</param>
     /// <returns>操作是否成功</returns>
-    public async Task<bool> StopAsync(int timeoutMs = 3000)
+    public Task<bool> StopAsync(int timeoutMs = 3000)
     {
-        if (!IsConnected) return true;
+        if (!IsConnected) return Task.FromResult(true);
 
         try
         {
-            Log.Information("正在异步停止体积相机服务(超时:{TimeoutMs}ms)...", timeoutMs);
+            Log.Information("正在停止体积相机服务...");
             
-            // 使用CancellationToken实现超时
-            using var cts = new CancellationTokenSource(timeoutMs);
-            
-            var success = await Task.Run(() => 
+            // 1. 关闭设备
+            var closeResult = NativeMethods.CloseDevice();
+            if (closeResult != 0)
             {
-                try 
-                {
-                    // 1. 关闭设备
-                    var closeResult = NativeMethods.CloseDevice();
-                    if (closeResult != 0)
-                    {
-                        Log.Warning("关闭设备失败：{Result}", closeResult);
-                    }
+                Log.Warning("关闭设备失败：{Result}", closeResult);
+            }
 
-                    // 2. 关闭后台程序
-                    if (NativeMethods.KillProcess()) return true;
-                    Log.Warning("关闭后台程序失败");
-                    return false;
-
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "停止体积相机时发生异常");
-                    return false;
-                }
-            }, cts.Token).ContinueWith(t => 
+            // 2. 关闭后台程序
+            var success = NativeMethods.KillProcess();
+            if (!success)
             {
-                // 处理任务取消
-                if (t.IsCanceled)
-                {
-                    Log.Warning("停止体积相机操作超时");
-                    return false;
-                }
-                
-                // 处理任务异常
-                if (!t.IsFaulted) return t.Result;
-                Log.Error(t.Exception, "停止体积相机时发生异常");
-                return false;
+                Log.Warning("关闭后台程序失败");
+            }
 
-            }, TaskScheduler.Default);
-            
-            // 无论停止结果如何，重置状态
+            // 重置状态
             IsConnected = false;
             
-            Log.Information("体积相机服务已异步停止");
-            return success;
+            Log.Information("体积相机服务已停止");
+            return Task.FromResult(success);
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "异步停止体积相机服务时发生错误");
+            Log.Error(ex, "停止体积相机服务时发生错误");
             IsConnected = false; // 强制重置状态
-            return false;
+            return Task.FromResult(false);
         }
     }
 

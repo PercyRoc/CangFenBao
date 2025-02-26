@@ -60,13 +60,13 @@ public partial class App
         containerRegistry.Register<CameraSettingsView>();
         containerRegistry.Register<VolumeSettingsView>();
         containerRegistry.Register<WeightSettingsView>();
-        containerRegistry.Register<TraySettingsView>();
+        containerRegistry.Register<PalletSettingsView>();
         
         // 注册设置页面的ViewModel
         containerRegistry.Register<CameraSettingsViewModel>();
         containerRegistry.Register<VolumeSettingsViewModel>();
         containerRegistry.Register<WeightSettingsViewModel>();
-        containerRegistry.Register<TraySettingsViewModel>();
+        containerRegistry.Register<PalletSettingsViewModel>();
     }
 
     /// <summary>
@@ -245,10 +245,12 @@ public partial class App
             weightStartupService.StopAsync(CancellationToken.None).Wait();
 
             // 释放相机工厂
-            if (Container.Resolve<CameraFactory>() is IDisposable cameraFactory) cameraFactory.Dispose();
+            if (Container.Resolve<CameraFactory>() is IAsyncDisposable cameraFactory) 
+                cameraFactory.DisposeAsync().AsTask().Wait();
 
             // 释放相机服务
-            if (Container.Resolve<ICameraService>() is IDisposable cameraService) cameraService.Dispose();
+            if (Container.Resolve<ICameraService>() is IAsyncDisposable cameraService) 
+                cameraService.DisposeAsync().AsTask().Wait();
 
             // 释放主窗口 ViewModel
             if (MainWindow?.DataContext is IDisposable disposable) disposable.Dispose();

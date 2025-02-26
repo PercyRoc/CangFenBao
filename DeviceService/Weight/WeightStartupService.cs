@@ -82,9 +82,34 @@ public class WeightStartupService : IHostedService
             Log.Information("正在停止重量称服务...");
             if (_weightService != null)
             {
-                await _weightService.StopAsync();
-                await _weightService.DisposeAsync();
-                _weightService = null;
+                // 使用超时机制确保不会无限等待
+                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                    timeoutCts.Token, cancellationToken);
+
+                try
+                {
+                    // 先停止服务
+                    var stopTask = _weightService.StopAsync();
+                    await Task.WhenAny(stopTask, Task.Delay(3000, linkedCts.Token));
+                    
+                    if (!stopTask.IsCompleted)
+                    {
+                        Log.Warning("停止重量称服务超时");
+                    }
+
+                    // 释放资源
+                    await _weightService.DisposeAsync();
+                    _weightService = null;
+                }
+                catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
+                {
+                    Log.Warning("停止重量称服务超时");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "停止重量称服务时发生错误");
+                }
             }
             Log.Information("重量称服务已停止");
         }

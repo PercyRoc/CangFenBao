@@ -3,14 +3,14 @@ using Presentation_SangNeng.ViewModels.Settings;
 
 namespace Presentation_SangNeng.ViewModels.Windows;
 
-public class SelectableTrayModel(TrayModel trayModel, bool isSelected = false) : BindableBase
+public class SelectablePalletModel(PalletModel palletModel, bool isSelected = false) : BindableBase
 {
     private bool _isSelected = isSelected;
-    private string _name = trayModel.Name;
-    private double _weight = trayModel.Weight;
-    private double _length = trayModel.Length;
-    private double _width = trayModel.Width;
-    private double _height = trayModel.Height;
+    private string _name = palletModel.Name;
+    private double _weight = palletModel.Weight;
+    private double _length = palletModel.Length;
+    private double _width = palletModel.Width;
+    private double _height = palletModel.Height;
 
     public bool IsSelected
     {
@@ -25,7 +25,7 @@ public class SelectableTrayModel(TrayModel trayModel, bool isSelected = false) :
         {
             if (SetProperty(ref _name, value))
             {
-                trayModel.Name = value;
+                palletModel.Name = value;
             }
         }
     }
@@ -37,7 +37,7 @@ public class SelectableTrayModel(TrayModel trayModel, bool isSelected = false) :
         {
             if (SetProperty(ref _weight, value))
             {
-                trayModel.Weight = value;
+                palletModel.Weight = value;
             }
         }
     }
@@ -49,7 +49,7 @@ public class SelectableTrayModel(TrayModel trayModel, bool isSelected = false) :
         {
             if (SetProperty(ref _length, value))
             {
-                trayModel.Length = value;
+                palletModel.Length = value;
             }
         }
     }
@@ -61,7 +61,7 @@ public class SelectableTrayModel(TrayModel trayModel, bool isSelected = false) :
         {
             if (SetProperty(ref _width, value))
             {
-                trayModel.Width = value;
+                palletModel.Width = value;
             }
         }
     }
@@ -73,7 +73,7 @@ public class SelectableTrayModel(TrayModel trayModel, bool isSelected = false) :
         {
             if (SetProperty(ref _height, value))
             {
-                trayModel.Height = value;
+                palletModel.Height = value;
             }
         }
     }

@@ -20,6 +20,13 @@ public class BenNiaoPreReportService : IDisposable
     private readonly System.Timers.Timer _updateTimer;
     private List<PreReportDataResponse>? _preReportData;
     private bool _disposed;
+    
+    // 创建JSON序列化选项，避免中文转义
+    private readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        WriteIndented = true
+    };
 
     public BenNiaoPreReportService(
         IHttpClientFactory httpClientFactory,
@@ -101,11 +108,11 @@ public class BenNiaoPreReportService : IDisposable
                 config.BenNiaoAppSecret,
                 requestBody);
 
-            Log.Information("笨鸟预报数据签名请求：{@Request}", JsonSerializer.Serialize(request));
+            Log.Information("笨鸟预报数据签名请求：{@Request}", JsonSerializer.Serialize(request, _jsonOptions));
             Log.Information("笨鸟预报数据请求地址：{BaseUrl}{Url}", _httpClient.BaseAddress, url);
 
             // 发送请求
-            var jsonContent = JsonSerializer.Serialize(request);
+            var jsonContent = JsonSerializer.Serialize(request, _jsonOptions);
             Log.Information("笨鸟预报数据请求JSON：{@JsonContent}", jsonContent);
 
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
@@ -118,7 +125,7 @@ public class BenNiaoPreReportService : IDisposable
 
             response.EnsureSuccessStatusCode();
 
-            var result = await response.Content.ReadFromJsonAsync<BenNiaoResponse<List<PreReportDataResponse>>>();
+            var result = await response.Content.ReadFromJsonAsync<BenNiaoResponse<List<PreReportDataResponse>>>(_jsonOptions);
 
             if (result is { IsSuccess: true, Result: not null })
             {

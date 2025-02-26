@@ -56,8 +56,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly SemaphoreSlim _measurementLock = new(1, 1);
     private PackageInfo? _currentPackage;
     private int _packageIndex = 1;
-    private ObservableCollection<SelectableTrayModel> _availableTrays;
-    private SelectableTrayModel? _selectedTray;
+    private ObservableCollection<SelectablePalletModel> _availablePallets;
+    private SelectablePalletModel? _selectedPallet;
 
     /// <summary>
     /// 构造函数
@@ -146,15 +146,15 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 });
         }
 
-        _availableTrays = [];
+        _availablePallets = [];
 
-        SelectTrayCommand = new DelegateCommand<SelectableTrayModel>(ExecuteSelectTray);
+        SelectPalletCommand = new DelegateCommand<SelectablePalletModel>(ExecuteSelectPallet);
 
         // 订阅托盘设置更改事件
-        eventAggregator.GetEvent<TraySettingsChangedEvent>().Subscribe(LoadAvailableTrays);
+        eventAggregator.GetEvent<PalletSettingsChangedEvent>().Subscribe(LoadAvailablePallets);
 
-        // Load available trays
-        LoadAvailableTrays();
+        // Load available pallets
+        LoadAvailablePallets();
     }
 
     private static void UpdateImageDisplay(Image<Rgba32> image, Action<BitmapSource> imageUpdater)
@@ -348,9 +348,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         var weight = _weightService.FindNearestWeight(DateTime.Now);
                         if (weight.HasValue)
                         {
-                            _currentPackage.Weight = (float)weight.Value / 1000;
-                            Log.Information("获取到包裹重量：{Weight:F3}kg", weight.Value);
-
+                            // 计算实际重量（减去托盘重量）
+                            var actualWeight = weight.Value / 1000;
+                            if (SelectedPallet != null && SelectedPallet.Name != "noPallet")
+                            {
+                                actualWeight = Math.Max(0, actualWeight - SelectedPallet.Weight);
+                            }
+                            _currentPackage.Weight = (float)actualWeight;
+                            
                             Application.Current.Dispatcher.Invoke(() =>
                             {
                                 var items = PackageInfoItems.ToList();
@@ -379,27 +384,27 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 var hikvisionImage = await photoTask;
 
                 // 处理体积数据
-                if (_currentPackage.Status == PackageStatus.MeasureSuccess && SelectedTray != null &&
-                    SelectedTray.Name != "noTray")
+                if (_currentPackage.Status == PackageStatus.MeasureSuccess && SelectedPallet != null &&
+                    SelectedPallet.Name != "noPallet")
                 {
                     var originalLength = _currentPackage.Length;
                     var originalWidth = _currentPackage.Width;
                     var originalHeight = _currentPackage.Height;
 
                     // 托盘尺寸单位为cm，需要转换为mm进行比较
-                    var trayLengthInMm = SelectedTray.Length;
-                    var trayWidthInMm = SelectedTray.Width;
-                    var trayHeightInMm = SelectedTray.Height;
+                    var palletLengthInMm = SelectedPallet.Length;
+                    var palletWidthInMm = SelectedPallet.Width;
+                    var palletHeightInMm = SelectedPallet.Height;
 
                     // 如果获取到的长度或宽度小于托盘尺寸，使用托盘尺寸
-                    if (originalLength < trayLengthInMm || originalWidth < trayWidthInMm)
+                    if (originalLength < palletLengthInMm || originalWidth < palletWidthInMm)
                     {
-                        _currentPackage.Length = Math.Max(originalLength ?? 0, trayLengthInMm);
-                        _currentPackage.Width = Math.Max(originalWidth ?? 0, trayWidthInMm);
+                        _currentPackage.Length = Math.Max(originalLength ?? 0, palletLengthInMm);
+                        _currentPackage.Width = Math.Max(originalWidth ?? 0, palletWidthInMm);
                     }
 
                     // 高度始终要加上托盘高度
-                    _currentPackage.Height = originalHeight + trayHeightInMm;
+                    _currentPackage.Height = originalHeight + palletHeightInMm;
                     // 更新体积（保持使用mm³作为单位进行计算）
                     _currentPackage.Volume = _currentPackage.Length * _currentPackage.Width * _currentPackage.Height;
                     // 显示时转换为cm
@@ -759,19 +764,19 @@ public class MainWindowViewModel : BindableBase, IDisposable
     /// </summary>
     public ICommand OpenHistoryWindowCommand { get; }
 
-    public ObservableCollection<SelectableTrayModel> AvailableTrays
+    public ObservableCollection<SelectablePalletModel> AvailablePallets
     {
-        get => _availableTrays;
-        set => SetProperty(ref _availableTrays, value);
+        get => _availablePallets;
+        set => SetProperty(ref _availablePallets, value);
     }
 
-    private SelectableTrayModel? SelectedTray
+    private SelectablePalletModel? SelectedPallet
     {
-        get => _selectedTray;
-        set => SetProperty(ref _selectedTray, value);
+        get => _selectedPallet;
+        set => SetProperty(ref _selectedPallet, value);
     }
 
-    public DelegateCommand<SelectableTrayModel> SelectTrayCommand { get; }
+    public DelegateCommand<SelectablePalletModel> SelectPalletCommand { get; }
 
     #endregion
 
@@ -814,44 +819,44 @@ public class MainWindowViewModel : BindableBase, IDisposable
         ];
     }
 
-    private void ExecuteSelectTray(SelectableTrayModel tray)
+    private void ExecuteSelectPallet(SelectablePalletModel pallet)
     {
-        foreach (var availableTray in AvailableTrays)
+        foreach (var availablePallet in AvailablePallets)
         {
-            availableTray.IsSelected = availableTray == tray;
+            availablePallet.IsSelected = availablePallet == pallet;
         }
 
-        SelectedTray = tray;
+        SelectedPallet = pallet;
     }
 
-    private void LoadAvailableTrays()
+    private void LoadAvailablePallets()
     {
         try
         {
-            var traySettings = _settingsService.LoadConfiguration<TraySettings>();
+            var palletSettings = _settingsService.LoadConfiguration<PalletSettings>();
 
-            AvailableTrays.Clear();
+            AvailablePallets.Clear();
 
             // 添加空托盘选项
-            var emptyTray = new SelectableTrayModel(new TrayModel
+            var emptyPallet = new SelectablePalletModel(new PalletModel
             {
-                Name = "noTray",
+                Name = "noPallet",
                 Weight = 0,
                 Length = 0,
                 Width = 0,
                 Height = 0
             });
-            AvailableTrays.Add(emptyTray);
+            AvailablePallets.Add(emptyPallet);
 
             // 添加配置的托盘
-            foreach (var tray in traySettings.Trays)
+            foreach (var pallet in palletSettings.Pallets)
             {
-                AvailableTrays.Add(new SelectableTrayModel(tray));
+                AvailablePallets.Add(new SelectablePalletModel(pallet));
             }
 
             // 默认选择空托盘
-            emptyTray.IsSelected = true;
-            SelectedTray = emptyTray;
+            emptyPallet.IsSelected = true;
+            SelectedPallet = emptyPallet;
         }
         catch (Exception ex)
         {

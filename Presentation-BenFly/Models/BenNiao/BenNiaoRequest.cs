@@ -40,6 +40,13 @@ public class BenNiaoRequest
 /// </summary>
 public static class BenNiaoSignHelper
 {
+    // 创建JSON序列化选项，避免中文转义
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        WriteIndented = true
+    };
+    
     /// <summary>
     ///     创建请求
     /// </summary>
@@ -49,7 +56,7 @@ public static class BenNiaoSignHelper
     public static BenNiaoRequest CreateRequest(string appId, string appSecret, object data)
     {
         var timestamp = DateTimeOffset.Now.ToUnixTimeMilliseconds();
-        var paramsJson = JsonSerializer.Serialize(data);
+        var paramsJson = JsonSerializer.Serialize(data, JsonOptions);
 
         var request = new BenNiaoRequest
         {

@@ -522,8 +522,42 @@ public class PendulumSortService : IPendulumSortService
             var startTime = DateTime.Now;
             
             // 获取分拣命令
-            var isRightSwing = package.ChuteName % 2 == 0;
-            var command = isRightSwing ? _moduleCommands["2代模块"].SwingRight : _moduleCommands["2代模块"].SwingLeft;
+            // 修改分拣逻辑：1号格口左摆，2号格口右摆，3号格口不做动作
+            string? command = null;
+            bool isNoAction = false;
+            
+            switch (package.ChuteName)
+            {
+                case 1: // 1号格口左摆
+                    command = _moduleCommands["2代模块"].SwingLeft;
+                    Log.Information("包裹 {Barcode} 分配到1号格口，执行左摆", package.Barcode);
+                    break;
+                case 2: // 2号格口右摆
+                    command = _moduleCommands["2代模块"].SwingRight;
+                    Log.Information("包裹 {Barcode} 分配到2号格口，执行右摆", package.Barcode);
+                    break;
+                case 3: // 3号格口不做动作
+                    isNoAction = true;
+                    Log.Information("包裹 {Barcode} 分配到3号格口，不做摆动", package.Barcode);
+                    break;
+                default: // 其他格口使用默认逻辑
+                    if (package.ChuteName <= 0)
+                    {
+                        // 如果格口号为0或未设置，不执行动作
+                        isNoAction = true;
+                        Log.Information("包裹 {Barcode} 未设置有效格口号({ChuteName})，不做摆动", 
+                            package.Barcode, package.ChuteName);
+                    }
+                    else
+                    {
+                        // 其他格口根据奇偶性决定摆动方向
+                        var isRightSwing = package.ChuteName % 2 == 0;
+                        command = isRightSwing ? _moduleCommands["2代模块"].SwingRight : _moduleCommands["2代模块"].SwingLeft;
+                        Log.Information("包裹 {Barcode} 分配到{Chute}号格口，执行{Direction}摆", 
+                            package.Barcode, package.ChuteName, isRightSwing ? "右" : "左");
+                    }
+                    break;
+            }
 
             // 获取摆轮状态
             if (!_pendulumStates.TryGetValue(photoelectricName, out var state))
@@ -536,13 +570,22 @@ public class PendulumSortService : IPendulumSortService
             var photoelectric = _configuration.TriggerPhotoelectric;
 
             // 等待包裹到达最佳分拣位置
-            await Task.Delay(photoelectric.SortingDelay);
-
-            // 执行分拣动作
-            state.SetSwing();
-            await _triggerClient!.SendAsync(HexStringToByteArray(command));
-            Log.Information("发送分拣命令: {Command} 到触发光电, 包裹:{Barcode}, 方向:{Direction}",
-                command, package.Barcode, isRightSwing ? "右摆" : "左摆");
+            if (photoelectric.SortingDelay > 0){
+                await Task.Delay(photoelectric.SortingDelay);
+            }
+            // 3号格口不执行动作
+            if (!isNoAction)
+            {
+                // 执行分拣动作
+                state.SetSwing();
+                await _triggerClient!.SendAsync(HexStringToByteArray(command!));
+                Log.Information("发送分拣命令: {Command} 到触发光电, 包裹:{Barcode}",
+                    command, package.Barcode);
+            }
+            else
+            {
+                Log.Information("包裹 {Barcode} 分配到3号格口，跳过摆动命令", package.Barcode);
+            }
 
             // 延迟后检查是否需要回正
             await Task.Delay(photoelectric.ResetDelay);
@@ -554,28 +597,63 @@ public class PendulumSortService : IPendulumSortService
                 nextPackage = GetNextPackage(package);
             }
 
-            // 检查下一个包裹是否使用相同索引
-            var isSameSlot = nextPackage != null && nextPackage.Index % 2 == package.Index % 2;
-            if (!isSameSlot)
+            // 如果当前是3号格口，不需要回正（因为没有摆动）
+            if (!isNoAction)
             {
-                var resetCommand =
-                    isRightSwing ? _moduleCommands["2代模块"].ResetRight : _moduleCommands["2代模块"].ResetLeft;
-                state.SetReset();
-                await _triggerClient!.SendAsync(HexStringToByteArray(resetCommand));
-                Log.Information(
-                    "发送回正命令: {Command} 到触发光电, 原因:{Reason}, 当前状态:{State}",
-                    resetCommand,
-                    nextPackage == null ? "无后续包裹" : "不同格口",
-                    state.GetCurrentState());
-            }
-            else
-            {
+                // 确定当前摆动方向（用于回正判断）
+                var isCurrentRightSwing = command == _moduleCommands["2代模块"].SwingRight;
+                
+                // 检查下一个包裹是否使用相同摆动方向
+                var needReset = true;
+                
                 if (nextPackage != null)
+                {
+                    var nextIsNoAction = nextPackage.ChuteName == 3;
+                    bool nextIsRightSwing;
+                    
+                    switch (nextPackage.ChuteName)
+                    {
+                        case 1:
+                            nextIsRightSwing = false; // 左摆
+                            break;
+                        case 2:
+                            nextIsRightSwing = true; // 右摆
+                            break;
+                        case 3:
+                            nextIsNoAction = true;
+                            nextIsRightSwing = false; // 不重要，因为不会摆动
+                            break;
+                        default:
+                            nextIsRightSwing = nextPackage.ChuteName % 2 == 0;
+                            break;
+                    }
+                    
+                    // 如果下一个包裹不摆动，也要回正
+                    // 如果下一个包裹摆动方向与当前相同，则不需要回正
+                    needReset = nextIsNoAction || (nextIsRightSwing != isCurrentRightSwing);
+                }
+                
+                if (needReset)
+                {
+                    var resetCommand =
+                        isCurrentRightSwing ? _moduleCommands["2代模块"].ResetRight : _moduleCommands["2代模块"].ResetLeft;
+                    state.SetReset();
+                    await _triggerClient!.SendAsync(HexStringToByteArray(resetCommand));
                     Log.Information(
-                        "跳过回正 - 触发光电保持 {Direction} 摆动状态，因为下一个包裹 {NextCode} 使用相同方向, 当前状态:{State}",
-                        isRightSwing ? "右" : "左",
-                        nextPackage.Barcode,
+                        "发送回正命令: {Command} 到触发光电, 原因:{Reason}, 当前状态:{State}",
+                        resetCommand,
+                        nextPackage == null ? "无后续包裹" : "不同格口方向",
                         state.GetCurrentState());
+                }
+                else
+                {
+                    if (nextPackage != null)
+                        Log.Information(
+                            "跳过回正 - 触发光电保持 {Direction} 摆动状态，因为下一个包裹 {NextCode} 使用相同方向, 当前状态:{State}",
+                            isCurrentRightSwing ? "右" : "左",
+                            nextPackage.Barcode,
+                            state.GetCurrentState());
+                }
             }
 
             // 更新摆轮最后处理的索引
@@ -713,16 +791,6 @@ public class PendulumSortService : IPendulumSortService
             Log.Error(ex, "重新连接时发生错误");
             throw;
         }
-    }
-
-    /// <summary>
-    ///     获取分拣光电索引
-    /// </summary>
-    private static int GetSortingPhotoelectricIndex(int index)
-    {
-        // 计算分拣光电索引（从0开始）
-        // 例如：索引1-2对应第0个分拣光电，索引3-4对应第1个分拣光电，以此类推
-        return (index - 1) / 2;
     }
 
     /// <summary>

@@ -130,13 +130,13 @@
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
 
-                        <ui:NavigationViewItem Content="Tray Settings"
+                        <ui:NavigationViewItem Content="Pallet Settings"
                                                Tag="Tray">
                             <ui:NavigationViewItem.Icon>
                                 <ui:SymbolIcon Symbol="BoxMultiple24" />
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="local:TraySettingsView" />
+                                <x:Type Type="local:PalletSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>
