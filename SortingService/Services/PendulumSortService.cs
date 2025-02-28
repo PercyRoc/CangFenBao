@@ -449,77 +449,75 @@ public class PendulumSortService : IPendulumSortService
                 Log.Information("触发光电触发，时间：{Time:HH:mm:ss.fff}, 当前队列长度: {Count}", 
                     triggerTime, _triggerTimes.Count);
             }
-            
-            if (message.Contains("+OCCH2:1"))  // 改为独立if判断
-            {
-                Log.Information("收到分拣触发信号，开始处理分拣逻辑");
+
+            if (!message.Contains("+OCCH2:1")) return; // 改为独立if判断
+            Log.Information("收到分拣触发信号，开始处理分拣逻辑");
                 
-                // 获取当前时间
-                var currentTime = DateTime.Now;
+            // 获取当前时间
+            var currentTime = DateTime.Now;
 
-                // 在同步块内获取所有待分拣包裹
-                List<PackageInfo> packages;
-                lock (_packageLock)
+            // 在同步块内获取所有待分拣包裹
+            List<PackageInfo> packages;
+            lock (_packageLock)
+            {
+                packages = [.. _pendingSortPackages.Values];
+                Log.Information("开始查找匹配包裹 - 当前时间:{Time}, 待分拣队列数量:{Count}",
+                    currentTime, packages.Count);
+            }
+
+            // 记录所有需要处理的包裹
+            var packagesToProcess = new List<PackageInfo>();
+
+            foreach (var package in packages)
+            {
+                Log.Debug("检查包裹匹配 - 包裹:{Barcode}, 序号:{Index}, 触发时间:{TriggerTime}",
+                    package.Barcode, package.Index, package.TriggerTimestamp);
+
+                // 检查包裹是否正在处理
+                if (IsPackageProcessing(package.Index))
                 {
-                    packages = [.. _pendingSortPackages.Values];
-                    Log.Information("开始查找匹配包裹 - 当前时间:{Time}, 待分拣队列数量:{Count}",
-                        currentTime, packages.Count);
+                    Log.Debug("包裹 {Barcode}(序号:{Index}) 正在处理中，跳过",
+                        package.Barcode, package.Index);
+                    continue;
                 }
 
-                // 记录所有需要处理的包裹
-                var packagesToProcess = new List<PackageInfo>();
-
-                foreach (var package in packages)
+                // 验证时间延迟
+                var delay = (currentTime - package.TriggerTimestamp).TotalMilliseconds;
+                if (delay < _configuration.TriggerPhotoelectric.SortingTimeRangeLower || 
+                    delay > _configuration.TriggerPhotoelectric.SortingTimeRangeUpper)
                 {
-                    Log.Debug("检查包裹匹配 - 包裹:{Barcode}, 序号:{Index}, 触发时间:{TriggerTime}",
-                        package.Barcode, package.Index, package.TriggerTimestamp);
-
-                    // 检查包裹是否正在处理
-                    if (IsPackageProcessing(package.Index))
-                    {
-                        Log.Debug("包裹 {Barcode}(序号:{Index}) 正在处理中，跳过",
-                            package.Barcode, package.Index);
-                        continue;
-                    }
-
-                    // 验证时间延迟
-                    var delay = (currentTime - package.TriggerTimestamp).TotalMilliseconds;
-                    if (delay < _configuration.TriggerPhotoelectric.SortingTimeRangeLower || 
-                        delay > _configuration.TriggerPhotoelectric.SortingTimeRangeUpper)
-                    {
-                        Log.Debug("包裹 {Barcode}(序号:{Index}) 分拣时间延迟验证失败，延迟:{Delay}ms，允许范围:{Lower}-{Upper}ms",
-                            package.Barcode, package.Index, delay, 
-                            _configuration.TriggerPhotoelectric.SortingTimeRangeLower,
-                            _configuration.TriggerPhotoelectric.SortingTimeRangeUpper);
-                        continue;
-                    }
-
-                    Log.Information(
-                        "分拣光电与包裹 {Barcode} (序号: {Index}) 匹配成功，延迟: {Delay}ms",
-                        package.Barcode, package.Index, delay);
-
-                    // 将符合条件的包裹添加到处理列表
-                    packagesToProcess.Add(package);
+                    Log.Debug("包裹 {Barcode}(序号:{Index}) 分拣时间延迟验证失败，延迟:{Delay}ms，允许范围:{Lower}-{Upper}ms",
+                        package.Barcode, package.Index, delay, 
+                        _configuration.TriggerPhotoelectric.SortingTimeRangeLower,
+                        _configuration.TriggerPhotoelectric.SortingTimeRangeUpper);
+                    continue;
                 }
 
-                if (packagesToProcess.Count == 0)
-                {
-                    Log.Warning("未找到匹配的包裹，当前队列包裹数量: {Count}", packages.Count);
-                    return;
-                }
+                Log.Information(
+                    "分拣光电与包裹 {Barcode} (序号: {Index}) 匹配成功，延迟: {Delay}ms",
+                    package.Barcode, package.Index, delay);
 
-                // 按触发时间和索引号排序，确保按正确顺序处理
-                packagesToProcess = [.. packagesToProcess.OrderBy(p => p.TriggerTimestamp).ThenBy(p => p.Index)];
+                // 将符合条件的包裹添加到处理列表
+                packagesToProcess.Add(package);
+            }
 
-                // 处理所有匹配的包裹
-                foreach (var package in packagesToProcess)
-                {
-                    // 标记包裹为处理中
-                    MarkPackageAsProcessing(package.Index, "触发光电");
+            if (packagesToProcess.Count == 0)
+            {
+                Log.Warning("未找到匹配的包裹，当前队列包裹数量: {Count}", packages.Count);
+                return;
+            }
 
-                    // 执行分拣动作
-                    _ = ExecuteSortingAction(package, "触发光电");
-                }
+            // 按触发时间和索引号排序，确保按正确顺序处理
+            packagesToProcess = [.. packagesToProcess.OrderBy(p => p.TriggerTimestamp).ThenBy(p => p.Index)];
+
+            // 处理所有匹配的包裹
+            foreach (var package in packagesToProcess)
+            {
+                // 标记包裹为处理中
+                MarkPackageAsProcessing(package.Index, "触发光电");
+
+                // 执行分拣动作
+                _ = ExecuteSortingAction(package, "触发光电");
             }
         }
         catch (Exception ex)

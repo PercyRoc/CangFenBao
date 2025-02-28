@@ -4,7 +4,6 @@ using System.IO;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Windows;
-using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using CommonLibrary.Models;
@@ -12,6 +11,8 @@ using DeviceService;
 using DeviceService.Camera;
 using Presentation_CommonLibrary.Models;
 using Presentation_CommonLibrary.Services;
+using Presentation_PlateTurnoverMachine.Models;
+using Presentation_PlateTurnoverMachine.Services;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
@@ -25,7 +26,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly ICustomDialogService _dialogService;
     private readonly ICameraService _cameraService;
     private readonly List<IDisposable> _subscriptions = [];
-    private readonly PackageTransferService _packageTransferService;
+    private readonly Services.SortingService _sortingService;
+    private readonly ITcpConnectionService _tcpConnectionService;
     private bool _disposed;
     private string _currentBarcode = string.Empty;
     private BitmapSource? _currentImage;
@@ -34,11 +36,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
     public MainWindowViewModel(
         ICustomDialogService dialogService,
         ICameraService cameraService,
-        PackageTransferService packageTransferService)
+        PackageTransferService packageTransferService,
+        Services.SortingService sortingService,
+        ITcpConnectionService tcpConnectionService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
-        _packageTransferService = packageTransferService;
+        _sortingService = sortingService;
+        _tcpConnectionService = tcpConnectionService;
 
         // 初始化命令
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
@@ -63,8 +68,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
         // 订阅相机连接状态事件
         _cameraService.ConnectionChanged += OnCameraConnectionChanged;
         
+        // 订阅触发光电连接状态事件
+        _tcpConnectionService.TriggerPhotoelectricConnectionChanged += OnTriggerPhotoelectricConnectionChanged;
+        
+        // 订阅TCP模块连接状态变化
+        _tcpConnectionService.TcpModuleConnectionChanged += OnTcpModuleConnectionChanged;
+        
         // 订阅包裹流
-        _subscriptions.Add(_packageTransferService.PackageStream
+        _subscriptions.Add(packageTransferService.PackageStream
             .ObserveOn(Scheduler.CurrentThread)
             .Subscribe(OnPackageInfo));
         
@@ -76,7 +87,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 try
                 {
                     var image = imageData.image;
-                    var barcodeLocations = imageData.barcodes;
                     
                     // 创建内存流并将其所有权转移给BitmapImage
                     var memoryStream = new MemoryStream();
@@ -95,80 +105,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                             bitmap.EndInit();
                             bitmap.Freeze(); // 使图像可以跨线程访问
                             
-                            // 创建可绘制的图像
-                            var drawingVisual = new DrawingVisual();
-                            using (var drawingContext = drawingVisual.RenderOpen())
-                            {
-                                // 绘制原始图像
-                                drawingContext.DrawImage(bitmap, new Rect(0, 0, bitmap.PixelWidth, bitmap.PixelHeight));
-                                
-                                // 绘制条码位置，使用更明显的颜色
-                                foreach (var barcode in barcodeLocations)
-                                {
-                                    var pen = new Pen(Brushes.Red, 3); // 使用红色和更粗的线条，在灰度图上更容易看见
-                                    pen.Freeze();
-                                    
-                                    // 创建条码框的路径
-                                    var points = barcode.Points.Select(p => new System.Windows.Point(p.X, p.Y))
-                                        .ToList();
-                                    if (points.Count != 4) continue;
-                                    {
-                                        var geometry = new PathGeometry();
-                                        var figure = new PathFigure(points[0], [
-                                            new LineSegment(points[1], true),
-                                            new LineSegment(points[2], true),
-                                            new LineSegment(points[3], true),
-                                            new LineSegment(points[0], true)
-                                        ], true);
-                                        geometry.Figures.Add(figure);
-                                        geometry.Freeze();
-                                        
-                                        drawingContext.DrawGeometry(null, pen, geometry);
-                                        
-                                        // 只有在条码内容不为空时才绘制文本
-                                        if (string.IsNullOrWhiteSpace(barcode.Code)) continue;
-                                        // 绘制条码文本，使用更明显的颜色和大小
-                                        var formattedText = new FormattedText(
-                                            barcode.Code,
-                                            CultureInfo.CurrentCulture,
-                                            FlowDirection.LeftToRight,
-                                            new Typeface("Arial"),
-                                            16, // 增大字号
-                                            Brushes.Red, // 使用红色
-                                            VisualTreeHelper.GetDpi(Application.Current.MainWindow).PixelsPerDip);
-                                        formattedText.SetFontWeight(FontWeights.Bold);
-                                        
-                                        // 计算文本位置（在条码框的左上角）
-                                        var textPoint = new System.Windows.Point(
-                                            points.Min(p => p.X),
-                                            points.Min(p => p.Y) - formattedText.Height);
-                                        
-                                        // 绘制文本背景
-                                        var textBackground = new RectangleGeometry(new Rect(
-                                            textPoint.X - 2,
-                                            textPoint.Y - 2,
-                                            formattedText.Width + 4,
-                                            formattedText.Height + 4));
-                                        drawingContext.DrawGeometry(Brushes.White, null, textBackground); // 使用白色背景
-                                        
-                                        // 绘制文本
-                                        drawingContext.DrawText(formattedText, textPoint);
-                                    }
-                                }
-                            }
-                            
-                            // 创建RenderTargetBitmap并渲染DrawingVisual
-                            var renderBitmap = new RenderTargetBitmap(
-                                bitmap.PixelWidth,
-                                bitmap.PixelHeight,
-                                96,
-                                96,
-                                PixelFormats.Pbgra32);
-                            renderBitmap.Render(drawingVisual);
-                            renderBitmap.Freeze();
-                            
-                            // 更新UI
-                            CurrentImage = renderBitmap;
+                            // 直接更新UI，不再绘制条码位置
+                            CurrentImage = bitmap;
                         }
                         finally
                         {
@@ -235,34 +173,41 @@ public class MainWindowViewModel : BindableBase, IDisposable
             cameraStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
         });
     }
-    
-    private void OnDeviceConnectionStatusChanged(object? sender, (string Name, bool Connected) status)
+
+    private void OnTriggerPhotoelectricConnectionChanged(object? sender, bool isConnected)
     {
-        Application.Current.Dispatcher.Invoke(() =>
+        try
         {
-            // 查找设备状态条目
-            var deviceStatus = DeviceStatuses.FirstOrDefault(s => s.Name == status.Name);
-            
-            // 如果没有找到对应的设备条目，查找更通用的条目
-            if (deviceStatus == null)
+            Application.Current.Dispatcher.Invoke(() =>
             {
-                if (status.Name.Contains("触发光电"))
-                {
-                    deviceStatus = DeviceStatuses.FirstOrDefault(s => s.Name == "翻板机");
-                }
-                // 可添加其他设备的匹配逻辑
-            }
-            
-            // 如果找到了设备条目，更新其状态
-            if (deviceStatus != null)
-            {
-                deviceStatus.Status = status.Connected ? "已连接" : "已断开";
-                deviceStatus.StatusColor = status.Connected ? "#4CAF50" : "#F44336";
-                Log.Information("设备 {Name} 连接状态更新为 {Status}", status.Name, status.Connected ? "已连接" : "已断开");
-            }
-        });
+                var status = DeviceStatuses.FirstOrDefault(s => s.Name == "触发光电");
+                if (status == null) return;
+                
+                status.Status = isConnected ? "已连接" : "已断开";
+                status.StatusColor = isConnected ? "#4CAF50" : "#F44336";
+                Log.Information("触发光电连接状态更新为：{Status}", status.Status);
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "更新触发光电状态时发生错误");
+        }
     }
-    
+
+    private void OnTcpModuleConnectionChanged(object? sender, ValueTuple<TcpConnectionConfig, bool> e)
+    {
+        try
+        {
+            UpdateTcpModuleStatus();
+            Log.Information("TCP模块 {IpAddress} 连接状态更新为：{Status}", 
+                e.Item1.IpAddress, e.Item2 ? "已连接" : "已断开");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "处理TCP模块连接状态变化时发生错误");
+        }
+    }
+
     private void OnPackageInfo(PackageInfo package)
     {
         try
@@ -277,6 +222,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     CurrentBarcode = package.Barcode;
                     // 更新实时包裹数据
                     UpdatePackageInfoItems(package);
+                    // 将包裹添加到分拣队列
+                    _sortingService.EnqueuePackage(package);
+                    
+                    // 更新历史包裹列表
+                    UpdatePackageHistory(package);
+                    
+                    // 更新统计信息
+                    UpdateStatistics(package);
                 }
                 catch (Exception ex)
                 {
@@ -326,6 +279,75 @@ public class MainWindowViewModel : BindableBase, IDisposable
         statusItem.Description = string.IsNullOrEmpty(package.ErrorMessage) ? "处理成功" : package.ErrorMessage;
     }
 
+    private void UpdatePackageHistory(PackageInfo package)
+    {
+        try
+        {
+            // 限制历史记录数量，保持最新的100条记录
+            const int maxHistoryCount = 100;
+            
+            // 添加到历史记录开头
+            PackageHistory.Insert(0, package);
+            
+            // 如果超出最大数量，移除多余的记录
+            while (PackageHistory.Count > maxHistoryCount)
+            {
+                PackageHistory.RemoveAt(PackageHistory.Count - 1);
+            }
+            
+            // 更新序号
+            for (var i = 0; i < PackageHistory.Count; i++)
+            {
+                PackageHistory[i].Index = i + 1;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "更新历史包裹列表时发生错误");
+        }
+    }
+
+    private void UpdateStatistics(PackageInfo package)
+    {
+        try
+        {
+            // 更新总包裹数
+            var totalItem = StatisticsItems.FirstOrDefault(x => x.Label == "总包裹数");
+            if (totalItem != null)
+            {
+                var total = int.Parse(totalItem.Value) + 1;
+                totalItem.Value = total.ToString();
+            }
+
+            // 更新成功/失败数
+            var isSuccess = string.IsNullOrEmpty(package.ErrorMessage);
+            var targetLabel = isSuccess ? "成功数" : "失败数";
+            var statusItem = StatisticsItems.FirstOrDefault(x => x.Label == targetLabel);
+            if (statusItem != null)
+            {
+                var count = int.Parse(statusItem.Value) + 1;
+                statusItem.Value = count.ToString();
+            }
+
+            // 更新处理速率（每小时包裹数）
+            var speedItem = StatisticsItems.FirstOrDefault(x => x.Label == "处理速率");
+            if (speedItem == null || PackageHistory.Count < 2) return;
+            // 获取最早和最新的包裹时间差
+            var latestTime = PackageHistory[0].CreateTime;
+            var earliestTime = PackageHistory[^1].CreateTime;
+            var timeSpan = latestTime - earliestTime;
+
+            if (!(timeSpan.TotalSeconds > 0)) return;
+            // 计算每小时处理数量
+            var hourlyRate = PackageHistory.Count / timeSpan.TotalHours;
+            speedItem.Value = Math.Round(hourlyRate).ToString(CultureInfo.InvariantCulture);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "更新统计信息时发生错误");
+        }
+    }
+
     private void InitializeDeviceStatuses()
     {
         try
@@ -341,13 +363,23 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 StatusColor = "#F44336" // 红色表示未连接
             });
 
-            // 添加其他设备状态
+            // 添加触发光电状态
             DeviceStatuses.Add(new DeviceStatus
             {
-                Name = "翻板机",
+                Name = "触发光电",
                 Status = "未连接",
-                Icon = "DeviceLaptop24",
+                Icon = "Alert24",
                 StatusColor = "#F44336"
+            });
+
+            // 添加TCP模块汇总状态
+            DeviceStatuses.Add(new DeviceStatus
+            {
+                Name = "TCP模块",
+                Status = "0/0",
+                Icon = "DeviceLaptop24",
+                StatusColor = "#F44336",
+                Description = "点击查看详情"
             });
 
             Log.Information("设备状态列表初始化完成，共 {Count} 个设备", DeviceStatuses.Count);
@@ -355,6 +387,40 @@ public class MainWindowViewModel : BindableBase, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "初始化设备状态列表时发生错误");
+        }
+    }
+
+    private void UpdateTcpModuleStatus()
+    {
+        try
+        {
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                var status = DeviceStatuses.FirstOrDefault(s => s.Name == "TCP模块");
+                if (status == null) return;
+
+                var totalModules = _tcpConnectionService.TcpModuleClients.Count;
+                var connectedModules = _tcpConnectionService.TcpModuleClients.Count(x => x.Value.Connected);
+
+                status.Status = $"{connectedModules}/{totalModules}";
+                status.StatusColor = connectedModules == totalModules ? "#4CAF50" : 
+                                   connectedModules > 0 ? "#FFA500" : "#F44336";
+
+                // 更新详细信息
+                var details = new System.Text.StringBuilder();
+                foreach (var (config, client) in _tcpConnectionService.TcpModuleClients)
+                {
+                    details.AppendLine($"{config.IpAddress}: {(client.Connected ? "已连接" : "已断开")}");
+                }
+                status.Description = details.ToString().TrimEnd();
+
+                Log.Debug("TCP模块状态更新为：{Status}, 已连接：{Connected}, 总数：{Total}", 
+                    status.Status, connectedModules, totalModules);
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "更新TCP模块状态时发生错误");
         }
     }
 
@@ -452,6 +518,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 // 取消订阅事件
                 _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
+                _tcpConnectionService.TriggerPhotoelectricConnectionChanged -= OnTriggerPhotoelectricConnectionChanged;
+                _tcpConnectionService.TcpModuleConnectionChanged -= OnTcpModuleConnectionChanged;
                 
                 // 释放订阅
                 foreach (var subscription in _subscriptions)

@@ -49,6 +49,7 @@ public partial class App
         
         // 注册TCP连接服务
         containerRegistry.RegisterSingleton<ITcpConnectionService, TcpConnectionService>();
+        containerRegistry.RegisterSingleton<Services.SortingService>();
         containerRegistry.RegisterSingleton<PlateTurnoverSettings>();
         containerRegistry.RegisterSingleton<TcpConnectionHostedService>();
         containerRegistry.Register<IHostedService>(sp => sp.Resolve<TcpConnectionHostedService>());

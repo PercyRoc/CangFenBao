@@ -14,6 +14,8 @@ public class DeviceStatus : BindableBase
 
     private string _statusColor = "#2196F3";
 
+    private string _description = string.Empty;
+
     /// <summary>
     ///     设备名称
     /// </summary>
@@ -48,5 +50,14 @@ public class DeviceStatus : BindableBase
     {
         get => _statusColor;
         set => SetProperty(ref _statusColor, value);
+    }
+
+    /// <summary>
+    ///     状态描述
+    /// </summary>
+    public string Description
+    {
+        get => _description;
+        set => SetProperty(ref _description, value);
     }
 }

@@ -116,6 +116,11 @@ public class PackageInfo : IDisposable
     public PackageStatus Status { get; set; }
 
     /// <summary>
+    /// 包裹计数
+    /// </summary>
+    public int PackageCount { get; set; }
+
+    /// <summary>
     /// 释放资源
     /// </summary>
     public void Dispose()

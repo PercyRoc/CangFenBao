@@ -13,6 +13,8 @@ public class PlateTurnoverSettings : BindableBase
     private ObservableCollection<PlateTurnoverItem> _items = [];
     private string _triggerPhotoelectricIp = "192.168.1.100"; // 默认IP地址
     private int _triggerPhotoelectricPort = 2000; // 默认端口号
+    private double _defaultInterval = 200; // 默认间隔时间（毫秒）
+    private int _errorChute; // 异常格口号
     
     /// <summary>
     /// 翻板机配置项列表
@@ -45,5 +47,23 @@ public class PlateTurnoverSettings : BindableBase
     {
         get => _triggerPhotoelectricPort;
         set => SetProperty(ref _triggerPhotoelectricPort, value);
+    }
+
+    /// <summary>
+    /// 默认间隔时间（毫秒）
+    /// </summary>
+    public double DefaultInterval
+    {
+        get => _defaultInterval;
+        set => SetProperty(ref _defaultInterval, value);
+    }
+
+    /// <summary>
+    /// 异常格口号
+    /// </summary>
+    public int ErrorChute
+    {
+        get => _errorChute;
+        set => SetProperty(ref _errorChute, value);
     }
 } 
