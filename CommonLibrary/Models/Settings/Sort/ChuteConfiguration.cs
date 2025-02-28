@@ -37,15 +37,22 @@ public class ChuteConfiguration : BindableBase
             !string.IsNullOrWhiteSpace(rule.FirstSegment) && rule.FirstSegment == firstSegment).ToList();
 
         // 如果没有匹配一段码的规则，继续下面的匹配逻辑
-        if (!matchedFirstSegmentRules.Any())
+        if (matchedFirstSegmentRules.Count == 0)
         {
-            // 如果二段码包含横杠，先尝试匹配二级网点段码
-            if (!string.IsNullOrWhiteSpace(secondSegment) && secondSegment.Contains('-'))
+            // 首先按逗号分割二段码
+            var secondSegmentParts = secondSegment.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim())
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToList();
+
+            foreach (var part in secondSegmentParts)
             {
-                var segments = secondSegment.Split('-');
-                
-                if (segments.Length >= 1)
+                // 如果当前部分包含横杠，尝试匹配二级网点段码
+                if (part.Contains('-'))
                 {
+                    var segments = part.Split('-');
+
+                    if (segments.Length < 1) continue;
                     // 先尝试匹配第一部分 (如C01-N01-00中的C01)
                     var matchedRule = Rules.FirstOrDefault(rule =>
                         !string.IsNullOrWhiteSpace(rule.SecondSegment) && rule.SecondSegment == segments[0]);
@@ -56,7 +63,7 @@ public class ChuteConfiguration : BindableBase
                     }
 
                     // 如果还有更多部分，尝试匹配第二部分
-                    if (segments.Length >= 2)
+                    if (segments.Length < 2) continue;
                     {
                         matchedRule = Rules.FirstOrDefault(rule =>
                             !string.IsNullOrWhiteSpace(rule.SecondSegment) && rule.SecondSegment == segments[1]);
@@ -67,16 +74,16 @@ public class ChuteConfiguration : BindableBase
                         }
                     }
                 }
-            }
-            else
-            {
-                // 如果二段码不包含横杠，直接匹配
-                var matchedRule = Rules.FirstOrDefault(rule =>
-                    !string.IsNullOrWhiteSpace(rule.SecondSegment) && rule.SecondSegment == secondSegment);
-
-                if (matchedRule != null)
+                else
                 {
-                    return matchedRule.Chute;
+                    // 如果不包含横杠，直接匹配
+                    var matchedRule = Rules.FirstOrDefault(rule =>
+                        !string.IsNullOrWhiteSpace(rule.SecondSegment) && rule.SecondSegment == part);
+
+                    if (matchedRule != null)
+                    {
+                        return matchedRule.Chute;
+                    }
                 }
             }
 
@@ -84,83 +91,56 @@ public class ChuteConfiguration : BindableBase
         }
         
         // 在匹配一段码的规则中查找二段码匹配
-        // 如果二段码包含横杠
-        if (!string.IsNullOrWhiteSpace(secondSegment) && secondSegment.Contains('-'))
+        // 首先按逗号分割二段码
+        var secondSegmentPartsWithFirst = secondSegment.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim())
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToList();
+
+        foreach (var part in secondSegmentPartsWithFirst)
         {
-            var segments = secondSegment.Split('-');
-            
-            if (segments.Length >= 1)
+            // 如果当前部分包含横杠
+            if (part.Contains('-'))
             {
-                // 先尝试使用第一部分（如C01）在匹配了一段码的规则中查找
+                var segments = part.Split('-');
+
+                if (segments.Length < 1) continue;
+                // 先尝试使用第一部分在匹配了一段码的规则中查找
                 var perfectMatch = matchedFirstSegmentRules.FirstOrDefault(rule =>
                     !string.IsNullOrWhiteSpace(rule.SecondSegment) && rule.SecondSegment == segments[0]);
-                
+                        
                 if (perfectMatch != null)
                 {
                     return perfectMatch.Chute;
                 }
-                
+                        
                 // 如果还有更多部分，尝试第二部分
-                if (segments.Length >= 2)
+                if (segments.Length < 2) continue;
                 {
                     perfectMatch = matchedFirstSegmentRules.FirstOrDefault(rule =>
                         !string.IsNullOrWhiteSpace(rule.SecondSegment) && rule.SecondSegment == segments[1]);
-                    
+                            
                     if (perfectMatch != null)
                     {
                         return perfectMatch.Chute;
                     }
                 }
             }
-        }
-        else
-        {
-            // 如果二段码不包含横杠，在匹配了一段码的规则中查找二段码完全匹配的规则
-            var perfectMatch = matchedFirstSegmentRules.FirstOrDefault(rule =>
-                !string.IsNullOrWhiteSpace(rule.SecondSegment) && rule.SecondSegment == secondSegment);
-            
-            if (perfectMatch != null)
+            else
             {
-                return perfectMatch.Chute;
+                // 如果不包含横杠，在匹配了一段码的规则中查找完全匹配的规则
+                var perfectMatch = matchedFirstSegmentRules.FirstOrDefault(rule =>
+                    !string.IsNullOrWhiteSpace(rule.SecondSegment) && rule.SecondSegment == part);
+                
+                if (perfectMatch != null)
+                {
+                    return perfectMatch.Chute;
+                }
             }
         }
         
         // 如果有匹配一段码的规则但没有匹配二段码的规则，返回第一个匹配一段码的规则
         return matchedFirstSegmentRules.First().Chute;
-    }
-
-    /// <summary>
-    /// 根据使用-连接的段码获取格口号
-    /// </summary>
-    /// <param name="barcode">使用-连接的段码，例如：123-456-789</param>
-    /// <returns>格口号，如果未找到匹配规则则返回异常格口号</returns>
-    public int GetChuteByConnectedSegments(string barcode)
-    {
-        // 如果条码为Noread或段码为空，直接返回异常格口
-        if (string.IsNullOrWhiteSpace(barcode) || barcode.Equals("Noread", StringComparison.OrdinalIgnoreCase))
-        {
-            Log.Warning("条码为Noread或段码为空，使用异常格口");
-            return ExceptionChute;
-        }
-
-        try
-        {
-            // 分割段码
-            var segments = barcode.Split('-');
-            
-            // 如果段码数量小于2，返回异常格口
-            if (segments.Length < 2)
-            {
-                return ExceptionChute;
-            }
-
-            // 使用前两段进行匹配
-            return GetChute(segments[0], segments[1]);
-        }
-        catch
-        {
-            return ExceptionChute;
-        }
     }
 
     /// <summary>

@@ -108,7 +108,7 @@
                                     <GridViewColumn.CellTemplate>
                                         <DataTemplate>
                                             <ui:TextBox Text="{Binding SecondSegment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                       Width="100" />
+                                                       Width="200" />
                                         </DataTemplate>
                                     </GridViewColumn.CellTemplate>
                                 </GridViewColumn>

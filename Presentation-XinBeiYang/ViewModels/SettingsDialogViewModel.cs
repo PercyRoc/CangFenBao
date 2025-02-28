@@ -12,6 +12,7 @@ public class SettingsDialogViewModel: BindableBase, IDialogAware
 {
     // 保存各个设置页面的ViewModel实例
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
+    private readonly HostSettingsViewModel _hostSettingsViewModel;
     private readonly INotificationService _notificationService;
 
     public SettingsDialogViewModel(
@@ -22,6 +23,7 @@ public class SettingsDialogViewModel: BindableBase, IDialogAware
 
         // 创建各个设置页面的ViewModel实例
         _cameraSettingsViewModel = containerProvider.Resolve<CameraSettingsViewModel>();
+        _hostSettingsViewModel = containerProvider.Resolve<HostSettingsViewModel>();
 
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
@@ -53,6 +55,7 @@ public class SettingsDialogViewModel: BindableBase, IDialogAware
         {
             // 保存所有设置
             _cameraSettingsViewModel.SaveConfigurationCommand.Execute();
+            _hostSettingsViewModel.SaveConfigurationCommand.Execute();
 
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");

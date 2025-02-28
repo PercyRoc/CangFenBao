@@ -114,6 +114,16 @@
                                    Name="RootNavigation">
 
                     <ui:NavigationView.MenuItems>
+                        <ui:NavigationViewItem Content="主机设置"
+                                             Tag="Host">
+                            <ui:NavigationViewItem.Icon>
+                                <ui:SymbolIcon Symbol="Server24" />
+                            </ui:NavigationViewItem.Icon>
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="local:HostSettingsView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
+                        
                         <ui:NavigationViewItem Content="相机设置"
                                                Tag="Camera">
                             <ui:NavigationViewItem.Icon>

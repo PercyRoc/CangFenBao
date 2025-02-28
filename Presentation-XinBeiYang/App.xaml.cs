@@ -2,7 +2,10 @@
 using System.Windows;
 using CommonLibrary.Extensions;
 using DeviceService;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Presentation_CommonLibrary.Extensions;
+using Presentation_XinBeiYang.Services;
 using Presentation_XinBeiYang.ViewModels;
 using Presentation_XinBeiYang.ViewModels.Settings;
 using Presentation_XinBeiYang.Views;
@@ -26,6 +29,7 @@ public partial class App
         // 注册视图和ViewModel
         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
         containerRegistry.RegisterForNavigation<CameraSettingsView, CameraSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<HostSettingsView, HostSettingsViewModel>();
 
         // 注册公共服务
         containerRegistry.AddCommonServices();
@@ -37,6 +41,12 @@ public partial class App
         
         // 注册包裹中转服务
         containerRegistry.RegisterSingleton<PackageTransferService>();
+        
+        // 注册PLC通讯服务
+        containerRegistry.RegisterSingleton<IPlcCommunicationService, PlcCommunicationService>();
+        
+        // 注册PLC通讯托管服务
+        containerRegistry.RegisterSingleton<IHostedService, PlcCommunicationHostedService>();
         
         // 注册设置窗口
         containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
@@ -61,6 +71,10 @@ public partial class App
         Log.Information("应用程序启动");
         // 先调用基类方法初始化容器
         base.OnStartup(e);
+
+        // 启动托管服务
+        var hostedService = Container.Resolve<IHostedService>();
+        _ = hostedService.StartAsync(CancellationToken.None);
     }
     
     /// <summary>
@@ -70,6 +84,10 @@ public partial class App
     {
         try
         {
+            // 停止托管服务
+            var hostedService = Container.Resolve<IHostedService>();
+            await hostedService.StopAsync(CancellationToken.None);
+            
             // 等待所有日志写入完成
             Log.Information("应用程序关闭");
             await Log.CloseAndFlushAsync();

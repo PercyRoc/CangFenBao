@@ -11,6 +11,7 @@ using DeviceService;
 using DeviceService.Camera;
 using Presentation_CommonLibrary.Models;
 using Presentation_CommonLibrary.Services;
+using Presentation_XinBeiYang.Services;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
@@ -23,6 +24,7 @@ public class MainWindowViewModel: BindableBase, IDisposable
     private readonly DispatcherTimer _timer;
     private readonly ICustomDialogService _dialogService;
     private readonly ICameraService _cameraService;
+    private readonly IPlcCommunicationService _plcCommunicationService;
     private readonly List<IDisposable> _subscriptions = [];
     private bool _disposed;
     private string _currentBarcode = string.Empty;
@@ -54,10 +56,13 @@ public class MainWindowViewModel: BindableBase, IDisposable
     public MainWindowViewModel(
         ICustomDialogService dialogService,
         ICameraService cameraService,
-        PackageTransferService packageTransferService)
+        PackageTransferService packageTransferService,
+        IPlcCommunicationService plcCommunicationService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
+        _plcCommunicationService = plcCommunicationService;
+
         // 初始化命令
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
 
@@ -80,6 +85,9 @@ public class MainWindowViewModel: BindableBase, IDisposable
         
         // 订阅相机连接状态事件
         _cameraService.ConnectionChanged += OnCameraConnectionChanged;
+        
+        // 订阅PLC连接状态事件
+        _plcCommunicationService.ConnectionStatusChanged += OnPlcConnectionChanged;
         
         // 订阅包裹流
         _subscriptions.Add(packageTransferService.PackageStream
@@ -149,6 +157,15 @@ public class MainWindowViewModel: BindableBase, IDisposable
                 Name = "相机",
                 Status = "未连接",
                 Icon = "Camera24",
+                StatusColor = "#F44336" // 红色表示未连接
+            });
+            
+            // 添加PLC状态
+            DeviceStatuses.Add(new DeviceStatus
+            {
+                Name = "PLC",
+                Status = "未连接",
+                Icon = "Chip24",
                 StatusColor = "#F44336" // 红色表示未连接
             });
 
@@ -256,11 +273,67 @@ public class MainWindowViewModel: BindableBase, IDisposable
         });
     }
     
-    private void OnPackageInfo(PackageInfo package)
+    private void OnPlcConnectionChanged(object? sender, bool isConnected)
+    {
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            var plcStatus = DeviceStatuses.FirstOrDefault(s => s.Name == "PLC");
+            if (plcStatus == null) return;
+            
+            plcStatus.Status = isConnected ? "已连接" : "已断开";
+            plcStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
+        });
+    }
+    
+    private async void OnPackageInfo(PackageInfo package)
     {
         try
         {
             Log.Information("收到包裹信息：{Barcode}", package.Barcode);
+            
+            // 发送上包请求
+            if (_plcCommunicationService.IsConnected)
+            {
+                try
+                {
+                    // 处理尺寸为空的情况，使用默认值0
+                    var length = package.Length ?? 0;
+                    var width = package.Width ?? 0;
+                    var height = package.Height ?? 0;
+                    
+                    var scanTimestamp = (ulong)DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    var result = await _plcCommunicationService.SendUploadRequestAsync(
+                        weight: package.Weight,
+                        length: (float)length,
+                        width: (float)width,
+                        height: (float)height,
+                        barcode1D: package.Barcode,
+                        barcode2D: string.Empty,
+                        scanTimestamp: scanTimestamp);
+
+                    if (!result)
+                    {
+                        package.SetError("PLC上包请求被拒绝");
+                        Log.Warning("PLC上包请求被拒绝：{Barcode}", package.Barcode);
+                    }
+                    else
+                    {
+                        // 记录发送的尺寸信息
+                        Log.Information("发送上包请求成功：{Barcode}, 尺寸：{Length}×{Width}×{Height}mm", 
+                            package.Barcode, length, width, height);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    package.SetError($"PLC上包请求失败：{ex.Message}");
+                    Log.Error(ex, "发送PLC上包请求时发生错误：{Barcode}", package.Barcode);
+                }
+            }
+            else
+            {
+                package.SetError("PLC未连接，无法发送上包请求");
+                Log.Warning("PLC未连接，无法发送上包请求：{Barcode}", package.Barcode);
+            }
             
             Application.Current.Dispatcher.Invoke(() =>
             {
@@ -403,6 +476,8 @@ public class MainWindowViewModel: BindableBase, IDisposable
             {
                 // 取消订阅事件
                 _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
+                _plcCommunicationService.ConnectionStatusChanged -= OnPlcConnectionChanged;
+                
                 // 释放订阅
                 foreach (var subscription in _subscriptions)
                 {
