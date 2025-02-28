@@ -2,25 +2,21 @@
 using System.Windows;
 using CommonLibrary.Extensions;
 using DeviceService;
-using Microsoft.Extensions.Hosting;
 using Presentation_CommonLibrary.Extensions;
-using Presentation_PlateTurnoverMachine.ViewModels;
-using Presentation_PlateTurnoverMachine.ViewModels.Settings;
-using Presentation_PlateTurnoverMachine.Views;
-using Presentation_PlateTurnoverMachine.Views.Settings;
+using Presentation_XinBeiYang.ViewModels;
+using Presentation_XinBeiYang.ViewModels.Settings;
+using Presentation_XinBeiYang.Views;
+using Presentation_XinBeiYang.Views.Settings;
 using Prism.Ioc;
 using Serilog;
-using Presentation_PlateTurnoverMachine.Services;
-using Presentation_PlateTurnoverMachine.Models;
 
-namespace Presentation_PlateTurnoverMachine;
+namespace Presentation_XinBeiYang;
 
 /// <summary>
 /// Interaction logic for App.xaml
 /// </summary>
 public partial class App
 {
-    
     protected override Window CreateShell()
     {
         return Container.Resolve<MainWindow>();
@@ -29,7 +25,6 @@ public partial class App
     {
         // 注册视图和ViewModel
         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
-        containerRegistry.RegisterForNavigation<PlateTurnoverSettingsView, PlateTurnoverSettingsViewModel>();
         containerRegistry.RegisterForNavigation<CameraSettingsView, CameraSettingsViewModel>();
 
         // 注册公共服务
@@ -46,13 +41,6 @@ public partial class App
         // 注册设置窗口
         containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
         containerRegistry.Register<SettingsDialogViewModel>();
-        
-        // 注册TCP连接服务
-        containerRegistry.RegisterSingleton<ITcpConnectionService, TcpConnectionService>();
-        containerRegistry.RegisterSingleton<Services.SortingService>();
-        containerRegistry.RegisterSingleton<PlateTurnoverSettings>();
-        containerRegistry.RegisterSingleton<TcpConnectionHostedService>();
-        containerRegistry.Register<IHostedService>(sp => sp.Resolve<TcpConnectionHostedService>());
     }
     
     /// <summary>
@@ -73,10 +61,6 @@ public partial class App
         Log.Information("应用程序启动");
         // 先调用基类方法初始化容器
         base.OnStartup(e);
-        
-        // 启动托管服务
-        var hostedService = Container.Resolve<TcpConnectionHostedService>();
-        _ = hostedService.StartAsync(CancellationToken.None);
     }
     
     /// <summary>
@@ -86,10 +70,6 @@ public partial class App
     {
         try
         {
-            // 停止托管服务
-            var hostedService = Container.Resolve<TcpConnectionHostedService>();
-            await hostedService.StopAsync(CancellationToken.None);
-            
             // 等待所有日志写入完成
             Log.Information("应用程序关闭");
             await Log.CloseAndFlushAsync();
