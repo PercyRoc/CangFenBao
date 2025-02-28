@@ -8,27 +8,39 @@ using Serilog;
 namespace Presentation_XinBeiYang.Services;
 
 /// <summary>
-/// PLC通讯服务实现
+///     PLC通讯服务实现
 /// </summary>
 public class PlcCommunicationService(INotificationService notificationService) : IPlcCommunicationService, IDisposable
 {
-    private readonly ConcurrentDictionary<ushort, TaskCompletionSource<PlcPacket>> _pendingRequests = new();
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly object _connectionLock = new();
-    private TcpClient? _tcpClient;
-    private NetworkStream? _networkStream;
-    private Task? _receiveTask;
+    private readonly ConcurrentDictionary<ushort, TaskCompletionSource<PlcPacket>> _pendingRequests = new();
     private Task? _heartbeatTask;
-    private ushort _nextCommandId = 1;
     private bool _isDisposed;
     private DateTime _lastReceivedTime = DateTime.MinValue;
+    private NetworkStream? _networkStream;
+    private ushort _nextCommandId = 1;
+    private Task? _receiveTask;
+    private TcpClient? _tcpClient;
+    public DeviceStatusCode CurrentDeviceStatus { get; private set; } = DeviceStatusCode.Normal;
+
+    public void Dispose()
+    {
+        if (_isDisposed)
+            return;
+
+        _cancellationTokenSource.Cancel();
+        _cancellationTokenSource.Dispose();
+        _networkStream?.Dispose();
+        _tcpClient?.Dispose();
+
+        _isDisposed = true;
+        GC.SuppressFinalize(this);
+    }
 
     public event EventHandler<bool>? ConnectionStatusChanged;
-    public event EventHandler<DeviceStatusCode>? DeviceStatusChanged;
-    public event EventHandler<(bool IsTimeout, int PackageId)>? UploadResultReceived;
 
     public bool IsConnected => _tcpClient?.Connected ?? false;
-    public DeviceStatusCode CurrentDeviceStatus { get; private set; } = DeviceStatusCode.Normal;
 
     public async Task ConnectAsync(string ipAddress, int port)
     {
@@ -110,6 +122,9 @@ public class PlcCommunicationService(INotificationService notificationService) :
         }
     }
 
+    public event EventHandler<DeviceStatusCode>? DeviceStatusChanged;
+    public event EventHandler<(bool IsTimeout, int PackageId)>? UploadResultReceived;
+
     private async Task ReceiveLoopAsync()
     {
         var buffer = new byte[PlcConstants.MaxPacketLength];
@@ -163,10 +178,7 @@ public class PlcCommunicationService(INotificationService notificationService) :
 
             // 解析数据包
             var packetData = received.Take(length).ToArray();
-            if (PlcPacket.TryParse(packetData, out var packet))
-            {
-                HandlePacket(packet!);
-            }
+            if (PlcPacket.TryParse(packetData, out var packet)) HandlePacket(packet!);
 
             // 移除已处理的数据
             received.RemoveRange(0, length);
@@ -183,10 +195,7 @@ public class PlcCommunicationService(INotificationService notificationService) :
 
             case UploadRequestAckPacket or UploadResultAckPacket or DeviceStatusAckPacket:
                 // 处理应答包
-                if (_pendingRequests.TryRemove(packet.CommandId, out var tcs))
-                {
-                    tcs.SetResult(packet);
-                }
+                if (_pendingRequests.TryRemove(packet.CommandId, out var tcs)) tcs.SetResult(packet);
                 break;
 
             case UploadResultPacket uploadResult:
@@ -202,6 +211,7 @@ public class PlcCommunicationService(INotificationService notificationService) :
                     CurrentDeviceStatus = deviceStatus.StatusCode;
                     DeviceStatusChanged?.Invoke(this, deviceStatus.StatusCode);
                 }
+
                 SendAckPacket(new DeviceStatusAckPacket(packet.CommandId));
                 break;
         }
@@ -305,18 +315,4 @@ public class PlcCommunicationService(INotificationService notificationService) :
         _nextCommandId = (ushort)(_nextCommandId == ushort.MaxValue ? 1 : _nextCommandId + 1);
         return id;
     }
-
-    public void Dispose()
-    {
-        if (_isDisposed)
-            return;
-
-        _cancellationTokenSource.Cancel();
-        _cancellationTokenSource.Dispose();
-        _networkStream?.Dispose();
-        _tcpClient?.Dispose();
-
-        _isDisposed = true;
-        GC.SuppressFinalize(this);
-    }
-} 
+}

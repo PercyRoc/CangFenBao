@@ -6,12 +6,12 @@ namespace CommonLibrary.Models.Settings.Camera;
 
 public class DeviceCameraInfo : BindableBase
 {
-    private bool _isSelected;
     private int _index;
     private string _ipAddress = string.Empty;
+    private bool _isSelected;
     private string _macAddress = string.Empty;
-    private string _serialNumber = string.Empty;
     private string _model = string.Empty;
+    private string _serialNumber = string.Empty;
     private CameraStatus _status;
 
     // Default constructor for serialization

@@ -11,10 +11,7 @@ public class EnumToVisibilityConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (value == null || parameter == null)
-        {
-            return Visibility.Collapsed;
-        }
+        if (value == null || parameter == null) return Visibility.Collapsed;
 
         return value.Equals(parameter) ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -23,4 +20,4 @@ public class EnumToVisibilityConverter : IValueConverter
     {
         throw new NotImplementedException();
     }
-} 
+}

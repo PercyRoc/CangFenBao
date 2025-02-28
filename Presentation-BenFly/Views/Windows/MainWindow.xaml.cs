@@ -31,10 +31,7 @@ public partial class MainWindow
         try
         {
             // 当在标题栏区域按下左键时允许拖动窗口
-            if (e.ChangedButton == MouseButton.Left && e.GetPosition(this).Y <= 32)
-            {
-                DragMove();
-            }
+            if (e.ChangedButton == MouseButton.Left && e.GetPosition(this).Y <= 32) DragMove();
         }
         catch (Exception ex)
         {

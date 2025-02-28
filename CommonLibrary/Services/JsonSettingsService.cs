@@ -17,8 +17,9 @@ public class JsonSettingsService : ISettingsService
         PropertyNameCaseInsensitive = true,
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
-    private readonly Dictionary<Type, string> _configurationKeys = [];
+
     private readonly Dictionary<string, object> _configurationCache = [];
+    private readonly Dictionary<Type, string> _configurationKeys = [];
     private readonly string _settingsDirectory;
 
     public JsonSettingsService(string settingsDirectory = "Settings")
@@ -71,12 +72,9 @@ public class JsonSettingsService : ISettingsService
     public T LoadConfiguration<T>() where T : class, new()
     {
         var key = GetConfigurationKey<T>();
-        
+
         // 尝试从缓存中获取
-        if (_configurationCache.TryGetValue(key, out var cached) && cached is T config)
-        {
-            return config;
-        }
+        if (_configurationCache.TryGetValue(key, out var cached) && cached is T config) return config;
 
         // 从文件加载
         var result = LoadSettings<T>(key);
@@ -109,7 +107,6 @@ public class JsonSettingsService : ISettingsService
     {
         var assemblies = AppDomain.CurrentDomain.GetAssemblies();
         foreach (var assembly in assemblies)
-        {
             try
             {
                 var configTypes = assembly.GetTypes()
@@ -118,26 +115,19 @@ public class JsonSettingsService : ISettingsService
                 foreach (var type in configTypes)
                 {
                     var attribute = type.GetCustomAttribute<ConfigurationAttribute>();
-                    if (attribute != null)
-                    {
-                        _configurationKeys[type] = attribute.Key;
-                    }
+                    if (attribute != null) _configurationKeys[type] = attribute.Key;
                 }
             }
             catch (Exception)
             {
                 // 忽略无法加载的程序集
             }
-        }
     }
 
     private string GetConfigurationKey<T>()
     {
         var type = typeof(T);
-        if (!_configurationKeys.TryGetValue(type, out var key))
-        {
-            throw new ArgumentException($"未找到类型 {type.Name} 的配置键名");
-        }
+        if (!_configurationKeys.TryGetValue(type, out var key)) throw new ArgumentException($"未找到类型 {type.Name} 的配置键名");
         return key;
     }
 

@@ -1,6 +1,7 @@
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using System.Runtime.InteropServices;
+using System.Text;
 using CommonLibrary.Models;
 using CommonLibrary.Models.Settings.Camera;
 using DeviceService.Camera.Models;
@@ -11,7 +12,7 @@ using SixLabors.ImageSharp.PixelFormats;
 namespace DeviceService.Camera.RenJia;
 
 /// <summary>
-/// 测量结果
+///     测量结果
 /// </summary>
 public record MeasureResult(
     bool IsSuccess,
@@ -25,8 +26,8 @@ public record MeasureResult(
 /// </summary>
 public class RenJiaCameraService : ICameraService
 {
-    private readonly Subject<PackageInfo> _packageSubject = new();
     private readonly Subject<(Image<Rgba32> image, IReadOnlyList<BarcodeLocation> barcodes)> _imageSubject = new();
+    private readonly Subject<PackageInfo> _packageSubject = new();
     private readonly CancellationTokenSource _processingCancellation = new();
     private bool _disposed;
     private bool _isConnected;
@@ -57,10 +58,7 @@ public class RenJiaCameraService : ICameraService
             Log.Information("开始启动人加体积相机服务...");
 
             // 1. 关闭可能存在的后台程序
-            if (!NativeMethods.KillProcess())
-            {
-                Log.Warning("关闭已存在的后台程序失败");
-            }
+            if (!NativeMethods.KillProcess()) Log.Warning("关闭已存在的后台程序失败");
             Thread.Sleep(100);
 
             // 2. 启动后台程序
@@ -121,7 +119,7 @@ public class RenJiaCameraService : ICameraService
     }
 
     /// <summary>
-    /// 异步停止相机服务，带超时控制
+    ///     异步停止相机服务，带超时控制
     /// </summary>
     /// <param name="timeoutMs">超时时间（毫秒）</param>
     /// <returns>操作是否成功</returns>
@@ -132,24 +130,18 @@ public class RenJiaCameraService : ICameraService
         try
         {
             Log.Information("正在停止体积相机服务...");
-            
+
             // 1. 关闭设备
             var closeResult = NativeMethods.CloseDevice();
-            if (closeResult != 0)
-            {
-                Log.Warning("关闭设备失败：{Result}", closeResult);
-            }
+            if (closeResult != 0) Log.Warning("关闭设备失败：{Result}", closeResult);
 
             // 2. 关闭后台程序
             var success = NativeMethods.KillProcess();
-            if (!success)
-            {
-                Log.Warning("关闭后台程序失败");
-            }
+            if (!success) Log.Warning("关闭后台程序失败");
 
             // 重置状态
             IsConnected = false;
-            
+
             Log.Information("体积相机服务已停止");
             return Task.FromResult(success);
         }
@@ -174,7 +166,6 @@ public class RenJiaCameraService : ICameraService
 
             var cameras = new List<DeviceCameraInfo>();
             for (var i = 0; i < deviceNum; i++)
-            {
                 cameras.Add(new DeviceCameraInfo
                 {
                     SerialNumber = $"RenJia_{i}",
@@ -182,7 +173,6 @@ public class RenJiaCameraService : ICameraService
                     IpAddress = "USB",
                     MacAddress = $"RenJia_{i}"
                 });
-            }
 
             return cameras;
         }
@@ -200,7 +190,7 @@ public class RenJiaCameraService : ICameraService
             Log.Warning("配置类型错误，期望 VolumeSettings 类型");
             return;
         }
-        
+
         try
         {
             _settings = volumeSettings;
@@ -212,7 +202,54 @@ public class RenJiaCameraService : ICameraService
     }
 
     /// <summary>
-    /// 触发一次测量
+    ///     异步释放资源
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed) return;
+
+        try
+        {
+            Log.Information("正在异步释放人加体积相机资源...");
+
+            // 异步停止相机
+            try
+            {
+                await StopAsync(5000);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "异步停止相机时发生错误");
+            }
+
+            // 释放其他资源
+            try
+            {
+                _packageSubject.Dispose();
+                _imageSubject.Dispose();
+                _processingCancellation.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "释放资源时发生错误");
+            }
+
+            Log.Information("人加体积相机资源已异步释放完成");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "异步释放人加体积相机资源时发生错误");
+        }
+        finally
+        {
+            _disposed = true;
+        }
+
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    ///     触发一次测量
     /// </summary>
     /// <returns>测量结果</returns>
     public MeasureResult TriggerMeasure()
@@ -272,7 +309,7 @@ public class RenJiaCameraService : ICameraService
                     {
                         var imageData = new byte[len];
                         Array.Copy(imageDataBuffer, imageData, len);
-                        
+
                         using var image = Image.Load<Rgba32>(imageData);
                         _imageSubject.OnNext((image.Clone(), new List<BarcodeLocation>()));
                     }
@@ -317,7 +354,6 @@ public class RenJiaCameraService : ICameraService
             }, TaskScheduler.Default);
 
             return new MeasureResult(false, "测量操作超时");
-
         }
         catch (Exception ex)
         {
@@ -332,60 +368,13 @@ public class RenJiaCameraService : ICameraService
         {
             var errorMessage = new byte[256];
             var messageLength = NativeMethods.GetErrorMes(errorMessage);
-            return messageLength <= 0 ? "未知错误" : System.Text.Encoding.UTF8.GetString(errorMessage, 0, messageLength).TrimEnd('\0');
+            return messageLength <= 0 ? "未知错误" : Encoding.UTF8.GetString(errorMessage, 0, messageLength).TrimEnd('\0');
         }
         catch (Exception ex)
         {
             Log.Error(ex, "获取错误信息时发生错误");
             return "获取错误信息失败";
         }
-    }
-
-    /// <summary>
-    /// 异步释放资源
-    /// </summary>
-    public async ValueTask DisposeAsync()
-    {
-        if (_disposed) return;
-
-        try
-        {
-            Log.Information("正在异步释放人加体积相机资源...");
-            
-            // 异步停止相机
-            try
-            {
-                await StopAsync(5000);
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "异步停止相机时发生错误");
-            }
-            
-            // 释放其他资源
-            try
-            {
-                _packageSubject.Dispose();
-                _imageSubject.Dispose();
-                _processingCancellation.Dispose();
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "释放资源时发生错误");
-            }
-            
-            Log.Information("人加体积相机资源已异步释放完成");
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "异步释放人加体积相机资源时发生错误");
-        }
-        finally
-        {
-            _disposed = true;
-        }
-        
-        GC.SuppressFinalize(this);
     }
 
     public void Dispose()
@@ -441,14 +430,16 @@ internal static class NativeMethods
     [DllImport("VolumeMeasurementDll.dll", EntryPoint = "GetDmsResult", CallingConvention = CallingConvention.Cdecl)]
     public static extern int GetDmsResult(
         [Out] float[] dimensionData,
-        [Out, MarshalAs(UnmanagedType.LPArray, SizeConst = 10485760)] byte[] imageData);
+        [Out] [MarshalAs(UnmanagedType.LPArray, SizeConst = 10485760)]
+        byte[] imageData);
 
     // 获取体积测量结果错误信息
     [DllImport("VolumeMeasurementDll.dll", EntryPoint = "GetErrorMes", CallingConvention = CallingConvention.Cdecl)]
     public static extern int GetErrorMes([Out] byte[] errMes);
 
     // 获取测量时刻的图像信息
-    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "GetMeasureImageFromId", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "GetMeasureImageFromId",
+        CallingConvention = CallingConvention.Cdecl)]
     public static extern int GetMeasureImageFromId(
         IntPtr imageData,
         int cameraId);
@@ -456,4 +447,4 @@ internal static class NativeMethods
     // 获取系统状态
     [DllImport("VolumeMeasurementDll.dll", EntryPoint = "GetSystemState", CallingConvention = CallingConvention.Cdecl)]
     public static extern int GetSystemState([Out] int[] systemState);
-} 
+}

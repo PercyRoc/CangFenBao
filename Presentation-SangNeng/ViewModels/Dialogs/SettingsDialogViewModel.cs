@@ -1,5 +1,5 @@
-using Presentation_SangNeng.ViewModels.Settings;
 using Presentation_CommonLibrary.Services;
+using Presentation_SangNeng.ViewModels.Settings;
 using Prism.Commands;
 using Prism.Ioc;
 using Prism.Mvvm;
@@ -12,11 +12,11 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
 {
     // 保存各个设置页面的ViewModel实例
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
+    private readonly INotificationService _notificationService;
+    private readonly PalletSettingsViewModel _palletSettingsViewModel;
     private readonly VolumeSettingsViewModel _volumeSettingsViewModel;
     private readonly WeightSettingsViewModel _weightSettingsViewModel;
-    private readonly PalletSettingsViewModel _palletSettingsViewModel;
-    private readonly INotificationService _notificationService;
-    
+
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
         INotificationService notificationService)
@@ -56,7 +56,8 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
     private void ExecuteSave()
     {
         try
-        { // 保存所有设置
+        {
+            // 保存所有设置
             _cameraSettingsViewModel.SaveConfigurationCommand.Execute();
             _volumeSettingsViewModel.SaveConfigurationCommand.Execute();
             _weightSettingsViewModel.SaveConfigurationCommand.Execute();
@@ -77,4 +78,4 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
     {
         RequestClose?.Invoke(new DialogResult(ButtonResult.Cancel));
     }
-} 
+}

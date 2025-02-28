@@ -27,9 +27,9 @@
                 <ResourceDictionary
                     Source="pack://application:,,,/Presentation-CommonLibrary;component/Resources/Styles/ColorStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
-            
+
             <!-- Converters -->
-            <converters:StringNullOrEmptyToBooleanConverter x:Key="NullOrEmptyToBooleanConverter" IsInverted="True"/>
+            <converters:StringNullOrEmptyToBooleanConverter x:Key="NullOrEmptyToBooleanConverter" IsInverted="True" />
         </ResourceDictionary>
     </ui:FluentWindow.Resources>
 
@@ -51,8 +51,7 @@
             <Border Grid.Column="0"
                     Width="48"
                     Height="32"
-                    Effect="{StaticResource IconGlowEffect}">
-            </Border>
+                    Effect="{StaticResource IconGlowEffect}" />
 
             <!-- Title -->
             <TextBlock Grid.Column="1"
@@ -94,12 +93,12 @@
         <Border Grid.Row="1" Background="{StaticResource MainBackground}">
             <Grid Margin="16">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
                 <!-- 查询条件 -->
-                <Border Grid.Row="0" 
+                <Border Grid.Row="0"
                         Margin="0,0,0,16"
                         Background="{DynamicResource ControlFillColorDefaultBrush}"
                         BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
@@ -108,65 +107,65 @@
                         Padding="16">
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="200"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="200"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="200"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="200"/>
-                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="200" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="200" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="200" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="200" />
+                            <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
 
-                        <TextBlock Grid.Column="0" 
-                                  Text="Start Date:" 
-                                  VerticalAlignment="Center" 
-                                  Margin="0,0,8,0"
-                                  Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                        <DatePicker Grid.Column="1" 
-                                   SelectedDate="{Binding StartDate}" 
-                                   Margin="0,0,16,0"/>
+                        <TextBlock Grid.Column="0"
+                                   Text="Start Date:"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,8,0"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <DatePicker Grid.Column="1"
+                                    SelectedDate="{Binding StartDate}"
+                                    Margin="0,0,16,0" />
 
-                        <TextBlock Grid.Column="2" 
-                                  Text="End Date:" 
-                                  VerticalAlignment="Center" 
-                                  Margin="0,0,8,0"
-                                  Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                        <DatePicker Grid.Column="3" 
-                                   SelectedDate="{Binding EndDate}" 
-                                   Margin="0,0,16,0"/>
+                        <TextBlock Grid.Column="2"
+                                   Text="End Date:"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,8,0"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <DatePicker Grid.Column="3"
+                                    SelectedDate="{Binding EndDate}"
+                                    Margin="0,0,16,0" />
 
-                        <TextBlock Grid.Column="4" 
-                                  Text="Status:" 
-                                  VerticalAlignment="Center" 
-                                  Margin="0,0,8,0"
-                                  Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                        <ComboBox Grid.Column="5" 
-                                 ItemsSource="{Binding StatusList}"
-                                 SelectedItem="{Binding SelectedStatus}"
-                                 DisplayMemberPath="DisplayName"
-                                 Margin="0,0,16,0"/>
+                        <TextBlock Grid.Column="4"
+                                   Text="Status:"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,8,0"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <ComboBox Grid.Column="5"
+                                  ItemsSource="{Binding StatusList}"
+                                  SelectedItem="{Binding SelectedStatus}"
+                                  DisplayMemberPath="DisplayName"
+                                  Margin="0,0,16,0" />
 
-                        <TextBlock Grid.Column="6" 
-                                  Text="Barcode:" 
-                                  VerticalAlignment="Center" 
-                                  Margin="0,0,8,0"
-                                  Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <TextBlock Grid.Column="6"
+                                   Text="Barcode:"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,8,0"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
                         <ui:TextBox Grid.Column="7"
-                                   Text="{Binding SearchBarcode, UpdateSourceTrigger=PropertyChanged}"
-                                   PlaceholderText="Enter barcode..."
-                                   ClearButtonEnabled="True"
-                                   Icon="Barcode24"
-                                   Margin="0,0,16,0"/>
+                                    Text="{Binding SearchBarcode, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="Enter barcode..."
+                                    ClearButtonEnabled="True"
+                                    Icon="Barcode24"
+                                    Margin="0,0,16,0" />
 
-                        <ui:Button Grid.Column="8" 
-                                  Appearance="Primary"
-                                  Command="{Binding QueryCommand}"
-                                  HorizontalAlignment="Left">
+                        <ui:Button Grid.Column="8"
+                                   Appearance="Primary"
+                                   Command="{Binding QueryCommand}"
+                                   HorizontalAlignment="Left">
                             <StackPanel Orientation="Horizontal">
-                                <ui:SymbolIcon Symbol="Search24" Margin="0,0,8,0"/>
-                                <TextBlock Text="Search"/>
+                                <ui:SymbolIcon Symbol="Search24" Margin="0,0,8,0" />
+                                <TextBlock Text="Search" />
                             </StackPanel>
                         </ui:Button>
                     </Grid>
@@ -179,34 +178,39 @@
                         BorderThickness="1"
                         CornerRadius="4">
                     <DataGrid Margin="1"
-                             ItemsSource="{Binding PackageRecords}"
-                             AutoGenerateColumns="False"
-                             IsReadOnly="True"
-                             CanUserSortColumns="True"
-                             CanUserResizeColumns="True"
-                             GridLinesVisibility="All"
-                             Style="{DynamicResource DefaultDataGridStyle}"
-                             ColumnHeaderStyle="{DynamicResource DefaultDataGridColumnHeaderStyle}"
-                             CellStyle="{DynamicResource DefaultDataGridCellStyle}"
-                             RowStyle="{DynamicResource DefaultDataGridRowStyle}">
+                              ItemsSource="{Binding PackageRecords}"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              CanUserSortColumns="True"
+                              CanUserResizeColumns="True"
+                              GridLinesVisibility="All"
+                              Style="{DynamicResource DefaultDataGridStyle}"
+                              ColumnHeaderStyle="{DynamicResource DefaultDataGridColumnHeaderStyle}"
+                              CellStyle="{DynamicResource DefaultDataGridCellStyle}"
+                              RowStyle="{DynamicResource DefaultDataGridRowStyle}">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="No." Binding="{Binding Id}" Width="80"/>
-                            <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" Width="150"/>
-                            <DataGridTextColumn Header="Weight(kg)" Binding="{Binding Weight}" Width="100"/>
-                            <DataGridTextColumn Header="Length(cm)" Binding="{Binding Length, StringFormat={}{0:F1}}" Width="100"/>
-                            <DataGridTextColumn Header="Width(cm)" Binding="{Binding Width, StringFormat={}{0:F1}}" Width="100"/>
-                            <DataGridTextColumn Header="Height(cm)" Binding="{Binding Height, StringFormat={}{0:F1}}" Width="100"/>
-                            <DataGridTextColumn Header="Volume(cm³)" Binding="{Binding Volume}" Width="120"/>
-                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100"/>
-                            <DataGridTextColumn Header="Create Time" Binding="{Binding CreateTime, StringFormat=yyyy-MM-dd HH:mm:ss}" Width="*"/>
+                            <DataGridTextColumn Header="No." Binding="{Binding Id}" Width="80" />
+                            <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" Width="150" />
+                            <DataGridTextColumn Header="Weight(kg)" Binding="{Binding Weight}" Width="100" />
+                            <DataGridTextColumn Header="Length(cm)" Binding="{Binding Length, StringFormat={}{0:F1}}"
+                                                Width="100" />
+                            <DataGridTextColumn Header="Width(cm)" Binding="{Binding Width, StringFormat={}{0:F1}}"
+                                                Width="100" />
+                            <DataGridTextColumn Header="Height(cm)" Binding="{Binding Height, StringFormat={}{0:F1}}"
+                                                Width="100" />
+                            <DataGridTextColumn Header="Volume(cm³)" Binding="{Binding Volume}" Width="120" />
+                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
+                            <DataGridTextColumn Header="Create Time"
+                                                Binding="{Binding CreateTime, StringFormat=yyyy-MM-dd HH:mm:ss}"
+                                                Width="*" />
                             <DataGridTemplateColumn Header="Image" Width="100">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <ui:Button Appearance="Secondary"
-                                                  Command="{Binding DataContext.ViewImageCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                                                  CommandParameter="{Binding}"
-                                                  IsEnabled="{Binding ImagePath, Converter={StaticResource NullOrEmptyToBooleanConverter}}">
-                                            <ui:SymbolIcon Symbol="Image24"/>
+                                                   Command="{Binding DataContext.ViewImageCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                   CommandParameter="{Binding}"
+                                                   IsEnabled="{Binding ImagePath, Converter={StaticResource NullOrEmptyToBooleanConverter}}">
+                                            <ui:SymbolIcon Symbol="Image24" />
                                         </ui:Button>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
@@ -227,4 +231,4 @@
                     Margin="0,10,10,0"
                     Panel.ZIndex="1000" />
     </Grid>
-</ui:FluentWindow> 
+</ui:FluentWindow>

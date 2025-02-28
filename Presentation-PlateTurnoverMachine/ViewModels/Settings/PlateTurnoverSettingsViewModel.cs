@@ -13,12 +13,12 @@ namespace Presentation_PlateTurnoverMachine.ViewModels.Settings;
 
 public class PlateTurnoverSettingsViewModel : BindableBase
 {
-    private readonly ISettingsService _settingsService;
     private readonly INotificationService _notificationService;
-    private string _infoTitle = string.Empty;
+    private readonly ISettingsService _settingsService;
     private string _infoMessage = string.Empty;
-    private bool _isInfoBarOpen;
     private InfoBarSeverity _infoSeverity;
+    private string _infoTitle = string.Empty;
+    private bool _isInfoBarOpen;
     private PlateTurnoverSettings _settings = new();
 
     public PlateTurnoverSettingsViewModel(
@@ -116,13 +116,13 @@ public class PlateTurnoverSettingsViewModel : BindableBase
         if (index == -1) return;
 
         Settings.Items.Remove(item);
-        
+
         // // 更新后续项的索引
         // for (int i = index; i < Settings.Items.Count; i++)
         // {
         //     Settings.Items[i].Index = i + 1;
         // }
-        
+
         ShowInfo("删除成功", "已删除选中的翻板机配置项", InfoBarSeverity.Success);
     }
 
@@ -158,6 +158,7 @@ public class PlateTurnoverSettingsViewModel : BindableBase
                 Settings.Items.Add(item);
                 row++;
             }
+
             ShowInfo("导入成功", $"已从Excel导入 {Settings.Items.Count} 条配置", InfoBarSeverity.Success);
         }
         catch (Exception ex)
@@ -186,10 +187,7 @@ public class PlateTurnoverSettingsViewModel : BindableBase
 
             // 创建表头
             var headers = new[] { "序号", "TCP模块", "IO点位", "映射格口", "距离当前点位位置", "分拣延迟系数(0-1)", "磁铁吸合时间(ms)" };
-            for (var i = 0; i < headers.Length; i++)
-            {
-                worksheet.Cells[1, i + 1].Value = headers[i];
-            }
+            for (var i = 0; i < headers.Length; i++) worksheet.Cells[1, i + 1].Value = headers[i];
 
             // 写入数据
             for (var i = 0; i < Settings.Items.Count; i++)
@@ -225,7 +223,7 @@ public class PlateTurnoverSettingsViewModel : BindableBase
             _settingsService.SaveConfiguration(Settings);
             ShowInfo("保存成功", "翻板机配置已保存", InfoBarSeverity.Success);
             _notificationService.ShowSuccessWithToken("翻板机配置已保存", "SettingWindowGrowl");
-            
+
             // 更新光电设备配置
             try
             {

@@ -1,11 +1,13 @@
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using CommonLibrary.Services;
 using Presentation_BenFly.Models.BenNiao;
 using Presentation_BenFly.Models.Upload;
 using Serilog;
+using Timer = System.Timers.Timer;
 
 namespace Presentation_BenFly.Services;
 
@@ -16,17 +18,18 @@ public class BenNiaoPreReportService : IDisposable
 {
     private const string SettingsKey = "UploadSettings";
     private readonly HttpClient _httpClient;
-    private readonly ISettingsService _settingsService;
-    private readonly System.Timers.Timer _updateTimer;
-    private List<PreReportDataResponse>? _preReportData;
-    private bool _disposed;
-    
+
     // 创建JSON序列化选项，避免中文转义
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         WriteIndented = true
     };
+
+    private readonly ISettingsService _settingsService;
+    private readonly Timer _updateTimer;
+    private bool _disposed;
+    private List<PreReportDataResponse>? _preReportData;
 
     public BenNiaoPreReportService(
         IHttpClientFactory httpClientFactory,
@@ -36,7 +39,7 @@ public class BenNiaoPreReportService : IDisposable
         _settingsService = settingsService;
 
         // 初始化定时器
-        _updateTimer = new System.Timers.Timer();
+        _updateTimer = new Timer();
         _updateTimer.Elapsed += async (_, _) => await UpdatePreReportDataAsync();
 
         // 立即执行一次预报数据更新
@@ -57,6 +60,17 @@ public class BenNiaoPreReportService : IDisposable
         StartUpdateTimer();
     }
 
+    public void Dispose()
+    {
+        if (_disposed) return;
+
+        _updateTimer.Stop();
+        _updateTimer.Dispose();
+        _disposed = true;
+
+        GC.SuppressFinalize(this);
+    }
+
     /// <summary>
     ///     获取预报数据
     /// </summary>
@@ -74,10 +88,10 @@ public class BenNiaoPreReportService : IDisposable
         {
             var config = _settingsService.LoadSettings<UploadConfiguration>(SettingsKey);
             var interval = TimeSpan.FromSeconds(config.PreReportUpdateIntervalSeconds);
-            
+
             _updateTimer.Interval = interval.TotalMilliseconds;
             _updateTimer.Start();
-            
+
             Log.Information("已启动预报数据定时更新，间隔：{Interval}秒", config.PreReportUpdateIntervalSeconds);
         }
         catch (Exception ex)
@@ -125,7 +139,8 @@ public class BenNiaoPreReportService : IDisposable
 
             response.EnsureSuccessStatusCode();
 
-            var result = await response.Content.ReadFromJsonAsync<BenNiaoResponse<List<PreReportDataResponse>>>(_jsonOptions);
+            var result =
+                await response.Content.ReadFromJsonAsync<BenNiaoResponse<List<PreReportDataResponse>>>(_jsonOptions);
 
             if (result is { IsSuccess: true, Result: not null })
             {
@@ -144,16 +159,5 @@ public class BenNiaoPreReportService : IDisposable
         {
             Log.Error(ex, "获取笨鸟预报数据时发生错误");
         }
-    }
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-        
-        _updateTimer.Stop();
-        _updateTimer.Dispose();
-        _disposed = true;
-        
-        GC.SuppressFinalize(this);
     }
 }

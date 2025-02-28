@@ -4,19 +4,14 @@ using Microsoft.EntityFrameworkCore;
 namespace CommonLibrary.Data;
 
 /// <summary>
-/// 包裹数据库上下文
+///     包裹数据库上下文
 /// </summary>
 public class PackageDbContext : DbContext
 {
     private readonly DateTime _date;
-    
-    /// <summary>
-    /// 包裹数据
-    /// </summary>
-    public DbSet<PackageRecord> Packages { get; set; } = null!;
 
     /// <summary>
-    /// 构造函数
+    ///     构造函数
     /// </summary>
     public PackageDbContext(DbContextOptions<PackageDbContext> options, DateTime? date = null) : base(options)
     {
@@ -24,12 +19,17 @@ public class PackageDbContext : DbContext
     }
 
     /// <summary>
-    /// 配置模型
+    ///     包裹数据
+    /// </summary>
+    public DbSet<PackageRecord> Packages { get; set; } = null!;
+
+    /// <summary>
+    ///     配置模型
     /// </summary>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         var tableName = $"Packages_{_date:yyyyMMdd}";
-        
+
         modelBuilder.Entity<PackageRecord>(entity =>
         {
             entity.ToTable(tableName);
@@ -56,4 +56,4 @@ public class PackageDbContext : DbContext
 
         base.OnModelCreating(modelBuilder);
     }
-} 
+}

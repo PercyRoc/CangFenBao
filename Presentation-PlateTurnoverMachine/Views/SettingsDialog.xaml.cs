@@ -1,7 +1,7 @@
 ﻿using System.Windows;
 using System.Windows.Input;
-using Presentation_PlateTurnoverMachine.Views.Settings;
 using Presentation_CommonLibrary.Services;
+using Presentation_PlateTurnoverMachine.Views.Settings;
 using Serilog;
 
 namespace Presentation_PlateTurnoverMachine.Views;
@@ -11,7 +11,7 @@ public partial class SettingsDialog
     public SettingsDialog(INotificationService notificationService)
     {
         InitializeComponent();
-        
+
         notificationService.Register("SettingWindowGrowl", GrowlPanel);
 
         // 在窗口加载完成后设置服务提供程序并导航
@@ -25,10 +25,7 @@ public partial class SettingsDialog
         try
         {
             // 当在标题栏区域按下左键时允许拖动窗口
-            if (e.ChangedButton == MouseButton.Left && e.GetPosition(this).Y <= 32)
-            {
-                DragMove();
-            }
+            if (e.ChangedButton == MouseButton.Left && e.GetPosition(this).Y <= 32) DragMove();
         }
         catch (Exception ex)
         {

@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+
 <Page x:Class="Presentation_XinBeiYang.Views.Settings.HostSettingsView"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -11,20 +12,20 @@
       d:DataContext="{d:DesignInstance Type=settings:HostSettingsViewModel}"
       mc:Ignorable="d"
       Title="主机设置">
-    
+
     <ScrollViewer>
         <StackPanel Margin="16">
             <TextBlock Text="主机设置"
-                      HorizontalAlignment="Center"
-                      Style="{DynamicResource SubtitleTextBlockStyle}"
-                      Margin="0,0,0,16" />
+                       HorizontalAlignment="Center"
+                       Style="{DynamicResource SubtitleTextBlockStyle}"
+                       Margin="0,0,0,16" />
 
             <!-- 主机配置卡片 -->
             <ui:Card>
                 <StackPanel Margin="16">
                     <TextBlock Text="基本配置"
-                             Style="{DynamicResource SubtitleTextBlockStyle}"
-                             Margin="0,0,0,16"/>
+                               Style="{DynamicResource SubtitleTextBlockStyle}"
+                               Margin="0,0,0,16" />
 
                     <!-- IP地址 -->
                     <Grid Margin="0,0,0,8">
@@ -34,14 +35,14 @@
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Text="IP地址："
-                                 Grid.Column="0"
-                                 VerticalAlignment="Center"
-                                 HorizontalAlignment="Right"
-                                 Margin="0,0,8,0" />
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
                         <ui:TextBox Grid.Column="1"
-                                  Text="{Binding Configuration.IpAddress, UpdateSourceTrigger=PropertyChanged}"
-                                  PlaceholderText="请输入IP地址" />
+                                    Text="{Binding Configuration.IpAddress, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="请输入IP地址" />
                     </Grid>
 
                     <!-- 端口号 -->
@@ -52,19 +53,19 @@
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Text="端口号："
-                                 Grid.Column="0"
-                                 VerticalAlignment="Center"
-                                 HorizontalAlignment="Right"
-                                 Margin="0,0,8,0" />
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
                         <ui:NumberBox Grid.Column="1"
-                                    Width="120"
-                                    HorizontalAlignment="Left"
-                                    ClearButtonEnabled="False"
-                                    Value="{Binding Configuration.Port, UpdateSourceTrigger=PropertyChanged}" />
+                                      Width="120"
+                                      HorizontalAlignment="Left"
+                                      ClearButtonEnabled="False"
+                                      Value="{Binding Configuration.Port, UpdateSourceTrigger=PropertyChanged}" />
                     </Grid>
                 </StackPanel>
             </ui:Card>
         </StackPanel>
     </ScrollViewer>
-</Page> 
+</Page>

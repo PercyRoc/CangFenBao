@@ -12,10 +12,10 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
 {
     // 保存各个设置页面的ViewModel实例
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
+    private readonly ChuteSettingsViewModel _chuteSettingsViewModel;
     private readonly INotificationService _notificationService;
     private readonly SortSettingsViewModel _sortSettingsViewModel;
     private readonly UploadSettingsViewModel _uploadSettingsViewModel;
-    private readonly ChuteSettingsViewModel _chuteSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,

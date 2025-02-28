@@ -11,8 +11,8 @@ namespace Presentation_SangNeng.ViewModels.Settings;
 
 public class WeightSettingsViewModel : BindableBase
 {
-    private readonly ISettingsService _settingsService;
     private readonly INotificationService _notificationService;
+    private readonly ISettingsService _settingsService;
     private WeightSettings? _configuration;
 
     public WeightSettingsViewModel(
@@ -27,7 +27,7 @@ public class WeightSettingsViewModel : BindableBase
 
         // 加载配置
         LoadSettings();
-        
+
         // 初始化可用串口
         ExecuteRefreshPorts();
     }
@@ -54,20 +54,16 @@ public class WeightSettingsViewModel : BindableBase
         {
             PortNames.Clear();
             var ports = SerialPort.GetPortNames();
-            foreach (var port in ports)
-            {
-                PortNames.Add(port);
-            }
+            foreach (var port in ports) PortNames.Add(port);
 
             if (PortNames.Count == 0)
-            {
                 _notificationService.ShowWarningWithToken("No available serial ports found", "SettingWindowGrowl");
-            }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to refresh serial ports");
-            _notificationService.ShowErrorWithToken($"Failed to refresh serial ports: {ex.Message}", "SettingWindowGrowl");
+            _notificationService.ShowErrorWithToken($"Failed to refresh serial ports: {ex.Message}",
+                "SettingWindowGrowl");
         }
     }
 
@@ -81,4 +77,4 @@ public class WeightSettingsViewModel : BindableBase
     {
         Configuration = _settingsService.LoadConfiguration<WeightSettings>();
     }
-} 
+}

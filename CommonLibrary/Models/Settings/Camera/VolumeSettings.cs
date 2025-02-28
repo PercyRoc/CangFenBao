@@ -1,5 +1,3 @@
-using CommonLibrary.Models.Settings.Camera.Enums;
-
 namespace CommonLibrary.Models.Settings.Camera;
 
 /// <summary>
@@ -17,4 +15,4 @@ public class VolumeSettings : CameraSettings
     ///     超时时间（毫秒）
     /// </summary>
     public int TimeoutMs { get; set; } = 5000;
-} 
+}

@@ -1,20 +1,20 @@
 namespace Presentation_XinBeiYang.Models.Communication.Packets;
 
 /// <summary>
-/// 设备状态数据包
+///     设备状态数据包
 /// </summary>
 public class DeviceStatusPacket : PlcPacket
 {
-    /// <summary>
-    /// 设备状态码
-    /// </summary>
-    public DeviceStatusCode StatusCode { get; }
-
     public DeviceStatusPacket(ushort commandId, DeviceStatusCode statusCode)
         : base(CommandType.DeviceStatus, commandId)
     {
         StatusCode = statusCode;
     }
+
+    /// <summary>
+    ///     设备状态码
+    /// </summary>
+    public DeviceStatusCode StatusCode { get; }
 
     protected override byte[] GetMessageBody()
     {
@@ -29,7 +29,7 @@ public class DeviceStatusPacket : PlcPacket
 }
 
 /// <summary>
-/// 设备状态应答数据包
+///     设备状态应答数据包
 /// </summary>
 public class DeviceStatusAckPacket : PlcPacket
 {
@@ -42,4 +42,4 @@ public class DeviceStatusAckPacket : PlcPacket
     {
         return null;
     }
-} 
+}

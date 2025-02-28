@@ -1,12 +1,12 @@
-using Microsoft.Extensions.Hosting;
 using CommonLibrary.Services;
+using Microsoft.Extensions.Hosting;
 using Presentation_XinBeiYang.Models;
 using Serilog;
 
 namespace Presentation_XinBeiYang.Services;
 
 /// <summary>
-/// PLC通讯托管服务
+///     PLC通讯托管服务
 /// </summary>
 public class PlcCommunicationHostedService(
     IPlcCommunicationService plcCommunicationService,
@@ -24,7 +24,7 @@ public class PlcCommunicationHostedService(
         {
             // 加载配置
             _configuration = settingsService.LoadConfiguration<HostConfiguration>();
-            
+
             while (await _timer.WaitForNextTickAsync(stoppingToken))
             {
                 // 每次循环重新加载配置，确保使用最新配置
@@ -32,11 +32,9 @@ public class PlcCommunicationHostedService(
 
                 // 如果未连接，尝试连接
                 if (!plcCommunicationService.IsConnected)
-                {
                     await plcCommunicationService.ConnectAsync(
                         _configuration.IpAddress,
                         _configuration.Port);
-                }
             }
         }
         catch (OperationCanceledException)
@@ -50,10 +48,7 @@ public class PlcCommunicationHostedService(
         finally
         {
             // 确保在服务停止时断开连接
-            if (plcCommunicationService.IsConnected)
-            {
-                await plcCommunicationService.DisconnectAsync();
-            }
+            if (plcCommunicationService.IsConnected) await plcCommunicationService.DisconnectAsync();
         }
     }
 
@@ -64,10 +59,7 @@ public class PlcCommunicationHostedService(
         try
         {
             // 断开PLC连接
-            if (plcCommunicationService.IsConnected)
-            {
-                await plcCommunicationService.DisconnectAsync();
-            }
+            if (plcCommunicationService.IsConnected) await plcCommunicationService.DisconnectAsync();
         }
         catch (Exception ex)
         {
@@ -78,4 +70,4 @@ public class PlcCommunicationHostedService(
             await base.StopAsync(cancellationToken);
         }
     }
-} 
+}

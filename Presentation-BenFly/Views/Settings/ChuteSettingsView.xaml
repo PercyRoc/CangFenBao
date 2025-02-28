@@ -14,16 +14,16 @@
     <ScrollViewer>
         <StackPanel MaxWidth="800" Margin="16">
             <TextBlock Text="格口设置"
-                      Style="{DynamicResource SubtitleTextBlockStyle}"
-                      HorizontalAlignment="Center"
-                      Margin="0,0,0,16" />
+                       Style="{DynamicResource SubtitleTextBlockStyle}"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,16" />
 
             <!-- 格口设置 -->
             <ui:Card Margin="0,0,0,16">
                 <StackPanel Margin="16">
                     <TextBlock Text="基本设置"
-                              Style="{DynamicResource SubtitleTextBlockStyle}"
-                              Margin="0,0,0,16" />
+                               Style="{DynamicResource SubtitleTextBlockStyle}"
+                               Margin="0,0,0,16" />
 
                     <!-- 异常格口 -->
                     <Grid Margin="0,0,0,8">
@@ -33,16 +33,16 @@
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Text="异常格口："
-                                  Grid.Column="0"
-                                  VerticalAlignment="Center"
-                                  HorizontalAlignment="Right"
-                                  Margin="0,0,8,0" />
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
                         <ui:TextBox Grid.Column="1"
-                                   Text="{Binding Configuration.ExceptionChute, UpdateSourceTrigger=PropertyChanged}"
-                                   PlaceholderText="1-999"
-                                   Width="120"
-                                   HorizontalAlignment="Left" />
+                                    Text="{Binding Configuration.ExceptionChute, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="1-999"
+                                    Width="120"
+                                    HorizontalAlignment="Left" />
                     </Grid>
                 </StackPanel>
             </ui:Card>
@@ -51,8 +51,8 @@
             <ui:Card>
                 <StackPanel Margin="16">
                     <TextBlock Text="格口规则"
-                              Style="{DynamicResource SubtitleTextBlockStyle}"
-                              Margin="0,0,0,16" />
+                               Style="{DynamicResource SubtitleTextBlockStyle}"
+                               Margin="0,0,0,16" />
 
                     <!-- 工具栏 -->
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
@@ -91,32 +91,37 @@
                                 <GridViewColumn Header="格口号" Width="80">
                                     <GridViewColumn.CellTemplate>
                                         <DataTemplate>
-                                            <ui:TextBox Text="{Binding Chute, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="60"
-                                                       PlaceholderText="1-999" />
+                                            <ui:TextBox
+                                                Text="{Binding Chute, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                Width="60"
+                                                PlaceholderText="1-999" />
                                         </DataTemplate>
                                     </GridViewColumn.CellTemplate>
                                 </GridViewColumn>
                                 <GridViewColumn Header="一段码" Width="120">
                                     <GridViewColumn.CellTemplate>
                                         <DataTemplate>
-                                            <ui:TextBox Text="{Binding FirstSegment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                       Width="100" />
+                                            <ui:TextBox
+                                                Text="{Binding FirstSegment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                Width="100" />
                                         </DataTemplate>
                                     </GridViewColumn.CellTemplate>
                                 </GridViewColumn>
                                 <GridViewColumn Header="二段码" Width="120">
                                     <GridViewColumn.CellTemplate>
                                         <DataTemplate>
-                                            <ui:TextBox Text="{Binding SecondSegment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                       Width="200" />
+                                            <ui:TextBox
+                                                Text="{Binding SecondSegment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                Width="200" />
                                         </DataTemplate>
                                     </GridViewColumn.CellTemplate>
                                 </GridViewColumn>
                                 <GridViewColumn Header="三段码" Width="120">
                                     <GridViewColumn.CellTemplate>
                                         <DataTemplate>
-                                            <ui:TextBox Text="{Binding ThirdSegment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                       Width="100" />
+                                            <ui:TextBox
+                                                Text="{Binding ThirdSegment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                Width="100" />
                                         </DataTemplate>
                                     </GridViewColumn.CellTemplate>
                                 </GridViewColumn>
@@ -124,8 +129,8 @@
                                     <GridViewColumn.CellTemplate>
                                         <DataTemplate>
                                             <ui:Button Appearance="Danger"
-                                                      Command="{Binding DataContext.DeleteRuleCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                      CommandParameter="{Binding}">
+                                                       Command="{Binding DataContext.DeleteRuleCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                       CommandParameter="{Binding}">
                                                 <ui:SymbolIcon Symbol="Delete24" />
                                             </ui:Button>
                                         </DataTemplate>
@@ -138,4 +143,4 @@
             </ui:Card>
         </StackPanel>
     </ScrollViewer>
-</Page> 
+</Page>

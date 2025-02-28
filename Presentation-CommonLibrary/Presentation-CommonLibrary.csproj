@@ -28,11 +28,11 @@
 
     <ItemGroup>
         <Folder Include="Resources\Styles\"/>
-        <Folder Include="Views\" />
+        <Folder Include="Views\"/>
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\CommonLibrary\CommonLibrary.csproj" />
+        <ProjectReference Include="..\CommonLibrary\CommonLibrary.csproj"/>
     </ItemGroup>
 
 </Project>

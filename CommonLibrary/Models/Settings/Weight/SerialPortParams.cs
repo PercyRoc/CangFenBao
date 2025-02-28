@@ -31,4 +31,4 @@ public class SerialPortParams
     ///     校验位
     /// </summary>
     public Parity Parity { get; set; } = Parity.None;
-} 
+}

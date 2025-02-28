@@ -10,33 +10,33 @@
       d:DataContext="{d:DesignInstance Type=settings:PalletSettingsViewModel}"
       Title="Pallet Settings"
       prism:ViewModelLocator.AutoWireViewModel="True">
-    
+
     <Grid>
         <ScrollViewer HorizontalScrollBarVisibility="Disabled"
-                     VerticalScrollBarVisibility="Auto">
-            <Grid MaxWidth="800" 
+                      VerticalScrollBarVisibility="Auto">
+            <Grid MaxWidth="800"
                   Margin="16">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <!-- Header -->
                 <DockPanel Grid.Row="0" Margin="0,0,0,16">
                     <StackPanel Orientation="Horizontal">
-                        <ui:SymbolIcon Symbol="BoxMultiple24" 
-                                      Margin="0,0,8,0"
-                                      VerticalAlignment="Center"/>
+                        <ui:SymbolIcon Symbol="BoxMultiple24"
+                                       Margin="0,0,8,0"
+                                       VerticalAlignment="Center" />
                         <TextBlock Text="Pallet Settings"
-                                 FontSize="20"
-                                 FontWeight="SemiBold"
-                                 VerticalAlignment="Center"/>
+                                   FontSize="20"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center" />
                         <Button Command="{Binding AddPalletCommand}"
                                 Content="Add Pallet"
                                 Style="{StaticResource ButtonPrimary}"
                                 Margin="16,0,0,0"
-                                VerticalAlignment="Center"/>
+                                VerticalAlignment="Center" />
                     </StackPanel>
                 </DockPanel>
 
@@ -44,87 +44,88 @@
                 <ItemsControl Grid.Row="1" ItemsSource="{Binding Pallets}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Border Margin="0,0,0,16" 
+                            <Border Margin="0,0,0,16"
                                     BorderThickness="1"
                                     BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
                                     CornerRadius="8"
                                     Padding="16">
                                 <Grid>
                                     <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
 
                                     <!-- Header -->
                                     <DockPanel Grid.Row="0" Margin="0,0,0,16">
                                         <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
                                                  FontSize="16"
-                                                 FontWeight="SemiBold"/>
-                                        <Button Command="{Binding DataContext.RemovePalletCommand, 
+                                                 FontWeight="SemiBold" />
+                                        <Button
+                                            Command="{Binding DataContext.RemovePalletCommand, 
                                                   RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                CommandParameter="{Binding}"
-                                                Content="Remove"
-                                                Style="{StaticResource ButtonDanger}"
-                                                HorizontalAlignment="Right"/>
+                                            CommandParameter="{Binding}"
+                                            Content="Remove"
+                                            Style="{StaticResource ButtonDanger}"
+                                            HorizontalAlignment="Right" />
                                     </DockPanel>
 
                                     <!-- Properties -->
                                     <UniformGrid Grid.Row="1" Columns="2" Rows="2">
                                         <DockPanel Margin="0,8,8,8">
-                                            <TextBlock Text="Weight (kg): " 
-                                                     Width="80"
-                                                     VerticalAlignment="Center"/>
+                                            <TextBlock Text="Weight (kg): "
+                                                       Width="80"
+                                                       VerticalAlignment="Center" />
                                             <ui:NumberBox Value="{Binding Weight, UpdateSourceTrigger=PropertyChanged}"
-                                                         Width="200"
-                                                         Minimum="0"
-                                                         Maximum="999999"
-                                                         AcceptsExpression="False"
-                                                         ClearButtonEnabled="False"
-                                                         SpinButtonPlacementMode="Hidden"
-                                                         PlaceholderText="0.000"
-                                                         VerticalAlignment="Center"/>
+                                                          Width="200"
+                                                          Minimum="0"
+                                                          Maximum="999999"
+                                                          AcceptsExpression="False"
+                                                          ClearButtonEnabled="False"
+                                                          SpinButtonPlacementMode="Hidden"
+                                                          PlaceholderText="0.000"
+                                                          VerticalAlignment="Center" />
                                         </DockPanel>
                                         <DockPanel Margin="8,8,0,8">
-                                            <TextBlock Text="Length (cm): " 
-                                                     Width="80"
-                                                     VerticalAlignment="Center"/>
+                                            <TextBlock Text="Length (cm): "
+                                                       Width="80"
+                                                       VerticalAlignment="Center" />
                                             <ui:NumberBox Value="{Binding Length, UpdateSourceTrigger=PropertyChanged}"
-                                                         Width="200"
-                                                         Minimum="0"
-                                                         Maximum="999999"
-                                                         AcceptsExpression="False"
-                                                         ClearButtonEnabled="False"
-                                                         SpinButtonPlacementMode="Hidden"
-                                                         PlaceholderText="0.0"
-                                                         VerticalAlignment="Center"/>
+                                                          Width="200"
+                                                          Minimum="0"
+                                                          Maximum="999999"
+                                                          AcceptsExpression="False"
+                                                          ClearButtonEnabled="False"
+                                                          SpinButtonPlacementMode="Hidden"
+                                                          PlaceholderText="0.0"
+                                                          VerticalAlignment="Center" />
                                         </DockPanel>
                                         <DockPanel Margin="0,8,8,8">
-                                            <TextBlock Text="Width (cm): " 
-                                                     Width="80"
-                                                     VerticalAlignment="Center"/>
+                                            <TextBlock Text="Width (cm): "
+                                                       Width="80"
+                                                       VerticalAlignment="Center" />
                                             <ui:NumberBox Value="{Binding Width, UpdateSourceTrigger=PropertyChanged}"
-                                                         Width="200"
-                                                         Minimum="0"
-                                                         Maximum="999999"
-                                                         AcceptsExpression="False"
-                                                         ClearButtonEnabled="False"
-                                                         SpinButtonPlacementMode="Hidden"
-                                                         PlaceholderText="0.0"
-                                                         VerticalAlignment="Center"/>
+                                                          Width="200"
+                                                          Minimum="0"
+                                                          Maximum="999999"
+                                                          AcceptsExpression="False"
+                                                          ClearButtonEnabled="False"
+                                                          SpinButtonPlacementMode="Hidden"
+                                                          PlaceholderText="0.0"
+                                                          VerticalAlignment="Center" />
                                         </DockPanel>
                                         <DockPanel Margin="8,8,0,8">
-                                            <TextBlock Text="Height (cm): " 
-                                                     Width="80"
-                                                     VerticalAlignment="Center"/>
+                                            <TextBlock Text="Height (cm): "
+                                                       Width="80"
+                                                       VerticalAlignment="Center" />
                                             <ui:NumberBox Value="{Binding Height, UpdateSourceTrigger=PropertyChanged}"
-                                                         Width="200"
-                                                         Minimum="0"
-                                                         Maximum="999999"
-                                                         AcceptsExpression="False"
-                                                         ClearButtonEnabled="False"
-                                                         SpinButtonPlacementMode="Hidden"
-                                                         PlaceholderText="0.0"
-                                                         VerticalAlignment="Center"/>
+                                                          Width="200"
+                                                          Minimum="0"
+                                                          Maximum="999999"
+                                                          AcceptsExpression="False"
+                                                          ClearButtonEnabled="False"
+                                                          SpinButtonPlacementMode="Hidden"
+                                                          PlaceholderText="0.0"
+                                                          VerticalAlignment="Center" />
                                         </DockPanel>
                                     </UniformGrid>
                                 </Grid>
@@ -134,12 +135,11 @@
                 </ItemsControl>
 
                 <!-- Buttons -->
-                <StackPanel Grid.Row="2" 
-                            Orientation="Horizontal" 
+                <StackPanel Grid.Row="2"
+                            Orientation="Horizontal"
                             HorizontalAlignment="Right"
-                            Margin="0,16,0,0">
-                </StackPanel>
+                            Margin="0,16,0,0" />
             </Grid>
         </ScrollViewer>
     </Grid>
-</Page> 
+</Page>

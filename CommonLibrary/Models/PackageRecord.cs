@@ -1,82 +1,82 @@
 namespace CommonLibrary.Models;
 
 /// <summary>
-/// 包裹记录
+///     包裹记录
 /// </summary>
 public class PackageRecord
 {
     /// <summary>
-    /// 主键ID
+    ///     主键ID
     /// </summary>
     public int Id { get; set; }
-    
+
     /// <summary>
-    /// 条码
+    ///     条码
     /// </summary>
     public string Barcode { get; set; } = string.Empty;
-    
+
     /// <summary>
-    /// 分段码
+    ///     分段码
     /// </summary>
     public string? SegmentCode { get; set; }
-    
+
     /// <summary>
-    /// 重量（千克）
+    ///     重量（千克）
     /// </summary>
     public float Weight { get; set; }
-    
+
     /// <summary>
-    /// 格口名称
+    ///     格口名称
     /// </summary>
     public int? ChuteName { get; set; }
-    
+
     /// <summary>
-    /// 创建时间
+    ///     创建时间
     /// </summary>
     public DateTime CreateTime { get; set; }
-    
+
     /// <summary>
-    /// 附加信息
+    ///     附加信息
     /// </summary>
     public string? Information { get; set; }
-    
+
     /// <summary>
-    /// 错误信息
+    ///     错误信息
     /// </summary>
     public string? ErrorMessage { get; set; }
 
     /// <summary>
-    /// 长度（毫米）
+    ///     长度（毫米）
     /// </summary>
     public double? Length { get; set; }
 
     /// <summary>
-    /// 宽度（毫米）
+    ///     宽度（毫米）
     /// </summary>
     public double? Width { get; set; }
 
     /// <summary>
-    /// 高度（毫米）
+    ///     高度（毫米）
     /// </summary>
     public double? Height { get; set; }
 
     /// <summary>
-    /// 体积（立方毫米）
+    ///     体积（立方毫米）
     /// </summary>
     public double? Volume { get; set; }
-    
+
     /// <summary>
-    /// 处理状态
+    ///     处理状态
     /// </summary>
     public PackageStatus Status { get; set; }
 
     /// <summary>
-    /// 图片路径
+    ///     图片路径
     /// </summary>
     public string? ImagePath { get; set; }
 
     /// <summary>
-    /// 从包裹信息创建记录
+    ///     从包裹信息创建记录
     /// </summary>
     public static PackageRecord FromPackageInfo(PackageInfo info)
     {
@@ -97,4 +97,4 @@ public class PackageRecord
             ImagePath = info.ImagePath
         };
     }
-} 
+}

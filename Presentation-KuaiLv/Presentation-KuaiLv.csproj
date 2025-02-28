@@ -11,9 +11,9 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\CommonLibrary\CommonLibrary.csproj" />
-      <ProjectReference Include="..\DeviceService\DeviceService.csproj" />
-      <ProjectReference Include="..\Presentation-CommonLibrary\Presentation-CommonLibrary.csproj" />
+        <ProjectReference Include="..\CommonLibrary\CommonLibrary.csproj"/>
+        <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>
+        <ProjectReference Include="..\Presentation-CommonLibrary\Presentation-CommonLibrary.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -34,15 +34,15 @@
         <PackageReference Include="FluentFTP"/>
         <PackageReference Include="WPF-UI"/>
         <PackageReference Include="HandyControl"/>
-        <PackageReference Include="EPPlus" />
+        <PackageReference Include="EPPlus"/>
     </ItemGroup>
 
     <ItemGroup>
-      <Page Update="Views\MainWindow.xaml">
-        <Generator>MSBuild:Compile</Generator>
-        <XamlRuntime>Wpf</XamlRuntime>
-        <SubType>Designer</SubType>
-      </Page>
+        <Page Update="Views\MainWindow.xaml">
+            <Generator>MSBuild:Compile</Generator>
+            <XamlRuntime>Wpf</XamlRuntime>
+            <SubType>Designer</SubType>
+        </Page>
     </ItemGroup>
 
     <ItemGroup>

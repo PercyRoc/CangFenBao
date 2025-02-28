@@ -10,24 +10,20 @@ public enum ImageFormat
     /// <summary>
     ///     JPEG格式
     /// </summary>
-    [Description("JPEG")]
-    Jpeg,
+    [Description("JPEG")] Jpeg,
 
     /// <summary>
     ///     PNG格式
     /// </summary>
-    [Description("PNG")]
-    Png,
+    [Description("PNG")] Png,
 
     /// <summary>
     ///     BMP格式
     /// </summary>
-    [Description("BMP")]
-    Bmp,
+    [Description("BMP")] Bmp,
 
     /// <summary>
     ///     TIFF格式
     /// </summary>
-    [Description("TIFF")]
-    Tiff
-} 
+    [Description("TIFF")] Tiff
+}

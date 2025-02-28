@@ -41,9 +41,9 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\CommonLibrary\CommonLibrary.csproj" />
-      <ProjectReference Include="..\DeviceService\DeviceService.csproj" />
-      <ProjectReference Include="..\SortingService\SortingService.csproj" />
+        <ProjectReference Include="..\CommonLibrary\CommonLibrary.csproj"/>
+        <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>
+        <ProjectReference Include="..\SortingService\SortingService.csproj"/>
     </ItemGroup>
 
 
@@ -55,6 +55,6 @@
 
 
     <ItemGroup>
-      <Folder Include="Services\" />
+        <Folder Include="Services\"/>
     </ItemGroup>
 </Project>

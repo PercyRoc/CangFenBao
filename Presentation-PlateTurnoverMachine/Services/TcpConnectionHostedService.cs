@@ -1,12 +1,12 @@
-using Microsoft.Extensions.Hosting;
 using CommonLibrary.Services;
+using Microsoft.Extensions.Hosting;
 using Presentation_PlateTurnoverMachine.Models;
 using Serilog;
 
 namespace Presentation_PlateTurnoverMachine.Services;
 
 /// <summary>
-/// TCP连接托管服务
+///     TCP连接托管服务
 /// </summary>
 public class TcpConnectionHostedService(
     ITcpConnectionService tcpConnectionService,
@@ -24,7 +24,7 @@ public class TcpConnectionHostedService(
         {
             // 加载配置
             _settings = settingsService.LoadConfiguration<PlateTurnoverSettings>();
-            
+
             while (await _timer.WaitForNextTickAsync(stoppingToken))
             {
                 // 每次循环重新加载配置，确保使用最新配置
@@ -51,13 +51,12 @@ public class TcpConnectionHostedService(
                 Log.Warning("未能加载翻板机配置，跳过设备连接");
                 return;
             }
-            
+
             // 连接触发光电
-            var triggerConfig = new TcpConnectionConfig(_settings.TriggerPhotoelectricIp, _settings.TriggerPhotoelectricPort);
+            var triggerConfig =
+                new TcpConnectionConfig(_settings.TriggerPhotoelectricIp, _settings.TriggerPhotoelectricPort);
             if (tcpConnectionService.TriggerPhotoelectricClient?.Connected != true)
-            {
                 await tcpConnectionService.ConnectTriggerPhotoelectricAsync(triggerConfig);
-            }
 
             // 连接TCP模块
             var tcpConfigs = _settings.Items
@@ -74,13 +73,10 @@ public class TcpConnectionHostedService(
 
             var disconnectedConfigs = tcpConfigs
                 .Where(config => !tcpConnectionService.TcpModuleClients.ContainsKey(config) ||
-                               !tcpConnectionService.TcpModuleClients[config].Connected)
+                                 !tcpConnectionService.TcpModuleClients[config].Connected)
                 .ToList();
 
-            if (disconnectedConfigs.Count != 0)
-            {
-                await tcpConnectionService.ConnectTcpModulesAsync(disconnectedConfigs);
-            }
+            if (disconnectedConfigs.Count != 0) await tcpConnectionService.ConnectTcpModulesAsync(disconnectedConfigs);
         }
         catch (Exception ex)
         {
@@ -94,4 +90,4 @@ public class TcpConnectionHostedService(
         _timer.Dispose();
         await base.StopAsync(cancellationToken);
     }
-} 
+}

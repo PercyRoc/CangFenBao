@@ -10,11 +10,11 @@ using Serilog;
 
 namespace Presentation_XinBeiYang.ViewModels.Settings;
 
-public class CameraSettingsViewModel: BindableBase
+public class CameraSettingsViewModel : BindableBase
 {
-    private readonly ISettingsService _settingsService;
     private readonly CameraFactory _cameraFactory;
     private readonly INotificationService _notificationService;
+    private readonly ISettingsService _settingsService;
     private CameraSettings _configuration = new();
     private bool _isRefreshing;
 
@@ -27,7 +27,8 @@ public class CameraSettingsViewModel: BindableBase
         _cameraFactory = cameraFactory;
         _notificationService = notificationService;
 
-        RefreshCameraListCommand = new DelegateCommand(() => {
+        RefreshCameraListCommand = new DelegateCommand(() =>
+        {
             var task = ExecuteRefreshCameraList();
             task.ContinueWith(t =>
             {
@@ -68,10 +69,10 @@ public class CameraSettingsViewModel: BindableBase
         try
         {
             Log.Information("开始刷新相机列表，当前选择的厂商：{Manufacturer}", Configuration.Manufacturer);
-            
+
             // 创建相机服务
             await using var cameraService = _cameraFactory.CreateCameraByManufacturer(Configuration.Manufacturer);
-            
+
             // 获取相机列表
             var cameraInfos = cameraService.GetCameraInfos();
             if (cameraInfos == null)
@@ -89,13 +90,9 @@ public class CameraSettingsViewModel: BindableBase
             }
 
             if (AvailableCameras.Count == 0)
-            {
                 _notificationService.ShowWarningWithToken("未找到可用的相机", "SettingWindowGrowl");
-            }
             else
-            {
                 _notificationService.ShowSuccessWithToken($"已找到 {AvailableCameras.Count} 个相机", "SettingWindowGrowl");
-            }
         }
         catch (Exception ex)
         {
@@ -126,12 +123,9 @@ public class CameraSettingsViewModel: BindableBase
     private void LoadSettings()
     {
         Configuration = _settingsService.LoadConfiguration<CameraSettings>();
-        
+
         // 更新相机列表
         AvailableCameras.Clear();
-        foreach (var camera in Configuration.SelectedCameras)
-        {
-            AvailableCameras.Add(camera);
-        }
+        foreach (var camera in Configuration.SelectedCameras) AvailableCameras.Add(camera);
     }
 }

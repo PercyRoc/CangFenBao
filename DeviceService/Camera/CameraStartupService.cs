@@ -56,7 +56,7 @@ public class CameraStartupService(
         try
         {
             Log.Information("正在停止相机服务...");
-            
+
             if (_cameraService != null)
             {
                 try
@@ -64,7 +64,7 @@ public class CameraStartupService(
                     // 直接使用相机的StopAsync方法
                     var stopTask = _cameraService.StopAsync(10000); // 使用10秒超时
                     var timeoutTask = Task.Delay(11000, cancellationToken); // 额外给1秒缓冲时间
-                    
+
                     if (await Task.WhenAny(stopTask, timeoutTask) == timeoutTask)
                     {
                         Log.Warning("相机停止操作超时");
@@ -72,12 +72,9 @@ public class CameraStartupService(
                     else
                     {
                         var result = await stopTask;
-                        if (!result)
-                        {
-                            Log.Warning("相机停止操作未成功完成");
-                        }
+                        if (!result) Log.Warning("相机停止操作未成功完成");
                     }
-                    
+
                     // 异步释放资源
                     await _cameraService.DisposeAsync();
                 }
@@ -85,10 +82,10 @@ public class CameraStartupService(
                 {
                     Log.Error(ex, "停止相机服务时发生错误");
                 }
-                
+
                 _cameraService = null;
             }
-            
+
             Log.Information("相机服务已停止");
         }
         catch (Exception ex)

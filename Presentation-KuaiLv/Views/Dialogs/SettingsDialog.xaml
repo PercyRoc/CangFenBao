@@ -181,4 +181,4 @@
                     Margin="0,10,10,0"
                     Panel.ZIndex="1000" />
     </Grid>
-</ui:FluentWindow> 
+</ui:FluentWindow>

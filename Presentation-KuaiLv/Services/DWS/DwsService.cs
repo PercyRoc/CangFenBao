@@ -13,7 +13,7 @@ using Serilog;
 namespace Presentation_KuaiLv.Services.DWS;
 
 /// <summary>
-/// DWS服务实现
+///     DWS服务实现
 /// </summary>
 public class DwsService(
     HttpClient httpClient,
@@ -22,8 +22,8 @@ public class DwsService(
     IWarningLightService warningLightService)
     : IDwsService
 {
-    private int _failureCount;
     private const int MaxFailureCount = 5;
+    private int _failureCount;
 
     /// <inheritdoc />
     public async Task<DwsResponse> ReportPackageAsync(PackageInfo package)
@@ -32,7 +32,7 @@ public class DwsService(
         {
             // 加载配置
             var config = settingsService.LoadConfiguration<UploadConfiguration>();
-            
+
             // 构建请求数据
             var request = new DwsRequest
             {
@@ -180,4 +180,4 @@ public class DwsService(
             return new DwsResponse { Code = 500, Message = ex.Message };
         }
     }
-} 
+}

@@ -1,11 +1,15 @@
 using System.Collections.ObjectModel;
+using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
+using System.Reactive.Linq;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using CommonLibrary.Models;
 using CommonLibrary.Models.Settings.Camera;
+using CommonLibrary.Models.Settings.Camera.Enums;
 using CommonLibrary.Services;
 using DeviceService.Camera;
 using DeviceService.Camera.Hikvision;
@@ -15,52 +19,51 @@ using DeviceService.Weight;
 using Presentation_CommonLibrary.Models;
 using Presentation_CommonLibrary.Services;
 using Presentation_SangNeng.Events;
+using Presentation_SangNeng.ViewModels.Settings;
 using Prism.Commands;
+using Prism.Events;
 using Prism.Mvvm;
 using Serilog;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
-using System.Drawing;
-using System.Drawing.Drawing2D;
-using Presentation_SangNeng.ViewModels.Settings;
-using Prism.Events;
-using System.Reactive.Linq;
 using SixLabors.ImageSharp.Processing;
+using Color = System.Drawing.Color;
+using Timer = System.Timers.Timer;
 
 namespace Presentation_SangNeng.ViewModels.Windows;
 
 /// <summary>
-/// 主窗口视图模型
+///     主窗口视图模型
 /// </summary>
 public class MainWindowViewModel : BindableBase, IDisposable
 {
-    private readonly ICustomDialogService _dialogService;
-    private readonly IScannerService _scannerService;
-    private readonly RenJiaCameraService _volumeCamera;
-    private readonly ICameraService _cameraService;
-    private readonly IWeightService _weightService;
-    private readonly ISettingsService _settingsService;
-    private readonly IPackageDataService _packageDataService;
     private readonly IAudioService _audioService;
-    private readonly System.Timers.Timer _timer;
-    private bool _disposed;
-    private bool _hasPlayedErrorSound;
+    private readonly ICameraService _cameraService;
+    private readonly ICustomDialogService _dialogService;
+    private readonly SemaphoreSlim _measurementLock = new(1, 1);
+    private readonly IPackageDataService _packageDataService;
+    private readonly IScannerService _scannerService;
+    private readonly ISettingsService _settingsService;
+    private readonly Timer _timer;
+    private readonly RenJiaCameraService _volumeCamera;
+    private readonly IWeightService _weightService;
+    private ObservableCollection<SelectablePalletModel> _availablePallets;
     private string _currentBarcode = string.Empty;
     private ImageSource? _currentImage;
-    private ImageSource? _volumeImage;
-    private ObservableCollection<PackageInfoItem> _packageInfoItems = [];
-    private ObservableCollection<StatisticsItem> _statisticsItems = [];
-    private ObservableCollection<PackageInfo> _packageHistory = [];
-    private ObservableCollection<DeviceStatus> _deviceStatuses = [];
-    private SystemStatus _systemStatus = SystemStatus.GetCurrentStatus();
-    private readonly SemaphoreSlim _measurementLock = new(1, 1);
     private PackageInfo? _currentPackage;
+    private ObservableCollection<DeviceStatus> _deviceStatuses = [];
+    private bool _disposed;
+    private bool _hasPlayedErrorSound;
+    private ObservableCollection<PackageInfo> _packageHistory = [];
     private int _packageIndex = 1;
-    private ObservableCollection<SelectablePalletModel> _availablePallets;
+    private ObservableCollection<PackageInfoItem> _packageInfoItems = [];
     private SelectablePalletModel? _selectedPallet;
+    private ObservableCollection<StatisticsItem> _statisticsItems = [];
+    private SystemStatus _systemStatus = SystemStatus.GetCurrentStatus();
+    private ImageSource? _volumeImage;
 
     /// <summary>
-    /// 构造函数
+    ///     构造函数
     /// </summary>
     public MainWindowViewModel(
         ICustomDialogService dialogService,
@@ -101,7 +104,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _weightService.ConnectionChanged += OnWeightScaleConnectionChanged;
 
         // 启动系统状态更新定时器
-        _timer = new System.Timers.Timer(1000);
+        _timer = new Timer(1000);
         _timer.Elapsed += (_, _) => { SystemStatus = SystemStatus.GetCurrentStatus(); };
         _timer.Start();
 
@@ -130,7 +133,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         // 订阅海康相机图像流
         if (_cameraService is HikvisionIndustrialCameraSdkClient hikvisionCamera)
-        {
             hikvisionCamera.ImageStream
                 .Subscribe(imageData =>
                 {
@@ -143,7 +145,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         Log.Error(ex, "处理海康相机图像流数据时发生错误");
                     }
                 });
-        }
 
         _availablePallets = [];
 
@@ -154,6 +155,34 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         // Load available pallets
         LoadAvailablePallets();
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+
+        try
+        {
+            // 停止定时器
+            _timer.Stop();
+            _timer.Dispose();
+
+            // 取消事件订阅
+            _scannerService.BarcodeScanned -= OnBarcodeScanned;
+            _volumeCamera.ConnectionChanged -= OnVolumeCameraConnectionChanged;
+            _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
+            _weightService.ConnectionChanged -= OnWeightScaleConnectionChanged;
+
+            // 释放信号量
+            _measurementLock.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "释放资源时发生错误");
+        }
+
+        _disposed = true;
+        GC.SuppressFinalize(this);
     }
 
     private static void UpdateImageDisplay(Image<Rgba32> image, Action<BitmapSource> imageUpdater)
@@ -368,11 +397,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
                             // 计算实际重量（减去托盘重量）
                             var actualWeight = weight.Value / 1000;
                             if (SelectedPallet != null && SelectedPallet.Name != "noPallet")
-                            {
                                 actualWeight = Math.Max(0, actualWeight - SelectedPallet.Weight);
-                            }
                             _currentPackage.Weight = (float)actualWeight;
-                            
+
                             Application.Current.Dispatcher.Invoke(() =>
                             {
                                 var items = PackageInfoItems.ToList();
@@ -429,7 +456,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     // 更新体积（使用cm³作为单位）
                     _currentPackage.Volume = _currentPackage.Length * _currentPackage.Width * _currentPackage.Height;
                     // 显示尺寸（厘米）
-                    _currentPackage.VolumeDisplay = $"{_currentPackage.Length:F1}cm × {_currentPackage.Width:F1}cm × {_currentPackage.Height:F1}cm";
+                    _currentPackage.VolumeDisplay =
+                        $"{_currentPackage.Length:F1}cm × {_currentPackage.Width:F1}cm × {_currentPackage.Height:F1}cm";
 
                     // 播放成功音效
                     _ = _audioService.PlayPresetAsync(AudioType.Success);
@@ -439,7 +467,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 lock (imageLock)
                 {
                     if (capturedImage != null)
-                    {
                         try
                         {
                             var cameraSettings = _settingsService.LoadSettings<CameraSettings>("CameraSettings");
@@ -449,11 +476,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         {
                             Log.Error(ex, "保存图像到文件时发生错误");
                         }
-                    }
                     else
-                    {
                         Log.Warning("未能捕获到软触发图像");
-                    }
                 }
 
                 // 清理订阅
@@ -553,7 +577,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 _currentPackage.Width = result.Width / 10.0;
                 _currentPackage.Height = result.Height / 10.0;
                 _currentPackage.Volume = result.Length * result.Width * result.Height;
-                _currentPackage.VolumeDisplay = $"{_currentPackage.Length:F1}cm × {_currentPackage.Width:F1}cm × {_currentPackage.Height:F1}cm";
+                _currentPackage.VolumeDisplay =
+                    $"{_currentPackage.Length:F1}cm × {_currentPackage.Width:F1}cm × {_currentPackage.Height:F1}cm";
                 _currentPackage.Status = PackageStatus.MeasureSuccess;
             }
             finally
@@ -581,20 +606,17 @@ public class MainWindowViewModel : BindableBase, IDisposable
             await Task.Run(async () =>
             {
                 // 确保保存目录存在
-                if (!Directory.Exists(settings.ImageSavePath))
-                {
-                    Directory.CreateDirectory(settings.ImageSavePath);
-                }
+                if (!Directory.Exists(settings.ImageSavePath)) Directory.CreateDirectory(settings.ImageSavePath);
 
                 // 生成文件名（使用条码和时间戳）
                 var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff");
                 var fileName = $"{package.Barcode}_{timestamp}";
                 var extension = settings.ImageFormat switch
                 {
-                    CommonLibrary.Models.Settings.Camera.Enums.ImageFormat.Jpeg => ".jpg",
-                    CommonLibrary.Models.Settings.Camera.Enums.ImageFormat.Png => ".png",
-                    CommonLibrary.Models.Settings.Camera.Enums.ImageFormat.Bmp => ".bmp",
-                    CommonLibrary.Models.Settings.Camera.Enums.ImageFormat.Tiff => ".tiff",
+                    ImageFormat.Jpeg => ".jpg",
+                    ImageFormat.Png => ".png",
+                    ImageFormat.Bmp => ".bmp",
+                    ImageFormat.Tiff => ".tiff",
                     _ => ".jpg"
                 };
                 var filePath = Path.Combine(settings.ImageSavePath, fileName + extension);
@@ -611,7 +633,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 using (var bitmap = new Bitmap(tempFilePath))
                 using (var graphics = Graphics.FromImage(bitmap))
                 using (var font = new Font("Arial", 40))
-                using (var brush = new SolidBrush(System.Drawing.Color.Green))
+                using (var brush = new SolidBrush(Color.Green))
                 {
                     graphics.SmoothingMode = SmoothingMode.AntiAlias;
                     graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
@@ -750,10 +772,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         private set
         {
             if (_volumeImage == value) return;
-            if (SetProperty(ref _volumeImage, value))
-            {
-                Log.Debug("VolumeImage属性已更新");
-            }
+            if (SetProperty(ref _volumeImage, value)) Log.Debug("VolumeImage属性已更新");
         }
     }
 
@@ -790,7 +809,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     public ICommand OpenSettingsCommand { get; }
 
     /// <summary>
-    /// 打开历史记录窗口命令
+    ///     打开历史记录窗口命令
     /// </summary>
     public ICommand OpenHistoryWindowCommand { get; }
 
@@ -851,10 +870,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     private void ExecuteSelectPallet(SelectablePalletModel pallet)
     {
-        foreach (var availablePallet in AvailablePallets)
-        {
-            availablePallet.IsSelected = availablePallet == pallet;
-        }
+        foreach (var availablePallet in AvailablePallets) availablePallet.IsSelected = availablePallet == pallet;
 
         SelectedPallet = pallet;
     }
@@ -879,10 +895,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             AvailablePallets.Add(emptyPallet);
 
             // 添加配置的托盘
-            foreach (var pallet in palletSettings.Pallets)
-            {
-                AvailablePallets.Add(new SelectablePalletModel(pallet));
-            }
+            foreach (var pallet in palletSettings.Pallets) AvailablePallets.Add(new SelectablePalletModel(pallet));
 
             // 默认选择空托盘
             emptyPallet.IsSelected = true;
@@ -895,32 +908,4 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     #endregion
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-
-        try
-        {
-            // 停止定时器
-            _timer.Stop();
-            _timer.Dispose();
-
-            // 取消事件订阅
-            _scannerService.BarcodeScanned -= OnBarcodeScanned;
-            _volumeCamera.ConnectionChanged -= OnVolumeCameraConnectionChanged;
-            _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
-            _weightService.ConnectionChanged -= OnWeightScaleConnectionChanged;
-
-            // 释放信号量
-            _measurementLock.Dispose();
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "释放资源时发生错误");
-        }
-
-        _disposed = true;
-        GC.SuppressFinalize(this);
-    }
 }

@@ -20,4 +20,4 @@ public class HostConfiguration : BindableBase
         get => _port;
         set => SetProperty(ref _port, value);
     }
-} 
+}

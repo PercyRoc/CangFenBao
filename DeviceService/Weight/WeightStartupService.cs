@@ -1,7 +1,7 @@
-using Microsoft.Extensions.Hosting;
-using Presentation_CommonLibrary.Services;
 using CommonLibrary.Models.Settings.Weight;
 using CommonLibrary.Services;
+using Microsoft.Extensions.Hosting;
+using Presentation_CommonLibrary.Services;
 using Serilog;
 
 namespace DeviceService.Weight;
@@ -11,9 +11,9 @@ namespace DeviceService.Weight;
 /// </summary>
 public class WeightStartupService : IHostedService
 {
+    private readonly SemaphoreSlim _initLock = new(1, 1);
     private readonly INotificationService _notificationService;
     private readonly ISettingsService _settingsService;
-    private readonly SemaphoreSlim _initLock = new(1, 1);
     private IWeightService? _weightService;
 
     /// <summary>
@@ -92,11 +92,8 @@ public class WeightStartupService : IHostedService
                     // 先停止服务
                     var stopTask = _weightService.StopAsync();
                     await Task.WhenAny(stopTask, Task.Delay(3000, linkedCts.Token));
-                    
-                    if (!stopTask.IsCompleted)
-                    {
-                        Log.Warning("停止重量称服务超时");
-                    }
+
+                    if (!stopTask.IsCompleted) Log.Warning("停止重量称服务超时");
 
                     // 释放资源
                     await _weightService.DisposeAsync();
@@ -111,6 +108,7 @@ public class WeightStartupService : IHostedService
                     Log.Error(ex, "停止重量称服务时发生错误");
                 }
             }
+
             Log.Information("重量称服务已停止");
         }
         catch (Exception ex)
@@ -138,4 +136,4 @@ public class WeightStartupService : IHostedService
             _initLock.Release();
         }
     }
-} 
+}

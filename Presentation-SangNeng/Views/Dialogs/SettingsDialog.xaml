@@ -48,8 +48,7 @@
             <Border Grid.Column="0"
                     Width="48"
                     Height="32"
-                    Effect="{StaticResource IconGlowEffect}">
-            </Border>
+                    Effect="{StaticResource IconGlowEffect}" />
 
             <!-- Title -->
             <TextBlock Grid.Column="1"
@@ -109,7 +108,7 @@
                                 <x:Type Type="local:CameraSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
-                    
+
                         <ui:NavigationViewItem Content="Volume Settings"
                                                Tag="Volume">
                             <ui:NavigationViewItem.Icon>
@@ -119,7 +118,7 @@
                                 <x:Type Type="local:VolumeSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
-                    
+
                         <ui:NavigationViewItem Content="Weight Settings"
                                                Tag="Weight">
                             <ui:NavigationViewItem.Icon>
@@ -176,4 +175,4 @@
                     Margin="0,10,10,0"
                     Panel.ZIndex="1000" />
     </Grid>
-</ui:FluentWindow> 
+</ui:FluentWindow>

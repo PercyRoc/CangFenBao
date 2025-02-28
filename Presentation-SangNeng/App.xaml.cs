@@ -1,67 +1,69 @@
 ﻿using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using CommonLibrary.Extensions;
+using DeviceService;
+using DeviceService.Camera;
+using DeviceService.Scanner;
+using DeviceService.Weight;
+using HandyControl.Controls;
+using Presentation_CommonLibrary.Extensions;
 using Presentation_SangNeng.ViewModels.Dialogs;
 using Presentation_SangNeng.ViewModels.Settings;
 using Presentation_SangNeng.ViewModels.Windows;
 using Presentation_SangNeng.Views.Dialogs;
 using Presentation_SangNeng.Views.Settings;
 using Presentation_SangNeng.Views.Windows;
-using CommonLibrary.Extensions;
-using DeviceService;
-using DeviceService.Camera;
-using DeviceService.Scanner;
-using DeviceService.Weight;
-using Presentation_CommonLibrary.Extensions;
 using Prism.Ioc;
 using Serilog;
-using HandyControl.Controls;
-using System.Windows.Media;
+using Window = System.Windows.Window;
 
 namespace Presentation_SangNeng;
 
 /// <summary>
-/// 应用程序入口
+///     应用程序入口
 /// </summary>
 public partial class App
 {
     private CircleProgressBar? _loadingControl;
-    private System.Windows.Window? _loadingWindow;
+    private Window? _loadingWindow;
 
     /// <summary>
-    /// 创建主窗口
+    ///     创建主窗口
     /// </summary>
-    protected override System.Windows.Window CreateShell()
+    protected override Window CreateShell()
     {
         return Container.Resolve<MainWindow>();
     }
 
     /// <summary>
-    /// 注册服务
+    ///     注册服务
     /// </summary>
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
         // 注册通用服务
         containerRegistry.AddCommonServices();
         containerRegistry.AddPresentationCommonServices();
-        
+
         // 注册设备服务
-        containerRegistry.AddPhotoCamera()      // 拍照相机
-                        .AddVolumeCamera()      // 体积相机
-                        .AddScanner()           // 扫码枪
-                        .AddWeightScale();      // 重量称
-        
+        containerRegistry.AddPhotoCamera() // 拍照相机
+            .AddVolumeCamera() // 体积相机
+            .AddScanner() // 扫码枪
+            .AddWeightScale(); // 重量称
+
         // 注册窗口和ViewModel
         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
-        containerRegistry.Register<System.Windows.Window, SettingsDialog>("SettingsDialog");
+        containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
         containerRegistry.Register<SettingsDialogViewModel>();
-        containerRegistry.Register<System.Windows.Window, HistoryWindow>("HistoryWindow");
+        containerRegistry.Register<Window, HistoryWindow>("HistoryWindow");
         containerRegistry.Register<HistoryWindowViewModel>();
-        
+
         // 注册设置页面
         containerRegistry.Register<CameraSettingsView>();
         containerRegistry.Register<VolumeSettingsView>();
         containerRegistry.Register<WeightSettingsView>();
         containerRegistry.Register<PalletSettingsView>();
-        
+
         // 注册设置页面的ViewModel
         containerRegistry.Register<CameraSettingsViewModel>();
         containerRegistry.Register<VolumeSettingsViewModel>();
@@ -70,7 +72,7 @@ public partial class App
     }
 
     /// <summary>
-    /// 启动
+    ///     启动
     /// </summary>
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -87,7 +89,7 @@ public partial class App
         Log.Information("应用程序启动");
 
         // 在主线程创建和显示加载窗口
-        _loadingWindow = new System.Windows.Window
+        _loadingWindow = new Window
         {
             Title = "Starting...",
             WindowStartupLocation = WindowStartupLocation.CenterScreen,
@@ -101,15 +103,15 @@ public partial class App
             Topmost = true
         };
 
-        var grid = new System.Windows.Controls.Grid();
-        grid.Children.Add(new System.Windows.Controls.Border
+        var grid = new Grid();
+        grid.Children.Add(new Border
         {
             Background = new SolidColorBrush(Color.FromArgb(230, 255, 255, 255)),
             CornerRadius = new CornerRadius(8),
             Margin = new Thickness(0)
         });
 
-        var stackPanel = new System.Windows.Controls.StackPanel
+        var stackPanel = new StackPanel
         {
             Margin = new Thickness(20),
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -126,7 +128,7 @@ public partial class App
             Background = new SolidColorBrush(Color.FromArgb(50, 0, 122, 204))
         };
 
-        var textBlock = new System.Windows.Controls.TextBlock
+        var textBlock = new TextBlock
         {
             Text = "Initializing system...",
             Margin = new Thickness(0, 10, 0, 0),
@@ -155,7 +157,7 @@ public partial class App
                 ScannerStartupService scannerStartupService = null!;
                 WeightStartupService weightStartupService = null!;
 
-                await Application.Current.Dispatcher.InvokeAsync(() =>
+                await Current.Dispatcher.InvokeAsync(() =>
                 {
                     // 赋值已声明的变量
                     cameraStartupService = Container.Resolve<CameraStartupService>();
@@ -175,17 +177,17 @@ public partial class App
 
                 // 重点修复：扫码枪服务需要同步初始化
                 UpdateProgress("Initializing scanner...", 60);
-                await Application.Current.Dispatcher.InvokeAsync(() => 
+                await Current.Dispatcher.InvokeAsync(() =>
                 {
                     scannerStartupService.StartAsync(CancellationToken.None).Wait();
                 });
-                
+
                 UpdateProgress("Initializing weight scale...", 80);
                 await weightStartupService.StartAsync(CancellationToken.None);
 
                 UpdateProgress("Initialization complete", 100);
                 Log.Information("托管服务启动成功");
-            }   
+            }
             catch (Exception ex)
             {
                 Log.Error(ex, "启动托管服务时发生错误");
@@ -194,13 +196,14 @@ public partial class App
             finally
             {
                 // 关闭加载窗口
-                await Application.Current.Dispatcher.InvokeAsync(() =>
+                await Current.Dispatcher.InvokeAsync(() =>
                 {
                     if (_loadingWindow != null)
                     {
                         _loadingWindow.Close();
                         _loadingWindow = null;
                     }
+
                     _loadingControl = null;
                 });
             }
@@ -213,12 +216,9 @@ public partial class App
 
         Current.Dispatcher.Invoke(() =>
         {
-            if (_loadingWindow.Content is not System.Windows.Controls.Grid grid ||
-                grid.Children[1] is not System.Windows.Controls.StackPanel stackPanel) return;
-            if (stackPanel.Children[1] is System.Windows.Controls.TextBlock textBlock)
-            {
-                textBlock.Text = message;
-            }
+            if (_loadingWindow.Content is not Grid grid ||
+                grid.Children[1] is not StackPanel stackPanel) return;
+            if (stackPanel.Children[1] is TextBlock textBlock) textBlock.Text = message;
             _loadingControl.Value = progress;
         });
 
@@ -227,7 +227,7 @@ public partial class App
     }
 
     /// <summary>
-    /// 退出
+    ///     退出
     /// </summary>
     protected override void OnExit(ExitEventArgs e)
     {
@@ -245,11 +245,11 @@ public partial class App
             weightStartupService.StopAsync(CancellationToken.None).Wait();
 
             // 释放相机工厂
-            if (Container.Resolve<CameraFactory>() is IAsyncDisposable cameraFactory) 
+            if (Container.Resolve<CameraFactory>() is IAsyncDisposable cameraFactory)
                 cameraFactory.DisposeAsync().AsTask().Wait();
 
             // 释放相机服务
-            if (Container.Resolve<ICameraService>() is IAsyncDisposable cameraService) 
+            if (Container.Resolve<ICameraService>() is IAsyncDisposable cameraService)
                 cameraService.DisposeAsync().AsTask().Wait();
 
             // 释放主窗口 ViewModel

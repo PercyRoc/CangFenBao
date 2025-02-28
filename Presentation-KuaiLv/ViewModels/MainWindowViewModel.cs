@@ -21,17 +21,17 @@ namespace Presentation_KuaiLv.ViewModels;
 
 public class MainWindowViewModel : BindableBase, IDisposable
 {
-    private readonly DispatcherTimer _timer;
     private readonly ICameraService _cameraService;
     private readonly ICustomDialogService _dialogService;
     private readonly IDwsService _dwsService;
-    private readonly IWarningLightService _warningLightService;
     private readonly List<IDisposable> _subscriptions = [];
-    private bool _disposed;
+    private readonly DispatcherTimer _timer;
+    private readonly IWarningLightService _warningLightService;
     private string _currentBarcode = string.Empty;
     private BitmapSource? _currentImage;
+    private int _currentPackageIndex;
+    private bool _disposed;
     private SystemStatus _systemStatus = new();
-    private int _currentPackageIndex = 0;
 
     public MainWindowViewModel(
         ICustomDialogService dialogService,
@@ -73,7 +73,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         // 订阅图像流
         if (_cameraService is DahuaCameraService dahuaCamera)
-        {
             _subscriptions.Add(dahuaCamera.ImageStream
                 .Subscribe(imageData =>
                 {
@@ -94,14 +93,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         Log.Error(ex, "处理大华相机图像流数据时发生错误");
                     }
                 }));
-        }
 
         // 订阅包裹流
         _subscriptions.Add(packageTransferService.PackageStream
-            .Subscribe(package =>
-            {
-                Application.Current.Dispatcher.BeginInvoke(() => OnPackageInfo(package));
-            }));
+            .Subscribe(package => { Application.Current.Dispatcher.BeginInvoke(() => OnPackageInfo(package)); }));
     }
 
     #region Properties
@@ -329,7 +324,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
         if (_disposed) return;
 
         if (disposing)
-        {
             try
             {
                 // 停止定时器
@@ -340,17 +334,13 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 _warningLightService.ConnectionChanged -= OnWarningLightConnectionChanged;
 
                 // 释放订阅
-                foreach (var subscription in _subscriptions)
-                {
-                    subscription.Dispose();
-                }
+                foreach (var subscription in _subscriptions) subscription.Dispose();
                 _subscriptions.Clear();
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "释放资源时发生错误");
             }
-        }
 
         _disposed = true;
     }

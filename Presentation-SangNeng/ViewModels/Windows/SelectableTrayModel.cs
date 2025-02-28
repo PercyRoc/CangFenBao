@@ -1,16 +1,16 @@
-using Prism.Mvvm;
 using Presentation_SangNeng.ViewModels.Settings;
+using Prism.Mvvm;
 
 namespace Presentation_SangNeng.ViewModels.Windows;
 
 public class SelectablePalletModel(PalletModel palletModel, bool isSelected = false) : BindableBase
 {
+    private double _height = palletModel.Height;
     private bool _isSelected = isSelected;
+    private double _length = palletModel.Length;
     private string _name = palletModel.Name;
     private double _weight = palletModel.Weight;
-    private double _length = palletModel.Length;
     private double _width = palletModel.Width;
-    private double _height = palletModel.Height;
 
     public bool IsSelected
     {
@@ -23,10 +23,7 @@ public class SelectablePalletModel(PalletModel palletModel, bool isSelected = fa
         get => _name;
         set
         {
-            if (SetProperty(ref _name, value))
-            {
-                palletModel.Name = value;
-            }
+            if (SetProperty(ref _name, value)) palletModel.Name = value;
         }
     }
 
@@ -35,10 +32,7 @@ public class SelectablePalletModel(PalletModel palletModel, bool isSelected = fa
         get => _weight;
         set
         {
-            if (SetProperty(ref _weight, value))
-            {
-                palletModel.Weight = value;
-            }
+            if (SetProperty(ref _weight, value)) palletModel.Weight = value;
         }
     }
 
@@ -47,10 +41,7 @@ public class SelectablePalletModel(PalletModel palletModel, bool isSelected = fa
         get => _length;
         set
         {
-            if (SetProperty(ref _length, value))
-            {
-                palletModel.Length = value;
-            }
+            if (SetProperty(ref _length, value)) palletModel.Length = value;
         }
     }
 
@@ -59,10 +50,7 @@ public class SelectablePalletModel(PalletModel palletModel, bool isSelected = fa
         get => _width;
         set
         {
-            if (SetProperty(ref _width, value))
-            {
-                palletModel.Width = value;
-            }
+            if (SetProperty(ref _width, value)) palletModel.Width = value;
         }
     }
 
@@ -71,10 +59,7 @@ public class SelectablePalletModel(PalletModel palletModel, bool isSelected = fa
         get => _height;
         set
         {
-            if (SetProperty(ref _height, value))
-            {
-                palletModel.Height = value;
-            }
+            if (SetProperty(ref _height, value)) palletModel.Height = value;
         }
     }
-} 
+}

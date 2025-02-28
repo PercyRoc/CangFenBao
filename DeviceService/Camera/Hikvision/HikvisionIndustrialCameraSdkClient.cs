@@ -1,5 +1,7 @@
-﻿using System.Reactive.Linq;
+﻿using System.Collections.Concurrent;
+using System.Reactive.Linq;
 using System.Reactive.Subjects;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
 using CommonLibrary.Models;
@@ -9,8 +11,6 @@ using MVIDCodeReaderNet;
 using Serilog;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
-using System.Runtime.CompilerServices;
-using System.Collections.Concurrent;
 
 namespace DeviceService.Camera.Hikvision;
 
@@ -19,19 +19,21 @@ namespace DeviceService.Camera.Hikvision;
 /// </summary>
 public class HikvisionIndustrialCameraSdkClient : ICameraService
 {
-    // 根据CPU核心数调整并发处理数量
-    private readonly int _maxConcurrentProcessing = Math.Max(2, Environment.ProcessorCount / 2);
-
-    // 添加帧率限制相关字段
-    private readonly int _targetFrameRate = 10; // 目标帧率：10fps
+    private const int MaxImagePoolSize = 10;
     private readonly TimeSpan _frameInterval; // 帧间隔时间
-    private DateTime _lastFrameTime = DateTime.MinValue; // 上一帧处理时间
     private readonly object _frameRateLock = new(); // 帧率控制锁
 
     // 保持委托的引用，防止被GC回收
     private readonly MVIDCodeReader.cbOutputdelegate _imageCallback;
     private readonly Channel<(IntPtr imageData, int imageSize)> _imageChannel;
-    private volatile bool _isChannelClosed;
+
+    // 添加图像对象池
+    private readonly ConcurrentQueue<Image<Rgba32>> _imagePool = new();
+
+    private readonly object _latestImageLock = new();
+
+    // 根据CPU核心数调整并发处理数量
+    private readonly int _maxConcurrentProcessing = Math.Max(2, Environment.ProcessorCount / 2);
 
     private readonly Subject<PackageInfo> _packageSubject = new();
     private readonly CancellationTokenSource _processingCancellation = new();
@@ -40,29 +42,29 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
     private readonly Subject<(Image<Rgba32> image, IReadOnlyList<BarcodeLocation> barcodes)>
         _realtimeImageSubject = new();
 
-    // 添加图像对象池
-    private readonly ConcurrentQueue<Image<Rgba32>> _imagePool = new();
-    private const int MaxImagePoolSize = 10;
-
-    // 添加最新图像缓存
-    private Image<Rgba32>? _latestImage;
-    private readonly object _latestImageLock = new();
-
     // 添加SDK调用锁
     private readonly object _sdkLock = new();
 
+    // 添加帧率限制相关字段
+    private readonly int _targetFrameRate = 10; // 目标帧率：10fps
+
+    // 添加相机配置字段
+    private CameraSettings _configuration = new();
+
     private MVIDCodeReader? _device;
+    private string? _deviceIdentifier;
     private MVIDCodeReader.MVID_CAMERA_INFO_LIST _deviceList;
     private GCHandle _imageCallbackHandle;
     private ushort _imageHeight;
     private ushort _imageWidth;
+    private volatile bool _isChannelClosed;
     private bool _isGrabbing;
+    private DateTime _lastFrameTime = DateTime.MinValue; // 上一帧处理时间
+
+    // 添加最新图像缓存
+    private Image<Rgba32>? _latestImage;
     private int _processingCount;
     private Task? _processingTask;
-    
-    // 添加相机配置字段
-    private CameraSettings _configuration = new();
-    private string? _deviceIdentifier;
 
     /// <summary>
     ///     初始化海康工业相机SDK客户端
@@ -83,7 +85,8 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
 
         // 计算帧间隔时间
         _frameInterval = TimeSpan.FromSeconds(1.0 / _targetFrameRate);
-        Log.Information("已设置帧率限制：{FrameRate}fps，帧间隔：{FrameInterval}ms", _targetFrameRate, _frameInterval.TotalMilliseconds);
+        Log.Information("已设置帧率限制：{FrameRate}fps，帧间隔：{FrameInterval}ms", _targetFrameRate,
+            _frameInterval.TotalMilliseconds);
 
         // 初始化回调委托并保持引用
         _imageCallback = (pstOutput, _) =>
@@ -159,7 +162,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
             {
                 Log.Warning("设备未连接，尝试重新连接...");
                 ConnectDeviceInternalAsync().GetAwaiter().GetResult();
-                
+
                 if (!IsConnected)
                 {
                     Log.Error("设备连接失败，无法开始采集");
@@ -194,7 +197,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
 
                     // 如果是调用顺序错误或句柄无效，尝试重新初始化
                     if (result == unchecked((int)0x80000003) || // MVID_CR_E_CALLORDER
-                        result == unchecked((int)0x80000000))   // MVID_CR_INVALID_HANDLE
+                        result == unchecked((int)0x80000000)) // MVID_CR_INVALID_HANDLE
                     {
                         Log.Information("检测到调用顺序错误或句柄无效，尝试重新初始化...");
                         StopGrabbingInternal();
@@ -209,10 +212,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
                 }
 
                 // 在重试之前等待一段时间
-                if (i < maxRetries)
-                {
-                    Thread.Sleep(1000 * i); // 递增等待时间
-                }
+                if (i < maxRetries) Thread.Sleep(1000 * i); // 递增等待时间
             }
 
             return false;
@@ -225,57 +225,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
     }
 
     /// <summary>
-    /// 执行软触发
-    /// </summary>
-    /// <returns>成功返回true，失败返回false</returns>
-    public bool ExecuteSoftTrigger()
-    {
-        Log.Debug("正在执行软触发...");
-
-        try
-        {
-            // 1. 检查设备状态
-            if (_device == null || !IsConnected)
-            {
-                Log.Error("设备未初始化或未连接，无法执行软触发");
-                return false;
-            }
-
-            // 2. 确保相机处于采集状态
-            if (!_isGrabbing)
-            {
-                Log.Warning("相机未处于采集状态，尝试启动采集...");
-                if (!Start())
-                {
-                    Log.Error("启动采集失败，无法执行软触发");
-                    return false;
-                }
-            }
-                
-            // 3. 执行软触发
-            lock (_sdkLock)
-            {
-                Log.Debug("发送软触发命令...");
-                var triggerResult = _device.MVID_CR_CAM_SetCommandValue_NET("TriggerSoftware");
-                if (triggerResult != MVIDCodeReader.MVID_CR_OK)
-                {
-                    Log.Error("软触发失败：{Error}", GetErrorMessage(triggerResult));
-                    return false;
-                }
-            }
-            
-            Log.Information("软触发命令发送成功");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "执行软触发时发生错误");
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// 异步停止相机采集
+    ///     异步停止相机采集
     /// </summary>
     /// <param name="timeoutMs">超时时间（毫秒）</param>
     /// <returns>操作是否成功</returns>
@@ -284,26 +234,20 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
         try
         {
             Log.Information("正在停止海康工业相机服务...");
-            
+
             // 1. 停止相机采集，先停止回调，避免后续写入通道
             if (_isGrabbing)
             {
                 Log.Debug("正在停止相机采集...");
                 var stopResult = StopGrabbingInternal();
-                if (!stopResult)
-                {
-                    Log.Warning("停止相机采集失败，但将继续执行清理操作");
-                }
+                if (!stopResult) Log.Warning("停止相机采集失败，但将继续执行清理操作");
             }
 
             // 1.1 取消注册回调
             Log.Debug("正在取消注册回调...");
             var unregisterResult = UnregisterCallbacks();
-            if (!unregisterResult)
-            {
-                Log.Warning("取消注册回调失败，但将继续执行清理操作");
-            }
-            
+            if (!unregisterResult) Log.Warning("取消注册回调失败，但将继续执行清理操作");
+
             // 2. 关闭图像通道，停止接收新图像
             if (!_isChannelClosed)
             {
@@ -311,11 +255,11 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
                 _imageChannel.Writer.Complete();
                 _isChannelClosed = true;
             }
-                
+
             // 3. 停止处理线程
             Log.Debug("正在停止处理线程...");
             _processingCancellation.Cancel();
-                
+
             // 4. 等待处理线程完成
             if (_processingTask != null)
             {
@@ -362,8 +306,207 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
         }
     }
 
+    public IEnumerable<DeviceCameraInfo>? GetCameraInfos()
+    {
+        try
+        {
+            // 枚举设备
+            var nRet = MVIDCodeReader.MVID_CR_CAM_EnumDevices_NET(ref _deviceList);
+            if (nRet != MVIDCodeReader.MVID_CR_OK)
+            {
+                Log.Error("枚举设备失败：{Error}", nRet);
+                return null;
+            }
+
+            if (_deviceList.nDeviceNum == 0)
+            {
+                Log.Warning("未发现任何相机");
+                return [];
+            }
+
+            // 转换为通用相机信息
+            var cameras = new List<DeviceCameraInfo>();
+            for (var i = 0; i < _deviceList.nDeviceNum; i++)
+            {
+                var deviceInfo = (MVIDCodeReader.MVID_CAMERA_INFO)Marshal.PtrToStructure(
+                    _deviceList.pstCamInfo[i],
+                    typeof(MVIDCodeReader.MVID_CAMERA_INFO))!;
+
+                var info = new DeviceCameraInfo
+                {
+                    SerialNumber = deviceInfo.chSerialNumber.Trim('\0'),
+                    Model = deviceInfo.chModelName.Trim('\0')
+                };
+
+                if (deviceInfo.nCamType == MVIDCodeReader.MVID_GIGE_CAM)
+                {
+                    info.IpAddress = deviceInfo.ToString()
+                        ?.Split(',')
+                        .FirstOrDefault(x => x.Contains("IP"))?.Split(':').LastOrDefault()?.Trim() ?? "Unknown";
+
+                    // 如果序列号为空，尝试使用MAC地址
+                    if (string.IsNullOrEmpty(info.SerialNumber))
+                    {
+                        var macAddress = deviceInfo.ToString()
+                            ?.Split(',')
+                            .FirstOrDefault(x => x.Contains("MAC"))?.Split(':').LastOrDefault()?.Trim();
+                        info.SerialNumber = !string.IsNullOrEmpty(macAddress) ? macAddress : deviceInfo.chSerialNumber;
+                        Log.Warning("相机序列号为空，使用MAC地址作为备选：{Mac}", macAddress);
+                    }
+
+                    info.MacAddress = deviceInfo.ToString()
+                                          ?.Split(',')
+                                          .FirstOrDefault(x => x.Contains("MAC"))?.Split(':').LastOrDefault()?.Trim() ??
+                                      deviceInfo.chSerialNumber;
+                }
+                else
+                {
+                    info.IpAddress = "USB";
+                    info.MacAddress = deviceInfo.chSerialNumber;
+                }
+
+                // 记录详细的设备信息
+                Log.Information("发现相机：{Model} (SN:{SerialNumber}, IP:{IP}, MAC:{MAC})",
+                    info.Model, info.SerialNumber, info.IpAddress, info.MacAddress);
+
+                cameras.Add(info);
+            }
+
+            Log.Information("发现 {Count} 台相机", cameras.Count);
+            return cameras;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "枚举海康工业相机失败");
+            return null;
+        }
+    }
+
+    public void UpdateConfiguration(CameraSettings config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+
+        LogAndReturn(() =>
+        {
+            _configuration = config;
+            _deviceIdentifier = config.SelectedCameras.FirstOrDefault()?.SerialNumber;
+
+            if (string.IsNullOrEmpty(_deviceIdentifier))
+            {
+                Log.Warning("未配置相机序列号");
+                return false;
+            }
+
+            Log.Information("更新相机配置，目标序列号：{SerialNumber}", _deviceIdentifier);
+
+            return true;
+        }, "相机配置更新成功", "更新相机配置失败");
+    }
+
     /// <summary>
-    /// 停止相机采集 (内部实现)
+    ///     异步释放资源
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            Log.Information("正在释放海康工业相机资源...");
+
+            // 1. 停止相机服务
+            await StopAsync();
+
+            // 2. 释放回调资源
+            if (_imageCallbackHandle.IsAllocated) _imageCallbackHandle.Free();
+
+            // 3. 释放其他资源
+            _processingCancellation.Dispose();
+            _processingSemaphore.Dispose();
+            _packageSubject.Dispose();
+            _realtimeImageSubject.Dispose();
+
+            // 确保通道已关闭
+            if (!_isChannelClosed)
+            {
+                _imageChannel.Writer.Complete();
+                _isChannelClosed = true;
+            }
+
+            // 4. 释放图像池和最新图像
+            while (_imagePool.TryDequeue(out var image)) image.Dispose();
+
+            lock (_latestImageLock)
+            {
+                _latestImage?.Dispose();
+                _latestImage = null;
+            }
+
+            // 5. 销毁设备句柄
+            if (_device != null)
+            {
+                SafeSdkCall(() => _device.MVID_CR_DestroyHandle_NET());
+                _device = null;
+            }
+
+            Log.Information("海康工业相机资源已释放完成");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "释放海康工业相机资源时发生错误");
+        }
+    }
+
+    /// <summary>
+    ///     执行软触发
+    /// </summary>
+    /// <returns>成功返回true，失败返回false</returns>
+    public bool ExecuteSoftTrigger()
+    {
+        Log.Debug("正在执行软触发...");
+
+        try
+        {
+            // 1. 检查设备状态
+            if (_device == null || !IsConnected)
+            {
+                Log.Error("设备未初始化或未连接，无法执行软触发");
+                return false;
+            }
+
+            // 2. 确保相机处于采集状态
+            if (!_isGrabbing)
+            {
+                Log.Warning("相机未处于采集状态，尝试启动采集...");
+                if (!Start())
+                {
+                    Log.Error("启动采集失败，无法执行软触发");
+                    return false;
+                }
+            }
+
+            // 3. 执行软触发
+            lock (_sdkLock)
+            {
+                Log.Debug("发送软触发命令...");
+                var triggerResult = _device.MVID_CR_CAM_SetCommandValue_NET("TriggerSoftware");
+                if (triggerResult != MVIDCodeReader.MVID_CR_OK)
+                {
+                    Log.Error("软触发失败：{Error}", GetErrorMessage(triggerResult));
+                    return false;
+                }
+            }
+
+            Log.Information("软触发命令发送成功");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "执行软触发时发生错误");
+            return false;
+        }
+    }
+
+    /// <summary>
+    ///     停止相机采集 (内部实现)
     /// </summary>
     private bool StopGrabbingInternal()
     {
@@ -425,7 +568,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
     }
 
     /// <summary>
-    /// 获取错误码对应的错误信息
+    ///     获取错误码对应的错误信息
     /// </summary>
     private static string GetErrorMessage(int errorCode)
     {
@@ -481,103 +624,6 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
         };
     }
 
-    public IEnumerable<DeviceCameraInfo>? GetCameraInfos()
-    {
-        try
-        {
-            // 枚举设备
-            var nRet = MVIDCodeReader.MVID_CR_CAM_EnumDevices_NET(ref _deviceList);
-            if (nRet != MVIDCodeReader.MVID_CR_OK)
-            {
-                Log.Error("枚举设备失败：{Error}", nRet);
-                return null;
-            }
-
-            if (_deviceList.nDeviceNum == 0)
-            {
-                Log.Warning("未发现任何相机");
-                return [];
-            }
-
-            // 转换为通用相机信息
-            var cameras = new List<DeviceCameraInfo>();
-            for (var i = 0; i < _deviceList.nDeviceNum; i++)
-            {
-                var deviceInfo = (MVIDCodeReader.MVID_CAMERA_INFO)Marshal.PtrToStructure(
-                    _deviceList.pstCamInfo[i],
-                    typeof(MVIDCodeReader.MVID_CAMERA_INFO))!;
-
-                var info = new DeviceCameraInfo
-                {
-                    SerialNumber = deviceInfo.chSerialNumber.Trim('\0'),
-                    Model = deviceInfo.chModelName.Trim('\0')
-                };
-
-                if (deviceInfo.nCamType == MVIDCodeReader.MVID_GIGE_CAM)
-                {
-                    info.IpAddress = deviceInfo.ToString()
-                        ?.Split(',')
-                        .FirstOrDefault(x => x.Contains("IP"))?.Split(':').LastOrDefault()?.Trim() ?? "Unknown";
-
-                    // 如果序列号为空，尝试使用MAC地址
-                    if (string.IsNullOrEmpty(info.SerialNumber))
-                    {
-                        var macAddress = deviceInfo.ToString()
-                            ?.Split(',')
-                            .FirstOrDefault(x => x.Contains("MAC"))?.Split(':').LastOrDefault()?.Trim();
-                        info.SerialNumber = !string.IsNullOrEmpty(macAddress) ? macAddress : deviceInfo.chSerialNumber;
-                        Log.Warning("相机序列号为空，使用MAC地址作为备选：{Mac}", macAddress);
-                    }
-
-                    info.MacAddress = deviceInfo.ToString()
-                        ?.Split(',')
-                        .FirstOrDefault(x => x.Contains("MAC"))?.Split(':').LastOrDefault()?.Trim() ??
-                        deviceInfo.chSerialNumber;
-                }
-                else
-                {
-                    info.IpAddress = "USB";
-                    info.MacAddress = deviceInfo.chSerialNumber;
-                }
-
-                // 记录详细的设备信息
-                Log.Information("发现相机：{Model} (SN:{SerialNumber}, IP:{IP}, MAC:{MAC})",
-                    info.Model, info.SerialNumber, info.IpAddress, info.MacAddress);
-
-                cameras.Add(info);
-            }
-
-            Log.Information("发现 {Count} 台相机", cameras.Count);
-            return cameras;
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "枚举海康工业相机失败");
-            return null;
-        }
-    }
-
-    public void UpdateConfiguration(CameraSettings config)
-    {
-        ArgumentNullException.ThrowIfNull(config);
-        
-        LogAndReturn(() =>
-        {
-            _configuration = config;
-            _deviceIdentifier = config.SelectedCameras.FirstOrDefault()?.SerialNumber;
-            
-            if (string.IsNullOrEmpty(_deviceIdentifier))
-            {
-                Log.Warning("未配置相机序列号");
-                return false;
-            }
-
-            Log.Information("更新相机配置，目标序列号：{SerialNumber}", _deviceIdentifier);
-
-            return true;
-        }, "相机配置更新成功", "更新相机配置失败");
-    }
-
     /// <summary>
     ///     启动图像处理线程
     /// </summary>
@@ -588,10 +634,10 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
             try
             {
                 while (!_processingCancellation.Token.IsCancellationRequested)
-                {
                     try
                     {
-                        var (imageData, imageSize) = await _imageChannel.Reader.ReadAsync(_processingCancellation.Token);
+                        var (imageData, imageSize) =
+                            await _imageChannel.Reader.ReadAsync(_processingCancellation.Token);
                         await ProcessImageDataAsync(imageData, imageSize);
                     }
                     catch (OperationCanceledException)
@@ -602,16 +648,13 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
                     {
                         // 处理通道中剩余的数据
                         while (_imageChannel.Reader.TryRead(out var item))
-                        {
                             await ProcessImageDataAsync(item.imageData, item.imageSize);
-                        }
                         break;
                     }
                     catch (Exception ex)
                     {
                         Log.Error(ex, "处理图像数据时发生错误");
                     }
-                }
             }
             finally
             {
@@ -646,7 +689,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
                     Log.Debug("信号量已释放或处理已取消，跳过处理");
                     return;
                 }
-                
+
                 await semaphore.WaitAsync(_processingCancellation.Token);
             }
             catch (ObjectDisposedException)
@@ -671,7 +714,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
 
             // 创建一个图像用于所有操作
             var image = CreateImageFromBuffer(imageData);
-            
+
             try
             {
                 // 更新最新图像缓存
@@ -690,7 +733,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
                     nWidth = _imageWidth,
                     nHeight = _imageHeight
                 };
-                
+
                 // 处理图像
                 ProcessWithParameters(image, procParam);
             }
@@ -705,10 +748,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
         {
             try
             {
-                if (semaphore?.CurrentCount < _maxConcurrentProcessing)
-                {
-                    semaphore.Release();
-                }
+                if (semaphore?.CurrentCount < _maxConcurrentProcessing) semaphore.Release();
             }
             catch (ObjectDisposedException)
             {
@@ -720,7 +760,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
     }
 
     /// <summary>
-    /// 使用指定参数处理图像
+    ///     使用指定参数处理图像
     /// </summary>
     private void ProcessWithParameters(Image<Rgba32> image, MVIDCodeReader.MVID_PROC_PARAM procParam)
     {
@@ -767,25 +807,22 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
     {
         try
         {
-            if (!ValidateImageData(pImageData, nImageSize))
-            {
-                return;
-            }
+            if (!ValidateImageData(pImageData, nImageSize)) return;
 
             // 帧率限制：检查是否应该处理当前帧
             lock (_frameRateLock)
             {
                 var now = DateTime.UtcNow;
                 var elapsed = now - _lastFrameTime;
-                
+
                 // 如果距离上一帧的时间小于帧间隔，则跳过当前帧
                 if (elapsed < _frameInterval)
                 {
-                    Log.Debug("帧率限制：跳过当前帧，距离上一帧仅 {ElapsedMs:F1}ms，目标间隔 {TargetMs:F1}ms", 
+                    Log.Debug("帧率限制：跳过当前帧，距离上一帧仅 {ElapsedMs:F1}ms，目标间隔 {TargetMs:F1}ms",
                         elapsed.TotalMilliseconds, _frameInterval.TotalMilliseconds);
                     return;
                 }
-                
+
                 // 更新上一帧时间
                 _lastFrameTime = now;
             }
@@ -798,10 +835,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
             }
 
             // 将图像数据写入通道
-            if (!_imageChannel.Writer.TryWrite((pImageData, nImageSize)))
-            {
-                Log.Warning("图像通道已满，丢弃当前帧");
-            }
+            if (!_imageChannel.Writer.TryWrite((pImageData, nImageSize))) Log.Warning("图像通道已满，丢弃当前帧");
         }
         catch (Exception ex)
         {
@@ -823,7 +857,6 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
         if (_device != null && _isGrabbing) return true;
         Log.Debug("设备未就绪或未在采集状态，跳过回调处理");
         return false;
-
     }
 
     /// <summary>
@@ -882,6 +915,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
                 Log.Error("获取图像宽度失败：0x{Error:X}, {Message}", nRet, GetErrorMessage(nRet));
                 return false;
             }
+
             _imageWidth = (ushort)widthValue.nCurValue;
 
             // 获取图像高度
@@ -892,6 +926,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
                 Log.Error("获取图像高度失败：0x{Error:X}, {Message}", nRet, GetErrorMessage(nRet));
                 return false;
             }
+
             _imageHeight = (ushort)heightValue.nCurValue;
 
             Log.Information("获取图像参数成功：宽度={Width}, 高度={Height}", _imageWidth, _imageHeight);
@@ -909,10 +944,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
     /// </summary>
     private async Task<bool> ConnectDeviceInternalAsync()
     {
-        if (!ValidateConfiguration())
-        {
-            return false;
-        }
+        if (!ValidateConfiguration()) return false;
 
         return await LogAndReturnAsync(async () =>
         {
@@ -973,12 +1005,11 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
             Log.Error("枚举设备失败：{Error}, {Message}", nRet, GetErrorMessage(nRet));
             return -1;
         }
-    
+
         if (_deviceList.nDeviceNum == 0)
         {
             Log.Error("未发现任何相机");
             return -1;
-                
         }
 
         Log.Debug("发现 {Count} 台相机，开始查找目标设备...", _deviceList.nDeviceNum);
@@ -1008,13 +1039,12 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
     {
         const int maxRetries = 3;
         for (var retry = 0; retry < maxRetries; retry++)
-        {
             try
             {
                 Log.Debug("正在创建设备句柄（第{Attempt}次尝试）...", retry + 1);
                 var nRet = await Task.Run(() =>
                     _device!.MVID_CR_CreateHandle_NET(MVIDCodeReader.MVID_BCR | MVIDCodeReader.MVID_TDCR));
-                
+
                 if (nRet == MVIDCodeReader.MVID_CR_OK)
                 {
                     Log.Information("创建设备句柄成功");
@@ -1039,7 +1069,6 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
                     _device = new MVIDCodeReader();
                 }
             }
-        }
 
         return false;
     }
@@ -1062,7 +1091,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
             Log.Information("设备绑定成功");
             return true;
         }
-        
+
         Log.Error("绑定设备失败：0x{Error:X8}, {Message}", nRet, GetErrorMessage(nRet));
         return false;
     }
@@ -1082,11 +1111,10 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
         if (!string.IsNullOrEmpty(_deviceIdentifier)) return true;
         Log.Error("相机序列号为空");
         return false;
-
     }
 
     /// <summary>
-    /// 取消注册回调函数
+    ///     取消注册回调函数
     /// </summary>
     private bool UnregisterCallbacks()
     {
@@ -1119,64 +1147,6 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
         }
     }
 
-    /// <summary>
-    /// 异步释放资源
-    /// </summary>
-    public async ValueTask DisposeAsync()
-    {
-        try
-        {
-            Log.Information("正在释放海康工业相机资源...");
-
-            // 1. 停止相机服务
-            await StopAsync();
-
-            // 2. 释放回调资源
-            if (_imageCallbackHandle.IsAllocated)
-            {
-                _imageCallbackHandle.Free();
-            }
-
-            // 3. 释放其他资源
-            _processingCancellation.Dispose();
-            _processingSemaphore.Dispose();
-            _packageSubject.Dispose();
-            _realtimeImageSubject.Dispose();
-
-            // 确保通道已关闭
-            if (!_isChannelClosed)
-            {
-                _imageChannel.Writer.Complete();
-                _isChannelClosed = true;
-            }
-
-            // 4. 释放图像池和最新图像
-            while (_imagePool.TryDequeue(out var image))
-            {
-                image.Dispose();
-            }
-
-            lock (_latestImageLock)
-            {
-                _latestImage?.Dispose();
-                _latestImage = null;
-            }
-
-            // 5. 销毁设备句柄
-            if (_device != null)
-            {
-                SafeSdkCall(() => _device.MVID_CR_DestroyHandle_NET());
-                _device = null;
-            }
-
-            Log.Information("海康工业相机资源已释放完成");
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "释放海康工业相机资源时发生错误");
-        }
-    }
-
     #region 工具方法
 
     /// <summary>
@@ -1185,51 +1155,45 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
     private Image<Rgba32> CreateImageFromBuffer(byte[] imageData)
     {
         var image = GetImageFromPool();
-        
+
         // 确定图像是灰度还是彩色
         var isGrayscale = imageData.Length <= _imageWidth * _imageHeight;
-        
+
         image.ProcessPixelRows(accessor =>
         {
             if (isGrayscale)
-            {
                 // 灰度图像处理 - 使用批量处理提高性能
                 for (var y = 0; y < _imageHeight; y++)
                 {
                     var row = accessor.GetRowSpan(y);
                     var rowOffset = y * _imageWidth;
-                    
+
                     for (var x = 0; x < _imageWidth; x++)
                     {
                         var gray = imageData[rowOffset + x];
                         row[x] = new Rgba32(gray, gray, gray, 255);
                     }
                 }
-            }
             else
-            {
                 // RGB图像处理
                 for (var y = 0; y < _imageHeight; y++)
                 {
                     var row = accessor.GetRowSpan(y);
                     var rowOffset = y * _imageWidth * 3;
-                    
+
                     for (var x = 0; x < _imageWidth; x++)
                     {
                         var pixelOffset = rowOffset + x * 3;
                         if (pixelOffset + 2 < imageData.Length)
-                        {
                             row[x] = new Rgba32(
-                                imageData[pixelOffset],      // R
-                                imageData[pixelOffset + 1],  // G
-                                imageData[pixelOffset + 2],  // B
-                                255);                      // A
-                        }
+                                imageData[pixelOffset], // R
+                                imageData[pixelOffset + 1], // G
+                                imageData[pixelOffset + 2], // B
+                                255); // A
                     }
                 }
-            }
         });
-        
+
         return image;
     }
 
@@ -1279,6 +1243,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
             };
             barcodes.Add(barcodeLocation);
         }
+
         return barcodes;
     }
 
@@ -1297,10 +1262,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
     /// </summary>
     private static void ReleaseProcParam(IntPtr ptr)
     {
-        if (ptr != IntPtr.Zero)
-        {
-            Marshal.FreeHGlobal(ptr);
-        }
+        if (ptr != IntPtr.Zero) Marshal.FreeHGlobal(ptr);
     }
 
     /// <summary>
@@ -1311,10 +1273,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
         try
         {
             var result = action();
-            if (result)
-            {
-                Log.Information(successMsg);
-            }
+            if (result) Log.Information(successMsg);
         }
         catch (Exception ex)
         {
@@ -1330,10 +1289,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
         try
         {
             var result = await action();
-            if (result)
-            {
-                Log.Information(successMsg);
-            }
+            if (result) Log.Information(successMsg);
             return result;
         }
         catch (Exception ex)
@@ -1353,13 +1309,9 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
     private void ReturnImageToPool(Image<Rgba32> image)
     {
         if (_imagePool.Count < MaxImagePoolSize)
-        {
             _imagePool.Enqueue(image);
-        }
         else
-        {
             image.Dispose();
-        }
     }
 
     #endregion

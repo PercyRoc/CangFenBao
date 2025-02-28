@@ -2,7 +2,6 @@ using DeviceService.Camera;
 using DeviceService.Camera.RenJia;
 using DeviceService.Scanner;
 using DeviceService.Weight;
-using Microsoft.Extensions.Hosting;
 using Prism.Ioc;
 
 namespace DeviceService;
@@ -71,4 +70,4 @@ public static class ContainerRegistryExtensions
 
         return containerRegistry;
     }
-} 
+}

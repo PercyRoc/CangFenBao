@@ -10,11 +10,11 @@ namespace Presentation_SangNeng.ViewModels.Settings;
 
 public class PalletModel : BindableBase
 {
+    private double _height;
+    private double _length;
     private string _name = string.Empty;
     private double _weight;
-    private double _length;
     private double _width;
-    private double _height;
 
     public string Name
     {
@@ -55,8 +55,8 @@ public class PalletSettings
 
 public class PalletSettingsViewModel : BindableBase
 {
-    private readonly ISettingsService _settingsService;
     private readonly IEventAggregator _eventAggregator;
+    private readonly ISettingsService _settingsService;
     private PalletSettings? _configuration;
     private ObservableCollection<PalletModel> _pallets = [];
 
@@ -77,10 +77,7 @@ public class PalletSettingsViewModel : BindableBase
         get => _configuration;
         set
         {
-            if (SetProperty(ref _configuration, value))
-            {
-                Pallets = value?.Pallets ?? [];
-            }
+            if (SetProperty(ref _configuration, value)) Pallets = value?.Pallets ?? [];
         }
     }
 
@@ -90,10 +87,7 @@ public class PalletSettingsViewModel : BindableBase
         private set
         {
             if (!SetProperty(ref _pallets, value)) return;
-            if (Configuration != null)
-            {
-                Configuration.Pallets = value;
-            }
+            if (Configuration != null) Configuration.Pallets = value;
             RaisePropertyChanged();
         }
     }
@@ -127,12 +121,12 @@ public class PalletSettingsViewModel : BindableBase
     private void ExecuteSaveSettings()
     {
         if (Configuration == null) return;
-        
+
         try
         {
             Configuration.Pallets = new ObservableCollection<PalletModel>(Pallets);
             _settingsService.SaveConfiguration(Configuration);
-            
+
             // 发布事件通知配置已更改
             _eventAggregator.GetEvent<PalletSettingsChangedEvent>().Publish();
         }

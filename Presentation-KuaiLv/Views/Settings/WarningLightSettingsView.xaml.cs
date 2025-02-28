@@ -8,4 +8,4 @@ public partial class WarningLightSettingsView : Page
     {
         InitializeComponent();
     }
-} 
+}

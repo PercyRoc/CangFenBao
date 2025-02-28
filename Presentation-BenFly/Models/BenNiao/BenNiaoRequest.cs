@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -43,10 +44,10 @@ public static class BenNiaoSignHelper
     // 创建JSON序列化选项，避免中文转义
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         WriteIndented = true
     };
-    
+
     /// <summary>
     ///     创建请求
     /// </summary>

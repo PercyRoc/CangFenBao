@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Presentation_BenFly.Models.BenNiao;
@@ -12,50 +11,13 @@ public class PreReportDataResponse
     ///     运单号
     /// </summary>
     [JsonPropertyName("waybillNum")]
-    public string WaybillNum { get; set; } = string.Empty;
+    public string WaybillNum { get; private set; } = string.Empty;
 
     /// <summary>
     ///     三段码
     /// </summary>
     [JsonPropertyName("segmentCode")]
-    public string SegmentCode { get; set; } = string.Empty;
-
-    /// <summary>
-    ///     从数组转换为对象
-    /// </summary>
-    public static PreReportDataResponse FromArray(JsonElement array)
-    {
-        if (array.GetArrayLength() != 2) throw new ArgumentException("数组长度必须为2");
-
-        // 获取运单号（支持数字和字符串类型）
-        var waybillNum = array[0].ValueKind switch
-        {
-            JsonValueKind.Number => array[0].GetInt64().ToString(),
-            JsonValueKind.String => array[0].GetString() ?? string.Empty,
-            _ => string.Empty
-        };
-
-        // 获取三段码
-        var segmentCode = array[1].GetString() ?? string.Empty;
-
-        return new PreReportDataResponse
-        {
-            WaybillNum = waybillNum,
-            SegmentCode = segmentCode
-        };
-    }
-}
-
-/// <summary>
-///     实时查询请求
-/// </summary>
-public class RealTimeQueryRequest
-{
-    /// <summary>
-    ///     运单编号
-    /// </summary>
-    [JsonPropertyName("waybillNum")]
-    public string WaybillNum { get; set; } = string.Empty;
+    public string SegmentCode { get; private set; } = string.Empty;
 }
 
 /// <summary>

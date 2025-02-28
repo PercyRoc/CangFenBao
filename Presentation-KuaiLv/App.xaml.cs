@@ -7,9 +7,9 @@ using Presentation_CommonLibrary.Extensions;
 using Presentation_KuaiLv.Services.DWS;
 using Presentation_KuaiLv.Services.Warning;
 using Presentation_KuaiLv.ViewModels;
-using Presentation_KuaiLv.Views;
 using Presentation_KuaiLv.ViewModels.Dialogs;
 using Presentation_KuaiLv.ViewModels.Settings;
+using Presentation_KuaiLv.Views;
 using Presentation_KuaiLv.Views.Dialogs;
 using Presentation_KuaiLv.Views.Settings;
 using Prism.Ioc;
@@ -18,12 +18,12 @@ using Serilog;
 namespace Presentation_KuaiLv;
 
 /// <summary>
-/// Interaction logic for App.xaml
+///     Interaction logic for App.xaml
 /// </summary>
 public partial class App
 {
     /// <summary>
-    /// 创建主窗口
+    ///     创建主窗口
     /// </summary>
     protected override Window CreateShell()
     {
@@ -31,7 +31,7 @@ public partial class App
     }
 
     /// <summary>
-    /// 注册服务
+    ///     注册服务
     /// </summary>
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
@@ -42,18 +42,18 @@ public partial class App
         containerRegistry.AddCommonServices();
         containerRegistry.AddPresentationCommonServices();
         containerRegistry.AddPhotoCamera();
-        
+
         // 注册 DWS 服务
         containerRegistry.RegisterSingleton<IDwsService, DwsService>();
         containerRegistry.RegisterSingleton<HttpClient>();
-        
+
         // 注册警示灯服务
         containerRegistry.RegisterSingleton<IWarningLightService, WarningLightService>();
         containerRegistry.RegisterSingleton<WarningLightStartupService>();
-        
+
         // 注册包裹中转服务
         containerRegistry.RegisterSingleton<PackageTransferService>();
-        
+
         // 注册设置页面
         containerRegistry.Register<CameraSettingsView>();
         containerRegistry.Register<CameraSettingsViewModel>();
@@ -68,7 +68,7 @@ public partial class App
     }
 
     /// <summary>
-    /// 启动
+    ///     启动
     /// </summary>
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -112,7 +112,7 @@ public partial class App
     }
 
     /// <summary>
-    /// 退出
+    ///     退出
     /// </summary>
     protected override async void OnExit(ExitEventArgs e)
     {

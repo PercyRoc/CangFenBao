@@ -1,23 +1,23 @@
-using System.Media;
 using System.IO;
+using System.Media;
 using Serilog;
 
 namespace CommonLibrary.Services;
 
 /// <summary>
-/// 音频服务接口
+///     音频服务接口
 /// </summary>
 public interface IAudioService
 {
     /// <summary>
-    /// 播放音频文件
+    ///     播放音频文件
     /// </summary>
     /// <param name="audioPath">音频文件路径</param>
     /// <returns>是否播放成功</returns>
     Task<bool> PlayAsync(string audioPath);
 
     /// <summary>
-    /// 播放预设音频
+    ///     播放预设音频
     /// </summary>
     /// <param name="audioType">音频类型</param>
     /// <returns>是否播放成功</returns>
@@ -25,39 +25,39 @@ public interface IAudioService
 }
 
 /// <summary>
-/// 预设音频类型
+///     预设音频类型
 /// </summary>
 public enum AudioType
 {
     /// <summary>
-    /// 系统错误
+    ///     系统错误
     /// </summary>
     SystemError,
-    
+
     /// <summary>
-    /// 通用成功音效
+    ///     通用成功音效
     /// </summary>
     Success
 }
 
 /// <summary>
-/// 音频服务实现
+///     音频服务实现
 /// </summary>
 public class AudioService : IAudioService, IDisposable
 {
-    private readonly Dictionary<AudioType, string> _presetAudios;
     private readonly SoundPlayer _player;
     private readonly SemaphoreSlim _playLock;
+    private readonly Dictionary<AudioType, string> _presetAudios;
     private bool _disposed;
 
     /// <summary>
-    /// 构造函数
+    ///     构造函数
     /// </summary>
     public AudioService()
     {
         _player = new SoundPlayer();
         _playLock = new SemaphoreSlim(1, 1);
-        
+
         // 初始化预设音频
         var audioDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Audio");
         _presetAudios = new Dictionary<AudioType, string>
@@ -152,4 +152,4 @@ public class AudioService : IAudioService, IDisposable
         _disposed = true;
         GC.SuppressFinalize(this);
     }
-} 
+}

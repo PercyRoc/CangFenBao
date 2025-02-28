@@ -1,24 +1,24 @@
 using System.Net.Sockets;
+using System.Text;
 using CommonLibrary.Services;
 using Presentation_CommonLibrary.Services;
 using Presentation_KuaiLv.Models.Settings.Warning;
 using Serilog;
-using System.Text;
 
 namespace Presentation_KuaiLv.Services.Warning;
 
 /// <summary>
-/// 警示灯服务实现
+///     警示灯服务实现
 /// </summary>
 public class WarningLightService : IWarningLightService, IDisposable
 {
-    private readonly ISettingsService _settingsService;
     private readonly INotificationService _notificationService;
-    private TcpClient? _tcpClient;
-    private NetworkStream? _networkStream;
-    private bool _disposed;
     private readonly SemaphoreSlim _semaphore = new(1, 1);
+    private readonly ISettingsService _settingsService;
+    private bool _disposed;
     private bool _isConnected;
+    private NetworkStream? _networkStream;
+    private TcpClient? _tcpClient;
 
     public WarningLightService(
         ISettingsService settingsService,
@@ -26,6 +26,12 @@ public class WarningLightService : IWarningLightService, IDisposable
     {
         _settingsService = settingsService;
         _notificationService = notificationService;
+    }
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
     }
 
     /// <inheritdoc />
@@ -51,10 +57,7 @@ public class WarningLightService : IWarningLightService, IDisposable
         await _semaphore.WaitAsync();
         try
         {
-            if (IsConnected)
-            {
-                await DisconnectAsync();
-            }
+            if (IsConnected) await DisconnectAsync();
 
             var config = _settingsService.LoadConfiguration<WarningLightConfiguration>();
             if (!config.IsEnabled)
@@ -67,7 +70,7 @@ public class WarningLightService : IWarningLightService, IDisposable
             _tcpClient = new TcpClient();
             await _tcpClient.ConnectAsync(config.IpAddress, config.Port);
             _networkStream = _tcpClient.GetStream();
-            
+
             IsConnected = true;
             Log.Information("警示灯连接成功");
             _notificationService.ShowSuccess("警示灯连接成功", "已连接到警示灯控制器");
@@ -140,7 +143,7 @@ public class WarningLightService : IWarningLightService, IDisposable
             "AT+STACH1=0\r\n",
             "AT+STACH2=0\r\n"
         };
-        
+
         foreach (var cmd in commands)
         {
             await SendCommandAsync(Encoding.ASCII.GetBytes(cmd));
@@ -157,10 +160,7 @@ public class WarningLightService : IWarningLightService, IDisposable
             {
                 Log.Warning("警示灯未连接，尝试重新连接");
                 await ConnectAsync();
-                if (!IsConnected)
-                {
-                    return;
-                }
+                if (!IsConnected) return;
             }
 
             await _networkStream!.WriteAsync(command);
@@ -178,12 +178,6 @@ public class WarningLightService : IWarningLightService, IDisposable
         }
     }
 
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
     protected virtual void Dispose(bool disposing)
     {
         if (_disposed) return;
@@ -195,4 +189,4 @@ public class WarningLightService : IWarningLightService, IDisposable
 
         _disposed = true;
     }
-} 
+}

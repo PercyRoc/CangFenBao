@@ -12,6 +12,7 @@ namespace SortingService.Services;
 public class PendulumSortService : IPendulumSortService
 {
     private const int MaxDelayHistory = 100; // 保存最近100个延迟数据
+    private readonly ConcurrentDictionary<string, bool> _deviceConnectionStates = new();
     private readonly object _lockObject = new();
 
     private readonly Dictionary<string, PendulumCommands> _moduleCommands = new()
@@ -36,14 +37,13 @@ public class PendulumSortService : IPendulumSortService
     private readonly ConcurrentQueue<double> _processingDelays = new();
     private readonly ConcurrentDictionary<int, ProcessingStatus> _processingPackages = new();
     private readonly Timer _timeoutCheckTimer;
-    private TcpClientService? _triggerClient;
     private readonly ConcurrentQueue<double> _triggerDelays = new();
     private readonly Queue<DateTime> _triggerTimes = new();
     private CancellationTokenSource? _cancellationTokenSource;
     private SortConfiguration _configuration = new();
     private bool _disposed;
     private bool _isRunning;
-    private readonly ConcurrentDictionary<string, bool> _deviceConnectionStates = new();
+    private TcpClientService? _triggerClient;
 
     public PendulumSortService()
     {
@@ -187,7 +187,6 @@ public class PendulumSortService : IPendulumSortService
 
             // 向触发光电发送停止命令
             if (_triggerClient != null)
-            {
                 try
                 {
                     // 发送左右回正指令
@@ -212,7 +211,6 @@ public class PendulumSortService : IPendulumSortService
                 {
                     Log.Error(ex, "发送停止命令或断开触发光电连接时发生错误");
                 }
-            }
 
             // 清理定时器资源
             foreach (var timer in _packageTimers.Values)
@@ -220,6 +218,7 @@ public class PendulumSortService : IPendulumSortService
                 timer.Stop();
                 timer.Dispose();
             }
+
             _packageTimers.Clear();
 
             // 清理其他资源
@@ -227,11 +226,17 @@ public class PendulumSortService : IPendulumSortService
             {
                 _pendingSortPackages.Clear();
             }
+
             _processingPackages.Clear();
             _pendulumStates.Clear();
             _triggerTimes.Clear();
-            while (_triggerDelays.TryDequeue(out _)) { }
-            while (_processingDelays.TryDequeue(out _)) { }
+            while (_triggerDelays.TryDequeue(out _))
+            {
+            }
+
+            while (_processingDelays.TryDequeue(out _))
+            {
+            }
 
             Log.Information("分拣服务已完全停止");
         }
@@ -313,10 +318,7 @@ public class PendulumSortService : IPendulumSortService
             }
 
             // 将未匹配的非过期时间戳放回原队列
-            while (tempQueue.Count > 0)
-            {
-                _triggerTimes.Enqueue(tempQueue.Dequeue());
-            }
+            while (tempQueue.Count > 0) _triggerTimes.Enqueue(tempQueue.Dequeue());
 
             if (!matchedTimestamp.HasValue)
             {
@@ -411,6 +413,25 @@ public class PendulumSortService : IPendulumSortService
     }
 
     /// <summary>
+    ///     获取设备连接状态
+    /// </summary>
+    /// <param name="deviceName">设备名称</param>
+    /// <returns>true表示已连接，false表示未连接</returns>
+    public bool GetDeviceConnectionState(string deviceName)
+    {
+        return _deviceConnectionStates.TryGetValue(deviceName, out var state) && state;
+    }
+
+    /// <summary>
+    ///     获取所有设备的连接状态
+    /// </summary>
+    /// <returns>设备名称和连接状态的字典</returns>
+    public Dictionary<string, bool> GetAllDeviceConnectionStates()
+    {
+        return new Dictionary<string, bool>(_deviceConnectionStates);
+    }
+
+    /// <summary>
     ///     将十六进制字符串转换为字节数组
     /// </summary>
     private static byte[] HexStringToByteArray(string hex)
@@ -436,23 +457,22 @@ public class PendulumSortService : IPendulumSortService
             {
                 // 记录触发时间
                 var triggerTime = DateTime.Now;
-                lock (_triggerTimes)  // 添加同步锁
+                lock (_triggerTimes) // 添加同步锁
                 {
                     _triggerTimes.Enqueue(triggerTime);
                     // 清理过期的触发时间（保留最近2秒的记录）
-                    while (_triggerTimes.Count > 0 && 
+                    while (_triggerTimes.Count > 0 &&
                            (DateTime.Now - _triggerTimes.Peek()).TotalMilliseconds > 2000)
-                    {
                         _triggerTimes.Dequeue();
-                    }
                 }
-                Log.Information("触发光电触发，时间：{Time:HH:mm:ss.fff}, 当前队列长度: {Count}", 
+
+                Log.Information("触发光电触发，时间：{Time:HH:mm:ss.fff}, 当前队列长度: {Count}",
                     triggerTime, _triggerTimes.Count);
             }
 
             if (!message.Contains("+OCCH2:1")) return; // 改为独立if判断
             Log.Information("收到分拣触发信号，开始处理分拣逻辑");
-                
+
             // 获取当前时间
             var currentTime = DateTime.Now;
 
@@ -483,11 +503,11 @@ public class PendulumSortService : IPendulumSortService
 
                 // 验证时间延迟
                 var delay = (currentTime - package.TriggerTimestamp).TotalMilliseconds;
-                if (delay < _configuration.TriggerPhotoelectric.SortingTimeRangeLower || 
+                if (delay < _configuration.TriggerPhotoelectric.SortingTimeRangeLower ||
                     delay > _configuration.TriggerPhotoelectric.SortingTimeRangeUpper)
                 {
                     Log.Debug("包裹 {Barcode}(序号:{Index}) 分拣时间延迟验证失败，延迟:{Delay}ms，允许范围:{Lower}-{Upper}ms",
-                        package.Barcode, package.Index, delay, 
+                        package.Barcode, package.Index, delay,
                         _configuration.TriggerPhotoelectric.SortingTimeRangeLower,
                         _configuration.TriggerPhotoelectric.SortingTimeRangeUpper);
                     continue;
@@ -536,12 +556,12 @@ public class PendulumSortService : IPendulumSortService
             var startTime = DateTime.Now;
             Log.Debug("开始执行分拣动作 - 包裹:{Barcode}(序号:{Index}), 光电:{PhotoId}",
                 package.Barcode, package.Index, photoelectricName);
-            
+
             // 获取分拣命令
             // 修改分拣逻辑：1号格口左摆，2号格口右摆，3号格口不做动作
             string? command = null;
-            bool isNoAction = false;
-            
+            var isNoAction = false;
+
             switch (package.ChuteName)
             {
                 case 1: // 1号格口左摆
@@ -561,7 +581,7 @@ public class PendulumSortService : IPendulumSortService
                     {
                         // 如果格口号为0或未设置，不执行动作
                         isNoAction = true;
-                        Log.Information("包裹 {Barcode} 未设置有效格口号({ChuteName})，不做摆动", 
+                        Log.Information("包裹 {Barcode} 未设置有效格口号({ChuteName})，不做摆动",
                             package.Barcode, package.ChuteName);
                     }
                     else
@@ -569,9 +589,10 @@ public class PendulumSortService : IPendulumSortService
                         // 其他格口根据奇偶性决定摆动方向
                         var isRightSwing = package.ChuteName % 2 == 0;
                         command = isRightSwing ? _moduleCommands["2代模块"].SwingRight : _moduleCommands["2代模块"].SwingLeft;
-                        Log.Information("包裹 {Barcode} 分配到{Chute}号格口，执行{Direction}摆", 
+                        Log.Information("包裹 {Barcode} 分配到{Chute}号格口，执行{Direction}摆",
                             package.Barcode, package.ChuteName, isRightSwing ? "右" : "左");
                     }
+
                     break;
             }
 
@@ -586,9 +607,7 @@ public class PendulumSortService : IPendulumSortService
             var photoelectric = _configuration.TriggerPhotoelectric;
 
             // 等待包裹到达最佳分拣位置
-            if (photoelectric.SortingDelay > 0){
-                await Task.Delay(photoelectric.SortingDelay);
-            }
+            if (photoelectric.SortingDelay > 0) await Task.Delay(photoelectric.SortingDelay);
             // 3号格口不执行动作
             if (!isNoAction)
             {
@@ -622,15 +641,15 @@ public class PendulumSortService : IPendulumSortService
             {
                 // 确定当前摆动方向（用于回正判断）
                 var isCurrentRightSwing = command == _moduleCommands["2代模块"].SwingRight;
-                
+
                 // 检查下一个包裹是否使用相同摆动方向
                 var needReset = true;
-                
+
                 if (nextPackage != null)
                 {
                     var nextIsNoAction = nextPackage.ChuteName == 3;
                     bool nextIsRightSwing;
-                    
+
                     switch (nextPackage.ChuteName)
                     {
                         case 1:
@@ -647,12 +666,12 @@ public class PendulumSortService : IPendulumSortService
                             nextIsRightSwing = nextPackage.ChuteName % 2 == 0;
                             break;
                     }
-                    
+
                     // 如果下一个包裹不摆动，也要回正
                     // 如果下一个包裹摆动方向与当前相同，则不需要回正
-                    needReset = nextIsNoAction || (nextIsRightSwing != isCurrentRightSwing);
+                    needReset = nextIsNoAction || nextIsRightSwing != isCurrentRightSwing;
                 }
-                
+
                 if (needReset)
                 {
                     var resetCommand =
@@ -720,8 +739,8 @@ public class PendulumSortService : IPendulumSortService
             // 直接从字典中获取所有值并排序
             var nextPackages = _pendingSortPackages.Values
                 .Where(p => p.TriggerTimestamp > currentPackage.TriggerTimestamp
-                           && p.Index > currentPackage.Index
-                           && !IsPackageProcessing(p.Index))
+                            && p.Index > currentPackage.Index
+                            && !IsPackageProcessing(p.Index))
                 .OrderBy(p => p.TriggerTimestamp)
                 .ToList();
 
@@ -775,7 +794,7 @@ public class PendulumSortService : IPendulumSortService
         try
         {
             Log.Information("开始重新连接设备...");
-            
+
             // 断开现有连接
             await _triggerClient!.DisconnectAsync();
             UpdateDeviceConnectionState("触发光电", false);
@@ -909,32 +928,13 @@ public class PendulumSortService : IPendulumSortService
             deviceName,
             isConnected,
             (_, _) => isConnected);
-        
+
         // 触发设备连接状态变更事件
         RaiseDeviceConnectionStatusChanged(deviceName, isConnected);
-        
-        Log.Debug("设备 {Name} 连接状态更新为: {Status}", 
-            deviceName, 
+
+        Log.Debug("设备 {Name} 连接状态更新为: {Status}",
+            deviceName,
             isConnected ? "已连接" : "已断开");
-    }
-
-    /// <summary>
-    ///     获取设备连接状态
-    /// </summary>
-    /// <param name="deviceName">设备名称</param>
-    /// <returns>true表示已连接，false表示未连接</returns>
-    public bool GetDeviceConnectionState(string deviceName)
-    {
-        return _deviceConnectionStates.TryGetValue(deviceName, out var state) && state;
-    }
-
-    /// <summary>
-    ///     获取所有设备的连接状态
-    /// </summary>
-    /// <returns>设备名称和连接状态的字典</returns>
-    public Dictionary<string, bool> GetAllDeviceConnectionStates()
-    {
-        return new Dictionary<string, bool>(_deviceConnectionStates);
     }
 
     protected virtual void Dispose(bool disposing)
@@ -942,7 +942,6 @@ public class PendulumSortService : IPendulumSortService
         if (_disposed) return;
 
         if (disposing)
-        {
             try
             {
                 // 确保服务停止
@@ -958,10 +957,7 @@ public class PendulumSortService : IPendulumSortService
                 _cancellationTokenSource?.Dispose();
                 _timeoutCheckTimer.Dispose();
 
-                foreach (var timer in _packageTimers.Values)
-                {
-                    timer.Dispose();
-                }
+                foreach (var timer in _packageTimers.Values) timer.Dispose();
                 _packageTimers.Clear();
 
                 // 清空设备状态
@@ -973,7 +969,6 @@ public class PendulumSortService : IPendulumSortService
             {
                 Log.Error(ex, "释放分拣服务资源时发生错误");
             }
-        }
 
         _disposed = true;
     }

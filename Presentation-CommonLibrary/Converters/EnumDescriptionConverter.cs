@@ -6,7 +6,7 @@ namespace Presentation_CommonLibrary.Converters;
 
 public class EnumDescriptionConverter : IValueConverter
 {
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         if (value == null) return string.Empty;
 
@@ -18,7 +18,7 @@ public class EnumDescriptionConverter : IValueConverter
         return attributes.Length > 0 ? attributes[0].Description : enumValue.ToString();
     }
 
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         throw new NotImplementedException();
     }

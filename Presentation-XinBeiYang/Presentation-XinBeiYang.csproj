@@ -12,11 +12,11 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <Page Update="Views\MainWindow.xaml">
-        <Generator>MSBuild:Compile</Generator>
-        <XamlRuntime>Wpf</XamlRuntime>
-        <SubType>Designer</SubType>
-      </Page>
+        <Page Update="Views\MainWindow.xaml">
+            <Generator>MSBuild:Compile</Generator>
+            <XamlRuntime>Wpf</XamlRuntime>
+            <SubType>Designer</SubType>
+        </Page>
     </ItemGroup>
     <ItemGroup>
         <!-- Prism -->
@@ -41,9 +41,9 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\CommonLibrary\CommonLibrary.csproj" />
-        <ProjectReference Include="..\DeviceService\DeviceService.csproj" />
-        <ProjectReference Include="..\SortingService\SortingService.csproj" />
+        <ProjectReference Include="..\CommonLibrary\CommonLibrary.csproj"/>
+        <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>
+        <ProjectReference Include="..\SortingService\SortingService.csproj"/>
     </ItemGroup>
 
     <ItemGroup>

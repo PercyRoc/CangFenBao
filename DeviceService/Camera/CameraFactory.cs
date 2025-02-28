@@ -24,6 +24,19 @@ public class CameraFactory : IAsyncDisposable
         _settingsService = settingsService;
     }
 
+    public ValueTask DisposeAsync()
+    {
+        if (!_disposed)
+        {
+            _currentCamera?.DisposeAsync();
+            _currentCamera = null;
+            _disposed = true;
+        }
+
+        GC.SuppressFinalize(this);
+        return ValueTask.CompletedTask;
+    }
+
     /// <summary>
     ///     创建相机服务
     /// </summary>
@@ -51,7 +64,7 @@ public class CameraFactory : IAsyncDisposable
                 CameraManufacturer.Hikvision => new HikvisionIndustrialCameraSdkClient(),
                 _ => throw new ArgumentException($"不支持的相机厂商: {manufacturer}")
             };
-            
+
             Log.Information("已创建 {Manufacturer} 相机服务", manufacturer);
         }
         catch (Exception ex)
@@ -77,18 +90,5 @@ public class CameraFactory : IAsyncDisposable
             Log.Error(ex, "加载相机设置失败，使用默认设置");
             return new CameraSettings { Manufacturer = CameraManufacturer.Dahua };
         }
-    }
-
-    public ValueTask DisposeAsync()
-    {
-        if (!_disposed)
-        {
-             _currentCamera?.DisposeAsync();
-            _currentCamera = null;
-            _disposed = true;
-        }
-
-        GC.SuppressFinalize(this);
-        return ValueTask.CompletedTask;
     }
 }

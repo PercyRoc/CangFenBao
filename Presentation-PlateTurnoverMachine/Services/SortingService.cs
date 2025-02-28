@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text;
 using CommonLibrary.Models;
 using CommonLibrary.Services;
 using Presentation_PlateTurnoverMachine.Models;
@@ -7,27 +8,42 @@ using Serilog;
 namespace Presentation_PlateTurnoverMachine.Services;
 
 /// <summary>
-/// 分拣服务
+///     分拣服务
 /// </summary>
 public class SortingService : IDisposable
 {
     private const int MaxIntervalCount = 100;
-    private readonly ConcurrentQueue<PackageInfo> _packageQueue = new();
-    private readonly Queue<double> _triggerIntervals = new();
-    private readonly object _countLock = new();
-    private readonly object _intervalsLock = new();
     private readonly Dictionary<(string IpAddress, int Channel), bool> _channelStates = new();
     private readonly object _channelStatesLock = new();
-    private int _currentCount;
-    private DateTime _lastTriggerTime;
-    private readonly ITcpConnectionService _tcpConnectionService;
+    private readonly object _countLock = new();
+    private readonly object _intervalsLock = new();
+    private readonly ConcurrentQueue<PackageInfo> _packageQueue = new();
     private readonly ISettingsService _settingsService;
     private readonly Dictionary<string, TcpConnectionConfig> _tcpConfigs = new();
-    private PlateTurnoverSettings Settings => _settingsService.LoadConfiguration<PlateTurnoverSettings>();
+    private readonly ITcpConnectionService _tcpConnectionService;
+    private readonly Queue<double> _triggerIntervals = new();
+    private int _currentCount;
     private bool _disposed;
+    private DateTime _lastTriggerTime;
+
+    public SortingService(ITcpConnectionService tcpConnectionService, ISettingsService settingsService)
+    {
+        _tcpConnectionService = tcpConnectionService;
+        _settingsService = settingsService;
+        _tcpConnectionService.TriggerPhotoelectricDataReceived += OnTriggerPhotoelectricDataReceived;
+        _tcpConnectionService.TcpModuleDataReceived += OnTcpModuleDataReceived;
+        _lastTriggerTime = DateTime.Now;
+
+        // 初始化所有TCP配置
+        foreach (var item in Settings.Items)
+            if (!string.IsNullOrEmpty(item.TcpAddress))
+                _tcpConfigs[item.TcpAddress] = new TcpConnectionConfig(item.TcpAddress, 2000);
+    }
+
+    private PlateTurnoverSettings Settings => _settingsService.LoadConfiguration<PlateTurnoverSettings>();
 
     /// <summary>
-    /// 获取最近100次触发的平均时间间隔（毫秒）
+    ///     获取最近100次触发的平均时间间隔（毫秒）
     /// </summary>
     private double AverageInterval
     {
@@ -41,26 +57,14 @@ public class SortingService : IDisposable
         }
     }
 
-    public SortingService(ITcpConnectionService tcpConnectionService, ISettingsService settingsService)
+    public void Dispose()
     {
-        _tcpConnectionService = tcpConnectionService;
-        _settingsService = settingsService;
-        _tcpConnectionService.TriggerPhotoelectricDataReceived += OnTriggerPhotoelectricDataReceived;
-        _tcpConnectionService.TcpModuleDataReceived += OnTcpModuleDataReceived;
-        _lastTriggerTime = DateTime.Now;
-
-        // 初始化所有TCP配置
-        foreach (var item in Settings.Items)
-        {
-            if (!string.IsNullOrEmpty(item.TcpAddress))
-            {
-                _tcpConfigs[item.TcpAddress] = new TcpConnectionConfig(item.TcpAddress, 2000);
-            }
-        }
+        Dispose(true);
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>
-    /// 添加包裹到分拣队列
+    ///     添加包裹到分拣队列
     /// </summary>
     /// <param name="package">包裹信息</param>
     public void EnqueuePackage(PackageInfo package)
@@ -118,11 +122,11 @@ public class SortingService : IDisposable
     {
         try
         {
-            var message = System.Text.Encoding.ASCII.GetString(e.Data);
-            
+            var message = Encoding.ASCII.GetString(e.Data);
+
             // 处理OCCH_ALL消息
             if (!message.StartsWith("+OCCH_ALL:")) return;
-            
+
             var channelStates = message.Replace("+OCCH_ALL:", "").Split(',');
             if (channelStates.Length != 8)
             {
@@ -145,7 +149,7 @@ public class SortingService : IDisposable
                 {
                     var isActive = channelStates[i] == "1";
                     _channelStates[(e.Config.IpAddress, i + 1)] = isActive;
-                    Log.Debug("TCP模块 {Address} 通道 {Channel} {Status}", 
+                    Log.Debug("TCP模块 {Address} 通道 {Channel} {Status}",
                         e.Config.IpAddress, i + 1, isActive ? "已锁定" : "已解锁");
                 }
             }
@@ -157,7 +161,7 @@ public class SortingService : IDisposable
     }
 
     /// <summary>
-    /// 处理触发光电信号
+    ///     处理触发光电信号
     /// </summary>
     /// <param name="data">触发光电数据</param>
     /// <param name="triggerTime">触发时间</param>
@@ -166,28 +170,22 @@ public class SortingService : IDisposable
         try
         {
             // 检查是否是触发光电+OCCH1:1信号
-            if (!IsValidTriggerSignal(data))
-            {
-                return;
-            }
+            if (!IsValidTriggerSignal(data)) return;
 
             lock (_countLock)
             {
                 // 计算时间间隔
                 var interval = triggerTime - _lastTriggerTime;
                 var intervalMs = interval.TotalMilliseconds;
-                
+
                 // 记录时间间隔
                 lock (_intervalsLock)
                 {
                     _triggerIntervals.Enqueue(intervalMs);
-                    if (_triggerIntervals.Count > MaxIntervalCount)
-                    {
-                        _triggerIntervals.Dequeue();
-                    }
+                    if (_triggerIntervals.Count > MaxIntervalCount) _triggerIntervals.Dequeue();
                 }
-                
-                Log.Debug("触发光电信号时间间隔：{Interval:F2}毫秒，最近{Count}次平均间隔：{Average:F2}毫秒", 
+
+                Log.Debug("触发光电信号时间间隔：{Interval:F2}毫秒，最近{Count}次平均间隔：{Average:F2}毫秒",
                     intervalMs, _triggerIntervals.Count, AverageInterval);
                 _lastTriggerTime = triggerTime;
 
@@ -203,16 +201,16 @@ public class SortingService : IDisposable
                     // 获取包裹对应的翻板机配置
                     var turnoverItem = Settings.Items.FirstOrDefault(item => item.MappingChute == package.ChuteName);
                     if (turnoverItem == null) continue;
-                    
+
                     // 如果当前计数等于配置的距离，说明包裹到达了目标位置
                     if (!(_currentCount >= turnoverItem.Distance)) continue;
-                    Log.Information("包裹 {Barcode} 已到达目标位置，触发次数：{Count}，目标格口：{ChuteName}，总耗时：{TotalTime:F2}毫秒", 
-                        package.Barcode, _currentCount, package.ChuteName, 
+                    Log.Information("包裹 {Barcode} 已到达目标位置，触发次数：{Count}，目标格口：{ChuteName}，总耗时：{TotalTime:F2}毫秒",
+                        package.Barcode, _currentCount, package.ChuteName,
                         (triggerTime - package.CreateTime).TotalMilliseconds);
 
                     // 计算延迟时间
                     var delayMs = (int)(AverageInterval * turnoverItem.DelayFactor);
-                    Log.Debug("包裹 {Barcode} 将在 {Delay} 毫秒后触发落格，平均间隔：{Average:F2}毫秒，延迟系数：{Factor:F2}", 
+                    Log.Debug("包裹 {Barcode} 将在 {Delay} 毫秒后触发落格，平均间隔：{Average:F2}毫秒，延迟系数：{Factor:F2}",
                         package.Barcode, delayMs, AverageInterval, turnoverItem.DelayFactor);
 
                     // 异步发送落格命令
@@ -232,17 +230,19 @@ public class SortingService : IDisposable
                             // 准备落格命令
                             var outNumber = turnoverItem.IoPoint!.ToUpper().Replace("OUT", "");
                             var lockCommand = $"AT+STACH{outNumber}=1";
-                            var commandData = System.Text.Encoding.ASCII.GetBytes(lockCommand);
+                            var commandData = Encoding.ASCII.GetBytes(lockCommand);
 
                             // 发送落格命令
-                            await _tcpConnectionService.SendToTcpModuleAsync(_tcpConfigs[turnoverItem.TcpAddress], commandData);
+                            await _tcpConnectionService.SendToTcpModuleAsync(_tcpConfigs[turnoverItem.TcpAddress],
+                                commandData);
                             Log.Information("包裹 {Barcode} 已发送落格命令：{Command}", package.Barcode, lockCommand);
 
                             // 等待磁铁吸合时间后复位
                             await Task.Delay(turnoverItem.MagnetTime);
                             var resetCommand = $"AT+STACH{outNumber}=0";
-                            var resetData = System.Text.Encoding.ASCII.GetBytes(resetCommand);
-                            await _tcpConnectionService.SendToTcpModuleAsync(_tcpConfigs[turnoverItem.TcpAddress], resetData);
+                            var resetData = Encoding.ASCII.GetBytes(resetCommand);
+                            await _tcpConnectionService.SendToTcpModuleAsync(_tcpConfigs[turnoverItem.TcpAddress],
+                                resetData);
                             Log.Debug("包裹 {Barcode} 已发送复位命令：{Command}", package.Barcode, resetCommand);
                         }
                         catch (Exception ex)
@@ -266,7 +266,7 @@ public class SortingService : IDisposable
     {
         try
         {
-            var message = System.Text.Encoding.ASCII.GetString(data);
+            var message = Encoding.ASCII.GetString(data);
             return message.Contains("+OCCH1:1");
         }
         catch (Exception ex)
@@ -274,12 +274,6 @@ public class SortingService : IDisposable
             Log.Error(ex, "验证触发信号时发生错误");
             return false;
         }
-    }
-
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
     }
 
     protected virtual void Dispose(bool disposing)

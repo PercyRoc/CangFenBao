@@ -1,13 +1,11 @@
 using CommonLibrary.Services;
-using Presentation_CommonLibrary.Services;
 using Presentation_KuaiLv.Models.Settings.Warning;
-using Presentation_KuaiLv.Services.Warning;
 using Prism.Mvvm;
 
 namespace Presentation_KuaiLv.ViewModels.Settings;
 
 /// <summary>
-/// 警示灯设置视图模型
+///     警示灯设置视图模型
 /// </summary>
 public class WarningLightSettingsViewModel : BindableBase
 {
@@ -24,15 +22,12 @@ public class WarningLightSettingsViewModel : BindableBase
         // 监听配置变化并自动保存
         PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(Configuration))
-            {
-                SaveConfiguration();
-            }
+            if (e.PropertyName == nameof(Configuration)) SaveConfiguration();
         };
     }
 
     /// <summary>
-    /// 配置
+    ///     配置
     /// </summary>
     public WarningLightConfiguration Configuration
     {
@@ -49,4 +44,4 @@ public class WarningLightSettingsViewModel : BindableBase
     {
         _settingsService.SaveConfiguration(Configuration);
     }
-} 
+}

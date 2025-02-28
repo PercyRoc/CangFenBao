@@ -10,12 +10,10 @@ public enum WeightType
     /// <summary>
     ///     Static Weight
     /// </summary>
-    [Description("Static Weight")]
-    Static,
+    [Description("Static Weight")] Static,
 
     /// <summary>
     ///     Dynamic Weight
     /// </summary>
-    [Description("Dynamic Weight")]
-    Dynamic
-} 
+    [Description("Dynamic Weight")] Dynamic
+}

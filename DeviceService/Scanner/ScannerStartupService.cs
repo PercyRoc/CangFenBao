@@ -89,4 +89,4 @@ public class ScannerStartupService : IHostedService
             _initLock.Release();
         }
     }
-} 
+}

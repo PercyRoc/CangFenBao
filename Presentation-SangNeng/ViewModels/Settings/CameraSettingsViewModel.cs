@@ -4,6 +4,7 @@ using CommonLibrary.Models.Settings.Camera;
 using CommonLibrary.Models.Settings.Camera.Enums;
 using CommonLibrary.Services;
 using DeviceService.Camera;
+using Microsoft.Win32;
 using Presentation_CommonLibrary.Services;
 using Prism.Commands;
 using Prism.Mvvm;
@@ -13,10 +14,12 @@ namespace Presentation_SangNeng.ViewModels.Settings;
 
 public class CameraSettingsViewModel : BindableBase
 {
-    private readonly ISettingsService _settingsService;
     private readonly CameraFactory _cameraFactory;
     private readonly INotificationService _notificationService;
+    private readonly ISettingsService _settingsService;
     private CameraSettings? _configuration;
+
+    private bool _isRefreshing;
 
     public CameraSettingsViewModel(
         ISettingsService settingsService,
@@ -27,7 +30,8 @@ public class CameraSettingsViewModel : BindableBase
         _cameraFactory = cameraFactory;
         _notificationService = notificationService;
 
-        RefreshCameraListCommand = new DelegateCommand(() => {
+        RefreshCameraListCommand = new DelegateCommand(() =>
+        {
             var task = ExecuteRefreshCameraList();
             task.ContinueWith(t =>
             {
@@ -137,7 +141,6 @@ public class CameraSettingsViewModel : BindableBase
         }
     }
 
-    private bool _isRefreshing;
     public bool IsRefreshing
     {
         get => _isRefreshing;
@@ -159,8 +162,9 @@ public class CameraSettingsViewModel : BindableBase
         IsRefreshing = true;
         try
         {
-            Log.Information("Starting to refresh camera list, current manufacturer: {Manufacturer}", SelectedManufacturer);
-            
+            Log.Information("Starting to refresh camera list, current manufacturer: {Manufacturer}",
+                SelectedManufacturer);
+
             // 先获取相机列表，避免受服务释放影响
             List<DeviceCameraInfo> newCameras;
             await using (var cameraService = _cameraFactory.CreateCameraByManufacturer(SelectedManufacturer))
@@ -192,31 +196,27 @@ public class CameraSettingsViewModel : BindableBase
             AvailableCameras.Clear();
             foreach (var camera in newCameras)
             {
-                Log.Information("Adding camera: IP={IP}, MAC={MAC}, Selected={Selected}", 
+                Log.Information("Adding camera: IP={IP}, MAC={MAC}, Selected={Selected}",
                     camera.IpAddress, camera.MacAddress, camera.IsSelected);
                 AvailableCameras.Add(camera);
             }
 
             // 更新配置中的相机列表
             if (Configuration != null)
-            {
                 Configuration.SelectedCameras = new List<DeviceCameraInfo>(
                     AvailableCameras.Select(c => new DeviceCameraInfo(c)));
-            }
 
             if (AvailableCameras.Count == 0)
-            {
                 _notificationService.ShowWarningWithToken("No available cameras found", "SettingWindowGrowl");
-            }
             else
-            {
-                _notificationService.ShowSuccessWithToken($"Found {AvailableCameras.Count} cameras", "SettingWindowGrowl");
-            }
+                _notificationService.ShowSuccessWithToken($"Found {AvailableCameras.Count} cameras",
+                    "SettingWindowGrowl");
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to refresh camera list");
-            _notificationService.ShowErrorWithToken($"Failed to refresh camera list: {ex.Message}", "SettingWindowGrowl");
+            _notificationService.ShowErrorWithToken($"Failed to refresh camera list: {ex.Message}",
+                "SettingWindowGrowl");
         }
         finally
         {
@@ -226,17 +226,14 @@ public class CameraSettingsViewModel : BindableBase
 
     private void ExecuteSelectImagePath()
     {
-        var dialog = new Microsoft.Win32.SaveFileDialog
+        var dialog = new SaveFileDialog
         {
             Title = "Select Image Save Path",
             FileName = "Images",
             Filter = "All Files|*.*"
         };
 
-        if (dialog.ShowDialog() == true)
-        {
-            ImageSavePath = Path.GetDirectoryName(dialog.FileName) ?? "Images";
-        }
+        if (dialog.ShowDialog() == true) ImageSavePath = Path.GetDirectoryName(dialog.FileName) ?? "Images";
     }
 
     private void ExecuteSaveConfiguration()
@@ -250,21 +247,18 @@ public class CameraSettingsViewModel : BindableBase
             // 如果当前列表为空但配置中有相机，保持配置中的相机不变
             if (AvailableCameras.Count == 0 && Configuration.SelectedCameras.Count > 0)
             {
-                Log.Information("Keeping existing cameras in configuration: {Count}", Configuration.SelectedCameras.Count);
+                Log.Information("Keeping existing cameras in configuration: {Count}",
+                    Configuration.SelectedCameras.Count);
                 foreach (var camera in Configuration.SelectedCameras)
-                {
-                    Log.Information("Existing camera in config: IP={IP}, MAC={MAC}, Selected={Selected}", 
+                    Log.Information("Existing camera in config: IP={IP}, MAC={MAC}, Selected={Selected}",
                         camera.IpAddress, camera.MacAddress, camera.IsSelected);
-                }
             }
             else
             {
                 // 否则使用当前列表更新配置
                 foreach (var camera in AvailableCameras)
-                {
-                    Log.Information("Current camera: IP={IP}, MAC={MAC}, Selected={Selected}", 
+                    Log.Information("Current camera: IP={IP}, MAC={MAC}, Selected={Selected}",
                         camera.IpAddress, camera.MacAddress, camera.IsSelected);
-                }
 
                 Configuration.SelectedCameras = AvailableCameras
                     .Where(c => c.IsSelected)
@@ -288,10 +282,10 @@ public class CameraSettingsViewModel : BindableBase
     {
         Configuration = _settingsService.LoadConfiguration<CameraSettings>();
         Log.Information("Loading camera settings...");
-        
+
         // 清空现有列表
         AvailableCameras.Clear();
-        
+
         if (Configuration?.SelectedCameras == null)
         {
             Log.Information("No saved cameras found in configuration");
@@ -302,12 +296,12 @@ public class CameraSettingsViewModel : BindableBase
         Log.Information("Found {Count} cameras in saved configuration", Configuration.SelectedCameras.Count);
         foreach (var camera in Configuration.SelectedCameras)
         {
-            Log.Information("Loading camera: IP={IP}, MAC={MAC}, Selected={Selected}", 
+            Log.Information("Loading camera: IP={IP}, MAC={MAC}, Selected={Selected}",
                 camera.IpAddress, camera.MacAddress, camera.IsSelected);
-            
+
             // 使用深拷贝添加相机
             var newCamera = new DeviceCameraInfo(camera);
             AvailableCameras.Add(newCamera);
         }
     }
-} 
+}

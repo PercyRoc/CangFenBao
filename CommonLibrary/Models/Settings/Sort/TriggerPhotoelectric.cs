@@ -8,17 +8,17 @@ public class TriggerPhotoelectric : BindableBase
 
     private int _port;
 
-    private int _timeRangeLower;
-
-    private int _timeRangeUpper;
+    private int _resetDelay;
 
     private int _sortingDelay;
-
-    private int _resetDelay;
 
     private int _sortingTimeRangeLower;
 
     private int _sortingTimeRangeUpper;
+
+    private int _timeRangeLower;
+
+    private int _timeRangeUpper;
 
     public string IpAddress
     {

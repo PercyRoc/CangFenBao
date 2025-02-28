@@ -1,5 +1,3 @@
-using System.Windows.Controls;
-
 namespace Presentation_SangNeng.Views.Settings;
 
 public partial class PalletSettingsView
@@ -8,4 +6,4 @@ public partial class PalletSettingsView
     {
         InitializeComponent();
     }
-} 
+}

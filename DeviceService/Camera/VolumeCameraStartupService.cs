@@ -1,8 +1,8 @@
+using CommonLibrary.Models.Settings.Camera;
+using CommonLibrary.Services;
 using DeviceService.Camera.RenJia;
 using Microsoft.Extensions.Hosting;
 using Presentation_CommonLibrary.Services;
-using CommonLibrary.Models.Settings.Camera;
-using CommonLibrary.Services;
 using Serilog;
 
 namespace DeviceService.Camera;
@@ -12,9 +12,9 @@ namespace DeviceService.Camera;
 /// </summary>
 public class VolumeCameraStartupService : IHostedService
 {
+    private readonly SemaphoreSlim _initLock = new(1, 1);
     private readonly INotificationService _notificationService;
     private readonly ISettingsService _settingsService;
-    private readonly SemaphoreSlim _initLock = new(1, 1);
     private RenJiaCameraService? _cameraService;
 
     /// <summary>
@@ -75,18 +75,14 @@ public class VolumeCameraStartupService : IHostedService
         try
         {
             Log.Information("正在停止体积相机服务...");
-            
+
             if (_cameraService != null)
-            {
                 try
                 {
                     // 使用异步停止方法并设置超时保护
                     var stopResult = await _cameraService.StopAsync(5000);
-                    if (!stopResult)
-                    {
-                        Log.Warning("体积相机异步停止未成功完成");
-                    }
-                    
+                    if (!stopResult) Log.Warning("体积相机异步停止未成功完成");
+
                     // 使用异步释放资源
                     await _cameraService.DisposeAsync();
                     _cameraService = null;
@@ -96,8 +92,7 @@ public class VolumeCameraStartupService : IHostedService
                     Log.Error(ex, "停止体积相机服务时发生错误");
                     _cameraService = null;
                 }
-            }
-            
+
             Log.Information("体积相机服务已停止");
         }
         catch (Exception ex)
@@ -125,4 +120,4 @@ public class VolumeCameraStartupService : IHostedService
             _initLock.Release();
         }
     }
-} 
+}

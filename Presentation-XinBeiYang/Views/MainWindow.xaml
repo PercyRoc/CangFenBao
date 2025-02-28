@@ -14,7 +14,7 @@
                  WindowStartupLocation="CenterScreen"
                  Closing="MetroWindow_Closing"
                  ExtendsContentIntoTitleBar="True">
-    
+
     <ui:FluentWindow.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -26,14 +26,14 @@
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
         </ResourceDictionary>
     </ui:FluentWindow.Resources>
-    
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="32" />
             <RowDefinition Height="*" />
             <RowDefinition Height="28" />
         </Grid.RowDefinitions>
-        
+
         <!-- 标题栏 -->
         <Grid Grid.Row="0" Background="{StaticResource TitleBarGradient}">
             <Grid.ColumnDefinitions>
@@ -113,8 +113,8 @@
                     BorderBrush="#40FFFFFF"
                     BorderThickness="0,0,0,1" />
         </Grid>
-        
-         <!-- 主要内容区域 -->
+
+        <!-- 主要内容区域 -->
         <Grid Grid.Row="1" Background="{StaticResource MainBackground}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="2*" />
@@ -440,7 +440,7 @@
             </Grid>
         </Grid>
 
-    <!-- 状态栏 -->
+        <!-- 状态栏 -->
         <Border Grid.Row="2"
                 Background="{StaticResource SecondaryBrush}"
                 Opacity="0.8"

@@ -1,10 +1,12 @@
 using System.ComponentModel.DataAnnotations;
+using System.Drawing;
 using System.IO;
 using System.Windows.Input;
 using CommonLibrary.Models.Settings.Sort;
 using CommonLibrary.Services;
 using Microsoft.Win32;
 using OfficeOpenXml;
+using OfficeOpenXml.Style;
 using Presentation_CommonLibrary.Services;
 using Prism.Commands;
 using Prism.Mvvm;
@@ -13,10 +15,10 @@ namespace Presentation_BenFly.ViewModels.Settings;
 
 public class ChuteSettingsViewModel : BindableBase
 {
-    private readonly ISettingsService _settingsService;
-    private readonly INotificationService _notificationService;
-    private ChuteConfiguration _configuration = new();
     private const string NotificationToken = "SettingWindowGrowl";
+    private readonly INotificationService _notificationService;
+    private readonly ISettingsService _settingsService;
+    private ChuteConfiguration _configuration = new();
 
     public ChuteSettingsViewModel(ISettingsService settingsService, INotificationService notificationService)
     {
@@ -52,10 +54,7 @@ public class ChuteSettingsViewModel : BindableBase
 
     private void ExecuteDeleteRule(ChuteRule? rule)
     {
-        if (rule != null)
-        {
-            Configuration.Rules.Remove(rule);
-        }
+        if (rule != null) Configuration.Rules.Remove(rule);
     }
 
     private void ExecuteImportExcel()
@@ -66,10 +65,7 @@ public class ChuteSettingsViewModel : BindableBase
             Title = "选择Excel文件"
         };
 
-        if (dialog.ShowDialog() != true)
-        {
-            return;
-        }
+        if (dialog.ShowDialog() != true) return;
 
         try
         {
@@ -94,13 +90,11 @@ public class ChuteSettingsViewModel : BindableBase
                 var secondSegment = worksheet.Cells[row, 3].Text;
                 var thirdSegment = worksheet.Cells[row, 4].Text;
 
-                if (string.IsNullOrWhiteSpace(chute) && 
-                    string.IsNullOrWhiteSpace(firstSegment) && 
-                    string.IsNullOrWhiteSpace(secondSegment) && 
+                if (string.IsNullOrWhiteSpace(chute) &&
+                    string.IsNullOrWhiteSpace(firstSegment) &&
+                    string.IsNullOrWhiteSpace(secondSegment) &&
                     string.IsNullOrWhiteSpace(thirdSegment))
-                {
                     continue;
-                }
 
                 var rule = new ChuteRule
                 {
@@ -115,7 +109,8 @@ public class ChuteSettingsViewModel : BindableBase
                 var validationResults = new List<ValidationResult>();
                 if (!Validator.TryValidateObject(rule, validationContext, validationResults, true))
                 {
-                    _notificationService.ShowWarningWithToken($"第{row}行: {validationResults[0].ErrorMessage}", NotificationToken);
+                    _notificationService.ShowWarningWithToken($"第{row}行: {validationResults[0].ErrorMessage}",
+                        NotificationToken);
                     return;
                 }
 
@@ -123,10 +118,7 @@ public class ChuteSettingsViewModel : BindableBase
             }
 
             Configuration.Rules.Clear();
-            foreach (var rule in rules)
-            {
-                Configuration.Rules.Add(rule);
-            }
+            foreach (var rule in rules) Configuration.Rules.Add(rule);
 
             _notificationService.ShowSuccessWithToken("Excel导入成功", NotificationToken);
         }
@@ -145,10 +137,7 @@ public class ChuteSettingsViewModel : BindableBase
             FileName = "格口规则.xlsx"
         };
 
-        if (dialog.ShowDialog() != true)
-        {
-            return;
-        }
+        if (dialog.ShowDialog() != true) return;
 
         try
         {
@@ -170,9 +159,9 @@ public class ChuteSettingsViewModel : BindableBase
             using (var range = worksheet.Cells[1, 1, 1, 4])
             {
                 range.Style.Font.Bold = true;
-                range.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
-                range.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
-                range.Style.Border.BorderAround(OfficeOpenXml.Style.ExcelBorderStyle.Thin);
+                range.Style.Fill.PatternType = ExcelFillStyle.Solid;
+                range.Style.Fill.BackgroundColor.SetColor(Color.LightGray);
+                range.Style.Border.BorderAround(ExcelBorderStyle.Thin);
             }
 
             // 写入数据
@@ -188,7 +177,7 @@ public class ChuteSettingsViewModel : BindableBase
 
                 // 设置数据单元格样式
                 using var range = worksheet.Cells[row, 1, row, 4];
-                range.Style.Border.BorderAround(OfficeOpenXml.Style.ExcelBorderStyle.Thin);
+                range.Style.Border.BorderAround(ExcelBorderStyle.Thin);
             }
 
             // 自动调整列宽
@@ -232,4 +221,4 @@ public class ChuteSettingsViewModel : BindableBase
     {
         Configuration = _settingsService.LoadConfiguration<ChuteConfiguration>();
     }
-} 
+}

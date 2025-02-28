@@ -1,7 +1,7 @@
 using System.Windows;
 using System.Windows.Input;
-using Presentation_SangNeng.Views.Settings;
 using Presentation_CommonLibrary.Services;
+using Presentation_SangNeng.Views.Settings;
 using Serilog;
 
 namespace Presentation_SangNeng.Views.Dialogs;
@@ -11,7 +11,7 @@ public partial class SettingsDialog
     public SettingsDialog(INotificationService notificationService)
     {
         InitializeComponent();
-        
+
         notificationService.Register("SettingWindowGrowl", GrowlPanel);
 
         // 在窗口加载完成后设置服务提供程序并导航
@@ -25,20 +25,17 @@ public partial class SettingsDialog
         // 导航到相机设置页面
         RootNavigation?.Navigate(typeof(CameraSettingsView));
     }
-    
+
     private void OnWindowMouseDown(object sender, MouseButtonEventArgs e)
     {
         try
         {
             // 当在标题栏区域按下左键时允许拖动窗口
-            if (e.ChangedButton == MouseButton.Left && e.GetPosition(this).Y <= 32)
-            {
-                DragMove();
-            }
+            if (e.ChangedButton == MouseButton.Left && e.GetPosition(this).Y <= 32) DragMove();
         }
         catch (Exception ex)
         {
             Log.Error(ex, "拖动窗口时发生错误");
         }
     }
-} 
+}

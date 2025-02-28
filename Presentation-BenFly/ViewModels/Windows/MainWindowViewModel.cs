@@ -17,8 +17,8 @@ using Presentation_CommonLibrary.Services;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
-using SortingService.Interfaces;
 using SixLabors.ImageSharp;
+using SortingService.Interfaces;
 
 namespace Presentation_BenFly.ViewModels.Windows;
 
@@ -33,16 +33,16 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     private readonly DispatcherTimer _timer;
 
-    private int _currentPackageIndex = 0;
-
     private string _currentBarcode = string.Empty;
 
     private BitmapSource? _currentImage;
+
+    private int _currentPackageIndex;
     private bool _disposed;
 
-    private SystemStatus _systemStatus = new();
-
     private bool _isInitialized;
+
+    private SystemStatus _systemStatus = new();
 
     public MainWindowViewModel(
         ICustomDialogService dialogService,
@@ -91,13 +91,13 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         // 订阅图像流
         _subscriptions.Add(_cameraService.ImageStream
-            .ObserveOn(TaskPoolScheduler.Default)  // 使用任务池调度器
+            .ObserveOn(TaskPoolScheduler.Default) // 使用任务池调度器
             .Subscribe(imageData =>
             {
                 try
                 {
                     var image = imageData.image;
-                    
+
                     // 使用 TaskPool 进行图像编码
                     Task.Run(() =>
                     {
@@ -415,7 +415,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 package.Image = null;
                 Log.Debug("已释放包裹 {Barcode} 的图像资源", package.Barcode);
             }
-            
+
             try
             {
                 var chuteConfig = _settingsService.LoadConfiguration<ChuteConfiguration>();
@@ -468,10 +468,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
 
         var sizeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "尺寸");
-        if (sizeItem != null)
-        {
-            sizeItem.Value = package.VolumeDisplay;
-        }
+        if (sizeItem != null) sizeItem.Value = package.VolumeDisplay;
 
         var segmentItem = PackageInfoItems.FirstOrDefault(x => x.Label == "段码");
         if (segmentItem != null)
@@ -609,7 +606,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
         if (_disposed) return;
 
         if (disposing)
-        {
             try
             {
                 // 停止分拣服务
@@ -631,10 +627,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
 
                 // 释放订阅
-                foreach (var subscription in _subscriptions)
-                {
-                    subscription.Dispose();
-                }
+                foreach (var subscription in _subscriptions) subscription.Dispose();
 
                 _subscriptions.Clear();
 
@@ -645,7 +638,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 Log.Error(ex, "释放资源时发生错误");
             }
-        }
 
         _disposed = true;
     }

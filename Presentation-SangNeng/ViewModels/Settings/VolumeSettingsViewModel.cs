@@ -10,8 +10,8 @@ namespace Presentation_SangNeng.ViewModels.Settings;
 
 public class VolumeSettingsViewModel : BindableBase
 {
-    private readonly ISettingsService _settingsService;
     private readonly INotificationService _notificationService;
+    private readonly ISettingsService _settingsService;
     private VolumeSettings? _configuration;
 
     public VolumeSettingsViewModel(
@@ -62,7 +62,7 @@ public class VolumeSettingsViewModel : BindableBase
     private void ExecuteSaveConfiguration()
     {
         if (Configuration == null) return;
-        
+
         try
         {
             _settingsService.SaveConfiguration(Configuration);
@@ -78,4 +78,4 @@ public class VolumeSettingsViewModel : BindableBase
     {
         Configuration = _settingsService.LoadConfiguration<VolumeSettings>();
     }
-} 
+}

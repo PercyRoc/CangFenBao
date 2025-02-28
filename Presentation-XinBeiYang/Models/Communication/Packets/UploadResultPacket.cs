@@ -3,26 +3,26 @@ using System.Buffers.Binary;
 namespace Presentation_XinBeiYang.Models.Communication.Packets;
 
 /// <summary>
-/// 上包结果数据包
+///     上包结果数据包
 /// </summary>
 public class UploadResultPacket : PlcPacket
 {
-    /// <summary>
-    /// 上包结果
-    /// </summary>
-    public bool IsTimeout { get; }
-
-    /// <summary>
-    /// 包裹流水号
-    /// </summary>
-    public int PackageId { get; }
-
     private UploadResultPacket(ushort commandId, bool isTimeout, int packageId)
         : base(CommandType.UploadResult, commandId)
     {
         IsTimeout = isTimeout;
         PackageId = packageId;
     }
+
+    /// <summary>
+    ///     上包结果
+    /// </summary>
+    public bool IsTimeout { get; }
+
+    /// <summary>
+    ///     包裹流水号
+    /// </summary>
+    public int PackageId { get; }
 
     protected override byte[] GetMessageBody()
     {
@@ -47,7 +47,7 @@ public class UploadResultPacket : PlcPacket
 }
 
 /// <summary>
-/// 上包结果应答数据包
+///     上包结果应答数据包
 /// </summary>
 public class UploadResultAckPacket(ushort commandId) : PlcPacket(CommandType.UploadResultAck, commandId)
 {
@@ -55,4 +55,4 @@ public class UploadResultAckPacket(ushort commandId) : PlcPacket(CommandType.Upl
     {
         return null;
     }
-} 
+}

@@ -26,7 +26,7 @@
         <PackageReference Include="WPF-UI"/>
         <PackageReference Include="HandyControl"/>
         <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
-        
+
         <!-- Serial Port -->
         <PackageReference Include="System.IO.Ports"/>
     </ItemGroup>
@@ -39,23 +39,23 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="ViewModels\" />
-      <Folder Include="Views\Dialogs\" />
-      <Folder Include="Views\Settings\" />
+        <Folder Include="ViewModels\"/>
+        <Folder Include="Views\Dialogs\"/>
+        <Folder Include="Views\Settings\"/>
     </ItemGroup>
 
     <ItemGroup>
-      <Page Update="Views\Windows\MainWindow.xaml">
-        <Generator>MSBuild:Compile</Generator>
-        <XamlRuntime>Wpf</XamlRuntime>
-        <SubType>Designer</SubType>
-      </Page>
+        <Page Update="Views\Windows\MainWindow.xaml">
+            <Generator>MSBuild:Compile</Generator>
+            <XamlRuntime>Wpf</XamlRuntime>
+            <SubType>Designer</SubType>
+        </Page>
     </ItemGroup>
 
     <ItemGroup>
-      <Resource Include="..\Presentation-CommonLibrary\Resources\Icon\logo.ico">
-        <Link>logo.ico</Link>
-      </Resource>
+        <Resource Include="..\Presentation-CommonLibrary\Resources\Icon\logo.ico">
+            <Link>logo.ico</Link>
+        </Resource>
     </ItemGroup>
 
 </Project>

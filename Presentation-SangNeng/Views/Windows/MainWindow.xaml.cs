@@ -8,11 +8,12 @@ using MessageBoxResult = System.Windows.MessageBoxResult;
 namespace Presentation_SangNeng.Views.Windows;
 
 /// <summary>
-/// Interaction logic for MainWindow.xaml
+///     Interaction logic for MainWindow.xaml
 /// </summary>
 public partial class MainWindow
 {
     private readonly IDialogService _dialogService;
+
     public MainWindow(IDialogService dialogService, INotificationService notificationService)
     {
         _dialogService = dialogService;
@@ -44,16 +45,13 @@ public partial class MainWindow
             await _dialogService.ShowErrorAsync("Error occurred while closing the program, please try again", "Error");
         }
     }
-    
+
     private void OnWindowMouseDown(object sender, MouseButtonEventArgs e)
     {
         try
         {
             // 当在标题栏区域按下左键时允许拖动窗口
-            if (e.ChangedButton == MouseButton.Left && e.GetPosition(this).Y <= 32)
-            {
-                DragMove();
-            }
+            if (e.ChangedButton == MouseButton.Left && e.GetPosition(this).Y <= 32) DragMove();
         }
         catch (Exception ex)
         {

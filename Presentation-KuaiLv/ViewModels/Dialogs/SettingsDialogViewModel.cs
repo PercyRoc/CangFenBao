@@ -1,5 +1,5 @@
-using Presentation_KuaiLv.ViewModels.Settings;
 using Presentation_CommonLibrary.Services;
+using Presentation_KuaiLv.ViewModels.Settings;
 using Prism.Commands;
 using Prism.Ioc;
 using Prism.Mvvm;
@@ -12,9 +12,9 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
 {
     // 保存各个设置页面的ViewModel实例
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
+    private readonly INotificationService _notificationService;
     private readonly UploadSettingsViewModel _uploadSettingsViewModel;
     private readonly WarningLightSettingsViewModel _warningLightSettingsViewModel;
-    private readonly INotificationService _notificationService;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
@@ -75,4 +75,4 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
     {
         RequestClose?.Invoke(new DialogResult(ButtonResult.Cancel));
     }
-} 
+}

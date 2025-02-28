@@ -2,7 +2,6 @@
 using System.Windows;
 using CommonLibrary.Extensions;
 using DeviceService;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Presentation_CommonLibrary.Extensions;
 using Presentation_XinBeiYang.Services;
@@ -16,7 +15,7 @@ using Serilog;
 namespace Presentation_XinBeiYang;
 
 /// <summary>
-/// Interaction logic for App.xaml
+///     Interaction logic for App.xaml
 /// </summary>
 public partial class App
 {
@@ -24,6 +23,7 @@ public partial class App
     {
         return Container.Resolve<MainWindow>();
     }
+
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
         // 注册视图和ViewModel
@@ -35,26 +35,26 @@ public partial class App
         containerRegistry.AddCommonServices();
         containerRegistry.AddPresentationCommonServices();
         containerRegistry.AddPhotoCamera();
-        
+
         // 注册 DWS 服务
         containerRegistry.RegisterSingleton<HttpClient>();
-        
+
         // 注册包裹中转服务
         containerRegistry.RegisterSingleton<PackageTransferService>();
-        
+
         // 注册PLC通讯服务
         containerRegistry.RegisterSingleton<IPlcCommunicationService, PlcCommunicationService>();
-        
+
         // 注册PLC通讯托管服务
         containerRegistry.RegisterSingleton<IHostedService, PlcCommunicationHostedService>();
-        
+
         // 注册设置窗口
         containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
         containerRegistry.Register<SettingsDialogViewModel>();
     }
-    
+
     /// <summary>
-    /// 启动
+    ///     启动
     /// </summary>
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -76,9 +76,9 @@ public partial class App
         var hostedService = Container.Resolve<IHostedService>();
         _ = hostedService.StartAsync(CancellationToken.None);
     }
-    
+
     /// <summary>
-    /// 退出
+    ///     退出
     /// </summary>
     protected override async void OnExit(ExitEventArgs e)
     {
@@ -87,7 +87,7 @@ public partial class App
             // 停止托管服务
             var hostedService = Container.Resolve<IHostedService>();
             await hostedService.StopAsync(CancellationToken.None);
-            
+
             // 等待所有日志写入完成
             Log.Information("应用程序关闭");
             await Log.CloseAndFlushAsync();

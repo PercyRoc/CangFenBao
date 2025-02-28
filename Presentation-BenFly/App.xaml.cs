@@ -37,7 +37,7 @@ public partial class App
         containerRegistry.AddPresentationCommonServices();
         containerRegistry.AddPhotoCamera();
         containerRegistry.AddSortingServices();
-        
+
         // 注册设置页面
         containerRegistry.Register<CameraSettingsView>();
         containerRegistry.Register<SortSettingsView>();
@@ -53,7 +53,7 @@ public partial class App
         // 注册设置窗口
         containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
         containerRegistry.Register<SettingsDialogViewModel>();
-        
+
         // 注册 HttpClient
         var services = new ServiceCollection();
         var settingsService = Container.Resolve<ISettingsService>();
@@ -139,18 +139,14 @@ public partial class App
             }
 
             // 释放相机工厂
-            if (Container.Resolve<CameraFactory>() is IDisposable cameraFactory)
-            {
-                cameraFactory.Dispose();
-                Log.Information("相机工厂已释放");
-            }
+            var cameraFactory = Container.Resolve<CameraFactory>();
+            cameraFactory.DisposeAsync().AsTask().Wait();
+            Log.Information("相机工厂已释放");
 
             // 释放相机服务
-            if (Container.Resolve<ICameraService>() is IDisposable cameraService)
-            {
-                cameraService.Dispose();
-                Log.Information("相机服务已释放");
-            }
+            var cameraService = Container.Resolve<ICameraService>();
+            cameraService.DisposeAsync().AsTask().Wait();
+            Log.Information("相机服务已释放");
 
             // 等待所有日志写入完成
             Log.Information("应用程序关闭");

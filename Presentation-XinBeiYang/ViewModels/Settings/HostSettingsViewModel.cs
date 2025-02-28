@@ -9,8 +9,8 @@ namespace Presentation_XinBeiYang.ViewModels.Settings;
 
 public class HostSettingsViewModel : BindableBase
 {
-    private readonly ISettingsService _settingsService;
     private readonly INotificationService _notificationService;
+    private readonly ISettingsService _settingsService;
     private HostConfiguration _configuration = new();
 
     public HostSettingsViewModel(
@@ -62,4 +62,4 @@ public class HostSettingsViewModel : BindableBase
             _notificationService.ShowError("保存配置失败", ex.Message);
         }
     }
-} 
+}

@@ -1,11 +1,9 @@
-using System.Windows.Controls;
-
 namespace Presentation_BenFly.Views.Settings;
 
-public partial class ChuteSettingsView : Page
+public partial class ChuteSettingsView
 {
     public ChuteSettingsView()
     {
         InitializeComponent();
     }
-} 
+}

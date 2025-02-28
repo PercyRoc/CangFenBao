@@ -1,14 +1,14 @@
 using System.Net.Sockets;
-using SortingService.Interfaces;
 using Serilog;
+using SortingService.Interfaces;
 
 namespace SortingService.Services;
 
 public sealed class TcpClientService : ITcpClientService
 {
     private TcpClient? _client;
-    private NetworkStream? _stream;
     private bool _disposed;
+    private NetworkStream? _stream;
 
     public bool IsConnected => _client?.Connected ?? false;
     public string IpAddress { get; private set; } = string.Empty;
@@ -25,7 +25,7 @@ public sealed class TcpClientService : ITcpClientService
         try
         {
             Log.Information("正在连接到 {IpAddress}:{Port}...", ipAddress, port);
-            
+
             _client = new TcpClient
             {
                 NoDelay = true,
@@ -36,7 +36,7 @@ public sealed class TcpClientService : ITcpClientService
             using var cts = new CancellationTokenSource(timeout);
             await _client.ConnectAsync(ipAddress, port, cts.Token);
             _stream = _client.GetStream();
-            
+
             Log.Information("已成功连接到 {IpAddress}:{Port}", ipAddress, port);
         }
         catch (Exception ex)
@@ -105,7 +105,7 @@ public sealed class TcpClientService : ITcpClientService
         {
             var buffer = new byte[1024];
             var bytesRead = await _stream.ReadAsync(buffer);
-            
+
             if (bytesRead == 0)
             {
                 Log.Warning("连接已关闭: {IpAddress}:{Port}", IpAddress, Port);
@@ -114,7 +114,7 @@ public sealed class TcpClientService : ITcpClientService
 
             var data = new byte[bytesRead];
             Array.Copy(buffer, data, bytesRead);
-            
+
             Log.Debug("从 {IpAddress}:{Port} 接收到 {Length} 字节数据", IpAddress, Port, bytesRead);
             return data;
         }
@@ -135,7 +135,6 @@ public sealed class TcpClientService : ITcpClientService
         if (_disposed) return;
 
         if (disposing)
-        {
             try
             {
                 // 检查是否需要断开连接
@@ -158,7 +157,6 @@ public sealed class TcpClientService : ITcpClientService
             {
                 Log.Error(ex, "释放TCP客户端资源时发生错误");
             }
-        }
 
         _disposed = true;
     }

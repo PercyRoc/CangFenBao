@@ -23,9 +23,9 @@ public class DahuaCameraService : ICameraService
 
     private readonly object _cameraIdLock = new();
     private readonly SemaphoreSlim _imageProcessingSemaphore = new(1, 1);
+    private readonly Subject<(Image<Rgba32> image, IReadOnlyList<BarcodeLocation> barcodes)> _imageSubject = new();
     private readonly LogisticsWrapper _logisticsWrapper;
     private readonly Subject<PackageInfo> _packageSubject = new();
-    private readonly Subject<(Image<Rgba32> image, IReadOnlyList<BarcodeLocation> barcodes)> _imageSubject = new();
     private bool _disposed;
     private string? _firstCameraId;
 
@@ -55,7 +55,7 @@ public class DahuaCameraService : ICameraService
     /// <summary>
     ///     图像信息流
     /// </summary>
-    public IObservable<(Image<Rgba32> image, IReadOnlyList<BarcodeLocation> barcodes)> ImageStream => 
+    public IObservable<(Image<Rgba32> image, IReadOnlyList<BarcodeLocation> barcodes)> ImageStream =>
         _imageSubject.AsObservable();
 
     /// <summary>
@@ -139,7 +139,8 @@ public class DahuaCameraService : ICameraService
                             packageInfo.Length = Math.Round(args.VolumeInfo.length / 10, 2);
                             packageInfo.Width = Math.Round(args.VolumeInfo.width / 10, 2);
                             packageInfo.Height = Math.Round(args.VolumeInfo.height / 10, 2);
-                            packageInfo.VolumeDisplay = $"{packageInfo.Length:F1} × {packageInfo.Width:F1} × {packageInfo.Height:F1}";
+                            packageInfo.VolumeDisplay =
+                                $"{packageInfo.Length:F1} × {packageInfo.Width:F1} × {packageInfo.Height:F1}";
                         }
 
                         // 处理图像数据
@@ -231,17 +232,17 @@ public class DahuaCameraService : ICameraService
         try
         {
             Log.Information("正在停止大华相机服务...");
-            
+
             // 同步执行停止流程
-            try 
+            try
             {
                 // 清理回调
                 DetachAllCallbacks();
-                
+
                 // 重置状态
                 IsConnected = false;
                 ConnectionChanged?.Invoke(_firstCameraId ?? string.Empty, false);
-                
+
                 Log.Information("大华相机服务已停止");
                 return Task.FromResult(true);
             }
@@ -300,7 +301,18 @@ public class DahuaCameraService : ICameraService
         }
     }
 
-  
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed) return;
+        await StopAsync();
+        _imageProcessingSemaphore.Dispose();
+        _packageSubject.Dispose();
+        _imageSubject.Dispose();
+        _disposed = true;
+        GC.SuppressFinalize(this);
+    }
+
+
     /// <summary>
     ///     初始化SDK
     /// </summary>
@@ -397,29 +409,24 @@ public class DahuaCameraService : ICameraService
 
                         // 逐行复制数据，处理非4字节对齐的情况
                         if (retImg.Width % 4 != 0)
-                        {
                             for (var i = 0; i < retImg.Height; i++)
-                            {
                                 Array.Copy(retImg.Data, i * retImg.Width, alignedData, i * stride, retImg.Width);
-                            }
-                        }
                         else
-                        {
                             Array.Copy(retImg.Data, alignedData, retImg.Data.Length);
-                        }
 
                         // 从处理后的数据创建图像
                         using var grayImage = Image.LoadPixelData<L8>(alignedData, retImg.Width, retImg.Height);
                         image = grayImage.CloneAs<Rgba32>();
 
-                        #if DEBUG
+#if DEBUG
                         image.SaveAsPng($"debug_image_{DateTime.Now:yyyyMMdd_HHmmss}.png");
-                        #endif
+#endif
                     }
                     finally
                     {
                         DecompressorPool.Return(decompressor);
                     }
+
                     break;
                 }
                 case LogisticsAPIStruct.EImageType.eImageTypeBGR:
@@ -427,12 +434,12 @@ public class DahuaCameraService : ICameraService
                 {
                     // 检查数据大小是否匹配mono8格式
                     var channels = imageType == LogisticsAPIStruct.EImageType.eImageTypeBGR ? 3 : 1;
-                    var stride = ((width * channels + 3) & ~3);
+                    var stride = (width * channels + 3) & ~3;
                     var expectedSize = stride * height;
 
                     if (imageData.Length < expectedSize)
                     {
-                        Log.Warning("图像数据大小不匹配: 期望={Expected}, 实际={Actual}, 步幅={Stride}", 
+                        Log.Warning("图像数据大小不匹配: 期望={Expected}, 实际={Actual}, 步幅={Stride}",
                             expectedSize, imageData.Length, stride);
                         throw new ArgumentException($"图像数据大小不匹配: 期望{expectedSize}字节，实际{imageData.Length}字节");
                     }
@@ -441,17 +448,11 @@ public class DahuaCameraService : ICameraService
                     var alignedData = new byte[stride * height];
 
                     // 逐行复制数据，处理非4字节对齐的情况
-                    if ((width * channels) % 4 != 0)
-                    {
+                    if (width * channels % 4 != 0)
                         for (var i = 0; i < height; i++)
-                        {
-                            Array.Copy(imageData, i * (width * channels), alignedData, i * stride, width * channels);
-                        }
-                    }
+                            Array.Copy(imageData, i * width * channels, alignedData, i * stride, width * channels);
                     else
-                    {
                         Array.Copy(imageData, alignedData, imageData.Length);
-                    }
 
                     // 从处理后的数据创建图像
                     if (channels == 1)
@@ -464,6 +465,7 @@ public class DahuaCameraService : ICameraService
                         using var bgrImage = Image.LoadPixelData<Bgr24>(alignedData, width, height);
                         image = bgrImage.CloneAs<Rgba32>();
                     }
+
                     break;
                 }
                 default:
@@ -537,17 +539,5 @@ public class DahuaCameraService : ICameraService
         {
             Log.Error(ex, "处理实时图像时发生错误");
         }
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-       
-        if (_disposed) return;
-        await StopAsync();
-        _imageProcessingSemaphore.Dispose();
-        _packageSubject.Dispose();
-        _imageSubject.Dispose();
-        _disposed = true;
-        GC.SuppressFinalize(this);
     }
 }

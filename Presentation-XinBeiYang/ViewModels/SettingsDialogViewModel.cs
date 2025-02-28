@@ -8,7 +8,7 @@ using Serilog;
 
 namespace Presentation_XinBeiYang.ViewModels;
 
-public class SettingsDialogViewModel: BindableBase, IDialogAware
+public class SettingsDialogViewModel : BindableBase, IDialogAware
 {
     // 保存各个设置页面的ViewModel实例
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;

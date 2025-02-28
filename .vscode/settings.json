@@ -12,5 +12,5 @@
     "dotnet.inlayHints.suppressInlayHintsForParametersThatDifferOnlyBySuffix": true,
     "dotnet.inlayHints.suppressInlayHintsForParametersThatMatchMethodIntent": true,
     "dotnet.formatting.organizeImportsOnFormat": true,
-    "commentTranslate.targetLanguage": "zh-CN"
+    "commentTranslate.targetLanguage": ""
 }

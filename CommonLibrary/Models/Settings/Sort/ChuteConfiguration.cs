@@ -25,7 +25,7 @@ public class ChuteConfiguration : BindableBase
     }
 
     /// <summary>
-    /// 根据段码获取格口号
+    ///     根据段码获取格口号
     /// </summary>
     /// <param name="firstSegment">一段码</param>
     /// <param name="secondSegment">二段码</param>
@@ -46,7 +46,6 @@ public class ChuteConfiguration : BindableBase
                 .ToList();
 
             foreach (var part in secondSegmentParts)
-            {
                 // 如果当前部分包含横杠，尝试匹配二级网点段码
                 if (part.Contains('-'))
                 {
@@ -57,10 +56,7 @@ public class ChuteConfiguration : BindableBase
                     var matchedRule = Rules.FirstOrDefault(rule =>
                         !string.IsNullOrWhiteSpace(rule.SecondSegment) && rule.SecondSegment == segments[0]);
 
-                    if (matchedRule != null)
-                    {
-                        return matchedRule.Chute;
-                    }
+                    if (matchedRule != null) return matchedRule.Chute;
 
                     // 如果还有更多部分，尝试匹配第二部分
                     if (segments.Length < 2) continue;
@@ -68,10 +64,7 @@ public class ChuteConfiguration : BindableBase
                         matchedRule = Rules.FirstOrDefault(rule =>
                             !string.IsNullOrWhiteSpace(rule.SecondSegment) && rule.SecondSegment == segments[1]);
 
-                        if (matchedRule != null)
-                        {
-                            return matchedRule.Chute;
-                        }
+                        if (matchedRule != null) return matchedRule.Chute;
                     }
                 }
                 else
@@ -80,16 +73,12 @@ public class ChuteConfiguration : BindableBase
                     var matchedRule = Rules.FirstOrDefault(rule =>
                         !string.IsNullOrWhiteSpace(rule.SecondSegment) && rule.SecondSegment == part);
 
-                    if (matchedRule != null)
-                    {
-                        return matchedRule.Chute;
-                    }
+                    if (matchedRule != null) return matchedRule.Chute;
                 }
-            }
 
             return ExceptionChute;
         }
-        
+
         // 在匹配一段码的规则中查找二段码匹配
         // 首先按逗号分割二段码
         var secondSegmentPartsWithFirst = secondSegment.Split(',', StringSplitOptions.RemoveEmptyEntries)
@@ -98,7 +87,6 @@ public class ChuteConfiguration : BindableBase
             .ToList();
 
         foreach (var part in secondSegmentPartsWithFirst)
-        {
             // 如果当前部分包含横杠
             if (part.Contains('-'))
             {
@@ -108,22 +96,16 @@ public class ChuteConfiguration : BindableBase
                 // 先尝试使用第一部分在匹配了一段码的规则中查找
                 var perfectMatch = matchedFirstSegmentRules.FirstOrDefault(rule =>
                     !string.IsNullOrWhiteSpace(rule.SecondSegment) && rule.SecondSegment == segments[0]);
-                        
-                if (perfectMatch != null)
-                {
-                    return perfectMatch.Chute;
-                }
-                        
+
+                if (perfectMatch != null) return perfectMatch.Chute;
+
                 // 如果还有更多部分，尝试第二部分
                 if (segments.Length < 2) continue;
                 {
                     perfectMatch = matchedFirstSegmentRules.FirstOrDefault(rule =>
                         !string.IsNullOrWhiteSpace(rule.SecondSegment) && rule.SecondSegment == segments[1]);
-                            
-                    if (perfectMatch != null)
-                    {
-                        return perfectMatch.Chute;
-                    }
+
+                    if (perfectMatch != null) return perfectMatch.Chute;
                 }
             }
             else
@@ -131,20 +113,16 @@ public class ChuteConfiguration : BindableBase
                 // 如果不包含横杠，在匹配了一段码的规则中查找完全匹配的规则
                 var perfectMatch = matchedFirstSegmentRules.FirstOrDefault(rule =>
                     !string.IsNullOrWhiteSpace(rule.SecondSegment) && rule.SecondSegment == part);
-                
-                if (perfectMatch != null)
-                {
-                    return perfectMatch.Chute;
-                }
+
+                if (perfectMatch != null) return perfectMatch.Chute;
             }
-        }
-        
+
         // 如果有匹配一段码的规则但没有匹配二段码的规则，返回第一个匹配一段码的规则
         return matchedFirstSegmentRules.First().Chute;
     }
 
     /// <summary>
-    /// 根据空格分隔的段码获取格口号
+    ///     根据空格分隔的段码获取格口号
     /// </summary>
     /// <param name="barcode">使用空格分隔的段码，例如：551 A01-B01 00 或 551 A01 00</param>
     /// <returns>格口号，如果未找到匹配规则则返回异常格口号</returns>
@@ -163,7 +141,9 @@ public class ChuteConfiguration : BindableBase
             var segments = barcode.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
             // 如果段码数量小于2，返回异常格口
-            return segments.Length < 2 ? ExceptionChute :
+            return segments.Length < 2
+                ? ExceptionChute
+                :
                 // 使用前两段进行匹配
                 GetChute(segments[0], segments[1]);
         }
@@ -177,21 +157,18 @@ public class ChuteConfiguration : BindableBase
 public class ChuteRule : BindableBase, IValidatableObject
 {
     private int _chute;
+    private string _errorMessage = string.Empty;
     private string _firstSegment = string.Empty;
+    private bool _hasError;
     private string _secondSegment = string.Empty;
     private string _thirdSegment = string.Empty;
-    private bool _hasError;
-    private string _errorMessage = string.Empty;
 
     public int Chute
     {
         get => _chute;
         set
         {
-            if (SetProperty(ref _chute, value))
-            {
-                ValidateChute();
-            }
+            if (SetProperty(ref _chute, value)) ValidateChute();
         }
     }
 
@@ -225,6 +202,20 @@ public class ChuteRule : BindableBase, IValidatableObject
         private set => SetProperty(ref _errorMessage, value);
     }
 
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (Chute is < 1 or > 999) yield return new ValidationResult("格口号必须是1-999之间的数字", [nameof(Chute)]);
+
+        if (string.IsNullOrWhiteSpace(FirstSegment) &&
+            string.IsNullOrWhiteSpace(SecondSegment) &&
+            string.IsNullOrWhiteSpace(ThirdSegment))
+            yield return new ValidationResult("至少需要填写一个段码", [
+                nameof(FirstSegment),
+                nameof(SecondSegment),
+                nameof(ThirdSegment)
+            ]);
+    }
+
     private void ValidateChute()
     {
         if (Chute is < 1 or > 999)
@@ -237,23 +228,4 @@ public class ChuteRule : BindableBase, IValidatableObject
         HasError = false;
         ErrorMessage = string.Empty;
     }
-
-    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
-    {
-        if (Chute is < 1 or > 999)
-        {
-            yield return new ValidationResult("格口号必须是1-999之间的数字", [nameof(Chute)]);
-        }
-
-        if (string.IsNullOrWhiteSpace(FirstSegment) && 
-            string.IsNullOrWhiteSpace(SecondSegment) && 
-            string.IsNullOrWhiteSpace(ThirdSegment))
-        {
-            yield return new ValidationResult("至少需要填写一个段码", [
-                nameof(FirstSegment),
-                nameof(SecondSegment),
-                nameof(ThirdSegment)
-            ]);
-        }
-    }
-} 
+}

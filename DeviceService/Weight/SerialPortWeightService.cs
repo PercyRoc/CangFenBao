@@ -1,12 +1,13 @@
+using System.Globalization;
 using System.IO.Ports;
+using System.Text;
 using CommonLibrary.Models.Settings.Weight;
 using Serilog;
-using System.Globalization;
 
 namespace DeviceService.Weight;
 
 /// <summary>
-/// 串口重量称服务
+///     串口重量称服务
 /// </summary>
 public class SerialPortWeightService : IWeightService
 {
@@ -16,20 +17,20 @@ public class SerialPortWeightService : IWeightService
     private const int MaxCacheAgeMinutes = 2;
     private const double StableThreshold = 0.001;
     private const int ProcessInterval = 50;
+    private readonly CancellationTokenSource _cts = new();
 
     private readonly object _lock = new();
     private readonly byte[] _readBuffer = new byte[ReadBufferSize];
     private readonly Queue<(double Weight, DateTime Timestamp)> _weightCache = new();
-    private readonly List<double> _weightSamples = [];
     private readonly AutoResetEvent _weightReceived = new(false);
-    private readonly CancellationTokenSource _cts = new();
+    private readonly List<double> _weightSamples = [];
+    private int _bufferPosition;
+    private bool _disposed;
+    private bool _isConnected;
+    private DateTime _lastProcessTime = DateTime.MinValue;
 
     private SerialPort? _serialPort;
     private WeightSettings _settings = new();
-    private bool _disposed;
-    private bool _isConnected;
-    private int _bufferPosition;
-    private DateTime _lastProcessTime = DateTime.MinValue;
 
     public bool IsConnected
     {
@@ -87,7 +88,7 @@ public class SerialPortWeightService : IWeightService
                         DataBits = _settings.SerialPortParams.DataBits,
                         StopBits = _settings.SerialPortParams.StopBits,
                         Parity = _settings.SerialPortParams.Parity,
-                        Encoding = System.Text.Encoding.ASCII,
+                        Encoding = Encoding.ASCII,
                         ReadBufferSize = ReadBufferSize * 2,
                         ReadTimeout = 500,
                         WriteTimeout = 500
@@ -124,28 +125,6 @@ public class SerialPortWeightService : IWeightService
         catch (Exception ex)
         {
             Log.Error(ex, "启动串口重量称服务失败");
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// 检查串口是否被占用
-    /// </summary>
-    private static bool IsPortInUse(string portName)
-    {
-        try
-        {
-            using var port = new SerialPort(portName);
-            port.Open();
-            port.Close();
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return true;
-        }
-        catch
-        {
             return false;
         }
     }
@@ -202,7 +181,7 @@ public class SerialPortWeightService : IWeightService
             var lowerBound = targetTime.AddMilliseconds(_settings.TimeRangeLower); // TimeRangeLower 已经是负数，所以用加法
             var upperBound = targetTime.AddMilliseconds(_settings.TimeRangeUpper);
 
-            Log.Debug("查找重量数据 - 目标时间: {TargetTime}, 下限: {LowerBound}, 上限: {UpperBound}, 缓存数量: {CacheCount}", 
+            Log.Debug("查找重量数据 - 目标时间: {TargetTime}, 下限: {LowerBound}, 上限: {UpperBound}, 缓存数量: {CacheCount}",
                 targetTime, lowerBound, upperBound, _weightCache.Count);
 
             if (_weightCache.Count > 0)
@@ -276,208 +255,6 @@ public class SerialPortWeightService : IWeightService
         }
     }
 
-    private void OnDataReceived(object sender, SerialDataReceivedEventArgs e)
-    {
-        try
-        {
-            if (_serialPort is not { IsOpen: true }) return;
-
-            var receiveTime = DateTime.Now;
-            var bytesToRead = _serialPort.BytesToRead;
-            if (bytesToRead == 0) return;
-
-            if (_bufferPosition + bytesToRead > ReadBufferSize)
-            {
-                Log.Debug("Buffer is full, resetting buffer");
-                _bufferPosition = 0;
-            }
-
-            var availableSpace = ReadBufferSize - _bufferPosition;
-            var actualBytesToRead = Math.Min(bytesToRead, availableSpace);
-
-            if (actualBytesToRead <= 0)
-            {
-                Log.Warning("Buffer space insufficient, skipping this read");
-                return;
-            }
-
-            var bytesRead = _serialPort.Read(_readBuffer, _bufferPosition, actualBytesToRead);
-            _bufferPosition += bytesRead;
-
-            ProcessBuffer(receiveTime);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "Error occurred while processing serial port data");
-            _bufferPosition = 0;
-        }
-    }
-
-    private void ProcessBuffer(DateTime receiveTime)
-    {
-        if ((receiveTime - _lastProcessTime).TotalMilliseconds < ProcessInterval) return;
-        _lastProcessTime = receiveTime;
-
-        CleanExpiredWeightData(receiveTime);
-
-        try
-        {
-            var rawData = System.Text.Encoding.ASCII.GetString(_readBuffer, 0, _bufferPosition);
-            
-            // 新增数据分割逻辑
-            var dataSegments = rawData.Split(['='], StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.Trim())
-                .Where(s => s.Length >= 6)  // 最小有效长度检查
-                .ToList();
-
-            foreach (var valuePart in dataSegments.Select(segment => segment.Length > 6 ? segment[..6] : segment))
-            {
-                // 先反转数据，再解析
-                var reversedValue = ReverseWeight(valuePart);
-                if (float.TryParse(reversedValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var weight))
-                {
-                    // 根据称重类型处理
-                    if (_settings.WeightType == WeightType.Static)
-                    {
-                        ProcessStaticWeight(weight * 1000, receiveTime);
-                    }
-                    else
-                    {
-                        ProcessDynamicWeight(weight * 1000, receiveTime);
-                    }
-                }
-                else
-                {
-                    Log.Warning("无法解析的重量数据: {Data}", valuePart);
-                }
-            }
-
-            // 新增粘包处理：保留未处理完的数据
-            var lastSegment = dataSegments.LastOrDefault();
-            if (lastSegment != null && rawData.EndsWith("="))
-            {
-                _bufferPosition = 0; // 完整处理时清空缓冲区
-            }
-            else if (lastSegment != null)
-            {
-                // 将未处理完的部分保留在缓冲区
-                var remaining = rawData.Substring(rawData.LastIndexOf('=') + 1);
-                var remainingBytes = System.Text.Encoding.ASCII.GetBytes(remaining);
-                Array.Copy(remainingBytes, _readBuffer, remainingBytes.Length);
-                _bufferPosition = remainingBytes.Length;
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "Error occurred while parsing weight data");
-        }
-        finally
-        {
-            _bufferPosition = 0;
-        }
-    }
-
-    private void ProcessStaticWeight(double weightG, DateTime timestamp)
-    {
-        _weightSamples.Add(weightG);
-
-        while (_weightSamples.Count > _settings.StableCheckCount)
-        {
-            _weightSamples.RemoveAt(0);
-        }
-
-        if (_weightSamples.Count < _settings.StableCheckCount) return;
-
-        var average = _weightSamples.Average();
-        var isStable = _weightSamples.All(w => Math.Abs(w - average) <= StableThreshold * 1000);
-
-        if (!isStable) return;
-        
-        
-        lock (_lock)
-        {
-            _weightCache.Enqueue((average, timestamp));
-            while (_weightCache.Count > MaxCacheSize)
-            {
-                _weightCache.Dequeue();
-            }
-        }
-
-        _weightReceived.Set();
-        _weightSamples.Clear();
-    }
-
-    private void ProcessDynamicWeight(double weightG, DateTime timestamp)
-    {
-        Log.Debug("处理动态重量: {Weight:F3}kg", weightG / 1000);
-        
-        lock (_lock)
-        {
-            _weightCache.Enqueue((weightG, timestamp));
-            while (_weightCache.Count > MaxCacheSize)
-            {
-                _weightCache.Dequeue();
-            }
-            Log.Debug("已缓存动态重量数据，当前缓存数量: {CacheCount}", _weightCache.Count);
-        }
-
-        _weightReceived.Set();
-    }
-
-    private void CleanExpiredWeightData(DateTime currentTime)
-    {
-        lock (_lock)
-        {
-            var expireTime = currentTime.AddMinutes(-MaxCacheAgeMinutes);
-            while (_weightCache.Count > 0 && _weightCache.Peek().Timestamp < expireTime)
-            {
-                _weightCache.Dequeue();
-            }
-        }
-    }
-
-    private void OnErrorReceived(object sender, SerialErrorReceivedEventArgs e)
-    {
-        try
-        {
-            switch (e.EventType)
-            {
-                case SerialError.Frame:
-                case SerialError.Overrun:
-                case SerialError.RXParity:
-                    Log.Warning("Serial port data transmission error: {Error}, Port: {PortName}",
-                        e.EventType, _serialPort?.PortName ?? "Unknown");
-                    break;
-
-                case SerialError.TXFull:
-                    Log.Warning("Serial port transmit buffer is full: {PortName}",
-                        _serialPort?.PortName ?? "Unknown");
-                    break;
-
-                case SerialError.RXOver:
-                    Log.Warning("Serial port receive buffer overflow: {PortName}",
-                        _serialPort?.PortName ?? "Unknown");
-                    if (_serialPort?.IsOpen == true)
-                    {
-                        _serialPort.DiscardInBuffer();
-                        _bufferPosition = 0;
-                    }
-
-                    break;
-
-                default:
-                    Log.Error("Serious error occurred on serial port: {Error}, Port: {PortName}",
-                        e.EventType, _serialPort?.PortName ?? "Unknown");
-                    IsConnected = false;
-                    break;
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "Exception occurred while handling serial port error");
-        }
-    }
-
     public void Dispose()
     {
         if (_disposed) return;
@@ -525,8 +302,216 @@ public class SerialPortWeightService : IWeightService
     }
 
     /// <summary>
-    /// 反转重量数据，直接从后往前重新排列所有字符
-    /// 例如：02.7000 -> 0007.20
+    ///     检查串口是否被占用
+    /// </summary>
+    private static bool IsPortInUse(string portName)
+    {
+        try
+        {
+            using var port = new SerialPort(portName);
+            port.Open();
+            port.Close();
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void OnDataReceived(object sender, SerialDataReceivedEventArgs e)
+    {
+        try
+        {
+            if (_serialPort is not { IsOpen: true }) return;
+
+            var receiveTime = DateTime.Now;
+            var bytesToRead = _serialPort.BytesToRead;
+            if (bytesToRead == 0) return;
+
+            if (_bufferPosition + bytesToRead > ReadBufferSize)
+            {
+                Log.Debug("Buffer is full, resetting buffer");
+                _bufferPosition = 0;
+            }
+
+            var availableSpace = ReadBufferSize - _bufferPosition;
+            var actualBytesToRead = Math.Min(bytesToRead, availableSpace);
+
+            if (actualBytesToRead <= 0)
+            {
+                Log.Warning("Buffer space insufficient, skipping this read");
+                return;
+            }
+
+            var bytesRead = _serialPort.Read(_readBuffer, _bufferPosition, actualBytesToRead);
+            _bufferPosition += bytesRead;
+
+            ProcessBuffer(receiveTime);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error occurred while processing serial port data");
+            _bufferPosition = 0;
+        }
+    }
+
+    private void ProcessBuffer(DateTime receiveTime)
+    {
+        if ((receiveTime - _lastProcessTime).TotalMilliseconds < ProcessInterval) return;
+        _lastProcessTime = receiveTime;
+
+        CleanExpiredWeightData(receiveTime);
+
+        try
+        {
+            var rawData = Encoding.ASCII.GetString(_readBuffer, 0, _bufferPosition);
+
+            // 新增数据分割逻辑
+            var dataSegments = rawData.Split(['='], StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim())
+                .Where(s => s.Length >= 6) // 最小有效长度检查
+                .ToList();
+
+            foreach (var valuePart in dataSegments.Select(segment => segment.Length > 6 ? segment[..6] : segment))
+            {
+                // 先反转数据，再解析
+                var reversedValue = ReverseWeight(valuePart);
+                if (float.TryParse(reversedValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var weight))
+                {
+                    // 根据称重类型处理
+                    if (_settings.WeightType == WeightType.Static)
+                        ProcessStaticWeight(weight * 1000, receiveTime);
+                    else
+                        ProcessDynamicWeight(weight * 1000, receiveTime);
+                }
+                else
+                {
+                    Log.Warning("无法解析的重量数据: {Data}", valuePart);
+                }
+            }
+
+            // 新增粘包处理：保留未处理完的数据
+            var lastSegment = dataSegments.LastOrDefault();
+            if (lastSegment != null && rawData.EndsWith("="))
+            {
+                _bufferPosition = 0; // 完整处理时清空缓冲区
+            }
+            else if (lastSegment != null)
+            {
+                // 将未处理完的部分保留在缓冲区
+                var remaining = rawData.Substring(rawData.LastIndexOf('=') + 1);
+                var remainingBytes = Encoding.ASCII.GetBytes(remaining);
+                Array.Copy(remainingBytes, _readBuffer, remainingBytes.Length);
+                _bufferPosition = remainingBytes.Length;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error occurred while parsing weight data");
+        }
+        finally
+        {
+            _bufferPosition = 0;
+        }
+    }
+
+    private void ProcessStaticWeight(double weightG, DateTime timestamp)
+    {
+        _weightSamples.Add(weightG);
+
+        while (_weightSamples.Count > _settings.StableCheckCount) _weightSamples.RemoveAt(0);
+
+        if (_weightSamples.Count < _settings.StableCheckCount) return;
+
+        var average = _weightSamples.Average();
+        var isStable = _weightSamples.All(w => Math.Abs(w - average) <= StableThreshold * 1000);
+
+        if (!isStable) return;
+
+
+        lock (_lock)
+        {
+            _weightCache.Enqueue((average, timestamp));
+            while (_weightCache.Count > MaxCacheSize) _weightCache.Dequeue();
+        }
+
+        _weightReceived.Set();
+        _weightSamples.Clear();
+    }
+
+    private void ProcessDynamicWeight(double weightG, DateTime timestamp)
+    {
+        Log.Debug("处理动态重量: {Weight:F3}kg", weightG / 1000);
+
+        lock (_lock)
+        {
+            _weightCache.Enqueue((weightG, timestamp));
+            while (_weightCache.Count > MaxCacheSize) _weightCache.Dequeue();
+            Log.Debug("已缓存动态重量数据，当前缓存数量: {CacheCount}", _weightCache.Count);
+        }
+
+        _weightReceived.Set();
+    }
+
+    private void CleanExpiredWeightData(DateTime currentTime)
+    {
+        lock (_lock)
+        {
+            var expireTime = currentTime.AddMinutes(-MaxCacheAgeMinutes);
+            while (_weightCache.Count > 0 && _weightCache.Peek().Timestamp < expireTime) _weightCache.Dequeue();
+        }
+    }
+
+    private void OnErrorReceived(object sender, SerialErrorReceivedEventArgs e)
+    {
+        try
+        {
+            switch (e.EventType)
+            {
+                case SerialError.Frame:
+                case SerialError.Overrun:
+                case SerialError.RXParity:
+                    Log.Warning("Serial port data transmission error: {Error}, Port: {PortName}",
+                        e.EventType, _serialPort?.PortName ?? "Unknown");
+                    break;
+
+                case SerialError.TXFull:
+                    Log.Warning("Serial port transmit buffer is full: {PortName}",
+                        _serialPort?.PortName ?? "Unknown");
+                    break;
+
+                case SerialError.RXOver:
+                    Log.Warning("Serial port receive buffer overflow: {PortName}",
+                        _serialPort?.PortName ?? "Unknown");
+                    if (_serialPort?.IsOpen == true)
+                    {
+                        _serialPort.DiscardInBuffer();
+                        _bufferPosition = 0;
+                    }
+
+                    break;
+
+                default:
+                    Log.Error("Serious error occurred on serial port: {Error}, Port: {PortName}",
+                        e.EventType, _serialPort?.PortName ?? "Unknown");
+                    IsConnected = false;
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Exception occurred while handling serial port error");
+        }
+    }
+
+    /// <summary>
+    ///     反转重量数据，直接从后往前重新排列所有字符
+    ///     例如：02.7000 -> 0007.20
     /// </summary>
     private static string ReverseWeight(string weightStr)
     {

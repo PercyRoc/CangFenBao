@@ -142,11 +142,11 @@
                                    Margin="0,0,8,0" />
 
                         <ui:NumberBox Grid.Column="1"
-                                     Width="120"
-                                     HorizontalAlignment="Left"
-                                     Value="{Binding Configuration.BenNiaoFtpPort, UpdateSourceTrigger=PropertyChanged}"
-                                     PlaceholderText="请输入FTP端口"
-                                     ClearButtonEnabled="False" />
+                                      Width="120"
+                                      HorizontalAlignment="Left"
+                                      Value="{Binding Configuration.BenNiaoFtpPort, UpdateSourceTrigger=PropertyChanged}"
+                                      PlaceholderText="请输入FTP端口"
+                                      ClearButtonEnabled="False" />
                     </Grid>
 
                     <!-- FTP用户名 -->
@@ -181,9 +181,9 @@
                                    Margin="0,0,8,0" />
 
                         <ui:PasswordBox Grid.Column="1"
-                                       Password="{Binding Configuration.BenNiaoFtpPassword, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                       PlaceholderText="请输入FTP密码"
-                                       RevealButtonEnabled="True" />
+                                        Password="{Binding Configuration.BenNiaoFtpPassword, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                        PlaceholderText="请输入FTP密码"
+                                        RevealButtonEnabled="True" />
                     </Grid>
 
                     <!-- 预回传更新间隔 -->

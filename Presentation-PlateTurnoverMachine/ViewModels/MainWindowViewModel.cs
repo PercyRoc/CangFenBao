@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
+using System.Text;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -22,15 +23,16 @@ namespace Presentation_PlateTurnoverMachine.ViewModels;
 
 public class MainWindowViewModel : BindableBase, IDisposable
 {
-    private readonly DispatcherTimer _timer;
-    private readonly ICustomDialogService _dialogService;
     private readonly ICameraService _cameraService;
-    private readonly List<IDisposable> _subscriptions = [];
+    private readonly ICustomDialogService _dialogService;
     private readonly Services.SortingService _sortingService;
+    private readonly List<IDisposable> _subscriptions = [];
     private readonly ITcpConnectionService _tcpConnectionService;
-    private bool _disposed;
+    private readonly DispatcherTimer _timer;
     private string _currentBarcode = string.Empty;
     private BitmapSource? _currentImage;
+    private int _currentPackageIndex;
+    private bool _disposed;
     private SystemStatus _systemStatus = new();
 
     public MainWindowViewModel(
@@ -64,21 +66,21 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         // 初始化包裹信息
         InitializePackageInfoItems();
-        
+
         // 订阅相机连接状态事件
         _cameraService.ConnectionChanged += OnCameraConnectionChanged;
-        
+
         // 订阅触发光电连接状态事件
         _tcpConnectionService.TriggerPhotoelectricConnectionChanged += OnTriggerPhotoelectricConnectionChanged;
-        
+
         // 订阅TCP模块连接状态变化
         _tcpConnectionService.TcpModuleConnectionChanged += OnTcpModuleConnectionChanged;
-        
+
         // 订阅包裹流
         _subscriptions.Add(packageTransferService.PackageStream
             .ObserveOn(Scheduler.CurrentThread)
             .Subscribe(OnPackageInfo));
-        
+
         // 订阅图像流
         _subscriptions.Add(_cameraService.ImageStream
             .ObserveOn(Scheduler.CurrentThread)
@@ -87,13 +89,13 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 try
                 {
                     var image = imageData.image;
-                    
+
                     // 创建内存流并将其所有权转移给BitmapImage
                     var memoryStream = new MemoryStream();
                     // 由于现在是灰度图像，需要调整保存格式
                     image.SaveAsPng(memoryStream); // 使用PNG格式保持灰度图像质量
                     memoryStream.Position = 0;
-                    
+
                     Application.Current.Dispatcher.Invoke(() =>
                     {
                         try
@@ -104,7 +106,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                             bitmap.StreamSource = memoryStream;
                             bitmap.EndInit();
                             bitmap.Freeze(); // 使图像可以跨线程访问
-                            
+
                             // 直接更新UI，不再绘制条码位置
                             CurrentImage = bitmap;
                         }
@@ -161,14 +163,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         SystemStatus = SystemStatus.GetCurrentStatus();
     }
-    
+
     private void OnCameraConnectionChanged(string cameraId, bool isConnected)
     {
         Application.Current.Dispatcher.Invoke(() =>
         {
             var cameraStatus = DeviceStatuses.FirstOrDefault(s => s.Name == "相机");
             if (cameraStatus == null) return;
-            
+
             cameraStatus.Status = isConnected ? "已连接" : "已断开";
             cameraStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
         });
@@ -182,7 +184,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 var status = DeviceStatuses.FirstOrDefault(s => s.Name == "触发光电");
                 if (status == null) return;
-                
+
                 status.Status = isConnected ? "已连接" : "已断开";
                 status.StatusColor = isConnected ? "#4CAF50" : "#F44336";
                 Log.Information("触发光电连接状态更新为：{Status}", status.Status);
@@ -199,7 +201,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             UpdateTcpModuleStatus();
-            Log.Information("TCP模块 {IpAddress} 连接状态更新为：{Status}", 
+            Log.Information("TCP模块 {IpAddress} 连接状态更新为：{Status}",
                 e.Item1.IpAddress, e.Item2 ? "已连接" : "已断开");
         }
         catch (Exception ex)
@@ -212,8 +214,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            Log.Information("收到包裹信息：{Barcode}", package.Barcode);
-            
+            package.Index = Interlocked.Increment(ref _currentPackageIndex);
+            Log.Information("收到包裹信息：{Barcode}, 序号：{Index}", package.Barcode, package.Index);
+
             Application.Current.Dispatcher.Invoke(() =>
             {
                 try
@@ -224,10 +227,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     UpdatePackageInfoItems(package);
                     // 将包裹添加到分拣队列
                     _sortingService.EnqueuePackage(package);
-                    
+
                     // 更新历史包裹列表
                     UpdatePackageHistory(package);
-                    
+
                     // 更新统计信息
                     UpdateStatistics(package);
                 }
@@ -243,7 +246,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             package.SetError($"处理失败：{ex.Message}");
         }
     }
-    
+
     private void UpdatePackageInfoItems(PackageInfo package)
     {
         var weightItem = PackageInfoItems.FirstOrDefault(x => x.Label == "重量");
@@ -252,27 +255,24 @@ public class MainWindowViewModel : BindableBase, IDisposable
             weightItem.Value = package.Weight.ToString(CultureInfo.InvariantCulture);
             weightItem.Unit = "kg";
         }
-        
+
         var sizeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "尺寸");
-        if (sizeItem != null)
-        {
-            sizeItem.Value = package.VolumeDisplay;
-        }
-        
+        if (sizeItem != null) sizeItem.Value = package.VolumeDisplay;
+
         var chuteItem = PackageInfoItems.FirstOrDefault(x => x.Label == "格口");
         if (chuteItem != null)
         {
             chuteItem.Value = package.ChuteName.ToString();
             chuteItem.Description = string.IsNullOrEmpty(package.ChuteName.ToString()) ? "等待分配..." : "目标格口";
         }
-        
+
         var timeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "时间");
         if (timeItem != null)
         {
             timeItem.Value = package.CreateTime.ToString("HH:mm:ss");
             timeItem.Description = $"处理于 {package.CreateTime:yyyy-MM-dd}";
         }
-        
+
         var statusItem = PackageInfoItems.FirstOrDefault(x => x.Label == "状态");
         if (statusItem == null) return;
         statusItem.Value = string.IsNullOrEmpty(package.ErrorMessage) ? "正常" : "异常";
@@ -285,21 +285,15 @@ public class MainWindowViewModel : BindableBase, IDisposable
         {
             // 限制历史记录数量，保持最新的100条记录
             const int maxHistoryCount = 100;
-            
+
             // 添加到历史记录开头
             PackageHistory.Insert(0, package);
-            
+
             // 如果超出最大数量，移除多余的记录
-            while (PackageHistory.Count > maxHistoryCount)
-            {
-                PackageHistory.RemoveAt(PackageHistory.Count - 1);
-            }
-            
+            while (PackageHistory.Count > maxHistoryCount) PackageHistory.RemoveAt(PackageHistory.Count - 1);
+
             // 更新序号
-            for (var i = 0; i < PackageHistory.Count; i++)
-            {
-                PackageHistory[i].Index = i + 1;
-            }
+            for (var i = 0; i < PackageHistory.Count; i++) PackageHistory[i].Index = i + 1;
         }
         catch (Exception ex)
         {
@@ -403,18 +397,16 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 var connectedModules = _tcpConnectionService.TcpModuleClients.Count(x => x.Value.Connected);
 
                 status.Status = $"{connectedModules}/{totalModules}";
-                status.StatusColor = connectedModules == totalModules ? "#4CAF50" : 
-                                   connectedModules > 0 ? "#FFA500" : "#F44336";
+                status.StatusColor = connectedModules == totalModules ? "#4CAF50" :
+                    connectedModules > 0 ? "#FFA500" : "#F44336";
 
                 // 更新详细信息
-                var details = new System.Text.StringBuilder();
+                var details = new StringBuilder();
                 foreach (var (config, client) in _tcpConnectionService.TcpModuleClients)
-                {
                     details.AppendLine($"{config.IpAddress}: {(client.Connected ? "已连接" : "已断开")}");
-                }
                 status.Description = details.ToString().TrimEnd();
 
-                Log.Debug("TCP模块状态更新为：{Status}, 已连接：{Connected}, 总数：{Total}", 
+                Log.Debug("TCP模块状态更新为：{Status}, 已连接：{Connected}, 总数：{Total}",
                     status.Status, connectedModules, totalModules);
             });
         }
@@ -513,22 +505,18 @@ public class MainWindowViewModel : BindableBase, IDisposable
         if (_disposed) return;
 
         if (disposing)
-        {
             try
             {
                 // 取消订阅事件
                 _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
                 _tcpConnectionService.TriggerPhotoelectricConnectionChanged -= OnTriggerPhotoelectricConnectionChanged;
                 _tcpConnectionService.TcpModuleConnectionChanged -= OnTcpModuleConnectionChanged;
-                
+
                 // 释放订阅
-                foreach (var subscription in _subscriptions)
-                {
-                    subscription.Dispose();
-                }
-                
+                foreach (var subscription in _subscriptions) subscription.Dispose();
+
                 _subscriptions.Clear();
-                
+
                 // 停止定时器
                 _timer.Stop();
             }
@@ -536,7 +524,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 Log.Error(ex, "释放资源时发生错误");
             }
-        }
 
         _disposed = true;
     }

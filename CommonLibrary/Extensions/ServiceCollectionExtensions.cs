@@ -17,12 +17,12 @@ public static class ServiceCollectionExtensions
         // 数据库配置
         var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "packages.db");
         Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
-        
+
         // 初始化核心表结构
         var options = new DbContextOptionsBuilder<PackageDbContext>()
             .UseSqlite($"Data Source={dbPath}")
             .Options;
-        
+
         using (var context = new PackageDbContext(options))
         {
             context.Database.EnsureCreated();

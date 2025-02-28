@@ -15,9 +15,9 @@ public class PackageTransferService : IDisposable
 {
     private readonly ICameraService _cameraService;
     private readonly CameraSettings _cameraSettings;
+    private readonly IDisposable _packageSubscription;
     private readonly ConcurrentDictionary<string, (DateTime Time, int Count)> _processedBarcodes = new();
     private readonly ISettingsService _settingsService;
-    private readonly IDisposable _packageSubscription;
     private bool _isDisposed;
 
     /// <summary>
@@ -30,24 +30,9 @@ public class PackageTransferService : IDisposable
         _cameraService = cameraService;
         _settingsService = settingsService;
         _cameraSettings = LoadCameraSettings();
-        
+
         // 订阅包裹流
         _packageSubscription = _cameraService.PackageStream.Subscribe(HandlePackageInfo);
-    }
-
-    /// <summary>
-    ///     释放资源
-    /// </summary>
-    public void Dispose()
-    {
-        if (_isDisposed)
-            return;
-
-        _packageSubscription.Dispose();
-        _processedBarcodes.Clear();
-        _isDisposed = true;
-
-        GC.SuppressFinalize(this);
     }
 
     /// <summary>
@@ -68,6 +53,21 @@ public class PackageTransferService : IDisposable
             // 处理包裹信息
             ProcessPackage(package);
         });
+
+    /// <summary>
+    ///     释放资源
+    /// </summary>
+    public void Dispose()
+    {
+        if (_isDisposed)
+            return;
+
+        _packageSubscription.Dispose();
+        _processedBarcodes.Clear();
+        _isDisposed = true;
+
+        GC.SuppressFinalize(this);
+    }
 
     /// <summary>
     ///     加载相机设置

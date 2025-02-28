@@ -7,14 +7,13 @@ namespace Presentation_CommonLibrary.Models;
 /// </summary>
 public class DeviceStatus : BindableBase
 {
+    private string _description = string.Empty;
     private string _icon = string.Empty;
     private string _name = string.Empty;
 
     private string _status = string.Empty;
 
     private string _statusColor = "#2196F3";
-
-    private string _description = string.Empty;
 
     /// <summary>
     ///     设备名称

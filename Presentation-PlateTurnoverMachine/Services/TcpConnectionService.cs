@@ -1,37 +1,37 @@
-using System.Net.Sockets;
 using System.IO;
+using System.Net.Sockets;
 using Presentation_PlateTurnoverMachine.Models;
 using Serilog;
 
 namespace Presentation_PlateTurnoverMachine.Services;
 
 /// <summary>
-/// TCP连接服务实现
+///     TCP连接服务实现
 /// </summary>
 public class TcpConnectionService : ITcpConnectionService
 {
-    private readonly Dictionary<TcpConnectionConfig, TcpClient> _tcpModuleClients = new();
-    private readonly SemaphoreSlim _sendLock = new(1, 1);
     private readonly SemaphoreSlim _receiveLock = new(1, 1);
+    private readonly SemaphoreSlim _sendLock = new(1, 1);
+    private readonly Dictionary<TcpConnectionConfig, TcpClient> _tcpModuleClients = new();
+    private readonly Dictionary<TcpConnectionConfig, CancellationTokenSource> _tcpModuleListeningCts = new();
+    private readonly Dictionary<TcpConnectionConfig, Task> _tcpModuleListeningTasks = new();
     private bool _disposed;
     private CancellationTokenSource? _listeningCts;
     private Task? _listeningTask;
     private TcpClient? _triggerPhotoelectricClient;
-    private readonly Dictionary<TcpConnectionConfig, Task> _tcpModuleListeningTasks = new();
-    private readonly Dictionary<TcpConnectionConfig, CancellationTokenSource> _tcpModuleListeningCts = new();
 
     /// <summary>
-    /// TCP模块连接状态改变事件
+    ///     TCP模块连接状态改变事件
     /// </summary>
     public event EventHandler<(TcpConnectionConfig Config, bool Connected)>? TcpModuleConnectionChanged;
 
     /// <summary>
-    /// 触发光电连接状态改变事件
+    ///     触发光电连接状态改变事件
     /// </summary>
     public event EventHandler<bool>? TriggerPhotoelectricConnectionChanged;
 
     /// <summary>
-    /// 获取触发光电的TCP客户端
+    ///     获取触发光电的TCP客户端
     /// </summary>
     public TcpClient? TriggerPhotoelectricClient
     {
@@ -45,22 +45,22 @@ public class TcpConnectionService : ITcpConnectionService
     }
 
     /// <summary>
-    /// 获取TCP模块客户端字典
+    ///     获取TCP模块客户端字典
     /// </summary>
     public IReadOnlyDictionary<TcpConnectionConfig, TcpClient> TcpModuleClients => _tcpModuleClients;
 
     /// <summary>
-    /// 触发光电数据接收事件
+    ///     触发光电数据接收事件
     /// </summary>
     public event EventHandler<TcpDataReceivedEventArgs>? TriggerPhotoelectricDataReceived;
 
     /// <summary>
-    /// TCP模块数据接收事件
+    ///     TCP模块数据接收事件
     /// </summary>
     public event EventHandler<TcpModuleDataReceivedEventArgs>? TcpModuleDataReceived;
 
     /// <summary>
-    /// 连接触发光电
+    ///     连接触发光电
     /// </summary>
     /// <param name="config">连接配置</param>
     /// <returns>连接是否成功</returns>
@@ -73,12 +73,11 @@ public class TcpConnectionService : ITcpConnectionService
             await client.ConnectAsync(config.GetIpEndPoint());
             TriggerPhotoelectricClient = client;
             Log.Information("成功连接到触发光电: {Config}", config.IpAddress);
-            
+
             // 连接成功后自动开始监听数据
             await StartListeningTriggerPhotoelectricAsync(CancellationToken.None);
-            
+
             return true;
-            
         }
         catch (Exception ex)
         {
@@ -89,17 +88,15 @@ public class TcpConnectionService : ITcpConnectionService
     }
 
     /// <summary>
-    /// 连接TCP模块
+    ///     连接TCP模块
     /// </summary>
     /// <param name="configs">TCP模块连接配置列表</param>
     /// <returns>连接结果字典，key为配置，value为对应的TcpClient</returns>
-    public async Task<Dictionary<TcpConnectionConfig, TcpClient>> ConnectTcpModulesAsync(IEnumerable<TcpConnectionConfig> configs)
+    public async Task<Dictionary<TcpConnectionConfig, TcpClient>> ConnectTcpModulesAsync(
+        IEnumerable<TcpConnectionConfig> configs)
     {
         // 停止并清理旧的监听任务
-        foreach (var (config, _) in _tcpModuleListeningTasks)
-        {
-            await StopListeningTcpModuleAsync(config);
-        }
+        foreach (var (config, _) in _tcpModuleListeningTasks) await StopListeningTcpModuleAsync(config);
         _tcpModuleListeningTasks.Clear();
         _tcpModuleListeningCts.Clear();
 
@@ -109,13 +106,13 @@ public class TcpConnectionService : ITcpConnectionService
             client.Close();
             OnTcpModuleConnectionChanged(config, false);
         }
+
         _tcpModuleClients.Clear();
 
         var uniqueConfigs = configs.Distinct().ToList();
         var result = new Dictionary<TcpConnectionConfig, TcpClient>();
 
         foreach (var config in uniqueConfigs)
-        {
             try
             {
                 var client = new TcpClient();
@@ -123,10 +120,10 @@ public class TcpConnectionService : ITcpConnectionService
                 result.Add(config, client);
                 _tcpModuleClients.Add(config, client);
                 Log.Information("成功连接到TCP模块: {Config}", config.IpAddress);
-                
+
                 // 触发连接成功事件
                 OnTcpModuleConnectionChanged(config, true);
-                
+
                 // 连接成功后自动开始监听数据
                 await StartListeningTcpModuleAsync(config, client, CancellationToken.None);
             }
@@ -135,43 +132,44 @@ public class TcpConnectionService : ITcpConnectionService
                 Log.Error(ex, "连接TCP模块失败: {Config}", config.IpAddress);
                 OnTcpModuleConnectionChanged(config, false);
             }
-        }
 
         return result;
     }
 
     /// <summary>
-    /// 发送数据到指定的TCP模块
+    ///     发送数据到指定的TCP模块
     /// </summary>
     /// <param name="config">TCP模块配置</param>
     /// <param name="data">要发送的数据</param>
     public async Task SendToTcpModuleAsync(TcpConnectionConfig config, byte[] data)
     {
         if (!_tcpModuleClients.TryGetValue(config, out var client) || !client.Connected)
-        {
             throw new InvalidOperationException($"TCP模块未连接: {config.IpAddress}");
-        }
 
         await SendDataAsync(client, data);
     }
 
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
     /// <summary>
-    /// 从触发光电接收数据
+    ///     从触发光电接收数据
     /// </summary>
     /// <returns>接收到的数据</returns>
     /// <exception cref="InvalidOperationException">触发光电未连接时抛出此异常</exception>
     public async Task<byte[]> ReceiveFromTriggerPhotoelectricAsync()
     {
-        if (TriggerPhotoelectricClient is not { Connected: true })
-        {
-            throw new InvalidOperationException("触发光电未连接");
-        }
+        if (TriggerPhotoelectricClient is not { Connected: true }) throw new InvalidOperationException("触发光电未连接");
 
         return await ReceiveDataAsync(TriggerPhotoelectricClient);
     }
 
     /// <summary>
-    /// 从指定的TCP模块接收数据
+    ///     从指定的TCP模块接收数据
     /// </summary>
     /// <param name="config">TCP模块配置</param>
     /// <returns>接收到的数据</returns>
@@ -179,24 +177,19 @@ public class TcpConnectionService : ITcpConnectionService
     public async Task<byte[]> ReceiveFromTcpModuleAsync(TcpConnectionConfig config)
     {
         if (!_tcpModuleClients.TryGetValue(config, out var client) || !client.Connected)
-        {
             throw new InvalidOperationException($"TCP模块未连接: {config.IpAddress}");
-        }
 
         return await ReceiveDataAsync(client);
     }
 
     /// <summary>
-    /// 开始监听触发光电数据
+    ///     开始监听触发光电数据
     /// </summary>
     /// <param name="cancellationToken">取消令牌</param>
     /// <exception cref="InvalidOperationException">触发光电未连接时抛出此异常</exception>
     public async Task StartListeningTriggerPhotoelectricAsync(CancellationToken cancellationToken)
     {
-        if (TriggerPhotoelectricClient is not { Connected: true })
-        {
-            throw new InvalidOperationException("触发光电未连接");
-        }
+        if (TriggerPhotoelectricClient is not { Connected: true }) throw new InvalidOperationException("触发光电未连接");
 
         // 如果已经在监听，先停止
         StopListeningTriggerPhotoelectric();
@@ -210,21 +203,21 @@ public class TcpConnectionService : ITcpConnectionService
             try
             {
                 Log.Information("开始监听触发光电数据");
-                
+
                 while (!_listeningCts.Token.IsCancellationRequested)
-                {
                     try
                     {
                         var data = await ReceiveFromTriggerPhotoelectricAsync();
                         var receivedTime = DateTime.Now;
-                        
+
                         // 触发事件
-                        TriggerPhotoelectricDataReceived?.Invoke(this, new TcpDataReceivedEventArgs(data, receivedTime));
+                        TriggerPhotoelectricDataReceived?.Invoke(this,
+                            new TcpDataReceivedEventArgs(data, receivedTime));
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
                         Log.Error(ex, "接收触发光电数据时发生错误");
-                        
+
                         // 如果连接断开，尝试等待一段时间后继续
                         if (!TriggerPhotoelectricClient.Connected)
                         {
@@ -232,7 +225,6 @@ public class TcpConnectionService : ITcpConnectionService
                             await Task.Delay(5000, _listeningCts.Token);
                         }
                     }
-                }
             }
             catch (OperationCanceledException)
             {
@@ -249,7 +241,7 @@ public class TcpConnectionService : ITcpConnectionService
     }
 
     /// <summary>
-    /// 停止监听触发光电数据
+    ///     停止监听触发光电数据
     /// </summary>
     public void StopListeningTriggerPhotoelectric()
     {
@@ -257,10 +249,7 @@ public class TcpConnectionService : ITcpConnectionService
         {
             if (_listeningCts != null)
             {
-                if (!_listeningCts.IsCancellationRequested)
-                {
-                    _listeningCts.Cancel();
-                }
+                if (!_listeningCts.IsCancellationRequested) _listeningCts.Cancel();
                 _listeningCts.Dispose();
                 _listeningCts = null;
             }
@@ -268,10 +257,7 @@ public class TcpConnectionService : ITcpConnectionService
             if (_listeningTask != null)
             {
                 // 等待任务完成，但设置超时
-                if (!_listeningTask.Wait(TimeSpan.FromSeconds(5)))
-                {
-                    Log.Warning("等待触发光电监听任务结束超时");
-                }
+                if (!_listeningTask.Wait(TimeSpan.FromSeconds(5))) Log.Warning("等待触发光电监听任务结束超时");
                 _listeningTask = null;
             }
 
@@ -284,12 +270,13 @@ public class TcpConnectionService : ITcpConnectionService
     }
 
     /// <summary>
-    /// 开始监听指定TCP模块的数据
+    ///     开始监听指定TCP模块的数据
     /// </summary>
     /// <param name="config">TCP模块配置</param>
     /// <param name="client">TCP客户端</param>
     /// <param name="cancellationToken">取消令牌</param>
-    private async Task StartListeningTcpModuleAsync(TcpConnectionConfig config, TcpClient client, CancellationToken cancellationToken)
+    private async Task StartListeningTcpModuleAsync(TcpConnectionConfig config, TcpClient client,
+        CancellationToken cancellationToken)
     {
         // 如果已经在监听，先停止
         await StopListeningTcpModuleAsync(config);
@@ -304,21 +291,21 @@ public class TcpConnectionService : ITcpConnectionService
             try
             {
                 Log.Information("开始监听TCP模块数据: {Config}", config.IpAddress);
-                
+
                 while (!cts.Token.IsCancellationRequested && client.Connected)
-                {
                     try
                     {
                         var data = await ReceiveDataAsync(client);
                         var receivedTime = DateTime.Now;
-                        
+
                         // 触发事件
-                        TcpModuleDataReceived?.Invoke(this, new TcpModuleDataReceivedEventArgs(config, data, receivedTime));
+                        TcpModuleDataReceived?.Invoke(this,
+                            new TcpModuleDataReceivedEventArgs(config, data, receivedTime));
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
                         Log.Error(ex, "接收TCP模块数据时发生错误: {Config}", config.IpAddress);
-                        
+
                         // 如果连接断开，触发事件并退出
                         if (!client.Connected)
                         {
@@ -326,17 +313,13 @@ public class TcpConnectionService : ITcpConnectionService
                             OnTcpModuleConnectionChanged(config, false);
                             break;
                         }
-                        
+
                         // 其他错误，等待一段时间后继续
                         await Task.Delay(1000, cts.Token);
                     }
-                }
 
                 // 如果是因为连接断开而退出循环，确保触发事件
-                if (!client.Connected)
-                {
-                    OnTcpModuleConnectionChanged(config, false);
-                }
+                if (!client.Connected) OnTcpModuleConnectionChanged(config, false);
             }
             catch (OperationCanceledException)
             {
@@ -354,7 +337,7 @@ public class TcpConnectionService : ITcpConnectionService
     }
 
     /// <summary>
-    /// 停止监听指定TCP模块的数据
+    ///     停止监听指定TCP模块的数据
     /// </summary>
     /// <param name="config">TCP模块配置</param>
     private Task StopListeningTcpModuleAsync(TcpConnectionConfig config)
@@ -363,10 +346,7 @@ public class TcpConnectionService : ITcpConnectionService
         {
             if (_tcpModuleListeningCts.TryGetValue(config, out var cts))
             {
-                if (!cts.IsCancellationRequested)
-                {
-                    cts.Cancel();
-                }
+                if (!cts.IsCancellationRequested) cts.Cancel();
                 cts.Dispose();
                 _tcpModuleListeningCts.Remove(config);
             }
@@ -374,10 +354,7 @@ public class TcpConnectionService : ITcpConnectionService
             if (_tcpModuleListeningTasks.TryGetValue(config, out var task))
             {
                 // 等待任务完成，但设置超时
-                if (!task.Wait(TimeSpan.FromSeconds(5)))
-                {
-                    Log.Warning("等待TCP模块监听任务结束超时: {Config}", config.IpAddress);
-                }
+                if (!task.Wait(TimeSpan.FromSeconds(5))) Log.Warning("等待TCP模块监听任务结束超时: {Config}", config.IpAddress);
                 _tcpModuleListeningTasks.Remove(config);
             }
 
@@ -412,41 +389,37 @@ public class TcpConnectionService : ITcpConnectionService
         try
         {
             var stream = client.GetStream();
-            
+
             // 检查是否有可用数据
             if (!stream.DataAvailable)
             {
                 // 等待数据可用
                 var buffer = new byte[1];
                 var bytesRead = await stream.ReadAsync(buffer.AsMemory(0, 1));
-                
+
                 // 如果没有读取到数据，返回空数组
-                if (bytesRead == 0)
-                {
-                    return [];
-                }
-                
+                if (bytesRead == 0) return [];
+
                 // 创建结果数组，包含已读取的第一个字节
                 var totalAvailable = client.Available + 1;
                 var result = new byte[totalAvailable];
                 result[0] = buffer[0];
-                
+
                 // 读取剩余数据
                 if (client.Available <= 0) return [buffer[0]];
                 var remainingBuffer = new byte[client.Available];
                 var totalBytesRead = 0;
-                    
+
                 while (totalBytesRead < remainingBuffer.Length)
                 {
-                    var read = await stream.ReadAsync(remainingBuffer.AsMemory(totalBytesRead, remainingBuffer.Length - totalBytesRead));
+                    var read = await stream.ReadAsync(remainingBuffer.AsMemory(totalBytesRead,
+                        remainingBuffer.Length - totalBytesRead));
                     if (read == 0)
-                    {
                         // 连接已关闭
                         throw new IOException("连接已关闭，无法读取完整数据");
-                    }
                     totalBytesRead += read;
                 }
-                    
+
                 Array.Copy(remainingBuffer, 0, result, 1, totalBytesRead);
                 return result.Take(totalBytesRead + 1).ToArray();
             }
@@ -456,18 +429,16 @@ public class TcpConnectionService : ITcpConnectionService
                 var available = client.Available;
                 var buffer = new byte[available];
                 var totalBytesRead = 0;
-                
+
                 while (totalBytesRead < available)
                 {
                     var read = await stream.ReadAsync(buffer.AsMemory(totalBytesRead, available - totalBytesRead));
                     if (read == 0)
-                    {
                         // 连接已关闭
                         throw new IOException("连接已关闭，无法读取完整数据");
-                    }
                     totalBytesRead += read;
                 }
-                
+
                 return buffer.Take(totalBytesRead).ToArray();
             }
         }
@@ -475,13 +446,6 @@ public class TcpConnectionService : ITcpConnectionService
         {
             _receiveLock.Release();
         }
-    }
-
-    /// <inheritdoc />
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
     }
 
     protected virtual void Dispose(bool disposing)
@@ -497,22 +461,20 @@ public class TcpConnectionService : ITcpConnectionService
                 StopListeningTcpModuleAsync(config).Wait();
                 OnTcpModuleConnectionChanged(config, false);
             }
+
             _tcpModuleListeningTasks.Clear();
             _tcpModuleListeningCts.Clear();
-            
+
             // 停止监听
             StopListeningTriggerPhotoelectric();
-            
+
             // 释放锁
             _sendLock.Dispose();
             _receiveLock.Dispose();
-            
+
             // 关闭连接
             TriggerPhotoelectricClient?.Close();
-            foreach (var client in _tcpModuleClients.Values)
-            {
-                client.Close();
-            }
+            foreach (var client in _tcpModuleClients.Values) client.Close();
             _tcpModuleClients.Clear();
         }
 
@@ -520,7 +482,7 @@ public class TcpConnectionService : ITcpConnectionService
     }
 
     /// <summary>
-    /// 触发TCP模块连接状态改变事件
+    ///     触发TCP模块连接状态改变事件
     /// </summary>
     /// <param name="config">TCP模块配置</param>
     /// <param name="connected">是否已连接</param>
@@ -529,4 +491,4 @@ public class TcpConnectionService : ITcpConnectionService
         TcpModuleConnectionChanged?.Invoke(this, (config, connected));
         Log.Information("TCP模块 {Config} 连接状态改变: {Status}", config.IpAddress, connected ? "已连接" : "已断开");
     }
-} 
+}

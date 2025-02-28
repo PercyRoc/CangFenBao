@@ -8,11 +8,11 @@
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
-      <PlatformTarget>x64</PlatformTarget>
+        <PlatformTarget>x64</PlatformTarget>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
-      <PlatformTarget>x64</PlatformTarget>
+        <PlatformTarget>x64</PlatformTarget>
     </PropertyGroup>
 
     <ItemGroup>
@@ -28,7 +28,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\CommonLibrary\CommonLibrary.csproj"/>
-        <ProjectReference Include="..\Presentation-CommonLibrary\Presentation-CommonLibrary.csproj" />
+        <ProjectReference Include="..\Presentation-CommonLibrary\Presentation-CommonLibrary.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -36,14 +36,14 @@
             <HintPath>Camera\DaHua\Libs\LogisticsBaseCSharp.dll</HintPath>
         </Reference>
         <Reference Include="MVIDCodeReader.Net">
-          <HintPath>lib\MVIDCodeReader.Net.dll</HintPath>
+            <HintPath>lib\MVIDCodeReader.Net.dll</HintPath>
         </Reference>
         <Reference Include="VolumeMeasurementDll">
-          <HintPath>lib\VolumeMeasurementDll.dll</HintPath>
+            <HintPath>lib\VolumeMeasurementDll.dll</HintPath>
         </Reference>
     </ItemGroup>
 
     <ItemGroup>
-        <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
+        <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms"/>
     </ItemGroup>
 </Project>
