@@ -81,7 +81,25 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
     public ObservableCollection<PackageRecord> PackageRecords
     {
         get => _packageRecords;
-        private set => SetProperty(ref _packageRecords, value);
+        private set
+        {
+            // 将毫米转换为厘米
+            if (value != null)
+            {
+                foreach (var record in value)
+                {
+                    if (record.Length.HasValue)
+                        record.Length = record.Length.Value / 10.0;
+                    if (record.Width.HasValue)
+                        record.Width = record.Width.Value / 10.0;
+                    if (record.Height.HasValue)
+                        record.Height = record.Height.Value / 10.0;
+                    if (record.Volume.HasValue)
+                        record.Volume = record.Volume.Value / 1000.0; // 将立方毫米转换为立方厘米
+                }
+            }
+            SetProperty(ref _packageRecords, value);
+        }
     }
 
     /// <summary>

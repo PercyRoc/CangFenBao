@@ -4,24 +4,23 @@ using Serilog;
 
 namespace SortingService.Services;
 
-public class TcpClientService : ITcpClientService
+public sealed class TcpClientService : ITcpClientService
 {
     private TcpClient? _client;
     private NetworkStream? _stream;
     private bool _disposed;
-    private string _ipAddress = string.Empty;
-    private int _port;
 
     public bool IsConnected => _client?.Connected ?? false;
-    public string IpAddress => _ipAddress;
-    public int Port => _port;
+    public string IpAddress { get; private set; } = string.Empty;
+
+    public int Port { get; private set; }
 
     public async Task ConnectAsync(string ipAddress, int port, int timeout = 5000)
     {
         if (IsConnected) return;
 
-        _ipAddress = ipAddress;
-        _port = port;
+        IpAddress = ipAddress;
+        Port = port;
 
         try
         {
@@ -65,10 +64,10 @@ public class TcpClientService : ITcpClientService
             }
 
             // 重置连接信息
-            var oldIp = _ipAddress;
-            var oldPort = _port;
-            _ipAddress = string.Empty;
-            _port = 0;
+            var oldIp = IpAddress;
+            var oldPort = Port;
+            IpAddress = string.Empty;
+            Port = 0;
 
             Log.Information("已断开与 {IpAddress}:{Port} 的连接", oldIp, oldPort);
         }
@@ -82,17 +81,17 @@ public class TcpClientService : ITcpClientService
     public async Task SendAsync(byte[] data)
     {
         if (_stream == null || !IsConnected)
-            throw new InvalidOperationException($"未连接到服务器 {_ipAddress}:{_port}");
+            throw new InvalidOperationException($"未连接到服务器 {IpAddress}:{Port}");
 
         try
         {
             await _stream.WriteAsync(data);
             await _stream.FlushAsync();
-            Log.Debug("已发送 {Length} 字节数据到 {IpAddress}:{Port}", data.Length, _ipAddress, _port);
+            Log.Debug("已发送 {Length} 字节数据到 {IpAddress}:{Port}", data.Length, IpAddress, Port);
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "发送数据到 {IpAddress}:{Port} 失败", _ipAddress, _port);
+            Log.Error(ex, "发送数据到 {IpAddress}:{Port} 失败", IpAddress, Port);
             throw;
         }
     }
@@ -100,7 +99,7 @@ public class TcpClientService : ITcpClientService
     public async Task<byte[]> ReceiveAsync()
     {
         if (_stream == null || !IsConnected)
-            throw new InvalidOperationException($"未连接到服务器 {_ipAddress}:{_port}");
+            throw new InvalidOperationException($"未连接到服务器 {IpAddress}:{Port}");
 
         try
         {
@@ -109,19 +108,19 @@ public class TcpClientService : ITcpClientService
             
             if (bytesRead == 0)
             {
-                Log.Warning("连接已关闭: {IpAddress}:{Port}", _ipAddress, _port);
+                Log.Warning("连接已关闭: {IpAddress}:{Port}", IpAddress, Port);
                 throw new InvalidOperationException("连接已关闭");
             }
 
             var data = new byte[bytesRead];
             Array.Copy(buffer, data, bytesRead);
             
-            Log.Debug("从 {IpAddress}:{Port} 接收到 {Length} 字节数据", _ipAddress, _port, bytesRead);
+            Log.Debug("从 {IpAddress}:{Port} 接收到 {Length} 字节数据", IpAddress, Port, bytesRead);
             return data;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "从 {IpAddress}:{Port} 接收数据失败", _ipAddress, _port);
+            Log.Error(ex, "从 {IpAddress}:{Port} 接收数据失败", IpAddress, Port);
             throw;
         }
     }
@@ -129,10 +128,9 @@ public class TcpClientService : ITcpClientService
     public void Dispose()
     {
         Dispose(true);
-        GC.SuppressFinalize(this);
     }
 
-    protected virtual void Dispose(bool disposing)
+    private void Dispose(bool disposing)
     {
         if (_disposed) return;
 
@@ -143,7 +141,7 @@ public class TcpClientService : ITcpClientService
                 // 检查是否需要断开连接
                 if (IsConnected)
                 {
-                    Log.Warning("检测到未断开的连接，正在强制释放资源: {IpAddress}:{Port}", _ipAddress, _port);
+                    Log.Warning("检测到未断开的连接，正在强制释放资源: {IpAddress}:{Port}", IpAddress, Port);
                     DisconnectAsync().Wait();
                 }
 
@@ -153,8 +151,8 @@ public class TcpClientService : ITcpClientService
                 // 清理资源引用
                 _stream = null;
                 _client = null;
-                _ipAddress = string.Empty;
-                _port = 0;
+                IpAddress = string.Empty;
+                Port = 0;
             }
             catch (Exception ex)
             {

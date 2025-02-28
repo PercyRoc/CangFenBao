@@ -12,7 +12,6 @@ using DeviceService;
 using DeviceService.Camera;
 using Presentation_CommonLibrary.Models;
 using Presentation_CommonLibrary.Services;
-using Presentation_PlateTurnoverMachine.Services;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
@@ -25,7 +24,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly DispatcherTimer _timer;
     private readonly ICustomDialogService _dialogService;
     private readonly ICameraService _cameraService;
-    private readonly PhotoelectricManager _photoelectricManager;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly PackageTransferService _packageTransferService;
     private bool _disposed;
@@ -36,13 +34,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
     public MainWindowViewModel(
         ICustomDialogService dialogService,
         ICameraService cameraService,
-        PackageTransferService packageTransferService,
-        PhotoelectricManager photoelectricManager)
+        PackageTransferService packageTransferService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
         _packageTransferService = packageTransferService;
-        _photoelectricManager = photoelectricManager;
 
         // 初始化命令
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
@@ -66,9 +62,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
         
         // 订阅相机连接状态事件
         _cameraService.ConnectionChanged += OnCameraConnectionChanged;
-        
-        // 订阅光电设备连接状态事件
-        _photoelectricManager.DeviceConnectionStatusChanged += OnDeviceConnectionStatusChanged;
         
         // 订阅包裹流
         _subscriptions.Add(_packageTransferService.PackageStream
@@ -459,7 +452,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 // 取消订阅事件
                 _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
-                _photoelectricManager.DeviceConnectionStatusChanged -= OnDeviceConnectionStatusChanged;
                 
                 // 释放订阅
                 foreach (var subscription in _subscriptions)

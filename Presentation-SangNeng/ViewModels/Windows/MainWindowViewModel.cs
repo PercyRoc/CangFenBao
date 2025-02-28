@@ -132,7 +132,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
         if (_cameraService is HikvisionIndustrialCameraSdkClient hikvisionCamera)
         {
             hikvisionCamera.ImageStream
-                .Sample(TimeSpan.FromMilliseconds(100)) // 限制刷新率，每秒最多10帧
                 .Subscribe(imageData =>
                 {
                     try
@@ -317,9 +316,27 @@ public class MainWindowViewModel : BindableBase, IDisposable
             try
             {
                 // 创建三个并行任务
-                Task<Image<Rgba32>?> photoTask;
+                Task<bool> photoTask;
+                Image<Rgba32>? capturedImage = null;
+                var imageCaptured = false;
+                var imageLock = new object();
+                IDisposable? imageSubscription = null;
+
                 if (_cameraService is HikvisionIndustrialCameraSdkClient hikvisionCamera)
                 {
+                    // 先订阅图像流，准备接收触发后的图像
+                    imageSubscription = hikvisionCamera.ImageStream.Subscribe(imageData =>
+                    {
+                        lock (imageLock)
+                        {
+                            if (imageCaptured) return;
+                            capturedImage = imageData.image.Clone();
+                            imageCaptured = true;
+                            Log.Information("已捕获软触发图像");
+                        }
+                    });
+
+                    // 然后执行软触发
                     photoTask = Task.Run(() =>
                     {
                         try
@@ -330,13 +347,13 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         {
                             Log.Error(ex, "触发相机拍照失败");
                             PlayErrorSound();
-                            return null;
+                            return false;
                         }
                     }, cts.Token);
                 }
                 else
                 {
-                    photoTask = Task.FromResult<Image<Rgba32>?>(null);
+                    photoTask = Task.FromResult(false);
                 }
 
                 var volumeTask = TriggerVolumeCamera(cts.Token);
@@ -380,8 +397,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 // 等待所有任务完成
                 await Task.WhenAll(photoTask, volumeTask, weightTask);
 
-                // 获取相机拍照结果
-                var hikvisionImage = await photoTask;
+                // 等待一小段时间，确保图像被捕获
+                if (await photoTask && !imageCaptured)
+                {
+                    Log.Debug("软触发成功，等待图像数据...");
+                    await Task.Delay(5000, cts.Token); // 等待5秒钟
+                }
 
                 // 处理体积数据
                 if (_currentPackage.Status == PackageStatus.MeasureSuccess && SelectedPallet != null &&
@@ -391,43 +412,52 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     var originalWidth = _currentPackage.Width;
                     var originalHeight = _currentPackage.Height;
 
-                    // 托盘尺寸单位为cm，需要转换为mm进行比较
-                    var palletLengthInMm = SelectedPallet.Length;
-                    var palletWidthInMm = SelectedPallet.Width;
-                    var palletHeightInMm = SelectedPallet.Height;
+                    // 托盘尺寸已经是厘米单位，直接使用
+                    var palletLength = SelectedPallet.Length;
+                    var palletWidth = SelectedPallet.Width;
+                    var palletHeight = SelectedPallet.Height;
 
                     // 如果获取到的长度或宽度小于托盘尺寸，使用托盘尺寸
-                    if (originalLength < palletLengthInMm || originalWidth < palletWidthInMm)
+                    if (originalLength < palletLength || originalWidth < palletWidth)
                     {
-                        _currentPackage.Length = Math.Max(originalLength ?? 0, palletLengthInMm);
-                        _currentPackage.Width = Math.Max(originalWidth ?? 0, palletWidthInMm);
+                        _currentPackage.Length = Math.Max(originalLength ?? 0, palletLength);
+                        _currentPackage.Width = Math.Max(originalWidth ?? 0, palletWidth);
                     }
 
                     // 高度始终要加上托盘高度
-                    _currentPackage.Height = originalHeight + palletHeightInMm;
-                    // 更新体积（保持使用mm³作为单位进行计算）
+                    _currentPackage.Height = originalHeight + palletHeight;
+                    // 更新体积（使用cm³作为单位）
                     _currentPackage.Volume = _currentPackage.Length * _currentPackage.Width * _currentPackage.Height;
-                    // 显示时转换为cm
-                    _currentPackage.VolumeDisplay =
-                        $"{_currentPackage.Length:F1}cm × {_currentPackage.Width:F1}cm × {_currentPackage.Height:F1}cm";
+                    // 显示尺寸（厘米）
+                    _currentPackage.VolumeDisplay = $"{_currentPackage.Length:F1}cm × {_currentPackage.Width:F1}cm × {_currentPackage.Height:F1}cm";
 
                     // 播放成功音效
                     _ = _audioService.PlayPresetAsync(AudioType.Success);
                 }
 
-                // 在体积测量完成后保存海康相机图片
-                if (hikvisionImage != null)
+                // 在体积测量完成后保存捕获的图像
+                lock (imageLock)
                 {
-                    try
+                    if (capturedImage != null)
                     {
-                        var cameraSettings = _settingsService.LoadSettings<CameraSettings>("CameraSettings");
-                        _ = SaveImageAsync(hikvisionImage, cameraSettings, _currentPackage, cts.Token);
+                        try
+                        {
+                            var cameraSettings = _settingsService.LoadSettings<CameraSettings>("CameraSettings");
+                            _ = SaveImageAsync(capturedImage, cameraSettings, _currentPackage, cts.Token);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error(ex, "保存图像到文件时发生错误");
+                        }
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        Log.Error(ex, "保存图像到文件时发生错误");
+                        Log.Warning("未能捕获到软触发图像");
                     }
                 }
+
+                // 清理订阅
+                imageSubscription?.Dispose();
 
                 Application.Current.Dispatcher.Invoke(() =>
                 {
@@ -518,12 +548,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     return;
                 }
 
-                // 更新测量结果
-                _currentPackage.Length = result.Length / 10;
-                _currentPackage.Width = result.Width / 10;
-                _currentPackage.Height = result.Height / 10;
+                // 更新测量结果（将毫米转换为厘米）
+                _currentPackage.Length = result.Length / 10.0;
+                _currentPackage.Width = result.Width / 10.0;
+                _currentPackage.Height = result.Height / 10.0;
                 _currentPackage.Volume = result.Length * result.Width * result.Height;
-                _currentPackage.VolumeDisplay = $"{result.Length}cm × {result.Width}cm × {result.Height}cm";
+                _currentPackage.VolumeDisplay = $"{_currentPackage.Length:F1}cm × {_currentPackage.Width:F1}cm × {_currentPackage.Height:F1}cm";
                 _currentPackage.Status = PackageStatus.MeasureSuccess;
             }
             finally
@@ -590,7 +620,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     var watermarkLines = new[]
                     {
                         $"Barcode: {package.Barcode}",
-                        $"Size: {package.Length / 10.0:F1}cm × {package.Width / 10.0:F1}cm × {package.Height / 10.0:F1}cm",
+                        $"Size: {package.Length:F1}cm × {package.Width:F1}cm × {package.Height:F1}cm",
                         $"Weight: {package.Weight:F3}kg",
                         $"Volume: {package.Volume / 1000.0:N0}cm³",
                         $"Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}"

@@ -4,7 +4,6 @@ using System.Net.Http.Json;
 using CommonLibrary.Models;
 using CommonLibrary.Services;
 using Renci.SshNet;
-using Renci.SshNet.Sftp;
 using Presentation_BenFly.Models.BenNiao;
 using Presentation_BenFly.Models.Upload;
 using Serilog;
@@ -170,19 +169,19 @@ public class BenNiaoPackageService : IDisposable
     }
     
     // 检查SFTP连接是否活跃并尝试重新连接
-    private static async Task<bool> EnsureSftpConnectionAsync(SftpClient sftpClient)
+    private static Task<bool> EnsureSftpConnectionAsync(SftpClient sftpClient)
     {
-        if (sftpClient.IsConnected) return true;
+        if (sftpClient.IsConnected) return Task.FromResult(true);
         try
         {
             Log.Information("SFTP连接已断开，尝试重新连接...");
             sftpClient.Connect();
-            return sftpClient.IsConnected;
+            return Task.FromResult(sftpClient.IsConnected);
         }
         catch (Exception ex)
         {
             Log.Error(ex, "重新连接SFTP服务器失败");
-            return false;
+            return Task.FromResult(false);
         }
     }
 
@@ -396,14 +395,14 @@ public class BenNiaoPackageService : IDisposable
             }
 
             // 构建目标路径
-            var dateDir = $"dws/{scanTime:yyyyMMdd}";
+            var dateDir = $"dws/{scanTime:yyyyMMdd}/{scanTime:HH}";
             var fileName = $"{waybillNum}_{scanTime:yyyyMMddHHmmss}.jpg";
             
             // 重试参数
             const int maxRetries = 3;
             const int retryDelayMs = 1000; // 重试间隔1秒
-            int retryCount = 0;
-            bool uploadSuccessful = false;
+            var retryCount = 0;
+            var uploadSuccessful = false;
 
             while (!uploadSuccessful && retryCount < maxRetries)
             {
@@ -453,13 +452,22 @@ public class BenNiaoPackageService : IDisposable
                         Log.Debug("/dws 目录已存在");
                     }
 
-                    // 创建日期目录
+                    // 创建日期目录和小时目录
+                    var dateDirPath = $"/dws/{scanTime:yyyyMMdd}";
                     var fullDateDir = $"/{dateDir}";
+                    
+                    if (!sftpClient.Exists(dateDirPath))
+                    {
+                        Log.Debug("正在创建目录 {DateDir}...", dateDirPath);
+                        sftpClient.CreateDirectory(dateDirPath);
+                        Log.Information("成功创建 {DateDir} 目录", dateDirPath);
+                    }
+                    
                     if (!sftpClient.Exists(fullDateDir))
                     {
-                        Log.Debug("正在创建目录 {DateDir}...", fullDateDir);
+                        Log.Debug("正在创建小时目录 {HourDir}...", fullDateDir);
                         sftpClient.CreateDirectory(fullDateDir);
-                        Log.Information("成功创建 {DateDir} 目录", fullDateDir);
+                        Log.Information("成功创建小时目录 {HourDir}", fullDateDir);
                     }
                     else
                     {
@@ -469,7 +477,7 @@ public class BenNiaoPackageService : IDisposable
                     // 上传文件
                     var remotePath = $"/{dateDir}/{fileName}";
                     Log.Debug("开始上传文件到 {RemotePath}...", remotePath);
-                    using var fileStream = File.OpenRead(imagePath);
+                    await using var fileStream = File.OpenRead(imagePath);
                     
                     // 记录上传开始时间
                     var startTime = DateTime.Now;
@@ -634,7 +642,7 @@ public class BenNiaoPackageService : IDisposable
 
             var uploadItem = new
             {
-                networkName = _config.BenNiaoDistributionCenterName,
+                netWorkName = _config.BenNiaoDistributionCenterName,
                 deviceId = _config.DeviceId,
                 waybillNum = package.Barcode, // 可以为空
                 scanTime = uploadTime.ToString("yyyy-MM-dd HH:mm:ss"),

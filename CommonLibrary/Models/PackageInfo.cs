@@ -76,22 +76,22 @@ public class PackageInfo : IDisposable
     public DateTime TriggerTimestamp { get; set; }
 
     /// <summary>
-    /// 长度（毫米）
+    /// 长度（厘米）
     /// </summary>
     public double? Length { get; set; }
 
     /// <summary>
-    /// 宽度（毫米）
+    /// 宽度（厘米）
     /// </summary>
     public double? Width { get; set; }
 
     /// <summary>
-    /// 高度（毫米）
+    /// 高度（厘米）
     /// </summary>
     public double? Height { get; set; }
 
     /// <summary>
-    /// 体积（立方毫米）
+    /// 体积（立方厘米）
     /// </summary>
     public double? Volume { get; set; }
 

@@ -22,6 +22,12 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
     // 根据CPU核心数调整并发处理数量
     private readonly int _maxConcurrentProcessing = Math.Max(2, Environment.ProcessorCount / 2);
 
+    // 添加帧率限制相关字段
+    private readonly int _targetFrameRate = 10; // 目标帧率：10fps
+    private readonly TimeSpan _frameInterval; // 帧间隔时间
+    private DateTime _lastFrameTime = DateTime.MinValue; // 上一帧处理时间
+    private readonly object _frameRateLock = new(); // 帧率控制锁
+
     // 保持委托的引用，防止被GC回收
     private readonly MVIDCodeReader.cbOutputdelegate _imageCallback;
     private readonly Channel<(IntPtr imageData, int imageSize)> _imageChannel;
@@ -74,6 +80,10 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
         // 初始化信号量
         _processingSemaphore = new SemaphoreSlim(_maxConcurrentProcessing);
         _processingCount = 0;
+
+        // 计算帧间隔时间
+        _frameInterval = TimeSpan.FromSeconds(1.0 / _targetFrameRate);
+        Log.Information("已设置帧率限制：{FrameRate}fps，帧间隔：{FrameInterval}ms", _targetFrameRate, _frameInterval.TotalMilliseconds);
 
         // 初始化回调委托并保持引用
         _imageCallback = (pstOutput, _) =>
@@ -137,7 +147,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
                 ConnectDeviceInternalAsync().GetAwaiter().GetResult();
             }
 
-            // 3. 再次检查设备是否已经初始化
+            // 3. 检查设备是否已经初始化
             if (_device == null)
             {
                 Log.Error("设备初始化失败，无法开始采集");
@@ -215,30 +225,52 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
     }
 
     /// <summary>
-    /// 获取最新的图像
+    /// 执行软触发
     /// </summary>
-    /// <returns>成功返回图像数据，失败返回 null</returns>
-    public Image<Rgba32>? ExecuteSoftTrigger()
+    /// <returns>成功返回true，失败返回false</returns>
+    public bool ExecuteSoftTrigger()
     {
+        Log.Debug("正在执行软触发...");
+
         try
         {
-            lock (_latestImageLock)
+            // 1. 检查设备状态
+            if (_device == null || !IsConnected)
             {
-                if (_latestImage == null)
-                {
-                    Log.Warning("没有可用的图像");
-                    return null;
-                }
-
-                var image = _latestImage.Clone();
-                Log.Information("成功获取最新图像");
-                return image;
+                Log.Error("设备未初始化或未连接，无法执行软触发");
+                return false;
             }
+
+            // 2. 确保相机处于采集状态
+            if (!_isGrabbing)
+            {
+                Log.Warning("相机未处于采集状态，尝试启动采集...");
+                if (!Start())
+                {
+                    Log.Error("启动采集失败，无法执行软触发");
+                    return false;
+                }
+            }
+                
+            // 3. 执行软触发
+            lock (_sdkLock)
+            {
+                Log.Debug("发送软触发命令...");
+                var triggerResult = _device.MVID_CR_CAM_SetCommandValue_NET("TriggerSoftware");
+                if (triggerResult != MVIDCodeReader.MVID_CR_OK)
+                {
+                    Log.Error("软触发失败：{Error}", GetErrorMessage(triggerResult));
+                    return false;
+                }
+            }
+            
+            Log.Information("软触发命令发送成功");
+            return true;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "获取最新图像时发生错误");
-            return null;
+            Log.Error(ex, "执行软触发时发生错误");
+            return false;
         }
     }
 
@@ -738,6 +770,24 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
             if (!ValidateImageData(pImageData, nImageSize))
             {
                 return;
+            }
+
+            // 帧率限制：检查是否应该处理当前帧
+            lock (_frameRateLock)
+            {
+                var now = DateTime.UtcNow;
+                var elapsed = now - _lastFrameTime;
+                
+                // 如果距离上一帧的时间小于帧间隔，则跳过当前帧
+                if (elapsed < _frameInterval)
+                {
+                    Log.Debug("帧率限制：跳过当前帧，距离上一帧仅 {ElapsedMs:F1}ms，目标间隔 {TargetMs:F1}ms", 
+                        elapsed.TotalMilliseconds, _frameInterval.TotalMilliseconds);
+                    return;
+                }
+                
+                // 更新上一帧时间
+                _lastFrameTime = now;
             }
 
             // 检查处理限制

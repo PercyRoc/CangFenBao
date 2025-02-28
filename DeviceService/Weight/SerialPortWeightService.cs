@@ -332,19 +332,18 @@ public class SerialPortWeightService : IWeightService
 
             foreach (var valuePart in dataSegments.Select(segment => segment.Length > 6 ? segment[..6] : segment))
             {
-                if (float.TryParse(valuePart, NumberStyles.Float, CultureInfo.InvariantCulture, out var weight))
+                // 先反转数据，再解析
+                var reversedValue = ReverseWeight(valuePart);
+                if (float.TryParse(reversedValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var weight))
                 {
-                    // 反转数据处理：例如01.2000应该是2.1kg
-                    var reversedWeight = ReverseWeight(weight);
-                    
                     // 根据称重类型处理
                     if (_settings.WeightType == WeightType.Static)
                     {
-                        ProcessStaticWeight(reversedWeight * 1000, receiveTime);
+                        ProcessStaticWeight(weight * 1000, receiveTime);
                     }
                     else
                     {
-                        ProcessDynamicWeight(reversedWeight * 1000, receiveTime);
+                        ProcessDynamicWeight(weight * 1000, receiveTime);
                     }
                 }
                 else
@@ -526,42 +525,14 @@ public class SerialPortWeightService : IWeightService
     }
 
     /// <summary>
-    /// 反转重量数据
-    /// 例如：02.7000 -> 7.2，102.000 -> 0.102
+    /// 反转重量数据，直接从后往前重新排列所有字符
+    /// 例如：02.7000 -> 0007.20
     /// </summary>
-    private static float ReverseWeight(float originalWeight)
+    private static string ReverseWeight(string weightStr)
     {
-        // 将浮点数转换为固定格式的字符串（保留4位小数）
-        var weightStr = originalWeight.ToString("F4", CultureInfo.InvariantCulture);
-        
-        // 分割整数和小数部分
-        var parts = weightStr.Split('.');
-        if (parts.Length != 2)
-        {
-            return originalWeight; // 如果格式不正确，返回原始值
-        }
-
-        // 处理整数部分：移除前导零
-        var integerPart = parts[0].TrimStart('0');
-        if (string.IsNullOrEmpty(integerPart))
-        {
-            integerPart = "0";
-        }
-
-        // 处理小数部分：移除尾随零
-        var decimalPart = parts[1].TrimEnd('0');
-        if (string.IsNullOrEmpty(decimalPart))
-        {
-            decimalPart = "0";
-        }
-
-        // 如果整数部分大于等于100，需要反转到小数部分
-        if (int.Parse(integerPart) >= 100)
-        {
-            return float.Parse($"0.{integerPart}", CultureInfo.InvariantCulture);
-        }
-
-        // 否则，反转小数点前后的数字
-        return float.Parse($"{decimalPart}.{integerPart}", CultureInfo.InvariantCulture);
+        // 直接将整个字符串反转
+        var chars = weightStr.ToCharArray();
+        Array.Reverse(chars);
+        return new string(chars);
     }
 }

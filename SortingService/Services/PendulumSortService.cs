@@ -93,6 +93,13 @@ public class PendulumSortService : IPendulumSortService
                 await _triggerClient.SendAsync(startCommand);
                 Log.Debug("已发送启动命令到触发光电");
 
+                // 发送左右回正指令
+                var resetLeftCommand = HexStringToByteArray(_moduleCommands["2代模块"].ResetLeft);
+                var resetRightCommand = HexStringToByteArray(_moduleCommands["2代模块"].ResetRight);
+                await _triggerClient.SendAsync(resetLeftCommand);
+                await _triggerClient.SendAsync(resetRightCommand);
+                Log.Debug("已发送左右回正命令到触发光电");
+
                 // 更新触发光电状态
                 UpdateDeviceConnectionState("触发光电", true);
             }
@@ -183,6 +190,14 @@ public class PendulumSortService : IPendulumSortService
             {
                 try
                 {
+                    // 发送左右回正指令
+                    var resetLeftCommand = HexStringToByteArray(_moduleCommands["2代模块"].ResetLeft);
+                    var resetRightCommand = HexStringToByteArray(_moduleCommands["2代模块"].ResetRight);
+                    await _triggerClient.SendAsync(resetLeftCommand);
+                    await _triggerClient.SendAsync(resetRightCommand);
+                    Log.Debug("已发送左右回正命令到触发光电");
+
+                    // 发送停止命令
                     var stopCommand = HexStringToByteArray(_moduleCommands["2代模块"].Stop);
                     await _triggerClient.SendAsync(stopCommand);
                     Log.Debug("已发送停止命令到触发光电");
@@ -412,29 +427,30 @@ public class PendulumSortService : IPendulumSortService
     {
         try
         {
-            // 将接收到的数据转换为字符串
+            // 修改为独立判断两个信号（原先是if-else结构）
             var message = Encoding.ASCII.GetString(data);
             Log.Debug("收到触发光电数据: {Message}", message);
 
-            // 处理包裹触发信号
+            // 使用独立if判断来处理可能同时到达的信号
             if (message.Contains("+OCCH1:1"))
             {
                 // 记录触发时间
                 var triggerTime = DateTime.Now;
-                _triggerTimes.Enqueue(triggerTime);
+                lock (_triggerTimes)  // 添加同步锁
+                {
+                    _triggerTimes.Enqueue(triggerTime);
+                    // 清理过期的触发时间（保留最近2秒的记录）
+                    while (_triggerTimes.Count > 0 && 
+                           (DateTime.Now - _triggerTimes.Peek()).TotalMilliseconds > 2000)
+                    {
+                        _triggerTimes.Dequeue();
+                    }
+                }
                 Log.Information("触发光电触发，时间：{Time:HH:mm:ss.fff}, 当前队列长度: {Count}", 
                     triggerTime, _triggerTimes.Count);
-
-                // 清理过期的触发时间（保留最近2秒的记录）
-                while (_triggerTimes.Count > 0 && 
-                       (DateTime.Now - _triggerTimes.Peek()).TotalMilliseconds > 2000)
-                {
-                    _triggerTimes.Dequeue();
-                    Log.Debug("清理过期的触发时间记录");
-                }
             }
-            // 处理分拣触发信号
-            else if (message.Contains("+OCCH2:1"))
+            
+            if (message.Contains("+OCCH2:1"))  // 改为独立if判断
             {
                 Log.Information("收到分拣触发信号，开始处理分拣逻辑");
                 
@@ -492,8 +508,8 @@ public class PendulumSortService : IPendulumSortService
                     return;
                 }
 
-                // 按触发时间排序，确保按正确顺序处理
-                packagesToProcess = [.. packagesToProcess.OrderBy(p => p.TriggerTimestamp)];
+                // 按触发时间和索引号排序，确保按正确顺序处理
+                packagesToProcess = [.. packagesToProcess.OrderBy(p => p.TriggerTimestamp).ThenBy(p => p.Index)];
 
                 // 处理所有匹配的包裹
                 foreach (var package in packagesToProcess)
@@ -520,6 +536,8 @@ public class PendulumSortService : IPendulumSortService
         try
         {
             var startTime = DateTime.Now;
+            Log.Debug("开始执行分拣动作 - 包裹:{Barcode}(序号:{Index}), 光电:{PhotoId}",
+                package.Barcode, package.Index, photoelectricName);
             
             // 获取分拣命令
             // 修改分拣逻辑：1号格口左摆，2号格口右摆，3号格口不做动作
@@ -594,7 +612,11 @@ public class PendulumSortService : IPendulumSortService
             // 在同步块内获取下一个包裹
             lock (_packageLock)
             {
+                // 确保使用当前正在处理的包裹查找下一个
                 nextPackage = GetNextPackage(package);
+                Log.Debug("查找下一个包裹结果 - 当前包裹:{CurrentCode}(序号:{CurrentIndex}), 下一个包裹:{NextCode}",
+                    package.Barcode, package.Index,
+                    nextPackage?.Barcode ?? "无");
             }
 
             // 如果当前是3号格口，不需要回正（因为没有摆动）
@@ -694,26 +716,31 @@ public class PendulumSortService : IPendulumSortService
     {
         lock (_packageLock)
         {
-            var currentIndex = _pendingSortPackages.Keys.ToList().IndexOf(currentPackage.Index);
-            if (currentIndex < 0) return null;
+            Log.Debug("开始查找下一个包裹 - 当前包裹:{CurrentCode}(序号:{CurrentIndex}), 当前队列数量:{Count}",
+                currentPackage.Barcode, currentPackage.Index, _pendingSortPackages.Count);
 
-            // 从当前包裹之后查找第一个非处理中的包裹
+            // 直接从字典中获取所有值并排序
             var nextPackages = _pendingSortPackages.Values
-                .Skip(currentIndex + 1)
                 .Where(p => p.TriggerTimestamp > currentPackage.TriggerTimestamp
-                            && p.Index > currentPackage.Index
-                            && !IsPackageProcessing(p.Index))
+                           && p.Index > currentPackage.Index
+                           && !IsPackageProcessing(p.Index))
                 .OrderBy(p => p.TriggerTimestamp)
                 .ToList();
 
-            if (nextPackages.Count == 0) return null;
+            if (nextPackages.Count == 0)
+            {
+                Log.Debug("未找到符合条件的下一个包裹 - 当前包裹:{CurrentCode}(序号:{CurrentIndex})",
+                    currentPackage.Barcode, currentPackage.Index);
+                return null;
+            }
 
             var nextPackage = nextPackages.First();
             Log.Debug(
                 "找到下一个非处理中的包裹 - 当前包裹:{CurrentCode}(序号:{CurrentIndex}), " +
-                "下一个包裹:{NextCode}(序号:{NextIndex})",
+                "下一个包裹:{NextCode}(序号:{NextIndex}), 触发时间差:{TimeDiff}ms",
                 currentPackage.Barcode, currentPackage.Index,
-                nextPackage.Barcode, nextPackage.Index);
+                nextPackage.Barcode, nextPackage.Index,
+                (nextPackage.TriggerTimestamp - currentPackage.TriggerTimestamp).TotalMilliseconds);
             return nextPackage;
         }
     }
@@ -772,6 +799,13 @@ public class PendulumSortService : IPendulumSortService
                 var startCommand = HexStringToByteArray(_moduleCommands["2代模块"].Start);
                 await _triggerClient.SendAsync(startCommand);
                 Log.Debug("已发送启动命令到触发光电");
+
+                // 发送左右回正指令
+                var resetLeftCommand = HexStringToByteArray(_moduleCommands["2代模块"].ResetLeft);
+                var resetRightCommand = HexStringToByteArray(_moduleCommands["2代模块"].ResetRight);
+                await _triggerClient.SendAsync(resetLeftCommand);
+                await _triggerClient.SendAsync(resetRightCommand);
+                Log.Debug("已发送左右回正命令到触发光电");
 
                 // 更新触发光电状态
                 UpdateDeviceConnectionState("触发光电", true);

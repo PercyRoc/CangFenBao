@@ -220,62 +220,43 @@ public class DahuaCameraService : ICameraService
     /// </summary>
     /// <param name="timeoutMs">超时时间（毫秒）</param>
     /// <returns>操作是否成功</returns>
-    public async Task<bool> StopAsync(int timeoutMs = 3000)
+    public Task<bool> StopAsync(int timeoutMs = 3000)
     {
         if (!IsConnected)
         {
             Log.Debug("相机服务尚未启动，无需停止");
-            return true;
+            return Task.FromResult(true);
         }
 
         try
         {
-            Log.Information("正在异步停止大华相机服务(超时:{TimeoutMs}ms)...", timeoutMs);
+            Log.Information("正在停止大华相机服务...");
             
-            // 使用CancellationToken实现超时
-            using var cts = new CancellationTokenSource(timeoutMs);
-            
-            var success = await Task.Run(() => 
+            // 同步执行停止流程
+            try 
             {
-                try 
-                {
-                    // 清理回调
-                    DetachAllCallbacks();
-                    return true;
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "停止大华相机时发生异常");
-                    return false;
-                }
-            }, cts.Token).ContinueWith(t => 
-            {
-                // 处理任务取消
-                if (t.IsCanceled)
-                {
-                    Log.Warning("停止大华相机操作超时");
-                    return false;
-                }
+                // 清理回调
+                DetachAllCallbacks();
                 
-                // 处理任务异常
-                if (!t.IsFaulted) return t.Result;
-                Log.Error(t.Exception, "停止大华相机时发生异常");
-                return false;
-
-            }, TaskScheduler.Default);
-            
-            // 无论成功与否，重置状态
-            IsConnected = false;
-            ConnectionChanged?.Invoke(_firstCameraId ?? string.Empty, false);
-            
-            Log.Information("大华相机服务已异步停止");
-            return success;
+                // 重置状态
+                IsConnected = false;
+                ConnectionChanged?.Invoke(_firstCameraId ?? string.Empty, false);
+                
+                Log.Information("大华相机服务已停止");
+                return Task.FromResult(true);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "停止大华相机时发生异常");
+                IsConnected = false; // 强制重置状态
+                return Task.FromResult(false);
+            }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "异步停止大华相机服务时发生错误");
+            Log.Error(ex, "停止大华相机服务时发生错误");
             IsConnected = false; // 强制重置状态
-            return false;
+            return Task.FromResult(false);
         }
     }
 

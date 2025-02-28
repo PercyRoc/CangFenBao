@@ -4,7 +4,6 @@ using System.IO;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Windows;
-using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using CommonLibrary.Models;
@@ -51,7 +50,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         ISettingsService settingsService,
         IPendulumSortService sortService,
         PackageTransferService packageTransferService,
-        BenNiaoPackageService benNiaoService, BenNiaoPreReportService benNiaoPreReportService)
+        BenNiaoPackageService benNiaoService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
@@ -92,109 +91,46 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         // 订阅图像流
         _subscriptions.Add(_cameraService.ImageStream
-            .ObserveOn(Scheduler.CurrentThread)
+            .ObserveOn(TaskPoolScheduler.Default)  // 使用任务池调度器
             .Subscribe(imageData =>
             {
                 try
                 {
                     var image = imageData.image;
-                    var barcodeLocations = imageData.barcodes;
-
-                    // 创建内存流并将其所有权转移给BitmapImage
-                    var memoryStream = new MemoryStream();
-                    // 由于现在是灰度图像，需要调整保存格式
-                    image.SaveAsPng(memoryStream); // 使用PNG格式保持灰度图像质量
-                    memoryStream.Position = 0;
-
-                    Application.Current.Dispatcher.Invoke(() =>
+                    
+                    // 使用 TaskPool 进行图像编码
+                    Task.Run(() =>
                     {
                         try
                         {
-                            var bitmap = new BitmapImage();
-                            bitmap.BeginInit();
-                            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                            bitmap.StreamSource = memoryStream;
-                            bitmap.EndInit();
-                            bitmap.Freeze(); // 使图像可以跨线程访问
+                            using var memoryStream = new MemoryStream();
+                            image.SaveAsPng(memoryStream);
+                            memoryStream.Position = 0;
+                            var imageBytes = memoryStream.ToArray();
 
-                            // 创建可绘制的图像
-                            var drawingVisual = new DrawingVisual();
-                            using (var drawingContext = drawingVisual.RenderOpen())
+                            Application.Current.Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
                             {
-                                // 绘制原始图像
-                                drawingContext.DrawImage(bitmap, new Rect(0, 0, bitmap.PixelWidth, bitmap.PixelHeight));
-
-                                // 绘制条码位置，使用更明显的颜色
-                                foreach (var barcode in barcodeLocations)
+                                try
                                 {
-                                    var pen = new Pen(Brushes.Red, 3); // 使用红色和更粗的线条，在灰度图上更容易看见
-                                    pen.Freeze();
+                                    var bitmap = new BitmapImage();
+                                    bitmap.BeginInit();
+                                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                                    bitmap.StreamSource = new MemoryStream(imageBytes);
+                                    bitmap.EndInit();
+                                    bitmap.Freeze(); // 使图像可以跨线程访问
 
-                                    // 创建条码框的路径
-                                    var points = barcode.Points.Select(p => new System.Windows.Point(p.X, p.Y))
-                                        .ToList();
-                                    if (points.Count != 4) continue;
-                                    {
-                                        var geometry = new PathGeometry();
-                                        var figure = new PathFigure(points[0], [
-                                            new LineSegment(points[1], true),
-                                            new LineSegment(points[2], true),
-                                            new LineSegment(points[3], true),
-                                            new LineSegment(points[0], true)
-                                        ], true);
-                                        geometry.Figures.Add(figure);
-                                        geometry.Freeze();
-
-                                        drawingContext.DrawGeometry(null, pen, geometry);
-
-                                        // 只有在条码内容不为空时才绘制文本
-                                        if (string.IsNullOrWhiteSpace(barcode.Code)) continue;
-                                        // 绘制条码文本，使用更明显的颜色和大小
-                                        var formattedText = new FormattedText(
-                                            barcode.Code,
-                                            CultureInfo.CurrentCulture,
-                                            FlowDirection.LeftToRight,
-                                            new Typeface("Arial"),
-                                            16, // 增大字号
-                                            Brushes.Red, // 使用红色
-                                            VisualTreeHelper.GetDpi(Application.Current.MainWindow).PixelsPerDip);
-                                        formattedText.SetFontWeight(FontWeights.Bold);
-
-                                        // 计算文本位置（在条码框的左上角）
-                                        var textPoint = new System.Windows.Point(
-                                            points.Min(p => p.X),
-                                            points.Min(p => p.Y) - formattedText.Height);
-
-                                        // 绘制文本背景
-                                        var textBackground = new RectangleGeometry(new Rect(
-                                            textPoint.X - 2,
-                                            textPoint.Y - 2,
-                                            formattedText.Width + 4,
-                                            formattedText.Height + 4));
-                                        drawingContext.DrawGeometry(Brushes.White, null, textBackground); // 使用白色背景
-
-                                        // 绘制文本
-                                        drawingContext.DrawText(formattedText, textPoint);
-                                    }
+                                    // 更新UI
+                                    CurrentImage = bitmap;
                                 }
-                            }
-
-                            // 创建RenderTargetBitmap并渲染DrawingVisual
-                            var renderBitmap = new RenderTargetBitmap(
-                                bitmap.PixelWidth,
-                                bitmap.PixelHeight,
-                                96,
-                                96,
-                                PixelFormats.Pbgra32);
-                            renderBitmap.Render(drawingVisual);
-                            renderBitmap.Freeze();
-
-                            // 更新UI
-                            CurrentImage = renderBitmap;
+                                catch (Exception ex)
+                                {
+                                    Log.Error(ex, "创建BitmapImage时发生错误");
+                                }
+                            });
                         }
-                        finally
+                        catch (Exception ex)
                         {
-                            memoryStream.Dispose();
+                            Log.Error(ex, "编码图像数据时发生错误");
                         }
                     });
                 }
@@ -499,22 +435,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 try
                 {
-                    // 3. 更新当前条码和图像
                     CurrentBarcode = package.Barcode;
-                    // 4. 更新实时包裹数据
                     UpdatePackageInfoItems(package);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "更新UI时发生错误");
-                }
-            });
-            
-            
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                try
-                {
                     // 6. 更新统计信息和历史包裹列表
                     PackageHistory.Insert(0, package);
                     while (PackageHistory.Count > 1000) // 保持最近1000条记录
@@ -525,7 +447,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "更新统计信息时发生错误");
+                    Log.Error(ex, "更新UI时发生错误");
                 }
             });
         }

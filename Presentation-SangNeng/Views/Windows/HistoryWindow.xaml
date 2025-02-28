@@ -193,10 +193,10 @@
                             <DataGridTextColumn Header="No." Binding="{Binding Id}" Width="80"/>
                             <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" Width="150"/>
                             <DataGridTextColumn Header="Weight(kg)" Binding="{Binding Weight}" Width="100"/>
-                            <DataGridTextColumn Header="Length(mm)" Binding="{Binding Length}" Width="100"/>
-                            <DataGridTextColumn Header="Width(mm)" Binding="{Binding Width}" Width="100"/>
-                            <DataGridTextColumn Header="Height(mm)" Binding="{Binding Height}" Width="100"/>
-                            <DataGridTextColumn Header="Volume(mm³)" Binding="{Binding Volume}" Width="120"/>
+                            <DataGridTextColumn Header="Length(cm)" Binding="{Binding Length, StringFormat={}{0:F1}}" Width="100"/>
+                            <DataGridTextColumn Header="Width(cm)" Binding="{Binding Width, StringFormat={}{0:F1}}" Width="100"/>
+                            <DataGridTextColumn Header="Height(cm)" Binding="{Binding Height, StringFormat={}{0:F1}}" Width="100"/>
+                            <DataGridTextColumn Header="Volume(cm³)" Binding="{Binding Volume}" Width="120"/>
                             <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100"/>
                             <DataGridTextColumn Header="Create Time" Binding="{Binding CreateTime, StringFormat=yyyy-MM-dd HH:mm:ss}" Width="*"/>
                             <DataGridTemplateColumn Header="Image" Width="100">
