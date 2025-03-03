@@ -1,0 +1,70 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>WinExe</OutputType>
+        <TargetFramework>net8.0-windows</TargetFramework>
+        <RootNamespace>Presentation_ZtCloudWarehous</RootNamespace>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <ApplicationIcon>..\Presentation-CommonLibrary\Resources\Icon\logo.ico</ApplicationIcon>
+        <UseWPF>true</UseWPF>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <Folder Include="Models\" />
+      <Folder Include="Services\" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Page Update="Views\MainWindow.xaml">
+        <Generator>MSBuild:Compile</Generator>
+        <XamlRuntime>Wpf</XamlRuntime>
+        <SubType>Designer</SubType>
+      </Page>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\CommonLibrary\CommonLibrary.csproj"/>
+        <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>
+        <ProjectReference Include="..\Presentation-CommonLibrary\Presentation-CommonLibrary.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Prism -->
+        <PackageReference Include="Prism.DryIoc"/>
+        <PackageReference Include="Prism.Wpf"/>
+
+        <!-- Serilog -->
+        <PackageReference Include="Serilog"/>
+        <PackageReference Include="Serilog.Sinks.Console"/>
+        <PackageReference Include="Serilog.Sinks.File"/>
+        <PackageReference Include="Serilog.Sinks.Debug"/>
+        <PackageReference Include="Serilog.Extensions.Logging"/>
+
+        <!-- UI Framework -->
+        <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
+        <PackageReference Include="Microsoft.Extensions.Http"/>
+        <PackageReference Include="FluentFTP"/>
+        <PackageReference Include="WPF-UI"/>
+        <PackageReference Include="HandyControl"/>
+        <PackageReference Include="EPPlus"/>
+
+        <!-- WebSocket -->
+        <PackageReference Include="WebSocketSharp-netstandard"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Page Update="Views\MainWindow.xaml">
+            <Generator>MSBuild:Compile</Generator>
+            <XamlRuntime>Wpf</XamlRuntime>
+            <SubType>Designer</SubType>
+        </Page>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Resource Include="..\Presentation-CommonLibrary\Resources\Icon\logo.ico">
+            <Link>logo.ico</Link>
+        </Resource>
+    </ItemGroup>
+
+</Project>
