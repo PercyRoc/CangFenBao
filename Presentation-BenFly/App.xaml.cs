@@ -7,6 +7,8 @@ using DeviceService.Camera;
 using Microsoft.Extensions.DependencyInjection;
 using Presentation_BenFly.Models.Upload;
 using Presentation_BenFly.Services;
+using Presentation_BenFly.Services.Sortings.Interfaces;
+using Presentation_BenFly.Services.Sortings.Services;
 using Presentation_BenFly.ViewModels.Dialogs;
 using Presentation_BenFly.ViewModels.Settings;
 using Presentation_BenFly.ViewModels.Windows;
@@ -16,8 +18,6 @@ using Presentation_BenFly.Views.Windows;
 using Presentation_CommonLibrary.Extensions;
 using Prism.Ioc;
 using Serilog;
-using SortingService.Extensions;
-using SortingService.Interfaces;
 using SortSettingsView = Presentation_BenFly.Views.Settings.SortSettingsView;
 
 namespace Presentation_BenFly;
@@ -36,7 +36,6 @@ public partial class App
         containerRegistry.AddCommonServices();
         containerRegistry.AddPresentationCommonServices();
         containerRegistry.AddPhotoCamera();
-        containerRegistry.AddSortingServices();
 
         // 注册设置页面
         containerRegistry.Register<CameraSettingsView>();
@@ -54,6 +53,7 @@ public partial class App
         containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
         containerRegistry.Register<SettingsDialogViewModel>();
 
+        containerRegistry.Register<IPendulumSortService, PendulumSortService>();
         // 注册 HttpClient
         var services = new ServiceCollection();
         var settingsService = Container.Resolve<ISettingsService>();

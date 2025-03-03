@@ -37,11 +37,11 @@
         <ProjectReference Include="..\CommonLibrary\CommonLibrary.csproj"/>
         <ProjectReference Include="..\Presentation-CommonLibrary\Presentation-CommonLibrary.csproj"/>
         <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>
-        <ProjectReference Include="..\SortingService\SortingService.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
         <Folder Include="Models\"/>
+        <Folder Include="Services\Sortings\" />
     </ItemGroup>
 
     <ItemGroup>

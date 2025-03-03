@@ -37,7 +37,7 @@ public class DwsService(
             var request = new DwsRequest
             {
                 barCode = string.IsNullOrEmpty(package.Barcode) ? "noread" : package.Barcode,
-                weight = package.Weight,
+                weight = Math.Round(package.Weight, 2),
                 length = package.Length ?? 0,
                 width = package.Width ?? 0,
                 height = package.Height ?? 0,
@@ -66,7 +66,7 @@ public class DwsService(
 
             // 设置基地址 - 保持不变
             var baseAddress = config.Environment == UploadEnvironment.Production
-                ? "https://klwms.bb.sankuai.com"
+                ? "https://klwms.meituan.com"
                 : "https://klvwms.meituan.com";
             // 不要修改httpClient的BaseAddress属性
             // httpClient.BaseAddress = new Uri(baseAddress);
@@ -134,6 +134,8 @@ public class DwsService(
                     // 包裹号无效
                     Log.Warning("包裹号无效：{Barcode}", package.Barcode);
                     notificationService.ShowWarning("包裹号无效", "红灯，包裹号无效");
+                    await warningLightService.TurnOffGreenLightAsync();
+                    await Task.Delay(100); // 短暂延时确保绿灯完全关闭
                     await warningLightService.ShowRedLightAsync();
                     package.SetError($"包裹号无效：{result.Message}");
                     break;
@@ -142,6 +144,8 @@ public class DwsService(
                     // 非履约日包裹
                     Log.Warning("非履约日包裹：{Barcode}", package.Barcode);
                     notificationService.ShowWarning("非履约日包裹", "红灯，非履约日包裹");
+                    await warningLightService.TurnOffGreenLightAsync();
+                    await Task.Delay(100); // 短暂延时确保绿灯完全关闭
                     await warningLightService.ShowRedLightAsync();
                     package.SetError($"非履约日包裹：{result.Message}");
                     break;
@@ -150,6 +154,8 @@ public class DwsService(
                     // 重量异常
                     Log.Warning("重量异常：{Barcode}, {Message}", package.Barcode, result.Message);
                     notificationService.ShowWarning("重量异常", "红灯，重量异常");
+                    await warningLightService.TurnOffGreenLightAsync();
+                    await Task.Delay(100); // 短暂延时确保绿灯完全关闭
                     await warningLightService.ShowRedLightAsync();
                     package.SetError($"重量异常：{result.Message}");
                     break;
@@ -158,6 +164,8 @@ public class DwsService(
                     // 客户端请求错误
                     Log.Warning("客户端请求错误：{Message}", result.Message);
                     notificationService.ShowError("请求错误", "红灯，客户端请求错误");
+                    await warningLightService.TurnOffGreenLightAsync();
+                    await Task.Delay(100); // 短暂延时确保绿灯完全关闭
                     await warningLightService.ShowRedLightAsync();
                     package.SetError($"请求错误：{result.Message}");
                     break;
@@ -166,6 +174,8 @@ public class DwsService(
                     // 服务端异常
                     Log.Error("服务端异常：{Message}", result.Message);
                     notificationService.ShowError("服务异常", "红灯，系统错误");
+                    await warningLightService.TurnOffGreenLightAsync();
+                    await Task.Delay(100); // 短暂延时确保绿灯完全关闭
                     await warningLightService.ShowRedLightAsync();
                     package.SetError($"服务异常：{result.Message}");
                     break;
@@ -174,6 +184,8 @@ public class DwsService(
                     // 未知错误
                     Log.Error("未知错误：Code={Code}, Message={Message}", result.Code, result.Message);
                     notificationService.ShowError("未知错误", $"红灯，错误代码：{result.Code}");
+                    await warningLightService.TurnOffGreenLightAsync();
+                    await Task.Delay(100); // 短暂延时确保绿灯完全关闭
                     await warningLightService.ShowRedLightAsync();
                     package.SetError($"未知错误：{result.Message}");
                     break;
@@ -200,23 +212,22 @@ public class DwsService(
                 // TODO: 发送停机指令
             }
 
-            // 记录更详细的异常信息
-            if (ex is HttpRequestException httpEx)
+            switch (ex)
             {
-                Log.Error(ex, "DWS服务HTTP请求异常: {StatusCode}, {Message}", 
-                    httpEx.StatusCode, ex.Message);
-            }
-            else if (ex is TaskCanceledException)
-            {
-                Log.Error(ex, "DWS服务请求超时");
-            }
-            else if (ex is JsonException jsonEx)
-            {
-                Log.Error(ex, "DWS服务响应解析异常: {Message}", jsonEx.Message);
-            }
-            else
-            {
-                Log.Error(ex, "DWS服务请求异常: {Type}, {Message}", ex.GetType().Name, ex.Message);
+                // 记录更详细的异常信息
+                case HttpRequestException httpEx:
+                    Log.Error(ex, "DWS服务HTTP请求异常: {StatusCode}, {Message}", 
+                        httpEx.StatusCode, ex.Message);
+                    break;
+                case TaskCanceledException:
+                    Log.Error(ex, "DWS服务请求超时");
+                    break;
+                case JsonException jsonEx:
+                    Log.Error(ex, "DWS服务响应解析异常: {Message}", jsonEx.Message);
+                    break;
+                default:
+                    Log.Error(ex, "DWS服务请求异常: {Type}, {Message}", ex.GetType().Name, ex.Message);
+                    break;
             }
 
             return new DwsResponse { Code = 500, Message = ex.Message };

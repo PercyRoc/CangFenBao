@@ -3,11 +3,11 @@ using System.Text;
 using System.Timers;
 using CommonLibrary.Models;
 using CommonLibrary.Models.Settings.Sort;
+using Presentation_BenFly.Services.Sortings.Interfaces;
 using Serilog;
-using SortingService.Interfaces;
 using Timer = System.Timers.Timer;
 
-namespace SortingService.Services;
+namespace Presentation_BenFly.Services.Sortings.Services;
 
 public class PendulumSortService : IPendulumSortService
 {

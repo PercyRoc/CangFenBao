@@ -1,8 +1,8 @@
 using System.Net.Sockets;
+using Presentation_BenFly.Services.Sortings.Interfaces;
 using Serilog;
-using SortingService.Interfaces;
 
-namespace SortingService.Services;
+namespace Presentation_BenFly.Services.Sortings.Services;
 
 public sealed class TcpClientService : ITcpClientService
 {

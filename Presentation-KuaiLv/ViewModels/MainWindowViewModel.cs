@@ -51,6 +51,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         // 初始化命令
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
+        ResetWarningCommand = new DelegateCommand(ExecuteResetWarning);
 
         // 初始化系统状态更新定时器
         _timer = new DispatcherTimer
@@ -106,6 +107,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     #region Properties
 
     public DelegateCommand OpenSettingsCommand { get; }
+    public DelegateCommand ResetWarningCommand { get; private set; }
 
     public string CurrentBarcode
     {
@@ -137,6 +139,22 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private void ExecuteOpenSettings()
     {
         _dialogService.ShowDialog("SettingsDialog");
+    }
+
+    private async void ExecuteResetWarning()
+    {
+        try
+        {
+            // 关闭红灯并打开绿灯
+            await _warningLightService.TurnOffRedLightAsync();
+            await Task.Delay(100); // 短暂延时确保红灯完全关闭
+            await _warningLightService.ShowGreenLightAsync();
+            Log.Information("警示灯已重置：关闭红灯并打开绿灯");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "重置警示灯时发生错误");
+        }
     }
 
     private void Timer_Tick(object? sender, EventArgs e)
@@ -221,7 +239,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         {
             Label = "重量",
             Value = "0.00",
-            Unit = "kg",
+            Unit = "斤",
             Description = "包裹重量",
             Icon = "Scale24"
         });
@@ -362,7 +380,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // 设置包裹序号
             package.Index = Interlocked.Increment(ref _currentPackageIndex);
             Log.Information("收到包裹信息：{Barcode}, 序号：{Index}", package.Barcode, package.Index);
-
+            package.Weight *= 2;
             // 更新UI
             Application.Current.Dispatcher.Invoke(() =>
             {
@@ -423,7 +441,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         if (weightItem != null)
         {
             weightItem.Value = package.Weight.ToString("F2");
-            weightItem.Unit = "kg";
+            weightItem.Unit = "斤";
         }
 
         var sizeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "尺寸");

@@ -33,7 +33,7 @@ public class PackageInfo : IDisposable
     /// <summary>
     ///     重量显示
     /// </summary>
-    public string WeightDisplay => $"{Weight:F2}kg";
+    public string WeightDisplay => $"{Weight:F2}斤";
 
     /// <summary>
     ///     体积显示
@@ -99,12 +99,6 @@ public class PackageInfo : IDisposable
     ///     图像
     /// </summary>
     public Image<Rgba32>? Image { get; set; }
-
-    /// <summary>
-    ///     图像数据
-    /// </summary>
-    public byte[]? ImageData { get; set; }
-
     /// <summary>
     ///     图片路径
     /// </summary>
@@ -119,7 +113,6 @@ public class PackageInfo : IDisposable
     ///     包裹计数
     /// </summary>
     public int PackageCount { get; set; }
-
     /// <summary>
     ///     释放资源
     /// </summary>

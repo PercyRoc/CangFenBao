@@ -1,4 +1,4 @@
-namespace SortingService.Interfaces;
+namespace Presentation_BenFly.Services.Sortings.Interfaces;
 
 public interface ITcpClientService : IDisposable
 {

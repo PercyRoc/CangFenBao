@@ -12,13 +12,13 @@ using CommonLibrary.Services;
 using DeviceService;
 using DeviceService.Camera;
 using Presentation_BenFly.Services;
+using Presentation_BenFly.Services.Sortings.Interfaces;
 using Presentation_CommonLibrary.Models;
 using Presentation_CommonLibrary.Services;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
 using SixLabors.ImageSharp;
-using SortingService.Interfaces;
 
 namespace Presentation_BenFly.ViewModels.Windows;
 

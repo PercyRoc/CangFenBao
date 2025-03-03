@@ -1,7 +1,7 @@
 using CommonLibrary.Models;
 using CommonLibrary.Models.Settings.Sort;
 
-namespace SortingService.Interfaces;
+namespace Presentation_BenFly.Services.Sortings.Interfaces;
 
 public interface IPendulumSortService : IDisposable
 {
