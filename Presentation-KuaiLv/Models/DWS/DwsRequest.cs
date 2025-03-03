@@ -11,53 +11,53 @@ public class DwsRequest
     ///     包裹码（若无法解析二维码则赋值为noread）
     /// </summary>
     [JsonPropertyName("barCode")]
-    public string BarCode { get; set; } = "noread";
+    public string barCode { get; set; } = "noread";
 
     /// <summary>
     ///     重量（kg，两位小数）
     /// </summary>
     [JsonPropertyName("weight")]
-    public double Weight { get; set; }
+    public double weight { get; set; }
 
     /// <summary>
     ///     长（cm，一位小数）
     /// </summary>
     [JsonPropertyName("length")]
-    public double Length { get; set; }
+    public double length { get; set; }
 
     /// <summary>
     ///     宽（cm，一位小数）
     /// </summary>
     [JsonPropertyName("width")]
-    public double Width { get; set; }
+    public double width { get; set; }
 
     /// <summary>
     ///     高（cm，一位小数）
     /// </summary>
     [JsonPropertyName("height")]
-    public double Height { get; set; }
+    public double height { get; set; }
 
     /// <summary>
     ///     体积（cm³，一位小数）
     /// </summary>
     [JsonPropertyName("volume")]
-    public double Volume { get; set; }
+    public double volume { get; set; }
 
     /// <summary>
     ///     采集时间（格式：yyyy-MM-dd HH:mm:ss）
     /// </summary>
     [JsonPropertyName("timestamp")]
-    public string? Timestamp { get; set; }
+    public string? timestamp { get; set; }
 
     /// <summary>
     ///     照片Base64编码字符串
     /// </summary>
     [JsonPropertyName("image")]
-    public string? Image { get; set; }
+    public string? image { get; set; }
 
     /// <summary>
     ///     照片名称
     /// </summary>
     [JsonPropertyName("imagename")]
-    public string? ImageName { get; set; }
+    public string? imageName { get; set; }
 }

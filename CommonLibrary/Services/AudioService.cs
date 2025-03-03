@@ -67,11 +67,9 @@ public class AudioService : IAudioService, IDisposable
         };
 
         // 确保音频目录存在
-        if (!Directory.Exists(audioDirectory))
-        {
-            Directory.CreateDirectory(audioDirectory);
-            Log.Information("创建音频目录：{Directory}", audioDirectory);
-        }
+        if (Directory.Exists(audioDirectory)) return;
+        Directory.CreateDirectory(audioDirectory);
+        Log.Information("创建音频目录：{Directory}", audioDirectory);
     }
 
     /// <inheritdoc />
@@ -125,13 +123,10 @@ public class AudioService : IAudioService, IDisposable
     /// <inheritdoc />
     public async Task<bool> PlayPresetAsync(AudioType audioType)
     {
-        if (!_presetAudios.TryGetValue(audioType, out var audioPath))
-        {
-            Log.Warning("未找到预设音频：{Type}", audioType);
-            return false;
-        }
+        if (_presetAudios.TryGetValue(audioType, out var audioPath)) return await PlayAsync(audioPath);
+        Log.Warning("未找到预设音频：{Type}", audioType);
+        return false;
 
-        return await PlayAsync(audioPath);
     }
 
     /// <inheritdoc />

@@ -36,25 +36,27 @@ public class DwsService(
             // 构建请求数据
             var request = new DwsRequest
             {
-                BarCode = string.IsNullOrEmpty(package.Barcode) ? "noread" : package.Barcode,
-                Weight = package.Weight,
-                Length = package.Length ?? 0,
-                Width = package.Width ?? 0,
-                Height = package.Height ?? 0,
-                Volume = package.Volume ?? 0,
-                Timestamp = package.CreateTime.ToString("yyyy-MM-dd HH:mm:ss")
+                barCode = string.IsNullOrEmpty(package.Barcode) ? "noread" : package.Barcode,
+                weight = package.Weight,
+                length = package.Length ?? 0,
+                width = package.Width ?? 0,
+                height = package.Height ?? 0,
+                volume = package.Volume ?? 0,
+                timestamp = package.CreateTime.ToString("yyyy-MM-dd HH:mm:ss")
             };
 
             // 序列化请求数据
             var jsonContent = JsonSerializer.Serialize(request);
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
-            // 计算Content-MD5
+            // 计算Content-MD5 - 正确计算一次并使用Base64格式
             var contentMd5 = Convert.ToBase64String(MD5.HashData(Encoding.UTF8.GetBytes(jsonContent)));
+            content.Headers.ContentMD5 = Convert.FromBase64String(contentMd5);
 
-            // 构建签名字符串
+            // 构建签名字符串 - 确保路径一致
             var timestamp = DateTimeOffset.Now.ToUnixTimeMilliseconds().ToString();
-            var path = "/haina/parcel/dws/weight/w/bind";
+            // 统一使用相同的API路径
+            var path = "/haina/parcel/dws/w/bindWeight";
             var stringToSign = $"POST\n{contentMd5}\n{path}";
 
             // 计算签名
@@ -62,22 +64,44 @@ public class DwsService(
             var signature = Convert.ToBase64String(new HMACSHA256(Encoding.UTF8.GetBytes(secret))
                 .ComputeHash(Encoding.UTF8.GetBytes(stringToSign)));
 
-            // 设置请求头
-            httpClient.DefaultRequestHeaders.Clear();
-            httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
-            httpClient.DefaultRequestHeaders.Add("S-Ca-App", "kl_dws_weighing");
-            httpClient.DefaultRequestHeaders.Add("S-Ca-Timestamp", timestamp);
-            httpClient.DefaultRequestHeaders.Add("S-Ca-Signature", signature);
-            httpClient.DefaultRequestHeaders.Add("Content-MD5", contentMd5);
+            // 设置基地址 - 保持不变
+            var baseAddress = config.Environment == UploadEnvironment.Production
+                ? "https://klwms.bb.sankuai.com"
+                : "https://klvwms.meituan.com";
+            // 不要修改httpClient的BaseAddress属性
+            // httpClient.BaseAddress = new Uri(baseAddress);
 
-            // 设置基地址
-            httpClient.BaseAddress = new Uri(config.Environment == UploadEnvironment.Production
-                ? "http://klwms.bb.sankuai.com"
-                : "http://klwms.bb.test.sankuai.com");
+            // 记录请求前的信息
+            Log.Information("DWS请求参数: BaseUrl={BaseUrl}, Path={Path}, Method={Method}", 
+                baseAddress, path, "POST");
+            Log.Information("DWS请求头: Accept={Accept}, App={App}, Timestamp={Timestamp}, MD5={MD5}", 
+                "application/json", "kl_dws_weighing", timestamp, contentMd5);
+            Log.Information("DWS请求体: {RequestBody}", jsonContent);
 
-            // 发送请求
-            var response = await httpClient.PostAsync(path, content);
+            // 显式创建HttpRequestMessage确保使用POST方法
+            // 使用完整URL
+            var fullUrl = new Uri($"{baseAddress}{path}");
+            Log.Information("DWS完整请求URL: {FullUrl}", fullUrl);
+            
+            var requestMessage = new HttpRequestMessage(HttpMethod.Post, fullUrl)
+            {
+                Content = content
+            };
+            
+            // 设置请求头部
+            requestMessage.Headers.Add("Accept", "application/json");
+            requestMessage.Headers.Add("S-Ca-App", "kl_dws_weighing");
+            requestMessage.Headers.Add("S-Ca-Timestamp", timestamp);
+            requestMessage.Headers.Add("S-Ca-Signature", signature);
+            
+            // 发送请求，不使用默认请求头
+            Log.Information("开始发送DWS请求...");
+            var response = await httpClient.SendAsync(requestMessage);
+            Log.Information("DWS响应状态码: {StatusCode}", response.StatusCode);
+            
             var responseContent = await response.Content.ReadAsStringAsync();
+            Log.Information("DWS响应内容: {ResponseContent}", responseContent);
+
             var result = JsonSerializer.Deserialize<DwsResponse>(responseContent);
 
             if (result == null)
@@ -176,7 +200,25 @@ public class DwsService(
                 // TODO: 发送停机指令
             }
 
-            Log.Error(ex, "DWS服务请求异常");
+            // 记录更详细的异常信息
+            if (ex is HttpRequestException httpEx)
+            {
+                Log.Error(ex, "DWS服务HTTP请求异常: {StatusCode}, {Message}", 
+                    httpEx.StatusCode, ex.Message);
+            }
+            else if (ex is TaskCanceledException)
+            {
+                Log.Error(ex, "DWS服务请求超时");
+            }
+            else if (ex is JsonException jsonEx)
+            {
+                Log.Error(ex, "DWS服务响应解析异常: {Message}", jsonEx.Message);
+            }
+            else
+            {
+                Log.Error(ex, "DWS服务请求异常: {Type}, {Message}", ex.GetType().Name, ex.Message);
+            }
+
             return new DwsResponse { Code = 500, Message = ex.Message };
         }
     }

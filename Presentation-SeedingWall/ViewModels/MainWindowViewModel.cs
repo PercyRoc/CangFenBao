@@ -10,46 +10,67 @@ using DeviceService.Camera;
 using DeviceService.Camera.DaHua;
 using Presentation_CommonLibrary.Models;
 using Presentation_CommonLibrary.Services;
-using Presentation_KuaiLv.Services.DWS;
-using Presentation_KuaiLv.Services.Warning;
+using Presentation_SeedingWall.Services;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace Presentation_KuaiLv.ViewModels;
+namespace Presentation_SeedingWall.ViewModels;
 
 public class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly ICameraService _cameraService;
     private readonly ICustomDialogService _dialogService;
-    private readonly IDwsService _dwsService;
     private readonly IAudioService _audioService;
+    private readonly IJuShuiTanService _juShuiTanService;
+    private readonly IPlcService _plcService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
-    private readonly IWarningLightService _warningLightService;
     private string _currentBarcode = string.Empty;
     private BitmapSource? _currentImage;
     private int _currentPackageIndex;
     private bool _disposed;
     private SystemStatus _systemStatus = new();
+    
+    public DelegateCommand OpenSettingsCommand { get; }
 
-    public MainWindowViewModel(
-        ICustomDialogService dialogService,
+    public string CurrentBarcode
+    {
+        get => _currentBarcode;
+        private set => SetProperty(ref _currentBarcode, value);
+    }
+
+    public BitmapSource? CurrentImage
+    {
+        get => _currentImage;
+        private set => SetProperty(ref _currentImage, value);
+    }
+
+    public SystemStatus SystemStatus
+    {
+        get => _systemStatus;
+        private set => SetProperty(ref _systemStatus, value);
+    }
+
+    public ObservableCollection<PackageInfo> PackageHistory { get; } = [];
+    public ObservableCollection<StatisticsItem> StatisticsItems { get; } = [];
+    public ObservableCollection<DeviceStatus> DeviceStatuses { get; } = [];
+    public ObservableCollection<PackageInfoItem> PackageInfoItems { get; } = [];
+
+    public MainWindowViewModel( ICustomDialogService dialogService,
         ICameraService cameraService,
-        IDwsService dwsService,
-        IWarningLightService warningLightService,
         PackageTransferService packageTransferService,
-        IAudioService audioService)
+        IAudioService audioService,
+        IJuShuiTanService juShuiTanService,
+        IPlcService plcService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
-        _dwsService = dwsService;
-        _warningLightService = warningLightService;
         _audioService = audioService;
-
-        // 初始化命令
+        _juShuiTanService = juShuiTanService;
+        _plcService = plcService;
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
 
         // 初始化系统状态更新定时器
@@ -72,8 +93,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
         // 订阅相机连接状态事件
         _cameraService.ConnectionChanged += OnCameraConnectionChanged;
 
-        // 订阅警示灯连接状态事件
-        _warningLightService.ConnectionChanged += OnWarningLightConnectionChanged;
+        // 订阅聚水潭连接状态事件
+        _juShuiTanService.ConnectionStatusChanged += OnJuShuiTanConnectionChanged;
+
+        // 订阅PLC连接状态事件
+        _plcService.ConnectionStatusChanged += OnPlcConnectionChanged;
 
         // 订阅图像流
         if (_cameraService is DahuaCameraService dahuaCamera)
@@ -102,38 +126,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _subscriptions.Add(packageTransferService.PackageStream
             .Subscribe(package => { Application.Current.Dispatcher.BeginInvoke(() => OnPackageInfo(package)); }));
     }
-
-    #region Properties
-
-    public DelegateCommand OpenSettingsCommand { get; }
-
-    public string CurrentBarcode
-    {
-        get => _currentBarcode;
-        private set => SetProperty(ref _currentBarcode, value);
-    }
-
-    public BitmapSource? CurrentImage
-    {
-        get => _currentImage;
-        private set => SetProperty(ref _currentImage, value);
-    }
-
-    public SystemStatus SystemStatus
-    {
-        get => _systemStatus;
-        private set => SetProperty(ref _systemStatus, value);
-    }
-
-    public ObservableCollection<PackageInfo> PackageHistory { get; } = [];
-    public ObservableCollection<StatisticsItem> StatisticsItems { get; } = [];
-    public ObservableCollection<DeviceStatus> DeviceStatuses { get; } = [];
-    public ObservableCollection<PackageInfoItem> PackageInfoItems { get; } = [];
-
-    #endregion
-
-    #region Private Methods
-
+    
     private void ExecuteOpenSettings()
     {
         _dialogService.ShowDialog("SettingsDialog");
@@ -158,17 +151,24 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 Icon = "Camera24",
                 StatusColor = "#F44336" // 红色表示未连接
             });
-
-            // 添加警示灯状态
+            
+            // 添加聚水潭状态
             DeviceStatuses.Add(new DeviceStatus
             {
-                Name = "警示灯",
+                Name = "聚水潭",
                 Status = "未连接",
-                Icon = "Alert24",
+                Icon = "CloudSync24",
                 StatusColor = "#F44336" // 红色表示未连接
             });
-
-            Log.Information("设备状态列表初始化完成，共 {Count} 个设备", DeviceStatuses.Count);
+            
+            // 添加PLC状态
+            DeviceStatuses.Add(new DeviceStatus
+            {
+                Name = "PLC",
+                Status = "未连接",
+                Icon = "DeviceConnectWired24",
+                StatusColor = "#F44336" // 红色表示未连接
+            });
         }
         catch (Exception ex)
         {
@@ -270,26 +270,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             Log.Error(ex, "更新相机状态时发生错误");
         }
     }
-
-    private void OnWarningLightConnectionChanged(bool isConnected)
-    {
-        try
-        {
-            var warningLightStatus = DeviceStatuses.FirstOrDefault(x => x.Name == "警示灯");
-            if (warningLightStatus == null) return;
-
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                warningLightStatus.Status = isConnected ? "已连接" : "已断开";
-                warningLightStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
-            });
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "更新警示灯状态时发生错误");
-        }
-    }
-
+    
     private static void UpdateImageDisplay(Image<Rgba32> image, Action<BitmapSource> imageUpdater)
     {
         try
@@ -322,39 +303,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             Log.Error(ex, "更新图像显示时发生错误");
         }
     }
-
-    protected virtual void Dispose(bool disposing)
-    {
-        if (_disposed) return;
-
-        if (disposing)
-            try
-            {
-                // 停止定时器
-                _timer.Stop();
-
-                // 取消事件订阅
-                _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
-                _warningLightService.ConnectionChanged -= OnWarningLightConnectionChanged;
-
-                // 释放订阅
-                foreach (var subscription in _subscriptions) subscription.Dispose();
-                _subscriptions.Clear();
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "释放资源时发生错误");
-            }
-
-        _disposed = true;
-    }
-
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
+    
     private async void OnPackageInfo(PackageInfo package)
     {
         try
@@ -378,19 +327,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     Log.Error(ex, "更新UI时发生错误");
                 }
             });
-
-            // 上报DWS
-            var dwsResponse = await _dwsService.ReportPackageAsync(package);
-            if (!dwsResponse.IsSuccess)
-            {
-                Log.Warning("DWS上报失败：{Message}", dwsResponse.Message);
-                package.SetError($"DWS上报失败：{dwsResponse.Message}");
-                await _audioService.PlayPresetAsync(AudioType.SystemError);
-            }
-            else
-            {
-                await _audioService.PlayPresetAsync(AudioType.Success);
-            }
 
             Application.Current.Dispatcher.Invoke(() =>
             {
@@ -481,5 +417,78 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    #endregion
+    /// <summary>
+    /// 聚水潭连接状态变更处理
+    /// </summary>
+    /// <param name="isConnected">是否已连接</param>
+    private void OnJuShuiTanConnectionChanged(bool isConnected)
+    {
+        try
+        {
+            var deviceStatus = DeviceStatuses.FirstOrDefault(d => d.Name == "聚水潭");
+            if (deviceStatus != null)
+            {
+                deviceStatus.Status = isConnected ? "已连接" : "未连接";
+                deviceStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336"; // 绿色表示已连接，红色表示未连接
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "处理聚水潭连接状态变更时发生错误");
+        }
+    }
+
+    /// <summary>
+    /// PLC连接状态变更处理
+    /// </summary>
+    /// <param name="isConnected">是否已连接</param>
+    private void OnPlcConnectionChanged(bool isConnected)
+    {
+        try
+        {
+            var deviceStatus = DeviceStatuses.FirstOrDefault(d => d.Name == "PLC");
+            if (deviceStatus != null)
+            {
+                deviceStatus.Status = isConnected ? "已连接" : "未连接";
+                deviceStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336"; // 绿色表示已连接，红色表示未连接
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "处理PLC连接状态变更时发生错误");
+        }
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed) return;
+
+        if (disposing)
+            try
+            {
+                // 停止定时器
+                _timer.Stop();
+
+                // 取消事件订阅
+                _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
+                _juShuiTanService.ConnectionStatusChanged -= OnJuShuiTanConnectionChanged;
+                _plcService.ConnectionStatusChanged -= OnPlcConnectionChanged;
+
+                // 释放订阅
+                foreach (var subscription in _subscriptions) subscription.Dispose();
+                _subscriptions.Clear();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "释放资源时发生错误");
+            }
+
+        _disposed = true;
+    }
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
 }

@@ -4,21 +4,18 @@ using CommonLibrary.Extensions;
 using DeviceService;
 using DeviceService.Camera;
 using Presentation_CommonLibrary.Extensions;
-using Presentation_KuaiLv.Services.DWS;
-using Presentation_KuaiLv.Services.Warning;
-using Presentation_KuaiLv.ViewModels;
-using Presentation_KuaiLv.ViewModels.Dialogs;
-using Presentation_KuaiLv.ViewModels.Settings;
-using Presentation_KuaiLv.Views;
-using Presentation_KuaiLv.Views.Dialogs;
-using Presentation_KuaiLv.Views.Settings;
+using Presentation_SeedingWall.Services;
+using Presentation_SeedingWall.ViewModels;
+using Presentation_SeedingWall.ViewModels.Settings;
+using Presentation_SeedingWall.Views;
+using Presentation_SeedingWall.Views.Settings;
 using Prism.Ioc;
 using Serilog;
 
-namespace Presentation_KuaiLv;
+namespace Presentation_SeedingWall;
 
 /// <summary>
-///     Interaction logic for App.xaml
+/// Interaction logic for App.xaml
 /// </summary>
 public partial class App
 {
@@ -42,25 +39,26 @@ public partial class App
         containerRegistry.AddCommonServices();
         containerRegistry.AddPresentationCommonServices();
         containerRegistry.AddPhotoCamera();
-
-        // 注册 DWS 服务
-        containerRegistry.RegisterSingleton<IDwsService, DwsService>();
+        
         containerRegistry.RegisterSingleton<HttpClient>();
-
-        // 注册警示灯服务
-        containerRegistry.RegisterSingleton<IWarningLightService, WarningLightService>();
-        containerRegistry.RegisterSingleton<WarningLightStartupService>();
-
         // 注册包裹中转服务
         containerRegistry.RegisterSingleton<PackageTransferService>();
+        
+        // 注册聚水潭WebSocket服务
+        containerRegistry.RegisterSingleton<IJuShuiTanService, JuShuiTanService>();
+        containerRegistry.RegisterSingleton<JuShuiTanStartupService>();
+        
+        // 注册PLC服务
+        containerRegistry.RegisterSingleton<IPlcService, PlcService>();
+        containerRegistry.RegisterSingleton<PlcStartupService>();
 
         // 注册设置页面
         containerRegistry.Register<CameraSettingsView>();
         containerRegistry.Register<CameraSettingsViewModel>();
-        containerRegistry.Register<UploadSettingsView>();
-        containerRegistry.Register<UploadSettingsViewModel>();
-        containerRegistry.Register<WarningLightSettingsView>();
-        containerRegistry.Register<WarningLightSettingsViewModel>();
+        containerRegistry.Register<JuShuiTanSettingsView>();
+        containerRegistry.Register<JuShuiTanSettingsViewModel>();
+        containerRegistry.Register<PlcSettingsView>();
+        containerRegistry.Register<PlcSettingsViewModel>();
 
         // 注册设置窗口
         containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
@@ -70,7 +68,7 @@ public partial class App
     /// <summary>
     ///     启动
     /// </summary>
-    protected override void OnStartup(StartupEventArgs e)
+    protected override async void OnStartup(StartupEventArgs e)
     {
         // 配置Serilog
         Log.Logger = new LoggerConfiguration()
@@ -95,14 +93,16 @@ public partial class App
                 await cameraStartupService.StartAsync(CancellationToken.None);
                 Log.Information("相机托管服务启动成功");
             });
-
-            // 启动警示灯托管服务
-            var warningLightStartupService = Container.Resolve<WarningLightStartupService>();
-            _ = Task.Run(async () =>
-            {
-                await warningLightStartupService.StartAsync();
-                Log.Information("警示灯托管服务启动成功");
-            });
+            
+            // 启动聚水潭托管服务
+            var juShuiTanStartupService = Container.Resolve<JuShuiTanStartupService>();
+            await juShuiTanStartupService.StartAsync(CancellationToken.None);
+            Log.Information("聚水潭托管服务已启动");
+            
+            // 启动PLC服务
+            var plcStartupService = Container.Resolve<PlcStartupService>();
+            await plcStartupService.StartAsync(CancellationToken.None);
+            Log.Information("PLC服务已启动");
         }
         catch (Exception ex)
         {
@@ -128,12 +128,22 @@ public partial class App
                 // 停止相机托管服务
                 var cameraStartupService = Container.Resolve<CameraStartupService>();
                 Task.Run(async () => await cameraStartupService.StopAsync(CancellationToken.None)).Wait(2000);
+                Log.Information("相机托管服务已停止");
                 
-                // 停止警示灯托管服务
-                var warningLightStartupService = Container.Resolve<WarningLightStartupService>();
-                Task.Run(async () => await warningLightStartupService.StopAsync()).Wait(2000);
+                // 停止聚水潭托管服务
+                var juShuiTanStartupService = Container.Resolve<JuShuiTanStartupService>();
+                juShuiTanStartupService.StopAsync(CancellationToken.None).Wait();
+                Log.Information("聚水潭托管服务已停止");
                 
-                Log.Information("托管服务已停止");
+                // 停止PLC服务
+                var plcStartupService = Container.Resolve<PlcStartupService>();
+                plcStartupService.StopAsync(CancellationToken.None).Wait();
+                Log.Information("PLC服务已停止");
+                
+                // 断开聚水潭WebSocket连接
+                var juShuiTanService = Container.Resolve<IJuShuiTanService>();
+                juShuiTanService.Disconnect();
+                Log.Information("聚水潭WebSocket连接已断开");
             }
             catch (Exception ex)
             {
@@ -163,6 +173,10 @@ public partial class App
                     Task.Run(async () => await cameraService.DisposeAsync()).Wait(2000);
                     Log.Information("相机服务已释放");
                 }
+                
+                // 释放聚水潭服务
+                Container.Resolve<IJuShuiTanService>().Dispose();
+                Log.Information("聚水潭服务已释放");
             }
             catch (Exception ex)
             {

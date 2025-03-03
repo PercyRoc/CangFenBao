@@ -1,0 +1,111 @@
+---
+description: This rule mainly regulates C# code
+globs: 
+alwaysApply: true
+---
+# WPF项目架构提示规范
+
+## 1. 架构约束
+- 严格遵循Prism框架的模块化架构模式
+- 实施MVVM模式的三层隔离机制（View-ViewModel-Model）
+- 采用DryIoc容器实现依赖注入控制反转
+- 遵循ObservableCollection响应式数据流规范
+
+## 2. 编码准则
+- ViewModel必须继承BindableBase实现INotifyPropertyChanged
+- 领域服务需实现IDisposable接口保障资源生命周期
+- 异步操作必须使用CancellationTokenSource实现可取消模式
+- 跨线程访问必须通过Dispatcher.BeginInvoke调度
+- **主构造函数规范**：
+  - ViewModel主构造函数仅用于依赖注入参数声明
+  - 领域对象主构造函数需保持immutable特性
+  - 禁止在主构造函数内编写业务逻辑
+
+- **集合表达式规范**：
+  - 初始化ObservableCollection必须使用`[]`语法
+  - 只读集合应使用ImmutableArray的集合表达式
+  - 复杂集合初始化需保持可读性阈值（≤5个元素）
+
+- **自动属性增强**：
+  - 简单DTO使用自动属性（public int Id { get; init; }）
+  - ViewModel属性需保持完整属性+SetProperty模式
+  - 配置类允许自动属性+JSON序列化特性组合
+
+## 3. 技术约束
+**强制依赖项**
+- 界面框架：Prism.Wpf 8.x
+- 日志系统：Serilog + Seq Sink
+- 图像处理：SixLabors.ImageSharp 3.x
+- 设备抽象：厂商SDK标准化适配层
+
+**禁止模式**
+- 禁止在View层编写业务逻辑代码
+- 禁止使用非托管资源直接操作
+- 禁止同步阻塞UI线程操作
+- 禁止硬编码配置参数
+
+## 4. 交互模式
+- 事件驱动架构：基于EventAggregator的弱引用消息机制
+- 响应式数据流：使用DynamicData实现可观察集合
+- 声明式UI：XAML需遵循MahApps.Metro设计规范
+- 服务定位：通过IContainerProvider获取依赖实例
+- **模式匹配增强**：
+  ```prompt
+  当处理类型判断时：
+  1. 优先使用`is not null`空值检查
+  2. 类型匹配使用`obj is Type { Prop: pattern }`解构式匹配
+  3. Switch表达式应优先于传统switch语句
+  ```
+- **LINQ优化**：
+  - 集合操作优先使用LINQ查询语法
+  - 复杂查询需配合`[CollectionBuilder]`优化
+  - 禁止在LINQ中修改外部状态
+
+## 5. 质量保障
+- 静态分析：启用CA代码分析规则集
+- 异常处理：全局异常捕获必须记录结构化日志
+- 性能指标：界面渲染耗时<16ms，FPS≥60
+- 内存管理：工作集内存波动范围±10%
+
+## 6. 模型提示规范
+当处理WPF相关请求时：
+1. 优先使用Prism的DelegateCommand实现命令绑定
+2. 资源字典键名遵循`[控件类型][功能]Style`命名规范
+3. 设备交互层需包含厂商SDK异常处理try-catch块
+4. 图像处理必须使用ImageSharp的像素操作API
+5. 配置访问必须通过ISettingsService抽象接口
+6. 异步方法命名后缀必须使用Async约定
+7. 领域对象需实现IDisposable并包含析构保护
+8. 当处理C#12+特性时：
+9. ViewModel构造函数应优先使用主构造函数+依赖参数模式
+   ✅ public class MainViewModel(IEventAggregator eventAggregator) 
+   ❌ 传统构造函数写法
+
+10. 集合初始化必须使用现代表达式：
+   ✅ ObservableCollection<string> Items = ["A", "B"];
+   ❌ new ObservableCollection<string> { "A", "B" }
+
+11. 自动属性使用遵循：
+   - 配置类：允许public自动属性
+   - DTO对象：使用init-only自动属性
+   - ViewModel：禁止自动属性，必须显式实现SetProperty
+
+12. 字符串处理优先使用原始字符串字面量：
+   ✅ string xml = """<root><element/></root>""";
+   ❌ 拼接式字符串写法
+
+13. 参数空值检查使用简写模式：
+   ✅ ArgumentNullException.ThrowIfNull(service);
+   ❌ if (service == null) throw new...
+## 7. 兼容性约束
+- **版本控制**：
+  - 主构造函数仅限.NET 8+项目使用
+  - 集合表达式需启用LangVersion=preview
+  - 自动属性模式需配合Nullability注解
+
+- **静态分析规则**：
+  ```xml
+  <AnalysisMode>AllEnabledByDefault</AnalysisMode>
+  <WarningsAsErrors>CS8981,CS8847</WarningsAsErrors> <!-- 现代语法警告升级为错误 -->
+  ```
+  

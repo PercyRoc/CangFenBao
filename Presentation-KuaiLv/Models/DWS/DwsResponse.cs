@@ -24,10 +24,10 @@ public class DwsResponse
     public string? Message { get; set; }
 
     /// <summary>
-    ///     固定返回true（可忽略解析）
+    ///     返回数据，可能是字符串或布尔值
     /// </summary>
     [JsonPropertyName("data")]
-    public bool? Data { get; set; }
+    public object? Data { get; set; }
 
     /// <summary>
     ///     是否成功

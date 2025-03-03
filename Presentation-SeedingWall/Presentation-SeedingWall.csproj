@@ -3,14 +3,26 @@
     <PropertyGroup>
         <OutputType>WinExe</OutputType>
         <TargetFramework>net8.0-windows</TargetFramework>
-        <RootNamespace>Presentation_KuaiLv</RootNamespace>
+        <RootNamespace>Presentation_SeedingWall</RootNamespace>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
         <ApplicationIcon>..\Presentation-CommonLibrary\Resources\Icon\logo.ico</ApplicationIcon>
-        <AssemblyName>仓分宝-快驴</AssemblyName>
+        <AssemblyName>仓分宝-播种墙</AssemblyName>
     </PropertyGroup>
 
+    <ItemGroup>
+      <Page Update="Views\MainWindow.xaml">
+        <Generator>MSBuild:Compile</Generator>
+        <XamlRuntime>Wpf</XamlRuntime>
+        <SubType>Designer</SubType>
+      </Page>
+      <Page Update="Views\SettingsDialog.xaml">
+        <Generator>MSBuild:Compile</Generator>
+        <XamlRuntime>Wpf</XamlRuntime>
+        <SubType>Designer</SubType>
+      </Page>
+    </ItemGroup>
     <ItemGroup>
         <ProjectReference Include="..\CommonLibrary\CommonLibrary.csproj"/>
         <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>
@@ -36,6 +48,9 @@
         <PackageReference Include="WPF-UI"/>
         <PackageReference Include="HandyControl"/>
         <PackageReference Include="EPPlus"/>
+        
+        <!-- WebSocket -->
+        <PackageReference Include="WebSocketSharp-netstandard"/>
     </ItemGroup>
 
     <ItemGroup>

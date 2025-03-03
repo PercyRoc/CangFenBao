@@ -27,13 +27,18 @@ public class WarningLightStartupService(IWarningLightService warningLightService
     /// <summary>
     ///     停止服务
     /// </summary>
-    public async Task StopAsync(CancellationToken cancellationToken)
+    public async Task StopAsync()
     {
+        Log.Information("开始停止警示灯托管服务...");
+        
         try
         {
             if (warningLightService.IsConnected)
             {
-                await warningLightService.TurnOffAllLightsAsync();
+                await warningLightService.TurnOffRedLightAsync();
+                // 等待一段时间确保命令被处理
+                await Task.Delay(200);
+                await warningLightService.TurnOffGreenLightAsync();
                 await warningLightService.DisconnectAsync();
             }
 
@@ -41,7 +46,7 @@ public class WarningLightStartupService(IWarningLightService warningLightService
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "停止警示灯托管服务时发生错误");
+            Log.Error($"停止警示灯托管服务发生错误{ex}");
         }
     }
 }

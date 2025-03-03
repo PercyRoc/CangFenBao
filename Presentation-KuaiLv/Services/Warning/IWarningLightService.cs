@@ -19,11 +19,16 @@ public interface IWarningLightService
     ///     显示红灯
     /// </summary>
     Task ShowRedLightAsync();
-
+    
     /// <summary>
-    ///     关闭所有灯
+    ///     关闭绿灯
     /// </summary>
-    Task TurnOffAllLightsAsync();
+    Task TurnOffGreenLightAsync();
+    
+    /// <summary>
+    ///     关闭红灯
+    /// </summary>
+    Task TurnOffRedLightAsync();
 
     /// <summary>
     ///     连接警示灯
