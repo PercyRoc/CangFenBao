@@ -155,14 +155,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
             
             // 执行登出
             var success = await _apiService.LogoutAsync();
-            if (success)
-            {
-                Log.Information("用户登出成功，准备重启应用");
+            if (!success) return;
+            Log.Information("用户登出成功，准备重启应用");
                 
-                // 重启应用
-                System.Diagnostics.Process.Start(System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName);
-                System.Windows.Application.Current.Shutdown();
-            }
+            // 重启应用
+            System.Diagnostics.Process.Start(System.Diagnostics.Process.GetCurrentProcess().MainModule!.FileName);
+            System.Windows.Application.Current.Shutdown();
         }
         catch (Exception ex)
         {
@@ -176,11 +174,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
         
         // 每小时更新一次处理速率
         var now = DateTime.Now;
-        if ((now - _lastRateCalculationTime).TotalMinutes >= 1)
-        {
-            UpdateProcessingRate();
-            _lastRateCalculationTime = now;
-        }
+        if (!((now - _lastRateCalculationTime).TotalMinutes >= 1)) return;
+        UpdateProcessingRate();
+        _lastRateCalculationTime = now;
     }
 
     private void InitializeDeviceStatuses()
@@ -312,7 +308,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     /// 处理接收到的包裹信息
     /// </summary>
     /// <param name="package">包裹信息</param>
-    private void OnPackageReceived(PackageInfo package)
+    private async void OnPackageReceived(PackageInfo package)
     {
         try
         {
@@ -336,6 +332,52 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 // 更新当前图像
                 UpdateCurrentImage(package);
             });
+
+            // 提交商品尺寸
+            if (package is { Length: not null, Width: not null, Height: not null })
+            {
+                // 准备图片数据
+                var photoData = new List<byte[]>();
+                
+                // 如果有图片，转换为字节数组
+                if (package.Image != null)
+                {
+                    try
+                    {
+                        using var ms = new MemoryStream();
+                        await package.Image.SaveAsync(ms, new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder());
+                        photoData.Add(ms.ToArray());
+                        Log.Debug("图片已转换为字节数组");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning(ex, "转换图片数据失败");
+                    }
+                }
+                
+                // 提交尺寸信息
+                var success = await _apiService.SubmitDimensionsAsync(
+                    goodsSticker: package.Barcode,
+                    height: package.Height.Value.ToString("F2"),
+                    length: package.Length.Value.ToString("F2"),
+                    width: package.Width.Value.ToString("F2"),
+                    weight: (package.Weight * 1000).ToString("F2"), // 转换为克 (kg -> g)
+                    photoData: photoData
+                );
+                
+                if (success)
+                {
+                    Log.Information("商品尺寸提交成功: Barcode={Barcode}", package.Barcode);
+                }
+                else
+                {
+                    Log.Warning("商品尺寸提交失败: Barcode={Barcode}", package.Barcode);
+                }
+            }
+            else
+            {
+                Log.Warning("包裹缺少尺寸信息，无法提交: Barcode={Barcode}", package.Barcode);
+            }
         }
         catch (Exception ex)
         {
@@ -362,9 +404,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
             var dimensionsItem = PackageInfoItems.FirstOrDefault(p => p.Label == "Dimensions");
             if (dimensionsItem != null)
             {
-                var length = package.Length.HasValue ? package.Length.Value : 0;
-                var width = package.Width.HasValue ? package.Width.Value : 0;
-                var height = package.Height.HasValue ? package.Height.Value : 0;
+                var length = package.Length ?? 0;
+                var width = package.Width ?? 0;
+                var height = package.Height ?? 0;
                 dimensionsItem.Value = $"{length:F0} × {width:F0} × {height:F0}";
             }
             
@@ -539,7 +581,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 // 如果有图像路径但没有加载图像，尝试加载
                 try
                 {
-                    using var image = SixLabors.ImageSharp.Image.Load<Rgba32>(package.ImagePath);
+                    using var image = Image.Load<Rgba32>(package.ImagePath);
                     CurrentImage = ConvertToBitmapSource(image);
                     Log.Debug("已从路径加载并更新当前图像: {ImagePath}", package.ImagePath);
                 }

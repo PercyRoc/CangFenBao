@@ -1,0 +1,39 @@
+2025-03-04 09:48:00.694 +08:00 [INF] 应用程序启动
+2025-03-04 09:48:01.923 +08:00 [INF] 已设置帧率限制：10fps，帧间隔：100ms
+2025-03-04 09:48:01.928 +08:00 [INF] 已创建 "Hikvision" 相机服务
+2025-03-04 09:48:01.929 +08:00 [WRN] 未配置相机序列号
+2025-03-04 09:48:01.937 +08:00 [ERR] 应用程序启动过程中出现严重错误
+Prism.Ioc.ContainerResolutionException: An unexpected error occurred while resolving 'Presentation_KuaiLv.ViewModels.MainWindowViewModel'
+ ---> DryIoc.ContainerException: code: Error.UnableToResolveFromRegisteredServices;
+message: Unable to resolve resolution root Presentation_KuaiLv.ViewModels.MainWindowViewModel
+  from container without scope
+ with Rules with {TrackingDisposableTransients, UseDynamicRegistrationsAsFallbackOnly, FuncAndLazyWithoutRegistration, SelectLastRegisteredFactory} and without {ThrowOnRegisteringDisposableTransient, UseFastExpressionCompilerIfPlatformSupported}
+ with FactorySelector=SelectLastRegisteredFactory
+ with Made={FactoryMethod=ConstructorWithResolvableArguments}
+  with normal and dynamic registrations:
+  (DefaultDynamicKey(0), {FactoryID=190, ImplType=Presentation_KuaiLv.ViewModels.MainWindowViewModel, Reuse=TransientReuse, HasCondition})
+   at DryIoc.Throw.It(Int32 error, Object arg0, Object arg1, Object arg2, Object arg3) in /_/src/DryIoc/Container.cs:line 13642
+   at DryIoc.Container.TryThrowUnableToResolve(Request request) in /_/src/DryIoc/Container.cs:line 1086
+   at DryIoc.Container.DryIoc.IContainer.ResolveFactory(Request request) in /_/src/DryIoc/Container.cs:line 1068
+   at DryIoc.Container.ResolveAndCache(Int32 serviceTypeHash, Type serviceType, IfUnresolved ifUnresolved) in /_/src/DryIoc/Container.cs:line 367
+   at DryIoc.Container.DryIoc.IResolver.Resolve(Type serviceType, IfUnresolved ifUnresolved) in /_/src/DryIoc/Container.cs:line 356
+   at DryIoc.Container.DryIoc.IResolver.Resolve(Type serviceType, Object serviceKey, IfUnresolved ifUnresolved, Type requiredServiceType, Request preResolveParent, Object[] args) in /_/src/DryIoc/Container.cs:line 428
+   at DryIoc.Resolver.Resolve(IResolver resolver, Type serviceType, Object[] args, IfUnresolved ifUnresolved, Type requiredServiceType, Object serviceKey) in /_/src/DryIoc/Container.cs:line 8087
+   at Prism.DryIoc.DryIocContainerExtension.Resolve(Type type, ValueTuple`2[] parameters)
+   --- End of inner exception stack trace ---
+   at Prism.DryIoc.DryIocContainerExtension.Resolve(Type type, ValueTuple`2[] parameters)
+   at Prism.DryIoc.DryIocContainerExtension.Resolve(Type type)
+   at Prism.PrismInitializationExtensions.<>c.<ConfigureViewModelLocator>b__0_0(Object view, Type type)
+   at Prism.Mvvm.ViewModelLocationProvider.AutoWireViewModelChanged(Object view, Action`2 setDataContextCallback)
+   at Prism.Mvvm.ViewModelLocator.AutoWireViewModelChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+   at System.Windows.FrameworkElement.OnPropertyChanged(DependencyPropertyChangedEventArgs e)
+   at System.Windows.DependencyObject.NotifyPropertyChange(DependencyPropertyChangedEventArgs args)
+   at System.Windows.DependencyObject.UpdateEffectiveValue(EntryIndex entryIndex, DependencyProperty dp, PropertyMetadata metadata, EffectiveValueEntry oldEntry, EffectiveValueEntry& newEntry, Boolean coerceWithDeferredReference, Boolean coerceWithCurrentValue, OperationType operationType)
+   at System.Windows.DependencyObject.SetValueCommon(DependencyProperty dp, Object value, PropertyMetadata metadata, Boolean coerceWithDeferredReference, Boolean coerceWithCurrentValue, OperationType operationType, Boolean isInternal)
+   at System.Windows.DependencyObject.SetValue(DependencyProperty dp, Object value)
+   at Prism.Mvvm.ViewModelLocator.SetAutoWireViewModel(DependencyObject obj, Nullable`1 value)
+   at Prism.Common.MvvmHelpers.AutowireViewModel(Object viewOrViewModel)
+   at Prism.PrismApplicationBase.Initialize()
+   at Prism.PrismApplicationBase.InitializeInternal()
+   at Prism.PrismApplicationBase.OnStartup(StartupEventArgs e)
+   at Presentation_KuaiLv.App.OnStartup(StartupEventArgs e) in E:\RiderProjects\CangFenBao\Presentation-KuaiLv\App.xaml.cs:line 104

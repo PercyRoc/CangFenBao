@@ -199,7 +199,7 @@ public class TcpCameraService : IDisposable
                     _settings.ServerIp, _settings.ServerPort);
                 
                 // 尝试连接到服务器
-                var connectTask = _tcpClient.ConnectAsync(_settings.ServerIp, _settings.ServerPort);
+                var connectTask = _tcpClient.ConnectAsync(_settings.ServerIp!, _settings.ServerPort);
                 var timeoutTask = Task.Delay(_settings.ConnectionTimeoutMs);
                 
                 var completedTask = await Task.WhenAny(connectTask, timeoutTask);

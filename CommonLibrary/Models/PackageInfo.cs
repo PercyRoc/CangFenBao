@@ -63,7 +63,7 @@ public class PackageInfo : IDisposable
     /// <summary>
     ///     附加信息
     /// </summary>
-    public string Information { get; set; } = string.Empty;
+    public string? Information { get; set; } = string.Empty;
 
     /// <summary>
     ///     错误信息

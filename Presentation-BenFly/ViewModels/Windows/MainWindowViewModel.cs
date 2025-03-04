@@ -11,6 +11,7 @@ using CommonLibrary.Models.Settings.Sort;
 using CommonLibrary.Services;
 using DeviceService;
 using DeviceService.Camera;
+using DeviceService.Scanner;
 using Presentation_BenFly.Services;
 using Presentation_BenFly.Services.Sortings.Interfaces;
 using Presentation_CommonLibrary.Models;
@@ -19,6 +20,8 @@ using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
 using SixLabors.ImageSharp;
+using System.Windows.Controls;
+using System.Windows.Media;
 
 namespace Presentation_BenFly.ViewModels.Windows;
 
@@ -29,6 +32,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly ICustomDialogService _dialogService;
     private readonly ISettingsService _settingsService;
     private readonly IPendulumSortService _sortService;
+    private readonly IScannerService _scannerService;
     private readonly List<IDisposable> _subscriptions = [];
 
     private readonly DispatcherTimer _timer;
@@ -41,6 +45,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private bool _disposed;
 
     private bool _isInitialized;
+    private TaskCompletionSource<string>? _barcodeScanCompletionSource;
 
     private SystemStatus _systemStatus = new();
 
@@ -50,13 +55,18 @@ public class MainWindowViewModel : BindableBase, IDisposable
         ISettingsService settingsService,
         IPendulumSortService sortService,
         PackageTransferService packageTransferService,
-        BenNiaoPackageService benNiaoService)
+        BenNiaoPackageService benNiaoService,
+        ScannerStartupService scannerStartupService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
         _settingsService = settingsService;
         _sortService = sortService;
         _benNiaoService = benNiaoService;
+        _scannerService = scannerStartupService.GetScannerService();
+        
+        // 订阅扫码枪事件
+        _scannerService.BarcodeScanned += OnBarcodeScannerScanned;
 
         // 初始化命令
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
@@ -279,6 +289,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         PackageInfoItems.Add(new PackageInfoItem
         {
+            Label = "条码",
+            Value = "--",
+            Description = "包裹条码信息",
+            Icon = "Barcode24"
+        });
+        
+        PackageInfoItems.Add(new PackageInfoItem
+        {
             Label = "重量",
             Value = "--",
             Unit = "kg",
@@ -392,6 +410,98 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
+    private void OnBarcodeScannerScanned(object? sender, string barcode)
+    {
+        if (_barcodeScanCompletionSource is not null && !_barcodeScanCompletionSource.Task.IsCompleted)
+        {
+            Log.Information("收到巴枪扫码：{Barcode}", barcode);
+            _barcodeScanCompletionSource.SetResult(barcode);
+        }
+    }
+
+    private async Task<string> WaitForBarcodeScanAsync(int timeoutMilliseconds = 30000)
+    {
+        _barcodeScanCompletionSource = new TaskCompletionSource<string>();
+        
+        try
+        {
+            // 显示等待扫码提示
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                CurrentBarcode = "请扫描条码...";
+                
+                // 查找主窗口中的条码输入控件并设置焦点
+                if (Application.Current.MainWindow is not null)
+                {
+                    // 查找包含条码显示的控件
+                    var textBox = FindBarcodeTextBox(Application.Current.MainWindow);
+                    if (textBox is not null)
+                    {
+                        // 设置焦点
+                        textBox.Focus();
+                        Log.Debug("已将焦点设置到条码输入控件");
+                    }
+                    else
+                    {
+                        Log.Warning("未找到条码输入控件，无法设置焦点");
+                    }
+                }
+            });
+            
+            // 使用超时机制等待扫码
+            using var cts = new CancellationTokenSource(timeoutMilliseconds);
+            var completedTask = await Task.WhenAny(_barcodeScanCompletionSource.Task, Task.Delay(timeoutMilliseconds, cts.Token));
+            
+            if (completedTask == _barcodeScanCompletionSource.Task)
+            {
+                return await _barcodeScanCompletionSource.Task;
+            }
+            
+            throw new TimeoutException("等待巴枪扫码超时");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "等待巴枪扫码时发生错误");
+            throw;
+        }
+    }
+    
+    /// <summary>
+    /// 查找条码输入控件
+    /// </summary>
+    /// <param name="parent">父控件</param>
+    /// <returns>条码输入控件</returns>
+    private System.Windows.Controls.TextBox? FindBarcodeTextBox(DependencyObject parent)
+    {
+        // 获取父控件的所有子控件
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            
+            // 如果是TextBox且名称或Tag包含Barcode关键字
+            if (child is System.Windows.Controls.TextBox textBox)
+            {
+                var name = textBox.Name.ToLowerInvariant();
+                var tag = textBox.Tag?.ToString()?.ToLowerInvariant() ?? string.Empty;
+                
+                if (name.Contains("barcode") || tag.Contains("barcode") || 
+                    textBox.Text == CurrentBarcode)
+                {
+                    return textBox;
+                }
+            }
+            
+            // 递归查找子控件
+            var result = FindBarcodeTextBox(child);
+            if (result is not null)
+            {
+                return result;
+            }
+        }
+        
+        return null;
+    }
+
     private async void OnPackageInfo(PackageInfo package)
     {
         try
@@ -399,6 +509,59 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // 设置包裹序号
             package.Index = Interlocked.Increment(ref _currentPackageIndex);
             Log.Information("收到包裹信息：{Barcode}, 序号：{Index}", package.Barcode, package.Index);
+            
+            // 检查条码是否为 noread
+            if (string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    Log.Information("检测到 noread 条码，等待巴枪输入");
+                    
+                    // 更新UI显示，提示操作员使用巴枪扫码
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        CurrentBarcode = "【请使用巴枪扫描】";
+                    });
+                    
+                    // 等待巴枪扫码
+                    var newBarcode = await WaitForBarcodeScanAsync();
+                    
+                    // 更新包裹条码
+                    Log.Information("使用巴枪扫码 {NewBarcode} 替换 noread 条码", newBarcode);
+                    package.Barcode = newBarcode;
+                    
+                    // 更新UI显示
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        // 更新包裹信息项，显示新条码
+                        var barcodeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "条码");
+                        if (barcodeItem != null)
+                        {
+                            barcodeItem.Value = newBarcode;
+                            barcodeItem.Description = "条码信息";
+                        }
+                    });
+                }
+                catch (TimeoutException)
+                {
+                    Log.Warning("等待巴枪扫码超时，继续使用 noread 条码");
+                    // 超时后继续使用原始条码
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        CurrentBarcode = "noread (扫码超时)";
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "等待巴枪扫码时发生错误");
+                    // 发生错误时继续使用原始条码
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        CurrentBarcode = "noread (扫码错误)";
+                    });
+                }
+            }
+            
             _sortService.ProcessPackage(package);
             // 1. 通过笨鸟系统服务获取三段码并处理上传
             var benNiaoResult = await _benNiaoService.ProcessPackageAsync(package);
@@ -460,6 +623,15 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     private void UpdatePackageInfoItems(PackageInfo package)
     {
+        var barcodeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "条码");
+        if (barcodeItem != null)
+        {
+            barcodeItem.Value = package.Barcode;
+            barcodeItem.Description = string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase) 
+                ? "条码识别失败，请使用巴枪扫描" 
+                : "包裹条码信息";
+        }
+        
         var weightItem = PackageInfoItems.FirstOrDefault(x => x.Label == "重量");
         if (weightItem != null)
         {
@@ -624,6 +796,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                 // 取消订阅事件
                 _sortService.DeviceConnectionStatusChanged -= OnDeviceConnectionStatusChanged;
+                
+                // 取消订阅扫码枪事件
+                if (_scannerService is not null)
+                {
+                    _scannerService.BarcodeScanned -= OnBarcodeScannerScanned;
+                    Log.Debug("已取消订阅扫码枪事件");
+                }
+
                 _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
 
                 // 释放订阅

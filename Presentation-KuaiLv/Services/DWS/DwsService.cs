@@ -1,4 +1,5 @@
 using System.Net.Http;
+using System.Net.NetworkInformation;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -15,23 +16,126 @@ namespace Presentation_KuaiLv.Services.DWS;
 /// <summary>
 ///     DWS服务实现
 /// </summary>
-public class DwsService(
-    HttpClient httpClient,
-    ISettingsService settingsService,
-    INotificationService notificationService,
-    IWarningLightService warningLightService)
-    : IDwsService
+public class DwsService : IDwsService, IDisposable
 {
     private const int MaxFailureCount = 5;
     private int _failureCount;
+    private readonly Timer _networkCheckTimer;
+    private readonly Timer _offlinePackageRetryTimer;
+    private bool _isNetworkAvailable = true;
+    private readonly HttpClient _httpClient;
+    private readonly ISettingsService _settingsService;
+    private readonly INotificationService _notificationService;
+    private readonly IWarningLightService _warningLightService;
+    private readonly OfflinePackageService _offlinePackageService;
+    private bool _disposed;
+
+    public DwsService(
+        HttpClient httpClient,
+        ISettingsService settingsService,
+        INotificationService notificationService,
+        IWarningLightService warningLightService,
+        OfflinePackageService offlinePackageService)
+    {
+        _httpClient = httpClient;
+        _settingsService = settingsService;
+        _notificationService = notificationService;
+        _warningLightService = warningLightService;
+        _offlinePackageService = offlinePackageService;
+
+        // 初始化网络检测定时器（每30秒检查一次）
+        _networkCheckTimer = new Timer(CheckNetworkStatus, null, TimeSpan.Zero, TimeSpan.FromSeconds(30));
+        
+        // 初始化离线包裹重试定时器（每1分钟检查一次）
+        _offlinePackageRetryTimer = new Timer(RetryOfflinePackages, null, TimeSpan.Zero, TimeSpan.FromMinutes(1));
+    }
+
+    private async Task CheckNetworkStatusAsync()
+    {
+        try
+        {
+            var config = _settingsService.LoadConfiguration<UploadConfiguration>();
+            var baseAddress = config.Environment == UploadEnvironment.Production
+                ? "klwms.meituan.com"
+                : "klvwms.meituan.com";
+
+            using var ping = new Ping();
+            var reply = await ping.SendPingAsync(baseAddress);
+            var isAvailable = reply.Status == IPStatus.Success;
+
+            if (_isNetworkAvailable != isAvailable)
+            {
+                _isNetworkAvailable = isAvailable;
+                if (isAvailable)
+                {
+                    Log.Information("网络已恢复连接");
+                    _notificationService.ShowSuccess("网络已恢复", "网络连接已恢复");
+                }
+                else
+                {
+                    Log.Warning("网络连接已断开");
+                    _notificationService.ShowWarning("网络断开", "网络连接已断开，包裹将保存到本地");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "检查网络状态时发生错误");
+        }
+    }
+
+    private void CheckNetworkStatus(object? state)
+    {
+        _ = CheckNetworkStatusAsync();
+    }
+
+    private async Task RetryOfflinePackagesAsync()
+    {
+        if (!_isNetworkAvailable) return;
+
+        try
+        {
+            var offlinePackages = await _offlinePackageService.GetOfflinePackagesAsync();
+            foreach (var package in offlinePackages)
+            {
+                try
+                {
+                    var result = await ReportPackageAsync(package);
+                    if (result.Code != 200) continue;
+                    await _offlinePackageService.DeleteOfflinePackageAsync(package.Barcode);
+                    Log.Information("离线包裹上传成功：{Barcode}", package.Barcode);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "重试上传离线包裹失败：{Barcode}", package.Barcode);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "处理离线包裹时发生错误");
+        }
+    }
+
+    private void RetryOfflinePackages(object? state)
+    {
+        _ = RetryOfflinePackagesAsync();
+    }
 
     /// <inheritdoc />
     public async Task<DwsResponse> ReportPackageAsync(PackageInfo package)
     {
         try
         {
+            if (!_isNetworkAvailable)
+            {
+                Log.Warning("网络未连接，保存包裹到离线存储：{Barcode}", package.Barcode);
+                await _offlinePackageService.SaveOfflinePackageAsync(package);
+                return new DwsResponse { Code = 200, Message = "包裹已保存到离线存储" };
+            }
+
             // 加载配置
-            var config = settingsService.LoadConfiguration<UploadConfiguration>();
+            var config = _settingsService.LoadConfiguration<UploadConfiguration>();
 
             // 构建请求数据
             var request = new DwsRequest
@@ -68,8 +172,6 @@ public class DwsService(
             var baseAddress = config.Environment == UploadEnvironment.Production
                 ? "https://klwms.meituan.com"
                 : "https://klvwms.meituan.com";
-            // 不要修改httpClient的BaseAddress属性
-            // httpClient.BaseAddress = new Uri(baseAddress);
 
             // 记录请求前的信息
             Log.Information("DWS请求参数: BaseUrl={BaseUrl}, Path={Path}, Method={Method}", 
@@ -96,7 +198,7 @@ public class DwsService(
             
             // 发送请求，不使用默认请求头
             Log.Information("开始发送DWS请求...");
-            var response = await httpClient.SendAsync(requestMessage);
+            var response = await _httpClient.SendAsync(requestMessage);
             Log.Information("DWS响应状态码: {StatusCode}", response.StatusCode);
             
             var responseContent = await response.Content.ReadAsStringAsync();
@@ -107,7 +209,7 @@ public class DwsService(
             if (result == null)
             {
                 Log.Error("DWS服务响应解析失败");
-                notificationService.ShowError("DWS服务异常", "服务器响应解析失败");
+                _notificationService.ShowError("DWS服务异常", "服务器响应解析失败");
                 return new DwsResponse { Code = 500, Message = "服务器响应解析失败" };
             }
 
@@ -118,75 +220,75 @@ public class DwsService(
                     // 包裹为SKU多退少补品
                     _failureCount = 0;
                     Log.Information("包裹上报成功：{Barcode}", package.Barcode);
-                    notificationService.ShowSuccess("包裹上报成功", "绿灯");
-                    await warningLightService.ShowGreenLightAsync();
+                    _notificationService.ShowSuccess("包裹上报成功", "绿灯");
+                    await _warningLightService.ShowGreenLightAsync();
                     return result;
 
                 case 200:
                     // 包裹为SKU非多退少补品
                     _failureCount = 0;
                     Log.Information("包裹上报成功：{Barcode}", package.Barcode);
-                    notificationService.ShowSuccess("包裹上报成功", "绿灯");
-                    await warningLightService.ShowGreenLightAsync();
+                    _notificationService.ShowSuccess("包裹上报成功", "绿灯");
+                    await _warningLightService.ShowGreenLightAsync();
                     return result;
 
                 case 1003:
                     // 包裹号无效
                     Log.Warning("包裹号无效：{Barcode}", package.Barcode);
-                    notificationService.ShowWarning("包裹号无效", "红灯，包裹号无效");
-                    await warningLightService.TurnOffGreenLightAsync();
+                    _notificationService.ShowWarning("包裹号无效", "红灯，包裹号无效");
+                    await _warningLightService.TurnOffGreenLightAsync();
                     await Task.Delay(100); // 短暂延时确保绿灯完全关闭
-                    await warningLightService.ShowRedLightAsync();
+                    await _warningLightService.ShowRedLightAsync();
                     package.SetError($"包裹号无效：{result.Message}");
                     break;
 
                 case 1005:
                     // 非履约日包裹
                     Log.Warning("非履约日包裹：{Barcode}", package.Barcode);
-                    notificationService.ShowWarning("非履约日包裹", "红灯，非履约日包裹");
-                    await warningLightService.TurnOffGreenLightAsync();
+                    _notificationService.ShowWarning("非履约日包裹", "红灯，非履约日包裹");
+                    await _warningLightService.TurnOffGreenLightAsync();
                     await Task.Delay(100); // 短暂延时确保绿灯完全关闭
-                    await warningLightService.ShowRedLightAsync();
+                    await _warningLightService.ShowRedLightAsync();
                     package.SetError($"非履约日包裹：{result.Message}");
                     break;
 
                 case 1004:
                     // 重量异常
                     Log.Warning("重量异常：{Barcode}, {Message}", package.Barcode, result.Message);
-                    notificationService.ShowWarning("重量异常", "红灯，重量异常");
-                    await warningLightService.TurnOffGreenLightAsync();
+                    _notificationService.ShowWarning("重量异常", "红灯，重量异常");
+                    await _warningLightService.TurnOffGreenLightAsync();
                     await Task.Delay(100); // 短暂延时确保绿灯完全关闭
-                    await warningLightService.ShowRedLightAsync();
+                    await _warningLightService.ShowRedLightAsync();
                     package.SetError($"重量异常：{result.Message}");
                     break;
 
                 case 400:
                     // 客户端请求错误
                     Log.Warning("客户端请求错误：{Message}", result.Message);
-                    notificationService.ShowError("请求错误", "红灯，客户端请求错误");
-                    await warningLightService.TurnOffGreenLightAsync();
+                    _notificationService.ShowError("请求错误", "红灯，客户端请求错误");
+                    await _warningLightService.TurnOffGreenLightAsync();
                     await Task.Delay(100); // 短暂延时确保绿灯完全关闭
-                    await warningLightService.ShowRedLightAsync();
+                    await _warningLightService.ShowRedLightAsync();
                     package.SetError($"请求错误：{result.Message}");
                     break;
 
                 case 500:
                     // 服务端异常
                     Log.Error("服务端异常：{Message}", result.Message);
-                    notificationService.ShowError("服务异常", "红灯，系统错误");
-                    await warningLightService.TurnOffGreenLightAsync();
+                    _notificationService.ShowError("服务异常", "红灯，系统错误");
+                    await _warningLightService.TurnOffGreenLightAsync();
                     await Task.Delay(100); // 短暂延时确保绿灯完全关闭
-                    await warningLightService.ShowRedLightAsync();
+                    await _warningLightService.ShowRedLightAsync();
                     package.SetError($"服务异常：{result.Message}");
                     break;
 
                 default:
                     // 未知错误
                     Log.Error("未知错误：Code={Code}, Message={Message}", result.Code, result.Message);
-                    notificationService.ShowError("未知错误", $"红灯，错误代码：{result.Code}");
-                    await warningLightService.TurnOffGreenLightAsync();
+                    _notificationService.ShowError("未知错误", $"红灯，错误代码：{result.Code}");
+                    await _warningLightService.TurnOffGreenLightAsync();
                     await Task.Delay(100); // 短暂延时确保绿灯完全关闭
-                    await warningLightService.ShowRedLightAsync();
+                    await _warningLightService.ShowRedLightAsync();
                     package.SetError($"未知错误：{result.Message}");
                     break;
             }
@@ -195,8 +297,8 @@ public class DwsService(
             _failureCount++;
             if (_failureCount < MaxFailureCount) return result;
             Log.Error("DWS服务连续失败次数达到{Count}次，需要停机", MaxFailureCount);
-            notificationService.ShowError("DWS服务异常", "连续失败次数过多，设备将停机");
-            await warningLightService.ShowRedLightAsync();
+            _notificationService.ShowError("DWS服务异常", "连续失败次数过多，设备将停机");
+            await _warningLightService.ShowRedLightAsync();
             // TODO: 发送停机指令
 
             return result;
@@ -207,8 +309,8 @@ public class DwsService(
             if (_failureCount >= MaxFailureCount)
             {
                 Log.Error(ex, "DWS服务连续失败次数达到{Count}次，需要停机", MaxFailureCount);
-                notificationService.ShowError("DWS服务异常", "连续失败次数过多，设备将停机");
-                await warningLightService.ShowRedLightAsync();
+                _notificationService.ShowError("DWS服务异常", "连续失败次数过多，设备将停机");
+                await _warningLightService.ShowRedLightAsync();
                 // TODO: 发送停机指令
             }
 
@@ -232,5 +334,31 @@ public class DwsService(
 
             return new DwsResponse { Code = 500, Message = ex.Message };
         }
+    }
+
+    /// <summary>
+    /// 释放资源
+    /// </summary>
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// 释放资源
+    /// </summary>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed) return;
+
+        if (disposing)
+        {
+            // 释放定时器
+            _networkCheckTimer.Dispose();
+            _offlinePackageRetryTimer.Dispose();
+        }
+
+        _disposed = true;
     }
 }

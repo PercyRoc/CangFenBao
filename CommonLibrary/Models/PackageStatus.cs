@@ -53,5 +53,15 @@ public enum PackageStatus
     /// <summary>
     ///     分拣失败
     /// </summary>
-    SortFailed
+    SortFailed,
+
+    /// <summary>
+    ///     离线存储
+    /// </summary>
+    Offline,
+
+    /// <summary>
+    ///     已处理
+    /// </summary>
+    Processed
 }

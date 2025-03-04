@@ -1,6 +1,7 @@
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.IO;
 using CommonLibrary.Services;
 using Presentation_CommonLibrary.Services;
 using Presentation_XinBa.Services.Models;
@@ -46,6 +47,24 @@ public interface IApiService
     /// </summary>
     /// <returns>是否已登录</returns>
     bool IsLoggedIn();
+    
+    /// <summary>
+    /// 提交商品尺寸
+    /// </summary>
+    /// <param name="goodsSticker">商品条码</param>
+    /// <param name="height">高度(cm)</param>
+    /// <param name="length">长度(cm)</param>
+    /// <param name="width">宽度(cm)</param>
+    /// <param name="weight">重量(g)</param>
+    /// <param name="photoData">商品图片数据列表（可选）</param>
+    /// <returns>提交是否成功</returns>
+    Task<bool> SubmitDimensionsAsync(
+        string goodsSticker,
+        string height,
+        string length,
+        string width,
+        string weight,
+        IEnumerable<byte[]>? photoData = null);
 }
 
 /// <summary>
@@ -259,5 +278,78 @@ public class ApiService : IApiService
     {
         var settings = _settingsService.LoadConfiguration<EmployeeSettings>();
         return settings.IsLoggedIn;
+    }
+    
+    /// <inheritdoc />
+    public async Task<bool> SubmitDimensionsAsync(
+        string goodsSticker,
+        string height,
+        string length,
+        string width,
+        string weight,
+        IEnumerable<byte[]>? photoData = null)
+    {
+        try
+        {
+            Log.Information("尝试提交商品尺寸: GoodsSticker={GoodsSticker}", goodsSticker);
+            
+            using var formData = new MultipartFormDataContent();
+            
+            // 添加基本数据
+            formData.Add(new StringContent(goodsSticker), "goods_sticker");
+            formData.Add(new StringContent(height), "height");
+            formData.Add(new StringContent(length), "length");
+            formData.Add(new StringContent(width), "width");
+            formData.Add(new StringContent(weight), "weight");
+            
+            // 添加图片数据
+            if (photoData != null)
+            {
+                foreach (var imageBytes in photoData)
+                {
+                    var fileContent = new ByteArrayContent(imageBytes);
+                    fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/jpeg");
+                    formData.Add(fileContent, "photos", $"image_{DateTime.Now:yyyyMMddHHmmss}.jpg");
+                }
+            }
+            
+            var response = await _httpClient.PostAsync("/api/v1/dimensions", formData);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                Log.Information("商品尺寸提交成功: GoodsSticker={GoodsSticker}", goodsSticker);
+                return true;
+            }
+            
+            // 处理错误响应
+            var errorContent = await response.Content.ReadAsStringAsync();
+            Log.Error("商品尺寸提交失败: StatusCode={StatusCode}, Response={Response}", 
+                response.StatusCode, errorContent);
+            
+            try
+            {
+                var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(errorContent, _jsonOptions);
+                if (errorResponse != null)
+                {
+                    _notificationService.ShowError($"提交失败: {errorResponse.Message}");
+                }
+                else
+                {
+                    _notificationService.ShowError($"提交失败: {response.StatusCode}");
+                }
+            }
+            catch
+            {
+                _notificationService.ShowError($"提交失败: {response.StatusCode}");
+            }
+            
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "提交商品尺寸过程中发生错误");
+            _notificationService.ShowError($"提交过程中发生错误: {ex.Message}");
+            return false;
+        }
     }
 } 

@@ -46,6 +46,7 @@ public partial class App
         // 注册 DWS 服务
         containerRegistry.RegisterSingleton<IDwsService, DwsService>();
         containerRegistry.RegisterSingleton<HttpClient>();
+        containerRegistry.RegisterSingleton<OfflinePackageService>();
 
         // 注册警示灯服务
         containerRegistry.RegisterSingleton<IWarningLightService, WarningLightService>();
@@ -106,8 +107,7 @@ public partial class App
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "启动托管服务时发生错误");
-            throw;
+            Log.Error(ex, "启动服务时发生错误");
         }
     }
 
