@@ -470,9 +470,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             }
             
             // 更新成功/失败数量
-            bool isSuccess = package.Status == PackageStatus.MeasureSuccess || 
-                            package.Status == PackageStatus.WeighSuccess || 
-                            package.Status == PackageStatus.SortSuccess;
+            var isSuccess = package.Status is PackageStatus.MeasureSuccess or PackageStatus.WeighSuccess or PackageStatus.SortSuccess;
                             
             if (isSuccess)
             {

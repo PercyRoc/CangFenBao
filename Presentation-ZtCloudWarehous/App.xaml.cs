@@ -4,6 +4,7 @@ using CommonLibrary.Extensions;
 using DeviceService;
 using DeviceService.Camera;
 using Presentation_CommonLibrary.Extensions;
+using Presentation_ZtCloudWarehous.Services;
 using Presentation_ZtCloudWarehous.ViewModels;
 using Presentation_ZtCloudWarehous.ViewModels.Settings;
 using Presentation_ZtCloudWarehous.Views;
@@ -42,7 +43,7 @@ public partial class App
         containerRegistry.RegisterSingleton<HttpClient>();
         // 注册包裹中转服务
         containerRegistry.RegisterSingleton<PackageTransferService>();
-
+        containerRegistry.Register<IPendulumSortService, PendulumSortService>();
         // 注册设置页面
         containerRegistry.Register<CameraSettingsView>();
         containerRegistry.Register<CameraSettingsViewModel>();
