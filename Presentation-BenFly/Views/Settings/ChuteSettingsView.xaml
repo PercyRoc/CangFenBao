@@ -11,8 +11,8 @@
       d:DataContext="{d:DesignInstance Type=settings:ChuteSettingsViewModel}"
       Title="格口设置">
 
-    <ScrollViewer>
-        <StackPanel MaxWidth="800" Margin="16">
+    <Grid>
+        <StackPanel MaxWidth="800" Margin="16" VerticalAlignment="Top">
             <TextBlock Text="格口设置"
                        Style="{DynamicResource SubtitleTextBlockStyle}"
                        HorizontalAlignment="Center"
@@ -142,5 +142,5 @@
                 </StackPanel>
             </ui:Card>
         </StackPanel>
-    </ScrollViewer>
+    </Grid>
 </Page>

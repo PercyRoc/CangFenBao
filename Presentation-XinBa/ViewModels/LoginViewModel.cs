@@ -1,4 +1,3 @@
-using System.Windows.Input;
 using CommonLibrary.Services;
 using Presentation_CommonLibrary.Services;
 using Presentation_XinBa.Services;
@@ -24,6 +23,11 @@ public class LoginViewModel : BindableBase, IDialogAware
     private bool _isLoggingIn;
     private string _statusMessage = string.Empty;
     private bool _rememberCredentials = true;
+
+    /// <summary>
+    /// 登录成功事件
+    /// </summary>
+    public event EventHandler? LoginSucceeded;
 
     /// <summary>
     /// 构造函数
@@ -195,15 +199,21 @@ public class LoginViewModel : BindableBase, IDialogAware
                 _settingsService.SaveConfiguration(credentials);
                 Log.Information("已保存API凭证");
             }
-
-            var result = await _apiService.LoginAsync(EmployeeId, Username, Password);
-            if (result)
+            
+            // 执行登录
+            var success = await _apiService.LoginAsync(EmployeeId, Username, Password);
+            
+            if (success)
             {
                 Log.Information("登录成功: EmployeeId={EmployeeId}", EmployeeId);
                 _notificationService.ShowSuccess($"Employee {EmployeeId} logged in successfully");
                 
-                // 关闭对话框
-                RequestClose?.Invoke(new DialogResult(ButtonResult.OK));
+                // 触发登录成功事件
+                LoginSucceeded?.Invoke(this, EventArgs.Empty);
+                
+                // 注意：不再在这里关闭对话框，而是由App.xaml.cs中的OnLoginSucceeded方法负责关闭
+                // 这样可以确保主窗口显示后再关闭登录窗口
+                // RequestClose?.Invoke(new DialogResult(ButtonResult.OK));
             }
             else
             {

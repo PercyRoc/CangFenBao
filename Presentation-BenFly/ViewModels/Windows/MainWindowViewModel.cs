@@ -29,7 +29,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly BenNiaoPackageService _benNiaoService;
     private readonly ICameraService _cameraService;
-    private readonly ICustomDialogService _dialogService;
+    private readonly IDialogService _dialogService;
     private readonly ISettingsService _settingsService;
     private readonly IPendulumSortService _sortService;
     private readonly IScannerService _scannerService;
@@ -50,7 +50,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private SystemStatus _systemStatus = new();
 
     public MainWindowViewModel(
-        ICustomDialogService dialogService,
+        IDialogService dialogService,
         ICameraService cameraService,
         ISettingsService settingsService,
         IPendulumSortService sortService,
@@ -412,11 +412,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     private void OnBarcodeScannerScanned(object? sender, string barcode)
     {
-        if (_barcodeScanCompletionSource is not null && !_barcodeScanCompletionSource.Task.IsCompleted)
-        {
-            Log.Information("收到巴枪扫码：{Barcode}", barcode);
-            _barcodeScanCompletionSource.SetResult(barcode);
-        }
+        if (_barcodeScanCompletionSource is null || _barcodeScanCompletionSource.Task.IsCompleted) return;
+        Log.Information("收到巴枪扫码：{Barcode}", barcode);
+        _barcodeScanCompletionSource.SetResult(barcode);
     }
 
     private async Task<string> WaitForBarcodeScanAsync(int timeoutMilliseconds = 30000)
@@ -431,20 +429,18 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 CurrentBarcode = "请扫描条码...";
                 
                 // 查找主窗口中的条码输入控件并设置焦点
-                if (Application.Current.MainWindow is not null)
+                if (Application.Current.MainWindow is null) return;
+                // 查找包含条码显示的控件
+                var textBox = FindBarcodeTextBox(Application.Current.MainWindow);
+                if (textBox is not null)
                 {
-                    // 查找包含条码显示的控件
-                    var textBox = FindBarcodeTextBox(Application.Current.MainWindow);
-                    if (textBox is not null)
-                    {
-                        // 设置焦点
-                        textBox.Focus();
-                        Log.Debug("已将焦点设置到条码输入控件");
-                    }
-                    else
-                    {
-                        Log.Warning("未找到条码输入控件，无法设置焦点");
-                    }
+                    // 设置焦点
+                    textBox.Focus();
+                    Log.Debug("已将焦点设置到条码输入控件");
+                }
+                else
+                {
+                    Log.Warning("未找到条码输入控件，无法设置焦点");
                 }
             });
             
@@ -471,15 +467,15 @@ public class MainWindowViewModel : BindableBase, IDisposable
     /// </summary>
     /// <param name="parent">父控件</param>
     /// <returns>条码输入控件</returns>
-    private System.Windows.Controls.TextBox? FindBarcodeTextBox(DependencyObject parent)
+    private TextBox? FindBarcodeTextBox(DependencyObject parent)
     {
         // 获取父控件的所有子控件
-        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
         {
             var child = VisualTreeHelper.GetChild(parent, i);
             
             // 如果是TextBox且名称或Tag包含Barcode关键字
-            if (child is System.Windows.Controls.TextBox textBox)
+            if (child is TextBox textBox)
             {
                 var name = textBox.Name.ToLowerInvariant();
                 var tag = textBox.Tag?.ToString()?.ToLowerInvariant() ?? string.Empty;
@@ -535,11 +531,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     {
                         // 更新包裹信息项，显示新条码
                         var barcodeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "条码");
-                        if (barcodeItem != null)
-                        {
-                            barcodeItem.Value = newBarcode;
-                            barcodeItem.Description = "条码信息";
-                        }
+                        if (barcodeItem == null) return;
+                        barcodeItem.Value = newBarcode;
+                        barcodeItem.Description = "条码信息";
                     });
                 }
                 catch (TimeoutException)
@@ -798,11 +792,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 _sortService.DeviceConnectionStatusChanged -= OnDeviceConnectionStatusChanged;
                 
                 // 取消订阅扫码枪事件
-                if (_scannerService is not null)
-                {
-                    _scannerService.BarcodeScanned -= OnBarcodeScannerScanned;
-                    Log.Debug("已取消订阅扫码枪事件");
-                }
+                _scannerService.BarcodeScanned -= OnBarcodeScannerScanned;
+                Log.Debug("已取消订阅扫码枪事件");
 
                 _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
 

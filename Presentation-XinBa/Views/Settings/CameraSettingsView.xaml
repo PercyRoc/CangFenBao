@@ -11,26 +11,15 @@
       mc:Ignorable="d"
       Title="Camera Settings">
     
-    <Grid Margin="18">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
-
+    <StackPanel Margin="18" VerticalAlignment="Top">
         <!-- Title -->
-        <TextBlock Grid.Row="0" 
-                   Text="Camera Connection Settings" 
+        <TextBlock Text="Camera Connection Settings" 
                    FontSize="20" 
                    FontWeight="Bold" 
                    Margin="0,0,0,20"/>
 
         <!-- IP Address Settings -->
-        <StackPanel Grid.Row="1" Margin="0,0,0,10" HorizontalAlignment="Center">
+        <StackPanel Margin="0,0,0,10" HorizontalAlignment="Center">
             <TextBlock Text="Server IP Address" 
                        FontWeight="Medium" 
                        Margin="0,0,0,5"/>
@@ -44,7 +33,7 @@
         </StackPanel>
 
         <!-- Port Settings -->
-        <StackPanel Grid.Row="2" Margin="0,10,0,10" HorizontalAlignment="Center">
+        <StackPanel Margin="0,10,0,10" HorizontalAlignment="Center">
             <TextBlock Text="Server Port" 
                        FontWeight="Medium" 
                        Margin="0,0,0,5"/>
@@ -58,7 +47,7 @@
         </StackPanel>
 
         <!-- Reconnect Interval Settings -->
-        <StackPanel Grid.Row="3" Margin="0,10,0,10" HorizontalAlignment="Center">
+        <StackPanel Margin="0,10,0,10" HorizontalAlignment="Center">
             <TextBlock Text="Reconnect Interval (ms)" 
                        FontWeight="Medium" 
                        Margin="0,0,0,5"/>
@@ -72,7 +61,7 @@
         </StackPanel>
 
         <!-- Connection Timeout Settings -->
-        <StackPanel Grid.Row="4" Margin="0,10,0,10" HorizontalAlignment="Center">
+        <StackPanel Margin="0,10,0,10" HorizontalAlignment="Center">
             <TextBlock Text="Connection Timeout (ms)" 
                        FontWeight="Medium" 
                        Margin="0,0,0,5"/>
@@ -86,7 +75,7 @@
         </StackPanel>
 
         <!-- Image Save Path Settings -->
-        <StackPanel Grid.Row="5" Margin="0,10,0,10" HorizontalAlignment="Center">
+        <StackPanel Margin="0,10,0,10" HorizontalAlignment="Center">
             <TextBlock Text="Image Save Path" 
                        FontWeight="Medium" 
                        Margin="0,0,0,5"/>
@@ -110,11 +99,10 @@
         </StackPanel>
 
         <!-- Status Message -->
-        <TextBlock Grid.Row="6" 
-                   Text="{Binding StatusMessage}" 
+        <TextBlock Text="{Binding StatusMessage}" 
                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" 
                    TextWrapping="Wrap" 
                    HorizontalAlignment="Center"
                    Margin="0,20,0,0"/>
-    </Grid>
+    </StackPanel>
 </Page>

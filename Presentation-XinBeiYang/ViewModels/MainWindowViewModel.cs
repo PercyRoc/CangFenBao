@@ -22,7 +22,7 @@ namespace Presentation_XinBeiYang.ViewModels;
 public class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly ICameraService _cameraService;
-    private readonly ICustomDialogService _dialogService;
+    private readonly IDialogService _dialogService;
     private readonly IPlcCommunicationService _plcCommunicationService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
@@ -33,7 +33,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private SystemStatus _systemStatus = new();
 
     public MainWindowViewModel(
-        ICustomDialogService dialogService,
+        IDialogService dialogService,
         ICameraService cameraService,
         PackageTransferService packageTransferService,
         IPlcCommunicationService plcCommunicationService)

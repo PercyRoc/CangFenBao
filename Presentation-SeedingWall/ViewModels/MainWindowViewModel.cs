@@ -22,7 +22,7 @@ namespace Presentation_SeedingWall.ViewModels;
 public class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly ICameraService _cameraService;
-    private readonly ICustomDialogService _dialogService;
+    private readonly IDialogService _dialogService;
     private readonly IAudioService _audioService;
     private readonly IJuShuiTanService _juShuiTanService;
     private readonly IPlcService _plcService;
@@ -59,7 +59,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     public ObservableCollection<DeviceStatus> DeviceStatuses { get; } = [];
     public ObservableCollection<PackageInfoItem> PackageInfoItems { get; } = [];
 
-    public MainWindowViewModel( ICustomDialogService dialogService,
+    public MainWindowViewModel( IDialogService dialogService,
         ICameraService cameraService,
         PackageTransferService packageTransferService,
         IAudioService audioService,

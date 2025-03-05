@@ -39,7 +39,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly IAudioService _audioService;
     private readonly ICameraService _cameraService;
-    private readonly ICustomDialogService _dialogService;
+    private readonly IDialogService _dialogService;
     private readonly SemaphoreSlim _measurementLock = new(1, 1);
     private readonly IPackageDataService _packageDataService;
     private readonly IScannerService _scannerService;
@@ -66,7 +66,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     ///     构造函数
     /// </summary>
     public MainWindowViewModel(
-        ICustomDialogService dialogService,
+        IDialogService dialogService,
         IScannerService scannerService,
         RenJiaCameraService volumeCamera,
         ICameraService cameraService,

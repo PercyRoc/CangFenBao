@@ -121,6 +121,13 @@
                                 <x:Type Type="settings:CameraSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
+                        <ui:NavigationViewItem Content="分拣设置"
+                                               Tag="SortSettingsView"
+                                               Icon="{ui:SymbolIcon ArrowSort24}">
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="settings:SortSettingsView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>
                 </ui:NavigationView>
 

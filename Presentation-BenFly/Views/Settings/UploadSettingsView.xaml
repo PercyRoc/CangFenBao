@@ -16,8 +16,8 @@
             <converters:EnumDescriptionConverter x:Key="EnumDescriptionConverter" />
         </ResourceDictionary>
     </Page.Resources>
-    <ScrollViewer>
-        <StackPanel MaxWidth="500" Margin="16">
+    <Grid>
+        <StackPanel MaxWidth="500" Margin="16" VerticalAlignment="Top">
             <TextBlock Text="笨鸟服务配置"
                        Style="{DynamicResource SubtitleTextBlockStyle}"
                        HorizontalAlignment="Center"
@@ -232,5 +232,5 @@
                 </StackPanel>
             </ui:Card>
         </StackPanel>
-    </ScrollViewer>
+    </Grid>
 </Page>

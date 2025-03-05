@@ -1,4 +1,6 @@
 ﻿using System.Collections.ObjectModel;
+using System.IO;
+using System.Reactive.Linq;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -7,23 +9,22 @@ using Presentation_CommonLibrary.Models;
 using Presentation_CommonLibrary.Services;
 using Presentation_XinBa.Services;
 using Prism.Commands;
-using Prism.Ioc;
 using Prism.Mvvm;
-using Serilog;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
-using System.IO;
-using System.Reactive.Linq;
+using Serilog;
 
 namespace Presentation_XinBa.ViewModels;
 
+/// <summary>
+/// 主窗口视图模型
+/// </summary>
 public class MainWindowViewModel : BindableBase, IDisposable
 {
-    private readonly ICustomDialogService _dialogService;
+    private readonly IDialogService _dialogService;
     private readonly DispatcherTimer _timer;
     private readonly TcpCameraService? _cameraService;
     private readonly IApiService _apiService;
-    private readonly IContainerProvider _containerProvider;
     private string _currentBarcode = string.Empty;
     private BitmapSource? _currentImage;
     private bool _disposed;
@@ -37,16 +38,19 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private int _packagesInLastHour;
     private string _currentEmployeeInfo = string.Empty;
 
+    /// <summary>
+    /// 登出请求事件
+    /// </summary>
+    public event EventHandler? LogoutRequested;
+
     public MainWindowViewModel(
-        ICustomDialogService dialogService,
+        IDialogService dialogService,
         TcpCameraService cameraService,
-        IApiService apiService,
-        IContainerProvider containerProvider)
+        IApiService apiService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
         _apiService = apiService;
-        _containerProvider = containerProvider;
 
         // Initialize commands
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
@@ -69,8 +73,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
         // Initialize package information
         InitializePackageInfoItems();
         
-        // 更新当前登录员工信息
-        UpdateCurrentEmployeeInfo();
+        // 更新当前登录员工信息 - 初始调用
+        _ = UpdateCurrentEmployeeInfo();
 
         // 订阅相机连接状态事件
         if (_cameraService != null)
@@ -134,37 +138,42 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _dialogService.ShowDialog("SettingsDialog");
     }
     
+    /// <summary>
+    /// 执行登出
+    /// </summary>
     private async void ExecuteLogout()
     {
         try
         {
-            Log.Information("用户请求登出");
-            
-            // 确认是否要登出
-            var dialogService = _containerProvider.Resolve<IDialogService>();
-            var result = await dialogService.ShowIconConfirmAsync(
-                "确定要登出当前账户吗？", 
-                "登出确认", 
+            var result = await _dialogService.ShowIconConfirmAsync(
+                "确定要登出当前用户吗？",
+                "登出确认",
                 System.Windows.MessageBoxImage.Question);
-                
-            if (result != System.Windows.MessageBoxResult.Yes)
-            {
-                Log.Information("用户取消了登出操作");
-                return;
-            }
+
+            if (result != System.Windows.MessageBoxResult.Yes) return;
             
-            // 执行登出
+            // 先触发登出请求事件，创建登录窗口
+            Log.Information("用户确认登出，触发登出请求事件");
+            LogoutRequested?.Invoke(this, EventArgs.Empty);
+            
+            // 执行登出API调用
+            Log.Information("开始调用登出API");
             var success = await _apiService.LogoutAsync();
-            if (!success) return;
-            Log.Information("用户登出成功，准备重启应用");
                 
-            // 重启应用
-            System.Diagnostics.Process.Start(System.Diagnostics.Process.GetCurrentProcess().MainModule!.FileName);
-            System.Windows.Application.Current.Shutdown();
+            if (!success)
+            {
+                Log.Warning("用户登出失败");
+                await _dialogService.ShowErrorAsync("登出失败，请稍后重试", "错误");
+            }
+            else
+            {
+                Log.Information("用户登出成功");
+            }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "登出过程中发生错误");
+            Log.Error(ex, "执行登出过程中发生错误");
+            await _dialogService.ShowErrorAsync($"登出过程中发生错误: {ex.Message}", "错误");
         }
     }
 
@@ -277,18 +286,18 @@ public class MainWindowViewModel : BindableBase, IDisposable
             Icon = "AlertCircle24"
         });
     }
-    
+
     /// <summary>
     /// 更新当前登录员工信息
     /// </summary>
-    private void UpdateCurrentEmployeeInfo()
+    public Task UpdateCurrentEmployeeInfo()
     {
         try
         {
             var employeeId = _apiService.GetCurrentEmployeeId();
             if (employeeId.HasValue)
             {
-                CurrentEmployeeInfo = $"员工ID: {employeeId.Value}";
+                CurrentEmployeeInfo = $"Employee ID: {employeeId.Value}";
                 Log.Information("已更新当前登录员工信息: {EmployeeId}", employeeId.Value);
             }
             else
@@ -302,8 +311,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
             Log.Error(ex, "更新当前登录员工信息时出错");
             CurrentEmployeeInfo = "获取员工信息出错";
         }
+        return Task.CompletedTask;
     }
-    
+
     /// <summary>
     /// 处理接收到的包裹信息
     /// </summary>
@@ -435,7 +445,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     /// </summary>
     /// <param name="status">包裹状态</param>
     /// <returns>状态显示文本</returns>
-    private string GetStatusDisplayText(PackageStatus status)
+    private static string GetStatusDisplayText(PackageStatus status)
     {
         return status switch
         {
@@ -604,7 +614,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     /// </summary>
     /// <param name="image">ImageSharp图像</param>
     /// <returns>BitmapSource图像</returns>
-    private BitmapSource ConvertToBitmapSource(Image<Rgba32> image)
+    private static BitmapSource ConvertToBitmapSource(Image<Rgba32> image)
     {
         try
         {

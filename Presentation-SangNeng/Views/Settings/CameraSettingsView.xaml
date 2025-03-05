@@ -26,8 +26,8 @@
             <converters:EnumDescriptionConverter x:Key="EnumDescriptionConverter" />
         </ResourceDictionary>
     </Page.Resources>
-    <ScrollViewer>
-        <StackPanel Margin="16">
+    <Grid>
+        <StackPanel Margin="16" MaxWidth="800" VerticalAlignment="Top">
             <TextBlock Text="Camera Settings"
                        HorizontalAlignment="Center"
                        Style="{DynamicResource SubtitleTextBlockStyle}"
@@ -221,5 +221,5 @@
                 </StackPanel>
             </ui:Card>
         </StackPanel>
-    </ScrollViewer>
+    </Grid>
 </Page>

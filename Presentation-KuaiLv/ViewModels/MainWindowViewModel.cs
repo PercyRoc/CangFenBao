@@ -23,7 +23,7 @@ namespace Presentation_KuaiLv.ViewModels;
 public class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly ICameraService _cameraService;
-    private readonly ICustomDialogService _dialogService;
+    private readonly IDialogService _dialogService;
     private readonly IDwsService _dwsService;
     private readonly IAudioService _audioService;
     private readonly List<IDisposable> _subscriptions = [];
@@ -36,7 +36,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private SystemStatus _systemStatus = new();
 
     public MainWindowViewModel(
-        ICustomDialogService dialogService,
+        IDialogService dialogService,
         ICameraService cameraService,
         IDwsService dwsService,
         IWarningLightService warningLightService,

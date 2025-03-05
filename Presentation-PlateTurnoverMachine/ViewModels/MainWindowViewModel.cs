@@ -24,7 +24,7 @@ namespace Presentation_PlateTurnoverMachine.ViewModels;
 public class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly ICameraService _cameraService;
-    private readonly ICustomDialogService _dialogService;
+    private readonly IDialogService _dialogService;
     private readonly Services.SortingService _sortingService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly ITcpConnectionService _tcpConnectionService;
@@ -36,7 +36,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private SystemStatus _systemStatus = new();
 
     public MainWindowViewModel(
-        ICustomDialogService dialogService,
+        IDialogService dialogService,
         ICameraService cameraService,
         PackageTransferService packageTransferService,
         Services.SortingService sortingService,

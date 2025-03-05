@@ -1,7 +1,6 @@
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
-using System.IO;
 using CommonLibrary.Services;
 using Presentation_CommonLibrary.Services;
 using Presentation_XinBa.Services.Models;
@@ -88,21 +87,33 @@ public class ApiService : IApiService
     /// <summary>
     /// 构造函数
     /// </summary>
-    public ApiService(
-        HttpClient httpClient,
-        ISettingsService settingsService,
+    public ApiService(ISettingsService settingsService,
         INotificationService notificationService)
     {
-        _httpClient = httpClient;
         _settingsService = settingsService;
         _notificationService = notificationService;
         
+        // 配置HttpClient以处理SSL
+        var handler = new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback = (_, _, _, _) => true
+        };
+        _httpClient = new HttpClient(handler);
+        
         // 设置基础URL
         var apiCredentials = _settingsService.LoadConfiguration<ApiCredentials>();
-        _httpClient.BaseAddress = new Uri(apiCredentials.BaseUrl);
+        var baseUrl = apiCredentials.BaseUrl.TrimEnd('/'); // 确保没有尾部斜杠
+        _httpClient.BaseAddress = new Uri(baseUrl + "/");  // 确保有尾部斜杠
+        Log.Debug("API基础URL设置为: {BaseUrl}", _httpClient.BaseAddress);
         
         // 设置默认基本认证
         SetBasicAuthentication(DefaultApiUsername, DefaultApiPassword);
+        
+        // 设置超时时间
+        _httpClient.Timeout = TimeSpan.FromSeconds(30);
+        
+        // 设置请求头
+        _httpClient.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
     }
     
     /// <summary>
@@ -141,7 +152,14 @@ public class ApiService : IApiService
                 Encoding.UTF8,
                 "application/json");
             
-            var response = await _httpClient.PostAsync("/api/v1/employee/login", content);
+            const string path = "api/v1/employee/login";  // 移除开头的斜杠
+            
+            // 记录完整的请求URL和认证信息
+            Log.Debug("请求URL: {BaseUrl}{Path}", _httpClient.BaseAddress, path);
+            Log.Debug("认证信息: {Auth}", _httpClient.DefaultRequestHeaders.Authorization?.ToString());
+            Log.Debug("请求内容: {Content}", await content.ReadAsStringAsync());
+            
+            var response = await _httpClient.PostAsync(path, content);
             
             if (response.IsSuccessStatusCode)
             {
@@ -173,14 +191,9 @@ public class ApiService : IApiService
             try
             {
                 var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(errorContent, _jsonOptions);
-                if (errorResponse != null)
-                {
-                    _notificationService.ShowError($"登录失败: {errorResponse.Message}");
-                }
-                else
-                {
-                    _notificationService.ShowError($"登录失败: {response.StatusCode}");
-                }
+                _notificationService.ShowError(errorResponse != null
+                    ? $"登录失败: {errorResponse.Message}"
+                    : $"登录失败: {response.StatusCode}");
             }
             catch
             {
@@ -221,7 +234,8 @@ public class ApiService : IApiService
                 Encoding.UTF8,
                 "application/json");
             
-            var response = await _httpClient.PostAsync("/api/v1/employee/logout", content);
+            const string path = "api/v1/employee/logout";  // 移除开头的斜杠
+            var response = await _httpClient.PostAsync(path, content);
             
             // 无论API响应如何，都清除本地登录状态
             settings.IsLoggedIn = false;
@@ -242,14 +256,9 @@ public class ApiService : IApiService
             try
             {
                 var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(errorContent, _jsonOptions);
-                if (errorResponse != null)
-                {
-                    _notificationService.ShowError($"登出失败: {errorResponse.Message}");
-                }
-                else
-                {
-                    _notificationService.ShowError($"登出失败: {response.StatusCode}");
-                }
+                _notificationService.ShowError(errorResponse != null
+                    ? $"登出失败: {errorResponse.Message}"
+                    : $"登出失败: {response.StatusCode}");
             }
             catch
             {
@@ -294,14 +303,13 @@ public class ApiService : IApiService
             Log.Information("尝试提交商品尺寸: GoodsSticker={GoodsSticker}", goodsSticker);
             
             using var formData = new MultipartFormDataContent();
-            
             // 添加基本数据
             formData.Add(new StringContent(goodsSticker), "goods_sticker");
             formData.Add(new StringContent(height), "height");
             formData.Add(new StringContent(length), "length");
             formData.Add(new StringContent(width), "width");
             formData.Add(new StringContent(weight), "weight");
-            
+
             // 添加图片数据
             if (photoData != null)
             {
@@ -313,7 +321,15 @@ public class ApiService : IApiService
                 }
             }
             
-            var response = await _httpClient.PostAsync("/api/v1/dimensions", formData);
+            const string path = "api/v1/dimensions";  // 移除开头的斜杠
+            // 记录请求详情
+            Log.Debug("提交尺寸请求详情: BaseUrl={BaseUrl}, Endpoint={Endpoint}", _httpClient.BaseAddress, path);
+            
+            var response = await _httpClient.PostAsync(path, formData);
+            var responseContent = await response.Content.ReadAsStringAsync();
+            
+            Log.Information("服务器响应: StatusCode={StatusCode}, Content={Content}", 
+                response.StatusCode, responseContent);
             
             if (response.IsSuccessStatusCode)
             {
@@ -322,27 +338,34 @@ public class ApiService : IApiService
             }
             
             // 处理错误响应
-            var errorContent = await response.Content.ReadAsStringAsync();
             Log.Error("商品尺寸提交失败: StatusCode={StatusCode}, Response={Response}", 
-                response.StatusCode, errorContent);
+                response.StatusCode, responseContent);
             
             try
             {
-                var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(errorContent, _jsonOptions);
+                var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(responseContent, _jsonOptions);
                 if (errorResponse != null)
                 {
                     _notificationService.ShowError($"提交失败: {errorResponse.Message}");
+                    Log.Error("错误详情: {ErrorMessage}", errorResponse.Message);
                 }
                 else
                 {
-                    _notificationService.ShowError($"提交失败: {response.StatusCode}");
+                    _notificationService.ShowError($"提交失败: HTTP {(int)response.StatusCode} - {response.StatusCode}");
                 }
             }
-            catch
+            catch (JsonException ex)
             {
-                _notificationService.ShowError($"提交失败: {response.StatusCode}");
+                Log.Error(ex, "解析错误响应失败");
+                _notificationService.ShowError($"提交失败: 服务器返回了无效的响应格式");
             }
             
+            return false;
+        }
+        catch (HttpRequestException ex)
+        {
+            Log.Error(ex, "发送HTTP请求时发生错误");
+            _notificationService.ShowError($"网络错误: {ex.Message}");
             return false;
         }
         catch (Exception ex)

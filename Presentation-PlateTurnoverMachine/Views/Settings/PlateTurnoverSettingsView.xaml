@@ -21,11 +21,10 @@
         </ResourceDictionary>
     </Page.Resources>
 
-    <Grid>
+    <StackPanel VerticalAlignment="Top">
         <!-- 顶部工具栏 -->
         <Grid Background="{DynamicResource ControlFillColorDefaultBrush}"
-              Height="48"
-              VerticalAlignment="Top">
+              Height="48">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
@@ -65,149 +64,140 @@
                     Message="{Binding InfoMessage}"
                     IsOpen="{Binding IsInfoBarOpen}"
                     Severity="{Binding InfoSeverity}"
-                    Margin="16,56,16,0"
-                    VerticalAlignment="Top" />
+                    Margin="16,8,16,0" />
 
-        <!-- 主内容区域 -->
-        <Grid Margin="16,96,16,16">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
+        <!-- 触发光电配置 -->
+        <Border Margin="16,16,16,16"
+                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="4"
+                Padding="16">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
 
-            <!-- 触发光电配置 -->
-            <Border Grid.Row="0"
-                    Margin="0,0,0,16"
-                    Background="{DynamicResource ControlFillColorDefaultBrush}"
-                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                    BorderThickness="1"
-                    CornerRadius="4"
-                    Padding="16">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
+                <TextBlock Text="触发光电配置"
+                           Grid.Row="0"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,8" />
 
-                    <TextBlock Text="触发光电配置"
-                               Grid.Row="0"
-                               FontSize="14"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,8" />
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
 
-                    <Grid Grid.Row="1">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
+                    <TextBlock Text="IP地址："
+                               Grid.Column="0"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
 
-                        <TextBlock Text="IP地址："
-                                   Grid.Column="0"
-                                   VerticalAlignment="Center"
-                                   Margin="0,0,8,0" />
+                    <ui:TextBox
+                        Text="{Binding Settings.TriggerPhotoelectricIp, UpdateSourceTrigger=PropertyChanged}"
+                        Grid.Column="1"
+                        PlaceholderText="例如: 192.168.1.100"
+                        Margin="0,0,16,0" />
 
-                        <ui:TextBox
-                            Text="{Binding Settings.TriggerPhotoelectricIp, UpdateSourceTrigger=PropertyChanged}"
-                            Grid.Column="1"
-                            PlaceholderText="例如: 192.168.1.100"
-                            Margin="0,0,16,0" />
+                    <TextBlock Text="端口号："
+                               Grid.Column="2"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
 
-                        <TextBlock Text="端口号："
-                                   Grid.Column="2"
-                                   VerticalAlignment="Center"
-                                   Margin="0,0,8,0" />
-
-                        <ui:NumberBox Value="{Binding Settings.TriggerPhotoelectricPort}"
-                                      Grid.Column="3"
-                                      Minimum="1"
-                                      Maximum="65535"
-                                      SpinButtonPlacementMode="Inline" />
-                    </Grid>
+                    <ui:NumberBox Value="{Binding Settings.TriggerPhotoelectricPort}"
+                                  Grid.Column="3"
+                                  Minimum="1"
+                                  Maximum="65535"
+                                  SpinButtonPlacementMode="Inline" />
                 </Grid>
-            </Border>
+            </Grid>
+        </Border>
 
-            <!-- 列表视图 -->
-            <DataGrid Grid.Row="1"
-                      ItemsSource="{Binding Settings.Items}"
-                      d:ItemsSource="{d:DesignInstance Type=models:PlateTurnoverItem}"
-                      AutoGenerateColumns="False"
-                      CanUserAddRows="False"
-                      Background="Transparent"
-                      BorderThickness="1"
-                      BorderBrush="{DynamicResource ControlElevationBorderBrush}">
-                <DataGrid.Columns>
-                    <DataGridTextColumn Header="序号" Binding="{Binding Index}" Width="60" IsReadOnly="True" />
+        <!-- 列表视图 -->
+        <DataGrid Margin="16,0,16,16"
+                  Height="400"
+                  ItemsSource="{Binding Settings.Items}"
+                  d:ItemsSource="{d:DesignInstance Type=models:PlateTurnoverItem}"
+                  AutoGenerateColumns="False"
+                  CanUserAddRows="False"
+                  Background="Transparent"
+                  BorderThickness="1"
+                  BorderBrush="{DynamicResource ControlElevationBorderBrush}">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="序号" Binding="{Binding Index}" Width="60" IsReadOnly="True" />
 
-                    <DataGridTextColumn Header="TCP地址" Binding="{Binding TcpAddress}" Width="100">
-                        <DataGridTextColumn.EditingElementStyle>
-                            <Style TargetType="TextBox">
-                                <Setter Property="BorderThickness" Value="0" />
-                            </Style>
-                        </DataGridTextColumn.EditingElementStyle>
-                    </DataGridTextColumn>
+                <DataGridTextColumn Header="TCP地址" Binding="{Binding TcpAddress}" Width="100">
+                    <DataGridTextColumn.EditingElementStyle>
+                        <Style TargetType="TextBox">
+                            <Setter Property="BorderThickness" Value="0" />
+                        </Style>
+                    </DataGridTextColumn.EditingElementStyle>
+                </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="IO点位" Binding="{Binding IoPoint}" Width="100">
-                        <DataGridTextColumn.EditingElementStyle>
-                            <Style TargetType="TextBox">
-                                <Setter Property="BorderThickness" Value="0" />
-                            </Style>
-                        </DataGridTextColumn.EditingElementStyle>
-                    </DataGridTextColumn>
+                <DataGridTextColumn Header="IO点位" Binding="{Binding IoPoint}" Width="100">
+                    <DataGridTextColumn.EditingElementStyle>
+                        <Style TargetType="TextBox">
+                            <Setter Property="BorderThickness" Value="0" />
+                        </Style>
+                    </DataGridTextColumn.EditingElementStyle>
+                </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="映射格口" Binding="{Binding MappingChute}" Width="100">
-                        <DataGridTextColumn.EditingElementStyle>
-                            <Style TargetType="TextBox">
-                                <Setter Property="BorderThickness" Value="0" />
-                            </Style>
-                        </DataGridTextColumn.EditingElementStyle>
-                    </DataGridTextColumn>
+                <DataGridTextColumn Header="映射格口" Binding="{Binding MappingChute}" Width="100">
+                    <DataGridTextColumn.EditingElementStyle>
+                        <Style TargetType="TextBox">
+                            <Setter Property="BorderThickness" Value="0" />
+                        </Style>
+                    </DataGridTextColumn.EditingElementStyle>
+                </DataGridTextColumn>
 
-                    <DataGridTemplateColumn Header="距离当前点位位置" Width="150">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <ui:NumberBox Value="{Binding Distance}"
-                                              Width="120"
-                                              Minimum="0"
-                                              Maximum="10000" />
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="距离当前点位位置" Width="150">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ui:NumberBox Value="{Binding Distance}"
+                                          Width="120"
+                                          Minimum="0"
+                                          Maximum="10000" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
 
-                    <DataGridTextColumn Header="分拣延迟系数(0-1)" Binding="{Binding DelayFactor}" Width="150">
-                        <DataGridTextColumn.EditingElementStyle>
-                            <Style TargetType="TextBox">
-                                <Setter Property="BorderThickness" Value="0" />
-                            </Style>
-                        </DataGridTextColumn.EditingElementStyle>
-                    </DataGridTextColumn>
+                <DataGridTextColumn Header="分拣延迟系数(0-1)" Binding="{Binding DelayFactor}" Width="150">
+                    <DataGridTextColumn.EditingElementStyle>
+                        <Style TargetType="TextBox">
+                            <Setter Property="BorderThickness" Value="0" />
+                        </Style>
+                    </DataGridTextColumn.EditingElementStyle>
+                </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="磁铁吸合时间(ms)" Binding="{Binding MagnetTime}" Width="150">
-                        <DataGridTextColumn.EditingElementStyle>
-                            <Style TargetType="TextBox">
-                                <Setter Property="BorderThickness" Value="0" />
-                            </Style>
-                        </DataGridTextColumn.EditingElementStyle>
-                    </DataGridTextColumn>
+                <DataGridTextColumn Header="磁铁吸合时间(ms)" Binding="{Binding MagnetTime}" Width="150">
+                    <DataGridTextColumn.EditingElementStyle>
+                        <Style TargetType="TextBox">
+                            <Setter Property="BorderThickness" Value="0" />
+                        </Style>
+                    </DataGridTextColumn.EditingElementStyle>
+                </DataGridTextColumn>
 
-                    <DataGridTemplateColumn Width="50">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <ui:Button Appearance="Danger"
-                                           VerticalAlignment="Center"
-                                           HorizontalAlignment="Center"
-                                           Padding="4"
-                                           Command="{Binding DataContext.RemoveItemCommand, 
-                                                 RelativeSource={RelativeSource AncestorType=Page}}"
-                                           CommandParameter="{Binding}">
-                                    <ui:SymbolIcon Symbol="Delete24" FontSize="14" />
-                                </ui:Button>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                </DataGrid.Columns>
-            </DataGrid>
-        </Grid>
-    </Grid>
+                <DataGridTemplateColumn Width="50">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ui:Button Appearance="Danger"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Center"
+                                       Padding="4"
+                                       Command="{Binding DataContext.RemoveItemCommand, 
+                                             RelativeSource={RelativeSource AncestorType=Page}}"
+                                       CommandParameter="{Binding}">
+                                <ui:SymbolIcon Symbol="Delete24" FontSize="14" />
+                            </ui:Button>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+    </StackPanel>
 </Page>

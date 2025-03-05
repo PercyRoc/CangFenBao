@@ -37,5 +37,7 @@ public partial class SettingsDialog
     {
         // 导航到相机设置页面
         RootNavigation?.Navigate(typeof(CameraSettingsView));
+        
+        Log.Information("SettingsDialog已加载，导航到CameraSettingsView");
     }
 }

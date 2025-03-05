@@ -11,8 +11,8 @@
       mc:Ignorable="d"
       Title="分拣设置">
 
-    <ScrollViewer>
-        <StackPanel MaxWidth="500" Margin="16">
+    <Grid>
+        <StackPanel MaxWidth="500" Margin="16" VerticalAlignment="Top">
             <TextBlock Text="分拣设置"
                        Style="{DynamicResource SubtitleTextBlockStyle}"
                        HorizontalAlignment="Center"
@@ -394,5 +394,5 @@
                 </StackPanel>
             </ui:Card>
         </StackPanel>
-    </ScrollViewer>
+    </Grid>
 </Page>

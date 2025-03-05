@@ -43,6 +43,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <!-- App Icon -->
@@ -67,16 +68,7 @@
             </Border>
             <!-- 顶部工具栏 -->
             <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,5">
-                <TextBlock Text="{Binding CurrentEmployeeInfo}"
-                           VerticalAlignment="Center"
-                           Margin="0,0,20,0"
-                           FontWeight="Bold" />
-                <ui:Button Command="{Binding LogoutCommand}"
-                           Appearance="Primary"
-                           ToolTip="登出"
-                           Margin="0,0,10,0">
-                    <ui:SymbolIcon Symbol="SignOut24" Margin="0,0,8,0" />
-                </ui:Button>
+                <!-- 移除了用户信息和登出按钮 -->
             </StackPanel>
             <!-- System Settings Button -->
             <ui:Button Grid.Column="2"
@@ -84,6 +76,8 @@
                        Command="{Binding OpenSettingsCommand}"
                        Margin="0,0,8,0"
                        Padding="8,6"
+                       Background="{StaticResource AccentBrush}"
+                       Foreground="White"
                        ToolTip="System Settings">
                 <StackPanel Orientation="Horizontal">
                     <ui:SymbolIcon Symbol="Settings24" Margin="0,0,8,0" />
@@ -101,31 +95,54 @@
                        FontFamily="微软雅黑"
                        FontWeight="SemiBold"
                        TextOptions.TextFormattingMode="Display"
-                       Foreground="black"
+                       Foreground="{StaticResource TextPrimaryBrush}"
                        TextOptions.TextRenderingMode="ClearType">
                 <TextBlock.Effect>
-                    <DropShadowEffect BlurRadius="4"
-                                      Opacity="0.2"
+                    <DropShadowEffect BlurRadius="2"
+                                      Opacity="0.1"
                                       Direction="270"
                                       ShadowDepth="1" />
                 </TextBlock.Effect>
             </TextBlock>
 
+            <!-- 用户信息和登出按钮 - 移到右侧 -->
+            <StackPanel Grid.Column="4" 
+                        Orientation="Horizontal" 
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        Margin="0,0,10,0">
+                <TextBlock Text="{Binding CurrentEmployeeInfo}"
+                           VerticalAlignment="Center"
+                           Margin="0,0,10,0"
+                           Foreground="{StaticResource TextPrimaryBrush}"
+                           FontWeight="SemiBold" />
+                <ui:Button Command="{Binding LogoutCommand}"
+                           Appearance="Primary"
+                           Margin="0,0,0,0"
+                           Padding="8,4"
+                           Foreground="White"
+                           Background="{StaticResource AccentBrush}">
+                    <StackPanel Orientation="Horizontal">
+                        <ui:SymbolIcon Symbol="SignOut24" Margin="0,0,8,0" />
+                        <TextBlock Text="Logout" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ui:Button>
+            </StackPanel>
+
             <!-- TitleBar -->
-            <ui:TitleBar Grid.Column="4"
+            <ui:TitleBar Grid.Column="5"
                          Title=""
-                         ButtonsForeground="#FF008891"
+                         ButtonsForeground="{StaticResource AccentBrush}"
                          ShowMaximize="True"
                          ShowMinimize="True"
                          ShowClose="True" />
 
             <Border Grid.Column="0"
-                    Grid.ColumnSpan="4"
+                    Grid.ColumnSpan="5"
                     Height="1"
                     VerticalAlignment="Bottom"
-                    Background="#20008080"
-                    BorderBrush="#40FFFFFF"
-                    BorderThickness="0,0,0,1" />
+                    Background="{StaticResource BorderBrush}"
+                    BorderThickness="0" />
         </Grid>
 
         <!-- Main Content Area -->
@@ -159,13 +176,13 @@
                                 <ui:SymbolIcon Symbol="Backpack24"
                                                Width="24"
                                                Height="24"
-                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
                                                VerticalAlignment="Center" />
                                 <TextBlock Text="Real-time Package Information"
                                            Margin="8,0,0,0"
                                            FontSize="16"
                                            FontWeight="SemiBold"
-                                           Foreground="{DynamicResource AccentBrush}"
+                                           Foreground="{StaticResource AccentBrush}"
                                            VerticalAlignment="Center" />
                             </StackPanel>
                         </DockPanel>
@@ -176,7 +193,7 @@
                                        Margin="0,0,0,8"
                                        FontSize="14"
                                        FontWeight="SemiBold"
-                                       Foreground="{DynamicResource AccentBrush}" />
+                                       Foreground="{StaticResource TextPrimaryBrush}" />
 
                             <ui:TextBox Icon="Barcode24"
                                         Text="{Binding CurrentBarcode, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
@@ -270,13 +287,13 @@
                                 <ui:SymbolIcon Symbol="ChartMultiple24"
                                                Width="24"
                                                Height="24"
-                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
                                                VerticalAlignment="Center" />
                                 <TextBlock Text="Statistics Information"
                                            Margin="8,0,0,0"
                                            FontSize="16"
                                            FontWeight="SemiBold"
-                                           Foreground="{DynamicResource AccentBrush}"
+                                           Foreground="{StaticResource AccentBrush}"
                                            VerticalAlignment="Center" />
                             </StackPanel>
                         </DockPanel>
@@ -378,7 +395,7 @@
                                     Margin="0,0,0,8">
                             <ui:SymbolIcon Symbol="Image24"
                                            Margin="0,0,8,0"
-                                           Foreground="{StaticResource AccentBrush}"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
                                            VerticalAlignment="Center" />
                             <TextBlock Text="Real-time Image"
                                        FontSize="16"
@@ -414,6 +431,7 @@
                                     Margin="0,0,0,8">
                             <ui:SymbolIcon Symbol="History24"
                                            Margin="0,0,8,0"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
                                            VerticalAlignment="Center" />
                             <TextBlock Text="Historical Package Information"
                                        Foreground="{StaticResource AccentBrush}"
@@ -456,8 +474,7 @@
 
         <!-- Status Bar -->
         <Border Grid.Row="2"
-                Background="{StaticResource SecondaryBrush}"
-                Opacity="0.8"
+                Background="{StaticResource TitleBarGradient}"
                 BorderBrush="{StaticResource BorderBrush}"
                 BorderThickness="0,1,0,0">
             <Grid>
@@ -477,11 +494,11 @@
                     <ui:SymbolIcon Symbol="DeviceEq24"
                                    FontSize="14"
                                    Margin="0,0,4,0"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                   Foreground="{StaticResource TextSecondaryBrush}" />
                     <TextBlock Text="{Binding SystemStatus.CpuUsage, StringFormat=CPU: {0:F1}%}"
                                VerticalAlignment="Center"
                                FontSize="12"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                               Foreground="{StaticResource TextSecondaryBrush}" />
                 </StackPanel>
 
                 <!-- Memory Status -->
@@ -491,11 +508,11 @@
                     <ui:SymbolIcon Symbol="Memory16"
                                    FontSize="14"
                                    Margin="0,0,4,0"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                   Foreground="{StaticResource TextSecondaryBrush}" />
                     <TextBlock Text="{Binding SystemStatus.MemoryUsage, StringFormat=Memory: {0:F1}%}"
                                VerticalAlignment="Center"
                                FontSize="12"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                               Foreground="{StaticResource TextSecondaryBrush}" />
                 </StackPanel>
 
                 <!-- Disk Status -->
@@ -514,10 +531,10 @@
                                 <ui:SymbolIcon Symbol="HardDrive24"
                                                FontSize="14"
                                                Margin="0,0,4,0"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                               Foreground="{StaticResource TextSecondaryBrush}" />
                                 <TextBlock VerticalAlignment="Center"
                                            FontSize="12"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                           Foreground="{StaticResource TextSecondaryBrush}">
                                     <Run Text="{Binding Name, Mode=OneWay}" />
                                     <Run Text=": " />
                                     <Run Text="{Binding UsagePercentage, StringFormat={}{0:F1}%, Mode=OneWay}" />
@@ -547,9 +564,9 @@
                                 <TextBlock VerticalAlignment="Center"
                                            FontSize="12">
                                     <Run Text="{Binding Name}"
-                                         Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                         Foreground="{StaticResource TextSecondaryBrush}" />
                                     <Run Text=": "
-                                         Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                         Foreground="{StaticResource TextSecondaryBrush}" />
                                     <Run Text="{Binding Status}"
                                          Foreground="{Binding StatusColor}" />
                                 </TextBlock>
@@ -565,10 +582,10 @@
                     <ui:SymbolIcon Symbol="Timer24"
                                    FontSize="14"
                                    Margin="0,0,4,0"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                   Foreground="{StaticResource TextSecondaryBrush}" />
                     <TextBlock VerticalAlignment="Center"
                                FontSize="12"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                               Foreground="{StaticResource TextSecondaryBrush}">
                         <Run Text="Running Time: " />
                         <Run Text="{Binding SystemStatus.RunningTime, Mode=OneWay, StringFormat={}{0:hh\\:mm\\:ss}}" />
                     </TextBlock>

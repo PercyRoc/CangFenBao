@@ -23,7 +23,7 @@ namespace Presentation_ZtCloudWarehous.ViewModels;
 public class MainWindowViewModel: BindableBase, IDisposable
 {
     private readonly ICameraService _cameraService;
-    private readonly ICustomDialogService _dialogService;
+    private readonly IDialogService _dialogService;
     private readonly IAudioService _audioService;
     private readonly IPendulumSortService _sortService;
     private readonly ISettingsService _settingsService;
@@ -61,7 +61,7 @@ public class MainWindowViewModel: BindableBase, IDisposable
     public ObservableCollection<DeviceStatus> DeviceStatuses { get; } = [];
     public ObservableCollection<PackageInfoItem> PackageInfoItems { get; } = [];
 
-    public MainWindowViewModel( ICustomDialogService dialogService,
+    public MainWindowViewModel( IDialogService dialogService,
         ICameraService cameraService,
         PackageTransferService packageTransferService,
         IAudioService audioService, ISettingsService settingsService, IPendulumSortService sortService)
@@ -178,24 +178,32 @@ public class MainWindowViewModel: BindableBase, IDisposable
                 Icon = "Camera24",
                 StatusColor = "#F44336" // 红色表示未连接
             });
-            
-            // 添加聚水潭状态
+
+            // 加载分拣配置
+            var configuration = _settingsService.LoadSettings<SortConfiguration>("SortConfiguration");
+
+            // 添加触发光电状态
             DeviceStatuses.Add(new DeviceStatus
             {
-                Name = "聚水潭",
+                Name = "触发光电",
                 Status = "未连接",
-                Icon = "CloudSync24",
+                Icon = "Lightbulb24",
                 StatusColor = "#F44336" // 红色表示未连接
             });
-            
-            // 添加PLC状态
-            DeviceStatuses.Add(new DeviceStatus
+
+            // 添加分拣光电状态
+            foreach (var photoelectric in configuration.SortingPhotoelectrics)
             {
-                Name = "PLC",
-                Status = "未连接",
-                Icon = "DeviceConnectWired24",
-                StatusColor = "#F44336" // 红色表示未连接
-            });
+                DeviceStatuses.Add(new DeviceStatus
+                {
+                    Name = photoelectric.Name,
+                    Status = "未连接",
+                    Icon = "Lightbulb24",
+                    StatusColor = "#F44336" // 红色表示未连接
+                });
+            }
+
+            Log.Debug("设备状态列表初始化完成，共 {Count} 个设备", DeviceStatuses.Count);
         }
         catch (Exception ex)
         {
@@ -386,7 +394,7 @@ public class MainWindowViewModel: BindableBase, IDisposable
             Log.Error(ex, "更新图像显示时发生错误");
         }
     }
-    
+
     private async void OnPackageInfo(PackageInfo package)
     {
         try

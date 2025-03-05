@@ -8,12 +8,11 @@ public static class ServiceCollectionExtensions
     public static IContainerRegistry AddPresentationCommonServices(this IContainerRegistry services)
     {
         // 注册对话框服务
-        services.RegisterSingleton<ICustomDialogService, CustomDialogService>();
+        services.RegisterSingleton<IDialogService, DialogService>();
 
         // 注册通知服务
         services.RegisterSingleton<INotificationService, NotificationService>();
-        // 注册通知服务
-        services.RegisterSingleton<IDialogService, DialogService>();
+        
         return services;
     }
 }

@@ -40,155 +40,151 @@
         </ResourceDictionary>
     </Page.Resources>
 
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
-                  VerticalScrollBarVisibility="Auto"
-                  HorizontalAlignment="Center">
-        <StackPanel Margin="16">
-            <TextBlock Text="Weight Settings"
-                       HorizontalAlignment="Center"
-                       FontSize="20"
-                       FontWeight="SemiBold"
-                       Margin="0,0,0,16" />
+    <StackPanel Margin="16" VerticalAlignment="Top">
+        <TextBlock Text="Weight Settings"
+                   HorizontalAlignment="Center"
+                   FontSize="20"
+                   FontWeight="SemiBold"
+                   Margin="0,0,0,16" />
 
-            <!-- Weight Configuration -->
-            <ui:Card>
-                <StackPanel Margin="16">
-                    <!-- Weight Fusion Settings -->
-                    <TextBlock Text="Weight Fusion Settings"
-                               FontSize="16"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,16"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+        <!-- Weight Configuration -->
+        <ui:Card>
+            <StackPanel Margin="16">
+                <!-- Weight Fusion Settings -->
+                <TextBlock Text="Weight Fusion Settings"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,16"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
 
-                    <!-- Enable Switch -->
-                    <ui:ToggleSwitch Content="Enable Weight Fusion"
-                                     IsChecked="{Binding Configuration.EnableWeightFusion}"
-                                     Margin="0,0,0,16" />
+                <!-- Enable Switch -->
+                <ui:ToggleSwitch Content="Enable Weight Fusion"
+                                 IsChecked="{Binding Configuration.EnableWeightFusion}"
+                                 Margin="0,0,0,16" />
 
-                    <!-- Weight Type -->
-                    <StackPanel Style="{StaticResource InputContainerStyle}">
-                        <TextBlock Text="Weight Type:"
-                                   Style="{StaticResource LabelStyle}" />
-                        <ComboBox Width="200"
-                                  ItemsSource="{Binding WeightTypes}"
-                                  SelectedItem="{Binding Configuration.WeightType}">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Converter={StaticResource EnumDescriptionConverter}}" />
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                    </StackPanel>
+                <!-- Weight Type -->
+                <StackPanel Style="{StaticResource InputContainerStyle}">
+                    <TextBlock Text="Weight Type:"
+                               Style="{StaticResource LabelStyle}" />
+                    <ComboBox Width="200"
+                              ItemsSource="{Binding WeightTypes}"
+                              SelectedItem="{Binding Configuration.WeightType}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Converter={StaticResource EnumDescriptionConverter}}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
 
-                    <!-- Sample Count (Static Only) -->
-                    <StackPanel Style="{StaticResource InputContainerStyle}"
-                                Visibility="{Binding Configuration.WeightType, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter={x:Static weight:WeightType.Static}}">
-                        <TextBlock Text="Sample Count:"
-                                   Style="{StaticResource LabelStyle}" />
-                        <ui:NumberBox Width="200"
-                                      ClearButtonEnabled="False"
-                                      Value="{Binding Configuration.StableCheckCount, UpdateSourceTrigger=PropertyChanged}"
-                                      Minimum="3"
-                                      Maximum="10"
-                                      PlaceholderText="Enter sample count (3-10)"
-                                      ToolTip="Number of samples needed for stability check, range 3-10" />
-                    </StackPanel>
+                <!-- Sample Count (Static Only) -->
+                <StackPanel Style="{StaticResource InputContainerStyle}"
+                            Visibility="{Binding Configuration.WeightType, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter={x:Static weight:WeightType.Static}}">
+                    <TextBlock Text="Sample Count:"
+                               Style="{StaticResource LabelStyle}" />
+                    <ui:NumberBox Width="200"
+                                  ClearButtonEnabled="False"
+                                  Value="{Binding Configuration.StableCheckCount, UpdateSourceTrigger=PropertyChanged}"
+                                  Minimum="3"
+                                  Maximum="10"
+                                  PlaceholderText="Enter sample count (3-10)"
+                                  ToolTip="Number of samples needed for stability check, range 3-10" />
+                </StackPanel>
 
-                    <!-- Serial Port Settings -->
-                    <TextBlock Text="Serial Port Settings"
-                               FontSize="14"
-                               FontWeight="SemiBold"
-                               Margin="0,8,0,16"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                <!-- Serial Port Settings -->
+                <TextBlock Text="Serial Port Settings"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           Margin="0,8,0,16"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
 
-                    <StackPanel Style="{StaticResource InputContainerStyle}">
-                        <TextBlock Text="Port Name:"
-                                   Style="{StaticResource LabelStyle}" />
-                        <ComboBox Width="200"
-                                  ItemsSource="{Binding PortNames}"
-                                  SelectedItem="{Binding Configuration.SerialPortParams.PortName}" />
-                        <ui:Button Appearance="Secondary"
-                                   Icon="ArrowClockwise24"
-                                   Content="Refresh"
-                                   Command="{Binding RefreshPortsCommand}"
-                                   ToolTip="Refresh available serial ports"
-                                   Padding="12,4"
-                                   Margin="8,0,0,0" />
-                    </StackPanel>
+                <StackPanel Style="{StaticResource InputContainerStyle}">
+                    <TextBlock Text="Port Name:"
+                               Style="{StaticResource LabelStyle}" />
+                    <ComboBox Width="200"
+                              ItemsSource="{Binding PortNames}"
+                              SelectedItem="{Binding Configuration.SerialPortParams.PortName}" />
+                    <ui:Button Appearance="Secondary"
+                               Icon="ArrowClockwise24"
+                               Content="Refresh"
+                               Command="{Binding RefreshPortsCommand}"
+                               ToolTip="Refresh available serial ports"
+                               Padding="12,4"
+                               Margin="8,0,0,0" />
+                </StackPanel>
 
-                    <StackPanel Style="{StaticResource InputContainerStyle}">
-                        <TextBlock Text="Baud Rate:"
-                                   Style="{StaticResource LabelStyle}" />
-                        <ComboBox Width="200"
-                                  ItemsSource="{Binding BaudRates}"
-                                  SelectedItem="{Binding Configuration.SerialPortParams.BaudRate}" />
-                    </StackPanel>
+                <StackPanel Style="{StaticResource InputContainerStyle}">
+                    <TextBlock Text="Baud Rate:"
+                               Style="{StaticResource LabelStyle}" />
+                    <ComboBox Width="200"
+                              ItemsSource="{Binding BaudRates}"
+                              SelectedItem="{Binding Configuration.SerialPortParams.BaudRate}" />
+                </StackPanel>
 
-                    <StackPanel Style="{StaticResource InputContainerStyle}">
-                        <TextBlock Text="Data Bits:"
-                                   Style="{StaticResource LabelStyle}" />
-                        <ComboBox Width="200"
-                                  ItemsSource="{Binding DataBits}"
-                                  SelectedItem="{Binding Configuration.SerialPortParams.DataBits}" />
-                    </StackPanel>
+                <StackPanel Style="{StaticResource InputContainerStyle}">
+                    <TextBlock Text="Data Bits:"
+                               Style="{StaticResource LabelStyle}" />
+                    <ComboBox Width="200"
+                              ItemsSource="{Binding DataBits}"
+                              SelectedItem="{Binding Configuration.SerialPortParams.DataBits}" />
+                </StackPanel>
 
-                    <StackPanel Style="{StaticResource InputContainerStyle}">
-                        <TextBlock Text="Stop Bits:"
-                                   Style="{StaticResource LabelStyle}" />
-                        <ComboBox Width="200"
-                                  ItemsSource="{Binding StopBitOptions}"
-                                  SelectedItem="{Binding Configuration.SerialPortParams.StopBits}">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Converter={StaticResource EnumDescriptionConverter}}" />
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                    </StackPanel>
+                <StackPanel Style="{StaticResource InputContainerStyle}">
+                    <TextBlock Text="Stop Bits:"
+                               Style="{StaticResource LabelStyle}" />
+                    <ComboBox Width="200"
+                              ItemsSource="{Binding StopBitOptions}"
+                              SelectedItem="{Binding Configuration.SerialPortParams.StopBits}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Converter={StaticResource EnumDescriptionConverter}}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
 
-                    <StackPanel Style="{StaticResource InputContainerStyle}">
-                        <TextBlock Text="Parity:"
-                                   Style="{StaticResource LabelStyle}" />
-                        <ComboBox Width="200"
-                                  ItemsSource="{Binding ParityOptions}"
-                                  SelectedItem="{Binding Configuration.SerialPortParams.Parity}">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Converter={StaticResource EnumDescriptionConverter}}" />
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                    </StackPanel>
+                <StackPanel Style="{StaticResource InputContainerStyle}">
+                    <TextBlock Text="Parity:"
+                               Style="{StaticResource LabelStyle}" />
+                    <ComboBox Width="200"
+                              ItemsSource="{Binding ParityOptions}"
+                              SelectedItem="{Binding Configuration.SerialPortParams.Parity}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Converter={StaticResource EnumDescriptionConverter}}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
 
-                    <!-- Time Range Settings -->
-                    <TextBlock Text="Time Range Settings"
-                               FontSize="14"
-                               FontWeight="SemiBold"
-                               Margin="0,8,0,16"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                <!-- Time Range Settings -->
+                <TextBlock Text="Time Range Settings"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           Margin="0,8,0,16"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
 
-                    <StackPanel Style="{StaticResource InputContainerStyle}">
-                        <TextBlock Text="Time Range:"
-                                   Style="{StaticResource LabelStyle}" />
-                        <StackPanel Orientation="Horizontal">
-                            <ui:TextBox Width="100"
-                                        Text="{Binding Configuration.TimeRangeLower, UpdateSourceTrigger=PropertyChanged}"
-                                        PlaceholderText="Min Time" />
-                            <TextBlock Text=" - "
-                                       VerticalAlignment="Center"
-                                       Margin="8,0"
-                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                            <ui:TextBox Width="100"
-                                        Text="{Binding Configuration.TimeRangeUpper, UpdateSourceTrigger=PropertyChanged}"
-                                        PlaceholderText="Max Time" />
-                            <TextBlock Text="ms"
-                                       VerticalAlignment="Center"
-                                       Margin="8,0,0,0"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                        </StackPanel>
+                <StackPanel Style="{StaticResource InputContainerStyle}">
+                    <TextBlock Text="Time Range:"
+                               Style="{StaticResource LabelStyle}" />
+                    <StackPanel Orientation="Horizontal">
+                        <ui:TextBox Width="100"
+                                    Text="{Binding Configuration.TimeRangeLower, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="Min Time" />
+                        <TextBlock Text=" - "
+                                   VerticalAlignment="Center"
+                                   Margin="8,0"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <ui:TextBox Width="100"
+                                    Text="{Binding Configuration.TimeRangeUpper, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="Max Time" />
+                        <TextBlock Text="ms"
+                                   VerticalAlignment="Center"
+                                   Margin="8,0,0,0"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
                 </StackPanel>
-            </ui:Card>
-        </StackPanel>
-    </ScrollViewer>
+            </StackPanel>
+        </ui:Card>
+    </StackPanel>
 </Page>

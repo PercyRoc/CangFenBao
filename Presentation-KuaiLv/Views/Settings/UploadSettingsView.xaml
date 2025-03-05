@@ -27,8 +27,7 @@
     </Page.Resources>
 
     <Grid>
-        <ScrollViewer HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="600">
-            <StackPanel Margin="16">
+        <StackPanel Margin="16" MaxWidth="800" VerticalAlignment="Top">
                 <TextBlock Text="回传设置"
                            HorizontalAlignment="Center"
                            Style="{DynamicResource SubtitleTextBlockStyle}"
@@ -74,6 +73,5 @@
                     </StackPanel>
                 </ui:Card>
             </StackPanel>
-        </ScrollViewer>
     </Grid>
 </Page>
