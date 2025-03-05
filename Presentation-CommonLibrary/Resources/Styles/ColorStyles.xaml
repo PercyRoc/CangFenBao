@@ -6,9 +6,9 @@
     <Color x:Key="AccentBlue">#007AFF</Color>       <!-- 现代蓝 (类似iOS) -->
     <Color x:Key="AccentColor">#2563EB</Color>      <!-- 主强调色 (类似Tailwind蓝) -->
     <Color x:Key="SecondaryDark">#334155</Color>    <!-- 更现代的深灰蓝 -->
-    <Color x:Key="BackgroundLight">#F8FAFC</Color>  <!-- 浅灰背景 -->
+    <Color x:Key="BackgroundLight">#EEF2F7</Color>  <!-- 调整为更深的浅灰背景 -->
     <Color x:Key="SurfaceColor">#FFFFFF</Color>     <!-- 表面色 -->
-    <Color x:Key="BorderColor">#E2E8F0</Color>      <!-- 边框色 -->
+    <Color x:Key="BorderColor">#CBD5E1</Color>      <!-- 加深边框色 -->
     <Color x:Key="TextPrimary">#1E293B</Color>      <!-- 主文本色 -->
     <Color x:Key="TextSecondary">#64748B</Color>    <!-- 次文本色 -->
 
@@ -20,12 +20,12 @@
 
     <!-- 全局背景 - 更简洁的背景 -->
     <LinearGradientBrush x:Key="MainBackground" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#F8FAFC" Offset="0" />     <!-- 浅灰背景开始 -->
-        <GradientStop Color="#F1F5F9" Offset="1" />     <!-- 浅灰背景结束 -->
+        <GradientStop Color="#E5EAF2" Offset="0" />     <!-- 加深浅灰背景开始 -->
+        <GradientStop Color="#D8E1EB" Offset="1" />     <!-- 加深浅灰背景结束 -->
     </LinearGradientBrush>
 
     <!-- 功能区域配色 -->
-    <SolidColorBrush x:Key="CardBackground" Color="#FFFFFF" />        <!-- 纯白卡片背景 -->
+    <SolidColorBrush x:Key="CardBackground" Color="#FFFFFF" />        <!-- 保持纯白卡片背景 -->
     <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />  <!-- 边框颜色 -->
     <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />  <!-- 强调色 -->
     <SolidColorBrush x:Key="SecondaryBrush" Color="{StaticResource SecondaryDark}" />  <!-- 次要色 -->
@@ -48,10 +48,10 @@
         <Setter Property="Margin" Value="4" />
         <Setter Property="Effect">
             <Setter.Value>
-                <DropShadowEffect BlurRadius="12"
-                                  Opacity="0.08" 
+                <DropShadowEffect BlurRadius="14"
+                                  Opacity="0.15" 
                                   Direction="270"
-                                  ShadowDepth="2"
+                                  ShadowDepth="3"
                                   Color="#000000" />
             </Setter.Value>
         </Setter>
