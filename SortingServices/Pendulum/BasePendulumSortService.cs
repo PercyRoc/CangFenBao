@@ -114,6 +114,17 @@ public abstract class BasePendulumSortService : IPendulumSortService
             var currentTime = DateTime.Now;
             var tempTriggerTimesList = _triggerTimes.ToList();
             
+            // 记录当前时间和触发时间队列状态
+            Log.Information("当前时间: {CurrentTime:HH:mm:ss.fff}, 触发时间队列中有 {Count} 个时间戳待匹配", 
+                currentTime, tempTriggerTimesList.Count);
+            
+            if (tempTriggerTimesList.Count != 0)
+            {
+                Log.Information("触发时间队列内容: {Times}", 
+                    string.Join(", ", tempTriggerTimesList.Select(t => 
+                        $"{t:HH:mm:ss.fff}[延迟:{(currentTime - t).TotalMilliseconds:F0}ms]")));
+            }
+            
             // 清空原队列，准备重建
             _triggerTimes.Clear();
             
@@ -130,13 +141,16 @@ public abstract class BasePendulumSortService : IPendulumSortService
                 // 如果延迟已经超过上限，则将剩余时间戳全部重新入队
                 if (delay > Configuration.TriggerPhotoelectric.TimeRangeUpper)
                 {
-                    // 当前时间戳太早，直接跳过
+                    Log.Debug("触发时间 {TriggerTime:HH:mm:ss.fff} 延迟 {Delay:F0}ms 超过上限 {Upper}ms，跳过", 
+                        triggerTime, delay, Configuration.TriggerPhotoelectric.TimeRangeUpper);
                     continue;
                 }
                 
                 // 如果延迟小于下限，说明后面的时间戳更新，不可能匹配，提前结束查找
                 if (delay < Configuration.TriggerPhotoelectric.TimeRangeLower)
                 {
+                    Log.Debug("触发时间 {TriggerTime:HH:mm:ss.fff} 延迟 {Delay:F0}ms 小于下限 {Lower}ms，重新入队", 
+                        triggerTime, delay, Configuration.TriggerPhotoelectric.TimeRangeLower);
                     // 将当前和剩余的时间戳重新入队
                     _triggerTimes.Enqueue(triggerTime);
                     continue;
@@ -149,8 +163,9 @@ public abstract class BasePendulumSortService : IPendulumSortService
                 {
                     matchedTriggerTime = triggerTime;
                     found = true;
-                    Log.Information("包裹 {Barcode}(序号:{Index}) 匹配到触发时间 {TriggerTime:HH:mm:ss.fff}，延迟 {Delay}ms", 
+                    Log.Information("包裹 {Barcode}(序号:{Index}) 匹配到触发时间 {TriggerTime:HH:mm:ss.fff}，延迟 {Delay:F0}ms", 
                         package.Barcode, package.Index, triggerTime, delay);
+                    package.ProcessingTime = delay;
                     continue;
                 }
                 
@@ -167,7 +182,16 @@ public abstract class BasePendulumSortService : IPendulumSortService
                     Configuration.TriggerPhotoelectric.TimeRangeLower,
                     Configuration.TriggerPhotoelectric.TimeRangeUpper);
             }
-            package.SetError("触发时间范围设置需要调整");
+            
+            // 记录重建后的队列状态
+            var remainingTimes = _triggerTimes.ToList();
+            if (remainingTimes.Count != 0)
+            {
+                Log.Debug("重建后的触发时间队列（{Count}个）: {Times}", 
+                    remainingTimes.Count,
+                    string.Join(", ", remainingTimes.Select(t => t.ToString("HH:mm:ss.fff"))));
+            }
+            
             if (matchedTriggerTime.HasValue && !found)
             {
                 Log.Warning("尝试从触发时间队列中移除时间戳 {TriggerTime}，但未找到", matchedTriggerTime.Value);
@@ -190,18 +214,16 @@ public abstract class BasePendulumSortService : IPendulumSortService
             
             // 获取对应分拣光电的配置
             var photoelectricName = GetPhotoelectricNameBySlot(package.ChuteName);
-            if (photoelectricName != null)
-            {
-                var photoelectricConfig = GetPhotoelectricConfig(photoelectricName);
-                // 设置超时时间为时间范围上限 + 500ms
-                timer.Interval = photoelectricConfig.SortingTimeRangeUpper + 500;
-                timer.AutoReset = false;
-                PackageTimers[package.Index] = timer;
-                timer.Start();
+            if (photoelectricName == null) return;
+            var photoelectricConfig = GetPhotoelectricConfig(photoelectricName);
+            // 设置超时时间为时间范围上限 + 500ms
+            timer.Interval = photoelectricConfig.TimeRangeUpper + 500;
+            timer.AutoReset = false;
+            PackageTimers[package.Index] = timer;
+            timer.Start();
                 
-                Log.Debug("包裹 {Barcode}(序号:{Index}) 设置超时时间 {Timeout}ms", 
-                    package.Barcode, package.Index, timer.Interval);
-            }
+            Log.Debug("包裹 {Barcode}(序号:{Index}) 设置超时时间 {Timeout}ms", 
+                package.Barcode, package.Index, timer.Interval);
         }
         else
         {
@@ -407,7 +429,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// <summary>
     /// 标记包裹为处理中
     /// </summary>
-    protected void MarkPackageAsProcessing(string barcode, string photoelectricId)
+    private void MarkPackageAsProcessing(string barcode, string photoelectricId)
     {
         ProcessingPackages[barcode] = new ProcessingStatus
         {
@@ -422,26 +444,33 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// </summary>
     private void HandleTriggerPhotoelectric(string data)
     {
-        if (data != "+OCCH1:1") return;
-        
         // 记录触发时间
         var triggerTime = DateTime.Now;
-        Log.Debug("收到触发光电信号，记录触发时间 {TriggerTime:HH:mm:ss.fff}", triggerTime);
+        Log.Information("收到触发光电信号 {Signal}，记录触发时间 {TriggerTime:HH:mm:ss.fff}", data, triggerTime);
         
         lock (_triggerTimes)
         {
             _triggerTimes.Enqueue(triggerTime);
+            Log.Information("触发时间已入队，当前队列长度: {Count}", _triggerTimes.Count);
             
             // 如果队列中的时间戳太多，移除最早的
             while (_triggerTimes.Count > 100)
             {
-                _triggerTimes.Dequeue();
-                Log.Warning("触发时间队列已满，移除最早的时间戳");
+                var removed = _triggerTimes.Dequeue();
+                Log.Warning("触发时间队列已满，移除最早的时间戳: {RemovedTime:HH:mm:ss.fff}", removed);
+            }
+
+            // 打印当前队列中的所有触发时间
+            var times = _triggerTimes.ToList();
+            if (times.Count != 0)
+            {
+                Log.Information("当前触发时间队列：{Times}", 
+                    string.Join(", ", times.Select(t => t.ToString("HH:mm:ss.fff"))));
             }
         }
         
         // 计算并记录触发延迟
-        var delay = (triggerTime - DateTime.Now).TotalMilliseconds;
+        var delay = (DateTime.Now - triggerTime).TotalMilliseconds;
         _triggerDelays.Enqueue(delay);
         
         // 保持延迟队列在合理大小
@@ -461,11 +490,11 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// </summary>
     protected void HandlePhotoelectricSignal(string data)
     {
-        if (data == "+OCCH1:1")
+        if (data.Contains("OCCH1:1"))
         {
             HandleTriggerPhotoelectric(data);
         }
-        else if (data == "+OCCH2:1")
+        else if (data.Contains("OCCH2:1"))
         {
             HandleSecondPhotoelectric(data);
         }
@@ -512,13 +541,13 @@ public abstract class BasePendulumSortService : IPendulumSortService
             
         // 验证时间延迟
         var delay = (currentTime - package.TriggerTimestamp).TotalMilliseconds;
-        if (delay < photoelectricConfig.SortingTimeRangeLower ||
-            delay > photoelectricConfig.SortingTimeRangeUpper)
+        if (delay < photoelectricConfig.TimeRangeLower ||
+            delay > photoelectricConfig.TimeRangeUpper)
         {
             Log.Debug("包裹 {Barcode}(序号:{Index}) 分拣时间延迟验证失败，延迟:{Delay}ms，允许范围:{Lower}-{Upper}ms",
                 package.Barcode, package.Index, delay,
-                photoelectricConfig.SortingTimeRangeLower,
-                photoelectricConfig.SortingTimeRangeUpper);
+                photoelectricConfig.TimeRangeLower,
+                photoelectricConfig.TimeRangeUpper);
             return null;
         }
 
@@ -597,7 +626,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
                 {
                     // 先回正再摆动
                     var resetCommand = GetCommandBytes(PendulumCommands.Module2.ResetLeft);
-                    await client.SendAsync(resetCommand);
+                    client.Send(resetCommand);
                     await Task.Delay(photoelectricConfig.ResetDelay);
 
                     command = PendulumCommands.Module2.SwingLeft;
@@ -615,7 +644,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
                 {
                     // 先回正再摆动
                     var resetCommand = GetCommandBytes(PendulumCommands.Module2.ResetRight);
-                    await client.SendAsync(resetCommand);
+                    client.Send(resetCommand);
                     await Task.Delay(photoelectricConfig.ResetDelay);
 
                     command = PendulumCommands.Module2.SwingRight;
@@ -634,7 +663,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
             if (!string.IsNullOrEmpty(command))
             {
                 var commandBytes = GetCommandBytes(command);
-                await client.SendAsync(commandBytes);
+                client.Send(commandBytes);
                 Log.Debug("已发送分拣命令到分拣光电 {Name}: {Command}", photoelectricName, command);
             }
 
@@ -651,7 +680,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
                     AutoReset = false
                 };
                 
-                resetTimer.Elapsed += async (_, _) =>
+                resetTimer.Elapsed += (_, _) =>
                 {
                     resetTimer.Stop();
                     try
@@ -684,7 +713,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
                             ? GetCommandBytes(PendulumCommands.Module2.ResetLeft)
                             : GetCommandBytes(PendulumCommands.Module2.ResetRight);
 
-                        await client.SendAsync(resetCommand);
+                        client.Send(resetCommand);
                         pendulumState.SetReset();
                         Log.Debug("已发送回正命令到分拣光电 {Name}，当前无相同格口的待分拣包裹", photoelectricName);
                     }

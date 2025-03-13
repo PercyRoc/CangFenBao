@@ -1,15 +1,9 @@
-using Common.Models;
 using Common.Models.Package;
 
 namespace Presentation_Modules.Services;
 
 public interface IModuleConnectionService
 {
-    /// <summary>
-    ///     获取当前连接状态
-    /// </summary>
-    bool IsConnected { get; }
-
     /// <summary>
     ///     启动TCP服务端
     /// </summary>

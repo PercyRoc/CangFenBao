@@ -6,7 +6,7 @@
         <RootNamespace>Presentation_ZtCloudWarehous</RootNamespace>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
-        <ApplicationIcon>..\Presentation-CommonLibrary\Resources\Icon\logo.ico</ApplicationIcon>
+        <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
         <UseWPF>true</UseWPF>
     </PropertyGroup>
 

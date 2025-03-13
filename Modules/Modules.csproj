@@ -28,6 +28,7 @@
         <ProjectReference Include="..\Common\Common.csproj" />
         <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>
         <ProjectReference Include="..\SharedUI\SharedUI.csproj" />
+        <ProjectReference Include="..\SortingServices\SortingServices.csproj" />
     </ItemGroup>
 
     <ItemGroup>

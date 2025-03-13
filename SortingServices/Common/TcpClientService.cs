@@ -18,10 +18,11 @@ public class TcpClientService : IDisposable
     private bool _isConnected;
     private bool _disposed;
     private readonly CancellationTokenSource _cts = new();
-    private Task? _receiveTask;
-    private Task? _reconnectTask;
+    private Thread? _receiveThread;
+    private Thread? _reconnectThread;
     private bool _autoReconnect;
     private const int ReconnectInterval = 5000; // 重连间隔，单位毫秒
+    private readonly object _lockObject = new();
 
     /// <summary>
     /// 创建TCP客户端服务
@@ -45,22 +46,53 @@ public class TcpClientService : IDisposable
     /// <summary>
     /// 连接到设备
     /// </summary>
-    public async Task ConnectAsync()
+    public void Connect(int timeoutMs = 5000)
     {
         if (_isConnected) return;
 
         try
         {
-            _client = new TcpClient();
-            await _client.ConnectAsync(_ipAddress, _port);
-            _stream = _client.GetStream();
-            _isConnected = true;
-            _connectionStatusCallback(true);
+            lock (_lockObject)
+            {
+                _client = new TcpClient();
+                
+                // 设置连接超时
+                var result = _client.BeginConnect(_ipAddress, _port, null, null);
+                if (!result.AsyncWaitHandle.WaitOne(timeoutMs))
+                {
+                    _client.Close();
+                    throw new TimeoutException($"连接超时: {_deviceName}");
+                }
+                
+                _client.EndConnect(result);
 
-            // 启动接收数据的任务
-            _receiveTask = Task.Run(ReceiveDataAsync, _cts.Token);
+                // 验证连接是否真正建立
+                if (!_client.Connected)
+                {
+                    throw new Exception("TCP连接未成功建立");
+                }
 
-            Log.Information("已连接到设备 {DeviceName} ({IpAddress}:{Port})", _deviceName, _ipAddress, _port);
+                // 获取网络流并验证是否可读写
+                _stream = _client.GetStream();
+                if (!_stream.CanRead || !_stream.CanWrite)
+                {
+                    throw new Exception("网络流不可读写");
+                }
+
+                // 启动接收数据的线程
+                _receiveThread = new Thread(ReceiveData)
+                {
+                    IsBackground = true,
+                    Name = $"Receive-{_deviceName}"
+                };
+                _receiveThread.Start();
+
+                // 确保所有初始化完成后再设置连接状态和触发回调
+                _isConnected = true;
+                _connectionStatusCallback(true);
+
+                Log.Information("已连接到设备 {DeviceName} ({IpAddress}:{Port})", _deviceName, _ipAddress, _port);
+            }
         }
         catch (Exception ex)
         {
@@ -68,10 +100,19 @@ public class TcpClientService : IDisposable
             _connectionStatusCallback(false);
             Log.Error(ex, "连接设备 {DeviceName} ({IpAddress}:{Port}) 失败", _deviceName, _ipAddress, _port);
             
-            // 启动自动重连
+            // 清理资源
+            lock (_lockObject)
+            {
+                _stream?.Dispose();
+                _client?.Dispose();
+                _stream = null;
+                _client = null;
+            }
+
+            // 如果不是初始连接，则启动自动重连
             if (_autoReconnect && !_disposed)
             {
-                StartReconnectTask();
+                StartReconnectThread();
             }
             else
             {
@@ -81,65 +122,68 @@ public class TcpClientService : IDisposable
     }
 
     /// <summary>
-    /// 启动重连任务
+    /// 启动重连线程
     /// </summary>
-    private void StartReconnectTask()
+    private void StartReconnectThread()
     {
-        if (_reconnectTask is { IsCompleted: false })
+        if (_reconnectThread?.IsAlive == true)
         {
-            return; // 已有重连任务在运行
+            return; // 已有重连线程在运行
         }
 
-        _reconnectTask = Task.Run(async () =>
+        _reconnectThread = new Thread(() =>
         {
             Log.Information("启动设备 {DeviceName} 的自动重连任务", _deviceName);
             
-            while (!_isConnected && !_disposed && _autoReconnect)
+            int retryCount = 0;
+            const int maxRetries = 5; // 最大重试次数
+            
+            while (!_isConnected && !_disposed && _autoReconnect && retryCount < maxRetries)
             {
                 try
                 {
-                    Log.Information("尝试重新连接设备 {DeviceName} ({IpAddress}:{Port})", _deviceName, _ipAddress, _port);
-                    
-                    _client?.Dispose();
-                    _stream?.Dispose();
-                    
-                    _client = new TcpClient();
-                    await _client.ConnectAsync(_ipAddress, _port);
-                    _stream = _client.GetStream();
-                    _isConnected = true;
-                    _connectionStatusCallback(true);
+                    Log.Information("尝试重新连接设备 {DeviceName} ({IpAddress}:{Port}), 第 {RetryCount} 次尝试", 
+                        _deviceName, _ipAddress, _port, retryCount + 1);
 
-                    // 启动接收数据的任务
-                    _receiveTask = Task.Run(ReceiveDataAsync, _cts.Token);
+                    lock (_lockObject)
+                    {
+                        _client?.Dispose();
+                        _stream?.Dispose();
+                        _client = null;
+                        _stream = null;
+                    }
 
-                    Log.Information("已重新连接到设备 {DeviceName} ({IpAddress}:{Port})", _deviceName, _ipAddress, _port);
+                    Connect(5000); // 5秒连接超时
                     return; // 连接成功，退出重连循环
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "重新连接设备 {DeviceName} ({IpAddress}:{Port}) 失败，{Interval}秒后重试", 
-                        _deviceName, _ipAddress, _port, ReconnectInterval / 1000);
+                    retryCount++;
+                    Log.Error(ex, "重新连接设备 {DeviceName} ({IpAddress}:{Port}) 失败", _deviceName, _ipAddress, _port);
                     
-                    // 等待一段时间后重试
-                    try
-                    {
-                        await Task.Delay(ReconnectInterval, _cts.Token);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        // 取消操作，退出重连循环
-                        return;
-                    }
+                    // 使用指数退避算法计算等待时间
+                    var delayMs = Math.Min(ReconnectInterval * Math.Pow(2, retryCount), 30000); // 最大等待30秒
+                    Thread.Sleep((int)delayMs);
                 }
             }
-        }, _cts.Token);
+
+            if (retryCount >= maxRetries)
+            {
+                Log.Error("设备 {DeviceName} 重连失败次数达到上限 {MaxRetries}，停止重连", _deviceName, maxRetries);
+            }
+        })
+        {
+            IsBackground = true,
+            Name = $"Reconnect-{_deviceName}"
+        };
+
+        _reconnectThread.Start();
     }
 
     /// <summary>
     /// 发送数据到设备
     /// </summary>
-    /// <param name="data">要发送的数据</param>
-    public async Task SendAsync(byte[] data)
+    public void Send(byte[] data)
     {
         if (!_isConnected || _stream == null)
         {
@@ -148,8 +192,11 @@ public class TcpClientService : IDisposable
 
         try
         {
-            await _stream.WriteAsync(data);
-            await _stream.FlushAsync();
+            lock (_lockObject)
+            {
+                _stream.Write(data, 0, data.Length);
+                _stream.Flush();
+            }
         }
         catch (Exception ex)
         {
@@ -160,7 +207,7 @@ public class TcpClientService : IDisposable
             // 启动自动重连
             if (_autoReconnect && !_disposed)
             {
-                StartReconnectTask();
+                StartReconnectThread();
             }
             
             throw;
@@ -168,17 +215,17 @@ public class TcpClientService : IDisposable
     }
 
     /// <summary>
-    /// 接收数据的任务
+    /// 接收数据的线程方法
     /// </summary>
-    private async Task ReceiveDataAsync()
+    private void ReceiveData()
     {
         var buffer = new byte[1024];
 
-        while (!_cts.Token.IsCancellationRequested && _isConnected && _stream != null)
+        while (!_disposed && _isConnected && _stream != null)
         {
             try
             {
-                var bytesRead = await _stream.ReadAsync(buffer, _cts.Token);
+                var bytesRead = _stream.Read(buffer, 0, buffer.Length);
                 if (bytesRead == 0)
                 {
                     // 连接已关闭
@@ -188,7 +235,7 @@ public class TcpClientService : IDisposable
                     // 启动自动重连
                     if (_autoReconnect && !_disposed)
                     {
-                        StartReconnectTask();
+                        StartReconnectThread();
                     }
                     
                     break;
@@ -198,13 +245,10 @@ public class TcpClientService : IDisposable
                 Array.Copy(buffer, data, bytesRead);
                 _dataReceivedCallback(data);
             }
-            catch (OperationCanceledException)
-            {
-                // 取消操作，正常退出
-                break;
-            }
             catch (Exception ex)
             {
+                if (_disposed) break;
+                
                 _isConnected = false;
                 _connectionStatusCallback(false);
                 Log.Error(ex, "从设备 {DeviceName} 接收数据失败", _deviceName);
@@ -212,7 +256,7 @@ public class TcpClientService : IDisposable
                 // 启动自动重连
                 if (_autoReconnect && !_disposed)
                 {
-                    StartReconnectTask();
+                    StartReconnectThread();
                 }
                 
                 break;
@@ -227,17 +271,19 @@ public class TcpClientService : IDisposable
     {
         if (!_isConnected) return;
 
-        _isConnected = false;
-        _connectionStatusCallback(false);
-        _stream?.Close();
-        _client?.Close();
-        Log.Information("已断开与设备 {DeviceName} 的连接", _deviceName);
+        lock (_lockObject)
+        {
+            _isConnected = false;
+            _connectionStatusCallback(false);
+            _stream?.Close();
+            _client?.Close();
+            Log.Information("已断开与设备 {DeviceName} 的连接", _deviceName);
+        }
     }
 
     /// <summary>
     /// 获取连接状态
     /// </summary>
-    /// <returns>是否已连接</returns>
     public bool IsConnected()
     {
         return _isConnected;
@@ -246,7 +292,6 @@ public class TcpClientService : IDisposable
     /// <summary>
     /// 设置是否自动重连
     /// </summary>
-    /// <param name="autoReconnect">是否自动重连</param>
     public void SetAutoReconnect(bool autoReconnect)
     {
         _autoReconnect = autoReconnect;
@@ -264,7 +309,6 @@ public class TcpClientService : IDisposable
     /// <summary>
     /// 释放资源
     /// </summary>
-    /// <param name="disposing">是否释放托管资源</param>
     private void Dispose(bool disposing)
     {
         if (_disposed) return;
@@ -275,31 +319,29 @@ public class TcpClientService : IDisposable
             _cts.Cancel();
             Disconnect();
             
-            // 等待接收任务完成
-            if (_receiveTask is { IsCompleted: false })
+            // 等待接收线程结束
+            if (_receiveThread?.IsAlive == true)
             {
                 try
                 {
-                    // 尝试等待任务完成，但设置超时以避免无限等待
-                    _receiveTask.Wait(TimeSpan.FromSeconds(3));
+                    _receiveThread.Join(3000); // 等待最多3秒
                 }
-                catch (AggregateException)
+                catch (ThreadStateException)
                 {
-                    // 忽略任务取消异常
+                    // 忽略线程状态异常
                 }
             }
             
-            // 等待重连任务完成
-            if (_reconnectTask is { IsCompleted: false })
+            // 等待重连线程结束
+            if (_reconnectThread?.IsAlive == true)
             {
                 try
                 {
-                    // 尝试等待任务完成，但设置超时以避免无限等待
-                    _reconnectTask.Wait(TimeSpan.FromSeconds(3));
+                    _reconnectThread.Join(3000); // 等待最多3秒
                 }
-                catch (AggregateException)
+                catch (ThreadStateException)
                 {
-                    // 忽略任务取消异常
+                    // 忽略线程状态异常
                 }
             }
             

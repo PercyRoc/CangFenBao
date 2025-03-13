@@ -9,6 +9,8 @@ using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Camera.DaHua;
 using DeviceService.DataSourceDevices.Services;
+using Presentation_ZtCloudWarehous.Models;
+using Presentation_ZtCloudWarehous.Services;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
@@ -26,6 +28,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly IDialogService _dialogService;
     private readonly ISettingsService _settingsService;
     private readonly IPendulumSortService _sortService;
+    private readonly IWeighingService _weighingService;
+    private readonly INotificationService _notificationService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
     private string _currentBarcode = string.Empty;
@@ -37,13 +41,18 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     public MainWindowViewModel(IDialogService dialogService,
         ICameraService cameraService,
-        PackageTransferService packageTransferService, ISettingsService settingsService,
-        IPendulumSortService sortService)
+        PackageTransferService packageTransferService, 
+        ISettingsService settingsService,
+        IPendulumSortService sortService,
+        IWeighingService weighingService,
+        INotificationService notificationService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
         _settingsService = settingsService;
         _sortService = sortService;
+        _weighingService = weighingService;
+        _notificationService = notificationService;
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
 
         // 初始化系统状态更新定时器
@@ -399,13 +408,41 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    private void OnPackageInfo(PackageInfo package)
+    private async void OnPackageInfo(PackageInfo package)
     {
         try
         {
             // 设置包裹序号
             package.Index = Interlocked.Increment(ref _currentPackageIndex);
             Log.Information("收到包裹信息：{Barcode}, 序号：{Index}", package.Barcode, package.Index);
+
+            // 发送称重数据
+            try
+            {
+                var request = new WeighingRequest
+                {
+                    WaybillCode = package.Barcode,
+                    ActualWeight = Convert.ToDecimal(package.Weight),
+                    ActualVolume = package.Volume.HasValue ? Convert.ToDecimal(package.Volume.Value) : null
+                };
+
+                var response = await _weighingService.SendWeightDataAsync(request);
+                if (!response.Success)
+                {
+                    Log.Warning("上传称重数据失败: Code={Code}, Message={Message}", response.Code, response.Message);
+                    _notificationService.ShowWarning($"上传称重数据失败: {response.Message}");
+                }
+                else
+                {
+                    Log.Information("成功上传称重数据: {Barcode}", package.Barcode);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "上传称重数据时发生错误: {Barcode}", package.Barcode);
+                _notificationService.ShowError($"上传称重数据失败: {ex.Message}");
+            }
+
             // 更新UI
             Application.Current.Dispatcher.Invoke(() =>
             {
@@ -421,7 +458,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     Log.Error(ex, "更新UI时发生错误");
                 }
             });
+
             _sortService.ProcessPackage(package);
+
             Application.Current.Dispatcher.Invoke(() =>
             {
                 try
@@ -536,16 +575,39 @@ public class MainWindowViewModel : BindableBase, IDisposable
         if (disposing)
             try
             {
-                // 停止定时器
-                _timer.Stop();
+                // 停止定时器（UI线程操作）
+                if (Application.Current != null && !Application.Current.Dispatcher.CheckAccess())
+                {
+                    Application.Current.Dispatcher.Invoke(() => _timer.Stop());
+                }
+                else
+                {
+                    _timer.Stop();
+                }
 
-                // 取消事件订阅
-                _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
-// 停止分拣服务
+                // 停止分拣服务
                 if (_sortService.IsRunning())
                 {
-                    _sortService.StopAsync().Wait();
-                    Log.Information("摆轮分拣服务已停止");
+                    try
+                    {
+                        // 使用超时避免无限等待
+                        var stopTask = _sortService.StopAsync();
+                        var timeoutTask = Task.Delay(TimeSpan.FromSeconds(5));
+                        var completedTask = Task.WhenAny(stopTask, timeoutTask).Result;
+
+                        if (completedTask == stopTask)
+                        {
+                            Log.Information("摆轮分拣服务已停止");
+                        }
+                        else
+                        {
+                            Log.Warning("摆轮分拣服务停止超时");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "停止摆轮分拣服务时发生错误");
+                    }
                 }
 
                 // 释放分拣服务资源
@@ -557,8 +619,20 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                 // 取消订阅事件
                 _sortService.DeviceConnectionStatusChanged -= OnDeviceConnectionStatusChanged;
+                _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
+
                 // 释放订阅
-                foreach (var subscription in _subscriptions) subscription.Dispose();
+                foreach (var subscription in _subscriptions)
+                {
+                    try
+                    {
+                        subscription.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "释放订阅时发生错误");
+                    }
+                }
                 _subscriptions.Clear();
             }
             catch (Exception ex)

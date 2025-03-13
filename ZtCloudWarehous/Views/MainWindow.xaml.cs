@@ -2,6 +2,7 @@
 using System.Windows;
 using System.Windows.Input;
 using Common.Services.Ui;
+using Presentation_ZtCloudWarehous.ViewModels;
 using Serilog;
 
 namespace Presentation_ZtCloudWarehous.Views;
@@ -49,6 +50,25 @@ public partial class MainWindow
                 MessageBoxImage.Question);
 
             if (result != MessageBoxResult.Yes) return;
+
+            // 释放MainWindowViewModel
+            if (DataContext is MainWindowViewModel viewModel)
+            {
+                // 在后台线程中执行Dispose操作，避免UI线程阻塞
+                await Task.Run(() => 
+                {
+                    try
+                    {
+                        viewModel.Dispose();
+                        Log.Information("主窗口ViewModel已释放");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "释放ViewModel时发生错误");
+                    }
+                });
+            }
+
             e.Cancel = false;
             Application.Current.Shutdown();
         }

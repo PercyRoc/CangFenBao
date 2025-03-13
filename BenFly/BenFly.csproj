@@ -8,7 +8,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
         <AssemblyName>仓分宝-笨鸟</AssemblyName>
-        <ApplicationIcon>..\Presentation-CommonLibrary\Resources\Icon\logo.ico</ApplicationIcon>
+        <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
     </PropertyGroup>
 
     <ItemGroup>

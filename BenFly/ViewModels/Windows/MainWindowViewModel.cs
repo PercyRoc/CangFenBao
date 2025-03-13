@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -15,7 +16,9 @@ using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Scanner;
 using DeviceService.DataSourceDevices.Services;
+using Presentation_BenFly.Models.Settings;
 using Presentation_BenFly.Services;
+using Presentation_BenFly.Services.Belt;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
@@ -34,6 +37,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly IScannerService _scannerService;
     private readonly ISettingsService _settingsService;
     private readonly IPendulumSortService _sortService;
+    private readonly IBeltSerialService _beltSerialService;
     private readonly List<IDisposable> _subscriptions = [];
 
     private readonly DispatcherTimer _timer;
@@ -55,7 +59,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
         IPendulumSortService sortService,
         PackageTransferService packageTransferService,
         BenNiaoPackageService benNiaoService,
-        ScannerStartupService scannerStartupService)
+        ScannerStartupService scannerStartupService,
+        IBeltSerialService beltSerialService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
@@ -63,6 +68,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _sortService = sortService;
         _benNiaoService = benNiaoService;
         _scannerService = scannerStartupService.GetScannerService();
+        _beltSerialService = beltSerialService;
 
         // 订阅扫码枪事件
         _scannerService.BarcodeScanned += OnBarcodeScannerScanned;
@@ -92,6 +98,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         // 订阅相机连接状态事件
         _cameraService.ConnectionChanged += OnCameraConnectionChanged;
+
+        // 订阅串口连接状态事件
+        _beltSerialService.ConnectionStatusChanged += OnBeltConnectionStatusChanged;
 
         // 订阅包裹流
         _subscriptions.Add(packageTransferService.PackageStream
@@ -207,6 +216,16 @@ public class MainWindowViewModel : BindableBase, IDisposable
             });
             Log.Debug("已添加相机状态");
 
+            // 添加皮带状态
+            DeviceStatuses.Add(new DeviceStatus
+            {
+                Name = "皮带",
+                Status = "未连接",
+                Icon = "ConveyorBelt",
+                StatusColor = "#F44336"
+            });
+            Log.Debug("已添加皮带状态");
+
             // 获取分拣配置
             var sortConfig = _settingsService.LoadSettings<PendulumSortConfig>();
             Log.Debug("已加载分拣配置，光电数量: {Count}", sortConfig.SortingPhotoelectrics.Count);
@@ -251,11 +270,31 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 deviceStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
                 Log.Debug("已更新设备初始状态: {Name} -> {Status}", deviceName, deviceStatus.Status);
             }
+
+            // 更新皮带初始状态
+            UpdateBeltStatus(_beltSerialService.IsOpen);
         }
         catch (Exception ex)
         {
             Log.Error(ex, "初始化设备状态列表时发生错误");
         }
+    }
+
+    private void OnBeltConnectionStatusChanged(object? sender, bool isConnected)
+    {
+        UpdateBeltStatus(isConnected);
+    }
+
+    private void UpdateBeltStatus(bool isConnected)
+    {
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            var beltStatus = DeviceStatuses.FirstOrDefault(x => x.Name == "皮带");
+            if (beltStatus == null) return;
+
+            beltStatus.Status = isConnected ? "已连接" : "已断开";
+            beltStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
+        });
     }
 
     private void InitializeStatisticsItems()
@@ -479,44 +518,84 @@ public class MainWindowViewModel : BindableBase, IDisposable
             package.Index = Interlocked.Increment(ref _currentPackageIndex);
             Log.Information("收到包裹信息：{Barcode}, 序号：{Index}", package.Barcode, package.Index);
 
-            // // 检查条码是否为 noread
-            // if (string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase))
-            //     try
-            //     {
-            //         Log.Information("检测到 noread 条码，等待巴枪输入");
+            // 检查条码是否为 noread
+            if (string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase))
+                try
+                {
+                    Log.Information("检测到 noread 条码，停止皮带并等待巴枪输入");
 
-            //         // 更新UI显示，提示操作员使用巴枪扫码
-            //         Application.Current.Dispatcher.Invoke(() => { CurrentBarcode = "【请使用巴枪扫描】"; });
+                    // 发送停止皮带命令
+                    try
+                    {
+                        _beltSerialService.SendData(Encoding.ASCII.GetBytes("STOP LB\r\n"));
+                        Log.Information("已发送停止皮带命令");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "发送停止皮带命令时发生错误");
+                    }
 
-            //         // 等待巴枪扫码
-            //         var newBarcode = await WaitForBarcodeScanAsync();
+                    // 更新UI显示，提示操作员使用巴枪扫码
+                    Application.Current.Dispatcher.Invoke(() => { CurrentBarcode = "【请使用巴枪扫描】"; });
 
-            //         // 更新包裹条码
-            //         Log.Information("使用巴枪扫码 {NewBarcode} 替换 noread 条码", newBarcode);
-            //         package.Barcode = newBarcode;
+                    // 等待巴枪扫码
+                    var newBarcode = await WaitForBarcodeScanAsync();
 
-            //         // 更新UI显示
-            //         Application.Current.Dispatcher.Invoke(() =>
-            //         {
-            //             // 更新包裹信息项，显示新条码
-            //             var barcodeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "条码");
-            //             if (barcodeItem == null) return;
-            //             barcodeItem.Value = newBarcode;
-            //             barcodeItem.Description = "条码信息";
-            //         });
-            //     }
-            //     catch (TimeoutException)
-            //     {
-            //         Log.Warning("等待巴枪扫码超时，继续使用 noread 条码");
-            //         // 超时后继续使用原始条码
-            //         Application.Current.Dispatcher.Invoke(() => { CurrentBarcode = "noread (扫码超时)"; });
-            //     }
-            //     catch (Exception ex)
-            //     {
-            //         Log.Error(ex, "等待巴枪扫码时发生错误");
-            //         // 发生错误时继续使用原始条码
-            //         Application.Current.Dispatcher.Invoke(() => { CurrentBarcode = "noread (扫码错误)"; });
-            //     }
+                    // 更新包裹条码
+                    Log.Information("使用巴枪扫码 {NewBarcode} 替换 noread 条码", newBarcode);
+                    package.Barcode = newBarcode;
+
+                    // 更新UI显示
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        // 更新包裹信息项，显示新条码
+                        var barcodeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "条码");
+                        if (barcodeItem == null) return;
+                        barcodeItem.Value = newBarcode;
+                        barcodeItem.Description = "条码信息";
+                    });
+
+                    // 发送启动皮带命令
+                    try
+                    {
+                        _beltSerialService.SendData(Encoding.ASCII.GetBytes("START LB\r\n"));
+                        Log.Information("已发送启动皮带命令");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "发送启动皮带命令时发生错误");
+                    }
+                }
+                catch (TimeoutException)
+                {
+                    Log.Warning("等待巴枪扫码超时，继续使用 noread 条码");
+                    // 超时后继续使用原始条码，并启动皮带
+                    Application.Current.Dispatcher.Invoke(() => { CurrentBarcode = "noread (扫码超时)"; });
+                    try
+                    {
+                        _beltSerialService.SendData(Encoding.ASCII.GetBytes("START LB\r\n"));
+                        Log.Information("扫码超时，已发送启动皮带命令");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "发送启动皮带命令时发生错误");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "等待巴枪扫码时发生错误");
+                    // 发生错误时继续使用原始条码，并启动皮带
+                    Application.Current.Dispatcher.Invoke(() => { CurrentBarcode = "noread (扫码错误)"; });
+                    try
+                    {
+                        _beltSerialService.SendData(Encoding.ASCII.GetBytes("START LB\r\n"));
+                        Log.Information("扫码错误，已发送启动皮带命令");
+                    }
+                    catch (Exception startEx)
+                    {
+                        Log.Error(startEx, "发送启动皮带命令时发生错误");
+                    }
+                }
 
             _sortService.ProcessPackage(package);
             // 1. 通过笨鸟系统服务获取三段码并处理上传
@@ -676,11 +755,39 @@ public class MainWindowViewModel : BindableBase, IDisposable
         if (disposing)
             try
             {
+                // 停止定时器（UI线程操作）
+                if (Application.Current != null && !Application.Current.Dispatcher.CheckAccess())
+                {
+                    Application.Current.Dispatcher.Invoke(() => _timer.Stop());
+                }
+                else
+                {
+                    _timer.Stop();
+                }
+
                 // 停止分拣服务
                 if (_sortService.IsRunning())
                 {
-                    _sortService.StopAsync().Wait();
-                    Log.Information("摆轮分拣服务已停止");
+                    try
+                    {
+                        // 使用超时避免无限等待
+                        var stopTask = _sortService.StopAsync();
+                        var timeoutTask = Task.Delay(TimeSpan.FromSeconds(5));
+                        var completedTask = Task.WhenAny(stopTask, timeoutTask).Result;
+
+                        if (completedTask == stopTask)
+                        {
+                            Log.Information("摆轮分拣服务已停止");
+                        }
+                        else
+                        {
+                            Log.Warning("摆轮分拣服务停止超时");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "停止摆轮分拣服务时发生错误");
+                    }
                 }
 
                 // 释放分拣服务资源
@@ -692,20 +799,23 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                 // 取消订阅事件
                 _sortService.DeviceConnectionStatusChanged -= OnDeviceConnectionStatusChanged;
-
-                // 取消订阅扫码枪事件
                 _scannerService.BarcodeScanned -= OnBarcodeScannerScanned;
-                Log.Debug("已取消订阅扫码枪事件");
-
                 _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
+                _beltSerialService.ConnectionStatusChanged -= OnBeltConnectionStatusChanged;
 
                 // 释放订阅
-                foreach (var subscription in _subscriptions) subscription.Dispose();
-
+                foreach (var subscription in _subscriptions)
+                {
+                    try
+                    {
+                        subscription.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "释放订阅时发生错误");
+                    }
+                }
                 _subscriptions.Clear();
-
-                // 停止定时器
-                _timer.Stop();
             }
             catch (Exception ex)
             {
@@ -713,5 +823,23 @@ public class MainWindowViewModel : BindableBase, IDisposable
             }
 
         _disposed = true;
+    }
+}
+
+/// <summary>
+/// 用于包装DispatcherTimer的可释放对象
+/// </summary>
+internal class DisposableTimer : IDisposable
+{
+    private readonly DispatcherTimer _timer;
+
+    public DisposableTimer(DispatcherTimer timer)
+    {
+        _timer = timer;
+    }
+
+    public void Dispose()
+    {
+        _timer.Stop();
     }
 }

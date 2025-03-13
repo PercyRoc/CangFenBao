@@ -6,6 +6,7 @@
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:hc="https://handyorg.github.io/handycontrol"
                  xmlns:viewModels="clr-namespace:Presentation_KuaiLv.ViewModels"
+                 xmlns:converters="clr-namespace:Presentation_KuaiLv.Converters"
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=viewModels:MainWindowViewModel}"
                  Title="仓分宝-快驴"
@@ -25,6 +26,7 @@
             </ResourceDictionary.MergedDictionaries>
 
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+            <converters:ColorToBrushConverter x:Key="ColorToBrushConverter" />
         </ResourceDictionary>
     </ui:FluentWindow.Resources>
 
@@ -198,56 +200,32 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Margin="4"
-                                            Height="90"
-                                            CornerRadius="8"
-                                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                                            BorderThickness="1">
+                                    <Border Margin="0,0,8,8" Padding="16" Background="{DynamicResource CardBackgroundBrush}"
+                                            BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
+                                            CornerRadius="8">
                                         <Grid>
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto" />
-                                                <RowDefinition Height="*" />
-                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
 
-                                            <!-- 标题和图标 -->
-                                            <DockPanel Grid.Row="0" Margin="12,8,12,0">
-                                                <TextBlock Text="{Binding Label}"
-                                                           FontSize="12"
-                                                           FontWeight="SemiBold"
-                                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                                                <Border CornerRadius="4"
-                                                        Width="24"
-                                                        Height="24"
-                                                        HorizontalAlignment="Right">
-                                                    <ui:SymbolIcon Symbol="{Binding Icon}"
-                                                                   Width="14"
-                                                                   Height="14"
-                                                                   Foreground="White"
-                                                                   HorizontalAlignment="Center"
-                                                                   VerticalAlignment="Center" />
-                                                </Border>
-                                            </DockPanel>
+                                            <ui:SymbolIcon Grid.Column="0" Margin="0,0,16,0" FontSize="24"
+                                                          Symbol="{Binding Icon}" />
 
-                                            <!-- 值和单位 -->
-                                            <StackPanel Grid.Row="1"
-                                                        Margin="12,4,12,8"
-                                                        VerticalAlignment="Center">
-                                                <DockPanel>
-                                                    <TextBlock Text="{Binding Value}"
-                                                               FontSize="24"
-                                                               FontWeight="SemiBold"
-                                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                                                    <TextBlock Text="{Binding Unit}"
-                                                               FontSize="12"
-                                                               Margin="4,0,0,0"
-                                                               VerticalAlignment="Bottom"
-                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                                </DockPanel>
-                                                <TextBlock Text="{Binding Description}"
-                                                           FontSize="11"
-                                                           Margin="0,4,0,0"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                         Text="{Binding Label}" />
+                                                <StackPanel Margin="0,4,0,0" Orientation="Horizontal">
+                                                    <TextBlock FontSize="20" FontWeight="SemiBold" 
+                                                             Foreground="{Binding StatusColor, Converter={StaticResource ColorToBrushConverter}}"
+                                                             Text="{Binding Value}" />
+                                                    <TextBlock Margin="4,0,0,0" FontSize="20" FontWeight="SemiBold"
+                                                             Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                             Text="{Binding Unit}" />
+                                                </StackPanel>
+                                                <TextBlock Margin="0,4,0,0" FontSize="12"
+                                                         Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                         Text="{Binding Description}" TextWrapping="Wrap" />
                                             </StackPanel>
                                         </Grid>
                                     </Border>
@@ -437,7 +415,7 @@
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="序号" Binding="{Binding Index}" Width="60" />
                                 <DataGridTextColumn Header="条码" Binding="{Binding Barcode}" Width="160" />
-                                <DataGridTextColumn Header="重量" Binding="{Binding WeightDisplay}" Width="80" />
+                                <DataGridTextColumn Header="重量" Binding="{Binding Weight, StringFormat='{}{0:F2}斤'}" Width="80" />
                                 <DataGridTextColumn Header="尺寸" Binding="{Binding VolumeDisplay}" Width="120" />
                                 <DataGridTextColumn Header="状态" Binding="{Binding StatusDisplay}" Width="80" />
                                 <DataGridTextColumn Header="处理时间"

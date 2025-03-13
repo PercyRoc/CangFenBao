@@ -17,6 +17,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
     private readonly INotificationService _notificationService;
     private readonly SortSettingsViewModel _sortSettingsViewModel;
     private readonly UploadSettingsViewModel _uploadSettingsViewModel;
+    private readonly BeltSettingsViewModel _beltSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
@@ -29,6 +30,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
         _sortSettingsViewModel = containerProvider.Resolve<SortSettingsViewModel>();
         _uploadSettingsViewModel = containerProvider.Resolve<UploadSettingsViewModel>();
         _chuteSettingsViewModel = containerProvider.Resolve<ChuteSettingsViewModel>();
+        _beltSettingsViewModel = containerProvider.Resolve<BeltSettingsViewModel>();
 
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
@@ -63,6 +65,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
             _sortSettingsViewModel.SaveConfigurationCommand.Execute();
             _uploadSettingsViewModel.SaveConfigurationCommand.Execute();
             _chuteSettingsViewModel.SaveCommand.Execute(null);
+            _beltSettingsViewModel.SaveConfigurationCommand.Execute();
 
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");

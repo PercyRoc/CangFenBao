@@ -4,6 +4,8 @@ using Common.Extensions;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
+using Modules.ViewModels;
+using Modules.Views;
 using Presentation_Modules.Services;
 using Presentation_Modules.ViewModels;
 using Presentation_Modules.ViewModels.Settings;
@@ -19,7 +21,7 @@ namespace Presentation_Modules;
 /// <summary>
 ///     Interaction logic for App.xaml
 /// </summary>
-public partial class App : PrismApplication
+public partial class App
 {
     /// <summary>
     ///     创建主窗口
@@ -54,8 +56,15 @@ public partial class App : PrismApplication
         containerRegistry.RegisterSingleton<ModuleConnectionHostedService>();
         containerRegistry.Register<ModuleConnectionHostedService>();
         
-        containerRegistry.Register<ModuleConfigView>();
-        containerRegistry.Register<ModuleConfigViewModel>();
+        // 注册锁格服务
+        containerRegistry.RegisterSingleton<LockingService>();
+        containerRegistry.RegisterSingleton<LockingHostedService>();
+        
+        // 注册格口包裹记录服务
+        containerRegistry.RegisterSingleton<ChutePackageRecordService>();
+        
+        containerRegistry.RegisterForNavigation<ModuleConfigView,ModuleConfigViewModel>();
+        containerRegistry.RegisterForNavigation<TcpSettingsView,TcpSettingsViewModel>();
 
         // 注册设置窗口
         containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
@@ -98,6 +107,18 @@ public partial class App : PrismApplication
                 await moduleConnectionHostedService.StartAsync(CancellationToken.None);
                 Log.Information("模组连接托管服务启动成功");
             });
+            
+            // 启动锁格托管服务
+            var lockingHostedService = Container.Resolve<LockingHostedService>();
+            _ = Task.Run(async () =>
+            {
+                await lockingHostedService.StartAsync();
+                Log.Information("锁格托管服务启动成功");
+            });
+            
+            // 初始化锁格服务
+            _ = Container.Resolve<LockingService>();
+            Log.Information("锁格服务初始化成功");
         }
         catch (Exception ex)
         {
@@ -129,6 +150,18 @@ public partial class App : PrismApplication
                 var moduleConnectionHostedService = Container.Resolve<ModuleConnectionHostedService>();
                 Task.Run(async () => await moduleConnectionHostedService.StopAsync(CancellationToken.None)).Wait(2000);
                 Log.Information("模组连接托管服务已停止");
+                
+                // 停止锁格托管服务
+                var lockingHostedService = Container.Resolve<LockingHostedService>();
+                Task.Run(async () => await lockingHostedService.StopAsync()).Wait(2000);
+                Log.Information("锁格托管服务已停止");
+                
+                // 释放锁格服务
+                if (Container.Resolve<LockingService>() is IDisposable lockingService)
+                {
+                    lockingService.Dispose();
+                    Log.Information("锁格服务已释放");
+                }
             }
             catch (Exception ex)
             {

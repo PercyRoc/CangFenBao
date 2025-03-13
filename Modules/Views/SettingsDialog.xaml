@@ -9,6 +9,7 @@
                  xmlns:viewModels1="clr-namespace:Presentation_Modules.ViewModels"
                  xmlns:settings="clr-namespace:Presentation_Modules.Views.Settings"
                  xmlns:settings1="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
+                 xmlns:views="clr-namespace:Modules.Views"
                  prism:ViewModelLocator.AutoWireViewModel="True"
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=viewModels1:SettingsDialogViewModel}"
@@ -128,6 +129,14 @@
                                                Icon="{ui:SymbolIcon Settings24}">
                             <ui:NavigationViewItem.TargetPageType>
                                 <x:Type Type="settings:ModuleConfigView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
+
+                        <ui:NavigationViewItem Content="锁格设置"
+                                               Tag="TcpSettingsView"
+                                               Icon="{ui:SymbolIcon LockClosed24}">
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="views:TcpSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>

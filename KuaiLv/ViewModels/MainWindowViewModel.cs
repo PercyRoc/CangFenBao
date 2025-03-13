@@ -373,68 +373,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private async void OnPackageInfo(PackageInfo package)
-    {
-        try
-        {
-            // 设置包裹序号
-            package.Index = Interlocked.Increment(ref _currentPackageIndex);
-            Log.Information("收到包裹信息：{Barcode}, 序号：{Index}", package.Barcode, package.Index);
-            package.Weight *= 2;
-            // 更新UI
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                try
-                {
-                    // 更新当前条码和图像
-                    CurrentBarcode = package.Barcode;
-                    // 更新实时包裹数据
-                    UpdatePackageInfoItems(package);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "更新UI时发生错误");
-                }
-            });
-
-            // 上报DWS
-            var dwsResponse = await _dwsService.ReportPackageAsync(package);
-            if (!dwsResponse.IsSuccess)
-            {
-                Log.Warning("DWS上报失败：{Message}", dwsResponse.Message);
-                package.SetError($"DWS上报失败：{dwsResponse.Message}");
-                await _audioService.PlayPresetAsync(AudioType.SystemError);
-            }
-            else
-            {
-                await _audioService.PlayPresetAsync(AudioType.Success);
-            }
-
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                try
-                {
-                    // 更新历史记录
-                    PackageHistory.Insert(0, package);
-                    while (PackageHistory.Count > 1000) // 保持最近1000条记录
-                        PackageHistory.RemoveAt(PackageHistory.Count - 1);
-
-                    // 更新统计数据
-                    UpdateStatistics();
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "更新统计信息时发生错误");
-                }
-            });
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "处理包裹信息时发生错误：{Barcode}", package.Barcode);
-            package.SetError($"处理失败：{ex.Message}");
-        }
-    }
-
     private void UpdatePackageInfoItems(PackageInfo package)
     {
         var weightItem = PackageInfoItems.FirstOrDefault(x => x.Label == "重量");
@@ -460,8 +398,98 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         var statusItem = PackageInfoItems.FirstOrDefault(x => x.Label == "状态");
         if (statusItem == null) return;
-        statusItem.Value = package.StatusDisplay;
-        statusItem.Description = package.ErrorMessage ?? "处理状态";
+        
+        // 更新状态显示
+        if (string.IsNullOrEmpty(package.ErrorMessage))
+        {
+            statusItem.Value = "正常";
+            statusItem.Description = "处理状态";
+            statusItem.StatusColor = "#4CAF50"; // 绿色表示正常
+        }
+        else
+        {
+            statusItem.Value = "异常";
+            statusItem.Description = package.ErrorMessage;
+            statusItem.StatusColor = "#F44336"; // 红色表示异常
+        }
+    }
+
+    private async void OnPackageInfo(PackageInfo package)
+    {
+        try
+        {
+            // 设置包裹序号
+            package.Index = Interlocked.Increment(ref _currentPackageIndex);
+            Log.Information("收到包裹信息：{Barcode}, 序号：{Index}", package.Barcode, package.Index);
+            package.Weight *= 2;
+
+            // 更新UI
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                try
+                {
+                    // 更新当前条码和图像
+                    CurrentBarcode = package.Barcode;
+                    // 更新实时包裹数据
+                    UpdatePackageInfoItems(package);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "更新UI时发生错误");
+                    package.SetError($"更新UI失败：{ex.Message}");
+                    UpdatePackageInfoItems(package);
+                }
+            });
+
+            // 上报DWS
+            var dwsResponse = await _dwsService.ReportPackageAsync(package);
+            if (!dwsResponse.IsSuccess)
+            {
+                Log.Warning("DWS上报失败：{Message}", dwsResponse.Message);
+                package.SetError($"DWS上报失败：{dwsResponse.Message}");
+                await _audioService.PlayPresetAsync(AudioType.SystemError);
+                
+                // 更新UI显示错误状态
+                Application.Current.Dispatcher.Invoke(() => UpdatePackageInfoItems(package));
+            }
+            else
+            {
+                await _audioService.PlayPresetAsync(AudioType.Success);
+                // 更新UI显示成功状态
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    package.StatusDisplay = "成功";
+                    UpdatePackageInfoItems(package);
+                });
+            }
+
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                try
+                {
+                    // 更新历史记录
+                    PackageHistory.Insert(0, package);
+                    while (PackageHistory.Count > 1000) // 保持最近1000条记录
+                        PackageHistory.RemoveAt(PackageHistory.Count - 1);
+
+                    // 更新统计数据
+                    UpdateStatistics();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "更新统计信息时发生错误");
+                    package.SetError($"更新统计失败：{ex.Message}");
+                    UpdatePackageInfoItems(package);
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "处理包裹信息时发生错误：{Barcode}", package.Barcode);
+            package.SetError($"处理失败：{ex.Message}");
+            // 确保在发生错误时更新UI显示
+            Application.Current.Dispatcher.Invoke(() => UpdatePackageInfoItems(package));
+        }
     }
 
     private void UpdateStatistics()

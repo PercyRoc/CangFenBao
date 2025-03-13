@@ -28,6 +28,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly IDialogService _dialogService;
     private readonly IModuleConnectionService _moduleConnectionService;
     private readonly ISettingsService _settingsService;
+    private readonly LockingService _lockingService;
+    private readonly ChutePackageRecordService _chutePackageRecordService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
     private string _currentBarcode = string.Empty;
@@ -35,18 +37,25 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private bool _disposed;
     private SystemStatus _systemStatus = new();
     private static int _lastPackageIndex = 0; // 用于记录上一次分配的包裹序号
+    
+    // 格口锁定状态字典
+    private readonly Dictionary<int, bool> _chuteLockStatus = new();
 
     public MainWindowViewModel(IDialogService dialogService,
         ICameraService cameraService,
         PackageTransferService packageTransferService, ISettingsService settingsService,
         IModuleConnectionService moduleConnectionService,
-        ChuteMappingService chuteMappingService)
+        ChuteMappingService chuteMappingService,
+        LockingService lockingService,
+        ChutePackageRecordService chutePackageRecordService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
         _settingsService = settingsService;
         _moduleConnectionService = moduleConnectionService;
         _chuteMappingService = chuteMappingService;
+        _lockingService = lockingService;
+        _chutePackageRecordService = chutePackageRecordService;
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
 
         // 初始化系统状态更新定时器
@@ -71,6 +80,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         // 订阅模组带连接状态事件
         _moduleConnectionService.ConnectionStateChanged += OnModuleConnectionChanged;
+        
+        // 订阅锁格状态变更事件
+        _lockingService.ChuteLockStatusChanged += OnChuteLockStatusChanged;
+        
+        // 订阅锁格设备连接状态变更事件
+        _lockingService.ConnectionStatusChanged += OnLockingDeviceConnectionChanged;
 
         // 订阅图像流
         if (_cameraService is DahuaCameraService dahuaCamera)
@@ -119,6 +134,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
         // 订阅包裹流
         _subscriptions.Add(packageTransferService.PackageStream
             .Subscribe(package => { Application.Current.Dispatcher.BeginInvoke(() => OnPackageInfo(package)); }));
+            
+        // 初始检查锁格设备状态
+        UpdateLockingDeviceStatus(_lockingService.IsConnected());
     }
 
     public DelegateCommand OpenSettingsCommand { get; }
@@ -177,12 +195,21 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 StatusColor = "#F44336" // 红色表示未连接
             });
 
-            // 添加相机状态
+            // 添加模组带状态
             DeviceStatuses.Add(new DeviceStatus
             {
                 Name = "模组带",
                 Status = "未连接",
                 Icon = "ArrowSort24",
+                StatusColor = "#F44336" // 红色表示未连接
+            });
+            
+            // 添加锁格设备状态
+            DeviceStatuses.Add(new DeviceStatus
+            {
+                Name = "锁格设备",
+                Status = "未连接",
+                Icon = "Lock24",
                 StatusColor = "#F44336" // 红色表示未连接
             });
         }
@@ -369,6 +396,24 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 package.Status = PackageStatus.Error;
                 package.StatusDisplay = "格口分配失败";
             }
+            else
+            {
+                // 检查分配的格口是否被锁定
+                if (IsChuteLocked(chuteNumber.Value))
+                {
+                    Log.Warning("分配的格口 {ChuteNumber} 已被锁定，重新分配到异常格口: {Barcode}", 
+                        chuteNumber.Value, package.Barcode);
+                    
+                    // 记录原始分配的格口号
+                    package.OriginalChuteName = chuteNumber.Value;
+                    
+                    // 重新分配到异常格口
+                    chuteNumber = config.ExceptionChute;
+                    package.Status = PackageStatus.Error;
+                    package.StatusDisplay = "格口已锁定，使用异常格口";
+                    package.ErrorMessage = $"原格口 {package.OriginalChuteName} 已锁定";
+                }
+            }
 
             // 更新包裹的格口号
             package.ChuteName = chuteNumber.Value;
@@ -385,6 +430,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 package.StatusDisplay = "正常";
             }
+            
+            // 记录包裹分配到格口的信息
+            _chutePackageRecordService.AddPackageRecord(package);
 
             // 更新UI
             Application.Current.Dispatcher.Invoke(() =>
@@ -489,6 +537,79 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
+    /// <summary>
+    /// 处理锁格状态变更事件
+    /// </summary>
+    /// <param name="chuteNumber">格口号</param>
+    /// <param name="isLocked">是否锁定</param>
+    private async void OnChuteLockStatusChanged(int chuteNumber, bool isLocked)
+    {
+        try
+        {
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                // 更新格口锁定状态字典
+                _chuteLockStatus[chuteNumber] = isLocked;
+                
+                // 记录状态变更
+                Log.Information("格口 {ChuteNumber} 锁定状态变更为: {Status}", 
+                    chuteNumber, isLocked ? "锁定" : "解锁");
+                
+                // TODO: 可以在这里更新UI显示格口状态
+                // 例如，可以添加一个格口状态列表到UI中
+            });
+            
+            // 更新格口包裹记录服务中的锁定状态
+            await _chutePackageRecordService.SetChuteLockStatusAsync(chuteNumber, isLocked);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "处理锁格状态变更事件时出错");
+        }
+    }
+
+    /// <summary>
+    /// 获取格口锁定状态
+    /// </summary>
+    /// <param name="chuteNumber">格口号</param>
+    /// <returns>是否锁定</returns>
+    public bool IsChuteLocked(int chuteNumber)
+    {
+        return _chuteLockStatus.TryGetValue(chuteNumber, out var isLocked) && isLocked;
+    }
+
+    /// <summary>
+    /// 处理锁格设备连接状态变更事件
+    /// </summary>
+    /// <param name="isConnected">是否已连接</param>
+    private void OnLockingDeviceConnectionChanged(bool isConnected)
+    {
+        UpdateLockingDeviceStatus(isConnected);
+    }
+    
+    /// <summary>
+    /// 更新锁格设备状态
+    /// </summary>
+    /// <param name="isConnected">是否已连接</param>
+    private void UpdateLockingDeviceStatus(bool isConnected)
+    {
+        try
+        {
+            var lockingDeviceStatus = DeviceStatuses.FirstOrDefault(x => x.Name == "锁格设备");
+            if (lockingDeviceStatus == null) return;
+
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                lockingDeviceStatus.Status = isConnected ? "已连接" : "已断开";
+                lockingDeviceStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "更新锁格设备状态时发生错误");
+        }
+    }
+
     protected virtual void Dispose(bool disposing)
     {
         if (_disposed) return;
@@ -502,6 +623,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 // 取消事件订阅
                 _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
                 _moduleConnectionService.ConnectionStateChanged -= OnModuleConnectionChanged;
+                _lockingService.ChuteLockStatusChanged -= OnChuteLockStatusChanged;
+                _lockingService.ConnectionStatusChanged -= OnLockingDeviceConnectionChanged;
+                
                 // 释放订阅
                 foreach (var subscription in _subscriptions) subscription.Dispose();
                 _subscriptions.Clear();

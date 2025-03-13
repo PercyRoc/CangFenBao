@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using Common.Services.Settings;
 using Prism.Mvvm;
 using Serilog;
+using System.Linq;
 
 namespace FuzhouPolicyForce.Models.Settings;
 
@@ -163,16 +164,58 @@ public class ChuteRule : BindableBase
         if (IsAlphanumeric && !barcode.All(c => char.IsLetterOrDigit(c))) return false;
         
         // 检查前缀和后缀
-        if (!string.IsNullOrEmpty(StartsWith) && !barcode.StartsWith(StartsWith)) return false;
-        if (!string.IsNullOrEmpty(EndsWith) && !barcode.EndsWith(EndsWith)) return false;
+        if (!string.IsNullOrEmpty(StartsWith))
+        {
+            var startValues = StartsWith.Replace("，", ",")
+                                      .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                      .Select(s => s.Trim())
+                                      .Where(s => !string.IsNullOrEmpty(s));
+            if (!startValues.Any(start => barcode.StartsWith(start))) return false;
+        }
+        if (!string.IsNullOrEmpty(EndsWith))
+        {
+            var endValues = EndsWith.Replace("，", ",")
+                                  .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                  .Select(s => s.Trim())
+                                  .Where(s => !string.IsNullOrEmpty(s));
+            if (!endValues.Any(end => barcode.EndsWith(end))) return false;
+        }
         
         // 检查不包含的前缀和后缀
-        if (!string.IsNullOrEmpty(NotStartsWith) && barcode.StartsWith(NotStartsWith)) return false;
-        if (!string.IsNullOrEmpty(NotEndsWith) && barcode.EndsWith(NotEndsWith)) return false;
+        if (!string.IsNullOrEmpty(NotStartsWith))
+        {
+            var notStartValues = NotStartsWith.Replace("，", ",")
+                                           .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                           .Select(s => s.Trim())
+                                           .Where(s => !string.IsNullOrEmpty(s));
+            if (notStartValues.Any(start => barcode.StartsWith(start))) return false;
+        }
+        if (!string.IsNullOrEmpty(NotEndsWith))
+        {
+            var notEndValues = NotEndsWith.Replace("，", ",")
+                                       .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                       .Select(s => s.Trim())
+                                       .Where(s => !string.IsNullOrEmpty(s));
+            if (notEndValues.Any(end => barcode.EndsWith(end))) return false;
+        }
         
         // 检查包含和不包含的字符串
-        if (!string.IsNullOrEmpty(Contains) && !barcode.Contains(Contains)) return false;
-        if (!string.IsNullOrEmpty(NotContains) && barcode.Contains(NotContains)) return false;
+        if (!string.IsNullOrEmpty(Contains))
+        {
+            var containValues = Contains.Replace("，", ",")
+                                     .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                     .Select(s => s.Trim())
+                                     .Where(s => !string.IsNullOrEmpty(s));
+            if (!containValues.Any(contain => barcode.Contains(contain))) return false;
+        }
+        if (!string.IsNullOrEmpty(NotContains))
+        {
+            var notContainValues = NotContains.Replace("，", ",")
+                                           .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                           .Select(s => s.Trim())
+                                           .Where(s => !string.IsNullOrEmpty(s));
+            if (notContainValues.Any(notContain => barcode.Contains(notContain))) return false;
+        }
         
         // 检查正则表达式
         if (!string.IsNullOrEmpty(RegexPattern) && RegexPattern != "(?=.*(?))") 

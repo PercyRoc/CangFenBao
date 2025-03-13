@@ -11,7 +11,7 @@ namespace SortingServices.Pendulum;
 /// </summary>
 public class SinglePendulumSortService(ISettingsService settingsService) : BasePendulumSortService(settingsService)
 {
-    public override async Task InitializeAsync(PendulumSortConfig configuration)
+    public override Task InitializeAsync(PendulumSortConfig configuration)
     {
         Configuration = configuration;
 
@@ -21,12 +21,12 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
             configuration.TriggerPhotoelectric.IpAddress,
             configuration.TriggerPhotoelectric.Port,
             ProcessTriggerData,
-            connected => UpdateDeviceConnectionState("触发光电", connected) // 启用自动重连
+            connected => UpdateDeviceConnectionState("触发光电", connected)
         );
 
         try
         {
-            await TriggerClient.ConnectAsync();
+            TriggerClient.Connect();
         }
         catch (Exception ex)
         {
@@ -38,6 +38,7 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
         PendulumStates["默认"] = new PendulumState();
 
         Log.Information("单光电单摆轮分拣服务初始化完成");
+        return Task.CompletedTask;
     }
 
     public override async Task StartAsync()
@@ -60,11 +61,11 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
                 if (TriggerClient != null && TriggerClient.IsConnected())
                 {
                     var startCommand = GetCommandBytes(PendulumCommands.Module2.Start);
-                    await TriggerClient.SendAsync(startCommand);
+                    TriggerClient.Send(startCommand);
                     var resetLeftCommand = GetCommandBytes(PendulumCommands.Module2.ResetLeft);
                     var resetRightCommand = GetCommandBytes(PendulumCommands.Module2.ResetRight);
-                    await TriggerClient.SendAsync(resetLeftCommand);
-                    await TriggerClient.SendAsync(resetRightCommand);
+                    TriggerClient.Send(resetLeftCommand);
+                    TriggerClient.Send(resetRightCommand);
                     Log.Debug("已发送启动命令到触发光电");
                 }
                 else
@@ -123,13 +124,13 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
                     // 发送左右回正指令
                     var resetLeftCommand = GetCommandBytes(PendulumCommands.Module2.ResetLeft);
                     var resetRightCommand = GetCommandBytes(PendulumCommands.Module2.ResetRight);
-                    await TriggerClient.SendAsync(resetLeftCommand);
-                    await TriggerClient.SendAsync(resetRightCommand);
+                    TriggerClient.Send(resetLeftCommand);
+                    TriggerClient.Send(resetRightCommand);
                     Log.Debug("已发送左右回正命令到触发光电");
 
                     // 发送停止命令
                     var stopCommand = GetCommandBytes(PendulumCommands.Module2.Stop);
-                    await TriggerClient.SendAsync(stopCommand);
+                    TriggerClient.Send(stopCommand);
                     Log.Debug("已发送停止命令到触发光电");
                 }
                 catch (Exception ex)
@@ -213,8 +214,6 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
     /// </summary>
     protected override void HandleSecondPhotoelectric(string data)
     {
-        if (data != "+OCCH2:1") return;
-        
         // 使用基类的匹配逻辑
         var package = MatchPackageForSorting("默认");
         if (package == null) return;
@@ -223,7 +222,7 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
         _ = ExecuteSortingAction(package, "默认");
     }
 
-    protected override async Task ReconnectAsync()
+    protected override Task ReconnectAsync()
     {
         try
         {
@@ -236,15 +235,15 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
                     Configuration.TriggerPhotoelectric.IpAddress,
                     Configuration.TriggerPhotoelectric.Port,
                     ProcessTriggerData,
-                    connected => UpdateDeviceConnectionState("触发光电", connected) // 启用自动重连
+                    connected => UpdateDeviceConnectionState("触发光电", connected)
                 );
-                await TriggerClient.ConnectAsync();
+                TriggerClient.Connect();
                 
                 // 如果服务正在运行，发送启动命令
                 if (IsRunningFlag)
                 {
                     var startCommand = GetCommandBytes(PendulumCommands.Module2.Start);
-                    await TriggerClient.SendAsync(startCommand);
+                    TriggerClient.Send(startCommand);
                     Log.Debug("重连后已发送启动命令到触发光电");
                 }
             }
@@ -253,6 +252,8 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
         {
             Log.Error(ex, "重连设备失败");
         }
+
+        return Task.CompletedTask;
     }
 
     protected override bool SlotBelongsToPhotoelectric(int targetSlot, string photoelectricName)

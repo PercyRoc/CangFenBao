@@ -5,6 +5,7 @@ using Common.Services.Ui;
 using Presentation_BenFly.ViewModels.Windows;
 using Serilog;
 using MessageBoxResult = System.Windows.MessageBoxResult;
+using System.Threading.Tasks;
 
 namespace Presentation_BenFly.Views.Windows;
 
@@ -55,8 +56,19 @@ public partial class MainWindow
             // 释放MainWindowViewModel
             if (DataContext is MainWindowViewModel viewModel)
             {
-                viewModel.Dispose();
-                Log.Information("主窗口ViewModel已释放");
+                // 在后台线程中执行Dispose操作，避免UI线程阻塞
+                await Task.Run(() => 
+                {
+                    try
+                    {
+                        viewModel.Dispose();
+                        Log.Information("主窗口ViewModel已释放");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "释放ViewModel时发生错误");
+                    }
+                });
             }
 
             e.Cancel = false;

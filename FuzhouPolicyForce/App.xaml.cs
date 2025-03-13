@@ -42,8 +42,8 @@ public partial class App
         // 获取设置服务
         var settingsService = Container.Resolve<ISettingsService>();
 
-        // 注册单摆轮分拣服务
-        containerRegistry.RegisterPendulumSortService(settingsService, PendulumServiceType.Single);
+        // 注册多摆轮分拣服务
+        containerRegistry.RegisterPendulumSortService(settingsService, PendulumServiceType.Multi);
         containerRegistry.RegisterSingleton<IHostedService, PendulumSortHostedService>();
     }
 

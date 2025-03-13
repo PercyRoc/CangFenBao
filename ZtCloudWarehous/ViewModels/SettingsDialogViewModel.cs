@@ -1,4 +1,5 @@
-﻿using Common.Services.Ui;
+﻿using Common.Services.Settings;
+using Common.Services.Ui;
 using Presentation_ZtCloudWarehous.ViewModels.Settings;
 using Prism.Commands;
 using Prism.Ioc;
@@ -15,6 +16,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
     private readonly INotificationService _notificationService;
     private readonly SortSettingsViewModel _sortSettingsViewModel;
+    private readonly WeighingSettingsViewModel _weighingSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
@@ -25,6 +27,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
         // 创建各个设置页面的ViewModel实例
         _cameraSettingsViewModel = containerProvider.Resolve<CameraSettingsViewModel>();
         _sortSettingsViewModel = containerProvider.Resolve<SortSettingsViewModel>();
+        _weighingSettingsViewModel = containerProvider.Resolve<WeighingSettingsViewModel>();
 
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
@@ -57,6 +60,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
             // 保存所有设置
             _cameraSettingsViewModel.SaveConfigurationCommand.Execute();
             _sortSettingsViewModel.SaveConfigurationCommand.Execute();
+            _weighingSettingsViewModel.SaveConfigurationCommand.Execute();
 
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");

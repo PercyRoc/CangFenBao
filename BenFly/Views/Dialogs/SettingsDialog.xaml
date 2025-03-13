@@ -156,6 +156,16 @@
                                 <x:Type Type="local:UploadSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
+
+                        <ui:NavigationViewItem Content="皮带设置"
+                                               Tag="Belt">
+                            <ui:NavigationViewItem.Icon>
+                                <ui:SymbolIcon Symbol="ArrowCircleRight24" />
+                            </ui:NavigationViewItem.Icon>
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="local:BeltSettingsView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>
                 </ui:NavigationView>
 

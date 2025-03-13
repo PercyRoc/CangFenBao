@@ -1,14 +1,23 @@
 ﻿using System.Net.Http;
 using System.Windows;
 using Common.Extensions;
+using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Presentation_ZtCloudWarehous.Services;
 using Presentation_ZtCloudWarehous.ViewModels;
+using Presentation_ZtCloudWarehous.ViewModels.Settings;
 using Presentation_ZtCloudWarehous.Views;
 using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
+using SortingServices.Pendulum;
+using SortingServices.Pendulum.Extensions;
+using SortingServices.Pendulum.Models;
+using ZtCloudWarehous.Views.Settings;
 
 namespace Presentation_ZtCloudWarehous;
 
@@ -41,10 +50,23 @@ public partial class App
         containerRegistry.RegisterSingleton<HttpClient>();
         // 注册包裹中转服务
         containerRegistry.RegisterSingleton<PackageTransferService>();
+        
+        // 注册称重服务
+        containerRegistry.RegisterSingleton<IWeighingService, WeighingService>();
 
         // 注册设置窗口
         containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
         containerRegistry.Register<SettingsDialogViewModel>();
+
+        // 注册称重设置页面
+        containerRegistry.RegisterForNavigation<WeighingSettingsPage, WeighingSettingsViewModel>();
+
+        // 获取设置服务
+        var settingsService = Container.Resolve<ISettingsService>();
+
+        // 注册多摆轮分拣服务
+        containerRegistry.RegisterPendulumSortService(settingsService, PendulumServiceType.Multi);
+        containerRegistry.RegisterSingleton<IHostedService, PendulumSortHostedService>();
     }
 
     /// <summary>
@@ -63,18 +85,19 @@ public partial class App
             .CreateLogger();
 
         Log.Information("应用程序启动");
-        // 先调用基类方法初始化容器
         base.OnStartup(e);
 
         try
         {
             // 启动相机托管服务
             var cameraStartupService = Container.Resolve<CameraStartupService>();
-            _ = Task.Run(async () =>
-            {
-                await cameraStartupService.StartAsync(CancellationToken.None);
-                Log.Information("相机托管服务启动成功");
-            });
+            cameraStartupService.StartAsync(CancellationToken.None).Wait();
+            Log.Information("相机托管服务启动成功");
+
+            // 启动摆轮分拣托管服务
+            var pendulumHostedService = Container.Resolve<IHostedService>();
+            pendulumHostedService.StartAsync(CancellationToken.None).Wait();
+            Log.Information("摆轮分拣托管服务启动成功");
         }
         catch (Exception ex)
         {
@@ -97,9 +120,14 @@ public partial class App
             {
                 Log.Information("正在停止托管服务...");
 
+                // 停止摆轮分拣托管服务
+                var pendulumHostedService = Container.Resolve<IHostedService>();
+                pendulumHostedService.StopAsync(CancellationToken.None).Wait();
+                Log.Information("摆轮分拣托管服务已停止");
+
                 // 停止相机托管服务
                 var cameraStartupService = Container.Resolve<CameraStartupService>();
-                Task.Run(async () => await cameraStartupService.StopAsync(CancellationToken.None)).Wait(2000);
+                cameraStartupService.StopAsync(CancellationToken.None).Wait();
                 Log.Information("相机托管服务已停止");
             }
             catch (Exception ex)
@@ -111,17 +139,20 @@ public partial class App
             try
             {
                 // 释放相机工厂
-                if (Container.Resolve<CameraFactory>() is IDisposable cameraFactory)
-                {
-                    cameraFactory.Dispose();
-                    Log.Information("相机工厂已释放");
-                }
+                var cameraFactory = Container.Resolve<CameraFactory>();
+                cameraFactory.Dispose();
+                Log.Information("相机工厂已释放");
 
                 // 释放相机服务
-                if (Container.Resolve<ICameraService>() is IDisposable cameraService)
+                var cameraService = Container.Resolve<ICameraService>();
+                cameraService.Dispose();
+                Log.Information("相机服务已释放");
+
+                // 释放摆轮分拣服务
+                if (Container.Resolve<IPendulumSortService>() is IDisposable pendulumService)
                 {
-                    cameraService.Dispose();
-                    Log.Information("相机服务已释放");
+                    pendulumService.Dispose();
+                    Log.Information("摆轮分拣服务已释放");
                 }
             }
             catch (Exception ex)
@@ -132,15 +163,11 @@ public partial class App
             // 等待所有日志写入完成
             Log.Information("应用程序关闭");
             Log.CloseAndFlush();
-
-            // 确保所有操作完成
-            Thread.Sleep(1000);
         }
         catch (Exception ex)
         {
             Log.Error(ex, "应用程序关闭时发生错误");
             Log.CloseAndFlush();
-            Thread.Sleep(1000);
         }
         finally
         {

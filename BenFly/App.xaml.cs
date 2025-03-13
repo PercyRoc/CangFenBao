@@ -7,6 +7,7 @@ using DeviceService.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Presentation_BenFly.Services;
+using Presentation_BenFly.Services.Belt;
 using Presentation_BenFly.ViewModels.Dialogs;
 using Presentation_BenFly.ViewModels.Settings;
 using Presentation_BenFly.ViewModels.Windows;
@@ -32,7 +33,7 @@ public partial class App
 {
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
-        // 注册视图和ViewModel
+        // 注册主窗口
         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
 
         // 注册公共服务
@@ -40,20 +41,20 @@ public partial class App
         containerRegistry.AddShardUi();
         containerRegistry.AddPhotoCamera();
 
-        // 注册设置页面
-        containerRegistry.Register<CameraSettingsView>();
-        containerRegistry.Register<SortSettingsView>();
-        containerRegistry.Register<UploadSettingsView>();
-        containerRegistry.Register<ChuteSettingsView>();
-        containerRegistry.Register<ChuteSettingsViewModel>();
+        // 注册设置页面和ViewModel
+        containerRegistry.RegisterForNavigation<CameraSettingsView, CameraSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<SortSettingsView, SortSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<UploadSettingsView, UploadSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<ChuteSettingsView, ChuteSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<BeltSettingsView, BeltSettingsViewModel>();
 
-        // 注册设置页面的ViewModel
-        containerRegistry.Register<CameraSettingsViewModel>();
-        containerRegistry.Register<SortSettingsViewModel>();
-        containerRegistry.Register<UploadSettingsViewModel>();
-
+        // 注册设置对话框
         containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
         containerRegistry.Register<SettingsDialogViewModel>();
+
+        // 注册串口服务
+        containerRegistry.RegisterSingleton<IBeltSerialService, BeltSerialService>();
+        containerRegistry.RegisterSingleton<IHostedService, BeltSerialHostedService>("BeltSerialHostedService");
 
         // 注册 HttpClient
         var services = new ServiceCollection();
@@ -106,6 +107,11 @@ public partial class App
             var pendulumHostedService = Container.Resolve<IHostedService>();
             pendulumHostedService.StartAsync(CancellationToken.None).Wait();
             Log.Information("摆轮分拣托管服务启动成功");
+
+            // 启动串口托管服务
+            var beltSerialHostedService = Container.Resolve<IHostedService>("BeltSerialHostedService");
+            beltSerialHostedService.StartAsync(CancellationToken.None).Wait();
+            Log.Information("串口托管服务启动成功");
         }
         catch (Exception ex)
         {
@@ -118,6 +124,11 @@ public partial class App
     {
         try
         {
+            // 停止串口托管服务
+            var beltSerialHostedService = Container.Resolve<IHostedService>("BeltSerialHostedService");
+            beltSerialHostedService.StopAsync(CancellationToken.None).Wait();
+            Log.Information("串口托管服务已停止");
+
             // 停止摆轮分拣托管服务
             var pendulumHostedService = Container.Resolve<IHostedService>();
             pendulumHostedService.StopAsync(CancellationToken.None).Wait();
@@ -137,6 +148,11 @@ public partial class App
             var cameraService = Container.Resolve<ICameraService>();
             cameraService.Dispose();
             Log.Information("相机服务已释放");
+
+            // 释放串口服务
+            var beltSerialService = Container.Resolve<IBeltSerialService>();
+            beltSerialService.Dispose();
+            Log.Information("串口服务已释放");
 
             // 等待所有日志写入完成
             Log.Information("应用程序关闭");

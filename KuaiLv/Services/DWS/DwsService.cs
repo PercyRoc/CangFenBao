@@ -27,7 +27,6 @@ public class DwsService : IDwsService, IDisposable
     private readonly ISettingsService _settingsService;
     private readonly IWarningLightService _warningLightService;
     private bool _disposed;
-    private int _failureCount;
     private bool _isNetworkAvailable = true;
     private UploadConfiguration _currentConfig;
 
@@ -84,6 +83,7 @@ public class DwsService : IDwsService, IDisposable
             {
                 Log.Warning("网络未连接，保存包裹到离线存储：{Barcode}", package.Barcode);
                 await _offlinePackageService.SaveOfflinePackageAsync(package);
+                package.SetError("网络未连接，已保存到离线存储");
                 return new DwsResponse { Code = 200, Message = "包裹已保存到离线存储" };
             }
 
@@ -171,18 +171,18 @@ public class DwsService : IDwsService, IDisposable
             {
                 case 200 when string.IsNullOrEmpty(result.Message):
                     // 包裹为SKU多退少补品
-                    _failureCount = 0;
                     Log.Information("包裹上报成功：{Barcode}", package.Barcode);
                     _notificationService.ShowSuccess("包裹上报成功");
                     await _warningLightService.ShowGreenLightAsync();
+                    package.StatusDisplay = "成功";
                     return result;
 
                 case 200:
                     // 包裹为SKU非多退少补品
-                    _failureCount = 0;
                     Log.Information("包裹上报成功：{Barcode}", package.Barcode);
                     _notificationService.ShowSuccess("包裹上报成功");
                     await _warningLightService.ShowGreenLightAsync();
+                    package.StatusDisplay = "成功";
                     return result;
 
                 case 1003:
@@ -242,46 +242,33 @@ public class DwsService : IDwsService, IDisposable
                     await _warningLightService.TurnOffGreenLightAsync();
                     await Task.Delay(100); // 短暂延时确保绿灯完全关闭
                     await _warningLightService.ShowRedLightAsync();
-                    package.SetError($"未知错误：{result.Message}");
+                    package.SetError($"未知错误[{result.Code}]：{result.Message}");
                     break;
             }
-
-            // 处理失败计数
-            _failureCount++;
-            if (_failureCount < MaxFailureCount) return result;
-            Log.Error("DWS服务连续失败次数达到{Count}次，需要停机", MaxFailureCount);
-            _notificationService.ShowError("DWS服务异常");
-            await _warningLightService.ShowRedLightAsync();
-            // TODO: 发送停机指令
 
             return result;
         }
         catch (Exception ex)
         {
-            _failureCount++;
-            if (_failureCount >= MaxFailureCount)
-            {
-                Log.Error(ex, "DWS服务连续失败次数达到{Count}次，需要停机", MaxFailureCount);
-                _notificationService.ShowError("DWS服务异常");
-                await _warningLightService.ShowRedLightAsync();
-                // TODO: 发送停机指令
-            }
-
+            // 记录更详细的异常信息
             switch (ex)
             {
-                // 记录更详细的异常信息
                 case HttpRequestException httpEx:
                     Log.Error(ex, "DWS服务HTTP请求异常: {StatusCode}, {Message}",
                         httpEx.StatusCode, ex.Message);
+                    package.SetError($"网络请求异常：{httpEx.Message}");
                     break;
                 case TaskCanceledException:
                     Log.Error(ex, "DWS服务请求超时");
+                    package.SetError("请求超时，请检查网络连接");
                     break;
                 case JsonException jsonEx:
                     Log.Error(ex, "DWS服务响应解析异常: {Message}", jsonEx.Message);
+                    package.SetError("响应数据解析失败");
                     break;
                 default:
                     Log.Error(ex, "DWS服务请求异常: {Type}, {Message}", ex.GetType().Name, ex.Message);
+                    package.SetError($"系统异常：{ex.Message}");
                     break;
             }
 

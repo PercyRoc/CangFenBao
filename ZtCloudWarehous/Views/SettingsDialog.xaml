@@ -9,6 +9,7 @@
                  xmlns:viewModels="clr-namespace:Presentation_ZtCloudWarehous.ViewModels"
                  xmlns:settings="clr-namespace:Presentation_ZtCloudWarehous.Views.Settings"
                  xmlns:settings1="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
+                 xmlns:settings2="clr-namespace:ZtCloudWarehous.Views.Settings"
                  prism:ViewModelLocator.AutoWireViewModel="True"
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}"
@@ -127,6 +128,13 @@
                                                Icon="{ui:SymbolIcon ArrowSort24}">
                             <ui:NavigationViewItem.TargetPageType>
                                 <x:Type Type="settings:SortSettingsView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
+                        <ui:NavigationViewItem Content="称重设置"
+                                               Tag="WeighingSettingsPage"
+                                               Icon="{ui:SymbolIcon ScaleFill24}">
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="settings2:WeighingSettingsPage" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>

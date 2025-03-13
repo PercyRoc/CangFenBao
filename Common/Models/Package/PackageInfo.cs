@@ -55,6 +55,11 @@ public class PackageInfo : IDisposable
     public int ChuteName { get; set; }
 
     /// <summary>
+    ///     原始格口名称（当格口被锁定时，记录原始分配的格口）
+    /// </summary>
+    public int OriginalChuteName { get; set; }
+
+    /// <summary>
     ///     状态显示
     /// </summary>
     public string StatusDisplay { get; set; } = string.Empty;

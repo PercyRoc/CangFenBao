@@ -14,7 +14,7 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
 {
     private readonly ConcurrentDictionary<string, TcpClientService> _sortingClients = new();
 
-    public override async Task InitializeAsync(PendulumSortConfig configuration)
+    public override Task InitializeAsync(PendulumSortConfig configuration)
     {
         Configuration = configuration;
 
@@ -29,7 +29,7 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
 
         try
         {
-            await TriggerClient.ConnectAsync();
+            TriggerClient.Connect();
         }
         catch (Exception ex)
         {
@@ -53,7 +53,7 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
 
             try
             {
-                await client.ConnectAsync();
+                client.Connect();
             }
             catch (Exception ex)
             {
@@ -63,6 +63,7 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
         }
 
         Log.Information("多光电多摆轮分拣服务初始化完成");
+        return Task.CompletedTask;
     }
 
     public override async Task StartAsync()
@@ -86,11 +87,11 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
                 {
                     if (!client.Value.IsConnected()) continue;
                     var startCommand = GetCommandBytes(PendulumCommands.Module2.Start);
-                    await client.Value.SendAsync(startCommand);
+                    client.Value.Send(startCommand);
                     var resetLeftCommand = GetCommandBytes(PendulumCommands.Module2.ResetLeft);
                     var resetRightCommand = GetCommandBytes(PendulumCommands.Module2.ResetRight);
-                    await client.Value.SendAsync(resetLeftCommand);
-                    await client.Value.SendAsync(resetRightCommand);
+                    client.Value.Send(resetLeftCommand);
+                    client.Value.Send(resetRightCommand);
                     Log.Debug("已发送启动和回正命令到分拣光电 {Name}", client.Key);
                 }
 
@@ -153,12 +154,12 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
                     // 发送左右回正指令
                     var resetLeftCommand = GetCommandBytes(PendulumCommands.Module2.ResetLeft);
                     var resetRightCommand = GetCommandBytes(PendulumCommands.Module2.ResetRight);
-                    await client.Value.SendAsync(resetLeftCommand);
-                    await client.Value.SendAsync(resetRightCommand);
+                    client.Value.Send(resetLeftCommand);
+                    client.Value.Send(resetRightCommand);
                         
                     // 发送停止命令
                     var stopCommand = GetCommandBytes(PendulumCommands.Module2.Stop);
-                    await client.Value.SendAsync(stopCommand);
+                    client.Value.Send(stopCommand);
                     Log.Debug("已发送回正和停止命令到分拣光电 {Name}", client.Key);
                 }
                 catch (Exception ex)
@@ -242,37 +243,61 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
         try
         {
             var message = Encoding.ASCII.GetString(data);
-            Log.Debug("收到分拣光电 {Name} 数据: {Message}", photoelectricName, message);
+            Log.Information("收到分拣光电 {Name} 数据: {Message}", photoelectricName, message);
 
-            switch (message)
+            if (message.Contains("OCCH1:1"))
             {
-                case "+OCCH1:1":
+                Log.Information("分拣光电 {Name} 收到上升沿信号，开始匹配包裹", photoelectricName);
+                // 使用基类的匹配逻辑
+                var package = MatchPackageForSorting(photoelectricName);
+                if (package != null)
                 {
-                    // 使用基类的匹配逻辑
-                    var package = MatchPackageForSorting(photoelectricName);
-                    if (package != null)
-                    {
-                        // 临时存储匹配到的包裹
-                        MatchedPackages[photoelectricName] = package;
-                    }
-                    break;
-                }
-                case "+OCCH1:0":
-                {
-                    // 检查是否有匹配到的包裹
-                    if (!MatchedPackages.TryRemove(photoelectricName, out var package))
-                    {
-                        Log.Warning("分拣光电 {Name} 未找到匹配的包裹，无法执行分拣动作", photoelectricName);
-                        return;
-                    }
-
-                    Log.Information("收到分拣光电 {Name} 执行信号，开始处理包裹 {Barcode} 的分拣动作", 
+                    // 临时存储匹配到的包裹
+                    MatchedPackages[photoelectricName] = package;
+                    Log.Information("分拣光电 {Name} 匹配到包裹 {Barcode}，等待下降沿信号", 
                         photoelectricName, package.Barcode);
-
-                    // 执行分拣动作
-                    _ = ExecuteSortingAction(package, photoelectricName);
-                    break;
                 }
+                else
+                {
+                    Log.Warning("分拣光电 {Name} 未匹配到包裹", photoelectricName);
+                    // 打印当前待分拣队列状态
+                    var pendingPackages = PendingSortPackages.Values
+                        .Where(p => !IsPackageProcessing(p.Barcode))
+                        .OrderBy(p => p.TriggerTimestamp)
+                        .ThenBy(p => p.Index)
+                        .ToList();
+                    
+                    if (pendingPackages.Count != 0)
+                    {
+                        Log.Information("当前待分拣队列中有 {Count} 个包裹:", pendingPackages.Count);
+                        foreach (var pkg in pendingPackages)
+                        {
+                            Log.Information("包裹 {Barcode}(序号:{Index}) 触发时间:{TriggerTime:HH:mm:ss.fff} 目标格口:{Slot}", 
+                                pkg.Barcode, pkg.Index, pkg.TriggerTimestamp, pkg.ChuteName);
+                        }
+                    }
+                    else
+                    {
+                        Log.Information("当前待分拣队列为空");
+                    }
+                }
+            }
+
+            if (!message.Contains("OCCH1:0")) return;
+            {
+                Log.Information("分拣光电 {Name} 收到下降沿信号，准备执行分拣动作", photoelectricName);
+                // 检查是否有匹配到的包裹
+                if (!MatchedPackages.TryRemove(photoelectricName, out var package))
+                {
+                    Log.Warning("分拣光电 {Name} 未找到匹配的包裹，无法执行分拣动作", photoelectricName);
+                    return;
+                }
+
+                Log.Information("分拣光电 {Name} 开始处理包裹 {Barcode} 的分拣动作", 
+                    photoelectricName, package.Barcode);
+
+                // 执行分拣动作
+                _ = ExecuteSortingAction(package, photoelectricName);
             }
         }
         catch (Exception ex)
@@ -292,7 +317,7 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
     /// <summary>
     /// 重新连接设备
     /// </summary>
-    protected override async Task ReconnectAsync()
+    protected override Task ReconnectAsync()
     {
         try
         {
@@ -305,9 +330,9 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
                     Configuration.TriggerPhotoelectric.IpAddress,
                     Configuration.TriggerPhotoelectric.Port,
                     ProcessTriggerData,
-                    connected => UpdateDeviceConnectionState("触发光电", connected) // 启用自动重连
+                    connected => UpdateDeviceConnectionState("触发光电", connected)
                 );
-                await TriggerClient.ConnectAsync();
+                TriggerClient.Connect();
             }
 
             // 重连分拣光电
@@ -320,19 +345,19 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
                     photoelectric.IpAddress,
                     photoelectric.Port,
                     data => ProcessSortingData(data, photoelectric.Name),
-                    connected => UpdateDeviceConnectionState(photoelectric.Name, connected) // 启用自动重连
+                    connected => UpdateDeviceConnectionState(photoelectric.Name, connected)
                 );
                 _sortingClients[photoelectric.Name] = newClient;
-                await newClient.ConnectAsync();
+                newClient.Connect();
                     
                 // 如果服务正在运行，发送启动命令和回正命令
                 if (!IsRunningFlag) continue;
                 var startCommand = GetCommandBytes(PendulumCommands.Module2.Start);
-                await newClient.SendAsync(startCommand);
+                newClient.Send(startCommand);
                 var resetLeftCommand = GetCommandBytes(PendulumCommands.Module2.ResetLeft);
                 var resetRightCommand = GetCommandBytes(PendulumCommands.Module2.ResetRight);
-                await newClient.SendAsync(resetLeftCommand);
-                await newClient.SendAsync(resetRightCommand);
+                newClient.Send(resetLeftCommand);
+                newClient.Send(resetRightCommand);
                 Log.Debug("重连后已发送启动和回正命令到分拣光电 {Name}", photoelectric.Name);
             }
         }
@@ -340,6 +365,8 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
         {
             Log.Error(ex, "重连设备失败");
         }
+
+        return Task.CompletedTask;
     }
 
     protected override bool SlotBelongsToPhotoelectric(int targetSlot, string photoelectricName)

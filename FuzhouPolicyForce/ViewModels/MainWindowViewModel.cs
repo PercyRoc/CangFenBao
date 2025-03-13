@@ -316,14 +316,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         PackageInfoItems.Add(new PackageInfoItem
         {
-            Label = "段码",
-            Value = "--",
-            Description = "三段码信息",
-            Icon = "Barcode24"
-        });
-
-        PackageInfoItems.Add(new PackageInfoItem
-        {
             Label = "分拣口",
             Value = "--",
             Description = "目标分拣位置",
