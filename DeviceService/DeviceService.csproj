@@ -19,13 +19,15 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\CommonLibrary\CommonLibrary.csproj"/>
-        <ProjectReference Include="..\Presentation-CommonLibrary\Presentation-CommonLibrary.csproj"/>
+        <ProjectReference Include="..\Common\Common.csproj" />
     </ItemGroup>
 
     <ItemGroup>
         <Reference Include="LogisticsBaseCSharp">
             <HintPath>Camera\DaHua\Libs\LogisticsBaseCSharp.dll</HintPath>
+        </Reference>
+        <Reference Include="MvCodeReaderSDK.Net">
+          <HintPath>lib\MvCodeReaderSDK.Net.dll</HintPath>
         </Reference>
         <Reference Include="MVIDCodeReader.Net">
             <HintPath>lib\MVIDCodeReader.Net.dll</HintPath>

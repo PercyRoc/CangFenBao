@@ -1,0 +1,149 @@
+﻿using System.Collections.ObjectModel;
+using System.Windows;
+using Common.Services.Settings;
+using FuzhouPolicyForce.Models.Settings;
+using Prism.Commands;
+using Prism.Mvvm;
+
+namespace FuzhouPolicyForce.ViewModels.Settings;
+
+public class ChuteSettingsViewModel : BindableBase
+{
+    private readonly ISettingsService _settingsService;
+    private ChuteSettings _configuration = new();
+    private int _selectedChuteNumber = 1;
+    private ObservableCollection<int> _chuteNumbers = new();
+    private ChuteRule _currentRule = new();
+
+    public DelegateCommand SaveConfigurationCommand { get; }
+    
+    public ChuteSettings Configuration
+    {
+        get => _configuration;
+        private set => SetProperty(ref _configuration, value);
+    }
+
+    public int SelectedChuteNumber
+    {
+        get => _selectedChuteNumber;
+        set
+        {
+            if (SetProperty(ref _selectedChuteNumber, value))
+            {
+                LoadChuteRule(value);
+            }
+        }
+    }
+
+    public ObservableCollection<int> ChuteNumbers
+    {
+        get => _chuteNumbers;
+        set => SetProperty(ref _chuteNumbers, value);
+    }
+
+    public ChuteRule CurrentRule
+    {
+        get => _currentRule;
+        set => SetProperty(ref _currentRule, value);
+    }
+
+    public ChuteSettingsViewModel(ISettingsService settingsService)
+    {
+        _settingsService = settingsService;
+        SaveConfigurationCommand = new DelegateCommand(ExecuteSaveConfiguration);
+        
+        // 加载配置
+        LoadSettings();
+        
+        // 注册配置变更事件
+        _settingsService.OnSettingsChanged<ChuteSettings>(OnSettingsChanged);
+        
+        // 监听格口数量变化
+        Configuration.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(Configuration.ChuteCount))
+            {
+                UpdateChuteNumbers();
+            }
+        };
+    }
+
+    private void LoadSettings()
+    {
+        Configuration = _settingsService.LoadSettings<ChuteSettings>();
+        UpdateChuteNumbers();
+        
+        if (Configuration.ChuteRules.TryGetValue(SelectedChuteNumber, out var rule))
+        {
+            CurrentRule = rule;
+        }
+        else
+        {
+            CurrentRule = new ChuteRule();
+            Configuration.ChuteRules[SelectedChuteNumber] = CurrentRule;
+        }
+    }
+
+    private void UpdateChuteNumbers()
+    {
+        if (!Application.Current.Dispatcher.CheckAccess())
+        {
+            Application.Current.Dispatcher.Invoke(UpdateChuteNumbers);
+            return;
+        }
+
+        ChuteNumbers.Clear();
+        for (var i = 1; i <= Configuration.ChuteCount; i++)
+        {
+            ChuteNumbers.Add(i);
+        }
+        
+        if (SelectedChuteNumber > Configuration.ChuteCount)
+        {
+            SelectedChuteNumber = 1;
+        }
+    }
+
+    private void LoadChuteRule(int chuteNumber)
+    {
+        if (Configuration.ChuteRules.TryGetValue(chuteNumber, out var rule))
+        {
+            CurrentRule = rule;
+        }
+        else
+        {
+            CurrentRule = new ChuteRule();
+            Configuration.ChuteRules[chuteNumber] = CurrentRule;
+        }
+    }
+
+    private void ExecuteSaveConfiguration()
+    {
+        // 确保当前规则已保存到字典中
+        Configuration.ChuteRules[SelectedChuteNumber] = CurrentRule;
+        
+        // 保存配置
+        _settingsService.SaveSettings(Configuration, validate: true);
+    }
+
+    private void OnSettingsChanged(ChuteSettings settings)
+    {
+        if (!Application.Current.Dispatcher.CheckAccess())
+        {
+            Application.Current.Dispatcher.Invoke(() => OnSettingsChanged(settings));
+            return;
+        }
+
+        Configuration = settings;
+        
+        if (settings.ChuteRules.TryGetValue(SelectedChuteNumber, out var rule))
+        {
+            CurrentRule = rule;
+        }
+        else
+        {
+            CurrentRule = new ChuteRule();
+            Configuration.ChuteRules[SelectedChuteNumber] = CurrentRule;
+        }
+    }
+}

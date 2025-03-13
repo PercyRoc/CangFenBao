@@ -1,0 +1,46 @@
+<Page x:Class="Presentation_SeedingWall.Views.Settings.PlcSettingsView"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:settings="clr-namespace:Presentation_SeedingWall.ViewModels.Settings"
+      mc:Ignorable="d"
+      d:DataContext="{d:DesignInstance Type=settings:PlcSettingsViewModel}"
+      d:DesignHeight="450" d:DesignWidth="800">
+    <StackPanel Margin="18" VerticalAlignment="Top">
+        <!-- 标题 -->
+        <TextBlock Text="PLC通信设置"
+                   FontSize="20"
+                   FontWeight="Bold"
+                   Margin="0,0,0,20" />
+
+        <!-- 服务器IP地址 -->
+        <StackPanel Margin="0,0,0,10" HorizontalAlignment="Center">
+            <TextBlock Text="服务器IP地址"
+                       FontWeight="Medium"
+                       Margin="0,0,0,5" />
+            <ui:TextBox Text="{Binding Configuration.ServerIp, UpdateSourceTrigger=PropertyChanged}"
+                        PlaceholderText="请输入服务器IP地址，例如：127.0.0.1"
+                        Width="200"
+                        Margin="0,0,0,5" />
+            <TextBlock Text="PLC将作为客户端连接到此IP地址"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       FontSize="12" />
+        </StackPanel>
+
+        <!-- 服务器端口 -->
+        <StackPanel Margin="0,10,0,10" HorizontalAlignment="Center">
+            <TextBlock Text="服务器端口"
+                       FontWeight="Medium"
+                       Margin="0,0,0,5" />
+            <ui:TextBox Text="{Binding Configuration.ServerPort, UpdateSourceTrigger=PropertyChanged}"
+                        PlaceholderText="请输入服务器端口，例如：4600"
+                        Width="200"
+                        Margin="0,0,0,5" />
+            <TextBlock Text="PLC将连接到此端口"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       FontSize="12" />
+        </StackPanel>
+    </StackPanel>
+</Page>

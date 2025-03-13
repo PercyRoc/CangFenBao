@@ -1,16 +1,4 @@
 {
-    "dotnet.defaultSolution": "CangFenBao.sln",
-    "dotnet.typeMembers.propertyGenerationBehavior": "preferAutoProperties",
-    "csharp.inlayHints.enableInlayHintsForImplicitObjectCreation": true,
-    "csharp.inlayHints.enableInlayHintsForImplicitVariableTypes": true,
-    "csharp.inlayHints.enableInlayHintsForLambdaParameterTypes": true,
-    "csharp.inlayHints.enableInlayHintsForTypes": true,
-    "dotnet.inlayHints.enableInlayHintsForIndexerParameters": true,
-    "dotnet.inlayHints.enableInlayHintsForLiteralParameters": true,
-    "dotnet.inlayHints.enableInlayHintsForObjectCreationParameters": true,
-    "dotnet.inlayHints.enableInlayHintsForParameters": true,
-    "dotnet.inlayHints.suppressInlayHintsForParametersThatDifferOnlyBySuffix": true,
-    "dotnet.inlayHints.suppressInlayHintsForParametersThatMatchMethodIntent": true,
-    "dotnet.formatting.organizeImportsOnFormat": true,
-    "commentTranslate.targetLanguage": ""
+    "commentTranslate.source": "intellsmi.comment-translate-ali.cloud",
+    "commentTranslate.hover.enabled": true
 }

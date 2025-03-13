@@ -1,5 +1,5 @@
 ---
-description: This rule mainly regulates C# code1.
+description: WPF Project Basic Rules
 globs: 
 alwaysApply: false
 ---
@@ -11,6 +11,7 @@ alwaysApply: false
 2. **模块化与可复用性**：我们将避免代码重复，编写模块化、可复用且易于维护的代码。这种做法不仅提高了可读性，还简化了未来的更新和维护工作。
 3. **面向对象编程（OOP）和 SOLID 原则**：我们将遵循 OOP 原则和 SOLID 设计原则，确保代码具有可扩展性、灵活性，并易于扩展。
 4. **有意义的命名约定**：所有变量和方法的命名都将具有意义且描述性强，使代码具有自解释性，更易于理解。
+5. **详细的代码注释**：添加详细的方法注释，方法中如果重要的地方也添加合适的注释。
 
 ### 约定
 

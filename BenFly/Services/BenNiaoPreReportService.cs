@@ -1,0 +1,231 @@
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using Common.Services;
+using Common.Services.Settings;
+using Presentation_BenFly.Models.BenNiao;
+using Presentation_BenFly.Models.Upload;
+using Serilog;
+using Timer = System.Timers.Timer;
+
+namespace Presentation_BenFly.Services;
+
+/// <summary>
+///     笨鸟预报数据服务
+/// </summary>
+public class BenNiaoPreReportService : IDisposable
+{
+    private const string SettingsKey = "UploadSettings";
+    private readonly IHttpClientFactory _httpClientFactory;
+    private HttpClient _httpClient;
+
+    // 创建JSON序列化选项，避免中文转义
+    private readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        WriteIndented = true
+    };
+
+    private readonly ISettingsService _settingsService;
+    private readonly Timer _updateTimer;
+    private bool _disposed;
+    private List<PreReportDataResponse>? _preReportData;
+    private UploadConfiguration _config;
+
+    public BenNiaoPreReportService(
+        IHttpClientFactory httpClientFactory,
+        ISettingsService settingsService)
+    {
+        _httpClientFactory = httpClientFactory;
+        _settingsService = settingsService;
+        _config = _settingsService.LoadSettings<UploadConfiguration>(SettingsKey);
+
+        // 初始化 HttpClient
+        _httpClient = CreateHttpClient();
+
+        // 订阅配置变更
+        _settingsService.OnSettingsChanged<UploadConfiguration>(HandleConfigurationChanged);
+
+        // 初始化定时器
+        _updateTimer = new Timer();
+        _updateTimer.Elapsed += async (_, _) => await UpdatePreReportDataAsync();
+
+        // 立即执行一次预报数据更新
+        Task.Run(async () =>
+        {
+            try
+            {
+                Log.Information("启动时执行预报数据更新");
+                await UpdatePreReportDataAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "启动时更新预报数据失败");
+            }
+        });
+
+        // 启动定时更新
+        StartUpdateTimer();
+    }
+
+    private HttpClient CreateHttpClient()
+    {
+        var baseUrl = _config.BenNiaoEnvironment == BenNiaoEnvironment.Production
+            ? "https://api.benniao.com"
+            : "http://sit.bnsy.rhb56.cn";
+        
+        var client = _httpClientFactory.CreateClient("BenNiao");
+        client.BaseAddress = new Uri(baseUrl);
+        Log.Information("已创建 HttpClient，BaseUrl: {BaseUrl}", baseUrl);
+        return client;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+
+        _updateTimer.Stop();
+        _updateTimer.Dispose();
+        
+        // 取消配置变更订阅
+        _settingsService.OnSettingsChanged<UploadConfiguration>(null);
+        
+        _disposed = true;
+
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// 处理配置变更
+    /// </summary>
+    private void HandleConfigurationChanged(UploadConfiguration newConfig)
+    {
+        try
+        {
+            Log.Information("笨鸟预报数据服务配置已变更");
+
+            // 检查环境是否变更
+            if (_config.BenNiaoEnvironment != newConfig.BenNiaoEnvironment)
+            {
+                Log.Information("笨鸟环境已变更，重新创建 HttpClient");
+                _config = newConfig;
+                _httpClient = CreateHttpClient();
+            }
+            else
+            {
+                _config = newConfig;
+            }
+
+            // 更新定时器间隔
+            _updateTimer.Interval = TimeSpan.FromSeconds(newConfig.PreReportUpdateIntervalSeconds).TotalMilliseconds;
+            Log.Information("已更新预报数据更新间隔为 {Interval} 秒", newConfig.PreReportUpdateIntervalSeconds);
+
+            // 立即执行一次数据更新
+            Task.Run(async () =>
+            {
+                try
+                {
+                    await UpdatePreReportDataAsync();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "配置变更后更新预报数据失败");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "处理配置变更时发生错误");
+        }
+    }
+
+    /// <summary>
+    ///     获取预报数据
+    /// </summary>
+    public List<PreReportDataResponse>? GetPreReportData()
+    {
+        return _preReportData;
+    }
+
+    /// <summary>
+    ///     启动定时更新
+    /// </summary>
+    private void StartUpdateTimer()
+    {
+        try
+        {
+            var interval = TimeSpan.FromSeconds(_config.PreReportUpdateIntervalSeconds);
+
+            _updateTimer.Interval = interval.TotalMilliseconds;
+            _updateTimer.Start();
+
+            Log.Information("已启动预报数据定时更新，间隔：{Interval}秒", _config.PreReportUpdateIntervalSeconds);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "启动预报数据定时更新失败");
+        }
+    }
+
+    /// <summary>
+    ///     更新预报数据
+    /// </summary>
+    public async Task UpdatePreReportDataAsync()
+    {
+        try
+        {
+            Log.Information("开始获取笨鸟预报数据");
+
+            const string url = "/api/openApi/dataDownload";
+
+            // 构建请求参数
+            var requestBody = new { netWorkName = _config.BenNiaoDistributionCenterName };
+            Log.Information("笨鸟预报数据请求参数：{@RequestBody}", requestBody);
+
+            // 创建签名请求
+            var request = BenNiaoSignHelper.CreateRequest(
+                _config.BenNiaoAppId,
+                _config.BenNiaoAppSecret,
+                requestBody);
+
+            Log.Information("笨鸟预报数据签名请求：{@Request}", JsonSerializer.Serialize(request, _jsonOptions));
+            Log.Information("笨鸟预报数据请求地址：{BaseUrl}{Url}", _httpClient.BaseAddress, url);
+
+            // 发送请求
+            var jsonContent = JsonSerializer.Serialize(request, _jsonOptions);
+            Log.Information("笨鸟预报数据请求JSON：{@JsonContent}", jsonContent);
+
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+            var response = await _httpClient.PostAsync(url, content);
+
+            Log.Information("笨鸟预报数据响应状态码：{StatusCode}", response.StatusCode);
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+            Log.Information("笨鸟预报数据响应内容：{@Response}", responseContent);
+
+            response.EnsureSuccessStatusCode();
+
+            var result =
+                await response.Content.ReadFromJsonAsync<BenNiaoResponse<List<PreReportDataResponse>>>(_jsonOptions);
+
+            if (result is { IsSuccess: true, Result: not null })
+            {
+                _preReportData = result.Result;
+
+                Log.Information("成功获取笨鸟预报数据，数量：{Count}", _preReportData.Count);
+                if (_preReportData.Count != 0) Log.Information("笨鸟预报数据示例：{@FirstItem}", _preReportData.First());
+            }
+            else
+            {
+                var message = result?.Message ?? "未知错误";
+                Log.Error("获取笨鸟预报数据失败：{Message}", message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "获取笨鸟预报数据时发生错误");
+        }
+    }
+}
