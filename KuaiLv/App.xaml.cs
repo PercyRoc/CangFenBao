@@ -16,8 +16,6 @@ using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 using System.IO;
-using System.Threading.Tasks;
-using System.Threading;
 
 namespace Presentation_KuaiLv;
 
@@ -170,7 +168,7 @@ public partial class App
         try
         {
             _cleanupTimer = new System.Timers.Timer(1000 * 60 * 60); // 每1小时执行一次
-            _cleanupTimer.Elapsed += (_, args) =>
+            _cleanupTimer.Elapsed += (_, _) =>
             {
                 try
                 {

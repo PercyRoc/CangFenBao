@@ -5,19 +5,20 @@ using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
-using Microsoft.Extensions.DependencyInjection;
+using FuzhouPolicyForce.Views.Settings;
 using Microsoft.Extensions.Hosting;
 using Presentation_ZtCloudWarehous.Services;
 using Presentation_ZtCloudWarehous.ViewModels;
 using Presentation_ZtCloudWarehous.ViewModels.Settings;
 using Presentation_ZtCloudWarehous.Views;
+using Presentation_ZtCloudWarehous.Views.Settings;
 using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
+using SharedUI.ViewModels.Settings;
 using SortingServices.Pendulum;
 using SortingServices.Pendulum.Extensions;
 using SortingServices.Pendulum.Models;
-using ZtCloudWarehous.Views.Settings;
 
 namespace Presentation_ZtCloudWarehous;
 
@@ -60,7 +61,8 @@ public partial class App
 
         // 注册称重设置页面
         containerRegistry.RegisterForNavigation<WeighingSettingsPage, WeighingSettingsViewModel>();
-
+        containerRegistry.RegisterForNavigation<BalanceSortSettingsView, BalanceSortSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
         // 获取设置服务
         var settingsService = Container.Resolve<ISettingsService>();
 

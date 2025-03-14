@@ -4,6 +4,7 @@ using Common.Extensions;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.Extensions;
+using FuzhouPolicyForce.Views.Settings;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Presentation_BenFly.Services;
@@ -22,7 +23,6 @@ using SharedUI.Views.Settings;
 using SortingServices.Pendulum;
 using SortingServices.Pendulum.Extensions;
 using SortingServices.Pendulum.Models;
-using SortSettingsView = Presentation_BenFly.Views.Settings.SortSettingsView;
 
 namespace Presentation_BenFly;
 
@@ -43,7 +43,7 @@ public partial class App
 
         // 注册设置页面和ViewModel
         containerRegistry.RegisterForNavigation<CameraSettingsView, CameraSettingsViewModel>();
-        containerRegistry.RegisterForNavigation<SortSettingsView, SortSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<BalanceSortSettingsView, BalanceSortSettingsViewModel>();
         containerRegistry.RegisterForNavigation<UploadSettingsView, UploadSettingsViewModel>();
         containerRegistry.RegisterForNavigation<ChuteSettingsView, ChuteSettingsViewModel>();
         containerRegistry.RegisterForNavigation<BeltSettingsView, BeltSettingsViewModel>();

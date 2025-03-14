@@ -1,6 +1,4 @@
-using System.Windows.Controls;
-
-namespace ZtCloudWarehous.Views.Settings;
+namespace Presentation_ZtCloudWarehous.Views.Settings;
 
 public partial class WeighingSettingsPage
 {

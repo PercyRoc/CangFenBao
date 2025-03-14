@@ -1,17 +1,17 @@
-using Common.Services.Settings;
+﻿using Common.Services.Settings;
 using Prism.Commands;
 using Prism.Mvvm;
 using SortingServices.Pendulum.Models;
 
-namespace Presentation_ZtCloudWarehous.ViewModels.Settings;
+namespace SharedUI.ViewModels.Settings;
 
-public class SortSettingsViewModel : BindableBase
+public class BalanceSortSettingsViewModel: BindableBase
 {
     private readonly ISettingsService _settingsService;
 
     private PendulumSortConfig _configuration = new();
 
-    public SortSettingsViewModel(ISettingsService settingsService)
+    public BalanceSortSettingsViewModel(ISettingsService settingsService)
     {
         _settingsService = settingsService;
 

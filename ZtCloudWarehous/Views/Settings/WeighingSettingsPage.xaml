@@ -1,5 +1,5 @@
 <Page
-    x:Class="ZtCloudWarehous.Views.Settings.WeighingSettingsPage"
+    x:Class="Presentation_ZtCloudWarehous.Views.Settings.WeighingSettingsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"

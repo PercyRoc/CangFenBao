@@ -9,6 +9,7 @@
                   xmlns:hc="https://handyorg.github.io/handycontrol"
                   xmlns:settings="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
                   xmlns:local="clr-namespace:FuzhouPolicyForce.Views.Settings"
+                  xmlns:local1="clr-namespace:FuzhouPolicyForce.Views.Settings;assembly=SharedUI"
                   prism:ViewModelLocator.AutoWireViewModel="True"
                   mc:Ignorable="d"
                   d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}"
@@ -50,7 +51,7 @@
                     Width="48"
                     Height="32"
                     Effect="{StaticResource IconGlowEffect}">
-                <Image Source="/logo.ico"
+                <Image Source="/Resources/favicon.ico"
                        Width="32"
                        Height="32"
                        Margin="8,0,8,0"
@@ -132,7 +133,7 @@
                                 <ui:SymbolIcon Symbol="ArrowSort24" />
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="local:SortSettingsView" />
+                                <x:Type Type="local1:BalanceSortSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
 
@@ -142,7 +143,7 @@
                                 <ui:SymbolIcon Symbol="Grid24" />
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="local:ChuteSettingsView" />
+                                <x:Type Type="local1:BarcodeChuteSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>

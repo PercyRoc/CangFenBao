@@ -6,6 +6,59 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
+        <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
+        <UseWPF>true</UseWPF>
+        <AssemblyName>仓分宝-中通云仓</AssemblyName>
     </PropertyGroup>
+
+    <ItemGroup>
+      <Page Update="Views\MainWindow.xaml">
+        <Generator>MSBuild:Compile</Generator>
+        <XamlRuntime>Wpf</XamlRuntime>
+        <SubType>Designer</SubType>
+      </Page>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Common\Common.csproj" />
+        <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>
+        <ProjectReference Include="..\SharedUI\SharedUI.csproj" />
+        <ProjectReference Include="..\SortingServices\SortingServices.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Prism -->
+        <PackageReference Include="Prism.DryIoc"/>
+        <PackageReference Include="Prism.Wpf"/>
+
+        <!-- Serilog -->
+        <PackageReference Include="Serilog"/>
+        <PackageReference Include="Serilog.Sinks.Console"/>
+        <PackageReference Include="Serilog.Sinks.File"/>
+        <PackageReference Include="Serilog.Sinks.Debug"/>
+        <PackageReference Include="Serilog.Extensions.Logging"/>
+
+        <!-- UI Framework -->
+        <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
+        <PackageReference Include="Microsoft.Extensions.Http"/>
+        <PackageReference Include="FluentFTP"/>
+        <PackageReference Include="WPF-UI"/>
+        <PackageReference Include="HandyControl"/>
+        <PackageReference Include="EPPlus"/>
+
+        <!-- WebSocket -->
+        <PackageReference Include="WebSocketSharp-netstandard"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Resource Include="..\SharedUI\Resources\Icon\logo.ico">
+            <Link>logo.ico</Link>
+        </Resource>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="ViewModels\Settings\" />
+      <Folder Include="Views\Settings\" />
+    </ItemGroup>
 
 </Project>

@@ -15,7 +15,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
     private readonly ChuteSettingsViewModel _chuteSettingsViewModel;
     private readonly INotificationService _notificationService;
-    private readonly SortSettingsViewModel _sortSettingsViewModel;
+    private readonly BalanceSortSettingsViewModel _balanceSortSettingsViewModel;
     private readonly UploadSettingsViewModel _uploadSettingsViewModel;
     private readonly BeltSettingsViewModel _beltSettingsViewModel;
 
@@ -27,7 +27,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
 
         // 创建各个设置页面的ViewModel实例
         _cameraSettingsViewModel = containerProvider.Resolve<CameraSettingsViewModel>();
-        _sortSettingsViewModel = containerProvider.Resolve<SortSettingsViewModel>();
+        _balanceSortSettingsViewModel = containerProvider.Resolve<BalanceSortSettingsViewModel>();
         _uploadSettingsViewModel = containerProvider.Resolve<UploadSettingsViewModel>();
         _chuteSettingsViewModel = containerProvider.Resolve<ChuteSettingsViewModel>();
         _beltSettingsViewModel = containerProvider.Resolve<BeltSettingsViewModel>();
@@ -62,7 +62,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
         {
             // 保存所有设置
             _cameraSettingsViewModel.SaveConfigurationCommand.Execute();
-            _sortSettingsViewModel.SaveConfigurationCommand.Execute();
+            _balanceSortSettingsViewModel.SaveConfigurationCommand.Execute();
             _uploadSettingsViewModel.SaveConfigurationCommand.Execute();
             _chuteSettingsViewModel.SaveCommand.Execute(null);
             _beltSettingsViewModel.SaveConfigurationCommand.Execute();

@@ -2,12 +2,12 @@
 using System.Windows.Controls;
 using System.Windows.Media;
 using Common.Extensions;
-using DeviceService;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Scanner;
 using DeviceService.DataSourceDevices.Weight;
 using DeviceService.Extensions;
 using HandyControl.Controls;
+using Presentation_SangNeng.Services;
 using Presentation_SangNeng.ViewModels.Dialogs;
 using Presentation_SangNeng.ViewModels.Settings;
 using Presentation_SangNeng.ViewModels.Windows;
@@ -15,6 +15,8 @@ using Presentation_SangNeng.Views.Dialogs;
 using Presentation_SangNeng.Views.Settings;
 using Presentation_SangNeng.Views.Windows;
 using Prism.Ioc;
+using SangNeng.Services;
+using SangNeng.ViewModels.Settings;
 using Serilog;
 using SharedUI.Extensions;
 using Window = System.Windows.Window;
@@ -52,6 +54,9 @@ public partial class App
             .AddScanner() // 扫码枪
             .AddWeightScale(); // 重量称
 
+        // 注册桑能服务
+        containerRegistry.RegisterSingleton<ISangNengService, SangNengService>();
+
         // 注册窗口和ViewModel
         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
         containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
@@ -68,6 +73,9 @@ public partial class App
         containerRegistry.Register<VolumeSettingsViewModel>();
         containerRegistry.Register<WeightSettingsViewModel>();
         containerRegistry.Register<PalletSettingsViewModel>();
+
+        // 注册桑能设置页面
+        containerRegistry.RegisterForNavigation<SangNengSettingsPage, SangNengSettingsViewModel>();
     }
 
     /// <summary>
@@ -244,28 +252,26 @@ public partial class App
             weightStartupService.StopAsync(CancellationToken.None).Wait();
 
             // 释放相机工厂
-            if (Container.Resolve<CameraFactory>() is IAsyncDisposable cameraFactory)
-                cameraFactory.DisposeAsync().AsTask().Wait();
+            if (Container.Resolve<CameraFactory>() is IDisposable cameraFactory)
+            {
+                cameraFactory.Dispose();
+                Log.Information("相机工厂已释放");
+            }
 
             // 释放相机服务
-            if (Container.Resolve<ICameraService>() is IAsyncDisposable cameraService)
-                cameraService.DisposeAsync().AsTask().Wait();
-
-            // 释放主窗口 ViewModel
-            if (MainWindow?.DataContext is IDisposable disposable) disposable.Dispose();
-
+            if (Container.Resolve<ICameraService>() is IDisposable cameraService)
+            {
+                cameraService.Dispose();
+                Log.Information("相机服务已释放");
+            }
             // 等待所有日志写入完成
             Log.Information("应用程序关闭");
             Log.CloseAndFlush();
-
-            // 确保所有后台线程都已完成
-            Thread.Sleep(500);
         }
         catch (Exception ex)
         {
             Log.Error(ex, "应用程序关闭时发生错误");
             Log.CloseAndFlush();
-            Thread.Sleep(500);
         }
         finally
         {

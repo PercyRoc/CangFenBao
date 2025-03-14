@@ -24,6 +24,8 @@ using Presentation_SangNeng.ViewModels.Settings;
 using Prism.Commands;
 using Prism.Events;
 using Prism.Mvvm;
+using SangNeng.Models;
+using SangNeng.Services;
 using Serilog;
 using SharedUI.Models;
 using SixLabors.ImageSharp;
@@ -49,6 +51,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly Timer _timer;
     private readonly RenJiaCameraService _volumeCamera;
     private readonly SerialPortWeightService _weightService;
+    private readonly ISangNengService _sangNengService;
     private ObservableCollection<SelectablePalletModel> _availablePallets;
     private string _currentBarcode = string.Empty;
     private ImageSource? _currentImage;
@@ -76,7 +79,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
         ISettingsService settingsService,
         IPackageDataService packageDataService,
         IAudioService audioService,
-        IEventAggregator eventAggregator)
+        IEventAggregator eventAggregator,
+        ISangNengService sangNengService)
     {
         _dialogService = dialogService;
         _scannerService = scannerService;
@@ -86,6 +90,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _settingsService = settingsService;
         _packageDataService = packageDataService;
         _audioService = audioService;
+        _sangNengService = sangNengService;
 
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
         OpenHistoryWindowCommand = new DelegateCommand(() => { _dialogService.ShowDialog("HistoryWindow"); });
@@ -351,12 +356,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 Image<Rgba32>? capturedImage = null;
                 var imageCaptured = false;
                 var imageLock = new object();
-                IDisposable? imageSubscription = null;
 
                 if (_cameraService is HikvisionIndustrialCameraSdkClient hikvisionCamera)
                 {
                     // 先订阅图像流，准备接收触发后的图像
-                    imageSubscription = hikvisionCamera.ImageStream.Subscribe(imageData =>
+                    hikvisionCamera.ImageStream.Subscribe(imageData =>
                     {
                         lock (imageLock)
                         {
@@ -466,24 +470,47 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 }
 
                 // 在体积测量完成后保存捕获的图像
-                lock (imageLock)
+                Image<Rgba32>? imageToProcess = null;
+                string? base64Image = null;
+                string? imageName = null;
+
+                try
                 {
-                    if (capturedImage != null)
+                    lock (imageLock)
+                    {
+                        if (capturedImage != null)
+                        {
+                            imageToProcess = capturedImage.Clone();
+                            capturedImage.Dispose(); // 释放原始图像
+                            capturedImage = null;
+                        }
+                    }
+
+                    if (imageToProcess != null)
+                    {
                         try
                         {
                             var cameraSettings = _settingsService.LoadSettings<CameraSettings>("CameraSettings");
-                            _ = SaveImageAsync(capturedImage, cameraSettings, _currentPackage, cts.Token);
+                            var result = await SaveImageAsync(imageToProcess, cameraSettings, _currentPackage, cts.Token);
+                            if (result.HasValue)
+                            {
+                                (base64Image, imageName) = result.Value;
+                            }
                         }
                         catch (Exception ex)
                         {
                             Log.Error(ex, "保存图像到文件时发生错误");
                         }
+                    }
                     else
+                    {
                         Log.Warning("未能捕获到软触发图像");
+                    }
                 }
-
-                // 清理订阅
-                imageSubscription?.Dispose();
+                finally
+                {
+                    imageToProcess?.Dispose();
+                }
 
                 Application.Current.Dispatcher.Invoke(() =>
                 {
@@ -504,6 +531,39 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     // 更新统计信息
                     UpdateStatistics();
                 });
+
+                // 调用桑能接口上传数据
+                try 
+                {
+                    var request = new SangNengWeightRequest
+                    {
+                        Barcode = _currentPackage.Barcode,
+                        Weight = _currentPackage.Weight,
+                        Length = _currentPackage.Length ?? 0,
+                        Width = _currentPackage.Width ?? 0,
+                        Height = _currentPackage.Height ?? 0,
+                        Volume = _currentPackage.Volume ?? 0,
+                        Timestamp = _currentPackage.CreateTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                        Image = base64Image ?? string.Empty,
+                        ImageName = imageName ?? string.Empty
+                    };
+
+                    var response = await _sangNengService.SendWeightDataAsync(request);
+                    if (response.Code != 0)  // 假设 0 表示成功
+                    {
+                        Log.Warning("上传数据到桑能服务器失败: {Message}", response.Message);
+                        Application.Current.Dispatcher.Invoke(() => UpdatePackageStatus("Upload Failed"));
+                    }
+                    else 
+                    {
+                        Log.Information("成功上传数据到桑能服务器");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "上传数据到桑能服务器时发生错误");
+                    Application.Current.Dispatcher.Invoke(() => UpdatePackageStatus("Upload Error"));
+                }
 
                 // 在后台保存到数据库，不等待完成
                 _ = Task.Run(async () =>
@@ -600,11 +660,15 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    private static async Task SaveImageAsync(Image<Rgba32> image, CameraSettings settings, PackageInfo package,
+    private static async Task<(string base64Image, string imageName)?> SaveImageAsync(Image<Rgba32> image, CameraSettings settings, PackageInfo package,
         CancellationToken cancellationToken)
     {
+        string? tempFilePath = null;
         try
         {
+            string? base64Image = null;
+            var imageName = string.Empty;
+            
             await Task.Run(async () =>
             {
                 // 确保保存目录存在
@@ -612,7 +676,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                 // 生成文件名（使用条码和时间戳）
                 var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff");
-                var fileName = $"{package.Barcode}_{timestamp}";
+                imageName = $"{package.Barcode}_{timestamp}";
                 var extension = settings.ImageFormat switch
                 {
                     ImageFormat.Jpeg => ".jpg",
@@ -621,10 +685,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     ImageFormat.Tiff => ".tiff",
                     _ => ".jpg"
                 };
-                var filePath = Path.Combine(settings.ImageSavePath, fileName + extension);
+                var filePath = Path.Combine(settings.ImageSavePath, imageName + extension);
 
                 // 先保存原始图像到临时文件
-                var tempFilePath = Path.Combine(settings.ImageSavePath, $"temp_{fileName}{extension}");
+                tempFilePath = Path.Combine(settings.ImageSavePath, $"temp_{imageName}{extension}");
                 await using (var fileStream =
                              new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
                 {
@@ -662,9 +726,33 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                     // 保存带水印的图像
                     bitmap.Save(filePath, System.Drawing.Imaging.ImageFormat.Jpeg);
+
+                    // 转换为Base64
+                    using (var ms = new MemoryStream())
+                    {
+                        bitmap.Save(ms, System.Drawing.Imaging.ImageFormat.Jpeg);
+                        base64Image = Convert.ToBase64String(ms.ToArray());
+                    }
                 }
 
-                // 删除临时文件
+                // 保存图片路径到包裹对象
+                package.ImagePath = filePath;
+
+                Log.Debug("图像已保存：{FilePath}", filePath);
+            }, cancellationToken);
+
+            return (base64Image!, imageName);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Log.Error(ex, "保存图像时发生错误");
+            return null;
+        }
+        finally
+        {
+            // 清理临时文件
+            if (tempFilePath != null && File.Exists(tempFilePath))
+            {
                 try
                 {
                     File.Delete(tempFilePath);
@@ -673,16 +761,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 {
                     Log.Warning(ex, "删除临时文件失败：{Path}", tempFilePath);
                 }
-
-                // 保存图片路径到包裹对象
-                package.ImagePath = filePath;
-
-                Log.Debug("图像已保存：{FilePath}", filePath);
-            }, cancellationToken);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            Log.Error(ex, "保存图像时发生错误");
+            }
         }
     }
 

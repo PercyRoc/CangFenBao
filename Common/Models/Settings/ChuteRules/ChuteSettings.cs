@@ -2,16 +2,15 @@ using System.ComponentModel.DataAnnotations;
 using Common.Services.Settings;
 using Prism.Mvvm;
 using Serilog;
-using System.Linq;
 
-namespace FuzhouPolicyForce.Models.Settings;
+namespace Common.Models.Settings.ChuteRules;
 
 [Configuration("ChuteSettings")]
 public class ChuteSettings : BindableBase
 {
     private int _chuteCount = 1;
     private int _errorChuteNumber;
-    private Dictionary<int, ChuteRule> _chuteRules = new();
+    private Dictionary<int, BarcodeMatchRule> _chuteRules = new();
 
     [Range(1, 100, ErrorMessage = "格口数量必须在1-100之间")]
     public int ChuteCount
@@ -27,7 +26,7 @@ public class ChuteSettings : BindableBase
         set => SetProperty(ref _errorChuteNumber, value);
     }
     
-    public Dictionary<int, ChuteRule> ChuteRules
+    public Dictionary<int, BarcodeMatchRule> ChuteRules
     {
         get => _chuteRules;
         set => SetProperty(ref _chuteRules, value);
@@ -58,7 +57,7 @@ public class ChuteSettings : BindableBase
     }
 }
 
-public class ChuteRule : BindableBase
+public class BarcodeMatchRule : BindableBase
 {
     private bool _isDigitOnly;
     private bool _isLetterOnly;

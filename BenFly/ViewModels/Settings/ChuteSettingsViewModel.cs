@@ -26,7 +26,7 @@ public class ChuteSettingsViewModel : BindableBase
         _notificationService = notificationService;
 
         AddRuleCommand = new DelegateCommand(ExecuteAddRule);
-        DeleteRuleCommand = new DelegateCommand<ChuteRule>(ExecuteDeleteRule);
+        DeleteRuleCommand = new DelegateCommand<SegmentMatchRule>(ExecuteDeleteRule);
         ImportExcelCommand = new DelegateCommand(ExecuteImportExcel);
         ExportExcelCommand = new DelegateCommand(ExecuteExportExcel);
         SaveCommand = new DelegateCommand(ExecuteSave);
@@ -49,10 +49,10 @@ public class ChuteSettingsViewModel : BindableBase
 
     private void ExecuteAddRule()
     {
-        Configuration.Rules.Add(new ChuteRule());
+        Configuration.Rules.Add(new SegmentMatchRule());
     }
 
-    private void ExecuteDeleteRule(ChuteRule? rule)
+    private void ExecuteDeleteRule(SegmentMatchRule? rule)
     {
         if (rule != null) Configuration.Rules.Remove(rule);
     }
@@ -82,7 +82,7 @@ public class ChuteSettingsViewModel : BindableBase
                 return;
             }
 
-            var rules = new List<ChuteRule>();
+            var rules = new List<SegmentMatchRule>();
             for (var row = 2; row <= worksheet.Dimension.End.Row; row++)
             {
                 var chute = worksheet.Cells[row, 1].Text;
@@ -96,7 +96,7 @@ public class ChuteSettingsViewModel : BindableBase
                     string.IsNullOrWhiteSpace(thirdSegment))
                     continue;
 
-                var rule = new ChuteRule
+                var rule = new SegmentMatchRule
                 {
                     Chute = Convert.ToInt32(chute),
                     FirstSegment = firstSegment,

@@ -1,0 +1,63 @@
+<Page
+    x:Class="ChongqingJushuitan.Views.Settings.JushuitanSettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:settings="clr-namespace:ChongqingJushuitan.ViewModels.Settings"
+    xmlns:converters="clr-namespace:SharedUI.Converters;assembly=SharedUI"
+    mc:Ignorable="d"
+    d:DataContext="{d:DesignInstance Type=settings:JushuitanSettingsViewModel}"
+    Title="聚水潭称重接口设置">
+    
+    <Page.Resources>
+        <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+    </Page.Resources>
+    
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <StackPanel Margin="20" Grid.Row="0">
+            <GroupBox Header="环境设置" Margin="0,0,0,10">
+                <StackPanel Margin="10">
+                    <RadioButton Content="正式环境" 
+                               IsChecked="{Binding Settings.IsProduction}"
+                               Margin="0,0,0,5"/>
+                    <RadioButton Content="测试环境" 
+                               IsChecked="{Binding Settings.IsProduction, Converter={StaticResource InverseBooleanConverter}}"
+                               Margin="0,0,0,5"/>
+                </StackPanel>
+            </GroupBox>
+
+            <GroupBox Header="接口参数" Margin="0,0,0,10">
+                <Grid Margin="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Text="AppKey：" Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,5"/>
+                    <TextBox Text="{Binding Settings.AppKey}" Grid.Row="0" Grid.Column="1" Margin="0,0,0,5"/>
+
+                    <TextBlock Text="AppSecret：" Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,5"/>
+                    <TextBox Text="{Binding Settings.AppSecret}" Grid.Row="1" Grid.Column="1" Margin="0,0,0,5"/>
+
+                    <TextBlock Text="AccessToken：" Grid.Row="2" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,5"/>
+                    <TextBox Text="{Binding Settings.AccessToken}" Grid.Row="2" Grid.Column="1" Margin="0,0,0,5"/>
+
+                    <TextBlock Text="RefreshToken：" Grid.Row="3" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,5"/>
+                    <TextBox Text="{Binding Settings.RefreshToken}" Grid.Row="3" Grid.Column="1" Margin="0,0,0,5"/>
+                </Grid>
+            </GroupBox>
+        </StackPanel>
+    </Grid>
+</Page> 

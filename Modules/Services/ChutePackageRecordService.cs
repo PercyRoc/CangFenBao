@@ -1,5 +1,11 @@
 using System.Collections.Concurrent;
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Common.Models.Package;
+using Common.Services.Settings;
+using Presentation_Modules.Models;
 using Serilog;
 
 namespace Presentation_Modules.Services;
@@ -9,11 +15,24 @@ namespace Presentation_Modules.Services;
 /// </summary>
 public class ChutePackageRecordService
 {
+    private const string ApiUrl = "http://123.56.22.107:8080/api/DWSInfo2";
+    private readonly HttpClient _httpClient;
+    private readonly ModuleConfig _config;
+    
     // 使用线程安全的字典来存储每个格口的包裹记录
     private readonly ConcurrentDictionary<int, List<PackageInfo>> _chutePackages = new();
     
     // 格口锁定状态字典
     private readonly ConcurrentDictionary<int, bool> _chuteLockStatus = new();
+
+    public ChutePackageRecordService(HttpClient httpClient, ISettingsService settingsService)
+    {
+        _httpClient = httpClient;
+        _config = settingsService.LoadSettings<ModuleConfig>();
+        
+        // 设置默认请求头
+        _httpClient.DefaultRequestHeaders.Add("equickToken", _config.Token);
+    }
     
     /// <summary>
     /// 添加包裹记录
@@ -121,22 +140,73 @@ public class ChutePackageRecordService
     {
         try
         {
-            // TODO: 实现上传到指定接口的逻辑
-            // 这里是一个示例，实际实现需要根据接口规范来开发
+            // 根据站点代码确定handlers
+            var handlers = _config.SiteCode == "1002" ? "深圳收货组03" : "上海收货组03";
             
-            Log.Information("准备上传格口 {ChuteNumber} 的 {Count} 条包裹记录到API", 
-                chuteNumber, packages.Count);
+            // 构建包裹条码字符串，用逗号分隔
+            var packageCodes = string.Join(",", packages.Select(p => p.Barcode));
             
-            // 模拟API调用延迟
-            await Task.Delay(500);
-            
-            // 记录上传的包裹条码
-            var barcodes = string.Join(", ", packages.Select(p => p.Barcode));
-            Log.Information("格口 {ChuteNumber} 的包裹记录已上传: {Barcodes}", chuteNumber, barcodes);
+            // 构建请求数据
+            var requestData = new
+            {
+                packageCode = packageCodes,
+                chute_code = chuteNumber.ToString(),
+                Time = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                handlers,
+                siteCode = _config.SiteCode
+            };
+
+            // 序列化为JSON
+            var content = new StringContent(
+                JsonSerializer.Serialize(requestData),
+                Encoding.UTF8,
+                "application/json");
+
+            // 设置超时时间
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_config.ServerTimeout));
+
+            // 发送请求
+            Log.Information("正在上传格口 {ChuteNumber} 的包裹记录到API: {PackageCodes}", 
+                chuteNumber, packageCodes);
+                
+            var response = await _httpClient.PostAsync(ApiUrl, content, cts.Token);
+
+            // 检查响应状态
+            if (!response.IsSuccessStatusCode)
+            {
+                Log.Warning("上传格口包裹记录失败: HTTP状态码 {StatusCode}", response.StatusCode);
+                throw new HttpRequestException($"HTTP状态码: {response.StatusCode}");
+            }
+
+            // 解析响应
+            var responseJson = await response.Content.ReadAsStringAsync(cts.Token);
+            var responseData = JsonSerializer.Deserialize<ApiResponse>(responseJson);
+
+            if (responseData == null)
+            {
+                Log.Warning("解析API响应失败: {Response}", responseJson);
+                throw new JsonException("无法解析API响应");
+            }
+
+            // 检查响应码
+            if (responseData.Code != 200)
+            {
+                Log.Warning("上传格口包裹记录失败: 错误码 {Code}, 消息 {Message}",
+                    responseData.Code, responseData.Msg);
+                throw new Exception($"API错误: {responseData.Msg}");
+            }
+
+            Log.Information("格口 {ChuteNumber} 的包裹记录已成功上传", chuteNumber);
+        }
+        catch (TaskCanceledException)
+        {
+            Log.Warning("上传格口 {ChuteNumber} 的包裹记录超时, 超时时间: {Timeout}ms",
+                chuteNumber, _config.ServerTimeout);
+            throw;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "上传格口 {ChuteNumber} 的包裹数据到API时出错", chuteNumber);
+            Log.Error(ex, "上传格口 {ChuteNumber} 的包裹记录时发生异常", chuteNumber);
             throw;
         }
     }
@@ -183,5 +253,23 @@ public class ChutePackageRecordService
         }
         
         return result;
+    }
+
+    /// <summary>
+    /// API响应数据结构
+    /// </summary>
+    private class ApiResponse
+    {
+        [JsonPropertyName("result")]
+        public string? Result { get; init; }
+        
+        [JsonPropertyName("code")]
+        public int Code { get; init; }
+        
+        [JsonPropertyName("msg")]
+        public string? Msg { get; init; }
+        
+        [JsonPropertyName("barCode")]
+        public string? BarCode { get; init; }
     }
 } 

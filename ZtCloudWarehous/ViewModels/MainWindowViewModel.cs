@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Common.Models.Package;
+using Common.Models.Settings.ChuteRules;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
@@ -415,7 +416,45 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // 设置包裹序号
             package.Index = Interlocked.Increment(ref _currentPackageIndex);
             Log.Information("收到包裹信息：{Barcode}, 序号：{Index}", package.Barcode, package.Index);
+            _sortService.ProcessPackage(package);
+            try
+            {
+                // 获取格口规则配置
+                var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
 
+                // 判断条码是否为空或noread
+                if (string.IsNullOrEmpty(package.Barcode) ||
+                    string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase))
+                {
+                    // 使用异常口
+                    package.ChuteName = chuteSettings.ErrorChuteNumber;
+                    Log.Warning("包裹条码为空或noread，使用异常口：{ErrorChute}", chuteSettings.ErrorChuteNumber);
+                }
+                else
+                {
+                    // 尝试匹配格口规则
+                    var matchedChute = chuteSettings.FindMatchingChute(package.Barcode);
+
+                    if (matchedChute.HasValue)
+                    {
+                        package.ChuteName = matchedChute.Value;
+                        Log.Information("包裹 {Barcode} 匹配到格口 {Chute}", package.Barcode, matchedChute.Value);
+                    }
+                    else
+                    {
+                        // 没有匹配到规则，使用异常口
+                        package.ChuteName = chuteSettings.ErrorChuteNumber;
+                        Log.Warning("包裹 {Barcode} 未匹配到任何规则，使用异常口：{ErrorChute}",
+                            package.Barcode, chuteSettings.ErrorChuteNumber);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "获取格口号时发生错误：{Barcode}", package.Barcode);
+                package.SetError($"获取格口号失败：{ex.Message}");
+            }
+            
             // 发送称重数据
             try
             {
@@ -458,8 +497,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     Log.Error(ex, "更新UI时发生错误");
                 }
             });
-
-            _sortService.ProcessPackage(package);
 
             Application.Current.Dispatcher.Invoke(() =>
             {

@@ -2,9 +2,9 @@
 
 namespace FuzhouPolicyForce.Views.Settings;
 
-public partial class SortSettingsView
+public partial class BarcodeChuteSettingsView
 {
-    public SortSettingsView()
+    public BarcodeChuteSettingsView()
     {
         InitializeComponent();
     }

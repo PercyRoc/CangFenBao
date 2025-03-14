@@ -7,9 +7,9 @@
                  xmlns:prism="http://prismlibrary.com/"
                  xmlns:hc="https://handyorg.github.io/handycontrol"
                  xmlns:viewModels="clr-namespace:Presentation_ZtCloudWarehous.ViewModels"
-                 xmlns:settings="clr-namespace:Presentation_ZtCloudWarehous.Views.Settings"
                  xmlns:settings1="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
-                 xmlns:settings2="clr-namespace:ZtCloudWarehous.Views.Settings"
+                 xmlns:settings="clr-namespace:FuzhouPolicyForce.Views.Settings;assembly=SharedUI"
+                 xmlns:settings2="clr-namespace:Presentation_ZtCloudWarehous.Views.Settings"
                  prism:ViewModelLocator.AutoWireViewModel="True"
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}"
@@ -127,12 +127,19 @@
                                                Tag="SortSettingsView"
                                                Icon="{ui:SymbolIcon ArrowSort24}">
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="settings:SortSettingsView" />
+                                <x:Type Type="settings:BalanceSortSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
                         <ui:NavigationViewItem Content="称重设置"
                                                Tag="WeighingSettingsPage"
                                                Icon="{ui:SymbolIcon ScaleFill24}">
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="settings2:WeighingSettingsPage" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
+                        <ui:NavigationViewItem Content="格口设置"
+                                               Tag="BarcodeChuteSettingsView"
+                                               Icon="{ui:SymbolIcon Grid24}">
                             <ui:NavigationViewItem.TargetPageType>
                                 <x:Type Type="settings2:WeighingSettingsPage" />
                             </ui:NavigationViewItem.TargetPageType>

@@ -1,16 +1,21 @@
-﻿using System.Windows;
+﻿using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows;
 using Common.Extensions;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.Extensions;
 using FuzhouPolicyForce.ViewModels;
-using FuzhouPolicyForce.ViewModels.Settings;
 using FuzhouPolicyForce.Views;
 using FuzhouPolicyForce.Views.Settings;
 using Microsoft.Extensions.Hosting;
 using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
+using SharedUI.ViewModels;
+using SharedUI.ViewModels.Settings;
+using SharedUI.Views;
 using SortingServices.Pendulum;
 using SortingServices.Pendulum.Extensions;
 using SortingServices.Pendulum.Models;
@@ -22,6 +27,8 @@ namespace FuzhouPolicyForce;
 /// </summary>
 public partial class App
 {
+    private System.Timers.Timer? _cleanupTimer;
+
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
         // 注册视图和ViewModel
@@ -33,11 +40,13 @@ public partial class App
         containerRegistry.AddPhotoCamera();
 
         // 注册设置页面的ViewModel
-        containerRegistry.RegisterForNavigation<SortSettingsView, SortSettingsViewModel>();
-        containerRegistry.RegisterForNavigation<ChuteSettingsView, ChuteSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<BalanceSortSettingsView, BalanceSortSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
 
         containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
         containerRegistry.Register<SettingsDialogViewModel>();
+        containerRegistry.Register<Window,HistoryWindow>("HistoryDialog");
+        containerRegistry.Register<HistoryWindowViewModel>();
 
         // 获取设置服务
         var settingsService = Container.Resolve<ISettingsService>();
@@ -64,6 +73,14 @@ public partial class App
                 rollOnFileSizeLimit: true)
             .CreateLogger();
 
+        // 注册全局异常处理
+        DispatcherUnhandledException += App_DispatcherUnhandledException;
+        AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+        TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
+
+        // 启动DUMP文件清理任务
+        StartCleanupTask();
+
         Log.Information("应用程序启动");
         base.OnStartup(e);
 
@@ -86,10 +103,136 @@ public partial class App
         }
     }
 
+    private void App_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
+    {
+        try
+        {
+            Log.Fatal(e.Exception, "UI线程发生未处理的异常");
+            MessageBox.Show($"程序发生错误：{e.Exception.Message}\n请查看日志了解详细信息。", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            e.Handled = true;
+        }
+        catch (Exception ex)
+        {
+            Log.Fatal(ex, "处理UI异常时发生错误");
+        }
+    }
+
+    private void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+    {
+        try
+        {
+            var exception = e.ExceptionObject as Exception;
+            Log.Fatal(exception, "应用程序域发生未处理的异常");
+        }
+        catch (Exception ex)
+        {
+            Log.Fatal(ex, "处理应用程序域异常时发生错误");
+        }
+    }
+
+    private void TaskScheduler_UnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    {
+        try
+        {
+            Log.Fatal(e.Exception, "异步任务中发生未处理的异常");
+            e.SetObserved();
+        }
+        catch (Exception ex)
+        {
+            Log.Fatal(ex, "处理异步任务异常时发生错误");
+        }
+    }
+
+    /// <summary>
+    /// 启动定期清理任务
+    /// </summary>
+    private void StartCleanupTask()
+    {
+        try
+        {
+            _cleanupTimer = new System.Timers.Timer(1000 * 60 * 60); // 每1小时执行一次
+            _cleanupTimer.Elapsed += (_, args) =>
+            {
+                try
+                {
+                    CleanupDumpFiles();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "清理DUMP文件时发生错误");
+                }
+            };
+            _cleanupTimer.Start();
+
+            // 应用启动时立即执行一次清理
+            Task.Run(() =>
+            {
+                try
+                {
+                    CleanupDumpFiles();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "初始清理DUMP文件时发生错误");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "启动清理任务时发生错误");
+        }
+    }
+
+    /// <summary>
+    /// 清理DUMP文件
+    /// </summary>
+    private void CleanupDumpFiles()
+    {
+        try
+        {
+            var dumpPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory);
+            var dumpFiles = Directory.GetFiles(dumpPath, "*.dmp", SearchOption.TopDirectoryOnly);
+
+            int deletedCount = 0;
+            foreach (var file in dumpFiles)
+            {
+                try
+                {
+                    File.Delete(file);
+                    deletedCount++;
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "删除DUMP文件失败: {FilePath}", file);
+                }
+            }
+
+            if (deletedCount > 0)
+            {
+                Log.Information("成功清理 {Count} 个DUMP文件", deletedCount);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "清理DUMP文件过程中发生错误");
+            throw;
+        }
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
         try
         {
+            Log.Information("应用程序开始关闭...");
+
+            // 停止清理定时器
+            if (_cleanupTimer != null)
+            {
+                _cleanupTimer.Stop();
+                _cleanupTimer.Dispose();
+                Log.Information("清理定时器已停止");
+            }
+
             // 停止摆轮分拣托管服务
             var pendulumHostedService = Container.Resolve<IHostedService>();
             pendulumHostedService.StopAsync(CancellationToken.None).Wait();

@@ -7,8 +7,8 @@
                  xmlns:prism="http://prismlibrary.com/"
                  xmlns:dialogs="clr-namespace:Presentation_SangNeng.ViewModels.Dialogs"
                  xmlns:hc="https://handyorg.github.io/handycontrol"
-                 xmlns:local="clr-namespace:Presentation_SangNeng.Views.Settings"
                  xmlns:settings="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
+                 xmlns:local1="clr-namespace:Presentation_SangNeng.Views.Settings"
                  prism:ViewModelLocator.AutoWireViewModel="True"
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=dialogs:SettingsDialogViewModel}"
@@ -116,7 +116,7 @@
                                 <ui:SymbolIcon Symbol="Cube24" />
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="local:VolumeSettingsView" />
+                                <x:Type Type="local1:VolumeSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
 
@@ -126,7 +126,7 @@
                                 <ui:SymbolIcon Symbol="Scales24" />
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="local:WeightSettingsView" />
+                                <x:Type Type="local1:WeightSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
 
@@ -136,7 +136,17 @@
                                 <ui:SymbolIcon Symbol="BoxMultiple24" />
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="local:PalletSettingsView" />
+                                <x:Type Type="local1:PalletSettingsView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
+
+                        <ui:NavigationViewItem Content="Server Settings"
+                                               Tag="Server">
+                            <ui:NavigationViewItem.Icon>
+                                <ui:SymbolIcon Symbol="Server24" />
+                            </ui:NavigationViewItem.Icon>
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="local1:SangNengSettingsPage" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>

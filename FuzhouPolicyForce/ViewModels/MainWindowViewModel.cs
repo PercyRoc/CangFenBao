@@ -6,6 +6,7 @@ using System.Reactive.Linq;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Common.Data;
 using Common.Models.Package;
 using Common.Models.Settings.ChuteRules;
 using Common.Services.Settings;
@@ -29,6 +30,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly IDialogService _dialogService;
     private readonly ISettingsService _settingsService;
     private readonly IPendulumSortService _sortService;
+    private readonly IPackageDataService _packageDataService;
     private readonly List<IDisposable> _subscriptions = [];
 
     private readonly DispatcherTimer _timer;
@@ -48,16 +50,19 @@ public class MainWindowViewModel : BindableBase, IDisposable
         ISettingsService settingsService,
         IPendulumSortService sortService,
         PackageTransferService packageTransferService,
-        ScannerStartupService scannerStartupService)
+        ScannerStartupService scannerStartupService,
+        IPackageDataService packageDataService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
         _settingsService = settingsService;
         _sortService = sortService;
+        _packageDataService = packageDataService;
         scannerStartupService.GetScannerService();
 
         // 初始化命令
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
+        OpenHistoryCommand = new DelegateCommand(ExecuteOpenHistory);
 
         // 初始化系统状态更新定时器
         _timer = new DispatcherTimer
@@ -141,6 +146,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     public DelegateCommand OpenSettingsCommand { get; }
 
+    public DelegateCommand OpenHistoryCommand { get; }
+
     public string CurrentBarcode
     {
         get => _currentBarcode;
@@ -173,6 +180,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private void ExecuteOpenSettings()
     {
         _dialogService.ShowDialog("SettingsDialog");
+    }
+
+    private void ExecuteOpenHistory()
+    {
+        _dialogService.ShowDialog("HistoryDialog");
     }
 
     private void Timer_Tick(object? sender, EventArgs e)
@@ -371,20 +383,18 @@ public class MainWindowViewModel : BindableBase, IDisposable
         });
     }
 
-    private void OnPackageInfo(PackageInfo package)
+    private async void OnPackageInfo(PackageInfo package)
     {
         try
         {
             // 设置包裹序号
             package.Index = Interlocked.Increment(ref _currentPackageIndex);
             Log.Information("收到包裹信息：{Barcode}, 序号：{Index}", package.Barcode, package.Index);
-
-
-
+            _sortService.ProcessPackage(package);
             try
             {
                 // 获取格口规则配置
-                var chuteSettings = _settingsService.LoadSettings<Models.Settings.ChuteSettings>();
+                var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
 
                 // 判断条码是否为空或noread
                 if (string.IsNullOrEmpty(package.Barcode) ||
@@ -397,7 +407,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 else
                 {
                     // 尝试匹配格口规则
-                    int? matchedChute = chuteSettings.FindMatchingChute(package.Barcode);
+                    var matchedChute = chuteSettings.FindMatchingChute(package.Barcode);
 
                     if (matchedChute.HasValue)
                     {
@@ -418,7 +428,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 Log.Error(ex, "获取格口号时发生错误：{Barcode}", package.Barcode);
                 package.SetError($"获取格口号失败：{ex.Message}");
             }
-            _sortService.ProcessPackage(package);
+
             Application.Current.Dispatcher.Invoke(() =>
             {
                 try
@@ -438,6 +448,17 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     Log.Error(ex, "更新UI时发生错误");
                 }
             });
+            
+            // 保存包裹记录到数据库
+            try
+            {
+                await _packageDataService.AddPackageAsync(package);
+                Log.Information("包裹记录已保存到数据库：{Barcode}", package.Barcode);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "保存包裹记录到数据库时发生错误：{Barcode}", package.Barcode);
+            }
         }
         catch (Exception ex)
         {
@@ -453,7 +474,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         {
             barcodeItem.Value = package.Barcode;
             barcodeItem.Description = string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase)
-                ? "条码识别失败，请使用巴枪扫描"
+                ? "条码识别失败"
                 : "包裹条码信息";
         }
 

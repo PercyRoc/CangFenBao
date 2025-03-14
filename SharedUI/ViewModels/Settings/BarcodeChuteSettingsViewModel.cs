@@ -1,19 +1,19 @@
 ﻿using System.Collections.ObjectModel;
 using System.Windows;
+using Common.Models.Settings.ChuteRules;
 using Common.Services.Settings;
-using FuzhouPolicyForce.Models.Settings;
 using Prism.Commands;
 using Prism.Mvvm;
 
-namespace FuzhouPolicyForce.ViewModels.Settings;
+namespace SharedUI.ViewModels.Settings;
 
-public class ChuteSettingsViewModel : BindableBase
+public class BarcodeChuteSettingsViewModel : BindableBase
 {
     private readonly ISettingsService _settingsService;
     private ChuteSettings _configuration = new();
     private int _selectedChuteNumber = 1;
-    private ObservableCollection<int> _chuteNumbers = new();
-    private ChuteRule _currentRule = new();
+    private ObservableCollection<int> _chuteNumbers = [];
+    private BarcodeMatchRule _currentRule = new();
 
     public DelegateCommand SaveConfigurationCommand { get; }
     
@@ -41,13 +41,13 @@ public class ChuteSettingsViewModel : BindableBase
         set => SetProperty(ref _chuteNumbers, value);
     }
 
-    public ChuteRule CurrentRule
+    public BarcodeMatchRule CurrentRule
     {
         get => _currentRule;
-        set => SetProperty(ref _currentRule, value);
+        private set => SetProperty(ref _currentRule, value);
     }
 
-    public ChuteSettingsViewModel(ISettingsService settingsService)
+    public BarcodeChuteSettingsViewModel(ISettingsService settingsService)
     {
         _settingsService = settingsService;
         SaveConfigurationCommand = new DelegateCommand(ExecuteSaveConfiguration);
@@ -79,7 +79,7 @@ public class ChuteSettingsViewModel : BindableBase
         }
         else
         {
-            CurrentRule = new ChuteRule();
+            CurrentRule = new BarcodeMatchRule();
             Configuration.ChuteRules[SelectedChuteNumber] = CurrentRule;
         }
     }
@@ -112,7 +112,7 @@ public class ChuteSettingsViewModel : BindableBase
         }
         else
         {
-            CurrentRule = new ChuteRule();
+            CurrentRule = new BarcodeMatchRule();
             Configuration.ChuteRules[chuteNumber] = CurrentRule;
         }
     }
@@ -142,7 +142,7 @@ public class ChuteSettingsViewModel : BindableBase
         }
         else
         {
-            CurrentRule = new ChuteRule();
+            CurrentRule = new BarcodeMatchRule();
             Configuration.ChuteRules[SelectedChuteNumber] = CurrentRule;
         }
     }

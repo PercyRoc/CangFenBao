@@ -332,14 +332,12 @@ public class TcpCameraService(string host = "127.0.0.1", int port = 2000) : ICam
             {
                 currentPacket.Add(part);
                 fieldCount++;
-                
-                if (fieldCount == 7)
-                {
-                    // 找到一个完整的数据包
-                    completePackets.Add(string.Join(",", currentPacket));
-                    currentPacket.Clear();
-                    fieldCount = 0;
-                }
+
+                if (fieldCount != 7) continue;
+                // 找到一个完整的数据包
+                completePackets.Add(string.Join(",", currentPacket));
+                currentPacket.Clear();
+                fieldCount = 0;
             }
             
             // 添加所有完整的数据包

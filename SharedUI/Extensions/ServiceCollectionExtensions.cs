@@ -8,7 +8,6 @@ public static class ServiceCollectionExtensions
 {
     public static void AddShardUi(this IContainerRegistry services)
     {
-        services.Register<CameraSettingsView>();
-        services.Register<CameraSettingsViewModel>();
+        services.RegisterForNavigation<CameraSettingsView, CameraSettingsViewModel>();
     }
 }

@@ -1,5 +1,4 @@
-﻿using Common.Services.Settings;
-using Common.Services.Ui;
+﻿using Common.Services.Ui;
 using Presentation_ZtCloudWarehous.ViewModels.Settings;
 using Prism.Commands;
 using Prism.Ioc;
@@ -15,20 +14,22 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
     // 保存各个设置页面的ViewModel实例
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
     private readonly INotificationService _notificationService;
-    private readonly SortSettingsViewModel _sortSettingsViewModel;
+    private readonly BalanceSortSettingsViewModel _sortSettingsViewModel;
     private readonly WeighingSettingsViewModel _weighingSettingsViewModel;
+    private readonly BarcodeChuteSettingsViewModel _barcodeChuteSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
         INotificationService notificationService)
     {
         _notificationService = notificationService;
+       
 
         // 创建各个设置页面的ViewModel实例
         _cameraSettingsViewModel = containerProvider.Resolve<CameraSettingsViewModel>();
-        _sortSettingsViewModel = containerProvider.Resolve<SortSettingsViewModel>();
+        _sortSettingsViewModel = containerProvider.Resolve<BalanceSortSettingsViewModel>();
         _weighingSettingsViewModel = containerProvider.Resolve<WeighingSettingsViewModel>();
-
+        _barcodeChuteSettingsViewModel =  containerProvider.Resolve<BarcodeChuteSettingsViewModel>();
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
     }
@@ -61,7 +62,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
             _cameraSettingsViewModel.SaveConfigurationCommand.Execute();
             _sortSettingsViewModel.SaveConfigurationCommand.Execute();
             _weighingSettingsViewModel.SaveConfigurationCommand.Execute();
-
+            _barcodeChuteSettingsViewModel.SaveConfigurationCommand.Execute();
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");
             RequestClose?.Invoke(new DialogResult(ButtonResult.OK));

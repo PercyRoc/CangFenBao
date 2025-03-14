@@ -4,6 +4,7 @@ using Prism.Commands;
 using Prism.Ioc;
 using Prism.Mvvm;
 using Prism.Services.Dialogs;
+using SangNeng.ViewModels.Settings;
 using Serilog;
 using SharedUI.ViewModels.Settings;
 
@@ -17,6 +18,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
     private readonly PalletSettingsViewModel _palletSettingsViewModel;
     private readonly VolumeSettingsViewModel _volumeSettingsViewModel;
     private readonly WeightSettingsViewModel _weightSettingsViewModel;
+    private readonly SangNengSettingsViewModel _sangNengSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
@@ -29,6 +31,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
         _volumeSettingsViewModel = containerProvider.Resolve<VolumeSettingsViewModel>();
         _weightSettingsViewModel = containerProvider.Resolve<WeightSettingsViewModel>();
         _palletSettingsViewModel = containerProvider.Resolve<PalletSettingsViewModel>();
+        _sangNengSettingsViewModel = containerProvider.Resolve<SangNengSettingsViewModel>();
 
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
@@ -63,6 +66,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
             _volumeSettingsViewModel.SaveConfigurationCommand.Execute();
             _weightSettingsViewModel.SaveConfigurationCommand.Execute();
             _palletSettingsViewModel.SaveConfigurationCommand.Execute();
+            _sangNengSettingsViewModel.SaveConfigurationCommand.Execute();
 
             Log.Information("All settings saved");
             _notificationService.ShowSuccess("Settings saved");

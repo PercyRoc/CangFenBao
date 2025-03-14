@@ -10,7 +10,7 @@ namespace Common.Models.Settings.ChuteRules;
 public class SegmentCodeRules : BindableBase
 {
     private int _exceptionChute;
-    private ObservableCollection<ChuteRule> _rules = [];
+    private ObservableCollection<SegmentMatchRule> _rules = [];
 
     [RegularExpression(@"^[1-9]\d{0,2}$", ErrorMessage = "异常格口号必须是1-999之间的数字")]
     public int ExceptionChute
@@ -19,7 +19,7 @@ public class SegmentCodeRules : BindableBase
         set => SetProperty(ref _exceptionChute, value);
     }
 
-    public ObservableCollection<ChuteRule> Rules
+    public ObservableCollection<SegmentMatchRule> Rules
     {
         get => _rules;
         set => SetProperty(ref _rules, value);
@@ -155,7 +155,7 @@ public class SegmentCodeRules : BindableBase
     }
 }
 
-public class ChuteRule : BindableBase, IValidatableObject
+public class SegmentMatchRule : BindableBase, IValidatableObject
 {
     private int _chute;
     private string _errorMessage = string.Empty;

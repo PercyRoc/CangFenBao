@@ -10,7 +10,6 @@ public class WeighingSettingsViewModel : BindableBase
 {
     private readonly ISettingsService _settingsService;
     private readonly INotificationService _notificationService;
-    private readonly WeighingSettings _settings;
 
     public WeighingSettingsViewModel(
         ISettingsService settingsService,
@@ -18,12 +17,12 @@ public class WeighingSettingsViewModel : BindableBase
     {
         _settingsService = settingsService;
         _notificationService = notificationService;
-        _settings = _settingsService.LoadSettings<WeighingSettings>();
+        Settings = _settingsService.LoadSettings<WeighingSettings>();
 
         SaveConfigurationCommand = new DelegateCommand(ExecuteSaveConfiguration);
     }
 
-    public WeighingSettings Settings => _settings;
+    public WeighingSettings Settings { get; }
 
     public DelegateCommand SaveConfigurationCommand { get; }
 
@@ -31,7 +30,7 @@ public class WeighingSettingsViewModel : BindableBase
     {
         try
         {
-            var results = _settingsService.SaveSettings(_settings, validate: true);
+            var results = _settingsService.SaveSettings(Settings, validate: true);
             if (results.Length > 0)
             {
                 var errorMessage = string.Join("\n", results.Select(r => r.ErrorMessage));
@@ -40,7 +39,6 @@ public class WeighingSettingsViewModel : BindableBase
             }
 
             Log.Information("称重设置已保存");
-            _notificationService.ShowSuccess("称重设置已保存");
         }
         catch (Exception ex)
         {

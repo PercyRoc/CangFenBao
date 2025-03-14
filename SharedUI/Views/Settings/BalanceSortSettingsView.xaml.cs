@@ -2,9 +2,9 @@
 
 namespace FuzhouPolicyForce.Views.Settings;
 
-public partial class ChuteSettingsView
+public partial class BalanceSortSettingsView
 {
-    public ChuteSettingsView()
+    public BalanceSortSettingsView()
     {
         InitializeComponent();
     }

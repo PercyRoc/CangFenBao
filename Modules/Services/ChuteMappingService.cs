@@ -14,7 +14,7 @@ namespace Presentation_Modules.Services;
 /// </summary>
 public class ChuteMappingService : IDisposable
 {
-    private const string ApiUrl = "http://123.56.22.107:28081/api/getChuteCode";
+    private const string ApiUrl = "http://123.56.22.107:28081/api/DWSInfo";
     private readonly ModuleConfig _config;
     private readonly HttpClient _httpClient;
     private readonly ISettingsService _settingsService;
@@ -75,7 +75,7 @@ public class ChuteMappingService : IDisposable
             {
                 packageCode = package.Barcode,
                 scanTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
-                handlers = handlers,
+                handlers,
                 weight = package.Weight.ToString("0.000"),
                 siteCode = _siteCode
             };

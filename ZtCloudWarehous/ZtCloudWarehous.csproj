@@ -8,6 +8,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
         <UseWPF>true</UseWPF>
+        <AssemblyName>仓分宝-中通云仓</AssemblyName>
     </PropertyGroup>
 
     <ItemGroup>
@@ -47,14 +48,6 @@
 
         <!-- WebSocket -->
         <PackageReference Include="WebSocketSharp-netstandard"/>
-    </ItemGroup>
-
-    <ItemGroup>
-        <Page Update="Views\MainWindow.xaml">
-            <Generator>MSBuild:Compile</Generator>
-            <XamlRuntime>Wpf</XamlRuntime>
-            <SubType>Designer</SubType>
-        </Page>
     </ItemGroup>
 
     <ItemGroup>
