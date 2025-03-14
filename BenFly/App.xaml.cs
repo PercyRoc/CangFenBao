@@ -31,6 +31,9 @@ namespace BenFly;
 /// </summary>
 internal partial class App
 {
+    private static Mutex? _mutex;
+    private const string MutexName = "BenFly_App_Mutex";
+
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
         // 注册主窗口
@@ -78,7 +81,13 @@ internal partial class App
 
     protected override Window CreateShell()
     {
-        return Container.Resolve<MainWindow>();
+        // 检查是否已经运行
+        _mutex = new Mutex(true, MutexName, out var createdNew);
+
+        if (createdNew) return Container.Resolve<MainWindow>();
+        // 关闭当前实例
+        Current.Shutdown();
+        return null!;
     }
 
     protected override void OnStartup(StartupEventArgs e)
@@ -124,6 +133,10 @@ internal partial class App
     {
         try
         {
+            // 释放 Mutex
+            _mutex?.Dispose();
+            _mutex = null;
+
             // 停止串口托管服务
             var beltSerialHostedService = Container.Resolve<IHostedService>("BeltSerialHostedService");
             beltSerialHostedService.StopAsync(CancellationToken.None).Wait();

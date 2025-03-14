@@ -22,9 +22,19 @@ namespace PlateTurnoverMachine;
 /// </summary>
 internal partial class App
 {
+    private static Mutex? _mutex;
+    private const string MutexName = "PlateTurnoverMachine_App_Mutex";
+
     protected override Window CreateShell()
     {
-        return Container.Resolve<MainWindow>();
+        // 检查是否已经运行
+        _mutex = new Mutex(true, MutexName, out var createdNew);
+
+        if (createdNew) return Container.Resolve<MainWindow>();
+
+        // 关闭当前实例
+        Current.Shutdown();
+        return null!;
     }
 
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
@@ -100,6 +110,10 @@ internal partial class App
     {
         try
         {
+            // 释放 Mutex
+            _mutex?.Dispose();
+            _mutex = null;
+
             // 停止托管服务
             var hostedService = Container.Resolve<TcpConnectionHostedService>();
             hostedService.StopAsync(CancellationToken.None).Wait();

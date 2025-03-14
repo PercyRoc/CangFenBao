@@ -10,3 +10,5 @@ riderModule.iml
 *.ipr
 *.iws
 *.ids*
+/.vs
+/.cursor

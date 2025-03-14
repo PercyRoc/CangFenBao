@@ -13,19 +13,28 @@ using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 
-namespace Presentation_SeedingWall;
+namespace SeedingWall;
 
 /// <summary>
 ///     Interaction logic for App.xaml
 /// </summary>
 internal partial class App
 {
+    private static Mutex? _mutex;
+    private const string MutexName = "PlateTurnoverMachine_App_Mutex";
     /// <summary>
     ///     创建主窗口
     /// </summary>
     protected override Window CreateShell()
     {
-        return Container.Resolve<MainWindow>();
+        // 检查是否已经运行
+        _mutex = new Mutex(true, MutexName, out var createdNew);
+
+        if (createdNew) return Container.Resolve<MainWindow>();
+
+        // 关闭当前实例
+        Current.Shutdown();
+        return null!;
     }
 
     /// <summary>
@@ -145,7 +154,8 @@ internal partial class App
         try
         {
             Log.Information("应用程序开始关闭...");
-
+            _mutex?.Dispose();
+            _mutex = null;
             // 停止托管服务
             try
             {

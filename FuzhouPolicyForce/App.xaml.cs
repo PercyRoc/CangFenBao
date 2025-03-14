@@ -27,6 +27,8 @@ namespace FuzhouPolicyForce;
 /// </summary>
 internal partial class App
 {
+    private static Mutex? _mutex;
+    private const string MutexName = "FuzhouPolicyForce_App_Mutex";
     private Timer? _cleanupTimer;
 
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
@@ -58,7 +60,14 @@ internal partial class App
 
     protected override Window CreateShell()
     {
-        return Container.Resolve<MainWindow>();
+        // 检查是否已经运行
+        _mutex = new Mutex(true, MutexName, out var createdNew);
+
+        if (createdNew) return Container.Resolve<MainWindow>();
+
+        // 关闭当前实例
+        Current.Shutdown();
+        return null!;
     }
 
     protected override void OnStartup(StartupEventArgs e)
@@ -219,6 +228,10 @@ internal partial class App
     {
         try
         {
+            // 释放 Mutex
+            _mutex?.Dispose();
+            _mutex = null;
+
             Log.Information("应用程序开始关闭...");
 
             // 停止清理定时器

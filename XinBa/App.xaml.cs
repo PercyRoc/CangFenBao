@@ -16,6 +16,8 @@ namespace XinBa;
 /// </summary>
 internal partial class App
 {
+    private static Mutex? _mutex;
+    private const string MutexName = "XinBa_App_Mutex";
     private Window? _currentMainWindow;
 
     /// <summary>
@@ -23,6 +25,16 @@ internal partial class App
     /// </summary>
     protected override Window CreateShell()
     {
+        // 检查是否已经运行
+        _mutex = new Mutex(true, MutexName, out var createdNew);
+
+        if (!createdNew)
+        {
+            // 关闭当前实例
+            Current.Shutdown();
+            return null!;
+        }
+
         // 始终显示登录窗口
         Log.Information("应用程序启动，显示登录窗口");
 
@@ -250,6 +262,10 @@ internal partial class App
         try
         {
             Log.Information("应用程序开始关闭...");
+
+            // 释放 Mutex
+            _mutex?.Dispose();
+            _mutex = null;
 
             // 关闭所有窗口，无论是否可见
             foreach (Window window in Current.Windows)

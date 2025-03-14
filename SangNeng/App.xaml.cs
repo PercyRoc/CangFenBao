@@ -26,8 +26,10 @@ namespace SangNeng;
 /// <summary>
 ///     应用程序入口
 /// </summary>
-public partial class App
+internal partial class App
 {
+    private static Mutex? _mutex;
+    private const string MutexName = "SangNeng_App_Mutex";
     private CircleProgressBar? _loadingControl;
     private Window? _loadingWindow;
 
@@ -36,7 +38,14 @@ public partial class App
     /// </summary>
     protected override Window CreateShell()
     {
-        return Container.Resolve<MainWindow>();
+        // 检查是否已经运行
+        _mutex = new Mutex(true, MutexName, out var createdNew);
+
+        if (createdNew) return Container.Resolve<MainWindow>();
+
+        // 关闭当前实例
+        Current.Shutdown();
+        return null!;
     }
 
     /// <summary>
@@ -245,6 +254,10 @@ public partial class App
     {
         try
         {
+            // 释放 Mutex
+            _mutex?.Dispose();
+            _mutex = null;
+
             // 停止托管服务
             var cameraStartupService = Container.Resolve<CameraStartupService>();
             var volumeCameraStartupService = Container.Resolve<VolumeCameraStartupService>();

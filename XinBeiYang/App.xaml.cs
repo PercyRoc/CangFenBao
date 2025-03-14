@@ -19,11 +19,21 @@ namespace XinBeiYang;
 /// <summary>
 ///     Interaction logic for App.xaml
 /// </summary>
-public partial class App
+internal partial class App
 {
+    private static Mutex? _mutex;
+    private const string MutexName = "XinBeiYang_App_Mutex";
+
     protected override Window CreateShell()
     {
-        return Container.Resolve<MainWindow>();
+        // 检查是否已经运行
+        _mutex = new Mutex(true, MutexName, out var createdNew);
+
+        if (createdNew) return Container.Resolve<MainWindow>();
+
+        // 关闭当前实例
+        Current.Shutdown();
+        return null!;
     }
 
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
@@ -101,6 +111,10 @@ public partial class App
     {
         try
         {
+            // 释放 Mutex
+            _mutex?.Dispose();
+            _mutex = null;
+
             Log.Information("应用程序开始关闭...");
 
             // 停止托管服务
