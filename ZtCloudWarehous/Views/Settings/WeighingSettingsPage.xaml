@@ -9,68 +9,68 @@
     mc:Ignorable="d"
     d:DataContext="{d:DesignInstance Type=settings:WeighingSettingsViewModel}"
     Title="称重设置">
-    
+
     <Page.Resources>
-        <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+        <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
     </Page.Resources>
-    
+
     <StackPanel Margin="20">
         <GroupBox Header="环境设置" Margin="0,0,0,10">
             <StackPanel Margin="10">
-                <RadioButton Content="正式环境" 
-                           IsChecked="{Binding Settings.IsProduction}"
-                           Margin="0,0,0,5"/>
-                <RadioButton Content="联调环境" 
-                           IsChecked="{Binding Settings.IsProduction, Converter={StaticResource InverseBooleanConverter}}"
-                           Margin="0,0,0,5"/>
+                <RadioButton Content="正式环境"
+                             IsChecked="{Binding Settings.IsProduction}"
+                             Margin="0,0,0,5" />
+                <RadioButton Content="联调环境"
+                             IsChecked="{Binding Settings.IsProduction, Converter={StaticResource InverseBooleanConverter}}"
+                             Margin="0,0,0,5" />
             </StackPanel>
         </GroupBox>
 
         <GroupBox Header="公共参数" Margin="0,0,0,10">
             <Grid Margin="10">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <TextBlock Text="接口名称：" Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,5"/>
-                <TextBox Text="{Binding Settings.Api}" Grid.Row="0" Grid.Column="1" Margin="0,0,0,5"/>
+                <TextBlock Text="接口名称：" Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,5" />
+                <TextBox Text="{Binding Settings.Api}" Grid.Row="0" Grid.Column="1" Margin="0,0,0,5" />
 
-                <TextBlock Text="公司代码：" Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,5"/>
-                <TextBox Text="{Binding Settings.CompanyCode}" Grid.Row="1" Grid.Column="1" Margin="0,0,0,5"/>
+                <TextBlock Text="公司代码：" Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,5" />
+                <TextBox Text="{Binding Settings.CompanyCode}" Grid.Row="1" Grid.Column="1" Margin="0,0,0,5" />
 
-                <TextBlock Text="AppKey：" Grid.Row="2" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,5"/>
-                <TextBox Text="{Binding Settings.AppKey}" Grid.Row="2" Grid.Column="1" Margin="0,0,0,5"/>
+                <TextBlock Text="AppKey：" Grid.Row="2" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,5" />
+                <TextBox Text="{Binding Settings.AppKey}" Grid.Row="2" Grid.Column="1" Margin="0,0,0,5" />
 
-                <TextBlock Text="Secret：" Grid.Row="3" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,5"/>
-                <TextBox Text="{Binding Settings.Secret}" Grid.Row="3" Grid.Column="1" Margin="0,0,0,5"/>
+                <TextBlock Text="Secret：" Grid.Row="3" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,5" />
+                <TextBox Text="{Binding Settings.Secret}" Grid.Row="3" Grid.Column="1" Margin="0,0,0,5" />
 
-                <TextBlock Text="签名：" Grid.Row="4" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,5"/>
-                <TextBox Text="{Binding Settings.Sign}" Grid.Row="4" Grid.Column="1" Margin="0,0,0,5"/>
+                <TextBlock Text="签名：" Grid.Row="4" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,5" />
+                <TextBox Text="{Binding Settings.Sign}" Grid.Row="4" Grid.Column="1" Margin="0,0,0,5" />
 
-                <TextBlock Text="租户ID：" Grid.Row="5" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,5"/>
-                <TextBox Text="{Binding Settings.TenantId}" Grid.Row="5" Grid.Column="1" Margin="0,0,0,5"/>
+                <TextBlock Text="租户ID：" Grid.Row="5" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,5" />
+                <TextBox Text="{Binding Settings.TenantId}" Grid.Row="5" Grid.Column="1" Margin="0,0,0,5" />
 
-                <TextBlock Text="仓库编码：" Grid.Row="6" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,5"/>
-                <TextBox Text="{Binding Settings.WarehouseCode}" Grid.Row="6" Grid.Column="1" Margin="0,0,0,5"/>
+                <TextBlock Text="仓库编码：" Grid.Row="6" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,5" />
+                <TextBox Text="{Binding Settings.WarehouseCode}" Grid.Row="6" Grid.Column="1" Margin="0,0,0,5" />
 
-                <TextBlock Text="设备编码：" Grid.Row="7" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,5"/>
-                <TextBox Text="{Binding Settings.EquipmentCode}" Grid.Row="7" Grid.Column="1" Margin="0,0,0,5"/>
+                <TextBlock Text="设备编码：" Grid.Row="7" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,5" />
+                <TextBox Text="{Binding Settings.EquipmentCode}" Grid.Row="7" Grid.Column="1" Margin="0,0,0,5" />
 
-                <TextBlock Text="用户名：" Grid.Row="8" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,5"/>
-                <TextBox Text="{Binding Settings.UserRealName}" Grid.Row="8" Grid.Column="1" Margin="0,0,0,5"/>
+                <TextBlock Text="用户名：" Grid.Row="8" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,5" />
+                <TextBox Text="{Binding Settings.UserRealName}" Grid.Row="8" Grid.Column="1" Margin="0,0,0,5" />
             </Grid>
         </GroupBox>
     </StackPanel>
-</Page> 
+</Page>

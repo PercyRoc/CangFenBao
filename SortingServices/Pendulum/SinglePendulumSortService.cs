@@ -7,7 +7,7 @@ using SortingServices.Pendulum.Models;
 namespace SortingServices.Pendulum;
 
 /// <summary>
-/// 单光电单摆轮分拣服务实现
+///     单光电单摆轮分拣服务实现
 /// </summary>
 public class SinglePendulumSortService(ISettingsService settingsService) : BasePendulumSortService(settingsService)
 {
@@ -118,7 +118,6 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
 
             // 向触发光电发送停止命令
             if (TriggerClient != null && TriggerClient.IsConnected())
-            {
                 try
                 {
                     // 发送左右回正指令
@@ -137,7 +136,6 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
                 {
                     Log.Error(ex, "向触发光电发送停止命令失败");
                 }
-            }
 
             // 清空处理中的包裹
             ProcessingPackages.Clear();
@@ -166,12 +164,9 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
         try
         {
             var wasRunning = IsRunningFlag;
-            
+
             // 如果服务正在运行，先停止
-            if (wasRunning)
-            {
-                await StopAsync();
-            }
+            if (wasRunning) await StopAsync();
 
             // 更新配置
             Configuration = configuration;
@@ -210,7 +205,7 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
     }
 
     /// <summary>
-    /// 处理第二光电信号
+    ///     处理第二光电信号
     /// </summary>
     protected override void HandleSecondPhotoelectric(string data)
     {
@@ -238,7 +233,7 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
                     connected => UpdateDeviceConnectionState("触发光电", connected)
                 );
                 TriggerClient.Connect();
-                
+
                 // 如果服务正在运行，发送启动命令
                 if (IsRunningFlag)
                 {

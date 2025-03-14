@@ -1,4 +1,3 @@
-using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
@@ -6,12 +5,12 @@ using System.Windows.Data;
 namespace Presentation_XiYiGu.Converters;
 
 /// <summary>
-/// 字符串到可见性的转换器
+///     字符串到可见性的转换器
 /// </summary>
 public class StringToVisibilityConverter : IValueConverter
 {
     /// <summary>
-    /// 转换值
+    ///     转换值
     /// </summary>
     /// <param name="value">要转换的值</param>
     /// <param name="targetType">目标类型</param>
@@ -24,7 +23,7 @@ public class StringToVisibilityConverter : IValueConverter
     }
 
     /// <summary>
-    /// 转换回值
+    ///     转换回值
     /// </summary>
     /// <param name="value">要转换的值</param>
     /// <param name="targetType">目标类型</param>
@@ -38,12 +37,12 @@ public class StringToVisibilityConverter : IValueConverter
 }
 
 /// <summary>
-/// 反向字符串到可见性的转换器
+///     反向字符串到可见性的转换器
 /// </summary>
 public class InverseStringToVisibilityConverter : IValueConverter
 {
     /// <summary>
-    /// 转换值
+    ///     转换值
     /// </summary>
     /// <param name="value">要转换的值</param>
     /// <param name="targetType">目标类型</param>
@@ -56,7 +55,7 @@ public class InverseStringToVisibilityConverter : IValueConverter
     }
 
     /// <summary>
-    /// 转换回值
+    ///     转换回值
     /// </summary>
     /// <param name="value">要转换的值</param>
     /// <param name="targetType">目标类型</param>
@@ -67,4 +66,4 @@ public class InverseStringToVisibilityConverter : IValueConverter
     {
         throw new NotImplementedException();
     }
-} 
+}

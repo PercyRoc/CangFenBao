@@ -6,7 +6,7 @@ using Prism.Mvvm;
 namespace SortingServices.Pendulum.Models;
 
 /// <summary>
-/// 摆轮分拣配置
+///     摆轮分拣配置
 /// </summary>
 [Configuration("PendulumSort")]
 public class PendulumSortConfig : BindableBase
@@ -15,7 +15,7 @@ public class PendulumSortConfig : BindableBase
     private TriggerPhotoelectric _triggerPhotoelectric = new();
 
     /// <summary>
-    /// 触发光电配置
+    ///     触发光电配置
     /// </summary>
     [Required(ErrorMessage = "触发光电配置不能为空")]
     public TriggerPhotoelectric TriggerPhotoelectric
@@ -25,7 +25,7 @@ public class PendulumSortConfig : BindableBase
     }
 
     /// <summary>
-    /// 分拣光电配置列表
+    ///     分拣光电配置列表
     /// </summary>
     public ObservableCollection<SortPhotoelectric> SortingPhotoelectrics
     {
@@ -40,17 +40,17 @@ public class TriggerPhotoelectric : BindableBase
 
     private int _port;
 
-    private int _timeRangeLower;
-
-    private int _timeRangeUpper;
+    private int _resetDelay;
 
     private int _sortingDelay;
-
-    private int _resetDelay;
 
     private int _sortingTimeRangeLower;
 
     private int _sortingTimeRangeUpper;
+
+    private int _timeRangeLower;
+
+    private int _timeRangeUpper;
 
     public string IpAddress
     {

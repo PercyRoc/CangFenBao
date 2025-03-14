@@ -1,4 +1,3 @@
-using Common.Models.Settings;
 using Common.Services.Settings;
 using Prism.Mvvm;
 

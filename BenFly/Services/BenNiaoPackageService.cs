@@ -4,9 +4,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using Common.Models;
 using Common.Models.Package;
-using Common.Services;
 using Common.Services.Settings;
 using Presentation_BenFly.Models.BenNiao;
 using Presentation_BenFly.Models.Upload;
@@ -24,10 +22,7 @@ namespace Presentation_BenFly.Services;
 public class BenNiaoPackageService : IDisposable
 {
     private const string SettingsKey = "UploadSettings";
-    private UploadConfiguration _config;
     private readonly IHttpClientFactory _httpClientFactory;
-    private HttpClient _httpClient;
-    private readonly ISettingsService _settingsService;
 
     // 创建JSON序列化选项，避免中文转义
     private readonly JsonSerializerOptions _jsonOptions = new()
@@ -37,7 +32,10 @@ public class BenNiaoPackageService : IDisposable
     };
 
     private readonly BenNiaoPreReportService _preReportService;
+    private readonly ISettingsService _settingsService;
     private readonly SemaphoreSlim _sftpSemaphore = new(1, 1);
+    private UploadConfiguration _config;
+    private HttpClient _httpClient;
     private bool _isDisposed;
 
     // SFTP客户端实例，用于连接复用
@@ -66,18 +64,6 @@ public class BenNiaoPackageService : IDisposable
         Task.Run(InitializeSftpConnectionAsync);
     }
 
-    private HttpClient CreateHttpClient()
-    {
-        var baseUrl = _config.BenNiaoEnvironment == BenNiaoEnvironment.Production
-            ? "https://api.benniao.com"
-            : "http://sit.bnsy.rhb56.cn";
-        
-        var client = _httpClientFactory.CreateClient("BenNiao");
-        client.BaseAddress = new Uri(baseUrl);
-        Log.Information("已创建 HttpClient，BaseUrl: {BaseUrl}", baseUrl);
-        return client;
-    }
-
     public void Dispose()
     {
         if (!_isDisposed)
@@ -95,8 +81,20 @@ public class BenNiaoPackageService : IDisposable
         GC.SuppressFinalize(this);
     }
 
+    private HttpClient CreateHttpClient()
+    {
+        var baseUrl = _config.BenNiaoEnvironment == BenNiaoEnvironment.Production
+            ? "https://api.benniao.com"
+            : "http://sit.bnsy.rhb56.cn";
+
+        var client = _httpClientFactory.CreateClient("BenNiao");
+        client.BaseAddress = new Uri(baseUrl);
+        Log.Information("已创建 HttpClient，BaseUrl: {BaseUrl}", baseUrl);
+        return client;
+    }
+
     /// <summary>
-    /// 处理配置变更
+    ///     处理配置变更
     /// </summary>
     private async void HandleConfigurationChanged(UploadConfiguration newConfig)
     {
@@ -105,9 +103,9 @@ public class BenNiaoPackageService : IDisposable
             Log.Information("笨鸟包裹回传服务配置已变更");
 
             var needReconnectSftp = _config.BenNiaoFtpHost != newConfig.BenNiaoFtpHost ||
-                                  _config.BenNiaoFtpPort != newConfig.BenNiaoFtpPort ||
-                                  _config.BenNiaoFtpUsername != newConfig.BenNiaoFtpUsername ||
-                                  _config.BenNiaoFtpPassword != newConfig.BenNiaoFtpPassword;
+                                    _config.BenNiaoFtpPort != newConfig.BenNiaoFtpPort ||
+                                    _config.BenNiaoFtpUsername != newConfig.BenNiaoFtpUsername ||
+                                    _config.BenNiaoFtpPassword != newConfig.BenNiaoFtpPassword;
 
             var needRecreateHttpClient = _config.BenNiaoEnvironment != newConfig.BenNiaoEnvironment;
 

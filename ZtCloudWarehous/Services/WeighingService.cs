@@ -9,7 +9,7 @@ using Serilog;
 namespace Presentation_ZtCloudWarehous.Services;
 
 /// <summary>
-/// 称重服务实现
+///     称重服务实现
 /// </summary>
 public class WeighingService(HttpClient httpClient, ISettingsService settingsService) : IWeighingService
 {
@@ -44,15 +44,9 @@ public class WeighingService(HttpClient httpClient, ISettingsService settingsSer
             response.EnsureSuccessStatusCode();
 
             var result = await response.Content.ReadFromJsonAsync<WeighingResponse>();
-            if (result == null)
-            {
-                throw new Exception("服务器返回空响应");
-            }
+            if (result == null) throw new Exception("服务器返回空响应");
 
-            if (!result.Success)
-            {
-                Log.Warning("称重请求失败: Code={Code}, Message={Message}", result.Code, result.Message);
-            }
+            if (!result.Success) Log.Warning("称重请求失败: Code={Code}, Message={Message}", result.Code, result.Message);
 
             return result;
         }
@@ -62,4 +56,4 @@ public class WeighingService(HttpClient httpClient, ISettingsService settingsSer
             throw;
         }
     }
-} 
+}

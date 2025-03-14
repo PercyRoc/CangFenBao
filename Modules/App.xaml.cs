@@ -11,7 +11,6 @@ using Presentation_Modules.ViewModels;
 using Presentation_Modules.ViewModels.Settings;
 using Presentation_Modules.Views;
 using Presentation_Modules.Views.Settings;
-using Prism.DryIoc;
 using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
@@ -55,16 +54,16 @@ public partial class App
         containerRegistry.RegisterSingleton<IModuleConnectionService, ModuleConnectionService>();
         containerRegistry.RegisterSingleton<ModuleConnectionHostedService>();
         containerRegistry.Register<ModuleConnectionHostedService>();
-        
+
         // 注册锁格服务
         containerRegistry.RegisterSingleton<LockingService>();
         containerRegistry.RegisterSingleton<LockingHostedService>();
-        
+
         // 注册格口包裹记录服务
         containerRegistry.RegisterSingleton<ChutePackageRecordService>();
-        
-        containerRegistry.RegisterForNavigation<ModuleConfigView,ModuleConfigViewModel>();
-        containerRegistry.RegisterForNavigation<TcpSettingsView,TcpSettingsViewModel>();
+
+        containerRegistry.RegisterForNavigation<ModuleConfigView, ModuleConfigViewModel>();
+        containerRegistry.RegisterForNavigation<TcpSettingsView, TcpSettingsViewModel>();
 
         // 注册设置窗口
         containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
@@ -107,7 +106,7 @@ public partial class App
                 await moduleConnectionHostedService.StartAsync(CancellationToken.None);
                 Log.Information("模组连接托管服务启动成功");
             });
-            
+
             // 启动锁格托管服务
             var lockingHostedService = Container.Resolve<LockingHostedService>();
             _ = Task.Run(async () =>
@@ -115,7 +114,7 @@ public partial class App
                 await lockingHostedService.StartAsync();
                 Log.Information("锁格托管服务启动成功");
             });
-            
+
             // 初始化锁格服务
             _ = Container.Resolve<LockingService>();
             Log.Information("锁格服务初始化成功");
@@ -150,12 +149,12 @@ public partial class App
                 var moduleConnectionHostedService = Container.Resolve<ModuleConnectionHostedService>();
                 Task.Run(async () => await moduleConnectionHostedService.StopAsync(CancellationToken.None)).Wait(2000);
                 Log.Information("模组连接托管服务已停止");
-                
+
                 // 停止锁格托管服务
                 var lockingHostedService = Container.Resolve<LockingHostedService>();
                 Task.Run(async () => await lockingHostedService.StopAsync()).Wait(2000);
                 Log.Information("锁格托管服务已停止");
-                
+
                 // 释放锁格服务
                 if (Container.Resolve<LockingService>() is IDisposable lockingService)
                 {

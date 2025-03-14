@@ -1,11 +1,11 @@
-using System.IO;
-using System.Reflection;
-using Microsoft.Extensions.Configuration;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using System.Text.Encodings.Web;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
+using System.IO;
+using System.Reflection;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Microsoft.Extensions.Configuration;
 
 namespace Common.Services.Settings;
 
@@ -22,12 +22,13 @@ public class SettingsService : ISettingsService
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
-    private readonly Dictionary<Type, string> _configurationKeys = [];
-    private readonly string _settingsDirectory;
     private readonly Dictionary<string, object> _cachedSettings = [];
-    private readonly Dictionary<Type, IConfiguration> _configurations = [];
     private readonly Dictionary<Type, List<Action<object>>> _changeCallbacks = [];
     private readonly Dictionary<Type, IDisposable> _changeTokens = [];
+
+    private readonly Dictionary<Type, string> _configurationKeys = [];
+    private readonly Dictionary<Type, IConfiguration> _configurations = [];
+    private readonly string _settingsDirectory;
 
     /// <summary>
     ///     初始化设置服务
@@ -37,10 +38,7 @@ public class SettingsService : ISettingsService
     {
         _settingsDirectory = settingsDirectory;
 
-        if (!Directory.Exists(_settingsDirectory))
-        {
-            Directory.CreateDirectory(_settingsDirectory);
-        }
+        if (!Directory.Exists(_settingsDirectory)) Directory.CreateDirectory(_settingsDirectory);
 
         RegisterConfigurationTypes();
     }
@@ -57,19 +55,14 @@ public class SettingsService : ISettingsService
         var settingsKey = key ?? GetConfigurationKey<T>();
 
         if (useCache && _cachedSettings.TryGetValue(settingsKey, out var value) && value is T cachedSettings)
-        {
             return cachedSettings;
-        }
 
         var filePath = GetSettingsFilePath(settingsKey);
         if (!File.Exists(filePath))
         {
             var newSettings = new T();
 
-            if (useCache)
-            {
-                _cachedSettings[settingsKey] = newSettings;
-            }
+            if (useCache) _cachedSettings[settingsKey] = newSettings;
 
             return newSettings;
         }
@@ -79,7 +72,7 @@ public class SettingsService : ISettingsService
             if (!_configurations.TryGetValue(typeof(T), out var configuration))
             {
                 var builder = new ConfigurationBuilder()
-                    .AddJsonFile(filePath, optional: false, reloadOnChange: true);
+                    .AddJsonFile(filePath, false, true);
                 configuration = builder.Build();
                 _configurations[typeof(T)] = configuration;
 
@@ -89,10 +82,7 @@ public class SettingsService : ISettingsService
             var settings = new T();
             configuration.Bind(settings);
 
-            if (useCache)
-            {
-                _cachedSettings[settingsKey] = settings;
-            }
+            if (useCache) _cachedSettings[settingsKey] = settings;
 
             return settings;
         }
@@ -102,24 +92,21 @@ public class SettingsService : ISettingsService
 
             var newSettings = new T();
 
-            if (useCache)
-            {
-                _cachedSettings[settingsKey] = newSettings;
-            }
+            if (useCache) _cachedSettings[settingsKey] = newSettings;
 
             return newSettings;
         }
     }
 
     /// <summary>
-    /// 注册配置变更回调
+    ///     注册配置变更回调
     /// </summary>
     /// <typeparam name="T">配置类型</typeparam>
     /// <param name="callback">回调方法</param>
     public void OnSettingsChanged<T>(Action<T>? callback) where T : class, new()
     {
         if (callback == null) return;
-        
+
         var type = typeof(T);
         if (!_changeCallbacks.TryGetValue(type, out var value))
         {
@@ -128,36 +115,6 @@ public class SettingsService : ISettingsService
         }
 
         value.Add(obj => callback((T)obj));
-    }
-
-    private void SetupChangeToken<T>(IConfiguration configuration) where T : class, new()
-    {
-        if (_changeTokens.TryGetValue(typeof(T), out var oldToken))
-        {
-            oldToken.Dispose();
-            _changeTokens.Remove(typeof(T));
-        }
-
-        var token = configuration.GetReloadToken();
-        var registration = token.RegisterChangeCallback(_ =>
-        {
-            var settings = LoadSettings<T>(useCache: false);
-
-            var key = GetConfigurationKey<T>();
-            _cachedSettings[key] = settings;
-
-            if (_changeCallbacks.TryGetValue(typeof(T), out var callbacks))
-            {
-                foreach (var callback in callbacks)
-                {
-                    callback(settings);
-                }
-            }
-
-            SetupChangeToken<T>(configuration);
-        }, null);
-
-        _changeTokens[typeof(T)] = registration;
     }
 
     /// <summary>
@@ -180,10 +137,8 @@ public class SettingsService : ISettingsService
             if (validationResults.Length > 0)
             {
                 if (throwOnError)
-                {
                     throw new ValidationException(
                         $"配置校验失败: {string.Join(", ", validationResults.Select(r => r.ErrorMessage))}");
-                }
 
                 return validationResults;
             }
@@ -194,6 +149,58 @@ public class SettingsService : ISettingsService
         _cachedSettings[key] = configuration;
 
         return [];
+    }
+
+    /// <summary>
+    ///     校验配置
+    /// </summary>
+    /// <typeparam name="T">配置类型</typeparam>
+    /// <param name="settings">配置实例</param>
+    /// <returns>校验结果，如果有错误则包含错误信息</returns>
+    public ValidationResult[] ValidateSettings<T>(T settings) where T : class
+    {
+        var results = new List<ValidationResult>();
+        var validationContext = new ValidationContext(settings);
+        Validator.TryValidateObject(settings, validationContext, results, true);
+        return results.ToArray();
+    }
+
+    /// <summary>
+    ///     释放资源
+    /// </summary>
+    public void Dispose()
+    {
+        foreach (var token in _changeTokens.Values) token.Dispose();
+
+        _changeTokens.Clear();
+
+        GC.SuppressFinalize(this);
+    }
+
+    private void SetupChangeToken<T>(IConfiguration configuration) where T : class, new()
+    {
+        if (_changeTokens.TryGetValue(typeof(T), out var oldToken))
+        {
+            oldToken.Dispose();
+            _changeTokens.Remove(typeof(T));
+        }
+
+        var token = configuration.GetReloadToken();
+        var registration = token.RegisterChangeCallback(_ =>
+        {
+            var settings = LoadSettings<T>(useCache: false);
+
+            var key = GetConfigurationKey<T>();
+            _cachedSettings[key] = settings;
+
+            if (_changeCallbacks.TryGetValue(typeof(T), out var callbacks))
+                foreach (var callback in callbacks)
+                    callback(settings);
+
+            SetupChangeToken<T>(configuration);
+        }, null);
+
+        _changeTokens[typeof(T)] = registration;
     }
 
     /// <summary>
@@ -266,34 +273,5 @@ public class SettingsService : ISettingsService
         var filePath = GetSettingsFilePath(key);
         var json = JsonSerializer.Serialize(configuration, JsonOptions);
         File.WriteAllText(filePath, json);
-    }
-
-    /// <summary>
-    /// 校验配置
-    /// </summary>
-    /// <typeparam name="T">配置类型</typeparam>
-    /// <param name="settings">配置实例</param>
-    /// <returns>校验结果，如果有错误则包含错误信息</returns>
-    public ValidationResult[] ValidateSettings<T>(T settings) where T : class
-    {
-        var results = new List<ValidationResult>();
-        var validationContext = new ValidationContext(settings);
-        Validator.TryValidateObject(settings, validationContext, results, true);
-        return results.ToArray();
-    }
-
-    /// <summary>
-    /// 释放资源
-    /// </summary>
-    public void Dispose()
-    {
-        foreach (var token in _changeTokens.Values)
-        {
-            token.Dispose();
-        }
-
-        _changeTokens.Clear();
-
-        GC.SuppressFinalize(this);
     }
 }

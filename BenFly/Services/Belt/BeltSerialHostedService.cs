@@ -7,13 +7,13 @@ using Serilog;
 namespace Presentation_BenFly.Services.Belt;
 
 /// <summary>
-/// 皮带串口托管服务
+///     皮带串口托管服务
 /// </summary>
 public class BeltSerialHostedService : IHostedService
 {
+    private readonly CancellationTokenSource _cts = new();
     private readonly IBeltSerialService _serialService;
     private readonly ISettingsService _settingsService;
-    private readonly CancellationTokenSource _cts = new();
 
     public BeltSerialHostedService(
         IBeltSerialService serialService,
@@ -30,9 +30,9 @@ public class BeltSerialHostedService : IHostedService
         {
             // 加载串口设置
             var settings = _settingsService.LoadSettings<BeltSettings>();
-            
+
             // 如果没有配置串口或串口不存在，则不打开
-            if (string.IsNullOrEmpty(settings.PortName) || 
+            if (string.IsNullOrEmpty(settings.PortName) ||
                 !SerialPort.GetPortNames().Contains(settings.PortName))
             {
                 Log.Warning("未配置串口或串口不存在");
@@ -109,4 +109,4 @@ public class BeltSerialHostedService : IHostedService
             Log.Error(ex, "更新串口设置时发生错误");
         }
     }
-} 
+}

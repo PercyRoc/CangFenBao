@@ -11,25 +11,26 @@ namespace Presentation_ZtCloudWarehous.ViewModels;
 
 public class SettingsDialogViewModel : BindableBase, IDialogAware
 {
+    private readonly BarcodeChuteSettingsViewModel _barcodeChuteSettingsViewModel;
+
     // 保存各个设置页面的ViewModel实例
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
     private readonly INotificationService _notificationService;
     private readonly BalanceSortSettingsViewModel _sortSettingsViewModel;
     private readonly WeighingSettingsViewModel _weighingSettingsViewModel;
-    private readonly BarcodeChuteSettingsViewModel _barcodeChuteSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
         INotificationService notificationService)
     {
         _notificationService = notificationService;
-       
+
 
         // 创建各个设置页面的ViewModel实例
         _cameraSettingsViewModel = containerProvider.Resolve<CameraSettingsViewModel>();
         _sortSettingsViewModel = containerProvider.Resolve<BalanceSortSettingsViewModel>();
         _weighingSettingsViewModel = containerProvider.Resolve<WeighingSettingsViewModel>();
-        _barcodeChuteSettingsViewModel =  containerProvider.Resolve<BarcodeChuteSettingsViewModel>();
+        _barcodeChuteSettingsViewModel = containerProvider.Resolve<BarcodeChuteSettingsViewModel>();
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
     }

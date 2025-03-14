@@ -4,12 +4,12 @@ using System.Text;
 namespace Presentation_XiYiGu.Utils;
 
 /// <summary>
-/// AES加密工具类
+///     AES加密工具类
 /// </summary>
 public static class AesEncryptionUtil
 {
     /// <summary>
-    /// AES加密
+    ///     AES加密
     /// </summary>
     /// <param name="plainText">明文</param>
     /// <param name="key">密钥</param>
@@ -29,7 +29,7 @@ public static class AesEncryptionUtil
     }
 
     /// <summary>
-    /// AES解密
+    ///     AES解密
     /// </summary>
     /// <param name="cipherText">Base64编码的密文</param>
     /// <param name="key">密钥</param>
@@ -47,4 +47,4 @@ public static class AesEncryptionUtil
 
         return Encoding.UTF8.GetString(plainBytes);
     }
-} 
+}

@@ -15,8 +15,8 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
     // 保存各个设置页面的ViewModel实例
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
     private readonly ModuleConfigViewModel _moduleConfigViewModel;
-    private readonly TcpSettingsViewModel _tcpSettingsViewModel;
     private readonly INotificationService _notificationService;
+    private readonly TcpSettingsViewModel _tcpSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,

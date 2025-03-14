@@ -200,7 +200,8 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Margin="0,0,8,8" Padding="16" Background="{DynamicResource CardBackgroundBrush}"
+                                    <Border Margin="0,0,8,8" Padding="16"
+                                            Background="{DynamicResource CardBackgroundBrush}"
                                             BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
                                             CornerRadius="8">
                                         <Grid>
@@ -210,22 +211,23 @@
                                             </Grid.ColumnDefinitions>
 
                                             <ui:SymbolIcon Grid.Column="0" Margin="0,0,16,0" FontSize="24"
-                                                          Symbol="{Binding Icon}" />
+                                                           Symbol="{Binding Icon}" />
 
                                             <StackPanel Grid.Column="1">
-                                                <TextBlock FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                         Text="{Binding Label}" />
+                                                <TextBlock FontSize="12"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                           Text="{Binding Label}" />
                                                 <StackPanel Margin="0,4,0,0" Orientation="Horizontal">
-                                                    <TextBlock FontSize="20" FontWeight="SemiBold" 
-                                                             Foreground="{Binding StatusColor, Converter={StaticResource ColorToBrushConverter}}"
-                                                             Text="{Binding Value}" />
+                                                    <TextBlock FontSize="20" FontWeight="SemiBold"
+                                                               Foreground="{Binding StatusColor, Converter={StaticResource ColorToBrushConverter}}"
+                                                               Text="{Binding Value}" />
                                                     <TextBlock Margin="4,0,0,0" FontSize="20" FontWeight="SemiBold"
-                                                             Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                             Text="{Binding Unit}" />
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               Text="{Binding Unit}" />
                                                 </StackPanel>
                                                 <TextBlock Margin="0,4,0,0" FontSize="12"
-                                                         Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                                         Text="{Binding Description}" TextWrapping="Wrap" />
+                                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                           Text="{Binding Description}" TextWrapping="Wrap" />
                                             </StackPanel>
                                         </Grid>
                                     </Border>
@@ -415,7 +417,8 @@
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="序号" Binding="{Binding Index}" Width="60" />
                                 <DataGridTextColumn Header="条码" Binding="{Binding Barcode}" Width="160" />
-                                <DataGridTextColumn Header="重量" Binding="{Binding Weight, StringFormat='{}{0:F2}斤'}" Width="80" />
+                                <DataGridTextColumn Header="重量" Binding="{Binding Weight, StringFormat='{}{0:F2}斤'}"
+                                                    Width="80" />
                                 <DataGridTextColumn Header="尺寸" Binding="{Binding VolumeDisplay}" Width="120" />
                                 <DataGridTextColumn Header="状态" Binding="{Binding StatusDisplay}" Width="80" />
                                 <DataGridTextColumn Header="处理时间"

@@ -19,7 +19,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Common\Common.csproj" />
+        <ProjectReference Include="..\Common\Common.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -27,7 +27,7 @@
             <HintPath>Camera\DaHua\Libs\LogisticsBaseCSharp.dll</HintPath>
         </Reference>
         <Reference Include="MvCodeReaderSDK.Net">
-          <HintPath>lib\MvCodeReaderSDK.Net.dll</HintPath>
+            <HintPath>lib\MvCodeReaderSDK.Net.dll</HintPath>
         </Reference>
         <Reference Include="MVIDCodeReader.Net">
             <HintPath>lib\MVIDCodeReader.Net.dll</HintPath>

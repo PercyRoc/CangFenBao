@@ -10,11 +10,13 @@ namespace FuzhouPolicyForce.ViewModels;
 
 public class SettingsDialogViewModel : BindableBase, IDialogAware
 {
+    private readonly BalanceSortSettingsViewModel _balanceSortSettingsViewModel;
+
+    private readonly BarcodeChuteSettingsViewModel _barcodeChuteSettingsViewModel;
+
     // 保存各个设置页面的ViewModel实例
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
-    private readonly BarcodeChuteSettingsViewModel _barcodeChuteSettingsViewModel;
     private readonly INotificationService _notificationService;
-    private readonly BalanceSortSettingsViewModel _balanceSortSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,

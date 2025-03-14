@@ -5,7 +5,7 @@ using SortingServices.Pendulum.Models;
 
 namespace SharedUI.ViewModels.Settings;
 
-public class BalanceSortSettingsViewModel: BindableBase
+public class BalanceSortSettingsViewModel : BindableBase
 {
     private readonly ISettingsService _settingsService;
 

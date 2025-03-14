@@ -5,6 +5,7 @@ using MessageBoxResult = System.Windows.MessageBoxResult;
 using MessageBoxButton = System.Windows.MessageBoxButton;
 using MessageBoxImage = System.Windows.MessageBoxImage;
 using HcMessageBox = HandyControl.Controls.MessageBox;
+
 namespace Common.Services.Ui;
 
 /// <summary>
@@ -60,6 +61,7 @@ public class DialogService : IDialogService
     /// <inheritdoc />
     public Task<MessageBoxResult> ShowIconConfirmAsync(string message, string title, MessageBoxImage icon)
     {
-        return Application.Current.Dispatcher.InvokeAsync(() => HcMessageBox.Show(message, title, MessageBoxButton.YesNo, icon)).Task;
+        return Application.Current.Dispatcher
+            .InvokeAsync(() => HcMessageBox.Show(message, title, MessageBoxButton.YesNo, icon)).Task;
     }
 }

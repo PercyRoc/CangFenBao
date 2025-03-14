@@ -43,7 +43,7 @@ public interface IPendulumSortService : IDisposable
     /// </summary>
     /// <returns>设备名称和连接状态的字典</returns>
     Dictionary<string, bool> GetAllDeviceConnectionStates();
-    
+
     /// <summary>
     ///     更新分检服务配置
     /// </summary>

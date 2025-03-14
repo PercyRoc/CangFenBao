@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Input;
 using Common.Services.Ui;
 using Serilog;
-using Wpf.Ui.Controls;
 
 namespace Presentation_Modules.Views;
 
@@ -49,7 +48,7 @@ public partial class MainWindow
                 "关闭确认",
                 MessageBoxImage.Question);
 
-            if (result != System.Windows.MessageBoxResult.Yes) return;
+            if (result != MessageBoxResult.Yes) return;
             e.Cancel = false;
             Application.Current.Shutdown();
         }

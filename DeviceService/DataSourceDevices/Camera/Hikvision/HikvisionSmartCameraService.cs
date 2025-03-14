@@ -18,30 +18,30 @@ namespace DeviceService.DataSourceDevices.Camera.Hikvision;
 /// </summary>
 public class HikvisionSmartCameraService : ICameraService
 {
-    private readonly Subject<PackageInfo> _packageSubject = new();
-    private readonly Subject<(Image<Rgba32> image, IReadOnlyList<BarcodeLocation> barcodes)> _imageSubject = new();
-    private readonly Dictionary<string, CameraInstance> _cameras = new();
-    private bool _disposed;
-    private CameraSettings _settings = new();
-    private CodeRules _codeRules;
-    
-    // 节流相关字段
-    private readonly Dictionary<string, DateTime> _lastPublishTime = new();
-    private readonly Dictionary<string, PackageInfo> _pendingPackages = new();
-    private readonly object _publishLock = new();
     private const int ThrottleIntervalMs = 100;
-    
+    private const int BarcodeValidTimeMs = 500; // 条码有效期500ms
+    private const int TriggerIntervalMs = 200; // 触发间隔
+    private readonly object _cacheUpdateLock = new();
+
     // 使用IP地址作为键的相机条码缓存
     private readonly Dictionary<string, (DateTime Time, string Barcode)> _cameraBarcodeCaches = new();
-    private readonly object _cacheUpdateLock = new();
-    private const int BarcodeValidTimeMs = 500; // 条码有效期500ms
+    private readonly Dictionary<string, bool> _cameraProcessed = new();
+    private readonly Dictionary<string, CameraInstance> _cameras = new();
+    private readonly Subject<(Image<Rgba32> image, IReadOnlyList<BarcodeLocation> barcodes)> _imageSubject = new();
+
+    // 节流相关字段
+    private readonly Dictionary<string, DateTime> _lastPublishTime = new();
+    private readonly Subject<PackageInfo> _packageSubject = new();
+    private readonly Dictionary<string, PackageInfo> _pendingPackages = new();
+    private readonly object _publishLock = new();
+    private readonly object _triggerLock = new();
+    private CodeRules _codeRules;
 
     // 添加触发计数器和时间戳
-    private int _currentTriggerCount = 0;
+    private int _currentTriggerCount;
+    private bool _disposed;
     private DateTime _lastTriggerTime = DateTime.MinValue;
-    private const int TriggerIntervalMs = 200; // 触发间隔
-    private readonly Dictionary<string, bool> _cameraProcessed = new();
-    private readonly object _triggerLock = new();
+    private CameraSettings _settings = new();
 
     static HikvisionSmartCameraService()
     {
@@ -226,19 +226,10 @@ public class HikvisionSmartCameraService : ICameraService
                 }
             }
         };
-        
+
         Log.Information("已初始化条码规则，共 {Count} 条规则，其中 {EnabledCount} 条已启用",
             _codeRules.coderules.Count,
             _codeRules.coderules.Count(r => r.enable));
-    }
-
-    private class CameraInstance
-    {
-        public MvCodeReader Camera { get; init; } = null!;
-        public Thread? ReceiveThread { get; set; }
-        public bool IsGrabbing { get; set; }
-        public byte[] ImageBuffer { get; } = new byte[1024 * 1024 * 20];
-        public MvCodeReader.cbOutputEx2delegate? ImageCallback { get; set; }
     }
 
     /// <summary>
@@ -278,7 +269,8 @@ public class HikvisionSmartCameraService : ICameraService
         {
             // 枚举设备并查找目标相机
             var deviceList = new MvCodeReader.MV_CODEREADER_DEVICE_INFO_LIST();
-            var nRet = MvCodeReader.MV_CODEREADER_EnumDevices_NET(ref deviceList, MvCodeReader.MV_CODEREADER_GIGE_DEVICE);
+            var nRet = MvCodeReader.MV_CODEREADER_EnumDevices_NET(ref deviceList,
+                MvCodeReader.MV_CODEREADER_GIGE_DEVICE);
             if (nRet != MvCodeReader.MV_CODEREADER_OK)
             {
                 Log.Error("枚举设备失败 (错误码: 0x{Code:X})", nRet);
@@ -302,28 +294,26 @@ public class HikvisionSmartCameraService : ICameraService
                 if (deviceInfo.nTLayerType == MvCodeReader.MV_CODEREADER_GIGE_DEVICE)
                 {
                     // 获取GigE设备的特殊信息
-                    IntPtr buffer = Marshal.UnsafeAddrOfPinnedArrayElement(deviceInfo.SpecialInfo.stGigEInfo, 0);
+                    var buffer = Marshal.UnsafeAddrOfPinnedArrayElement(deviceInfo.SpecialInfo.stGigEInfo, 0);
                     var gigEInfo = (MvCodeReader.MV_CODEREADER_GIGE_DEVICE_INFO)Marshal.PtrToStructure(
                         buffer,
                         typeof(MvCodeReader.MV_CODEREADER_GIGE_DEVICE_INFO))!;
 
                     var cameraInfo = new DeviceCameraInfo { Index = i };
-                    
+
                     // 获取正确的IP地址
-                    var deviceIp = $"{gigEInfo.nCurrentIp & 0xFF}.{(gigEInfo.nCurrentIp >> 8) & 0xFF}.{(gigEInfo.nCurrentIp >> 16) & 0xFF}.{(gigEInfo.nCurrentIp >> 24) & 0xFF}";
-                    cameraInfo.IpAddress = deviceIp;  // 设置正确的IP地址
+                    var deviceIp =
+                        $"{gigEInfo.nCurrentIp & 0xFF}.{(gigEInfo.nCurrentIp >> 8) & 0xFF}.{(gigEInfo.nCurrentIp >> 16) & 0xFF}.{(gigEInfo.nCurrentIp >> 24) & 0xFF}";
+                    cameraInfo.IpAddress = deviceIp; // 设置正确的IP地址
                     cameraInfo.UpdateFromDeviceInfo(deviceInfo);
 
                     // 记录更详细的设备信息
                     string deviceName;
                     if (!string.IsNullOrEmpty(gigEInfo.chUserDefinedName))
-                    {
                         deviceName = $"GEV: {gigEInfo.chUserDefinedName} ({gigEInfo.chSerialNumber})";
-                    }
                     else
-                    {
-                        deviceName = $"GEV: {gigEInfo.chManufacturerName} {gigEInfo.chModelName} ({gigEInfo.chSerialNumber})";
-                    }
+                        deviceName =
+                            $"GEV: {gigEInfo.chManufacturerName} {gigEInfo.chModelName} ({gigEInfo.chSerialNumber})";
 
                     Log.Information("发现相机: {Name}", deviceName);
                     Log.Debug("相机详细信息: IP={IP}, MAC={MAC:X8}{MAC2:X8}, 制造商={Manufacturer}, 型号={Model}, 序列号={Serial}",
@@ -344,7 +334,7 @@ public class HikvisionSmartCameraService : ICameraService
             // 遍历并连接所有相机
             foreach (var targetCamera in cameraInfos)
             {
-                string deviceIp = targetCamera.IpAddress;  // 使用targetCamera中的IP地址作为初始值
+                var deviceIp = targetCamera.IpAddress; // 使用targetCamera中的IP地址作为初始值
                 try
                 {
                     // 创建相机实例
@@ -359,15 +349,17 @@ public class HikvisionSmartCameraService : ICameraService
                         typeof(MvCodeReader.MV_CODEREADER_DEVICE_INFO))!;
 
                     // 获取GigE设备的特殊信息以获取正确的IP地址
-                    IntPtr buffer = Marshal.UnsafeAddrOfPinnedArrayElement(deviceInfo.SpecialInfo.stGigEInfo, 0);
+                    var buffer = Marshal.UnsafeAddrOfPinnedArrayElement(deviceInfo.SpecialInfo.stGigEInfo, 0);
                     var gigEInfo = (MvCodeReader.MV_CODEREADER_GIGE_DEVICE_INFO)Marshal.PtrToStructure(
                         buffer,
                         typeof(MvCodeReader.MV_CODEREADER_GIGE_DEVICE_INFO))!;
 
-                    deviceIp = $"{gigEInfo.nCurrentIp & 0xFF}.{(gigEInfo.nCurrentIp >> 8) & 0xFF}.{(gigEInfo.nCurrentIp >> 16) & 0xFF}.{(gigEInfo.nCurrentIp >> 24) & 0xFF}";
+                    deviceIp =
+                        $"{gigEInfo.nCurrentIp & 0xFF}.{(gigEInfo.nCurrentIp >> 8) & 0xFF}.{(gigEInfo.nCurrentIp >> 16) & 0xFF}.{(gigEInfo.nCurrentIp >> 24) & 0xFF}";
 
                     // 检查设备访问权限
-                    if (!MvCodeReader.MV_CODEREADER_IsDeviceAccessible_NET(ref deviceInfo, MvCodeReader.MV_CODEREADER_ACCESS_Exclusive))
+                    if (!MvCodeReader.MV_CODEREADER_IsDeviceAccessible_NET(ref deviceInfo,
+                            MvCodeReader.MV_CODEREADER_ACCESS_Exclusive))
                     {
                         Log.Error("相机 {IP} 当前不可访问，可能被其他程序占用", deviceIp);
                         continue;
@@ -384,9 +376,9 @@ public class HikvisionSmartCameraService : ICameraService
                     // 打开设备
                     const int maxRetries = 3;
                     const int retryDelayMs = 1000;
-                    bool deviceOpened = false;
+                    var deviceOpened = false;
 
-                    for (int retry = 0; retry < maxRetries; retry++)
+                    for (var retry = 0; retry < maxRetries; retry++)
                     {
                         if (retry > 0)
                         {
@@ -459,9 +451,10 @@ public class HikvisionSmartCameraService : ICameraService
                                 errorMsg = "网络连接超时";
                                 break;
                             default:
-                                errorMsg = $"未知错误";
+                                errorMsg = "未知错误";
                                 break;
                         }
+
                         Log.Error("打开相机 {IP} 失败: {Error} (错误码: 0x{Code:X})", deviceIp, errorMsg, nRet);
                     }
 
@@ -470,35 +463,35 @@ public class HikvisionSmartCameraService : ICameraService
                         Log.Error("多次尝试后仍无法打开相机 {IP}", deviceIp);
                         continue;
                     }
-                    
+
                     // 注册回调函数 - 在开始采集之前注册
                     instance.IsGrabbing = true;
                     Log.Information("相机 {IP}: 注册图像回调函数", deviceIp);
-                    
+
                     // 使用Ex2版本的回调
-                    instance.ImageCallback = new MvCodeReader.cbOutputEx2delegate((IntPtr pData, IntPtr pstFrameInfoEx2, IntPtr pUser) =>
+                    instance.ImageCallback = (pData, pstFrameInfoEx2, pUser) =>
                     {
                         try
                         {
                             if (pData == IntPtr.Zero || pstFrameInfoEx2 == IntPtr.Zero)
                             {
-                                Log.Error("回调参数无效：pData={Data}, pstFrameInfoEx2={FrameInfo}", 
+                                Log.Error("回调参数无效：pData={Data}, pstFrameInfoEx2={FrameInfo}",
                                     pData == IntPtr.Zero ? "NULL" : "Valid",
                                     pstFrameInfoEx2 == IntPtr.Zero ? "NULL" : "Valid");
                                 return;
                             }
 
-                            var ipAddress = deviceIp;  // 使用正确的IP地址
-                            
+                            var ipAddress = deviceIp; // 使用正确的IP地址
+
                             // 将帧信息转换为结构体
                             var frameInfo = (MvCodeReader.MV_CODEREADER_IMAGE_OUT_INFO_EX2)Marshal.PtrToStructure(
                                 pstFrameInfoEx2,
                                 typeof(MvCodeReader.MV_CODEREADER_IMAGE_OUT_INFO_EX2))!;
-                            
+
                             Log.Debug("相机 {IP}: 收到图像回调 (Ex2)", ipAddress);
-                            Log.Debug("相机 {IP}: 图像信息 - 宽度:{Width}, 高度:{Height}, 帧号:{FrameNum}", 
+                            Log.Debug("相机 {IP}: 图像信息 - 宽度:{Width}, 高度:{Height}, 帧号:{FrameNum}",
                                 ipAddress, frameInfo.nWidth, frameInfo.nHeight, frameInfo.nFrameNum);
-                                
+
                             if (frameInfo.nFrameLen <= 0)
                             {
                                 Log.Warning("相机 {IP}: 获取到的帧长度为0", ipAddress);
@@ -507,49 +500,48 @@ public class HikvisionSmartCameraService : ICameraService
 
                             Log.Debug("相机 {IP}: 成功获取一帧图像", ipAddress);
                             Log.Debug("相机 {IP}: 图像大小 {Size} 字节", ipAddress, frameInfo.nFrameLen);
-                            
+
                             // 确保缓冲区大小足够
                             if (frameInfo.nFrameLen > instance.ImageBuffer.Length)
                             {
-                                Log.Warning("相机 {IP}: 图像数据大小({Size})超过缓冲区大小({BufferSize})", 
+                                Log.Warning("相机 {IP}: 图像数据大小({Size})超过缓冲区大小({BufferSize})",
                                     ipAddress, frameInfo.nFrameLen, instance.ImageBuffer.Length);
                                 return;
                             }
 
                             // 创建临时缓冲区并复制数据
-                            byte[] tempBuffer = new byte[frameInfo.nFrameLen];
+                            var tempBuffer = new byte[frameInfo.nFrameLen];
                             Marshal.Copy(pData, tempBuffer, 0, (int)frameInfo.nFrameLen);
-                            
+
                             // 处理条码结果
-                            string barcode = "NoRead";
+                            var barcode = "NoRead";
                             if (frameInfo.UnparsedBcrList.pstCodeListEx2 != IntPtr.Zero)
-                            {
                                 try
                                 {
                                     var bcrResult = (MvCodeReader.MV_CODEREADER_RESULT_BCR_EX2)Marshal.PtrToStructure(
                                         frameInfo.UnparsedBcrList.pstCodeListEx2,
                                         typeof(MvCodeReader.MV_CODEREADER_RESULT_BCR_EX2))!;
 
-                                    if (bcrResult.nCodeNum > 0 && bcrResult.stBcrInfoEx2 != null && bcrResult.stBcrInfoEx2.Length > 0)
+                                    if (bcrResult.nCodeNum > 0 && bcrResult.stBcrInfoEx2 != null &&
+                                        bcrResult.stBcrInfoEx2.Length > 0)
                                     {
                                         // 检查编码并正确解码
                                         string decodedBarcode;
                                         if (IsTextUTF8(bcrResult.stBcrInfoEx2[0].chCode))
-                                        {
-                                            decodedBarcode = Encoding.UTF8.GetString(bcrResult.stBcrInfoEx2[0].chCode).Trim().TrimEnd('\0');
-                                        }
+                                            decodedBarcode = Encoding.UTF8.GetString(bcrResult.stBcrInfoEx2[0].chCode)
+                                                .Trim().TrimEnd('\0');
                                         else
-                                        {
                                             try
                                             {
-                                                decodedBarcode = Encoding.GetEncoding("GB2312").GetString(bcrResult.stBcrInfoEx2[0].chCode).Trim().TrimEnd('\0');
+                                                decodedBarcode = Encoding.GetEncoding("GB2312")
+                                                    .GetString(bcrResult.stBcrInfoEx2[0].chCode).Trim().TrimEnd('\0');
                                             }
                                             catch (Exception ex)
                                             {
                                                 Log.Warning(ex, "使用GB2312解码失败，尝试使用默认编码");
-                                                decodedBarcode = Encoding.Default.GetString(bcrResult.stBcrInfoEx2[0].chCode).Trim().TrimEnd('\0');
+                                                decodedBarcode = Encoding.Default
+                                                    .GetString(bcrResult.stBcrInfoEx2[0].chCode).Trim().TrimEnd('\0');
                                             }
-                                        }
 
                                         // 验证条码是否符合规则
                                         if (_codeRules.IsValidBarcode(decodedBarcode))
@@ -559,7 +551,8 @@ public class HikvisionSmartCameraService : ICameraService
                                         }
                                         else
                                         {
-                                            Log.Warning("相机 {IP}: 条码 {Barcode} 不符合规则要求，标记为NoRead", ipAddress, decodedBarcode);
+                                            Log.Warning("相机 {IP}: 条码 {Barcode} 不符合规则要求，标记为NoRead", ipAddress,
+                                                decodedBarcode);
                                             barcode = "NoRead";
                                         }
                                     }
@@ -568,10 +561,9 @@ public class HikvisionSmartCameraService : ICameraService
                                 {
                                     Log.Error(ex, "相机 {IP}: 处理条码数据时发生错误", ipAddress);
                                 }
-                            }
-                            
+
                             Log.Debug("相机 {IP}: 处理条码结果: {Barcode}", ipAddress, barcode);
-                            
+
                             // 处理条码结果，传入相机IP地址
                             ProcessBarcodeResult(barcode, frameInfo, tempBuffer, ipAddress);
                         }
@@ -579,10 +571,11 @@ public class HikvisionSmartCameraService : ICameraService
                         {
                             Log.Error(ex, "图像回调函数处理时发生错误");
                         }
-                    });
-                    
+                    };
+
                     // 注册Ex2回调
-                    nRet = instance.Camera.MV_CODEREADER_RegisterImageCallBackEx2_NET(instance.ImageCallback, IntPtr.Zero);
+                    nRet = instance.Camera.MV_CODEREADER_RegisterImageCallBackEx2_NET(instance.ImageCallback,
+                        IntPtr.Zero);
                     if (nRet != MvCodeReader.MV_CODEREADER_OK)
                     {
                         string errorMsg;
@@ -601,6 +594,7 @@ public class HikvisionSmartCameraService : ICameraService
                                 errorMsg = $"未知错误 (错误码: 0x{nRet:X})";
                                 break;
                         }
+
                         Log.Error("相机 {IP} 注册回调函数失败: {Error} (错误码: 0x{Code:X})", deviceIp, errorMsg, nRet);
                         Log.Warning("相机 {IP}: 将使用轮询模式获取图像", deviceIp);
                     }
@@ -616,7 +610,7 @@ public class HikvisionSmartCameraService : ICameraService
                         Log.Error("相机 {IP} 开始采集失败", deviceIp);
                         continue;
                     }
-                    
+
                     // 如果回调注册失败，使用轮询模式
                     if (instance.ImageCallback == null)
                     {
@@ -656,7 +650,6 @@ public class HikvisionSmartCameraService : ICameraService
         try
         {
             foreach (var (ip, instance) in _cameras)
-            {
                 try
                 {
                     Log.Information("相机 {IP}: 准备停止采集", ip);
@@ -683,7 +676,6 @@ public class HikvisionSmartCameraService : ICameraService
                 {
                     Log.Error(ex, "停止相机 {IP} 时发生错误", ip);
                 }
-            }
 
             _cameras.Clear();
             IsConnected = false;
@@ -708,7 +700,8 @@ public class HikvisionSmartCameraService : ICameraService
         try
         {
             GC.Collect();
-            var nRet = MvCodeReader.MV_CODEREADER_EnumDevices_NET(ref deviceList, MvCodeReader.MV_CODEREADER_GIGE_DEVICE);
+            var nRet = MvCodeReader.MV_CODEREADER_EnumDevices_NET(ref deviceList,
+                MvCodeReader.MV_CODEREADER_GIGE_DEVICE);
             if (nRet != MvCodeReader.MV_CODEREADER_OK)
             {
                 Log.Error("枚举设备失败 (错误码: 0x{Code:X})", nRet);
@@ -726,9 +719,9 @@ public class HikvisionSmartCameraService : ICameraService
                 if (deviceInfo.nTLayerType == MvCodeReader.MV_CODEREADER_GIGE_DEVICE)
                 {
                     // 获取GigE设备的特殊信息
-                    IntPtr buffer = Marshal.UnsafeAddrOfPinnedArrayElement(deviceInfo.SpecialInfo.stGigEInfo, 0);
+                    var buffer = Marshal.UnsafeAddrOfPinnedArrayElement(deviceInfo.SpecialInfo.stGigEInfo, 0);
                     var gigEInfo = (MvCodeReader.MV_CODEREADER_GIGE_DEVICE_INFO)Marshal.PtrToStructure(
-                        buffer, 
+                        buffer,
                         typeof(MvCodeReader.MV_CODEREADER_GIGE_DEVICE_INFO))!;
 
                     var cameraInfo = new DeviceCameraInfo { Index = i };
@@ -737,13 +730,10 @@ public class HikvisionSmartCameraService : ICameraService
                     // 记录更详细的设备信息
                     string deviceName;
                     if (!string.IsNullOrEmpty(gigEInfo.chUserDefinedName))
-                    {
                         deviceName = $"GEV: {gigEInfo.chUserDefinedName} ({gigEInfo.chSerialNumber})";
-                    }
                     else
-                    {
-                        deviceName = $"GEV: {gigEInfo.chManufacturerName} {gigEInfo.chModelName} ({gigEInfo.chSerialNumber})";
-                    }
+                        deviceName =
+                            $"GEV: {gigEInfo.chManufacturerName} {gigEInfo.chModelName} ({gigEInfo.chSerialNumber})";
 
                     Log.Information("发现相机: {Name}", deviceName);
                     Log.Debug("相机详细信息: IP={IP}, MAC={MAC:X8}{MAC2:X8}, 制造商={Manufacturer}, 型号={Model}",
@@ -764,18 +754,14 @@ public class HikvisionSmartCameraService : ICameraService
                 .ToList();
 
             if (duplicateIPs.Any())
-            {
                 foreach (var ip in duplicateIPs)
                 {
                     var cameras = result.Where(x => x.IpAddress == ip).ToList();
                     Log.Warning("发现多个相机使用相同的IP地址 {IP}:", ip);
                     foreach (var camera in cameras)
-                    {
                         Log.Warning("  - 相机: {Name} (SN: {Serial})",
                             camera.Model, camera.SerialNumber);
-                    }
                 }
-            }
         }
         catch (Exception ex)
         {
@@ -792,18 +778,6 @@ public class HikvisionSmartCameraService : ICameraService
     {
         _settings = config;
         Log.Information("相机配置已更新");
-    }
-
-    /// <summary>
-    ///     设置条码规则
-    /// </summary>
-    /// <param name="rules">条码规则配置</param>
-    public void SetCodeRules(CodeRules rules)
-    {
-        _codeRules = rules;
-        Log.Information("已更新条码规则配置，共 {Count} 条规则，其中 {EnabledCount} 条已启用",
-            rules.coderules.Count,
-            rules.coderules.Count(r => r.enable));
     }
 
     /// <summary>
@@ -829,14 +803,25 @@ public class HikvisionSmartCameraService : ICameraService
         _disposed = true;
     }
 
+    /// <summary>
+    ///     设置条码规则
+    /// </summary>
+    /// <param name="rules">条码规则配置</param>
+    public void SetCodeRules(CodeRules rules)
+    {
+        _codeRules = rules;
+        Log.Information("已更新条码规则配置，共 {Count} 条规则，其中 {EnabledCount} 条已启用",
+            rules.coderules.Count,
+            rules.coderules.Count(r => r.enable));
+    }
+
     private void ReceiveImages(string ipAddress, CameraInstance instance)
     {
         Log.Information("开始接收相机 {IP} 的图像", ipAddress);
-        int errorCount = 0;
-        DateTime lastLogTime = DateTime.Now;
-        
+        var errorCount = 0;
+        var lastLogTime = DateTime.Now;
+
         while (instance.IsGrabbing)
-        {
             try
             {
                 var pData = IntPtr.Zero;
@@ -861,18 +846,14 @@ public class HikvisionSmartCameraService : ICameraService
                     {
                         Marshal.Copy(pData, instance.ImageBuffer, 0, (int)stFrameInfo.nFrameLen);
                         var barcode = ProcessBarcode(stFrameInfo);
-                        
+
                         // 处理所有条码结果，包括 NoRead
                         if (!string.IsNullOrEmpty(barcode))
                         {
                             if (barcode != "NoRead")
-                            {
                                 Log.Information("相机 {IP}: 识别到有效条码: {Barcode}", ipAddress, barcode);
-                            }
                             else
-                            {
                                 Log.Debug("相机 {IP}: 未识别到条码，发布 NoRead 事件", ipAddress);
-                            }
                             ProcessBarcodeResult(barcode, stFrameInfo, instance.ImageBuffer, ipAddress);
                         }
                     }
@@ -904,7 +885,7 @@ public class HikvisionSmartCameraService : ICameraService
                             errorMsg = $"未知错误 (错误码: 0x{nRet:X})";
                             break;
                     }
-                    
+
                     // 每分钟最多记录一次错误，避免日志过多
                     if ((DateTime.Now - lastLogTime).TotalMinutes >= 1)
                     {
@@ -921,8 +902,7 @@ public class HikvisionSmartCameraService : ICameraService
                 Log.Error(ex, "接收相机 {IP} 图像时发生错误", ipAddress);
                 Thread.Sleep(100);
             }
-        }
-        
+
         Log.Information("相机 {IP} 的图像接收线程已退出", ipAddress);
     }
 
@@ -938,27 +918,24 @@ public class HikvisionSmartCameraService : ICameraService
         if (bcrResult.nCodeNum <= 0) return "NoRead";
 
         // 遍历所有条码
-        for (int i = 0; i < bcrResult.nCodeNum; i++)
-        {
+        for (var i = 0; i < bcrResult.nCodeNum; i++)
             try
             {
                 string decodedBarcode;
                 if (IsTextUTF8(bcrResult.stBcrInfoEx2[i].chCode))
-                {
                     decodedBarcode = Encoding.UTF8.GetString(bcrResult.stBcrInfoEx2[i].chCode).Trim().TrimEnd('\0');
-                }
                 else
-                {
                     try
                     {
-                        decodedBarcode = Encoding.GetEncoding("GB2312").GetString(bcrResult.stBcrInfoEx2[i].chCode).Trim().TrimEnd('\0');
+                        decodedBarcode = Encoding.GetEncoding("GB2312").GetString(bcrResult.stBcrInfoEx2[i].chCode)
+                            .Trim().TrimEnd('\0');
                     }
                     catch (Exception ex)
                     {
                         Log.Warning(ex, "使用GB2312解码失败，尝试使用默认编码");
-                        decodedBarcode = Encoding.Default.GetString(bcrResult.stBcrInfoEx2[i].chCode).Trim().TrimEnd('\0');
+                        decodedBarcode = Encoding.Default.GetString(bcrResult.stBcrInfoEx2[i].chCode).Trim()
+                            .TrimEnd('\0');
                     }
-                }
 
                 // 验证条码是否符合规则
                 if (_codeRules.IsValidBarcode(decodedBarcode))
@@ -966,23 +943,21 @@ public class HikvisionSmartCameraService : ICameraService
                     Log.Information("找到符合规则的条码: {Barcode}", decodedBarcode);
                     return decodedBarcode;
                 }
-                else
-                {
-                    Log.Debug("条码 {Barcode} 不符合规则要求", decodedBarcode);
-                }
+
+                Log.Debug("条码 {Barcode} 不符合规则要求", decodedBarcode);
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "处理第 {Index} 个条码时发生错误", i + 1);
             }
-        }
 
         // 如果没有找到符合规则的条码，返回NoRead
         Log.Warning("未找到符合规则的条码，共处理 {Count} 个条码", bcrResult.nCodeNum);
         return "NoRead";
     }
 
-    private void ProcessBarcodeResult(string barcode, MvCodeReader.MV_CODEREADER_IMAGE_OUT_INFO_EX2 frameInfo, byte[] imageBuffer, string ipAddress)
+    private void ProcessBarcodeResult(string barcode, MvCodeReader.MV_CODEREADER_IMAGE_OUT_INFO_EX2 frameInfo,
+        byte[] imageBuffer, string ipAddress)
     {
         try
         {
@@ -1005,7 +980,7 @@ public class HikvisionSmartCameraService : ICameraService
 
                 // 检查是否所有相机都已处理完毕
                 var allCamerasProcessed = _cameras.Count == _cameraProcessed.Count;
-                
+
                 if (allCamerasProcessed)
                 {
                     _currentTriggerCount++;
@@ -1031,23 +1006,15 @@ public class HikvisionSmartCameraService : ICameraService
                             // 处理图像数据
                             using var image = ProcessImage(frameInfo, imageBuffer);
                             if (image != null)
-                            {
                                 package.Image = image;
-                            }
                             else
-                            {
                                 Log.Warning("无法处理图像数据");
-                            }
 
                             // 发布数据
                             if (validBarcode != null)
-                            {
                                 Log.Information("发布条码：{Barcode}", validBarcode);
-                            }
                             else
-                            {
                                 Log.Debug("所有相机都未识别到有效条码，发布NoRead");
-                            }
                             PublishData(package, image);
                         }
                         else
@@ -1076,7 +1043,7 @@ public class HikvisionSmartCameraService : ICameraService
             var cameraId = package.Barcode; // 使用条码作为唯一标识
             var now = DateTime.Now;
 
-            if (!_lastPublishTime.TryGetValue(cameraId, out var lastTime) || 
+            if (!_lastPublishTime.TryGetValue(cameraId, out var lastTime) ||
                 (now - lastTime).TotalMilliseconds >= ThrottleIntervalMs)
             {
                 // 如果超过节流时间间隔，直接发布
@@ -1088,7 +1055,7 @@ public class HikvisionSmartCameraService : ICameraService
             {
                 // 如果在节流时间内，更新待发布的数据
                 _pendingPackages[cameraId] = package;
-                
+
                 // 启动一个延迟任务来发布待处理的数据
                 Task.Delay(ThrottleIntervalMs - (int)(now - lastTime).TotalMilliseconds)
                     .ContinueWith(_ =>
@@ -1110,13 +1077,10 @@ public class HikvisionSmartCameraService : ICameraService
     private void PublishData(PackageInfo package, Image<Rgba32>? image)
     {
         _packageSubject.OnNext(package);
-        
-        if (image != null)
-        {
-            _imageSubject.OnNext((image.Clone(), new List<BarcodeLocation>()));
-        }
-        
-        Log.Debug("发布数据：条码 = {Barcode}, 图像大小 = {ImageSize}", 
+
+        if (image != null) _imageSubject.OnNext((image.Clone(), new List<BarcodeLocation>()));
+
+        Log.Debug("发布数据：条码 = {Barcode}, 图像大小 = {ImageSize}",
             package.Barcode,
             image != null ? $"{image.Width}x{image.Height}" : "无图像");
     }
@@ -1151,7 +1115,7 @@ public class HikvisionSmartCameraService : ICameraService
                 case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_Jpeg:
                 {
                     // 处理JPEG图像
-                    try 
+                    try
                     {
                         Log.Debug("开始处理JPEG图像数据，数据大小: {Size} 字节", imageBuffer.Length);
                         using var ms = new MemoryStream(imageBuffer);
@@ -1179,7 +1143,8 @@ public class HikvisionSmartCameraService : ICameraService
         }
     }
 
-    private Image<Rgba32>? ProcessImageFromBuffer(int width, int height, byte[] buffer, MvCodeReader.MvCodeReaderGvspPixelType pixelType)
+    private Image<Rgba32>? ProcessImageFromBuffer(int width, int height, byte[] buffer,
+        MvCodeReader.MvCodeReaderGvspPixelType pixelType)
     {
         try
         {
@@ -1197,13 +1162,11 @@ public class HikvisionSmartCameraService : ICameraService
                         {
                             var row = accessor.GetRowSpan(y);
                             for (var x = 0; x < width; x++)
-                            {
                                 if (y * width + x < buffer.Length)
                                 {
                                     var gray = buffer[y * width + x];
                                     row[x] = new Rgba32(gray, gray, gray, 255);
                                 }
-                            }
                         }
                     });
 
@@ -1212,7 +1175,7 @@ public class HikvisionSmartCameraService : ICameraService
                 case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_Jpeg:
                 {
                     // 处理JPEG图像
-                    try 
+                    try
                     {
                         Log.Debug("开始处理JPEG图像数据，数据大小: {Size} 字节", buffer.Length);
                         using var ms = new MemoryStream(buffer);
@@ -1230,7 +1193,7 @@ public class HikvisionSmartCameraService : ICameraService
                 }
                 default:
                     Log.Warning("不支持的像素格式: {PixelType}", pixelType);
-                    
+
                     // 尝试以 Mono8 格式处理
                     var defaultImage = new Image<Rgba32>(width, height);
                     defaultImage.ProcessPixelRows(accessor =>
@@ -1239,13 +1202,11 @@ public class HikvisionSmartCameraService : ICameraService
                         {
                             var row = accessor.GetRowSpan(y);
                             for (var x = 0; x < width; x++)
-                            {
                                 if (y * width + x < buffer.Length)
                                 {
                                     var gray = buffer[y * width + x];
                                     row[x] = new Rgba32(gray, gray, gray, 255);
                                 }
-                            }
                         }
                     });
                     return defaultImage;
@@ -1260,25 +1221,20 @@ public class HikvisionSmartCameraService : ICameraService
 
     private static bool IsTextUTF8(byte[] inputStream)
     {
-        int encodingBytesCount = 0;
-        bool allTextsAreASCIIChars = true;
+        var encodingBytesCount = 0;
+        var allTextsAreASCIIChars = true;
 
-        for (int i = 0; i < inputStream.Length; i++)
+        for (var i = 0; i < inputStream.Length; i++)
         {
-            byte current = inputStream[i];
+            var current = inputStream[i];
 
-            if ((current & 0x80) == 0x80)
-            {
-                allTextsAreASCIIChars = false;
-            }
+            if ((current & 0x80) == 0x80) allTextsAreASCIIChars = false;
             // First byte
             if (encodingBytesCount == 0)
             {
                 if ((current & 0x80) == 0)
-                {
                     // ASCII chars, from 0x00-0x7F
                     continue;
-                }
 
                 if ((current & 0xC0) == 0xC0)
                 {
@@ -1303,25 +1259,28 @@ public class HikvisionSmartCameraService : ICameraService
             {
                 // Following bytes, must start with 10.
                 if ((current & 0xC0) == 0x80)
-                {
                     encodingBytesCount--;
-                }
                 else
-                {
                     // Invalid bits structure for UTF8 encoding rule.
                     return false;
-                }
             }
         }
 
         if (encodingBytesCount != 0)
-        {
             // Invalid bits structure for UTF8 encoding rule.
             // Wrong following bytes count.
             return false;
-        }
 
         // Although UTF8 supports encoding for ASCII chars, we regard as a input stream, whose contents are all ASCII as default encoding.
         return !allTextsAreASCIIChars;
     }
-} 
+
+    private class CameraInstance
+    {
+        public MvCodeReader Camera { get; init; } = null!;
+        public Thread? ReceiveThread { get; set; }
+        public bool IsGrabbing { get; set; }
+        public byte[] ImageBuffer { get; } = new byte[1024 * 1024 * 20];
+        public MvCodeReader.cbOutputEx2delegate? ImageCallback { get; set; }
+    }
+}

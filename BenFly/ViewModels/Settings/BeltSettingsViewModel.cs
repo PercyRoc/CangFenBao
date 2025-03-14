@@ -1,11 +1,11 @@
+using System.Collections.ObjectModel;
+using System.IO.Ports;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using Presentation_BenFly.Models.Settings;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
-using System.Collections.ObjectModel;
-using System.IO.Ports;
 
 namespace Presentation_BenFly.ViewModels.Settings;
 
@@ -20,19 +20,19 @@ public class BeltSettingsViewModel : BindableBase
     {
         _notificationService = notificationService;
         _settingsService = settingsService;
-        
+
         // 初始化可用串口列表
         AvailablePortNames = new ObservableCollection<string>(SerialPort.GetPortNames());
-        
+
         // 初始化波特率列表
         AvailableBaudRates = [9600, 19200, 38400, 57600, 115200];
-        
+
         // 初始化数据位列表
         AvailableDataBits = [5, 6, 7, 8];
-        
+
         // 初始化校验位列表
         AvailableParities = new ObservableCollection<Parity>(Enum.GetValues<Parity>());
-        
+
         // 初始化停止位列表
         AvailableStopBits = new ObservableCollection<StopBits>(Enum.GetValues<StopBits>());
 
@@ -41,9 +41,7 @@ public class BeltSettingsViewModel : BindableBase
 
         // 如果串口为空，设置默认值
         if (string.IsNullOrEmpty(Settings.PortName))
-        {
             Settings.PortName = AvailablePortNames.FirstOrDefault() ?? string.Empty;
-        }
 
         SaveConfigurationCommand = new DelegateCommand(ExecuteSaveConfiguration);
     }
@@ -72,4 +70,4 @@ public class BeltSettingsViewModel : BindableBase
             _notificationService.ShowError("保存皮带串口设置时发生错误");
         }
     }
-} 
+}

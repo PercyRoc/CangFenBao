@@ -62,7 +62,6 @@ public class SangNengService : ISangNengService
                 Code = -1,
                 Message = "无法解析服务器响应"
             };
-
         }
         catch (Exception ex)
         {
@@ -74,4 +73,4 @@ public class SangNengService : ISangNengService
             };
         }
     }
-} 
+}

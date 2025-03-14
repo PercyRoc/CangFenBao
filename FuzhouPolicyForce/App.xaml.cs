@@ -1,7 +1,6 @@
 ﻿using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Threading;
 using Common.Extensions;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
@@ -19,15 +18,16 @@ using SharedUI.Views;
 using SortingServices.Pendulum;
 using SortingServices.Pendulum.Extensions;
 using SortingServices.Pendulum.Models;
+using Timer = System.Timers.Timer;
 
 namespace FuzhouPolicyForce;
 
 /// <summary>
-/// Interaction logic for App.xaml
+///     Interaction logic for App.xaml
 /// </summary>
 public partial class App
 {
-    private System.Timers.Timer? _cleanupTimer;
+    private Timer? _cleanupTimer;
 
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
@@ -45,7 +45,7 @@ public partial class App
 
         containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
         containerRegistry.Register<SettingsDialogViewModel>();
-        containerRegistry.Register<Window,HistoryWindow>("HistoryDialog");
+        containerRegistry.Register<Window, HistoryWindow>("HistoryDialog");
         containerRegistry.Register<HistoryWindowViewModel>();
 
         // 获取设置服务
@@ -103,12 +103,13 @@ public partial class App
         }
     }
 
-    private void App_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
+    private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         try
         {
             Log.Fatal(e.Exception, "UI线程发生未处理的异常");
-            MessageBox.Show($"程序发生错误：{e.Exception.Message}\n请查看日志了解详细信息。", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show($"程序发生错误：{e.Exception.Message}\n请查看日志了解详细信息。", "错误", MessageBoxButton.OK,
+                MessageBoxImage.Error);
             e.Handled = true;
         }
         catch (Exception ex)
@@ -144,13 +145,13 @@ public partial class App
     }
 
     /// <summary>
-    /// 启动定期清理任务
+    ///     启动定期清理任务
     /// </summary>
     private void StartCleanupTask()
     {
         try
         {
-            _cleanupTimer = new System.Timers.Timer(1000 * 60 * 60); // 每1小时执行一次
+            _cleanupTimer = new Timer(1000 * 60 * 60); // 每1小时执行一次
             _cleanupTimer.Elapsed += (_, args) =>
             {
                 try
@@ -184,7 +185,7 @@ public partial class App
     }
 
     /// <summary>
-    /// 清理DUMP文件
+    ///     清理DUMP文件
     /// </summary>
     private void CleanupDumpFiles()
     {
@@ -193,9 +194,8 @@ public partial class App
             var dumpPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory);
             var dumpFiles = Directory.GetFiles(dumpPath, "*.dmp", SearchOption.TopDirectoryOnly);
 
-            int deletedCount = 0;
+            var deletedCount = 0;
             foreach (var file in dumpFiles)
-            {
                 try
                 {
                     File.Delete(file);
@@ -205,12 +205,8 @@ public partial class App
                 {
                     Log.Warning(ex, "删除DUMP文件失败: {FilePath}", file);
                 }
-            }
 
-            if (deletedCount > 0)
-            {
-                Log.Information("成功清理 {Count} 个DUMP文件", deletedCount);
-            }
+            if (deletedCount > 0) Log.Information("成功清理 {Count} 个DUMP文件", deletedCount);
         }
         catch (Exception ex)
         {

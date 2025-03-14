@@ -26,18 +26,17 @@ public class CodeRuleUI
 
 public class CodeRule
 {
+    private Regex? _compiledRegex;
     public string name { get; set; } = string.Empty;
     public string regex { get; set; } = string.Empty;
     public bool userDefine { get; set; }
     public CodeRuleUI ui { get; set; } = new();
     public bool enable { get; set; }
-    
-    private Regex? _compiledRegex;
-    
+
     public bool IsMatch(string barcode)
     {
         if (!enable) return false;
-        
+
         _compiledRegex ??= new Regex(regex, RegexOptions.Compiled);
         return _compiledRegex.IsMatch(barcode);
     }
@@ -46,13 +45,13 @@ public class CodeRule
 public class CodeRules
 {
     public List<CodeRule> coderules { get; set; } = new();
-    
+
     public bool IsValidBarcode(string barcode)
     {
         // 如果没有启用的规则，则认为所有条码都有效
         if (!coderules.Any(r => r.enable)) return true;
-        
+
         // 只要符合任一启用的规则即为有效
         return coderules.Any(rule => rule.enable && rule.IsMatch(barcode));
     }
-} 
+}

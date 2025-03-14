@@ -8,7 +8,6 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using ChongqingJushuitan.Models.JuShuiTan;
 using ChongqingJushuitan.Services;
-using ChongqingJushuitan.ViewModels.Settings;
 using Common.Models.Package;
 using Common.Models.Settings.ChuteRules;
 using Common.Services.Settings;
@@ -30,9 +29,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
+    private readonly IJuShuiTanService _juShuiTanService;
     private readonly ISettingsService _settingsService;
     private readonly IPendulumSortService _sortService;
-    private readonly IJuShuiTanService _juShuiTanService;
     private readonly List<IDisposable> _subscriptions = [];
 
     private readonly DispatcherTimer _timer;
@@ -440,30 +439,28 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     Weight = Convert.ToDecimal(package.Weight),
                     IsInternational = false, // 根据实际情况设置
                     Type = 5, // 自动判断称重并发货
-                    Volume = package.Volume.HasValue ? Convert.ToDecimal(package.Volume.Value / 1000000) : null, // 将立方厘米转换为立方米
+                    Volume = package.Volume.HasValue
+                        ? Convert.ToDecimal(package.Volume.Value / 1000000)
+                        : null // 将立方厘米转换为立方米
                 };
 
                 Log.Debug("准备上传包裹数据到聚水潭: {@Request}", request);
                 var response = await _juShuiTanService.WeightAndSendAsync(request);
-                
+
                 if (response.IsSuccess)
                 {
                     Log.Information("包裹 {Barcode} 数据已成功上传到聚水潭", package.Barcode);
-                    
+
                     // 检查返回的数据
                     if (response.Data.Count > 0)
                     {
                         var data = response.Data[0];
                         if (!data.IsSuccess)
-                        {
                             Log.Warning("包裹 {Barcode} 数据上传到聚水潭返回错误: {ErrorMessage}",
                                 package.Barcode, data.Message);
-                        }
                         else
-                        {
                             Log.Debug("包裹 {Barcode} 上传成功，物流公司：{Company}，运单号：{TrackingNumber}",
                                 package.Barcode, data.LogisticsCompany, data.LogisticsId);
-                        }
                     }
                 }
                 else
@@ -605,17 +602,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 // 停止定时器（UI线程操作）
                 if (Application.Current != null && !Application.Current.Dispatcher.CheckAccess())
-                {
                     Application.Current.Dispatcher.Invoke(() => _timer.Stop());
-                }
                 else
-                {
                     _timer.Stop();
-                }
 
                 // 停止分拣服务
                 if (_sortService.IsRunning())
-                {
                     try
                     {
                         // 使用超时避免无限等待
@@ -624,19 +616,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         var completedTask = Task.WhenAny(stopTask, timeoutTask).Result;
 
                         if (completedTask == stopTask)
-                        {
                             Log.Information("摆轮分拣服务已停止");
-                        }
                         else
-                        {
                             Log.Warning("摆轮分拣服务停止超时");
-                        }
                     }
                     catch (Exception ex)
                     {
                         Log.Error(ex, "停止摆轮分拣服务时发生错误");
                     }
-                }
 
                 // 释放分拣服务资源
                 if (_sortService is IDisposable disposableSortService)

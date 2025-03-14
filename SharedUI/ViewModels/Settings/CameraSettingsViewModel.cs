@@ -65,9 +65,11 @@ public class CameraSettingsViewModel : BindableBase
         IsRefreshing = true;
         try
         {
-            Log.Information("开始刷新相机列表，当前选择的厂商：{Manufacturer}，类型：{Type}", Configuration.Manufacturer, Configuration.CameraType);
+            Log.Information("开始刷新相机列表，当前选择的厂商：{Manufacturer}，类型：{Type}", Configuration.Manufacturer,
+                Configuration.CameraType);
             // 创建相机服务
-            using var cameraService = CameraFactory.CreateCameraByManufacturer(Configuration.Manufacturer, Configuration.CameraType);
+            using var cameraService =
+                CameraFactory.CreateCameraByManufacturer(Configuration.Manufacturer, Configuration.CameraType);
             // 获取相机列表
             var cameraInfos = cameraService.GetCameraInfos();
             if (cameraInfos == null)

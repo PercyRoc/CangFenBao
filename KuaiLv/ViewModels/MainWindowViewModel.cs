@@ -398,7 +398,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         var statusItem = PackageInfoItems.FirstOrDefault(x => x.Label == "状态");
         if (statusItem == null) return;
-        
+
         // 更新状态显示
         if (string.IsNullOrEmpty(package.ErrorMessage))
         {
@@ -448,7 +448,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 Log.Warning("DWS上报失败：{Message}", dwsResponse.Message);
                 package.SetError($"DWS上报失败：{dwsResponse.Message}");
                 await _audioService.PlayPresetAsync(AudioType.SystemError);
-                
+
                 // 更新UI显示错误状态
                 Application.Current.Dispatcher.Invoke(() => UpdatePackageInfoItems(package));
             }

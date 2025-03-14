@@ -9,7 +9,7 @@ namespace Common.Models.Package;
 public class PackageInfo : IDisposable
 {
     private bool _disposed;
-    
+
     /// <summary>
     ///     构造函数
     /// </summary>

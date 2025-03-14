@@ -75,7 +75,7 @@ public class VolumeCameraStartupService : IHostedService
                 {
                     if (!_cameraService.Stop()) Log.Warning("体积相机停止未成功完成");
                     // 释放资源
-                     _cameraService.Dispose();
+                    _cameraService.Dispose();
                     _cameraService = null;
                 }
                 catch (Exception ex)

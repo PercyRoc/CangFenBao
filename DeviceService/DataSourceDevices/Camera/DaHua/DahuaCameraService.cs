@@ -306,7 +306,7 @@ public class DahuaCameraService : ICameraService
         _disposed = true;
         GC.SuppressFinalize(this);
     }
-    
+
     /// <summary>
     ///     初始化SDK
     /// </summary>

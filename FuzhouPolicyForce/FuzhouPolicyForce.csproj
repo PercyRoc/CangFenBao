@@ -11,18 +11,18 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <Page Update="Views\MainWindow.xaml">
-        <Generator>MSBuild:Compile</Generator>
-        <XamlRuntime>Wpf</XamlRuntime>
-        <SubType>Designer</SubType>
-      </Page>
+        <Page Update="Views\MainWindow.xaml">
+            <Generator>MSBuild:Compile</Generator>
+            <XamlRuntime>Wpf</XamlRuntime>
+            <SubType>Designer</SubType>
+        </Page>
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Common\Common.csproj" />
+        <ProjectReference Include="..\Common\Common.csproj"/>
         <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>
-        <ProjectReference Include="..\SharedUI\SharedUI.csproj" />
-        <ProjectReference Include="..\SortingServices\SortingServices.csproj" />
+        <ProjectReference Include="..\SharedUI\SharedUI.csproj"/>
+        <ProjectReference Include="..\SortingServices\SortingServices.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -48,12 +48,12 @@
 
     <ItemGroup>
         <Resource Include="Resources\favicon.ico">
-          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Resource>
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="Models\Settings\" />
+        <Folder Include="Models\Settings\"/>
     </ItemGroup>
 
 </Project>

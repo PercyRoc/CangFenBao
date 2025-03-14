@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Input;
 using Common.Services.Ui;
-using Presentation_BenFly.Views.Settings;
 using Serilog;
 using SharedUI.Views.Settings;
 

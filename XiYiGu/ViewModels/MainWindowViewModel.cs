@@ -20,14 +20,14 @@ using SortingServices.Pendulum.Models;
 
 namespace Presentation_XiYiGu.ViewModels;
 
-public class MainWindowViewModel: BindableBase, IDisposable
+public class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
     private readonly ISettingsService _settingsService;
-    private readonly WaybillUploadService _waybillUploadService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
+    private readonly WaybillUploadService _waybillUploadService;
     private string _currentBarcode = string.Empty;
     private BitmapSource? _currentImage;
     private int _currentPackageIndex;
@@ -36,7 +36,7 @@ public class MainWindowViewModel: BindableBase, IDisposable
 
     public MainWindowViewModel(IDialogService dialogService,
         ICameraService cameraService,
-        PackageTransferService packageTransferService, 
+        PackageTransferService packageTransferService,
         ISettingsService settingsService,
         WaybillUploadService waybillUploadService)
     {
@@ -314,7 +314,7 @@ public class MainWindowViewModel: BindableBase, IDisposable
             // 设置包裹序号
             package.Index = Interlocked.Increment(ref _currentPackageIndex);
             Log.Information("收到包裹信息：{Barcode}, 序号：{Index}", package.Barcode, package.Index);
-              // 将包裹添加到上传队列
+            // 将包裹添加到上传队列
             _waybillUploadService.EnqueuePackage(package);
             Log.Information("已将包裹添加到上传队列：{Barcode}", package.Barcode);
             // 更新UI

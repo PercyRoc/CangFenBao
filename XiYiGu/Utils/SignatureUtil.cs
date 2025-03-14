@@ -6,18 +6,19 @@ using Presentation_XiYiGu.Models;
 namespace Presentation_XiYiGu.Utils;
 
 /// <summary>
-/// 签名工具类
+///     签名工具类
 /// </summary>
 public static class SignatureUtil
 {
     /// <summary>
-    /// 生成MD5签名
+    ///     生成MD5签名
     /// </summary>
     /// <param name="parameters">参数字典</param>
     /// <param name="aesKey">AES密钥</param>
     /// <param name="isImageUpload">是否是图片上传</param>
     /// <returns>MD5签名</returns>
-    public static string GenerateMd5Signature(IDictionary<string, string> parameters, string aesKey, bool isImageUpload = false)
+    public static string GenerateMd5Signature(IDictionary<string, string> parameters, string aesKey,
+        bool isImageUpload = false)
     {
         // 构建签名字符串
         var sb = new StringBuilder();
@@ -72,4 +73,4 @@ public static class SignatureUtil
 
         return sb2.ToString();
     }
-} 
+}

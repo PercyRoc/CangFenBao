@@ -1,7 +1,6 @@
 ﻿using System.Windows;
 using System.Windows.Input;
 using Common.Services.Ui;
-using Presentation_Modules.Views.Settings;
 using Serilog;
 using SharedUI.Views.Settings;
 using Wpf.Ui.Controls;

@@ -10,13 +10,31 @@ namespace SharedUI.ViewModels.Settings;
 public class BarcodeChuteSettingsViewModel : BindableBase
 {
     private readonly ISettingsService _settingsService;
-    private ChuteSettings _configuration = new();
-    private int _selectedChuteNumber = 1;
     private ObservableCollection<int> _chuteNumbers = [];
+    private ChuteSettings _configuration = new();
     private BarcodeMatchRule _currentRule = new();
+    private int _selectedChuteNumber = 1;
+
+    public BarcodeChuteSettingsViewModel(ISettingsService settingsService)
+    {
+        _settingsService = settingsService;
+        SaveConfigurationCommand = new DelegateCommand(ExecuteSaveConfiguration);
+
+        // 加载配置
+        LoadSettings();
+
+        // 注册配置变更事件
+        _settingsService.OnSettingsChanged<ChuteSettings>(OnSettingsChanged);
+
+        // 监听格口数量变化
+        Configuration.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(Configuration.ChuteCount)) UpdateChuteNumbers();
+        };
+    }
 
     public DelegateCommand SaveConfigurationCommand { get; }
-    
+
     public ChuteSettings Configuration
     {
         get => _configuration;
@@ -28,10 +46,7 @@ public class BarcodeChuteSettingsViewModel : BindableBase
         get => _selectedChuteNumber;
         set
         {
-            if (SetProperty(ref _selectedChuteNumber, value))
-            {
-                LoadChuteRule(value);
-            }
+            if (SetProperty(ref _selectedChuteNumber, value)) LoadChuteRule(value);
         }
     }
 
@@ -47,32 +62,11 @@ public class BarcodeChuteSettingsViewModel : BindableBase
         private set => SetProperty(ref _currentRule, value);
     }
 
-    public BarcodeChuteSettingsViewModel(ISettingsService settingsService)
-    {
-        _settingsService = settingsService;
-        SaveConfigurationCommand = new DelegateCommand(ExecuteSaveConfiguration);
-        
-        // 加载配置
-        LoadSettings();
-        
-        // 注册配置变更事件
-        _settingsService.OnSettingsChanged<ChuteSettings>(OnSettingsChanged);
-        
-        // 监听格口数量变化
-        Configuration.PropertyChanged += (_, args) =>
-        {
-            if (args.PropertyName == nameof(Configuration.ChuteCount))
-            {
-                UpdateChuteNumbers();
-            }
-        };
-    }
-
     private void LoadSettings()
     {
         Configuration = _settingsService.LoadSettings<ChuteSettings>();
         UpdateChuteNumbers();
-        
+
         if (Configuration.ChuteRules.TryGetValue(SelectedChuteNumber, out var rule))
         {
             CurrentRule = rule;
@@ -93,15 +87,9 @@ public class BarcodeChuteSettingsViewModel : BindableBase
         }
 
         ChuteNumbers.Clear();
-        for (var i = 1; i <= Configuration.ChuteCount; i++)
-        {
-            ChuteNumbers.Add(i);
-        }
-        
-        if (SelectedChuteNumber > Configuration.ChuteCount)
-        {
-            SelectedChuteNumber = 1;
-        }
+        for (var i = 1; i <= Configuration.ChuteCount; i++) ChuteNumbers.Add(i);
+
+        if (SelectedChuteNumber > Configuration.ChuteCount) SelectedChuteNumber = 1;
     }
 
     private void LoadChuteRule(int chuteNumber)
@@ -121,9 +109,9 @@ public class BarcodeChuteSettingsViewModel : BindableBase
     {
         // 确保当前规则已保存到字典中
         Configuration.ChuteRules[SelectedChuteNumber] = CurrentRule;
-        
+
         // 保存配置
-        _settingsService.SaveSettings(Configuration, validate: true);
+        _settingsService.SaveSettings(Configuration, true);
     }
 
     private void OnSettingsChanged(ChuteSettings settings)
@@ -135,7 +123,7 @@ public class BarcodeChuteSettingsViewModel : BindableBase
         }
 
         Configuration = settings;
-        
+
         if (settings.ChuteRules.TryGetValue(SelectedChuteNumber, out var rule))
         {
             CurrentRule = rule;

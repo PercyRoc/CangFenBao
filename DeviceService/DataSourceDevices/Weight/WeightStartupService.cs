@@ -14,8 +14,8 @@ public class WeightStartupService : IHostedService
     private readonly SemaphoreSlim _initLock = new(1, 1);
     private readonly INotificationService _notificationService;
     private readonly ISettingsService _settingsService;
-    private SerialPortWeightService? _weightService;
     private WeightSettings? _currentSettings;
+    private SerialPortWeightService? _weightService;
 
     /// <summary>
     ///     构造函数

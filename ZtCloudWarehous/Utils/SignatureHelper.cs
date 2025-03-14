@@ -7,18 +7,19 @@ using Presentation_ZtCloudWarehous.Models;
 namespace Presentation_ZtCloudWarehous.Utils;
 
 /// <summary>
-/// 签名工具类
+///     签名工具类
 /// </summary>
 public static class SignatureHelper
 {
     /// <summary>
-    /// 计算签名
+    ///     计算签名
     /// </summary>
     /// <param name="commonParams">公共参数字典</param>
     /// <param name="businessParams">业务参数对象</param>
     /// <param name="secret">密钥</param>
     /// <returns>签名</returns>
-    public static string CalculateSignature(IDictionary<string, string> commonParams, object businessParams, string secret)
+    public static string CalculateSignature(IDictionary<string, string> commonParams, object businessParams,
+        string secret)
     {
         // 1. 按ASCII顺序排序公共参数
         var sortedParams = new SortedDictionary<string, string>(commonParams);
@@ -26,12 +27,8 @@ public static class SignatureHelper
         // 2. 拼接公共参数
         var stringBuilder = new StringBuilder();
         foreach (var param in sortedParams)
-        {
             if (!string.IsNullOrEmpty(param.Value))
-            {
                 stringBuilder.Append(param.Key).Append(param.Value);
-            }
-        }
 
         // 3. 添加业务参数JSON字符串
         var businessJson = JsonSerializer.Serialize(businessParams);
@@ -47,16 +44,13 @@ public static class SignatureHelper
 
         // 6. 转换为大写的十六进制字符串
         var sb = new StringBuilder();
-        foreach (var b in hashBytes)
-        {
-            sb.Append(b.ToString("X2"));
-        }
+        foreach (var b in hashBytes) sb.Append(b.ToString("X2"));
 
         return sb.ToString();
     }
 
     /// <summary>
-    /// 获取公共参数
+    ///     获取公共参数
     /// </summary>
     /// <param name="request">请求对象</param>
     /// <returns>公共参数字典</returns>
@@ -74,7 +68,7 @@ public static class SignatureHelper
     }
 
     /// <summary>
-    /// 获取业务参数
+    ///     获取业务参数
     /// </summary>
     /// <param name="request">请求对象</param>
     /// <returns>业务参数对象</returns>
@@ -95,7 +89,7 @@ public static class SignatureHelper
     }
 
     /// <summary>
-    /// 将对象转换为参数字典
+    ///     将对象转换为参数字典
     /// </summary>
     /// <param name="obj">要转换的对象</param>
     /// <returns>参数字典</returns>
@@ -112,17 +106,14 @@ public static class SignatureHelper
                 ? property.Value.GetString()
                 : property.Value.ToString();
 
-            if (!string.IsNullOrEmpty(value))
-            {
-                parameters[property.Name] = value;
-            }
+            if (!string.IsNullOrEmpty(value)) parameters[property.Name] = value;
         }
 
         return parameters;
     }
 
     /// <summary>
-    /// 将参数字典转换为URL查询字符串
+    ///     将参数字典转换为URL查询字符串
     /// </summary>
     /// <param name="parameters">参数字典</param>
     /// <returns>URL查询字符串</returns>
@@ -133,4 +124,4 @@ public static class SignatureHelper
             .Select(p => $"{HttpUtility.UrlEncode(p.Key)}={HttpUtility.UrlEncode(p.Value)}");
         return string.Join("&", pairs);
     }
-} 
+}

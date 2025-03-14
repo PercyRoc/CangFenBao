@@ -20,10 +20,8 @@
                     Source="pack://application:,,,/SharedUI;component/Resources/Styles/ColorStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
             <!-- 字符串到可见性转换器 -->
-            <local:StringToVisibilityConverter x:Key="StringToVisibilityConverter" />
-            
+
             <!-- 反向字符串到可见性转换器 -->
-            <local:InverseStringToVisibilityConverter x:Key="InverseStringToVisibilityConverter" />
         </ResourceDictionary>
     </Page.Resources>
     <StackPanel Margin="16" VerticalAlignment="Top">
@@ -40,48 +38,48 @@
                            Margin="0,0,0,16" />
 
                 <!-- 基础URL -->
-                <TextBlock Text="基础URL:" 
+                <TextBlock Text="基础URL:"
                            Style="{DynamicResource BodyStrong}"
-                           Margin="0,0,0,8"/>
-                <TextBox Text="{Binding ApiSettings.BaseUrl}" Margin="0,0,0,16"/>
+                           Margin="0,0,0,8" />
+                <TextBox Text="{Binding ApiSettings.BaseUrl}" Margin="0,0,0,16" />
 
                 <!-- AES密钥 -->
-                <TextBlock Text="AES密钥:" 
+                <TextBlock Text="AES密钥:"
                            Style="{DynamicResource BodyStrong}"
-                           Margin="0,0,0,8"/>
-                <TextBox Text="{Binding ApiSettings.AesKey}" Margin="0,0,0,16"/>
+                           Margin="0,0,0,8" />
+                <TextBox Text="{Binding ApiSettings.AesKey}" Margin="0,0,0,16" />
 
                 <!-- 设备编号 -->
-                <TextBlock Text="设备编号:" 
+                <TextBlock Text="设备编号:"
                            Style="{DynamicResource BodyStrong}"
-                           Margin="0,0,0,8"/>
-                <TextBox Text="{Binding ApiSettings.MachineMx}" Margin="0,0,0,16"/>
+                           Margin="0,0,0,8" />
+                <TextBox Text="{Binding ApiSettings.MachineMx}" Margin="0,0,0,16" />
             </StackPanel>
         </ui:Card>
-        
+
         <!-- 测试上传 -->
         <ui:Card Margin="0,16,0,0">
             <StackPanel Margin="16">
                 <TextBlock Text="测试上传"
                            Style="{DynamicResource SubtitleTextBlockStyle}"
                            Margin="0,0,0,16" />
-                
+
                 <!-- 测试数量 -->
-                <TextBlock Text="测试数量:" 
+                <TextBlock Text="测试数量:"
                            Style="{DynamicResource BodyStrong}"
-                           Margin="0,0,0,8"/>
-                <ui:NumberBox Value="{Binding TestCount}" 
-                             Minimum="1" 
-                             Maximum="100" 
-                             Margin="0,0,0,16"/>
-                
+                           Margin="0,0,0,8" />
+                <ui:NumberBox Value="{Binding TestCount}"
+                              Minimum="1"
+                              Maximum="100"
+                              Margin="0,0,0,16" />
+
                 <!-- 测试按钮 -->
-                <ui:Button Content="批量测试上传" 
+                <ui:Button Content="批量测试上传"
                            Command="{Binding TestUploadCommand}"
                            HorizontalAlignment="Center"
                            Appearance="Primary"
-                           Icon="{ui:SymbolIcon ArrowUpload24}"/>
+                           Icon="{ui:SymbolIcon ArrowUpload24}" />
             </StackPanel>
         </ui:Card>
     </StackPanel>
-</Page> 
+</Page>

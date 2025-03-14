@@ -125,7 +125,7 @@ public class PalletSettingsViewModel : BindableBase
         {
             Configuration.Pallets = new ObservableCollection<PalletModel>(Pallets);
             _settingsService.SaveSettings(Configuration);
-    
+
             // 发布事件通知配置已更改
             _eventAggregator.GetEvent<PalletSettingsChangedEvent>().Publish();
         }

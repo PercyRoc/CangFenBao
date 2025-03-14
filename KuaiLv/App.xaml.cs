@@ -1,5 +1,7 @@
-﻿using System.Net.Http;
+﻿using System.IO;
+using System.Net.Http;
 using System.Windows;
+using System.Windows.Threading;
 using Common.Extensions;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
@@ -15,7 +17,7 @@ using Presentation_KuaiLv.Views.Settings;
 using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
-using System.IO;
+using Timer = System.Timers.Timer;
 
 namespace Presentation_KuaiLv;
 
@@ -24,6 +26,8 @@ namespace Presentation_KuaiLv;
 /// </summary>
 public partial class App
 {
+    private Timer? _cleanupTimer;
+
     /// <summary>
     ///     创建主窗口
     /// </summary>
@@ -56,7 +60,7 @@ public partial class App
 
         // 注册包裹中转服务
         containerRegistry.RegisterSingleton<PackageTransferService>();
-        
+
         containerRegistry.Register<UploadSettingsView>();
         containerRegistry.Register<UploadSettingsViewModel>();
         containerRegistry.Register<WarningLightSettingsView>();
@@ -118,12 +122,13 @@ public partial class App
         }
     }
 
-    private void App_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
+    private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         try
         {
             Log.Fatal(e.Exception, "UI线程发生未处理的异常");
-            MessageBox.Show($"程序发生错误：{e.Exception.Message}\n请查看日志了解详细信息。", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show($"程序发生错误：{e.Exception.Message}\n请查看日志了解详细信息。", "错误", MessageBoxButton.OK,
+                MessageBoxImage.Error);
             e.Handled = true;
         }
         catch (Exception ex)
@@ -158,16 +163,14 @@ public partial class App
         }
     }
 
-    private System.Timers.Timer? _cleanupTimer;
-
     /// <summary>
-    /// 启动定期清理任务
+    ///     启动定期清理任务
     /// </summary>
     private void StartCleanupTask()
     {
         try
         {
-            _cleanupTimer = new System.Timers.Timer(1000 * 60 * 60); // 每1小时执行一次
+            _cleanupTimer = new Timer(1000 * 60 * 60); // 每1小时执行一次
             _cleanupTimer.Elapsed += (_, _) =>
             {
                 try
@@ -201,7 +204,7 @@ public partial class App
     }
 
     /// <summary>
-    /// 清理DUMP文件
+    ///     清理DUMP文件
     /// </summary>
     private void CleanupDumpFiles()
     {
@@ -210,9 +213,8 @@ public partial class App
             var dumpPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory);
             var dumpFiles = Directory.GetFiles(dumpPath, "*.dmp", SearchOption.TopDirectoryOnly);
 
-            int deletedCount = 0;
+            var deletedCount = 0;
             foreach (var file in dumpFiles)
-            {
                 try
                 {
                     File.Delete(file);
@@ -222,12 +224,8 @@ public partial class App
                 {
                     Log.Warning(ex, "删除DUMP文件失败: {FilePath}", file);
                 }
-            }
 
-            if (deletedCount > 0)
-            {
-                Log.Information("成功清理 {Count} 个DUMP文件", deletedCount);
-            }
+            if (deletedCount > 0) Log.Information("成功清理 {Count} 个DUMP文件", deletedCount);
         }
         catch (Exception ex)
         {
@@ -268,8 +266,6 @@ public partial class App
             // 释放资源
             try
             {
-
-
                 // 释放相机工厂
                 if (Container.Resolve<CameraFactory>() is IDisposable cameraFactory)
                 {

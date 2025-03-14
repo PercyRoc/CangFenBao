@@ -1,9 +1,8 @@
 using System.Collections.ObjectModel;
-using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.Windows.Input;
 using Common.Data;
-using Common.Models.Package;
 using Common.Services.Ui;
 using Microsoft.Win32;
 using OfficeOpenXml;
@@ -12,8 +11,6 @@ using Prism.Commands;
 using Prism.Mvvm;
 using Prism.Services.Dialogs;
 using Serilog;
-using SharedUI.Models;
-using static Common.Models.Package.PackageStatus;
 
 namespace SharedUI.ViewModels;
 
@@ -260,28 +257,25 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
 
             // 设置EPPlus许可证
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-            
+
             using var package = new ExcelPackage();
             var worksheet = package.Workbook.Worksheets.Add("包裹记录");
 
             // 设置表头
             var headers = new[]
             {
-                "编号", "条码", "格口", "重量(kg)", "长度(cm)", "宽度(cm)", "高度(cm)", 
+                "编号", "条码", "格口", "重量(kg)", "长度(cm)", "宽度(cm)", "高度(cm)",
                 "体积(cm³)", "状态", "创建时间"
             };
-            
-            for (var i = 0; i < headers.Length; i++)
-            {
-                worksheet.Cells[1, i + 1].Value = headers[i];
-            }
+
+            for (var i = 0; i < headers.Length; i++) worksheet.Cells[1, i + 1].Value = headers[i];
 
             // 设置表头样式
             using (var range = worksheet.Cells[1, 1, 1, headers.Length])
             {
                 range.Style.Font.Bold = true;
                 range.Style.Fill.PatternType = ExcelFillStyle.Solid;
-                range.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
+                range.Style.Fill.BackgroundColor.SetColor(Color.LightGray);
                 range.Style.Border.BorderAround(ExcelBorderStyle.Thin);
                 range.Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
             }
@@ -296,9 +290,9 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
                 worksheet.Cells[row, 2].Value = record.Barcode;
                 worksheet.Cells[row, 3].Value = record.ChuteName;
                 worksheet.Cells[row, 4].Value = record.Weight;
-                worksheet.Cells[row, 5].Value = record.Length.HasValue ? Math.Round(record.Length.Value, 1) : (double?)null;
-                worksheet.Cells[row, 6].Value = record.Width.HasValue ? Math.Round(record.Width.Value, 1) : (double?)null;
-                worksheet.Cells[row, 7].Value = record.Height.HasValue ? Math.Round(record.Height.Value, 1) : (double?)null;
+                worksheet.Cells[row, 5].Value = record.Length.HasValue ? Math.Round(record.Length.Value, 1) : null;
+                worksheet.Cells[row, 6].Value = record.Width.HasValue ? Math.Round(record.Width.Value, 1) : null;
+                worksheet.Cells[row, 7].Value = record.Height.HasValue ? Math.Round(record.Height.Value, 1) : null;
                 worksheet.Cells[row, 8].Value = record.Volume;
                 worksheet.Cells[row, 9].Value = record.Status.ToString();
                 worksheet.Cells[row, 10].Value = record.CreateTime;
@@ -321,4 +315,4 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
             _notificationService.ShowErrorWithToken($"导出失败: {ex.Message}", "HistoryWindowGrowl");
         }
     }
-} 
+}

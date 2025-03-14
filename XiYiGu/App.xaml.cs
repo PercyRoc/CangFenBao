@@ -20,7 +20,7 @@ namespace Presentation_XiYiGu;
 /// </summary>
 public partial class App
 {
-/// <summary>
+    /// <summary>
     ///     创建主窗口
     /// </summary>
     protected override Window CreateShell()

@@ -3,7 +3,6 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using Common.Services;
 using Common.Services.Settings;
 using Presentation_BenFly.Models.BenNiao;
 using Presentation_BenFly.Models.Upload;
@@ -19,7 +18,6 @@ public class BenNiaoPreReportService : IDisposable
 {
     private const string SettingsKey = "UploadSettings";
     private readonly IHttpClientFactory _httpClientFactory;
-    private HttpClient _httpClient;
 
     // 创建JSON序列化选项，避免中文转义
     private readonly JsonSerializerOptions _jsonOptions = new()
@@ -30,9 +28,10 @@ public class BenNiaoPreReportService : IDisposable
 
     private readonly ISettingsService _settingsService;
     private readonly Timer _updateTimer;
-    private bool _disposed;
-    private List<PreReportDataResponse>? _preReportData;
     private UploadConfiguration _config;
+    private bool _disposed;
+    private HttpClient _httpClient;
+    private List<PreReportDataResponse>? _preReportData;
 
     public BenNiaoPreReportService(
         IHttpClientFactory httpClientFactory,
@@ -70,35 +69,35 @@ public class BenNiaoPreReportService : IDisposable
         StartUpdateTimer();
     }
 
-    private HttpClient CreateHttpClient()
-    {
-        var baseUrl = _config.BenNiaoEnvironment == BenNiaoEnvironment.Production
-            ? "https://api.benniao.com"
-            : "http://sit.bnsy.rhb56.cn";
-        
-        var client = _httpClientFactory.CreateClient("BenNiao");
-        client.BaseAddress = new Uri(baseUrl);
-        Log.Information("已创建 HttpClient，BaseUrl: {BaseUrl}", baseUrl);
-        return client;
-    }
-
     public void Dispose()
     {
         if (_disposed) return;
 
         _updateTimer.Stop();
         _updateTimer.Dispose();
-        
+
         // 取消配置变更订阅
         _settingsService.OnSettingsChanged<UploadConfiguration>(null);
-        
+
         _disposed = true;
 
         GC.SuppressFinalize(this);
     }
 
+    private HttpClient CreateHttpClient()
+    {
+        var baseUrl = _config.BenNiaoEnvironment == BenNiaoEnvironment.Production
+            ? "https://api.benniao.com"
+            : "http://sit.bnsy.rhb56.cn";
+
+        var client = _httpClientFactory.CreateClient("BenNiao");
+        client.BaseAddress = new Uri(baseUrl);
+        Log.Information("已创建 HttpClient，BaseUrl: {BaseUrl}", baseUrl);
+        return client;
+    }
+
     /// <summary>
-    /// 处理配置变更
+    ///     处理配置变更
     /// </summary>
     private void HandleConfigurationChanged(UploadConfiguration newConfig)
     {

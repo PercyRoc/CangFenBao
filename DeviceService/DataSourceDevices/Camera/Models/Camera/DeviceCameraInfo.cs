@@ -90,9 +90,10 @@ public class DeviceCameraInfo : BindableBase
         if (deviceInfo.nTLayerType == MvCodeReader.MV_CODEREADER_GIGE_DEVICE)
         {
             // 从设备信息中获取IP地址和MAC地址
-            IpAddress = $"{deviceInfo.nMacAddrHigh >> 24}.{(deviceInfo.nMacAddrHigh >> 16) & 0xFF}.{(deviceInfo.nMacAddrHigh >> 8) & 0xFF}.{deviceInfo.nMacAddrHigh & 0xFF}";
+            IpAddress =
+                $"{deviceInfo.nMacAddrHigh >> 24}.{(deviceInfo.nMacAddrHigh >> 16) & 0xFF}.{(deviceInfo.nMacAddrHigh >> 8) & 0xFF}.{deviceInfo.nMacAddrHigh & 0xFF}";
             MacAddress = $"{deviceInfo.nMacAddrHigh:X2}-{deviceInfo.nMacAddrLow:X2}";
-            
+
             // 序列号和型号从设备信息中获取
             SerialNumber = deviceInfo.nDeviceType.ToString();
             Model = deviceInfo.nMajorVer.ToString();

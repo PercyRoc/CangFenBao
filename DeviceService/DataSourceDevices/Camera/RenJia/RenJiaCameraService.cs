@@ -189,6 +189,7 @@ public class RenJiaCameraService : ICameraService
             Log.Warning("配置类型错误，期望 VolumeSettings 类型");
             return;
         }
+
         try
         {
             _settings = volumeSettings;

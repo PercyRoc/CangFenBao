@@ -2,9 +2,9 @@
 using System.Windows;
 using ChongqingJushuitan.Services;
 using ChongqingJushuitan.ViewModels;
+using ChongqingJushuitan.ViewModels.Settings;
 using ChongqingJushuitan.Views;
 using ChongqingJushuitan.Views.Settings;
-using ChongqingJushuitan.ViewModels.Settings;
 using Common.Extensions;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
@@ -23,7 +23,7 @@ using SortingServices.Pendulum.Models;
 namespace ChongqingJushuitan;
 
 /// <summary>
-/// Interaction logic for App.xaml
+///     Interaction logic for App.xaml
 /// </summary>
 public partial class App
 {
@@ -49,20 +49,20 @@ public partial class App
         containerRegistry.AddPhotoCamera();
 
         containerRegistry.RegisterSingleton<HttpClient>();
-        
+
         // 注册聚水潭服务
         containerRegistry.RegisterSingleton<IJuShuiTanService, JuShuiTanService>();
-        
+
         // 注册包裹中转服务
         containerRegistry.RegisterSingleton<PackageTransferService>();
         containerRegistry.RegisterForNavigation<BalanceSortSettingsView, BalanceSortSettingsViewModel>();
         // 注册设置窗口
         containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
         containerRegistry.Register<SettingsDialogViewModel>();
-        
+
         // 注册聚水潭设置页面
         containerRegistry.RegisterForNavigation<JushuitanSettingsPage, JushuitanSettingsViewModel>();
-        
+
         // 获取设置服务
         var settingsService = Container.Resolve<ISettingsService>();
 

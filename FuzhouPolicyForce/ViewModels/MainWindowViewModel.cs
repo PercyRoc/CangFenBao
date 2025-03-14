@@ -28,9 +28,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
+    private readonly IPackageDataService _packageDataService;
     private readonly ISettingsService _settingsService;
     private readonly IPendulumSortService _sortService;
-    private readonly IPackageDataService _packageDataService;
     private readonly List<IDisposable> _subscriptions = [];
 
     private readonly DispatcherTimer _timer;
@@ -448,7 +448,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     Log.Error(ex, "更新UI时发生错误");
                 }
             });
-            
+
             // 保存包裹记录到数据库
             try
             {
@@ -568,17 +568,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 // 停止定时器（UI线程操作）
                 if (Application.Current != null && !Application.Current.Dispatcher.CheckAccess())
-                {
                     Application.Current.Dispatcher.Invoke(() => _timer.Stop());
-                }
                 else
-                {
                     _timer.Stop();
-                }
 
                 // 停止分拣服务
                 if (_sortService.IsRunning())
-                {
                     try
                     {
                         // 使用超时避免无限等待
@@ -587,19 +582,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         var completedTask = Task.WhenAny(stopTask, timeoutTask).Result;
 
                         if (completedTask == stopTask)
-                        {
                             Log.Information("摆轮分拣服务已停止");
-                        }
                         else
-                        {
                             Log.Warning("摆轮分拣服务停止超时");
-                        }
                     }
                     catch (Exception ex)
                     {
                         Log.Error(ex, "停止摆轮分拣服务时发生错误");
                     }
-                }
 
                 // 释放分拣服务资源
                 if (_sortService is IDisposable disposableSortService)

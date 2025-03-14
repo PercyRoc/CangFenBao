@@ -9,7 +9,7 @@ public class ColorToBrushConverter : IValueConverter
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         if (value is not string colorString) return Brushes.Black;
-        
+
         try
         {
             var color = (Color)ColorConverter.ConvertFromString(colorString);

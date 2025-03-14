@@ -1,6 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
-using Common.Models.Settings;
 using Common.Services.Settings;
 
 namespace Presentation_XinBa.Services.Models;

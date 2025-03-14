@@ -20,6 +20,9 @@ namespace DeviceService.DataSourceDevices.Camera.Hikvision;
 public class HikvisionIndustrialCameraSdkClient : ICameraService
 {
     private const int MaxImagePoolSize = 10;
+
+    // 添加帧率限制相关字段
+    private const int TargetFrameRate = 10; // 目标帧率：10fps
     private readonly TimeSpan _frameInterval; // 帧间隔时间
     private readonly object _frameRateLock = new(); // 帧率控制锁
 
@@ -44,9 +47,6 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
 
     // 添加SDK调用锁
     private readonly object _sdkLock = new();
-
-    // 添加帧率限制相关字段
-    private const int TargetFrameRate = 10; // 目标帧率：10fps
 
     // 添加相机配置字段
     private CameraSettings _configuration = new();
@@ -395,23 +395,20 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
             }
 
             // 检查序列号是否发生变化
-            if (!string.IsNullOrEmpty(currentDeviceIdentifier) && 
+            if (!string.IsNullOrEmpty(currentDeviceIdentifier) &&
                 !string.Equals(currentDeviceIdentifier, _deviceIdentifier, StringComparison.OrdinalIgnoreCase))
             {
                 Log.Information("相机序列号发生变更，准备重新连接相机");
-                
+
                 // 停止当前相机
-                if (_isGrabbing)
-                {
-                    StopGrabbingInternal();
-                }
-                
+                if (_isGrabbing) StopGrabbingInternal();
+
                 // 取消注册回调
                 UnregisterCallbacks();
-                
+
                 // 重新连接新相机
                 ConnectDeviceInternalAsync().GetAwaiter().GetResult();
-                
+
                 Log.Information("相机重新连接完成");
             }
             else
@@ -461,6 +458,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
                 SafeSdkCall(() => _device.MVID_CR_DestroyHandle_NET());
                 _device = null;
             }
+
             Log.Information("海康工业相机资源已释放完成");
         }
         catch (Exception ex)
@@ -549,7 +547,6 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
             }
 
             if (result != MVIDCodeReader.MVID_CR_OK)
-            {
                 switch (result)
                 {
                     // MVID_CR_E_CALLORDER
@@ -566,7 +563,6 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
                         Log.Error("停止采集失败：0x{Error:X}, {Message}", result, GetErrorMessage(result));
                         return false;
                 }
-            }
 
             _isGrabbing = false;
             Log.Information("停止采集成功");

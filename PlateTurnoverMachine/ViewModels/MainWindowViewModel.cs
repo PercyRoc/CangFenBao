@@ -372,7 +372,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 Name = "TCP模块",
                 Status = "0/0",
                 Icon = "DeviceLaptop24",
-                StatusColor = "#F44336",
+                StatusColor = "#F44336"
             });
 
             Log.Information("设备状态列表初始化完成，共 {Count} 个设备", DeviceStatuses.Count);

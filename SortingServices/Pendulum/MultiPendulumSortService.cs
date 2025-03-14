@@ -8,7 +8,7 @@ using SortingServices.Pendulum.Models;
 namespace SortingServices.Pendulum;
 
 /// <summary>
-/// 多光电多摆轮分拣服务实现
+///     多光电多摆轮分拣服务实现
 /// </summary>
 public class MultiPendulumSortService(ISettingsService settingsService) : BasePendulumSortService(settingsService)
 {
@@ -156,7 +156,7 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
                     var resetRightCommand = GetCommandBytes(PendulumCommands.Module2.ResetRight);
                     client.Value.Send(resetLeftCommand);
                     client.Value.Send(resetRightCommand);
-                        
+
                     // 发送停止命令
                     var stopCommand = GetCommandBytes(PendulumCommands.Module2.Stop);
                     client.Value.Send(stopCommand);
@@ -195,12 +195,9 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
         try
         {
             var wasRunning = IsRunningFlag;
-            
+
             // 如果服务正在运行，先停止
-            if (wasRunning)
-            {
-                await StopAsync();
-            }
+            if (wasRunning) await StopAsync();
 
             // 更新配置
             Configuration = configuration;
@@ -254,7 +251,7 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
                 {
                     // 临时存储匹配到的包裹
                     MatchedPackages[photoelectricName] = package;
-                    Log.Information("分拣光电 {Name} 匹配到包裹 {Barcode}，等待下降沿信号", 
+                    Log.Information("分拣光电 {Name} 匹配到包裹 {Barcode}，等待下降沿信号",
                         photoelectricName, package.Barcode);
                 }
                 else
@@ -266,15 +263,13 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
                         .OrderBy(p => p.TriggerTimestamp)
                         .ThenBy(p => p.Index)
                         .ToList();
-                    
+
                     if (pendingPackages.Count != 0)
                     {
                         Log.Information("当前待分拣队列中有 {Count} 个包裹:", pendingPackages.Count);
                         foreach (var pkg in pendingPackages)
-                        {
-                            Log.Information("包裹 {Barcode}(序号:{Index}) 触发时间:{TriggerTime:HH:mm:ss.fff} 目标格口:{Slot}", 
+                            Log.Information("包裹 {Barcode}(序号:{Index}) 触发时间:{TriggerTime:HH:mm:ss.fff} 目标格口:{Slot}",
                                 pkg.Barcode, pkg.Index, pkg.TriggerTimestamp, pkg.ChuteName);
-                        }
                     }
                     else
                     {
@@ -293,7 +288,7 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
                     return;
                 }
 
-                Log.Information("分拣光电 {Name} 开始处理包裹 {Barcode} 的分拣动作", 
+                Log.Information("分拣光电 {Name} 开始处理包裹 {Barcode} 的分拣动作",
                     photoelectricName, package.Barcode);
 
                 // 执行分拣动作
@@ -307,7 +302,7 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
     }
 
     /// <summary>
-    /// 不处理第二光电信号
+    ///     不处理第二光电信号
     /// </summary>
     protected override void HandleSecondPhotoelectric(string data)
     {
@@ -315,7 +310,7 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
     }
 
     /// <summary>
-    /// 重新连接设备
+    ///     重新连接设备
     /// </summary>
     protected override Task ReconnectAsync()
     {
@@ -349,7 +344,7 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
                 );
                 _sortingClients[photoelectric.Name] = newClient;
                 newClient.Connect();
-                    
+
                 // 如果服务正在运行，发送启动命令和回正命令
                 if (!IsRunningFlag) continue;
                 var startCommand = GetCommandBytes(PendulumCommands.Module2.Start);
@@ -411,7 +406,7 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
     {
         // 计算光电索引（从0开始）
         var index = (slot - 1) / 2;
-        
+
         // 获取对应索引的光电配置
         var photoelectric = Configuration.SortingPhotoelectrics.ElementAtOrDefault(index);
         return photoelectric?.Name;

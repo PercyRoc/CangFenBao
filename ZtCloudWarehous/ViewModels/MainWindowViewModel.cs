@@ -27,12 +27,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
+    private readonly INotificationService _notificationService;
     private readonly ISettingsService _settingsService;
     private readonly IPendulumSortService _sortService;
-    private readonly IWeighingService _weighingService;
-    private readonly INotificationService _notificationService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
+    private readonly IWeighingService _weighingService;
     private string _currentBarcode = string.Empty;
     private BitmapSource? _currentImage;
     private int _currentPackageIndex;
@@ -42,7 +42,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     public MainWindowViewModel(IDialogService dialogService,
         ICameraService cameraService,
-        PackageTransferService packageTransferService, 
+        PackageTransferService packageTransferService,
         ISettingsService settingsService,
         IPendulumSortService sortService,
         IWeighingService weighingService,
@@ -454,7 +454,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 Log.Error(ex, "获取格口号时发生错误：{Barcode}", package.Barcode);
                 package.SetError($"获取格口号失败：{ex.Message}");
             }
-            
+
             // 发送称重数据
             try
             {
@@ -614,17 +614,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 // 停止定时器（UI线程操作）
                 if (Application.Current != null && !Application.Current.Dispatcher.CheckAccess())
-                {
                     Application.Current.Dispatcher.Invoke(() => _timer.Stop());
-                }
                 else
-                {
                     _timer.Stop();
-                }
 
                 // 停止分拣服务
                 if (_sortService.IsRunning())
-                {
                     try
                     {
                         // 使用超时避免无限等待
@@ -633,19 +628,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         var completedTask = Task.WhenAny(stopTask, timeoutTask).Result;
 
                         if (completedTask == stopTask)
-                        {
                             Log.Information("摆轮分拣服务已停止");
-                        }
                         else
-                        {
                             Log.Warning("摆轮分拣服务停止超时");
-                        }
                     }
                     catch (Exception ex)
                     {
                         Log.Error(ex, "停止摆轮分拣服务时发生错误");
                     }
-                }
 
                 // 释放分拣服务资源
                 if (_sortService is IDisposable disposableSortService)
@@ -660,7 +650,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                 // 释放订阅
                 foreach (var subscription in _subscriptions)
-                {
                     try
                     {
                         subscription.Dispose();
@@ -669,7 +658,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     {
                         Log.Error(ex, "释放订阅时发生错误");
                     }
-                }
+
                 _subscriptions.Clear();
             }
             catch (Exception ex)

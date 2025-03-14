@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.IO;
 using Common.Models.Package;
 using Microsoft.EntityFrameworkCore;
@@ -101,32 +102,30 @@ public class PackageDataService : IPackageDataService
         {
             // 确保所有需要的表都存在
             await EnsureDateRangeTablesExistAsync(startTime, endTime);
-            
+
             // 获取所有需要查询的月份
             var startMonth = new DateTime(startTime.Year, startTime.Month, 1);
             var endMonth = new DateTime(endTime.Year, endTime.Month, 1);
             var months = new List<DateTime>();
-            
-            for (var month = startMonth; month <= endMonth; month = month.AddMonths(1))
-            {
-                months.Add(month);
-            }
-            
+
+            for (var month = startMonth; month <= endMonth; month = month.AddMonths(1)) months.Add(month);
+
             // 并行查询所有月份的数据
-            var tasks = months.Select(async month => {
+            var tasks = months.Select(async month =>
+            {
                 try
                 {
                     await using var dbContext = CreateDbContext(month);
                     var query = dbContext.Set<PackageRecord>().AsQueryable();
-                    
+
                     // 如果是起始月份，添加开始时间过滤
                     if (month == startMonth)
                         query = query.Where(p => p.CreateTime >= startTime);
-                    
+
                     // 如果是结束月份，添加结束时间过滤
                     if (month == endMonth)
                         query = query.Where(p => p.CreateTime <= endTime);
-                    
+
                     return await query.ToListAsync();
                 }
                 catch (Exception ex)
@@ -135,13 +134,13 @@ public class PackageDataService : IPackageDataService
                     return [];
                 }
             });
-            
+
             var results = await Task.WhenAll(tasks);
             return results.SelectMany(x => x).OrderByDescending(p => p.CreateTime).ToList();
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "查询时间范围内的包裹失败：{StartTime} - {EndTime}", 
+            Log.Error(ex, "查询时间范围内的包裹失败：{StartTime} - {EndTime}",
                 startTime.ToString("yyyy-MM-dd HH:mm:ss"), endTime.ToString("yyyy-MM-dd HH:mm:ss"));
             return [];
         }
@@ -200,7 +199,7 @@ public class PackageDataService : IPackageDataService
             // 创建当月和下月的表
             var currentMonth = DateTime.Today;
             var nextMonth = currentMonth.AddMonths(1);
-            
+
             await EnsureMonthlyTableExists(currentMonth);
             await EnsureMonthlyTableExists(nextMonth);
 
@@ -219,7 +218,10 @@ public class PackageDataService : IPackageDataService
     /// <summary>
     ///     获取表名
     /// </summary>
-    private static string GetTableName(DateTime date) => $"Packages_{date:yyyyMM}";
+    private static string GetTableName(DateTime date)
+    {
+        return $"Packages_{date:yyyyMM}";
+    }
 
     /// <summary>
     ///     确保月度表存在
@@ -227,12 +229,9 @@ public class PackageDataService : IPackageDataService
     private async Task EnsureMonthlyTableExists(DateTime date)
     {
         var tableName = GetTableName(date);
-        
+
         // 检查缓存
-        if (_tableExistsCache.TryGetValue(tableName, out var exists) && exists)
-        {
-            return;
-        }
+        if (_tableExistsCache.TryGetValue(tableName, out var exists) && exists) return;
 
         Log.Debug("检查数据表是否存在：{TableName}", tableName);
 
@@ -256,13 +255,9 @@ public class PackageDataService : IPackageDataService
             var tableExists = Convert.ToInt32(result) > 0;
 
             if (!tableExists)
-            {
                 await CreateMonthlyTableAsync(dbContext, tableName);
-            }
             else
-            {
                 Log.Debug("数据表已存在：{TableName}", tableName);
-            }
 
             // 更新缓存
             _tableExistsCache.TryAdd(tableName, true);
@@ -355,11 +350,9 @@ public class PackageDataService : IPackageDataService
             // 获取所有需要检查的月份
             var startMonth = new DateTime(startDate.Year, startDate.Month, 1);
             var endMonth = new DateTime(endDate.Year, endDate.Month, 1);
-            
+
             for (var month = startMonth; month <= endMonth; month = month.AddMonths(1))
-            {
                 await EnsureMonthlyTableExists(month);
-            }
         }
         catch (Exception ex)
         {
@@ -377,7 +370,7 @@ public class PackageDataService : IPackageDataService
         {
             var cutoffDate = DateTime.Today.AddMonths(-keepMonths);
             await using var dbContext = CreateDbContext();
-            
+
             // 获取所有表名
             const string sql = "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'Packages_%'";
             var connection = dbContext.Database.GetDbConnection();
@@ -385,18 +378,15 @@ public class PackageDataService : IPackageDataService
             await using var command = connection.CreateCommand();
             command.CommandText = sql;
             var tables = new List<string>();
-            
+
             await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                tables.Add(reader.GetString(0));
-            }
-            
+            while (await reader.ReadAsync()) tables.Add(reader.GetString(0));
+
             foreach (var table in tables)
             {
                 // 解析表名中的日期
                 if (table.Length <= 9 || !DateTime.TryParseExact(table[9..], "yyyyMM", null,
-                        System.Globalization.DateTimeStyles.None, out var tableDate)) continue;
+                        DateTimeStyles.None, out var tableDate)) continue;
                 if (tableDate >= cutoffDate) continue;
                 Log.Information("清理旧表：{Table}", table);
                 await dbContext.Database.ExecuteSqlAsync($"DROP TABLE IF EXISTS {table}");

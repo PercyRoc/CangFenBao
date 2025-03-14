@@ -4,12 +4,12 @@ using System.Text;
 namespace Presentation_XiYiGu.Utils;
 
 /// <summary>
-/// MD5工具类
+///     MD5工具类
 /// </summary>
 public static class Md5Util
 {
     /// <summary>
-    /// 计算MD5哈希值
+    ///     计算MD5哈希值
     /// </summary>
     /// <param name="input">输入字符串</param>
     /// <returns>MD5哈希值</returns>
@@ -21,11 +21,8 @@ public static class Md5Util
 
         // 将字节数组转换为小写十六进制字符串
         var sb = new StringBuilder();
-        foreach (var b in hashBytes)
-        {
-            sb.Append(b.ToString("x2"));
-        }
+        foreach (var b in hashBytes) sb.Append(b.ToString("x2"));
 
         return sb.ToString();
     }
-} 
+}

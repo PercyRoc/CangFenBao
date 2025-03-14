@@ -7,7 +7,7 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
-        <ApplicationIcon>..\Presentation-CommonLibrary\Resources\Icon\logo.ico</ApplicationIcon>
+        <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
     </PropertyGroup>
 
     <ItemGroup>
@@ -23,9 +23,9 @@
         </Page>
     </ItemGroup>
     <ItemGroup>
-        <ProjectReference Include="..\Common\Common.csproj" />
+        <ProjectReference Include="..\Common\Common.csproj"/>
         <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>
-        <ProjectReference Include="..\SharedUI\SharedUI.csproj" />
+        <ProjectReference Include="..\SharedUI\SharedUI.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -61,8 +61,8 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Resource Include="..\SharedUI\Resources\Icon\logo.ico">
-        <Link>logo.ico</Link>
-      </Resource>
+        <Resource Include="..\SharedUI\Resources\Icon\logo.ico">
+            <Link>logo.ico</Link>
+        </Resource>
     </ItemGroup>
 </Project>

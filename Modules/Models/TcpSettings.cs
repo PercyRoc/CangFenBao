@@ -20,4 +20,4 @@ public class TcpSettings : BindableBase
         get => _port;
         set => SetProperty(ref _port, value);
     }
-} 
+}

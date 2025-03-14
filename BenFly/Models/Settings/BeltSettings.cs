@@ -7,10 +7,10 @@ namespace Presentation_BenFly.Models.Settings;
 [Configuration("BeltSettings")]
 public class BeltSettings : BindableBase
 {
-    private string _portName = string.Empty;
     private int _baudRate = 9600;
     private int _dataBits = 8;
     private Parity _parity = Parity.None;
+    private string _portName = string.Empty;
     private StopBits _stopBits = StopBits.One;
 
     public string PortName

@@ -6,4 +6,4 @@ public partial class WeighingSettingsPage
     {
         InitializeComponent();
     }
-} 
+}

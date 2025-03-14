@@ -11,9 +11,9 @@ namespace DeviceService.DataSourceDevices.Scanner;
 /// </summary>
 public class UsbScannerService : IScannerService
 {
+    private const int ScannerTimeout = 50; // 扫码枪输入超时时间（毫秒）
     private readonly StringBuilder _barcodeBuilder = new();
     private readonly LowLevelKeyboardProc _proc;
-    private const int ScannerTimeout = 50; // 扫码枪输入超时时间（毫秒）
     private IntPtr _hookId = IntPtr.Zero;
     private bool _isRunning;
     private DateTime _lastKeyTime = DateTime.MinValue;
@@ -99,6 +99,7 @@ public class UsbScannerService : IScannerService
 
         return CallNextHookEx(_hookId, nCode, wParam, lParam);
     }
+
     //TODO
     private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
 

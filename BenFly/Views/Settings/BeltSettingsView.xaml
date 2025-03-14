@@ -14,56 +14,56 @@
             <TextBlock Text="皮带串口设置"
                        FontSize="20"
                        FontWeight="SemiBold"
-                       Margin="0,0,0,16"/>
+                       Margin="0,0,0,16" />
 
             <ui:Card Margin="0,0,0,16">
                 <StackPanel>
                     <!-- 串口选择 -->
                     <DockPanel Margin="0,0,0,8">
                         <TextBlock Text="串口："
-                                 Width="100"
-                                 VerticalAlignment="Center"/>
+                                   Width="100"
+                                   VerticalAlignment="Center" />
                         <ComboBox ItemsSource="{Binding AvailablePortNames}"
-                                SelectedItem="{Binding Settings.PortName}"/>
+                                  SelectedItem="{Binding Settings.PortName}" />
                     </DockPanel>
 
                     <!-- 波特率选择 -->
                     <DockPanel Margin="0,0,0,8">
                         <TextBlock Text="波特率："
-                                 Width="100"
-                                 VerticalAlignment="Center"/>
+                                   Width="100"
+                                   VerticalAlignment="Center" />
                         <ComboBox ItemsSource="{Binding AvailableBaudRates}"
-                                SelectedItem="{Binding Settings.BaudRate}"/>
+                                  SelectedItem="{Binding Settings.BaudRate}" />
                     </DockPanel>
 
                     <!-- 数据位选择 -->
                     <DockPanel Margin="0,0,0,8">
                         <TextBlock Text="数据位："
-                                 Width="100"
-                                 VerticalAlignment="Center"/>
+                                   Width="100"
+                                   VerticalAlignment="Center" />
                         <ComboBox ItemsSource="{Binding AvailableDataBits}"
-                                SelectedItem="{Binding Settings.DataBits}"/>
+                                  SelectedItem="{Binding Settings.DataBits}" />
                     </DockPanel>
 
                     <!-- 校验位选择 -->
                     <DockPanel Margin="0,0,0,8">
                         <TextBlock Text="校验位："
-                                 Width="100"
-                                 VerticalAlignment="Center"/>
+                                   Width="100"
+                                   VerticalAlignment="Center" />
                         <ComboBox ItemsSource="{Binding AvailableParities}"
-                                SelectedItem="{Binding Settings.Parity}"/>
+                                  SelectedItem="{Binding Settings.Parity}" />
                     </DockPanel>
 
                     <!-- 停止位选择 -->
                     <DockPanel>
                         <TextBlock Text="停止位："
-                                 Width="100"
-                                 VerticalAlignment="Center"/>
+                                   Width="100"
+                                   VerticalAlignment="Center" />
                         <ComboBox ItemsSource="{Binding AvailableStopBits}"
-                                SelectedItem="{Binding Settings.StopBits}"/>
+                                  SelectedItem="{Binding Settings.StopBits}" />
                     </DockPanel>
                 </StackPanel>
             </ui:Card>
         </StackPanel>
     </Grid>
-</Page> 
+</Page>

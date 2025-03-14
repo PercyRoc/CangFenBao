@@ -15,7 +15,8 @@ public static class ServiceCollectionExtensions
     {
         // 注册设置服务
         var settingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Settings");
-        services.RegisterSingleton<ISettingsService>(() => {
+        services.RegisterSingleton<ISettingsService>(() =>
+        {
             // 创建一个临时的ServiceProvider用于初始化SettingsService
             var serviceCollection = new ServiceCollection();
             serviceCollection.BuildServiceProvider();
@@ -28,7 +29,8 @@ public static class ServiceCollectionExtensions
 
         // 创建数据库上下文选项
         var options = new DbContextOptionsBuilder<PackageDbContext>()
-            .UseSqlite($"Data Source={dbPath}", sqliteOptions => {
+            .UseSqlite($"Data Source={dbPath}", sqliteOptions =>
+            {
                 sqliteOptions.CommandTimeout(30); // 设置命令超时时间（秒）
             })
             .Options;
@@ -47,7 +49,7 @@ public static class ServiceCollectionExtensions
 
         // 注册音频服务
         services.RegisterSingleton<IAudioService, AudioService>();
-        
+
         // 注册对话框服务
         services.RegisterSingleton<IDialogService, DialogService>();
 

@@ -4,9 +4,7 @@ namespace SangNeng.Models;
 
 public class SangNengWeightResponse
 {
-    [JsonPropertyName("code")]
-    public int Code { get; set; }
+    [JsonPropertyName("code")] public int Code { get; set; }
 
-    [JsonPropertyName("message")]
-    public string? Message { get; set; }
-} 
+    [JsonPropertyName("message")] public string? Message { get; set; }
+}

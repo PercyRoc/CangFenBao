@@ -8,8 +8,8 @@ namespace ChongqingJushuitan.ViewModels.Settings;
 
 public class JushuitanSettingsViewModel : BindableBase
 {
-    private readonly ISettingsService _settingsService;
     private readonly INotificationService _notificationService;
+    private readonly ISettingsService _settingsService;
 
     public JushuitanSettingsViewModel(
         ISettingsService settingsService,
@@ -30,7 +30,7 @@ public class JushuitanSettingsViewModel : BindableBase
     {
         try
         {
-            var results = _settingsService.SaveSettings(Settings, validate: true);
+            var results = _settingsService.SaveSettings(Settings, true);
             if (results.Length > 0)
             {
                 var errorMessage = string.Join("\n", results.Select(r => r.ErrorMessage));
@@ -47,4 +47,4 @@ public class JushuitanSettingsViewModel : BindableBase
             _notificationService.ShowError("保存聚水潭设置时发生错误");
         }
     }
-} 
+}

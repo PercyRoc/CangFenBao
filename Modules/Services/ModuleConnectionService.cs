@@ -61,7 +61,7 @@ public class ModuleConnectionService(ISettingsService settingsService) : IModule
             }
 
             _tcpListener = new TcpListener(ip, port);
-            
+
             try
             {
                 _tcpListener.Start();
@@ -132,10 +132,10 @@ public class ModuleConnectionService(ISettingsService settingsService) : IModule
         try
         {
             Log.Information("处理包裹对象: {Barcode}, 序号={Index}", package.Barcode, package.Index);
-            
+
             // 记录当前等待队列中的包裹数量
             Log.Debug("当前等待队列中有 {Count} 个包裹等待处理", _waitingPackages.Count);
-            
+
             // 如果等待队列为空，记录日志
             if (_waitingPackages.Count == 0)
             {
@@ -148,8 +148,9 @@ public class ModuleConnectionService(ISettingsService settingsService) : IModule
             {
                 var now = DateTime.Now;
                 var timeDiff = (now - waitInfo.ReceiveTime).TotalMilliseconds;
-                
-                Log.Debug("尝试匹配包裹: 序号={PackageNumber}, 条码={Barcode}, 等待时间={TimeDiff}ms, 有效范围={MinWaitTime}-{MaxWaitTime}ms",
+
+                Log.Debug(
+                    "尝试匹配包裹: 序号={PackageNumber}, 条码={Barcode}, 等待时间={TimeDiff}ms, 有效范围={MinWaitTime}-{MaxWaitTime}ms",
                     packageNumber, package.Barcode, timeDiff, _config.MinWaitTime, _config.MaxWaitTime);
 
                 // 检查时间范围
@@ -166,28 +167,29 @@ public class ModuleConnectionService(ISettingsService settingsService) : IModule
                             timeDiff, _config.MaxWaitTime);
                         package.StatusDisplay = "等待超时";
                     }
+
                     continue;
                 }
-                
+
                 // 验证包裹绑定关系
                 if (!ValidatePackageBinding(packageNumber, package.Barcode))
                 {
-                    Log.Debug("包裹绑定验证失败: 序号={PackageNumber}, 条码={Barcode}", 
+                    Log.Debug("包裹绑定验证失败: 序号={PackageNumber}, 条码={Barcode}",
                         packageNumber, package.Barcode);
                     continue;
                 }
-                
+
                 // 设置包裹序号为模组带序号
                 package.Index = packageNumber;
                 package.StatusDisplay = "正在分拣";
-                
+
                 Log.Information("找到匹配的等待包裹: 序号={PackageNumber}, 等待时间={TimeDiff}ms, 分配格口={ChuteNumber}",
                     packageNumber, timeDiff, package.ChuteName);
                 package.ProcessingTime = timeDiff;
 
                 // 取消超时任务
                 waitInfo.TimeoutCts?.Cancel();
-                
+
                 // 发送分拣指令
                 _ = SendSortingCommandAsync(packageNumber, (byte)package.ChuteName);
 
@@ -195,7 +197,7 @@ public class ModuleConnectionService(ISettingsService settingsService) : IModule
                 _waitingPackages.TryRemove(packageNumber, out _);
                 return; // 找到匹配后直接返回
             }
-            
+
             // 如果遍历完所有等待包裹都没有匹配成功，记录日志
             Log.Warning("未找到匹配的等待包裹: 条码={Barcode}, 序号={Index}", package.Barcode, package.Index);
         }
@@ -419,19 +421,16 @@ public class ModuleConnectionService(ISettingsService settingsService) : IModule
                     {
                         Log.Debug("启动包裹等待超时任务: 序号={PackageNumber}, 最大等待时间={MaxWaitTime}ms",
                             packageNumber, _config.MaxWaitTime);
-                            
+
                         await Task.Delay(_config.MaxWaitTime, waitInfo.TimeoutCts.Token);
 
                         // 超时处理
                         if (_waitingPackages.TryRemove(packageNumber, out _))
                         {
                             // 检查是否有绑定的条码
-                            string boundBarcode = "无";
-                            if (_packageBindings.TryGetValue(packageNumber, out var barcode))
-                            {
-                                boundBarcode = barcode;
-                            }
-                            
+                            var boundBarcode = "无";
+                            if (_packageBindings.TryGetValue(packageNumber, out var barcode)) boundBarcode = barcode;
+
                             Log.Warning("包裹等待超时: 序号={PackageNumber}, 最大等待时间={MaxWaitTime}ms, 绑定条码={Barcode}",
                                 packageNumber, _config.MaxWaitTime, boundBarcode);
 
@@ -487,12 +486,12 @@ public class ModuleConnectionService(ISettingsService settingsService) : IModule
 
         if (_packageBindings.TryGetValue(packageNumber, out var boundBarcode))
         {
-            if (boundBarcode == barcode) 
+            if (boundBarcode == barcode)
             {
                 Log.Debug("包裹绑定匹配成功: 序号={PackageNumber}, 条码={Barcode}", packageNumber, barcode);
                 return true;
             }
-            
+
             Log.Warning("包裹绑定不匹配: 序号={PackageNumber}, 当前条码={CurrentBarcode}, 已绑定条码={BoundBarcode}",
                 packageNumber, barcode, boundBarcode);
             return false;
@@ -515,7 +514,7 @@ public class ModuleConnectionService(ISettingsService settingsService) : IModule
                 Log.Warning("添加包裹绑定失败: 序号={PackageNumber}, 条码={Barcode}", packageNumber, barcode);
                 return false;
             }
-            
+
             Log.Debug("新增包裹绑定: 序号={PackageNumber}, 条码={Barcode}", packageNumber, barcode);
             return true;
         }
@@ -535,10 +534,8 @@ public class ModuleConnectionService(ISettingsService settingsService) : IModule
 
             // 检查异常码
             if (errorCode != 0)
-            {
                 Log.Warning("分拣异常: 包裹序号={PackageNumber}, 异常码=0x{ErrorCode:X2}",
                     packageNumber, errorCode);
-            }
 
             // 设置反馈完成
             if (_waitingPackages.TryGetValue(packageNumber, out var waitInfo) && waitInfo.FeedbackTask != null)

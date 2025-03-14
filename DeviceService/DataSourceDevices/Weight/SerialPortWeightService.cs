@@ -43,6 +43,29 @@ public class SerialPortWeightService : IDisposable
         }
     }
 
+    public void Dispose()
+    {
+        if (_disposed) return;
+
+        try
+        {
+            _cts.Cancel();
+            Stop();
+            _weightReceived.Dispose();
+            _cts.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "释放串口重量称资源时发生错误");
+        }
+        finally
+        {
+            _disposed = true;
+        }
+
+        GC.SuppressFinalize(this);
+    }
+
     public event Action<string, bool>? ConnectionChanged;
 
     public bool Start()
@@ -246,29 +269,6 @@ public class SerialPortWeightService : IDisposable
             Log.Debug("等待超时，未找到符合条件的重量数据");
             return null;
         }
-    }
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-
-        try
-        {
-            _cts.Cancel();
-            Stop();
-            _weightReceived.Dispose();
-            _cts.Dispose();
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "释放串口重量称资源时发生错误");
-        }
-        finally
-        {
-            _disposed = true;
-        }
-
-        GC.SuppressFinalize(this);
     }
 
     /// <summary>

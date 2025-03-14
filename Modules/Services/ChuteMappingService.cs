@@ -1,11 +1,11 @@
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Common.Models.Package;
 using Common.Services.Settings;
 using Presentation_Modules.Models;
 using Serilog;
-using System.Text.Json.Serialization;
 
 namespace Presentation_Modules.Services;
 
@@ -32,8 +32,14 @@ public class ChuteMappingService : IDisposable
 
         // 订阅配置更改事件
         _settingsService.OnSettingsChanged<ModuleConfig>(OnConfigChanged);
-        
+
         Log.Information("格口映射服务已初始化，站点代码: {SiteCode}", _siteCode);
+    }
+
+    public void Dispose()
+    {
+        _settingsService.OnSettingsChanged<ModuleConfig>(null);
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>
@@ -42,14 +48,12 @@ public class ChuteMappingService : IDisposable
     private void OnConfigChanged(ModuleConfig newConfig)
     {
         _siteCode = newConfig.SiteCode;
-        
+
         // 更新请求头中的Token
         if (_httpClient.DefaultRequestHeaders.Contains("equickToken"))
-        {
             _httpClient.DefaultRequestHeaders.Remove("equickToken");
-        }
         _httpClient.DefaultRequestHeaders.Add("equickToken", newConfig.Token);
-        
+
         Log.Information("格口映射服务配置已更新，站点代码: {SiteCode}", _siteCode);
     }
 
@@ -60,11 +64,13 @@ public class ChuteMappingService : IDisposable
     /// <returns>格口号，如果获取失败则返回null</returns>
     public async Task<int?> GetChuteNumberAsync(PackageInfo package)
     {
-        if (string.IsNullOrEmpty(package.Barcode) || package.Barcode.Equals("NoRead", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrEmpty(package.Barcode) ||
+            package.Barcode.Equals("NoRead", StringComparison.OrdinalIgnoreCase))
         {
             Log.Warning("包裹条码为空或为NoRead: {Barcode}", package.Barcode);
             return _config.ExceptionChute;
         }
+
         try
         {
             // 根据站点代码确定handlers
@@ -160,22 +166,12 @@ public class ChuteMappingService : IDisposable
     /// </summary>
     private class ChuteResponse
     {
-        [JsonPropertyName("result")]
-        public string? Result { get; init; }
-        
-        [JsonPropertyName("code")]
-        public int Code { get; init; }
-        
-        [JsonPropertyName("msg")]
-        public string? Msg { get; init; }
-        
-        [JsonPropertyName("chute_code")]
-        public string? ChuteCode { get; init; }
-    }
+        [JsonPropertyName("result")] public string? Result { get; init; }
 
-    public void Dispose()
-    {
-        _settingsService.OnSettingsChanged<ModuleConfig>(null);
-        GC.SuppressFinalize(this);
+        [JsonPropertyName("code")] public int Code { get; init; }
+
+        [JsonPropertyName("msg")] public string? Msg { get; init; }
+
+        [JsonPropertyName("chute_code")] public string? ChuteCode { get; init; }
     }
 }

@@ -16,7 +16,7 @@ public enum CameraManufacturer
     ///     海康
     /// </summary>
     Hikvision,
-    
+
     /// <summary>
     ///     TCP相机
     /// </summary>
@@ -37,7 +37,7 @@ public enum CameraType
     ///     智能相机
     /// </summary>
     Smart,
-    
+
     /// <summary>
     ///     TCP相机
     /// </summary>

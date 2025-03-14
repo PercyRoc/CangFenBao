@@ -12,14 +12,14 @@ namespace Presentation_KuaiLv.Services.Warning;
 /// </summary>
 public class WarningLightService : IWarningLightService, IDisposable
 {
-    private readonly SemaphoreSlim _semaphore = new(1, 1);
     private readonly INotificationService _notificationService;
+    private readonly SemaphoreSlim _semaphore = new(1, 1);
     private readonly ISettingsService _settingsService;
+    private WarningLightConfiguration _currentConfig;
     private bool _disposed;
     private bool _isConnected;
     private NetworkStream? _networkStream;
     private TcpClient? _tcpClient;
-    private WarningLightConfiguration _currentConfig;
 
     public WarningLightService(
         ISettingsService settingsService,
@@ -31,20 +31,6 @@ public class WarningLightService : IWarningLightService, IDisposable
 
         // 订阅配置变更事件
         settingsService.OnSettingsChanged<WarningLightConfiguration>(OnConfigurationChanged);
-    }
-
-    /// <summary>
-    /// 处理配置变更事件
-    /// </summary>
-    private async void OnConfigurationChanged(WarningLightConfiguration newConfig)
-    {
-        Log.Information("警示灯配置已更新");
-        _currentConfig = newConfig;
-
-        // 如果配置发生变化，重新连接服务
-        if (!IsConnected) return;
-        Log.Information("正在重新连接警示灯服务...");
-        await ConnectAsync();
     }
 
     public void Dispose()
@@ -75,7 +61,7 @@ public class WarningLightService : IWarningLightService, IDisposable
         try
         {
             Log.Information("开始连接警示灯...");
-            Log.Information("当前配置 - IP地址: {IpAddress}, 端口: {Port}, 是否启用: {IsEnabled}", 
+            Log.Information("当前配置 - IP地址: {IpAddress}, 端口: {Port}, 是否启用: {IsEnabled}",
                 _currentConfig.IpAddress, _currentConfig.Port, _currentConfig.IsEnabled);
 
             if (IsConnected)
@@ -93,19 +79,17 @@ public class WarningLightService : IWarningLightService, IDisposable
 
             Log.Information("正在创建TCP连接...");
             _tcpClient = new TcpClient();
-            
+
             try
             {
                 var connectTask = _tcpClient.ConnectAsync(_currentConfig.IpAddress, _currentConfig.Port);
                 if (await Task.WhenAny(connectTask, Task.Delay(_currentConfig.ConnectionTimeout)) != connectTask)
-                {
                     throw new TimeoutException($"连接超时（{_currentConfig.ConnectionTimeout}ms）");
-                }
                 await connectTask;
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "TCP连接失败 - IP: {IpAddress}, 端口: {Port}", 
+                Log.Error(ex, "TCP连接失败 - IP: {IpAddress}, 端口: {Port}",
                     _currentConfig.IpAddress, _currentConfig.Port);
                 throw;
             }
@@ -136,7 +120,7 @@ public class WarningLightService : IWarningLightService, IDisposable
         try
         {
             Log.Information("开始断开警示灯连接...");
-            
+
             if (_networkStream != null)
             {
                 Log.Information("正在关闭网络流...");
@@ -192,6 +176,20 @@ public class WarningLightService : IWarningLightService, IDisposable
     {
         var command = "AT+STACH2=0\r\n"u8.ToArray();
         await SendCommandAsync(command);
+    }
+
+    /// <summary>
+    ///     处理配置变更事件
+    /// </summary>
+    private async void OnConfigurationChanged(WarningLightConfiguration newConfig)
+    {
+        Log.Information("警示灯配置已更新");
+        _currentConfig = newConfig;
+
+        // 如果配置发生变化，重新连接服务
+        if (!IsConnected) return;
+        Log.Information("正在重新连接警示灯服务...");
+        await ConnectAsync();
     }
 
     private async Task SendCommandAsync(byte[] command)

@@ -1,7 +1,6 @@
 ﻿using System.Net.Http;
 using System.Windows;
 using Common.Extensions;
-using DeviceService;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;

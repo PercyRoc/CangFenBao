@@ -3,7 +3,7 @@ using System.Windows.Controls;
 namespace Modules.Views;
 
 /// <summary>
-/// TCP设置页面
+///     TCP设置页面
 /// </summary>
 public partial class TcpSettingsView : Page
 {
@@ -11,4 +11,4 @@ public partial class TcpSettingsView : Page
     {
         InitializeComponent();
     }
-} 
+}

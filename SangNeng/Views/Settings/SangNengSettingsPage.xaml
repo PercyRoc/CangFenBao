@@ -30,20 +30,20 @@
                 <ui:TextBox
                     Icon="Person24"
                     PlaceholderText="Username"
-                    Text="{Binding Settings.Username, UpdateSourceTrigger=PropertyChanged}" 
-                    Margin="0,0,0,16"/>
+                    Text="{Binding Settings.Username, UpdateSourceTrigger=PropertyChanged}"
+                    Margin="0,0,0,16" />
 
                 <ui:TextBox
                     Icon="Password24"
                     PlaceholderText="Password"
                     Text="{Binding Settings.Password, UpdateSourceTrigger=PropertyChanged}"
-                    Margin="0,0,0,16"/>
+                    Margin="0,0,0,16" />
 
                 <TextBlock
                     FontSize="12"
                     Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                    Text="These settings are used to connect to the SangNeng server." 
-                    TextWrapping="Wrap"/>
+                    Text="These settings are used to connect to the SangNeng server."
+                    TextWrapping="Wrap" />
             </StackPanel>
         </ui:Card>
     </Grid>

@@ -9,8 +9,8 @@ namespace SangNeng.ViewModels.Settings;
 
 public class SangNengSettingsViewModel : BindableBase
 {
-    private readonly ISettingsService _settingsService;
     private readonly INotificationService _notificationService;
+    private readonly ISettingsService _settingsService;
 
     public SangNengSettingsViewModel(
         ISettingsService settingsService,
@@ -31,7 +31,7 @@ public class SangNengSettingsViewModel : BindableBase
     {
         try
         {
-            var results = _settingsService.SaveSettings(Settings, validate: true);
+            var results = _settingsService.SaveSettings(Settings, true);
             if (results.Length > 0)
             {
                 var errorMessage = string.Join("\n", results.Select(r => r.ErrorMessage));
@@ -48,4 +48,4 @@ public class SangNengSettingsViewModel : BindableBase
             _notificationService.ShowError("Error saving SangNeng server settings");
         }
     }
-} 
+}

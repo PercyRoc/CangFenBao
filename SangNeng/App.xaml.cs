@@ -264,6 +264,7 @@ public partial class App
                 cameraService.Dispose();
                 Log.Information("相机服务已释放");
             }
+
             // 等待所有日志写入完成
             Log.Information("应用程序关闭");
             Log.CloseAndFlush();

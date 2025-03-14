@@ -6,7 +6,7 @@ using SortingServices.Pendulum.Models;
 namespace SortingServices.Pendulum;
 
 /// <summary>
-/// 摆轮分拣服务托管服务
+///     摆轮分拣服务托管服务
 /// </summary>
 public class PendulumSortHostedService(
     IPendulumSortService pendulumSortService,
@@ -47,4 +47,4 @@ public class PendulumSortHostedService(
             throw;
         }
     }
-} 
+}

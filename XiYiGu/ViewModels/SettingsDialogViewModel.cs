@@ -9,11 +9,12 @@ using SharedUI.ViewModels.Settings;
 
 namespace Presentation_XiYiGu.ViewModels;
 
-public class SettingsDialogViewModel: BindableBase, IDialogAware
+public class SettingsDialogViewModel : BindableBase, IDialogAware
 {
+    private readonly ApiSettingsViewModel _apiSettingsViewModel;
+
     // 保存各个设置页面的ViewModel实例
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
-    private readonly ApiSettingsViewModel _apiSettingsViewModel;
     private readonly INotificationService _notificationService;
 
     public SettingsDialogViewModel(
@@ -57,7 +58,7 @@ public class SettingsDialogViewModel: BindableBase, IDialogAware
             // 保存所有设置
             _cameraSettingsViewModel.SaveConfigurationCommand.Execute();
             _apiSettingsViewModel.SaveConfigurationCommand.Execute();
-            
+
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");
             RequestClose?.Invoke(new DialogResult(ButtonResult.OK));

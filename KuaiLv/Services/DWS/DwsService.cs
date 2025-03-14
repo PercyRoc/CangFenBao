@@ -26,9 +26,9 @@ public class DwsService : IDwsService, IDisposable
     private readonly OfflinePackageService _offlinePackageService;
     private readonly ISettingsService _settingsService;
     private readonly IWarningLightService _warningLightService;
+    private UploadConfiguration _currentConfig;
     private bool _disposed;
     private bool _isNetworkAvailable = true;
-    private UploadConfiguration _currentConfig;
 
     public DwsService(
         HttpClient httpClient,
@@ -42,7 +42,7 @@ public class DwsService : IDwsService, IDisposable
         _notificationService = notificationService;
         _warningLightService = warningLightService;
         _offlinePackageService = offlinePackageService;
-        
+
         // 从设置服务加载配置
         _currentConfig = _settingsService.LoadSettings<UploadConfiguration>();
 
@@ -54,15 +54,6 @@ public class DwsService : IDwsService, IDisposable
 
         // 初始化离线包裹重试定时器（每1分钟检查一次）
         _offlinePackageRetryTimer = new Timer(RetryOfflinePackages, null, TimeSpan.Zero, TimeSpan.FromMinutes(1));
-    }
-
-    /// <summary>
-    /// 处理配置变更事件
-    /// </summary>
-    private void OnConfigurationChanged(UploadConfiguration newConfig)
-    {
-        Log.Information("DWS服务配置已更新");
-        _currentConfig = newConfig;
     }
 
     /// <summary>
@@ -274,6 +265,15 @@ public class DwsService : IDwsService, IDisposable
 
             return new DwsResponse { Code = 500, Message = ex.Message };
         }
+    }
+
+    /// <summary>
+    ///     处理配置变更事件
+    /// </summary>
+    private void OnConfigurationChanged(UploadConfiguration newConfig)
+    {
+        Log.Information("DWS服务配置已更新");
+        _currentConfig = newConfig;
     }
 
     private async Task CheckNetworkStatusAsync()

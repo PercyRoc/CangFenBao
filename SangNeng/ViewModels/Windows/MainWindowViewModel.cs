@@ -46,12 +46,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly IDialogService _dialogService;
     private readonly SemaphoreSlim _measurementLock = new(1, 1);
     private readonly IPackageDataService _packageDataService;
+    private readonly ISangNengService _sangNengService;
     private readonly IScannerService _scannerService;
     private readonly ISettingsService _settingsService;
     private readonly Timer _timer;
     private readonly RenJiaCameraService _volumeCamera;
     private readonly SerialPortWeightService _weightService;
-    private readonly ISangNengService _sangNengService;
     private ObservableCollection<SelectablePalletModel> _availablePallets;
     private string _currentBarcode = string.Empty;
     private ImageSource? _currentImage;
@@ -487,25 +487,19 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     }
 
                     if (imageToProcess != null)
-                    {
                         try
                         {
                             var cameraSettings = _settingsService.LoadSettings<CameraSettings>("CameraSettings");
-                            var result = await SaveImageAsync(imageToProcess, cameraSettings, _currentPackage, cts.Token);
-                            if (result.HasValue)
-                            {
-                                (base64Image, imageName) = result.Value;
-                            }
+                            var result = await SaveImageAsync(imageToProcess, cameraSettings, _currentPackage,
+                                cts.Token);
+                            if (result.HasValue) (base64Image, imageName) = result.Value;
                         }
                         catch (Exception ex)
                         {
                             Log.Error(ex, "保存图像到文件时发生错误");
                         }
-                    }
                     else
-                    {
                         Log.Warning("未能捕获到软触发图像");
-                    }
                 }
                 finally
                 {
@@ -533,7 +527,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 });
 
                 // 调用桑能接口上传数据
-                try 
+                try
                 {
                     var request = new SangNengWeightRequest
                     {
@@ -549,12 +543,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     };
 
                     var response = await _sangNengService.SendWeightDataAsync(request);
-                    if (response.Code != 0)  // 假设 0 表示成功
+                    if (response.Code != 0) // 假设 0 表示成功
                     {
                         Log.Warning("上传数据到桑能服务器失败: {Message}", response.Message);
                         Application.Current.Dispatcher.Invoke(() => UpdatePackageStatus("Upload Failed"));
                     }
-                    else 
+                    else
                     {
                         Log.Information("成功上传数据到桑能服务器");
                     }
@@ -660,7 +654,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    private static async Task<(string base64Image, string imageName)?> SaveImageAsync(Image<Rgba32> image, CameraSettings settings, PackageInfo package,
+    private static async Task<(string base64Image, string imageName)?> SaveImageAsync(Image<Rgba32> image,
+        CameraSettings settings, PackageInfo package,
         CancellationToken cancellationToken)
     {
         string? tempFilePath = null;
@@ -668,7 +663,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         {
             string? base64Image = null;
             var imageName = string.Empty;
-            
+
             await Task.Run(async () =>
             {
                 // 确保保存目录存在
@@ -752,7 +747,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
         {
             // 清理临时文件
             if (tempFilePath != null && File.Exists(tempFilePath))
-            {
                 try
                 {
                     File.Delete(tempFilePath);
@@ -761,7 +755,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 {
                     Log.Warning(ex, "删除临时文件失败：{Path}", tempFilePath);
                 }
-            }
         }
     }
 

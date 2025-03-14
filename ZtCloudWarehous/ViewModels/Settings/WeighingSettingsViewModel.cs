@@ -8,8 +8,8 @@ namespace Presentation_ZtCloudWarehous.ViewModels.Settings;
 
 public class WeighingSettingsViewModel : BindableBase
 {
-    private readonly ISettingsService _settingsService;
     private readonly INotificationService _notificationService;
+    private readonly ISettingsService _settingsService;
 
     public WeighingSettingsViewModel(
         ISettingsService settingsService,
@@ -30,7 +30,7 @@ public class WeighingSettingsViewModel : BindableBase
     {
         try
         {
-            var results = _settingsService.SaveSettings(Settings, validate: true);
+            var results = _settingsService.SaveSettings(Settings, true);
             if (results.Length > 0)
             {
                 var errorMessage = string.Join("\n", results.Select(r => r.ErrorMessage));
@@ -46,4 +46,4 @@ public class WeighingSettingsViewModel : BindableBase
             _notificationService.ShowError("保存称重设置时发生错误");
         }
     }
-} 
+}

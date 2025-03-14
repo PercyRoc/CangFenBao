@@ -1,14 +1,13 @@
 ﻿using System.Windows;
 using System.Windows.Input;
 using Common.Services.Ui;
-using Presentation_XiYiGu.Views.Settings;
 using Serilog;
 using SharedUI.Views.Settings;
 
 namespace Presentation_XiYiGu.Views;
 
 /// <summary>
-/// 设置窗口
+///     设置窗口
 /// </summary>
 public partial class SettingsDialog
 {

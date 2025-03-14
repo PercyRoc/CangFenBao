@@ -16,7 +16,6 @@ using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Scanner;
 using DeviceService.DataSourceDevices.Services;
-using Presentation_BenFly.Models.Settings;
 using Presentation_BenFly.Services;
 using Presentation_BenFly.Services.Belt;
 using Prism.Commands;
@@ -31,13 +30,13 @@ namespace Presentation_BenFly.ViewModels.Windows;
 
 public class MainWindowViewModel : BindableBase, IDisposable
 {
+    private readonly IBeltSerialService _beltSerialService;
     private readonly BenNiaoPackageService _benNiaoService;
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
     private readonly IScannerService _scannerService;
     private readonly ISettingsService _settingsService;
     private readonly IPendulumSortService _sortService;
-    private readonly IBeltSerialService _beltSerialService;
     private readonly List<IDisposable> _subscriptions = [];
 
     private readonly DispatcherTimer _timer;
@@ -757,17 +756,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 // 停止定时器（UI线程操作）
                 if (Application.Current != null && !Application.Current.Dispatcher.CheckAccess())
-                {
                     Application.Current.Dispatcher.Invoke(() => _timer.Stop());
-                }
                 else
-                {
                     _timer.Stop();
-                }
 
                 // 停止分拣服务
                 if (_sortService.IsRunning())
-                {
                     try
                     {
                         // 使用超时避免无限等待
@@ -776,19 +770,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         var completedTask = Task.WhenAny(stopTask, timeoutTask).Result;
 
                         if (completedTask == stopTask)
-                        {
                             Log.Information("摆轮分拣服务已停止");
-                        }
                         else
-                        {
                             Log.Warning("摆轮分拣服务停止超时");
-                        }
                     }
                     catch (Exception ex)
                     {
                         Log.Error(ex, "停止摆轮分拣服务时发生错误");
                     }
-                }
 
                 // 释放分拣服务资源
                 if (_sortService is IDisposable disposableSortService)
@@ -805,7 +794,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                 // 释放订阅
                 foreach (var subscription in _subscriptions)
-                {
                     try
                     {
                         subscription.Dispose();
@@ -814,7 +802,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     {
                         Log.Error(ex, "释放订阅时发生错误");
                     }
-                }
+
                 _subscriptions.Clear();
             }
             catch (Exception ex)
@@ -827,7 +815,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 }
 
 /// <summary>
-/// 用于包装DispatcherTimer的可释放对象
+///     用于包装DispatcherTimer的可释放对象
 /// </summary>
 internal class DisposableTimer : IDisposable
 {

@@ -44,6 +44,7 @@ public class CameraStartupService(
             Log.Error(ex, "启动相机服务时发生错误");
             notificationService.ShowError(ex.Message);
         }
+
         return Task.CompletedTask;
     }
 
@@ -60,15 +61,17 @@ public class CameraStartupService(
             {
                 try
                 {
-                    if (!_cameraService.Stop())Log.Warning("相机停止失败");
+                    if (!_cameraService.Stop()) Log.Warning("相机停止失败");
                     _cameraService.Dispose();
                 }
                 catch (Exception ex)
                 {
                     Log.Error(ex, "停止相机服务时发生错误");
                 }
+
                 _cameraService = null;
             }
+
             Log.Information("相机服务已停止");
         }
         catch (Exception ex)
@@ -79,6 +82,7 @@ public class CameraStartupService(
         {
             _initLock.Dispose();
         }
+
         return Task.CompletedTask;
     }
 

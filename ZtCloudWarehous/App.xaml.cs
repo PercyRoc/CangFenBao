@@ -51,7 +51,7 @@ public partial class App
         containerRegistry.RegisterSingleton<HttpClient>();
         // 注册包裹中转服务
         containerRegistry.RegisterSingleton<PackageTransferService>();
-        
+
         // 注册称重服务
         containerRegistry.RegisterSingleton<IWeighingService, WeighingService>();
 

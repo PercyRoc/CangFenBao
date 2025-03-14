@@ -4,7 +4,7 @@ using System.Windows.Data;
 namespace SharedUI.Converters;
 
 /// <summary>
-/// 布尔值取反转换器
+///     布尔值取反转换器
 /// </summary>
 public class InverseBooleanConverter : IValueConverter
 {
@@ -21,4 +21,4 @@ public class InverseBooleanConverter : IValueConverter
             return !boolValue;
         return false;
     }
-} 
+}

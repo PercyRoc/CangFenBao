@@ -16,9 +16,9 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
     private readonly INotificationService _notificationService;
     private readonly PalletSettingsViewModel _palletSettingsViewModel;
+    private readonly SangNengSettingsViewModel _sangNengSettingsViewModel;
     private readonly VolumeSettingsViewModel _volumeSettingsViewModel;
     private readonly WeightSettingsViewModel _weightSettingsViewModel;
-    private readonly SangNengSettingsViewModel _sangNengSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,

@@ -8,14 +8,14 @@ using Serilog;
 namespace Presentation_ZtCloudWarehous.Services;
 
 /// <summary>
-/// 设备服务实现
+///     设备服务实现
 /// </summary>
 public class DeviceService : IDeviceService
 {
+    private readonly Timer _businessDataTimer;
+    private readonly Timer _heartbeatTimer;
     private readonly HttpClient _httpClient;
     private readonly ISettingsService _settingsService;
-    private readonly Timer _heartbeatTimer;
-    private readonly Timer _businessDataTimer;
     private bool _isRunning;
     private WeighingSettings? _settings;
 
@@ -23,12 +23,13 @@ public class DeviceService : IDeviceService
     {
         _httpClient = httpClient;
         _settingsService = settingsService;
-        
+
         // 创建心跳定时器（5分钟）
         _heartbeatTimer = new Timer(async _ => await SendHeartbeatAsync(), null, Timeout.Infinite, Timeout.Infinite);
-        
+
         // 创建业务数据同步定时器（10分钟）
-        _businessDataTimer = new Timer(async _ => await SyncBusinessDataInternalAsync(), null, Timeout.Infinite, Timeout.Infinite);
+        _businessDataTimer = new Timer(async _ => await SyncBusinessDataInternalAsync(), null, Timeout.Infinite,
+            Timeout.Infinite);
     }
 
     /// <inheritdoc />
@@ -38,7 +39,7 @@ public class DeviceService : IDeviceService
         {
             var response = await _httpClient.PostAsJsonAsync("api/device/register", request);
             response.EnsureSuccessStatusCode();
-            
+
             var result = await response.Content.ReadFromJsonAsync<DeviceResponse>();
             return result ?? new DeviceResponse { Code = 1, Msg = "注册失败：响应为空" };
         }
@@ -56,7 +57,7 @@ public class DeviceService : IDeviceService
         {
             var response = await _httpClient.PostAsJsonAsync("api/device/online", request);
             response.EnsureSuccessStatusCode();
-            
+
             var result = await response.Content.ReadFromJsonAsync<DeviceResponse>();
             return result ?? new DeviceResponse { Code = 1, Msg = "上线通知失败：响应为空" };
         }
@@ -74,7 +75,7 @@ public class DeviceService : IDeviceService
         {
             var response = await _httpClient.PostAsJsonAsync("api/device/offline", request);
             response.EnsureSuccessStatusCode();
-            
+
             var result = await response.Content.ReadFromJsonAsync<DeviceResponse>();
             return result ?? new DeviceResponse { Code = 1, Msg = "下线通知失败：响应为空" };
         }
@@ -92,7 +93,7 @@ public class DeviceService : IDeviceService
         {
             var response = await _httpClient.PostAsJsonAsync("api/device/heartbeat", request);
             response.EnsureSuccessStatusCode();
-            
+
             var result = await response.Content.ReadFromJsonAsync<DeviceResponse>();
             return result ?? new DeviceResponse { Code = 1, Msg = "心跳通知失败：响应为空" };
         }
@@ -110,7 +111,7 @@ public class DeviceService : IDeviceService
         {
             var response = await _httpClient.PostAsJsonAsync("api/device/action", request);
             response.EnsureSuccessStatusCode();
-            
+
             var result = await response.Content.ReadFromJsonAsync<DeviceResponse>();
             return result ?? new DeviceResponse { Code = 1, Msg = "动作数据同步失败：响应为空" };
         }
@@ -128,7 +129,7 @@ public class DeviceService : IDeviceService
         {
             var response = await _httpClient.PostAsJsonAsync("api/device/business", request);
             response.EnsureSuccessStatusCode();
-            
+
             var result = await response.Content.ReadFromJsonAsync<DeviceResponse>();
             return result ?? new DeviceResponse { Code = 1, Msg = "业务数据同步失败：响应为空" };
         }
@@ -270,4 +271,4 @@ public class DeviceService : IDeviceService
             Log.Error(ex, "同步业务数据失败");
         }
     }
-} 
+}

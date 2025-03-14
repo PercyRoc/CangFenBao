@@ -14,10 +14,10 @@ namespace DeviceService.DataSourceDevices.Camera;
 /// </summary>
 public class CameraFactory : IDisposable
 {
+    private readonly INotificationService _notificationService;
     private readonly ISettingsService _settingsService;
     private ICameraService? _currentCamera;
     private bool _disposed;
-    private readonly INotificationService _notificationService;
 
     /// <summary>
     ///     初始化相机工厂
@@ -31,23 +31,50 @@ public class CameraFactory : IDisposable
         InitializeCamera();
     }
 
+    public void Dispose()
+    {
+        if (!_disposed)
+        {
+            if (_currentCamera != null)
+            {
+                try
+                {
+                    _currentCamera.Stop();
+                    _currentCamera.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "停止相机失败");
+                }
+
+                _currentCamera = null;
+            }
+
+            _disposed = true;
+        }
+
+        GC.SuppressFinalize(this);
+    }
+
     private void OnCameraSettingsChanged(CameraSettings settings)
     {
         try
         {
             // 检查制造商和类型是否发生变化
-            if (_currentCamera == null || 
+            if (_currentCamera == null ||
                 (_currentCamera is DahuaCameraService && settings.Manufacturer != CameraManufacturer.Dahua) ||
-                (_currentCamera is HikvisionIndustrialCameraSdkClient && settings.Manufacturer == CameraManufacturer.Hikvision && settings.CameraType == CameraType.Industrial) ||
-                (_currentCamera is HikvisionSmartCameraService && settings.Manufacturer == CameraManufacturer.Hikvision && settings.CameraType == CameraType.Smart) ||
+                (_currentCamera is HikvisionIndustrialCameraSdkClient &&
+                 settings.Manufacturer == CameraManufacturer.Hikvision &&
+                 settings.CameraType == CameraType.Industrial) ||
+                (_currentCamera is HikvisionSmartCameraService &&
+                 settings.Manufacturer == CameraManufacturer.Hikvision && settings.CameraType == CameraType.Smart) ||
                 (_currentCamera is TcpCameraService && settings.Manufacturer != CameraManufacturer.Tcp))
             {
                 Log.Information("相机制造商或类型发生变更，准备重新初始化相机");
                 _notificationService.ShowSuccess("相机制造商或类型发生变更，准备重新初始化相机");
-                
+
                 // 停止并释放旧相机
                 if (_currentCamera != null)
-                {
                     try
                     {
                         _currentCamera.Stop();
@@ -57,13 +84,13 @@ public class CameraFactory : IDisposable
                     {
                         Log.Error(ex, "停止旧相机失败");
                     }
-                }
+
                 try
                 {
                     // 创建并初始化新相机
                     _currentCamera = CreateCameraByManufacturer(settings.Manufacturer, settings.CameraType);
                     _currentCamera.UpdateConfiguration(settings);
-                    
+
                     Log.Information("相机重新初始化完成");
                     _notificationService.ShowSuccess("相机重新初始化完成");
                 }
@@ -105,29 +132,6 @@ public class CameraFactory : IDisposable
         }
     }
 
-    public void Dispose()
-    {
-        if (!_disposed)
-        {
-            if (_currentCamera != null)
-            {
-                try
-                {
-                    _currentCamera.Stop();
-                    _currentCamera.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "停止相机失败");
-                }
-                _currentCamera = null;
-            }
-            _disposed = true;
-        }
-
-        GC.SuppressFinalize(this);
-    }
-
     /// <summary>
     ///     创建相机服务
     /// </summary>
@@ -152,7 +156,8 @@ public class CameraFactory : IDisposable
             ICameraService camera = manufacturer switch
             {
                 CameraManufacturer.Dahua => new DahuaCameraService(),
-                CameraManufacturer.Hikvision when cameraType == CameraType.Industrial => new HikvisionIndustrialCameraSdkClient(),
+                CameraManufacturer.Hikvision when cameraType == CameraType.Industrial =>
+                    new HikvisionIndustrialCameraSdkClient(),
                 CameraManufacturer.Hikvision when cameraType == CameraType.Smart => new HikvisionSmartCameraService(),
                 CameraManufacturer.Tcp => new TcpCameraService(),
                 _ => throw new ArgumentException($"不支持的相机厂商和类型组合: {manufacturer} - {cameraType}")

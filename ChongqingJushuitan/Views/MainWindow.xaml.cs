@@ -8,7 +8,7 @@ using Serilog;
 namespace ChongqingJushuitan.Views;
 
 /// <summary>
-/// Interaction logic for MainWindow.xaml
+///     Interaction logic for MainWindow.xaml
 /// </summary>
 public partial class MainWindow
 {
@@ -53,9 +53,8 @@ public partial class MainWindow
 
             // 释放MainWindowViewModel
             if (DataContext is MainWindowViewModel viewModel)
-            {
                 // 在后台线程中执行Dispose操作，避免UI线程阻塞
-                await Task.Run(() => 
+                await Task.Run(() =>
                 {
                     try
                     {
@@ -67,7 +66,6 @@ public partial class MainWindow
                         Log.Error(ex, "释放ViewModel时发生错误");
                     }
                 });
-            }
 
             e.Cancel = false;
             Application.Current.Shutdown();
