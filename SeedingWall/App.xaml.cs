@@ -18,7 +18,7 @@ namespace Presentation_SeedingWall;
 /// <summary>
 ///     Interaction logic for App.xaml
 /// </summary>
-public partial class App
+internal partial class App
 {
     /// <summary>
     ///     创建主窗口
@@ -67,7 +67,7 @@ public partial class App
     /// <summary>
     ///     启动
     /// </summary>
-    protected override async void OnStartup(StartupEventArgs e)
+    protected override void OnStartup(StartupEventArgs e)
     {
         // 配置Serilog
         Log.Logger = new LoggerConfiguration()
@@ -89,19 +89,46 @@ public partial class App
             var cameraStartupService = Container.Resolve<CameraStartupService>();
             _ = Task.Run(async () =>
             {
-                await cameraStartupService.StartAsync(CancellationToken.None);
-                Log.Information("相机托管服务启动成功");
+                try
+                {
+                    await cameraStartupService.StartAsync(CancellationToken.None);
+                    Log.Information("相机托管服务启动成功");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "相机托管服务启动失败");
+                }
             });
 
             // 启动聚水潭托管服务
             var juShuiTanStartupService = Container.Resolve<JuShuiTanStartupService>();
-            await juShuiTanStartupService.StartAsync(CancellationToken.None);
-            Log.Information("聚水潭托管服务已启动");
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await juShuiTanStartupService.StartAsync(CancellationToken.None);
+                    Log.Information("聚水潭托管服务已启动");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "聚水潭托管服务启动失败");
+                }
+            });
 
             // 启动PLC服务
             var plcStartupService = Container.Resolve<PlcStartupService>();
-            await plcStartupService.StartAsync(CancellationToken.None);
-            Log.Information("PLC服务已启动");
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await plcStartupService.StartAsync(CancellationToken.None);
+                    Log.Information("PLC服务已启动");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "PLC服务启动失败");
+                }
+            });
         }
         catch (Exception ex)
         {

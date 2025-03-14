@@ -1,6 +1,6 @@
 namespace ChongqingJushuitan.Views.Settings;
 
-public partial class JushuitanSettingsPage
+internal partial class JushuitanSettingsPage
 {
     public JushuitanSettingsPage()
     {

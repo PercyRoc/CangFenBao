@@ -1,6 +1,6 @@
-namespace Presentation_Modules.Views.Settings;
+namespace Modules.Views.Settings;
 
-public partial class ModuleConfigView
+internal partial class ModuleConfigView
 {
     public ModuleConfigView()
     {

@@ -41,6 +41,7 @@ public class RenJiaCameraService : ICameraService
         private set
         {
             if (_isConnected == value) return;
+
             _isConnected = value;
             ConnectionChanged?.Invoke("RenJia", value);
         }
@@ -206,6 +207,7 @@ public class RenJiaCameraService : ICameraService
     public void Dispose()
     {
         if (_disposed) return;
+
         try
         {
             Log.Information("正在异步释放人加体积相机资源...");
@@ -283,7 +285,7 @@ public class RenJiaCameraService : ICameraService
                     }
 
                     // 3. 验证测量结果
-                    if (dimensionData.Any(d => float.IsNaN(d) || float.IsInfinity(d) || d <= 0 || d > 2000))
+                    if (dimensionData.Any(static d => float.IsNaN(d) || float.IsInfinity(d) || d is <= 0 or > 2000))
                     {
                         var error = $"测量结果无效：L={dimensionData[0]}, W={dimensionData[1]}, H={dimensionData[2]}";
                         Log.Warning(error);
@@ -330,10 +332,11 @@ public class RenJiaCameraService : ICameraService
 
             // 等待测量任务完成或超时
             if (measureTask.Wait(timeoutMs)) return measureTask.Result;
+
             Log.Warning("体积测量操作超时（{Timeout}ms）", timeoutMs);
 
             // 在后台继续等待测量任务完成，避免资源泄漏
-            _ = measureTask.ContinueWith(t =>
+            _ = measureTask.ContinueWith(static t =>
             {
                 if (t.IsFaulted)
                     Log.Error(t.Exception, "超时后的测量任务发生异常");

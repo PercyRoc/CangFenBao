@@ -8,7 +8,7 @@ using SharedUI.ViewModels.Settings;
 
 namespace ChongqingJushuitan.ViewModels;
 
-public class SettingsDialogViewModel : BindableBase, IDialogAware
+internal class SettingsDialogViewModel : BindableBase, IDialogAware
 {
     private readonly BalanceSortSettingsViewModel _balanceSortSettingsViewModel;
 

@@ -1,11 +1,11 @@
-using Presentation_ZtCloudWarehous.Models;
+using ZtCloudWarehous.Models;
 
-namespace Presentation_ZtCloudWarehous.Services;
+namespace ZtCloudWarehous.Services;
 
 /// <summary>
 ///     称重服务接口
 /// </summary>
-public interface IWeighingService
+internal interface IWeighingService
 {
     /// <summary>
     ///     发送称重数据

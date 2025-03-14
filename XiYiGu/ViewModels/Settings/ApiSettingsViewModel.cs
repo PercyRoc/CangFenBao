@@ -1,17 +1,17 @@
 using Common.Services.Settings;
 using Common.Services.Ui;
-using Presentation_XiYiGu.Models.Settings;
-using Presentation_XiYiGu.Services;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
+using XiYiGu.Models.Settings;
+using XiYiGu.Services;
 
-namespace Presentation_XiYiGu.ViewModels.Settings;
+namespace XiYiGu.ViewModels.Settings;
 
 /// <summary>
 ///     API设置视图模型
 /// </summary>
-public class ApiSettingsViewModel : BindableBase
+internal class ApiSettingsViewModel : BindableBase
 {
     private readonly INotificationService _notificationService;
     private readonly ISettingsService _settingsService;
@@ -50,13 +50,13 @@ public class ApiSettingsViewModel : BindableBase
     public ApiSettings ApiSettings
     {
         get => _apiSettings;
-        set => SetProperty(ref _apiSettings, value);
+        private set => SetProperty(ref _apiSettings, value);
     }
 
     /// <summary>
     ///     是否正在加载
     /// </summary>
-    public bool IsLoading
+    private bool IsLoading
     {
         get => _isLoading;
         set => SetProperty(ref _isLoading, value);
@@ -79,7 +79,7 @@ public class ApiSettingsViewModel : BindableBase
     /// <summary>
     ///     保存配置命令
     /// </summary>
-    public DelegateCommand SaveConfigurationCommand { get; }
+    internal DelegateCommand SaveConfigurationCommand { get; }
 
     /// <summary>
     ///     加载设置
@@ -100,49 +100,59 @@ public class ApiSettingsViewModel : BindableBase
     /// <summary>
     ///     执行测试上传
     /// </summary>
-    private async void ExecuteTestUpload()
+    private void ExecuteTestUpload()
     {
         if (IsLoading) return;
 
-        try
+        _ = Task.Run(async () =>
         {
-            IsLoading = true;
-
-            // 重新加载最新的 API 设置
-            LoadSettings();
-
-            // 执行批量测试
-            var results = await _waybillUploadService.TestBatchUploadAsync(TestCount);
-
-            // 统计结果
-            var successCount = results.Count(r => r.InfoResponse.IsSuccess);
-            var imageSuccessCount = results.Count(r => r.ImageResponse?.IsSuccess == true);
-
-            // 显示结果
-            _notificationService.ShowSuccess(
-                $"批量测试完成：共{TestCount}条，运单信息成功{successCount}条，图片上传成功{imageSuccessCount}条");
-
-            // 如果有失败的记录，显示详细信息
-            var failedRecords = results.Where(r =>
-                !r.InfoResponse.IsSuccess || (r.ImageResponse != null && !r.ImageResponse.IsSuccess));
-            foreach (var record in failedRecords)
+            try
             {
-                var errorMsg = $"运单号：{record.Barcode}\n";
-                if (!record.InfoResponse.IsSuccess) errorMsg += $"运单信息上传失败：{record.InfoResponse.Msg}\n";
-                if (record.ImageResponse != null && !record.ImageResponse.IsSuccess)
-                    errorMsg += $"图片上传失败：{record.ImageResponse.Msg}";
-                _notificationService.ShowWarning(errorMsg);
+                IsLoading = true;
+
+                // 重新加载最新的 API 设置
+                LoadSettings();
+
+                // 执行批量测试
+                var results = await _waybillUploadService.TestBatchUploadAsync(TestCount);
+
+                // 统计结果
+                var successCount = results.Count(static r => r.InfoResponse.IsSuccess);
+                var imageSuccessCount = results.Count(static r => r.ImageResponse?.IsSuccess == true);
+
+                // 显示结果
+                _notificationService.ShowSuccess(
+                    $"批量测试完成：共{TestCount}条，运单信息成功{successCount}条，图片上传成功{imageSuccessCount}条");
+
+                // 如果有失败的记录，显示详细信息
+                var failedRecords = results.Where(static r =>
+                    !r.InfoResponse.IsSuccess || r.ImageResponse is { IsSuccess: false });
+                foreach (var record in failedRecords)
+                {
+                    var errorMsg = $"运单号：{record.Barcode}\n";
+                    if (!record.InfoResponse.IsSuccess)
+                    {
+                        errorMsg += $"运单信息上传失败：{record.InfoResponse.Msg}\n";
+                    }
+
+                    if (record.ImageResponse is { IsSuccess: false })
+                    {
+                        errorMsg += $"图片上传失败：{record.ImageResponse.Msg}";
+                    }
+
+                    _notificationService.ShowWarning(errorMsg);
+                }
             }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "批量测试时发生错误");
-            _notificationService.ShowError($"批量测试异常: {ex.Message}");
-        }
-        finally
-        {
-            IsLoading = false;
-        }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "批量测试时发生错误");
+                _notificationService.ShowError($"批量测试异常: {ex.Message}");
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        });
     }
 
     /// <summary>

@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 using Common.Services.Settings;
 using Prism.Mvvm;
 
-namespace SortingServices.Pendulum.Models;
+namespace Common.Models.Settings.Sort.PendulumSort;
 
 /// <summary>
 ///     摆轮分拣配置

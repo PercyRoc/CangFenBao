@@ -1,19 +1,19 @@
-﻿<ui:FluentWindow x:Class="Presentation_Modules.Views.MainWindow"
+﻿<ui:FluentWindow x:Class="Modules.Views.MainWindow"
                  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
                  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:hc="https://handyorg.github.io/handycontrol"
-                 xmlns:viewModels="clr-namespace:Presentation_Modules.ViewModels"
+                 xmlns:viewModels1="clr-namespace:Modules.ViewModels"
                  mc:Ignorable="d"
-                 d:DataContext="{d:DesignInstance Type=viewModels:MainWindowViewModel}"
+                 d:DataContext="{d:DesignInstance Type=viewModels1:MainWindowViewModel}"
                  Title="仓分宝-模组带"
                  Height="900"
                  Width="1600"
                  WindowStartupLocation="CenterScreen"
                  Closing="MetroWindow_Closing"
-                 ExtendsContentIntoTitleBar="True">
+                 ExtendsContentIntoTitleBar="True" x:ClassModifier="internal">
     <ui:FluentWindow.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>

@@ -9,6 +9,7 @@ using System.Windows.Threading;
 using Common.Data;
 using Common.Models.Package;
 using Common.Models.Settings.ChuteRules;
+using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
@@ -20,11 +21,10 @@ using Serilog;
 using SharedUI.Models;
 using SixLabors.ImageSharp;
 using SortingServices.Pendulum;
-using SortingServices.Pendulum.Models;
 
 namespace FuzhouPolicyForce.ViewModels;
 
-public class MainWindowViewModel : BindableBase, IDisposable
+internal class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
@@ -375,7 +375,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         Application.Current.Dispatcher.Invoke(() =>
         {
-            var cameraStatus = DeviceStatuses.FirstOrDefault(s => s.Name == "相机");
+            var cameraStatus = DeviceStatuses.FirstOrDefault(static s => s.Name == "相机");
             if (cameraStatus == null) return;
 
             cameraStatus.Status = isConnected ? "已连接" : "已断开";
@@ -469,7 +469,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     private void UpdatePackageInfoItems(PackageInfo package)
     {
-        var barcodeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "条码");
+        var barcodeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "条码");
         if (barcodeItem != null)
         {
             barcodeItem.Value = package.Barcode;
@@ -478,61 +478,65 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 : "包裹条码信息";
         }
 
-        var weightItem = PackageInfoItems.FirstOrDefault(x => x.Label == "重量");
+        var weightItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "重量");
         if (weightItem != null)
         {
             weightItem.Value = package.Weight.ToString(CultureInfo.InvariantCulture);
             weightItem.Unit = "kg";
         }
 
-        var sizeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "尺寸");
-        if (sizeItem != null) sizeItem.Value = package.VolumeDisplay;
+        var sizeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "尺寸");
+        if (sizeItem != null)
+        {
+            sizeItem.Value = package.VolumeDisplay;
+        }
 
-        var segmentItem = PackageInfoItems.FirstOrDefault(x => x.Label == "段码");
+        var segmentItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "段码");
         if (segmentItem != null)
         {
             segmentItem.Value = package.SegmentCode;
             segmentItem.Description = string.IsNullOrEmpty(package.SegmentCode) ? "等待获取..." : "三段码信息";
         }
 
-        var chuteItem = PackageInfoItems.FirstOrDefault(x => x.Label == "分拣口");
+        var chuteItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "分拣口");
         if (chuteItem != null)
         {
             chuteItem.Value = package.ChuteName.ToString();
             chuteItem.Description = string.IsNullOrEmpty(package.ChuteName.ToString()) ? "等待分配..." : "目标分拣位置";
         }
 
-        var timeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "时间");
+        var timeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "时间");
         if (timeItem != null)
         {
             timeItem.Value = package.CreateTime.ToString("HH:mm:ss");
             timeItem.Description = $"处理于 {package.CreateTime:yyyy-MM-dd}";
         }
 
-        var processingTimeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "处理时间");
+        var processingTimeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "处理时间");
         if (processingTimeItem == null) return;
+
         processingTimeItem.Value = $"{package.ProcessingTime:F0}";
         processingTimeItem.Description = $"耗时 {package.ProcessingTime:F0} 毫秒";
     }
 
     private void UpdateStatistics()
     {
-        var totalItem = StatisticsItems.FirstOrDefault(x => x.Label == "总包裹数");
+        var totalItem = StatisticsItems.FirstOrDefault(static x => x.Label == "总包裹数");
         if (totalItem != null)
         {
             totalItem.Value = PackageHistory.Count.ToString();
             totalItem.Description = $"累计处理 {PackageHistory.Count} 个包裹";
         }
 
-        var errorItem = StatisticsItems.FirstOrDefault(x => x.Label == "异常数");
+        var errorItem = StatisticsItems.FirstOrDefault(static x => x.Label == "异常数");
         if (errorItem != null)
         {
-            var errorCount = PackageHistory.Count(p => !string.IsNullOrEmpty(p.ErrorMessage));
+            var errorCount = PackageHistory.Count(static p => !string.IsNullOrEmpty(p.ErrorMessage));
             errorItem.Value = errorCount.ToString();
             errorItem.Description = $"共有 {errorCount} 个异常包裹";
         }
 
-        var efficiencyItem = StatisticsItems.FirstOrDefault(x => x.Label == "预测效率");
+        var efficiencyItem = StatisticsItems.FirstOrDefault(static x => x.Label == "预测效率");
         if (efficiencyItem != null)
         {
             var hourAgo = DateTime.Now.AddHours(-1);
@@ -541,13 +545,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
             efficiencyItem.Description = $"最近一小时处理 {hourlyCount} 个";
         }
 
-        var avgTimeItem = StatisticsItems.FirstOrDefault(x => x.Label == "平均处理时间");
+        var avgTimeItem = StatisticsItems.FirstOrDefault(static x => x.Label == "平均处理时间");
         if (avgTimeItem == null) return;
+
         {
             var recentPackages = PackageHistory.Take(100).ToList();
             if (recentPackages.Count != 0)
             {
-                var avgTime = recentPackages.Average(p => p.ProcessingTime);
+                var avgTime = recentPackages.Average(static p => p.ProcessingTime);
                 avgTimeItem.Value = avgTime.ToString("F0");
                 avgTimeItem.Description = $"最近{recentPackages.Count}个包裹平均耗时";
             }

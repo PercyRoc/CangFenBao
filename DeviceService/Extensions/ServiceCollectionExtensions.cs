@@ -23,7 +23,7 @@ public static class ContainerRegistryExtensions
         containerRegistry.RegisterSingleton<CameraStartupService>();
 
         // 注册相机服务（从启动服务获取实例）
-        containerRegistry.RegisterSingleton<ICameraService>(sp =>
+        containerRegistry.RegisterSingleton<ICameraService>(static sp =>
             sp.Resolve<CameraStartupService>().GetCameraService());
 
         return containerRegistry;
@@ -37,7 +37,7 @@ public static class ContainerRegistryExtensions
         // 注册体积相机启动服务
         containerRegistry.RegisterSingleton<VolumeCameraStartupService>();
 
-        containerRegistry.RegisterSingleton<RenJiaCameraService>(sp =>
+        containerRegistry.RegisterSingleton<RenJiaCameraService>(static sp =>
             sp.Resolve<VolumeCameraStartupService>().GetCameraService());
 
         return containerRegistry;
@@ -51,7 +51,7 @@ public static class ContainerRegistryExtensions
         // 注册扫码枪启动服务
         containerRegistry.RegisterSingleton<ScannerStartupService>();
 
-        containerRegistry.RegisterSingleton<IScannerService>(sp =>
+        containerRegistry.RegisterSingleton<IScannerService>(static sp =>
             sp.Resolve<ScannerStartupService>().GetScannerService());
 
         return containerRegistry;
@@ -65,7 +65,7 @@ public static class ContainerRegistryExtensions
         // 注册重量称启动服务
         containerRegistry.RegisterSingleton<WeightStartupService>();
 
-        containerRegistry.RegisterSingleton<SerialPortWeightService>(sp =>
+        containerRegistry.RegisterSingleton<SerialPortWeightService>(static sp =>
             sp.Resolve<WeightStartupService>().GetWeightService());
     }
 }

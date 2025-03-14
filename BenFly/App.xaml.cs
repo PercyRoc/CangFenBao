@@ -7,14 +7,15 @@ using DeviceService.Extensions;
 using FuzhouPolicyForce.Views.Settings;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Presentation_BenFly.Services;
-using Presentation_BenFly.Services.Belt;
-using Presentation_BenFly.ViewModels.Dialogs;
-using Presentation_BenFly.ViewModels.Settings;
-using Presentation_BenFly.ViewModels.Windows;
-using Presentation_BenFly.Views.Dialogs;
-using Presentation_BenFly.Views.Settings;
-using Presentation_BenFly.Views.Windows;
+using BenFly.Services;
+using BenFly.Services.Belt;
+using BenFly.ViewModels.Dialogs;
+using BenFly.ViewModels.Settings;
+using BenFly.ViewModels.Windows;
+using BenFly.Views.Dialogs;
+using BenFly.Views.Settings;
+using BenFly.Views.Windows;
+using Common.Models.Settings.Sort.PendulumSort;
 using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
@@ -22,14 +23,13 @@ using SharedUI.ViewModels.Settings;
 using SharedUI.Views.Settings;
 using SortingServices.Pendulum;
 using SortingServices.Pendulum.Extensions;
-using SortingServices.Pendulum.Models;
 
-namespace Presentation_BenFly;
+namespace BenFly;
 
 /// <summary>
 ///     Interaction logic for App.xaml
 /// </summary>
-public partial class App
+internal partial class App
 {
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {

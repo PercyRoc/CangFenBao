@@ -1,7 +1,7 @@
 using Common.Services.Settings;
 using Prism.Mvvm;
 
-namespace Presentation_Modules.Models;
+namespace Modules.Models;
 
 [Configuration("ModuleConfig")]
 public class ModuleConfig : BindableBase

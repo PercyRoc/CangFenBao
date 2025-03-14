@@ -2,12 +2,10 @@ using System.ComponentModel;
 using Common.Services.Settings;
 using Prism.Mvvm;
 
-namespace Presentation_BenFly.Models.Upload;
+namespace BenFly.Models.Upload;
 
 public enum BenNiaoEnvironment
 {
-    [Description("测试环境")] Test,
-
     [Description("生产环境")] Production
 }
 

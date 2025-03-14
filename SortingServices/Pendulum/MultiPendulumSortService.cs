@@ -1,16 +1,16 @@
 using System.Collections.Concurrent;
 using System.Text;
+using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
 using Serilog;
 using SortingServices.Common;
-using SortingServices.Pendulum.Models;
 
 namespace SortingServices.Pendulum;
 
 /// <summary>
 ///     多光电多摆轮分拣服务实现
 /// </summary>
-public class MultiPendulumSortService(ISettingsService settingsService) : BasePendulumSortService(settingsService)
+internal class MultiPendulumSortService(ISettingsService settingsService) : BasePendulumSortService(settingsService)
 {
     private readonly ConcurrentDictionary<string, TcpClientService> _sortingClients = new();
 
@@ -66,9 +66,9 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
         return Task.CompletedTask;
     }
 
-    public override async Task StartAsync()
+    public override Task StartAsync()
     {
-        if (IsRunningFlag) return;
+        if (IsRunningFlag) return Task.CompletedTask;
 
         // 启动超时检查定时器
         TimeoutCheckTimer.Start();
@@ -86,6 +86,7 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
                 foreach (var client in _sortingClients)
                 {
                     if (!client.Value.IsConnected()) continue;
+
                     var startCommand = GetCommandBytes(PendulumCommands.Module2.Start);
                     client.Value.Send(startCommand);
                     var resetLeftCommand = GetCommandBytes(PendulumCommands.Module2.ResetLeft);
@@ -105,9 +106,8 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
                         await ReconnectAsync();
                     }
 
-                    foreach (var client in _sortingClients)
+                    foreach (var client in _sortingClients.Where(static client => !client.Value.IsConnected()))
                     {
-                        if (client.Value.IsConnected()) continue;
                         Log.Warning("分拣光电 {Name} 连接断开，尝试重连", client.Key);
                         await ReconnectAsync();
                     }
@@ -129,7 +129,7 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
             }
         }, CancellationTokenSource.Token);
 
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
     public override async Task StopAsync()
@@ -146,9 +146,8 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
             TimeoutCheckTimer.Stop();
 
             // 向所有分拣光电发送回正命令和停止命令
-            foreach (var client in _sortingClients)
+            foreach (var client in _sortingClients.Where(static client => client.Value.IsConnected()))
             {
-                if (!client.Value.IsConnected()) continue;
                 try
                 {
                     // 发送左右回正指令
@@ -260,8 +259,8 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
                     // 打印当前待分拣队列状态
                     var pendingPackages = PendingSortPackages.Values
                         .Where(p => !IsPackageProcessing(p.Barcode))
-                        .OrderBy(p => p.TriggerTimestamp)
-                        .ThenBy(p => p.Index)
+                        .OrderBy(static p => p.TriggerTimestamp)
+                        .ThenBy(static p => p.Index)
                         .ToList();
 
                     if (pendingPackages.Count != 0)
@@ -279,6 +278,7 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
             }
 
             if (!message.Contains("OCCH1:0")) return;
+
             {
                 Log.Information("分拣光电 {Name} 收到下降沿信号，准备执行分拣动作", photoelectricName);
                 // 检查是否有匹配到的包裹
@@ -334,6 +334,7 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
             foreach (var photoelectric in Configuration.SortingPhotoelectrics)
             {
                 if (!_sortingClients.TryGetValue(photoelectric.Name, out var client) || client.IsConnected()) continue;
+
                 client.Dispose();
                 var newClient = new TcpClientService(
                     photoelectric.Name,
@@ -347,6 +348,7 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
 
                 // 如果服务正在运行，发送启动命令和回正命令
                 if (!IsRunningFlag) continue;
+
                 var startCommand = GetCommandBytes(PendulumCommands.Module2.Start);
                 newClient.Send(startCommand);
                 var resetLeftCommand = GetCommandBytes(PendulumCommands.Module2.ResetLeft);
@@ -388,17 +390,22 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
 
     protected override void CheckSortingPhotoelectricChanges(PendulumSortConfig oldConfig, PendulumSortConfig newConfig)
     {
-        // 检查每个分拣光电的连接参数是否变化
-        foreach (var newPhotoelectric in newConfig.SortingPhotoelectrics)
+        // 检查是否有分拣光电的连接参数发生变化
+        var hasChanges = newConfig.SortingPhotoelectrics.Any(newPhotoelectric =>
         {
             var oldPhotoelectric = oldConfig.SortingPhotoelectrics.FirstOrDefault(p => p.Name == newPhotoelectric.Name);
-            if (oldPhotoelectric == null) continue;
+            if (oldPhotoelectric == null) return false;
 
             if (oldPhotoelectric.IpAddress == newPhotoelectric.IpAddress &&
-                oldPhotoelectric.Port == newPhotoelectric.Port) continue;
+                oldPhotoelectric.Port == newPhotoelectric.Port) return false;
+
             Log.Information("分拣光电 {Name} 连接参数已变更，准备重新连接", newPhotoelectric.Name);
+            return true;
+        });
+
+        if (hasChanges)
+        {
             _ = ReconnectAsync();
-            break; // 发现一个变化就重连所有设备
         }
     }
 

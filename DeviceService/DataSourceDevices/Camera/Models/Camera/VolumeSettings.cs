@@ -9,11 +9,6 @@ namespace DeviceService.DataSourceDevices.Camera.Models.Camera;
 public class VolumeSettings : CameraSettings
 {
     /// <summary>
-    ///     已选择的相机
-    /// </summary>
-    public DeviceCameraInfo? SelectedCamera { get; set; }
-
-    /// <summary>
     ///     超时时间（毫秒）
     /// </summary>
     public int TimeoutMs { get; set; } = 5000;

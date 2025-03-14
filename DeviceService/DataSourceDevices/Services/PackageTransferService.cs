@@ -39,7 +39,7 @@ public class PackageTransferService : IDisposable
     ///     包裹信息流
     /// </summary>
     public IObservable<PackageInfo> PackageStream => _cameraService.PackageStream
-        .Where(package => !string.IsNullOrWhiteSpace(package.Barcode))
+        .Where(static package => !string.IsNullOrWhiteSpace(package.Barcode))
         .Where(package => !_cameraSettings.BarcodeRepeatFilterEnabled || IsValidBarcode(package.Barcode))
         .Do(package =>
         {
@@ -136,6 +136,7 @@ public class PackageTransferService : IDisposable
 
         // 如果超过时间窗口，重置计数
         if (!(timeSinceLastProcess.TotalMilliseconds > timeWindowMs)) return record.Count < maxRepeatCount;
+
         _processedBarcodes.TryRemove(barcode, out _);
         return true;
     }
@@ -165,7 +166,7 @@ public class PackageTransferService : IDisposable
         var timeWindowMs = _cameraSettings.RepeatTimeMs;
         var expiredBarcodes = _processedBarcodes
             .Where(kvp => (now - kvp.Value.Time).TotalMilliseconds > timeWindowMs)
-            .Select(kvp => kvp.Key)
+            .Select(static kvp => kvp.Key)
             .ToList();
 
         foreach (var barcode in expiredBarcodes) _processedBarcodes.TryRemove(barcode, out _);

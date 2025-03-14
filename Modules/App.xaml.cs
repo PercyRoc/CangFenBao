@@ -4,23 +4,22 @@ using Common.Extensions;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
+using Modules.Services;
 using Modules.ViewModels;
+using Modules.ViewModels.Settings;
 using Modules.Views;
-using Presentation_Modules.Services;
-using Presentation_Modules.ViewModels;
-using Presentation_Modules.ViewModels.Settings;
-using Presentation_Modules.Views;
-using Presentation_Modules.Views.Settings;
+using Modules.Views.Settings;
 using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
+using LockingService = Modules.Services.LockingService;
 
-namespace Presentation_Modules;
+namespace Modules;
 
 /// <summary>
 ///     Interaction logic for App.xaml
 /// </summary>
-public partial class App
+internal partial class App
 {
     /// <summary>
     ///     创建主窗口

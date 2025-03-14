@@ -1,7 +1,7 @@
 using System.Net.Sockets;
-using Presentation_PlateTurnoverMachine.Models;
+using PlateTurnoverMachine.Models;
 
-namespace Presentation_PlateTurnoverMachine.Services;
+namespace PlateTurnoverMachine.Services;
 
 /// <summary>
 ///     TCP连接服务接口

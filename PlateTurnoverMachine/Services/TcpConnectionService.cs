@@ -1,14 +1,14 @@
 using System.IO;
 using System.Net.Sockets;
-using Presentation_PlateTurnoverMachine.Models;
+using PlateTurnoverMachine.Models;
 using Serilog;
 
-namespace Presentation_PlateTurnoverMachine.Services;
+namespace PlateTurnoverMachine.Services;
 
 /// <summary>
 ///     TCP连接服务实现
 /// </summary>
-public class TcpConnectionService : ITcpConnectionService
+internal class TcpConnectionService : ITcpConnectionService
 {
     private readonly SemaphoreSlim _receiveLock = new(1, 1);
     private readonly SemaphoreSlim _sendLock = new(1, 1);
@@ -39,6 +39,7 @@ public class TcpConnectionService : ITcpConnectionService
         private set
         {
             if (_triggerPhotoelectricClient == value) return;
+
             _triggerPhotoelectricClient = value;
             TriggerPhotoelectricConnectionChanged?.Invoke(this, value?.Connected ?? false);
         }
@@ -141,12 +142,12 @@ public class TcpConnectionService : ITcpConnectionService
     /// </summary>
     /// <param name="config">TCP模块配置</param>
     /// <param name="data">要发送的数据</param>
-    public async Task SendToTcpModuleAsync(TcpConnectionConfig config, byte[] data)
+    public Task SendToTcpModuleAsync(TcpConnectionConfig config, byte[] data)
     {
         if (!_tcpModuleClients.TryGetValue(config, out var client) || !client.Connected)
             throw new InvalidOperationException($"TCP模块未连接: {config.IpAddress}");
 
-        await SendDataAsync(client, data);
+        return SendDataAsync(client, data);
     }
 
     /// <inheritdoc />
@@ -161,11 +162,11 @@ public class TcpConnectionService : ITcpConnectionService
     /// </summary>
     /// <returns>接收到的数据</returns>
     /// <exception cref="InvalidOperationException">触发光电未连接时抛出此异常</exception>
-    public async Task<byte[]> ReceiveFromTriggerPhotoelectricAsync()
+    private Task<byte[]> ReceiveFromTriggerPhotoelectricAsync()
     {
         if (TriggerPhotoelectricClient is not { Connected: true }) throw new InvalidOperationException("触发光电未连接");
 
-        return await ReceiveDataAsync(TriggerPhotoelectricClient);
+        return ReceiveDataAsync(TriggerPhotoelectricClient);
     }
 
     /// <summary>
@@ -174,12 +175,12 @@ public class TcpConnectionService : ITcpConnectionService
     /// <param name="config">TCP模块配置</param>
     /// <returns>接收到的数据</returns>
     /// <exception cref="InvalidOperationException">TCP模块未连接时抛出此异常</exception>
-    public async Task<byte[]> ReceiveFromTcpModuleAsync(TcpConnectionConfig config)
+    public Task<byte[]> ReceiveFromTcpModuleAsync(TcpConnectionConfig config)
     {
         if (!_tcpModuleClients.TryGetValue(config, out var client) || !client.Connected)
             throw new InvalidOperationException($"TCP模块未连接: {config.IpAddress}");
 
-        return await ReceiveDataAsync(client);
+        return ReceiveDataAsync(client);
     }
 
     /// <summary>
@@ -187,7 +188,7 @@ public class TcpConnectionService : ITcpConnectionService
     /// </summary>
     /// <param name="cancellationToken">取消令牌</param>
     /// <exception cref="InvalidOperationException">触发光电未连接时抛出此异常</exception>
-    public async Task StartListeningTriggerPhotoelectricAsync(CancellationToken cancellationToken)
+    private Task StartListeningTriggerPhotoelectricAsync(CancellationToken cancellationToken)
     {
         if (TriggerPhotoelectricClient is not { Connected: true }) throw new InvalidOperationException("触发光电未连接");
 
@@ -237,13 +238,13 @@ public class TcpConnectionService : ITcpConnectionService
             }
         }, _listeningCts.Token);
 
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
     /// <summary>
     ///     停止监听触发光电数据
     /// </summary>
-    public void StopListeningTriggerPhotoelectric()
+    private void StopListeningTriggerPhotoelectric()
     {
         try
         {
@@ -407,6 +408,7 @@ public class TcpConnectionService : ITcpConnectionService
 
                 // 读取剩余数据
                 if (client.Available <= 0) return [buffer[0]];
+
                 var remainingBuffer = new byte[client.Available];
                 var totalBytesRead = 0;
 
@@ -417,6 +419,7 @@ public class TcpConnectionService : ITcpConnectionService
                     if (read == 0)
                         // 连接已关闭
                         throw new IOException("连接已关闭，无法读取完整数据");
+
                     totalBytesRead += read;
                 }
 
@@ -436,6 +439,7 @@ public class TcpConnectionService : ITcpConnectionService
                     if (read == 0)
                         // 连接已关闭
                         throw new IOException("连接已关闭，无法读取完整数据");
+
                     totalBytesRead += read;
                 }
 

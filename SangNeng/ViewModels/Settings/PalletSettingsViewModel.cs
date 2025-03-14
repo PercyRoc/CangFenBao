@@ -1,9 +1,9 @@
 using System.Collections.ObjectModel;
 using Common.Services.Settings;
-using Presentation_SangNeng.Events;
 using Prism.Commands;
 using Prism.Events;
 using Prism.Mvvm;
+using SangNeng.Events;
 
 namespace Presentation_SangNeng.ViewModels.Settings;
 

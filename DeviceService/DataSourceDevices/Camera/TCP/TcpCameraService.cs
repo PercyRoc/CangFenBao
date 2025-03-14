@@ -14,7 +14,7 @@ namespace DeviceService.DataSourceDevices.Camera.TCP;
 /// <summary>
 ///     TCP相机服务实现
 /// </summary>
-public class TcpCameraService(string host = "127.0.0.1", int port = 2000) : ICameraService
+internal class TcpCameraService(string host = "127.0.0.1", int port = 2000) : ICameraService
 {
     private const int ReconnectInterval = 5000; // 重连间隔5秒
     private const int MinProcessInterval = 1000; // 最小处理间隔（毫秒）
@@ -139,12 +139,6 @@ public class TcpCameraService(string host = "127.0.0.1", int port = 2000) : ICam
     {
     }
 
-    public bool ExecuteSoftTrigger()
-    {
-        // TCP相机不支持软触发
-        return false;
-    }
-
     private async Task MaintenanceConnectionAsync()
     {
         while (!_cancellationTokenSource.Token.IsCancellationRequested)
@@ -160,11 +154,10 @@ public class TcpCameraService(string host = "127.0.0.1", int port = 2000) : ICam
                 Log.Error(ex, "连接或接收数据时发生错误");
             }
 
-            if (!_cancellationTokenSource.Token.IsCancellationRequested)
-            {
-                Log.Information("等待 {Interval} 毫秒后尝试重连...", ReconnectInterval);
-                await Task.Delay(ReconnectInterval, _cancellationTokenSource.Token);
-            }
+            if (_cancellationTokenSource.Token.IsCancellationRequested) continue;
+
+            Log.Information("等待 {Interval} 毫秒后尝试重连...", ReconnectInterval);
+            await Task.Delay(ReconnectInterval, _cancellationTokenSource.Token);
         }
     }
 
@@ -189,7 +182,7 @@ public class TcpCameraService(string host = "127.0.0.1", int port = 2000) : ICam
             IsConnected = false;
             _client?.Dispose();
             _client = null;
-            _stream?.Dispose();
+            _stream?.DisposeAsync();
             _stream = null;
             throw;
         }
@@ -296,7 +289,7 @@ public class TcpCameraService(string host = "127.0.0.1", int port = 2000) : ICam
     /// <summary>
     ///     从数据流中提取完整的数据包
     /// </summary>
-    private (List<string> Packets, string RemainingData) ExtractDataPackets(string data)
+    private static (List<string> Packets, string RemainingData) ExtractDataPackets(string data)
     {
         var result = new List<string>();
         var remainingData = string.Empty;
@@ -331,7 +324,10 @@ public class TcpCameraService(string host = "127.0.0.1", int port = 2000) : ICam
             result.AddRange(completePackets);
 
             // 如果有剩余的字段，保存为未处理的数据
-            if (fieldCount > 0) remainingData = string.Join(",", currentPacket);
+            if (fieldCount > 0)
+            {
+                remainingData = string.Join(",", currentPacket);
+            }
         }
         else
         {
@@ -358,7 +354,7 @@ public class TcpCameraService(string host = "127.0.0.1", int port = 2000) : ICam
             DateTime timestamp;
             if (long.TryParse(parts[6], out var unixTimestamp))
             {
-                timestamp = DateTimeOffset.FromUnixTimeSeconds(unixTimestamp).LocalDateTime;
+                timestamp = DateTimeOffset.FromUnixTimeMilliseconds(unixTimestamp).LocalDateTime;
             }
             else
             {
@@ -375,19 +371,34 @@ public class TcpCameraService(string host = "127.0.0.1", int port = 2000) : ICam
             };
 
             // 解析重量
-            if (float.TryParse(parts[1], out var weight)) package.Weight = weight;
+            if (float.TryParse(parts[1], out var weight))
+            {
+                package.Weight = weight;
+            }
 
             // 解析长度
-            if (double.TryParse(parts[2], out var length)) package.Length = length;
+            if (double.TryParse(parts[2], out var length))
+            {
+                package.Length = length;
+            }
 
             // 解析宽度
-            if (double.TryParse(parts[3], out var width)) package.Width = width;
+            if (double.TryParse(parts[3], out var width))
+            {
+                package.Width = width;
+            }
 
             // 解析高度
-            if (double.TryParse(parts[4], out var height)) package.Height = height;
+            if (double.TryParse(parts[4], out var height))
+            {
+                package.Height = height;
+            }
 
             // 解析体积
-            if (double.TryParse(parts[5], out var volume)) package.Volume = volume;
+            if (double.TryParse(parts[5], out var volume))
+            {
+                package.Volume = volume;
+            }
 
             package.SetTriggerTimestamp(timestamp);
             _packageSubject.OnNext(package);

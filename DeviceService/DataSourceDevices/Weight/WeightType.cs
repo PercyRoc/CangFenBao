@@ -1,6 +1,6 @@
 using System.ComponentModel;
 
-namespace Common.Models.Settings.Weight;
+namespace DeviceService.DataSourceDevices.Weight;
 
 /// <summary>
 ///     Weight Type

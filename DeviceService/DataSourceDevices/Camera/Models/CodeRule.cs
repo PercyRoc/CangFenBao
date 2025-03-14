@@ -2,56 +2,55 @@ using System.Text.RegularExpressions;
 
 namespace DeviceService.DataSourceDevices.Camera.Models;
 
-public class CodeRuleUI
+internal class CodeRuleUi
 {
-    public bool blength { get; set; }
-    public bool bstartwith { get; set; }
-    public bool bendwith { get; set; }
-    public bool binclude { get; set; }
-    public bool bexclude { get; set; }
-    public bool bother { get; set; }
-    public bool buserdefine { get; set; }
-    public int minLen { get; set; }
-    public int maxLen { get; set; }
-    public string startwith { get; set; } = string.Empty;
-    public string endwith { get; set; } = string.Empty;
-    public string include { get; set; } = string.Empty;
-    public int include_start { get; set; }
-    public int include_end { get; set; }
-    public string exclude { get; set; } = string.Empty;
-    public int exclude_start { get; set; }
-    public int exclude_end { get; set; }
-    public int other { get; set; }
+    public bool Blength { get; set; }
+    public bool Bstartwith { get; set; }
+    public bool Bendwith { get; set; }
+    public bool Binclude { get; set; }
+    public bool Bexclude { get; set; }
+    public bool Bother { get; set; }
+    public bool Buserdefine { get; set; }
+    public int MinLen { get; set; }
+    public int MaxLen { get; set; }
+    public string Startwith { get; set; } = string.Empty;
+    public string Endwith { get; set; } = string.Empty;
+    public string Include { get; set; } = string.Empty;
+    public int IncludeStart { get; set; }
+    public int IncludeEnd { get; set; }
+    public string Exclude { get; set; } = string.Empty;
+    public int ExcludeStart { get; set; }
+    public int ExcludeEnd { get; set; }
+    public int Other { get; set; }
 }
 
-public class CodeRule
+internal class CodeRule
 {
     private Regex? _compiledRegex;
-    public string name { get; set; } = string.Empty;
-    public string regex { get; set; } = string.Empty;
-    public bool userDefine { get; set; }
-    public CodeRuleUI ui { get; set; } = new();
-    public bool enable { get; set; }
+    public string Name { get; set; } = string.Empty;
+    internal string Regex { get; set; } = string.Empty;
+    public bool UserDefine { get; set; }
+    public CodeRuleUi Ui { get; set; } = new();
+    internal bool Enable { get; set; }
 
-    public bool IsMatch(string barcode)
+    internal bool IsMatch(string barcode)
     {
-        if (!enable) return false;
+        if (!Enable) return false;
 
-        _compiledRegex ??= new Regex(regex, RegexOptions.Compiled);
+        _compiledRegex ??= new Regex(Regex, RegexOptions.Compiled);
         return _compiledRegex.IsMatch(barcode);
     }
 }
 
 public class CodeRules
 {
-    public List<CodeRule> coderules { get; set; } = new();
+    internal List<CodeRule> Coderules { get; set; } = [];
 
-    public bool IsValidBarcode(string barcode)
+    internal bool IsValidBarcode(string barcode)
     {
         // 如果没有启用的规则，则认为所有条码都有效
-        if (!coderules.Any(r => r.enable)) return true;
-
-        // 只要符合任一启用的规则即为有效
-        return coderules.Any(rule => rule.enable && rule.IsMatch(barcode));
+        return !Coderules.Any(static r => r.Enable) ||
+               // 只要符合任一启用的规则即为有效
+               Coderules.Any(rule => rule.Enable && rule.IsMatch(barcode));
     }
 }

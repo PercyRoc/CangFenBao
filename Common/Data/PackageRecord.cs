@@ -91,7 +91,7 @@ public class PackageRecord
     /// <summary>
     ///     从包裹信息创建记录
     /// </summary>
-    public static PackageRecord FromPackageInfo(PackageInfo info)
+    internal static PackageRecord FromPackageInfo(PackageInfo info)
     {
         return new PackageRecord
         {

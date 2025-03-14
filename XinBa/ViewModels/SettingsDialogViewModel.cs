@@ -1,12 +1,12 @@
 ﻿using Common.Services.Ui;
-using Presentation_XinBa.ViewModels.Settings;
 using Prism.Commands;
 using Prism.Ioc;
 using Prism.Mvvm;
 using Prism.Services.Dialogs;
 using Serilog;
+using XinBa.ViewModels.Settings;
 
-namespace Presentation_XinBa.ViewModels;
+namespace XinBa.ViewModels;
 
 public class SettingsDialogViewModel : BindableBase, IDialogAware
 {

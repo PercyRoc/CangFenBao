@@ -6,25 +6,23 @@ using System.Text.Json;
 using Common.Models.Package;
 using Common.Services.Settings;
 using Common.Services.Ui;
-using Presentation_KuaiLv.Models.DWS;
-using Presentation_KuaiLv.Models.Settings.Upload;
-using Presentation_KuaiLv.Services.Warning;
+using KuaiLv.Models.DWS;
+using KuaiLv.Models.Settings.Upload;
+using KuaiLv.Services.Warning;
 using Serilog;
 
-namespace Presentation_KuaiLv.Services.DWS;
+namespace KuaiLv.Services.DWS;
 
 /// <summary>
 ///     DWS服务实现
 /// </summary>
-public class DwsService : IDwsService, IDisposable
+internal class DwsService : IDwsService, IDisposable
 {
-    private const int MaxFailureCount = 5;
     private readonly HttpClient _httpClient;
     private readonly Timer _networkCheckTimer;
     private readonly INotificationService _notificationService;
     private readonly Timer _offlinePackageRetryTimer;
     private readonly OfflinePackageService _offlinePackageService;
-    private readonly ISettingsService _settingsService;
     private readonly IWarningLightService _warningLightService;
     private UploadConfiguration _currentConfig;
     private bool _disposed;
@@ -38,16 +36,15 @@ public class DwsService : IDwsService, IDisposable
         OfflinePackageService offlinePackageService)
     {
         _httpClient = httpClient;
-        _settingsService = settingsService;
         _notificationService = notificationService;
         _warningLightService = warningLightService;
         _offlinePackageService = offlinePackageService;
 
         // 从设置服务加载配置
-        _currentConfig = _settingsService.LoadSettings<UploadConfiguration>();
+        _currentConfig = settingsService.LoadSettings<UploadConfiguration>();
 
         // 订阅配置变更事件
-        _settingsService.OnSettingsChanged<UploadConfiguration>(OnConfigurationChanged);
+        settingsService.OnSettingsChanged<UploadConfiguration>(OnConfigurationChanged);
 
         // 初始化网络检测定时器（每30秒检查一次）
         _networkCheckTimer = new Timer(CheckNetworkStatus, null, TimeSpan.Zero, TimeSpan.FromSeconds(30));
@@ -84,13 +81,13 @@ public class DwsService : IDwsService, IDisposable
             // 构建请求数据
             var request = new DwsRequest
             {
-                barCode = string.IsNullOrEmpty(package.Barcode) ? "noread" : package.Barcode,
-                weight = Math.Round(package.Weight, 2),
-                length = package.Length ?? 0,
-                width = package.Width ?? 0,
-                height = package.Height ?? 0,
-                volume = package.Volume ?? 0,
-                timestamp = package.CreateTime.ToString("yyyy-MM-dd HH:mm:ss")
+                BarCode = string.IsNullOrEmpty(package.Barcode) ? "noread" : package.Barcode,
+                Weight = Math.Round(package.Weight, 2),
+                Length = package.Length ?? 0,
+                Width = package.Width ?? 0,
+                Height = package.Height ?? 0,
+                Volume = package.Volume ?? 0,
+                Timestamp = package.CreateTime.ToString("yyyy-MM-dd HH:mm:ss")
             };
 
             // 序列化请求数据
@@ -104,7 +101,7 @@ public class DwsService : IDwsService, IDisposable
             // 构建签名字符串 - 确保路径一致
             var timestamp = DateTimeOffset.Now.ToUnixTimeMilliseconds().ToString();
             // 统一使用相同的API路径
-            var path = "/haina/parcel/dws/w/bindWeight";
+            const string path = "/haina/parcel/dws/w/bindWeight";
             var stringToSign = $"POST\n{contentMd5}\n{path}";
 
             // 计算签名
@@ -326,6 +323,7 @@ public class DwsService : IDwsService, IDisposable
                 {
                     var result = await ReportPackageAsync(package);
                     if (result.Code != 200) continue;
+
                     await _offlinePackageService.DeleteOfflinePackageAsync(package.Barcode);
                     Log.Information("离线包裹上传成功：{Barcode}", package.Barcode);
                 }

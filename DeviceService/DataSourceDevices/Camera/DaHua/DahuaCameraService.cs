@@ -32,7 +32,7 @@ public class DahuaCameraService : ICameraService
     /// <summary>
     ///     构造函数
     /// </summary>
-    public DahuaCameraService()
+    internal DahuaCameraService()
     {
         _logisticsWrapper = LogisticsWrapper.Instance;
     }
@@ -84,7 +84,7 @@ public class DahuaCameraService : ICameraService
             // 注册读码信息回调
             try
             {
-                _logisticsWrapper.AllCameraCodeInfoEventHandler += (_, _) => { };
+                _logisticsWrapper.AllCameraCodeInfoEventHandler += static (_, _) => { };
                 _logisticsWrapper.AttachAllCameraCodeinfoCB();
                 Log.Information("已注册读码信息回调");
             }
@@ -131,7 +131,10 @@ public class DahuaCameraService : ICameraService
                         };
 
                         // 设置重量和尺寸数据
-                        if (args.Weight > 0) packageInfo.Weight = (float)(args.Weight / 1000.0);
+                        if (args.Weight > 0)
+                        {
+                            packageInfo.Weight = (float)(args.Weight / 1000.0);
+                        }
 
                         if (args.VolumeInfo is { length: > 0, width: > 0, height: > 0 })
                         {
@@ -156,7 +159,7 @@ public class DahuaCameraService : ICameraService
                                 imageData,
                                 args.OriginalImage.width,
                                 args.OriginalImage.height,
-                                args.AreaList?.Select(points => points.Select(p => new Point(p.X, p.Y)).ToList())
+                                args.AreaList?.Select(static points => points.Select(static p => new Point(p.X, p.Y)).ToList())
                                     .ToList(),
                                 (LogisticsAPIStruct.EImageType)args.OriginalImage.type
                             );
@@ -168,8 +171,8 @@ public class DahuaCameraService : ICameraService
                             if (args.CameraID == _firstCameraId)
                             {
                                 var locations = args.AreaList?
-                                    .Select(points =>
-                                        new BarcodeLocation(points.Select(p => new Point(p.X, p.Y)).ToList()))
+                                    .Select(static points =>
+                                        new BarcodeLocation())
                                     .ToList() ?? [];
                                 _imageSubject.OnNext((image, locations));
                             }
@@ -266,7 +269,7 @@ public class DahuaCameraService : ICameraService
         {
             var cameraInfos = _logisticsWrapper.GetWorkCameraInfo();
 
-            return cameraInfos?.Select(info => new DeviceCameraInfo
+            return cameraInfos?.Select(static info => new DeviceCameraInfo
             {
                 SerialNumber = info.camDevSerialNumber,
                 Model = info.camDevModelName,
@@ -300,6 +303,7 @@ public class DahuaCameraService : ICameraService
     public void Dispose()
     {
         if (_disposed) return;
+
         _imageProcessingSemaphore.Dispose();
         _packageSubject.Dispose();
         _imageSubject.Dispose();
@@ -364,7 +368,7 @@ public class DahuaCameraService : ICameraService
         byte[] imageData,
         int width,
         int height,
-        List<List<Point>>? barcodeLocations,
+        IEnumerable<List<Point>>? barcodeLocations,
         LogisticsAPIStruct.EImageType imageType)
     {
         try
@@ -463,7 +467,7 @@ public class DahuaCameraService : ICameraService
             }
 
             var locations = barcodeLocations?
-                .Select(points => new BarcodeLocation(points))
+                .Select(static points => new BarcodeLocation())
                 .ToList() ?? [];
 
             return (image, locations);
@@ -509,7 +513,7 @@ public class DahuaCameraService : ICameraService
                             imageData,
                             args.OriginalImage.width,
                             args.OriginalImage.height,
-                            args.AreaList?.Select(points => points.Select(p => new Point(p.X, p.Y)).ToList()).ToList(),
+                            args.AreaList?.Select(static points => points.Select(static p => new Point(p.X, p.Y)).ToList()).ToList(),
                             (LogisticsAPIStruct.EImageType)args.OriginalImage.type
                         );
                         _imageSubject.OnNext((image, barcodeLocations));

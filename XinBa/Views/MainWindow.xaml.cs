@@ -2,21 +2,21 @@
 using System.Windows;
 using System.Windows.Input;
 using Common.Services.Ui;
-using Presentation_XinBa.Services;
 using Prism.Ioc;
 using Serilog;
+using XinBa.Services;
 
-namespace Presentation_XinBa.Views;
+namespace XinBa.Views;
 
 /// <summary>
 ///     Interaction logic for MainWindow.xaml
 /// </summary>
-public partial class MainWindow
+internal partial class MainWindow
 {
     private readonly IDialogService _dialogService;
     private bool _isClosing;
 
-    public MainWindow(IDialogService dialogService, INotificationService notificationService)
+    internal MainWindow(IDialogService dialogService, INotificationService notificationService)
     {
         _dialogService = dialogService;
         InitializeComponent();
@@ -44,33 +44,33 @@ public partial class MainWindow
     /// <summary>
     ///     窗口关闭事件
     /// </summary>
-    private async void MetroWindow_Closing(object sender, CancelEventArgs e)
+    private void MetroWindow_Closing(object sender, CancelEventArgs e)
     {
         if (_isClosing) return;
 
         // 取消当前的关闭操作
         e.Cancel = true;
 
-        try
+        _ = Task.Run(async () =>
         {
-            _isClosing = true;
-
-            // 使用已注入的对话框服务
-            var result = await _dialogService.ShowIconConfirmAsync(
-                "Are you sure you want to exit the application?",
-                "Exit Confirmation",
-                MessageBoxImage.Question);
-
-            if (result == MessageBoxResult.Yes)
+            try
             {
-                // 尝试登出当前用户
-                try
+                _isClosing = true;
+
+                // 使用已注入的对话框服务
+                var result = await _dialogService.ShowIconConfirmAsync(
+                    "Are you sure you want to exit the application?",
+                    "Exit Confirmation",
+                    MessageBoxImage.Question);
+
+                if (result == MessageBoxResult.Yes)
                 {
-                    // 获取API服务
-                    var app = Application.Current as App;
-                    if (app?.Container != null)
+                    // 尝试登出当前用户
+                    try
                     {
-                        var apiService = app.Container.Resolve<IApiService>();
+                        // 获取API服务
+                        var app = Application.Current as App;
+                        var apiService = app?.Container?.Resolve<IApiService>();
                         if (apiService != null && apiService.IsLoggedIn())
                         {
                             Log.Information("窗口关闭前尝试登出用户");
@@ -78,30 +78,34 @@ public partial class MainWindow
                             Log.Information("用户已登出");
                         }
                     }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "窗口关闭前登出用户时发生错误");
+                    }
+
+                    // 关闭窗口
+                    _isClosing = false;
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        Close();
+                        Application.Current.Shutdown();
+                    });
                 }
-                catch (Exception ex)
+                else
                 {
-                    Log.Error(ex, "窗口关闭前登出用户时发生错误");
+                    _isClosing = false;
                 }
-
-                // 关闭窗口
-                _isClosing = false;
-                Close();
-
-                // 关闭应用程序
-                Application.Current.Shutdown();
             }
-            else
+            catch (Exception ex)
             {
+                Log.Error(ex, "窗口关闭过程中发生错误");
                 _isClosing = false;
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    Close();
+                    Application.Current.Shutdown();
+                });
             }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "窗口关闭过程中发生错误");
-            _isClosing = false;
-            Close();
-            Application.Current.Shutdown();
-        }
+        });
     }
 }

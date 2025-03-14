@@ -176,7 +176,7 @@ public class TcpClientService : IDisposable
     /// <summary>
     ///     发送数据到设备
     /// </summary>
-    public void Send(byte[] data)
+    internal void Send(byte[] data)
     {
         if (!_isConnected || _stream == null) throw new InvalidOperationException("未连接到设备");
 
@@ -263,17 +263,9 @@ public class TcpClientService : IDisposable
     /// <summary>
     ///     获取连接状态
     /// </summary>
-    public bool IsConnected()
+    internal bool IsConnected()
     {
         return _isConnected;
-    }
-
-    /// <summary>
-    ///     设置是否自动重连
-    /// </summary>
-    public void SetAutoReconnect(bool autoReconnect)
-    {
-        _autoReconnect = autoReconnect;
     }
 
     /// <summary>

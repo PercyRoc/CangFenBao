@@ -1,31 +1,31 @@
 ﻿using System.Net.Http;
 using System.Windows;
 using Common.Extensions;
+using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
 using FuzhouPolicyForce.Views.Settings;
 using Microsoft.Extensions.Hosting;
-using Presentation_ZtCloudWarehous.Services;
-using Presentation_ZtCloudWarehous.ViewModels;
-using Presentation_ZtCloudWarehous.ViewModels.Settings;
-using Presentation_ZtCloudWarehous.Views;
-using Presentation_ZtCloudWarehous.Views.Settings;
 using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 using SharedUI.ViewModels.Settings;
 using SortingServices.Pendulum;
 using SortingServices.Pendulum.Extensions;
-using SortingServices.Pendulum.Models;
+using ZtCloudWarehous.Services;
+using ZtCloudWarehous.ViewModels;
+using ZtCloudWarehous.ViewModels.Settings;
+using ZtCloudWarehous.Views;
+using ZtCloudWarehous.Views.Settings;
 
-namespace Presentation_ZtCloudWarehous;
+namespace ZtCloudWarehous;
 
 /// <summary>
 ///     Interaction logic for App.xaml
 /// </summary>
-public partial class App
+internal partial class App
 {
     /// <summary>
     ///     创建主窗口

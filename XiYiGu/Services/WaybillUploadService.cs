@@ -2,15 +2,15 @@ using System.IO;
 using System.Net.Http;
 using Common.Models.Package;
 using Common.Services.Settings;
-using Presentation_XiYiGu.Models;
-using Presentation_XiYiGu.Models.Settings;
 using Serilog;
 using SixLabors.Fonts;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.PixelFormats;
+using XiYiGu.Models;
+using XiYiGu.Models.Settings;
 
-namespace Presentation_XiYiGu.Services;
+namespace XiYiGu.Services;
 
 /// <summary>
 ///     运单上传服务
@@ -63,7 +63,7 @@ public class WaybillUploadService
     ///     添加包裹到上传队列
     /// </summary>
     /// <param name="package">包裹信息</param>
-    public void EnqueuePackage(PackageInfo package)
+    internal void EnqueuePackage(PackageInfo package)
     {
         if (!_apiSettings.Enabled) return;
 
@@ -73,7 +73,10 @@ public class WaybillUploadService
         }
 
         // 如果没有正在上传，则开始上传
-        if (!_isUploading) _ = ProcessUploadQueueAsync();
+        if (!_isUploading)
+        {
+            _ = ProcessUploadQueueAsync();
+        }
     }
 
     /// <summary>
@@ -218,11 +221,16 @@ public class WaybillUploadService
         var sizeStr = string.Empty;
         if (package is { Length: not null, Width: not null, Height: not null })
             // 修改为长*宽*高格式，单位转换为毫米（原厘米值乘以10）
+        {
             sizeStr = $"{package.Length.Value * 10:F0}*{package.Width.Value * 10:F0}*{package.Height.Value * 10:F0}";
+        }
 
         // 计算体积字符串
         var volumeStr = string.Empty;
-        if (package.Volume.HasValue) volumeStr = $"{package.Volume.Value:F0}";
+        if (package.Volume.HasValue)
+        {
+            volumeStr = $"{package.Volume.Value:F0}";
+        }
 
         return new WaybillRecord
         {
@@ -279,7 +287,9 @@ public class WaybillUploadService
                 // 填充白色背景
                 for (var y = 0; y < image.Height; y++)
                 for (var x = 0; x < image.Width; x++)
+                {
                     image[x, y] = Color.White;
+                }
 
                 // 添加水印文字
                 var font = SystemFonts.CreateFont("Arial", 32);
@@ -294,7 +304,9 @@ public class WaybillUploadService
                 using var textImage = new Image<Rgba32>((int)textSize.Width, (int)textSize.Height);
                 for (var y = 0; y < textImage.Height; y++)
                 for (var x = 0; x < textImage.Width; x++)
+                {
                     textImage[x, y] = Color.Black;
+                }
 
                 // 将文字图片复制到主图片
                 for (var y = 0; y < textImage.Height; y++)
@@ -303,7 +315,9 @@ public class WaybillUploadService
                     var targetX = (int)textX + x;
                     var targetY = (int)textY + y;
                     if (targetX >= 0 && targetX < image.Width && targetY >= 0 && targetY < image.Height)
+                    {
                         image[targetX, targetY] = textImage[x, y];
+                    }
                 }
             }
             catch (Exception ex)
@@ -322,7 +336,7 @@ public class WaybillUploadService
     /// </summary>
     /// <param name="count">测试数量</param>
     /// <returns>上传结果列表</returns>
-    public async Task<List<(string Barcode, ApiResponse InfoResponse, ApiResponse? ImageResponse)>>
+    internal async Task<List<(string Barcode, ApiResponse InfoResponse, ApiResponse? ImageResponse)>>
         TestBatchUploadAsync(int count = 50)
     {
         var results = new List<(string Barcode, ApiResponse InfoResponse, ApiResponse? ImageResponse)>();

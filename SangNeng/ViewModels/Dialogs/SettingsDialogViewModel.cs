@@ -8,7 +8,7 @@ using SangNeng.ViewModels.Settings;
 using Serilog;
 using SharedUI.ViewModels.Settings;
 
-namespace Presentation_SangNeng.ViewModels.Dialogs;
+namespace SangNeng.ViewModels.Dialogs;
 
 public class SettingsDialogViewModel : BindableBase, IDialogAware
 {

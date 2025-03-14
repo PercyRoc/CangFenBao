@@ -7,7 +7,6 @@ namespace SharedUI.Models;
 /// </summary>
 public class DeviceStatus : BindableBase
 {
-    private string _description = string.Empty;
     private string _icon = string.Empty;
     private string _name = string.Empty;
 

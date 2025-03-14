@@ -6,6 +6,7 @@ using System.Reactive.Linq;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -16,19 +17,19 @@ using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Scanner;
 using DeviceService.DataSourceDevices.Services;
-using Presentation_BenFly.Services;
-using Presentation_BenFly.Services.Belt;
+using BenFly.Services;
+using BenFly.Services.Belt;
+using Common.Models.Settings.Sort.PendulumSort;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
 using SharedUI.Models;
 using SixLabors.ImageSharp;
 using SortingServices.Pendulum;
-using SortingServices.Pendulum.Models;
 
-namespace Presentation_BenFly.ViewModels.Windows;
+namespace BenFly.ViewModels.Windows;
 
-public class MainWindowViewModel : BindableBase, IDisposable
+internal class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly IBeltSerialService _beltSerialService;
     private readonly BenNiaoPackageService _benNiaoService;
@@ -210,7 +211,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 Name = "相机",
                 Status = "未连接",
-                Icon = "Camera",
+                Icon = "Camera24",
                 StatusColor = "#F44336" // 红色表示未连接
             });
             Log.Debug("已添加相机状态");
@@ -220,7 +221,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 Name = "皮带",
                 Status = "未连接",
-                Icon = "ConveyorBelt",
+                Icon = "AlignStartVertical20",
                 StatusColor = "#F44336"
             });
             Log.Debug("已添加皮带状态");
@@ -234,7 +235,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 Name = "触发光电",
                 Status = "未连接",
-                Icon = "RadioTower",
+                Icon = "LightbulbPerson24",
                 StatusColor = "#F44336"
             });
             Log.Debug("已添加触发光电状态");
@@ -246,7 +247,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 {
                     Name = photoelectric.Name,
                     Status = "未连接",
-                    Icon = "RadioTower",
+                    Icon = "LightbulbPerson24",
                     StatusColor = "#F44336"
                 });
                 Log.Debug("已添加分拣光电状态: {Name}", photoelectric.Name);
@@ -288,7 +289,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         Application.Current.Dispatcher.Invoke(() =>
         {
-            var beltStatus = DeviceStatuses.FirstOrDefault(x => x.Name == "皮带");
+            var beltStatus = DeviceStatuses.FirstOrDefault(static x => x.Name == "皮带");
             if (beltStatus == null) return;
 
             beltStatus.Status = isConnected ? "已连接" : "已断开";
@@ -304,7 +305,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             Value = "0",
             Unit = "个",
             Description = "累计处理包裹总数",
-            Icon = "CubeOutline24"
+            Icon = "CubeMultiple24"
         });
 
         StatisticsItems.Add(new StatisticsItem
@@ -313,7 +314,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             Value = "0",
             Unit = "个",
             Description = "处理异常的包裹数量",
-            Icon = "AlertOutline24"
+            Icon = "AlertOff24"
         });
 
         StatisticsItems.Add(new StatisticsItem
@@ -322,7 +323,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             Value = "0",
             Unit = "个/小时",
             Description = "预计每小时处理量",
-            Icon = "TrendingUp24"
+            Icon = "ArrowTrending24"
         });
 
         StatisticsItems.Add(new StatisticsItem
@@ -331,7 +332,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             Value = "0",
             Unit = "ms",
             Description = "单个包裹平均处理时间",
-            Icon = "TimerOutline24"
+            Icon = "Timer24"
         });
     }
 
@@ -339,19 +340,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         PackageInfoItems.Add(new PackageInfoItem
         {
-            Label = "条码",
-            Value = "--",
-            Description = "包裹条码信息",
-            Icon = "Barcode24"
-        });
-
-        PackageInfoItems.Add(new PackageInfoItem
-        {
             Label = "重量",
             Value = "--",
             Unit = "kg",
             Description = "包裹重量",
-            Icon = "ScaleBalance24"
+            Icon = "Scales24"
         });
 
         PackageInfoItems.Add(new PackageInfoItem
@@ -360,7 +353,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             Value = "--",
             Unit = "cm",
             Description = "长×宽×高",
-            Icon = "RulerSquare24"
+            Icon = "Ruler24"
         });
 
         PackageInfoItems.Add(new PackageInfoItem
@@ -368,7 +361,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             Label = "段码",
             Value = "--",
             Description = "三段码信息",
-            Icon = "Barcode24"
+            Icon = "BarcodeScanner24"
         });
 
         PackageInfoItems.Add(new PackageInfoItem
@@ -376,7 +369,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             Label = "分拣口",
             Value = "--",
             Description = "目标分拣位置",
-            Icon = "ArrowSplitHorizontal24"
+            Icon = "ArrowCircleDown24"
         });
 
         PackageInfoItems.Add(new PackageInfoItem
@@ -390,7 +383,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         PackageInfoItems.Add(new PackageInfoItem
         {
-            Label = "时间",
+            Label = "当前时间",
             Value = "--:--:--",
             Description = "包裹处理时间",
             Icon = "Clock24"
@@ -420,7 +413,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         Application.Current.Dispatcher.Invoke(() =>
         {
-            var cameraStatus = DeviceStatuses.FirstOrDefault(s => s.Name == "相机");
+            var cameraStatus = DeviceStatuses.FirstOrDefault(static s => s.Name == "相机");
             if (cameraStatus == null) return;
 
             cameraStatus.Status = isConnected ? "已连接" : "已断开";
@@ -431,6 +424,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private void OnBarcodeScannerScanned(object? sender, string barcode)
     {
         if (_barcodeScanCompletionSource is null || _barcodeScanCompletionSource.Task.IsCompleted) return;
+
         Log.Information("收到巴枪扫码：{Barcode}", barcode);
         _barcodeScanCompletionSource.SetResult(barcode);
     }
@@ -526,7 +520,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     // 发送停止皮带命令
                     try
                     {
-                        _beltSerialService.SendData(Encoding.ASCII.GetBytes("STOP LB\r\n"));
+                        _beltSerialService.SendData("STOP_LB\r\n"u8.ToArray());
                         Log.Information("已发送停止皮带命令");
                     }
                     catch (Exception ex)
@@ -534,30 +528,60 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         Log.Error(ex, "发送停止皮带命令时发生错误");
                     }
 
-                    // 更新UI显示，提示操作员使用巴枪扫码
-                    Application.Current.Dispatcher.Invoke(() => { CurrentBarcode = "【请使用巴枪扫描】"; });
+                    // 更新UI显示，提示操作员使用巴枪扫码或按回车跳过
+                    Application.Current.Dispatcher.Invoke(() => { CurrentBarcode = "【请使用巴枪扫描】或【按回车跳过】"; });
 
-                    // 等待巴枪扫码
-                    var newBarcode = await WaitForBarcodeScanAsync();
-
-                    // 更新包裹条码
-                    Log.Information("使用巴枪扫码 {NewBarcode} 替换 noread 条码", newBarcode);
-                    package.Barcode = newBarcode;
-
-                    // 更新UI显示
-                    Application.Current.Dispatcher.Invoke(() =>
+                    // 创建等待回车键的任务
+                    var enterKeyTcs = new TaskCompletionSource<bool>();
+                    KeyEventHandler? enterKeyHandler = null;
+                    enterKeyHandler = (_, e) =>
                     {
-                        // 更新包裹信息项，显示新条码
-                        var barcodeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "条码");
-                        if (barcodeItem == null) return;
-                        barcodeItem.Value = newBarcode;
-                        barcodeItem.Description = "条码信息";
-                    });
+                        if (e.Key != Key.Enter) return;
+
+                        Application.Current.MainWindow!.KeyDown -= enterKeyHandler;
+                        enterKeyTcs.SetResult(true);
+                    };
+                    Application.Current.MainWindow!.KeyDown += enterKeyHandler;
+
+                    // 同时等待巴枪扫码和回车键
+                    var barcodeScanTask = WaitForBarcodeScanAsync();
+                    var completedTask = await Task.WhenAny(barcodeScanTask, enterKeyTcs.Task);
+
+                    // 如果是回车键先完成
+                    if (completedTask == enterKeyTcs.Task)
+                    {
+                        Log.Information("用户按下回车键，跳过巴枪扫码");
+                        // 清理巴枪扫码任务
+                        _barcodeScanCompletionSource?.TrySetCanceled();
+                    }
+                    else
+                    {
+                        // 巴枪扫码完成，更新条码
+                        var newBarcode = await barcodeScanTask;
+                        Log.Information("使用巴枪扫码 {NewBarcode} 替换 noread 条码", newBarcode);
+                        package.Barcode = newBarcode;
+
+                        // 更新UI显示
+                        Application.Current.Dispatcher.Invoke(() =>
+                        {
+                            // 更新包裹信息项，显示新条码
+                            var barcodeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "条码");
+                            if (barcodeItem == null) return;
+
+                            barcodeItem.Value = newBarcode;
+                            barcodeItem.Description = "条码信息";
+                            CurrentBarcode = $"{newBarcode} (请按回车键继续...)";
+                        });
+
+                        // 等待用户按回车键确认
+                        await enterKeyTcs.Task;
+                        Log.Information("用户按下回车键确认条码");
+                    }
 
                     // 发送启动皮带命令
                     try
                     {
-                        _beltSerialService.SendData(Encoding.ASCII.GetBytes("START LB\r\n"));
+                        _beltSerialService.SendData("START_LB\r\n"u8.ToArray());
                         Log.Information("已发送启动皮带命令");
                     }
                     catch (Exception ex)
@@ -657,7 +681,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     private void UpdatePackageInfoItems(PackageInfo package)
     {
-        var barcodeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "条码");
+        var barcodeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "条码");
         if (barcodeItem != null)
         {
             barcodeItem.Value = package.Barcode;
@@ -666,61 +690,65 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 : "包裹条码信息";
         }
 
-        var weightItem = PackageInfoItems.FirstOrDefault(x => x.Label == "重量");
+        var weightItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "重量");
         if (weightItem != null)
         {
             weightItem.Value = package.Weight.ToString(CultureInfo.InvariantCulture);
             weightItem.Unit = "kg";
         }
 
-        var sizeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "尺寸");
-        if (sizeItem != null) sizeItem.Value = package.VolumeDisplay;
+        var sizeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "尺寸");
+        if (sizeItem != null)
+        {
+            sizeItem.Value = package.VolumeDisplay;
+        }
 
-        var segmentItem = PackageInfoItems.FirstOrDefault(x => x.Label == "段码");
+        var segmentItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "段码");
         if (segmentItem != null)
         {
             segmentItem.Value = package.SegmentCode;
             segmentItem.Description = string.IsNullOrEmpty(package.SegmentCode) ? "等待获取..." : "三段码信息";
         }
 
-        var chuteItem = PackageInfoItems.FirstOrDefault(x => x.Label == "分拣口");
+        var chuteItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "分拣口");
         if (chuteItem != null)
         {
             chuteItem.Value = package.ChuteName.ToString();
             chuteItem.Description = string.IsNullOrEmpty(package.ChuteName.ToString()) ? "等待分配..." : "目标分拣位置";
         }
 
-        var timeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "时间");
+        var timeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "时间");
         if (timeItem != null)
         {
             timeItem.Value = package.CreateTime.ToString("HH:mm:ss");
             timeItem.Description = $"处理于 {package.CreateTime:yyyy-MM-dd}";
         }
 
-        var processingTimeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "处理时间");
+        var processingTimeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "处理时间");
         if (processingTimeItem == null) return;
+
         processingTimeItem.Value = $"{package.ProcessingTime:F0}";
         processingTimeItem.Description = $"耗时 {package.ProcessingTime:F0} 毫秒";
     }
 
     private void UpdateStatistics()
     {
-        var totalItem = StatisticsItems.FirstOrDefault(x => x.Label == "总包裹数");
+        var totalItem = StatisticsItems.FirstOrDefault(static x => x.Label == "总包裹数");
         if (totalItem != null)
         {
             totalItem.Value = PackageHistory.Count.ToString();
             totalItem.Description = $"累计处理 {PackageHistory.Count} 个包裹";
         }
 
-        var errorItem = StatisticsItems.FirstOrDefault(x => x.Label == "异常数");
+        var errorItem = StatisticsItems.FirstOrDefault(static x => x.Label == "异常数");
         if (errorItem != null)
         {
-            var errorCount = PackageHistory.Count(p => !string.IsNullOrEmpty(p.ErrorMessage));
+            var errorCount = PackageHistory.Count(static p => !string.IsNullOrEmpty(p.ErrorMessage));
             errorItem.Value = errorCount.ToString();
             errorItem.Description = $"共有 {errorCount} 个异常包裹";
         }
 
-        var efficiencyItem = StatisticsItems.FirstOrDefault(x => x.Label == "预测效率");
+        var efficiencyItem = StatisticsItems.FirstOrDefault(static x => x.Label == "预测效率");
         if (efficiencyItem != null)
         {
             var hourAgo = DateTime.Now.AddHours(-1);
@@ -729,13 +757,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
             efficiencyItem.Description = $"最近一小时处理 {hourlyCount} 个";
         }
 
-        var avgTimeItem = StatisticsItems.FirstOrDefault(x => x.Label == "平均处理时间");
+        var avgTimeItem = StatisticsItems.FirstOrDefault(static x => x.Label == "平均处理时间");
         if (avgTimeItem == null) return;
+
         {
             var recentPackages = PackageHistory.Take(100).ToList();
             if (recentPackages.Count != 0)
             {
-                var avgTime = recentPackages.Average(p => p.ProcessingTime);
+                var avgTime = recentPackages.Average(static p => p.ProcessingTime);
                 avgTimeItem.Value = avgTime.ToString("F0");
                 avgTimeItem.Description = $"最近{recentPackages.Count}个包裹平均耗时";
             }
@@ -811,23 +840,5 @@ public class MainWindowViewModel : BindableBase, IDisposable
             }
 
         _disposed = true;
-    }
-}
-
-/// <summary>
-///     用于包装DispatcherTimer的可释放对象
-/// </summary>
-internal class DisposableTimer : IDisposable
-{
-    private readonly DispatcherTimer _timer;
-
-    public DisposableTimer(DispatcherTimer timer)
-    {
-        _timer = timer;
-    }
-
-    public void Dispose()
-    {
-        _timer.Stop();
     }
 }

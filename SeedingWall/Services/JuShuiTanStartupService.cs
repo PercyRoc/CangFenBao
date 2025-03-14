@@ -8,7 +8,7 @@ namespace Presentation_SeedingWall.Services;
 /// <summary>
 ///     聚水潭启动服务，用于在程序启动时自动启动聚水潭服务
 /// </summary>
-public class JuShuiTanStartupService : IHostedService
+internal class JuShuiTanStartupService : IHostedService
 {
     private readonly IJuShuiTanService _juShuiTanService;
     private readonly ISettingsService _settingsService;

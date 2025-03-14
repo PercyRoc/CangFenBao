@@ -1,18 +1,18 @@
 using Common.Services.Settings;
 using Common.Services.Ui;
-using Presentation_XinBa.Services;
-using Presentation_XinBa.Services.Models;
 using Prism.Commands;
 using Prism.Mvvm;
 using Prism.Services.Dialogs;
 using Serilog;
+using XinBa.Services;
+using XinBa.Services.Models;
 
-namespace Presentation_XinBa.ViewModels;
+namespace XinBa.ViewModels;
 
 /// <summary>
 ///     登录视图模型
 /// </summary>
-public class LoginViewModel : BindableBase, IDialogAware
+internal class LoginViewModel : BindableBase, IDialogAware
 {
     private readonly IApiService _apiService;
     private readonly INotificationService _notificationService;

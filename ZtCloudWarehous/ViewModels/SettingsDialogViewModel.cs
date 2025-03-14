@@ -1,15 +1,15 @@
 ﻿using Common.Services.Ui;
-using Presentation_ZtCloudWarehous.ViewModels.Settings;
 using Prism.Commands;
 using Prism.Ioc;
 using Prism.Mvvm;
 using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.ViewModels.Settings;
+using ZtCloudWarehous.ViewModels.Settings;
 
-namespace Presentation_ZtCloudWarehous.ViewModels;
+namespace ZtCloudWarehous.ViewModels;
 
-public class SettingsDialogViewModel : BindableBase, IDialogAware
+internal class SettingsDialogViewModel : BindableBase, IDialogAware
 {
     private readonly BarcodeChuteSettingsViewModel _barcodeChuteSettingsViewModel;
 

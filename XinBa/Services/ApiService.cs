@@ -4,10 +4,10 @@ using System.Text;
 using System.Text.Json;
 using Common.Services.Settings;
 using Common.Services.Ui;
-using Presentation_XinBa.Services.Models;
 using Serilog;
+using XinBa.Services.Models;
 
-namespace Presentation_XinBa.Services;
+namespace XinBa.Services;
 
 /// <summary>
 ///     API服务接口
@@ -98,7 +98,7 @@ public class ApiService : IApiService
         // 配置HttpClient以处理SSL
         var handler = new HttpClientHandler
         {
-            ServerCertificateCustomValidationCallback = (_, _, _, _) => true
+            ServerCertificateCustomValidationCallback = static (_, _, _, _) => true
         };
         _httpClient = new HttpClient(handler);
 
@@ -119,10 +119,10 @@ public class ApiService : IApiService
     }
 
     /// <inheritdoc />
-    public async Task<bool> LoginAsync(int employeeId)
+    public Task<bool> LoginAsync(int employeeId)
     {
         // 使用默认凭证登录
-        return await LoginAsync(employeeId, DefaultApiUsername, DefaultApiPassword);
+        return LoginAsync(employeeId, DefaultApiUsername, DefaultApiPassword);
     }
 
     /// <inheritdoc />
@@ -305,9 +305,8 @@ public class ApiService : IApiService
 
             // 添加图片数据
             if (photoData != null)
-                foreach (var imageBytes in photoData)
+                foreach (var fileContent in photoData.Select(static imageBytes => new ByteArrayContent(imageBytes)))
                 {
-                    var fileContent = new ByteArrayContent(imageBytes);
                     fileContent.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
                     formData.Add(fileContent, "photos", $"image_{DateTime.Now:yyyyMMddHHmmss}.jpg");
                 }

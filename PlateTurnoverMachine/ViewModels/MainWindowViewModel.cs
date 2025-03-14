@@ -11,17 +11,17 @@ using Common.Models.Package;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
-using Presentation_PlateTurnoverMachine.Models;
-using Presentation_PlateTurnoverMachine.Services;
+using PlateTurnoverMachine.Models;
+using PlateTurnoverMachine.Services;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
 using SharedUI.Models;
 using SixLabors.ImageSharp;
 
-namespace Presentation_PlateTurnoverMachine.ViewModels;
+namespace PlateTurnoverMachine.ViewModels;
 
-public class MainWindowViewModel : BindableBase, IDisposable
+internal class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
@@ -168,7 +168,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         Application.Current.Dispatcher.Invoke(() =>
         {
-            var cameraStatus = DeviceStatuses.FirstOrDefault(s => s.Name == "相机");
+            var cameraStatus = DeviceStatuses.FirstOrDefault(static s => s.Name == "相机");
             if (cameraStatus == null) return;
 
             cameraStatus.Status = isConnected ? "已连接" : "已断开";
@@ -182,7 +182,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         {
             Application.Current.Dispatcher.Invoke(() =>
             {
-                var status = DeviceStatuses.FirstOrDefault(s => s.Name == "触发光电");
+                var status = DeviceStatuses.FirstOrDefault(static s => s.Name == "触发光电");
                 if (status == null) return;
 
                 status.Status = isConnected ? "已连接" : "已断开";
@@ -249,32 +249,36 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     private void UpdatePackageInfoItems(PackageInfo package)
     {
-        var weightItem = PackageInfoItems.FirstOrDefault(x => x.Label == "重量");
+        var weightItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "重量");
         if (weightItem != null)
         {
             weightItem.Value = package.Weight.ToString(CultureInfo.InvariantCulture);
             weightItem.Unit = "kg";
         }
 
-        var sizeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "尺寸");
-        if (sizeItem != null) sizeItem.Value = package.VolumeDisplay;
+        var sizeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "尺寸");
+        if (sizeItem != null)
+        {
+            sizeItem.Value = package.VolumeDisplay;
+        }
 
-        var chuteItem = PackageInfoItems.FirstOrDefault(x => x.Label == "格口");
+        var chuteItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "格口");
         if (chuteItem != null)
         {
             chuteItem.Value = package.ChuteName.ToString();
             chuteItem.Description = string.IsNullOrEmpty(package.ChuteName.ToString()) ? "等待分配..." : "目标格口";
         }
 
-        var timeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "时间");
+        var timeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "时间");
         if (timeItem != null)
         {
             timeItem.Value = package.CreateTime.ToString("HH:mm:ss");
             timeItem.Description = $"处理于 {package.CreateTime:yyyy-MM-dd}";
         }
 
-        var statusItem = PackageInfoItems.FirstOrDefault(x => x.Label == "状态");
+        var statusItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "状态");
         if (statusItem == null) return;
+
         statusItem.Value = string.IsNullOrEmpty(package.ErrorMessage) ? "正常" : "异常";
         statusItem.Description = string.IsNullOrEmpty(package.ErrorMessage) ? "处理成功" : package.ErrorMessage;
     }
@@ -293,7 +297,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
             while (PackageHistory.Count > maxHistoryCount) PackageHistory.RemoveAt(PackageHistory.Count - 1);
 
             // 更新序号
-            for (var i = 0; i < PackageHistory.Count; i++) PackageHistory[i].Index = i + 1;
+            for (var i = 0; i < PackageHistory.Count; i++)
+            {
+                PackageHistory[i].Index = i + 1;
+            }
         }
         catch (Exception ex)
         {
@@ -306,7 +313,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             // 更新总包裹数
-            var totalItem = StatisticsItems.FirstOrDefault(x => x.Label == "总包裹数");
+            var totalItem = StatisticsItems.FirstOrDefault(static x => x.Label == "总包裹数");
             if (totalItem != null)
             {
                 var total = int.Parse(totalItem.Value) + 1;
@@ -324,7 +331,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             }
 
             // 更新处理速率（每小时包裹数）
-            var speedItem = StatisticsItems.FirstOrDefault(x => x.Label == "处理速率");
+            var speedItem = StatisticsItems.FirstOrDefault(static x => x.Label == "处理速率");
             if (speedItem == null || PackageHistory.Count < 2) return;
             // 获取最早和最新的包裹时间差
             var latestTime = PackageHistory[0].CreateTime;
@@ -389,11 +396,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
         {
             Application.Current.Dispatcher.Invoke(() =>
             {
-                var status = DeviceStatuses.FirstOrDefault(s => s.Name == "TCP模块");
+                var status = DeviceStatuses.FirstOrDefault(static s => s.Name == "TCP模块");
                 if (status == null) return;
 
                 var totalModules = _tcpConnectionService.TcpModuleClients.Count;
-                var connectedModules = _tcpConnectionService.TcpModuleClients.Count(x => x.Value.Connected);
+                var connectedModules = _tcpConnectionService.TcpModuleClients.Count(static x => x.Value.Connected);
 
                 status.Status = $"{connectedModules}/{totalModules}";
                 status.StatusColor = connectedModules == totalModules ? "#4CAF50" :

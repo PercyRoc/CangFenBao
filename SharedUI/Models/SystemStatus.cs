@@ -5,8 +5,8 @@ namespace SharedUI.Models;
 
 public class DiskStatus
 {
-    public string Name { get; set; } = string.Empty;
-    public double UsagePercentage { get; set; }
+    public string Name { get; internal set; } = string.Empty;
+    public double UsagePercentage { get; internal set; }
     public bool IsReady { get; set; }
 }
 

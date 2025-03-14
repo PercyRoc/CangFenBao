@@ -1,7 +1,7 @@
 using Common.Services.Settings;
 using Prism.Mvvm;
 
-namespace Presentation_XinBeiYang.Models;
+namespace XinBeiYang.Models;
 
 [Configuration("HostConfiguration")]
 public class HostConfiguration : BindableBase

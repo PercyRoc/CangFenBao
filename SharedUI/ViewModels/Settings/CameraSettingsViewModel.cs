@@ -30,6 +30,7 @@ public class CameraSettingsViewModel : BindableBase
             task.ContinueWith(t =>
             {
                 if (!t.IsFaulted || t.Exception == null) return;
+
                 Log.Error(t.Exception, "刷新相机列表时发生错误");
                 _notificationService.ShowErrorWithToken("刷新相机列表失败", "SettingWindowGrowl");
             }, TaskScheduler.FromCurrentSynchronizationContext());
@@ -108,11 +109,11 @@ public class CameraSettingsViewModel : BindableBase
     {
         try
         {
-            Configuration.SelectedCameras = AvailableCameras.Where(c => c.IsSelected).ToList();
+            Configuration.SelectedCameras = AvailableCameras.Where(static c => c.IsSelected).ToList();
             var results = _settingsService.SaveSettings(Configuration, true);
             if (results.Length > 0)
             {
-                var errorMessage = string.Join(", ", results.Select(r => r.ErrorMessage));
+                var errorMessage = string.Join(", ", results.Select(static r => r.ErrorMessage));
                 _notificationService.ShowErrorWithToken($"保存相机配置失败: {errorMessage}", "SettingWindowGrowl");
                 return;
             }

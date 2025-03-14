@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Presentation_BenFly.Models.BenNiao;
+namespace BenFly.Models.BenNiao;
 
 /// <summary>
 ///     笨鸟接口响应基类

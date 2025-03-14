@@ -1,14 +1,14 @@
 ﻿using System.Windows;
 using System.Windows.Input;
 using Common.Services.Ui;
-using Presentation_XinBa.Views.Settings;
 using Serilog;
+using XinBa.Views.Settings;
 
-namespace Presentation_XinBa.Views;
+namespace XinBa.Views;
 
-public partial class SettingsDialog
+internal partial class SettingsDialog
 {
-    public SettingsDialog(INotificationService notificationService)
+    internal SettingsDialog(INotificationService notificationService)
     {
         InitializeComponent();
 

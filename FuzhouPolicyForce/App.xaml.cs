@@ -2,6 +2,7 @@
 using System.Windows;
 using System.Windows.Threading;
 using Common.Extensions;
+using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.Extensions;
@@ -17,7 +18,6 @@ using SharedUI.ViewModels.Settings;
 using SharedUI.Views;
 using SortingServices.Pendulum;
 using SortingServices.Pendulum.Extensions;
-using SortingServices.Pendulum.Models;
 using Timer = System.Timers.Timer;
 
 namespace FuzhouPolicyForce;
@@ -25,7 +25,7 @@ namespace FuzhouPolicyForce;
 /// <summary>
 ///     Interaction logic for App.xaml
 /// </summary>
-public partial class App
+internal partial class App
 {
     private Timer? _cleanupTimer;
 
@@ -103,7 +103,7 @@ public partial class App
         }
     }
 
-    private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    private static void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         try
         {
@@ -118,7 +118,7 @@ public partial class App
         }
     }
 
-    private void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+    private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
         try
         {
@@ -131,7 +131,7 @@ public partial class App
         }
     }
 
-    private void TaskScheduler_UnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    private static void TaskScheduler_UnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
     {
         try
         {
@@ -152,7 +152,7 @@ public partial class App
         try
         {
             _cleanupTimer = new Timer(1000 * 60 * 60); // 每1小时执行一次
-            _cleanupTimer.Elapsed += (_, args) =>
+            _cleanupTimer.Elapsed += static (_, _) =>
             {
                 try
                 {
@@ -166,7 +166,7 @@ public partial class App
             _cleanupTimer.Start();
 
             // 应用启动时立即执行一次清理
-            Task.Run(() =>
+            Task.Run(static () =>
             {
                 try
                 {
@@ -187,7 +187,7 @@ public partial class App
     /// <summary>
     ///     清理DUMP文件
     /// </summary>
-    private void CleanupDumpFiles()
+    private static void CleanupDumpFiles()
     {
         try
         {

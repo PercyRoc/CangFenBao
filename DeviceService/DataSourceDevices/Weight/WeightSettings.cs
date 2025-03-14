@@ -1,6 +1,6 @@
 using Common.Services.Settings;
 
-namespace Common.Models.Settings.Weight;
+namespace DeviceService.DataSourceDevices.Weight;
 
 /// <summary>
 ///     重量设置

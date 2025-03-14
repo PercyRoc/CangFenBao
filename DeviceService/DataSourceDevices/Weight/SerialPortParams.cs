@@ -1,6 +1,6 @@
 using System.IO.Ports;
 
-namespace Common.Models.Settings.Weight;
+namespace DeviceService.DataSourceDevices.Weight;
 
 /// <summary>
 ///     串口参数

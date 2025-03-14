@@ -8,7 +8,6 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Common.Models.Package;
 using Common.Services.Ui;
-using Presentation_XinBa.Services;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
@@ -16,13 +15,14 @@ using SharedUI.Models;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.PixelFormats;
+using XinBa.Services;
 
-namespace Presentation_XinBa.ViewModels;
+namespace XinBa.ViewModels;
 
 /// <summary>
 ///     主窗口视图模型
 /// </summary>
-public class MainWindowViewModel : BindableBase, IDisposable
+internal class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly IApiService _apiService;
     private readonly TcpCameraService? _cameraService;
@@ -156,6 +156,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         // 每小时更新一次处理速率
         var now = DateTime.Now;
         if (!((now - _lastRateCalculationTime).TotalMinutes >= 1)) return;
+
         UpdateProcessingRate();
         _lastRateCalculationTime = now;
     }
@@ -262,7 +263,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     /// <summary>
     ///     更新当前登录员工信息
     /// </summary>
-    public Task UpdateCurrentEmployeeInfo()
+    internal Task UpdateCurrentEmployeeInfo()
     {
         try
         {
@@ -371,11 +372,15 @@ public class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             // 更新重量
-            var weightItem = PackageInfoItems.FirstOrDefault(p => p.Label == "Weight");
-            if (weightItem != null) weightItem.Value = $"{package.Weight:F2}";
+            var weightItem = PackageInfoItems.FirstOrDefault(static p => p.Label == "Weight");
+
+            if (weightItem != null)
+            {
+                weightItem.Value = $"{package.Weight:F2}";
+            }
 
             // 更新尺寸
-            var dimensionsItem = PackageInfoItems.FirstOrDefault(p => p.Label == "Dimensions");
+            var dimensionsItem = PackageInfoItems.FirstOrDefault(static p => p.Label == "Dimensions");
             if (dimensionsItem != null)
             {
                 var length = package.Length ?? 0;
@@ -385,12 +390,18 @@ public class MainWindowViewModel : BindableBase, IDisposable
             }
 
             // 更新时间
-            var timeItem = PackageInfoItems.FirstOrDefault(p => p.Label == "Time");
-            if (timeItem != null) timeItem.Value = package.TriggerTimestamp.ToString("HH:mm:ss");
+            var timeItem = PackageInfoItems.FirstOrDefault(static p => p.Label == "Time");
+            if (timeItem != null)
+            {
+                timeItem.Value = package.TriggerTimestamp.ToString("HH:mm:ss");
+            }
 
             // 更新状态
-            var statusItem = PackageInfoItems.FirstOrDefault(p => p.Label == "Status");
-            if (statusItem != null) statusItem.Value = GetStatusDisplayText(package.Status);
+            var statusItem = PackageInfoItems.FirstOrDefault(static p => p.Label == "Status");
+            if (statusItem != null)
+            {
+                statusItem.Value = GetStatusDisplayText(package.Status);
+            }
         }
         catch (Exception ex)
         {
@@ -431,8 +442,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
         {
             // 更新总包裹数
             _totalPackages++;
-            var totalItem = StatisticsItems.FirstOrDefault(s => s.Label == "Total Packages");
-            if (totalItem != null) totalItem.Value = _totalPackages.ToString();
+            var totalItem = StatisticsItems.FirstOrDefault(static s => s.Label == "Total Packages");
+            if (totalItem != null)
+            {
+                totalItem.Value = _totalPackages.ToString();
+            }
 
             // 更新成功/失败数量
             var isSuccess = package.Status is PackageStatus.MeasureSuccess or PackageStatus.WeighSuccess
@@ -441,14 +455,20 @@ public class MainWindowViewModel : BindableBase, IDisposable
             if (isSuccess)
             {
                 _successPackages++;
-                var successItem = StatisticsItems.FirstOrDefault(s => s.Label == "Success Count");
-                if (successItem != null) successItem.Value = _successPackages.ToString();
+                var successItem = StatisticsItems.FirstOrDefault(static s => s.Label == "Success Count");
+                if (successItem != null)
+                {
+                    successItem.Value = _successPackages.ToString();
+                }
             }
             else
             {
                 _failedPackages++;
-                var failureItem = StatisticsItems.FirstOrDefault(s => s.Label == "Failure Count");
-                if (failureItem != null) failureItem.Value = _failedPackages.ToString();
+                var failureItem = StatisticsItems.FirstOrDefault(static s => s.Label == "Failure Count");
+                if (failureItem != null)
+                {
+                    failureItem.Value = _failedPackages.ToString();
+                }
             }
 
             // 更新处理速率计算
@@ -471,8 +491,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
             _processingRate = _packagesInLastHour * 60; // 每分钟的包裹数 * 60 = 每小时的包裹数
             _packagesInLastHour = 0; // 重置计数器
 
-            var rateItem = StatisticsItems.FirstOrDefault(s => s.Label == "Processing Rate");
-            if (rateItem != null) rateItem.Value = _processingRate.ToString();
+            var rateItem = StatisticsItems.FirstOrDefault(static s => s.Label == "Processing Rate");
+            if (rateItem != null)
+            {
+                rateItem.Value = _processingRate.ToString();
+            }
         }
         catch (Exception ex)
         {
@@ -617,7 +640,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 _timer.Stop();
 
                 // 取消事件订阅
-                if (_cameraService != null) _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
+                if (_cameraService != null)
+                {
+                    _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
+                }
 
                 // 释放所有订阅
                 foreach (var subscription in _subscriptions) subscription.Dispose();
@@ -649,7 +675,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // 使用Dispatcher确保在UI线程上更新
             Application.Current.Dispatcher.Invoke(() =>
             {
-                var cameraStatus = DeviceStatuses.FirstOrDefault(s => s.Name == "Camera");
+                var cameraStatus = DeviceStatuses.FirstOrDefault(static s => s.Name == "Camera");
                 if (cameraStatus == null)
                 {
                     Log.Warning("未找到名为'Camera'的设备状态项");

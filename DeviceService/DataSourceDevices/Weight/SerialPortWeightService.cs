@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.IO.Ports;
 using System.Text;
-using Common.Models.Settings.Weight;
 using Serilog;
 
 namespace DeviceService.DataSourceDevices.Weight;
@@ -38,6 +37,7 @@ public class SerialPortWeightService : IDisposable
         private set
         {
             if (_isConnected == value) return;
+
             _isConnected = value;
             ConnectionChanged?.Invoke("Weight Scale", value);
         }
@@ -68,7 +68,7 @@ public class SerialPortWeightService : IDisposable
 
     public event Action<string, bool>? ConnectionChanged;
 
-    public bool Start()
+    internal bool Start()
     {
         try
         {
@@ -148,7 +148,7 @@ public class SerialPortWeightService : IDisposable
         }
     }
 
-    public void Stop()
+    internal void Stop()
     {
         Log.Information("正在停止串口重量称服务...");
 
@@ -184,7 +184,7 @@ public class SerialPortWeightService : IDisposable
         }
     }
 
-    public void UpdateConfiguration(WeightSettings config)
+    internal void UpdateConfiguration(WeightSettings config)
     {
         _settings = config;
     }
@@ -333,6 +333,7 @@ public class SerialPortWeightService : IDisposable
     private void ProcessBuffer(DateTime receiveTime)
     {
         if ((receiveTime - _lastProcessTime).TotalMilliseconds < ProcessInterval) return;
+
         _lastProcessTime = receiveTime;
 
         CleanExpiredWeightData(receiveTime);
@@ -343,11 +344,11 @@ public class SerialPortWeightService : IDisposable
 
             // 新增数据分割逻辑
             var dataSegments = rawData.Split(['='], StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.Trim())
-                .Where(s => s.Length >= 6) // 最小有效长度检查
+                .Select(static s => s.Trim())
+                .Where(static s => s.Length >= 6) // 最小有效长度检查
                 .ToList();
 
-            foreach (var valuePart in dataSegments.Select(segment => segment.Length > 6 ? segment[..6] : segment))
+            foreach (var valuePart in dataSegments.Select(static segment => segment.Length > 6 ? segment[..6] : segment))
             {
                 // 先反转数据，再解析
                 var reversedValue = ReverseWeight(valuePart);
@@ -367,14 +368,14 @@ public class SerialPortWeightService : IDisposable
 
             // 新增粘包处理：保留未处理完的数据
             var lastSegment = dataSegments.LastOrDefault();
-            if (lastSegment != null && rawData.EndsWith("="))
+            if (lastSegment != null && rawData.EndsWith('='))
             {
                 _bufferPosition = 0; // 完整处理时清空缓冲区
             }
             else if (lastSegment != null)
             {
                 // 将未处理完的部分保留在缓冲区
-                var remaining = rawData.Substring(rawData.LastIndexOf('=') + 1);
+                var remaining = rawData[(rawData.LastIndexOf('=') + 1)..];
                 var remainingBytes = Encoding.ASCII.GetBytes(remaining);
                 Array.Copy(remainingBytes, _readBuffer, remainingBytes.Length);
                 _bufferPosition = remainingBytes.Length;

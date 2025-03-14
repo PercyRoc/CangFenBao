@@ -6,25 +6,25 @@ using Common.Extensions;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
-using Presentation_KuaiLv.Services.DWS;
-using Presentation_KuaiLv.Services.Warning;
-using Presentation_KuaiLv.ViewModels;
-using Presentation_KuaiLv.ViewModels.Dialogs;
-using Presentation_KuaiLv.ViewModels.Settings;
-using Presentation_KuaiLv.Views;
-using Presentation_KuaiLv.Views.Dialogs;
-using Presentation_KuaiLv.Views.Settings;
+using KuaiLv.Services.DWS;
+using KuaiLv.Services.Warning;
+using KuaiLv.ViewModels;
+using KuaiLv.ViewModels.Dialogs;
+using KuaiLv.ViewModels.Settings;
+using KuaiLv.Views;
+using KuaiLv.Views.Dialogs;
+using KuaiLv.Views.Settings;
 using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 using Timer = System.Timers.Timer;
 
-namespace Presentation_KuaiLv;
+namespace KuaiLv;
 
 /// <summary>
 ///     Interaction logic for App.xaml
 /// </summary>
-public partial class App
+internal partial class App
 {
     private Timer? _cleanupTimer;
 

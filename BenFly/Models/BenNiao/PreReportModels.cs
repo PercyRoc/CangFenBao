@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Presentation_BenFly.Models.BenNiao;
+namespace BenFly.Models.BenNiao;
 
 /// <summary>
 ///     预报数据下载响应
@@ -11,19 +11,19 @@ public class PreReportDataResponse
     ///     运单号
     /// </summary>
     [JsonPropertyName("waybillNum")]
-    public string WaybillNum { get; private set; } = string.Empty;
+    internal string WaybillNum { get; private set; } = string.Empty;
 
     /// <summary>
     ///     三段码
     /// </summary>
     [JsonPropertyName("segmentCode")]
-    public string SegmentCode { get; private set; } = string.Empty;
+    internal string SegmentCode { get; private set; } = string.Empty;
 }
 
 /// <summary>
 ///     数据上传请求项
 /// </summary>
-public class DataUploadItem
+internal class DataUploadItem
 {
     /// <summary>
     ///     设备扫描分拨中心名称

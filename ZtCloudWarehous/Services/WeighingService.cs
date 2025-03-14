@@ -1,17 +1,17 @@
 using System.Net.Http;
 using System.Net.Http.Json;
 using Common.Services.Settings;
-using Presentation_ZtCloudWarehous.Models;
-using Presentation_ZtCloudWarehous.Utils;
-using Presentation_ZtCloudWarehous.ViewModels.Settings;
 using Serilog;
+using ZtCloudWarehous.Models;
+using ZtCloudWarehous.Utils;
+using ZtCloudWarehous.ViewModels.Settings;
 
-namespace Presentation_ZtCloudWarehous.Services;
+namespace ZtCloudWarehous.Services;
 
 /// <summary>
 ///     称重服务实现
 /// </summary>
-public class WeighingService(HttpClient httpClient, ISettingsService settingsService) : IWeighingService
+internal class WeighingService(HttpClient httpClient, ISettingsService settingsService) : IWeighingService
 {
     private const string UatBaseUrl = "https://scm-gateway-uat.ztocwst.com/edi/service/inbound/bz";
     private const string ProdBaseUrl = "https://scm-openapi.ztocwst.com/edi/service/inbound/bz";

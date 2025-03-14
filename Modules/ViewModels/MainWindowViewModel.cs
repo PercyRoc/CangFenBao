@@ -10,18 +10,19 @@ using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Camera.DaHua;
 using DeviceService.DataSourceDevices.Camera.Hikvision;
 using DeviceService.DataSourceDevices.Services;
-using Presentation_Modules.Models;
-using Presentation_Modules.Services;
+using Modules.Models;
+using Modules.Services;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
 using SharedUI.Models;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
+using LockingService = Modules.Services.LockingService;
 
-namespace Presentation_Modules.ViewModels;
+namespace Modules.ViewModels;
 
-public class MainWindowViewModel : BindableBase, IDisposable
+internal class MainWindowViewModel : BindableBase, IDisposable
 {
     private static int _lastPackageIndex; // 用于记录上一次分配的包裹序号
     private readonly ICameraService _cameraService;
@@ -87,50 +88,55 @@ public class MainWindowViewModel : BindableBase, IDisposable
         // 订阅锁格设备连接状态变更事件
         _lockingService.ConnectionStatusChanged += OnLockingDeviceConnectionChanged;
 
-        // 订阅图像流
-        if (_cameraService is DahuaCameraService dahuaCamera)
-            _subscriptions.Add(dahuaCamera.ImageStream
-                .Subscribe(imageData =>
-                {
-                    try
+        switch (_cameraService)
+        {
+            // 订阅图像流
+            case DahuaCameraService dahuaCamera:
+                _subscriptions.Add(dahuaCamera.ImageStream
+                    .Subscribe(imageData =>
                     {
-                        Log.Debug("收到大华相机图像流数据，尺寸：{Width}x{Height}",
-                            imageData.image.Width,
-                            imageData.image.Height);
-
-                        UpdateImageDisplay(imageData.image, bitmap =>
+                        try
                         {
-                            Log.Debug("从图像流更新CurrentImage");
-                            CurrentImage = bitmap;
-                        });
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex, "处理大华相机图像流数据时发生错误");
-                    }
-                }));
-        // 添加对海康相机图像流的订阅
-        else if (_cameraService is HikvisionSmartCameraService hikvisionCamera)
-            _subscriptions.Add(hikvisionCamera.ImageStream
-                .Subscribe(imageData =>
-                {
-                    try
-                    {
-                        Log.Debug("收到海康相机图像流数据，尺寸：{Width}x{Height}",
-                            imageData.image.Width,
-                            imageData.image.Height);
+                            Log.Debug("收到大华相机图像流数据，尺寸：{Width}x{Height}",
+                                imageData.image.Width,
+                                imageData.image.Height);
 
-                        UpdateImageDisplay(imageData.image, bitmap =>
+                            UpdateImageDisplay(imageData.image, bitmap =>
+                            {
+                                Log.Debug("从图像流更新CurrentImage");
+                                CurrentImage = bitmap;
+                            });
+                        }
+                        catch (Exception ex)
                         {
-                            Log.Debug("从图像流更新CurrentImage");
-                            CurrentImage = bitmap;
-                        });
-                    }
-                    catch (Exception ex)
+                            Log.Error(ex, "处理大华相机图像流数据时发生错误");
+                        }
+                    }));
+                break;
+            // 添加对海康相机图像流的订阅
+            case HikvisionSmartCameraService hikvisionCamera:
+                _subscriptions.Add(hikvisionCamera.ImageStream
+                    .Subscribe(imageData =>
                     {
-                        Log.Error(ex, "处理海康相机图像流数据时发生错误");
-                    }
-                }));
+                        try
+                        {
+                            Log.Debug("收到海康相机图像流数据，尺寸：{Width}x{Height}",
+                                imageData.image.Width,
+                                imageData.image.Height);
+
+                            UpdateImageDisplay(imageData.image, bitmap =>
+                            {
+                                Log.Debug("从图像流更新CurrentImage");
+                                CurrentImage = bitmap;
+                            });
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error(ex, "处理海康相机图像流数据时发生错误");
+                        }
+                    }));
+                break;
+        }
         // 订阅包裹流
         _subscriptions.Add(packageTransferService.PackageStream
             .Subscribe(package => { Application.Current.Dispatcher.BeginInvoke(() => OnPackageInfo(package)); }));
@@ -299,7 +305,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            var cameraStatus = DeviceStatuses.FirstOrDefault(x => x.Name == "相机");
+            var cameraStatus = DeviceStatuses.FirstOrDefault(static x => x.Name == "相机");
             if (cameraStatus == null) return;
 
             Application.Current.Dispatcher.Invoke(() =>
@@ -318,7 +324,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            var moduleStatus = DeviceStatuses.FirstOrDefault(x => x.Name == "模组带");
+            var moduleStatus = DeviceStatuses.FirstOrDefault(static x => x.Name == "模组带");
             if (moduleStatus == null) return;
 
             Application.Current.Dispatcher.Invoke(() =>
@@ -371,7 +377,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             // 使用模组带的序号更新包裹序号
-            if (package.Index <= 0) package.Index = Interlocked.Increment(ref _lastPackageIndex);
+            if (package.Index <= 0)
+            {
+                package.Index = Interlocked.Increment(ref _lastPackageIndex);
+            }
 
             Log.Information("收到包裹信息: {Barcode}, 序号={Index}", package.Barcode, package.Index);
 
@@ -423,7 +432,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
             _moduleConnectionService.OnPackageReceived(package);
 
             // 如果没有错误，设置为正常状态
-            if (string.IsNullOrEmpty(package.ErrorMessage)) package.StatusDisplay = "正常";
+            if (string.IsNullOrEmpty(package.ErrorMessage))
+            {
+                package.StatusDisplay = "正常";
+            }
 
             // 记录包裹分配到格口的信息
             _chutePackageRecordService.AddPackageRecord(package);
@@ -469,60 +481,62 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     private void UpdatePackageInfoItems(PackageInfo package)
     {
-        var weightItem = PackageInfoItems.FirstOrDefault(x => x.Label == "重量");
+        var weightItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "重量");
         if (weightItem != null)
         {
             weightItem.Value = package.Weight.ToString("F2");
             weightItem.Unit = "kg";
         }
 
-        var sizeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "尺寸");
+        var sizeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "尺寸");
         if (sizeItem != null)
         {
             sizeItem.Value = package.VolumeDisplay;
             sizeItem.Unit = "mm";
         }
 
-        var timeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "时间");
+        var timeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "时间");
         if (timeItem != null)
         {
             timeItem.Value = package.CreateTime.ToString("HH:mm:ss");
             timeItem.Description = $"处理于 {package.CreateTime:yyyy-MM-dd}";
         }
 
-        var statusItem = PackageInfoItems.FirstOrDefault(x => x.Label == "状态");
+        var statusItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "状态");
         if (statusItem == null) return;
+
         statusItem.Value = package.StatusDisplay;
         statusItem.Description = package.ErrorMessage ?? "处理状态";
     }
 
     private void UpdateStatistics()
     {
-        var totalItem = StatisticsItems.FirstOrDefault(x => x.Label == "总包裹数");
+        var totalItem = StatisticsItems.FirstOrDefault(static x => x.Label == "总包裹数");
         if (totalItem != null)
         {
             totalItem.Value = PackageHistory.Count.ToString();
             totalItem.Description = $"累计处理 {PackageHistory.Count} 个包裹";
         }
 
-        var successItem = StatisticsItems.FirstOrDefault(x => x.Label == "成功数");
+        var successItem = StatisticsItems.FirstOrDefault(static x => x.Label == "成功数");
         if (successItem != null)
         {
-            var successCount = PackageHistory.Count(p => string.IsNullOrEmpty(p.ErrorMessage));
+            var successCount = PackageHistory.Count(static p => string.IsNullOrEmpty(p.ErrorMessage));
             successItem.Value = successCount.ToString();
             successItem.Description = $"成功处理 {successCount} 个包裹";
         }
 
-        var failedItem = StatisticsItems.FirstOrDefault(x => x.Label == "失败数");
+        var failedItem = StatisticsItems.FirstOrDefault(static x => x.Label == "失败数");
         if (failedItem != null)
         {
-            var failedCount = PackageHistory.Count(p => !string.IsNullOrEmpty(p.ErrorMessage));
+            var failedCount = PackageHistory.Count(static p => !string.IsNullOrEmpty(p.ErrorMessage));
             failedItem.Value = failedCount.ToString();
             failedItem.Description = $"失败处理 {failedCount} 个包裹";
         }
 
-        var rateItem = StatisticsItems.FirstOrDefault(x => x.Label == "处理速率");
+        var rateItem = StatisticsItems.FirstOrDefault(static x => x.Label == "处理速率");
         if (rateItem == null) return;
+
         {
             var hourAgo = DateTime.Now.AddHours(-1);
             var hourlyCount = PackageHistory.Count(p => p.CreateTime > hourAgo);
@@ -567,7 +581,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     /// </summary>
     /// <param name="chuteNumber">格口号</param>
     /// <returns>是否锁定</returns>
-    public bool IsChuteLocked(int chuteNumber)
+    private bool IsChuteLocked(int chuteNumber)
     {
         return _chuteLockStatus.TryGetValue(chuteNumber, out var isLocked) && isLocked;
     }
@@ -589,7 +603,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            var lockingDeviceStatus = DeviceStatuses.FirstOrDefault(x => x.Name == "锁格设备");
+            var lockingDeviceStatus = DeviceStatuses.FirstOrDefault(static x => x.Name == "锁格设备");
             if (lockingDeviceStatus == null) return;
 
             Application.Current.Dispatcher.Invoke(() =>

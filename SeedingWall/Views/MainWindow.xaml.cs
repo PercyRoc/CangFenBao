@@ -9,7 +9,7 @@ namespace Presentation_SeedingWall.Views;
 /// <summary>
 ///     Interaction logic for MainWindow.xaml
 /// </summary>
-public partial class MainWindow
+internal partial class MainWindow
 {
     private readonly IDialogService _dialogService;
 

@@ -1,12 +1,12 @@
 using Common.Models.Package;
-using Presentation_KuaiLv.Models.DWS;
+using KuaiLv.Models.DWS;
 
-namespace Presentation_KuaiLv.Services.DWS;
+namespace KuaiLv.Services.DWS;
 
 /// <summary>
 ///     DWS服务接口
 /// </summary>
-public interface IDwsService
+internal interface IDwsService
 {
     /// <summary>
     ///     上报包裹信息

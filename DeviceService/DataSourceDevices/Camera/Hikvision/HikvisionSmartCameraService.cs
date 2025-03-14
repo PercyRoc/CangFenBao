@@ -18,8 +18,6 @@ namespace DeviceService.DataSourceDevices.Camera.Hikvision;
 /// </summary>
 public class HikvisionSmartCameraService : ICameraService
 {
-    private const int ThrottleIntervalMs = 100;
-    private const int BarcodeValidTimeMs = 500; // 条码有效期500ms
     private const int TriggerIntervalMs = 200; // 触发间隔
     private readonly object _cacheUpdateLock = new();
 
@@ -30,11 +28,7 @@ public class HikvisionSmartCameraService : ICameraService
     private readonly Subject<(Image<Rgba32> image, IReadOnlyList<BarcodeLocation> barcodes)> _imageSubject = new();
 
     // 节流相关字段
-    private readonly Dictionary<string, DateTime> _lastPublishTime = new();
     private readonly Subject<PackageInfo> _packageSubject = new();
-    private readonly Dictionary<string, PackageInfo> _pendingPackages = new();
-    private readonly object _publishLock = new();
-    private readonly object _triggerLock = new();
     private CodeRules _codeRules;
 
     // 添加触发计数器和时间戳
@@ -49,187 +43,192 @@ public class HikvisionSmartCameraService : ICameraService
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
     }
 
-    public HikvisionSmartCameraService()
+    internal HikvisionSmartCameraService()
     {
         // 初始化硬编码的条码规则
         _codeRules = new CodeRules
         {
-            coderules = new List<CodeRule>
-            {
-                new()
+            Coderules =
+            [
+                new CodeRule
                 {
-                    name = "default",
-                    regex = "(^.{0,0}$)",
-                    userDefine = false,
-                    ui = new CodeRuleUI
+                    Name = "default",
+                    Regex = "(^.{0,0}$)",
+                    UserDefine = false,
+                    Ui = new CodeRuleUi
                     {
-                        blength = true,
-                        bstartwith = true,
-                        bendwith = true,
-                        binclude = true,
-                        bexclude = true,
-                        bother = true,
-                        buserdefine = false,
-                        minLen = 0,
-                        maxLen = 100,
-                        startwith = "",
-                        endwith = "",
-                        include = "",
-                        include_start = 0,
-                        include_end = 0,
-                        exclude = "",
-                        exclude_start = 0,
-                        exclude_end = 0,
-                        other = 2
+                        Blength = true,
+                        Bstartwith = true,
+                        Bendwith = true,
+                        Binclude = true,
+                        Bexclude = true,
+                        Bother = true,
+                        Buserdefine = false,
+                        MinLen = 0,
+                        MaxLen = 100,
+                        Startwith = "",
+                        Endwith = "",
+                        Include = "",
+                        IncludeStart = 0,
+                        IncludeEnd = 0,
+                        Exclude = "",
+                        ExcludeStart = 0,
+                        ExcludeEnd = 0,
+                        Other = 2
                     },
-                    enable = false
+                    Enable = false
                 },
-                new()
+
+                new CodeRule
                 {
-                    name = "UN",
-                    regex = "(?=^[0-9a-zA-Z]+$)(?=^(UN).*)(?=.*(CN)$)(^.{14,100}$)",
-                    userDefine = false,
-                    ui = new CodeRuleUI
+                    Name = "UN",
+                    Regex = "(?=^[0-9a-zA-Z]+$)(?=^(UN).*)(?=.*(CN)$)(^.{14,100}$)",
+                    UserDefine = false,
+                    Ui = new CodeRuleUi
                     {
-                        blength = true,
-                        bstartwith = true,
-                        bendwith = true,
-                        binclude = false,
-                        bexclude = false,
-                        bother = true,
-                        buserdefine = false,
-                        minLen = 14,
-                        maxLen = 100,
-                        startwith = "UN",
-                        endwith = "CN",
-                        include = "",
-                        include_start = 0,
-                        include_end = 0,
-                        exclude = "",
-                        exclude_start = 0,
-                        exclude_end = 0,
-                        other = 2
+                        Blength = true,
+                        Bstartwith = true,
+                        Bendwith = true,
+                        Binclude = false,
+                        Bexclude = false,
+                        Bother = true,
+                        Buserdefine = false,
+                        MinLen = 14,
+                        MaxLen = 100,
+                        Startwith = "UN",
+                        Endwith = "CN",
+                        Include = "",
+                        IncludeStart = 0,
+                        IncludeEnd = 0,
+                        Exclude = "",
+                        ExcludeStart = 0,
+                        ExcludeEnd = 0,
+                        Other = 2
                     },
-                    enable = true
+                    Enable = true
                 },
-                new()
+
+                new CodeRule
                 {
-                    name = "YANDEX",
-                    regex = "(?=^[0-9a-zA-Z]+$)(^.{11,100}$)",
-                    userDefine = false,
-                    ui = new CodeRuleUI
+                    Name = "YANDEX",
+                    Regex = "(?=^[0-9a-zA-Z]+$)(^.{11,100}$)",
+                    UserDefine = false,
+                    Ui = new CodeRuleUi
                     {
-                        blength = true,
-                        bstartwith = true,
-                        bendwith = true,
-                        binclude = true,
-                        bexclude = true,
-                        bother = true,
-                        buserdefine = false,
-                        minLen = 11,
-                        maxLen = 100,
-                        startwith = "",
-                        endwith = "",
-                        include = "",
-                        include_start = 0,
-                        include_end = 0,
-                        exclude = "",
-                        exclude_start = 0,
-                        exclude_end = 0,
-                        other = 2
+                        Blength = true,
+                        Bstartwith = true,
+                        Bendwith = true,
+                        Binclude = true,
+                        Bexclude = true,
+                        Bother = true,
+                        Buserdefine = false,
+                        MinLen = 11,
+                        MaxLen = 100,
+                        Startwith = "",
+                        Endwith = "",
+                        Include = "",
+                        IncludeStart = 0,
+                        IncludeEnd = 0,
+                        Exclude = "",
+                        ExcludeStart = 0,
+                        ExcludeEnd = 0,
+                        Other = 2
                     },
-                    enable = true
+                    Enable = true
                 },
-                new()
+
+                new CodeRule
                 {
-                    name = "YADEX2",
-                    regex = "(?=^[0-9a-zA-Z]+$)(^.{13,100}$)",
-                    userDefine = false,
-                    ui = new CodeRuleUI
+                    Name = "YADEX2",
+                    Regex = "(?=^[0-9a-zA-Z]+$)(^.{13,100}$)",
+                    UserDefine = false,
+                    Ui = new CodeRuleUi
                     {
-                        blength = true,
-                        bstartwith = true,
-                        bendwith = true,
-                        binclude = true,
-                        bexclude = true,
-                        bother = true,
-                        buserdefine = false,
-                        minLen = 13,
-                        maxLen = 100,
-                        startwith = "",
-                        endwith = "",
-                        include = "",
-                        include_start = 0,
-                        include_end = 0,
-                        exclude = "",
-                        exclude_start = 0,
-                        exclude_end = 0,
-                        other = 2
+                        Blength = true,
+                        Bstartwith = true,
+                        Bendwith = true,
+                        Binclude = true,
+                        Bexclude = true,
+                        Bother = true,
+                        Buserdefine = false,
+                        MinLen = 13,
+                        MaxLen = 100,
+                        Startwith = "",
+                        Endwith = "",
+                        Include = "",
+                        IncludeStart = 0,
+                        IncludeEnd = 0,
+                        Exclude = "",
+                        ExcludeStart = 0,
+                        ExcludeEnd = 0,
+                        Other = 2
                     },
-                    enable = true
+                    Enable = true
                 },
-                new()
+
+                new CodeRule
                 {
-                    name = "EQ",
-                    regex = "(?=^[0-9a-zA-Z]+$)(?=^(EQ).*)(?=.*(YQ)$)(^.{17,100}$)",
-                    userDefine = false,
-                    ui = new CodeRuleUI
+                    Name = "EQ",
+                    Regex = "(?=^[0-9a-zA-Z]+$)(?=^(EQ).*)(?=.*(YQ)$)(^.{17,100}$)",
+                    UserDefine = false,
+                    Ui = new CodeRuleUi
                     {
-                        blength = true,
-                        bstartwith = true,
-                        bendwith = true,
-                        binclude = true,
-                        bexclude = true,
-                        bother = true,
-                        buserdefine = false,
-                        minLen = 17,
-                        maxLen = 100,
-                        startwith = "EQ",
-                        endwith = "YQ",
-                        include = "",
-                        include_start = 0,
-                        include_end = 0,
-                        exclude = "",
-                        exclude_start = 0,
-                        exclude_end = 0,
-                        other = 2
+                        Blength = true,
+                        Bstartwith = true,
+                        Bendwith = true,
+                        Binclude = true,
+                        Bexclude = true,
+                        Bother = true,
+                        Buserdefine = false,
+                        MinLen = 17,
+                        MaxLen = 100,
+                        Startwith = "EQ",
+                        Endwith = "YQ",
+                        Include = "",
+                        IncludeStart = 0,
+                        IncludeEnd = 0,
+                        Exclude = "",
+                        ExcludeStart = 0,
+                        ExcludeEnd = 0,
+                        Other = 2
                     },
-                    enable = true
+                    Enable = true
                 },
-                new()
+
+                new CodeRule
                 {
-                    name = "WB18",
-                    regex = "(?=^[0-9a-zA-Z]+$)(?=^(WB).*)(^.{18,100}$)",
-                    userDefine = false,
-                    ui = new CodeRuleUI
+                    Name = "WB18",
+                    Regex = "(?=^[0-9a-zA-Z]+$)(?=^(WB).*)(^.{18,100}$)",
+                    UserDefine = false,
+                    Ui = new CodeRuleUi
                     {
-                        blength = true,
-                        bstartwith = true,
-                        bendwith = true,
-                        binclude = true,
-                        bexclude = true,
-                        bother = true,
-                        buserdefine = false,
-                        minLen = 18,
-                        maxLen = 100,
-                        startwith = "WB",
-                        endwith = "",
-                        include = "",
-                        include_start = 0,
-                        include_end = 0,
-                        exclude = "",
-                        exclude_start = 0,
-                        exclude_end = 0,
-                        other = 2
+                        Blength = true,
+                        Bstartwith = true,
+                        Bendwith = true,
+                        Binclude = true,
+                        Bexclude = true,
+                        Bother = true,
+                        Buserdefine = false,
+                        MinLen = 18,
+                        MaxLen = 100,
+                        Startwith = "WB",
+                        Endwith = "",
+                        Include = "",
+                        IncludeStart = 0,
+                        IncludeEnd = 0,
+                        Exclude = "",
+                        ExcludeStart = 0,
+                        ExcludeEnd = 0,
+                        Other = 2
                     },
-                    enable = true
+                    Enable = true
                 }
-            }
+            ]
         };
 
         Log.Information("已初始化条码规则，共 {Count} 条规则，其中 {EnabledCount} 条已启用",
-            _codeRules.coderules.Count,
-            _codeRules.coderules.Count(r => r.enable));
+            _codeRules.Coderules.Count,
+            _codeRules.Coderules.Count(static r => r.Enable));
     }
 
     /// <summary>
@@ -291,41 +290,34 @@ public class HikvisionSmartCameraService : ICameraService
                     deviceList.pDeviceInfo[i],
                     typeof(MvCodeReader.MV_CODEREADER_DEVICE_INFO))!;
 
-                if (deviceInfo.nTLayerType == MvCodeReader.MV_CODEREADER_GIGE_DEVICE)
-                {
-                    // 获取GigE设备的特殊信息
-                    var buffer = Marshal.UnsafeAddrOfPinnedArrayElement(deviceInfo.SpecialInfo.stGigEInfo, 0);
-                    var gigEInfo = (MvCodeReader.MV_CODEREADER_GIGE_DEVICE_INFO)Marshal.PtrToStructure(
-                        buffer,
-                        typeof(MvCodeReader.MV_CODEREADER_GIGE_DEVICE_INFO))!;
+                if (deviceInfo.nTLayerType != MvCodeReader.MV_CODEREADER_GIGE_DEVICE) continue;
+                // 获取GigE设备的特殊信息
+                var buffer = Marshal.UnsafeAddrOfPinnedArrayElement(deviceInfo.SpecialInfo.stGigEInfo, 0);
+                var gigEInfo = (MvCodeReader.MV_CODEREADER_GIGE_DEVICE_INFO)Marshal.PtrToStructure(
+                    buffer,
+                    typeof(MvCodeReader.MV_CODEREADER_GIGE_DEVICE_INFO))!;
 
-                    var cameraInfo = new DeviceCameraInfo { Index = i };
+                var cameraInfo = new DeviceCameraInfo { Index = i };
 
-                    // 获取正确的IP地址
-                    var deviceIp =
-                        $"{gigEInfo.nCurrentIp & 0xFF}.{(gigEInfo.nCurrentIp >> 8) & 0xFF}.{(gigEInfo.nCurrentIp >> 16) & 0xFF}.{(gigEInfo.nCurrentIp >> 24) & 0xFF}";
-                    cameraInfo.IpAddress = deviceIp; // 设置正确的IP地址
-                    cameraInfo.UpdateFromDeviceInfo(deviceInfo);
+                // 获取正确的IP地址
+                var deviceIp =
+                    $"{gigEInfo.nCurrentIp & 0xFF}.{(gigEInfo.nCurrentIp >> 8) & 0xFF}.{(gigEInfo.nCurrentIp >> 16) & 0xFF}.{(gigEInfo.nCurrentIp >> 24) & 0xFF}";
+                cameraInfo.IpAddress = deviceIp; // 设置正确的IP地址
+                cameraInfo.UpdateFromDeviceInfo(deviceInfo);
 
-                    // 记录更详细的设备信息
-                    string deviceName;
-                    if (!string.IsNullOrEmpty(gigEInfo.chUserDefinedName))
-                        deviceName = $"GEV: {gigEInfo.chUserDefinedName} ({gigEInfo.chSerialNumber})";
-                    else
-                        deviceName =
-                            $"GEV: {gigEInfo.chManufacturerName} {gigEInfo.chModelName} ({gigEInfo.chSerialNumber})";
+                // 记录更详细的设备信息
+                var deviceName = !string.IsNullOrEmpty(gigEInfo.chUserDefinedName) ? $"GEV: {gigEInfo.chUserDefinedName} ({gigEInfo.chSerialNumber})" : $"GEV: {gigEInfo.chManufacturerName} {gigEInfo.chModelName} ({gigEInfo.chSerialNumber})";
 
-                    Log.Information("发现相机: {Name}", deviceName);
-                    Log.Debug("相机详细信息: IP={IP}, MAC={MAC:X8}{MAC2:X8}, 制造商={Manufacturer}, 型号={Model}, 序列号={Serial}",
-                        deviceIp,
-                        deviceInfo.nMacAddrHigh,
-                        deviceInfo.nMacAddrLow,
-                        gigEInfo.chManufacturerName,
-                        gigEInfo.chModelName,
-                        gigEInfo.chSerialNumber);
+                Log.Information("发现相机: {Name}", deviceName);
+                Log.Debug("相机详细信息: IP={IP}, MAC={MAC:X8}{MAC2:X8}, 制造商={Manufacturer}, 型号={Model}, 序列号={Serial}",
+                    deviceIp,
+                    deviceInfo.nMacAddrHigh,
+                    deviceInfo.nMacAddrLow,
+                    gigEInfo.chManufacturerName,
+                    gigEInfo.chModelName,
+                    gigEInfo.chSerialNumber);
 
-                    cameraInfos.Add(cameraInfo);
-                }
+                cameraInfos.Add(cameraInfo);
             }
 
             _settings.SelectedCameras = cameraInfos;
@@ -393,67 +385,28 @@ public class HikvisionSmartCameraService : ICameraService
                             break;
                         }
 
-                        string errorMsg;
-                        switch (nRet)
+                        var errorMsg = nRet switch
                         {
-                            case MvCodeReader.MV_CODEREADER_E_HANDLE:
-                                errorMsg = "无效的句柄";
-                                break;
-                            case MvCodeReader.MV_CODEREADER_E_SUPPORT:
-                                errorMsg = "不支持的功能";
-                                break;
-                            case MvCodeReader.MV_CODEREADER_E_BUSY:
-                                errorMsg = "设备忙，可能被其他程序占用";
-                                break;
-                            case MvCodeReader.MV_CODEREADER_E_NETER:
-                                errorMsg = "网络错误";
-                                break;
-                            case MvCodeReader.MV_CODEREADER_E_PARAMETER:
-                                errorMsg = "参数错误";
-                                break;
-                            case MvCodeReader.MV_CODEREADER_E_RESOURCE:
-                                errorMsg = "资源申请失败";
-                                break;
-                            case MvCodeReader.MV_CODEREADER_E_NODATA:
-                                errorMsg = "无数据";
-                                break;
-                            case MvCodeReader.MV_CODEREADER_E_PRECONDITION:
-                                errorMsg = "前置条件有误，或者依赖的资源未就绪";
-                                break;
-                            case MvCodeReader.MV_CODEREADER_E_VERSION:
-                                errorMsg = "版本不匹配";
-                                break;
-                            case MvCodeReader.MV_CODEREADER_E_NOENOUGH_BUF:
-                                errorMsg = "缓存不足";
-                                break;
-                            case MvCodeReader.MV_CODEREADER_E_UNKNOW:
-                                errorMsg = "未知的错误";
-                                break;
-                            case MvCodeReader.MV_CODEREADER_E_GC_GENERIC:
-                                errorMsg = "通用错误";
-                                break;
-                            case MvCodeReader.MV_CODEREADER_E_GC_ACCESS:
-                                errorMsg = "访问权限错误";
-                                break;
-                            case MvCodeReader.MV_CODEREADER_E_ACCESS_DENIED:
-                                errorMsg = "拒绝访问";
-                                break;
-                            case MvCodeReader.MV_CODEREADER_E_USB_DRIVER:
-                                errorMsg = "USB驱动错误";
-                                break;
-                            case MvCodeReader.MV_CODEREADER_E_USB_BANDWIDTH:
-                                errorMsg = "USB带宽不足";
-                                break;
-                            case MvCodeReader.MV_CODEREADER_E_USB_DEVICE:
-                                errorMsg = "USB设备错误";
-                                break;
-                            case MvCodeReader.MV_CODEREADER_E_NET_TIMEOUT:
-                                errorMsg = "网络连接超时";
-                                break;
-                            default:
-                                errorMsg = "未知错误";
-                                break;
-                        }
+                            MvCodeReader.MV_CODEREADER_E_HANDLE => "无效的句柄",
+                            MvCodeReader.MV_CODEREADER_E_SUPPORT => "不支持的功能",
+                            MvCodeReader.MV_CODEREADER_E_BUSY => "设备忙，可能被其他程序占用",
+                            MvCodeReader.MV_CODEREADER_E_NETER => "网络错误",
+                            MvCodeReader.MV_CODEREADER_E_PARAMETER => "参数错误",
+                            MvCodeReader.MV_CODEREADER_E_RESOURCE => "资源申请失败",
+                            MvCodeReader.MV_CODEREADER_E_NODATA => "无数据",
+                            MvCodeReader.MV_CODEREADER_E_PRECONDITION => "前置条件有误，或者依赖的资源未就绪",
+                            MvCodeReader.MV_CODEREADER_E_VERSION => "版本不匹配",
+                            MvCodeReader.MV_CODEREADER_E_NOENOUGH_BUF => "缓存不足",
+                            MvCodeReader.MV_CODEREADER_E_UNKNOW => "未知的错误",
+                            MvCodeReader.MV_CODEREADER_E_GC_GENERIC => "通用错误",
+                            MvCodeReader.MV_CODEREADER_E_GC_ACCESS => "访问权限错误",
+                            MvCodeReader.MV_CODEREADER_E_ACCESS_DENIED => "拒绝访问",
+                            MvCodeReader.MV_CODEREADER_E_USB_DRIVER => "USB驱动错误",
+                            MvCodeReader.MV_CODEREADER_E_USB_BANDWIDTH => "USB带宽不足",
+                            MvCodeReader.MV_CODEREADER_E_USB_DEVICE => "USB设备错误",
+                            MvCodeReader.MV_CODEREADER_E_NET_TIMEOUT => "网络连接超时",
+                            _ => "未知错误"
+                        };
 
                         Log.Error("打开相机 {IP} 失败: {Error} (错误码: 0x{Code:X})", deviceIp, errorMsg, nRet);
                     }
@@ -469,7 +422,7 @@ public class HikvisionSmartCameraService : ICameraService
                     Log.Information("相机 {IP}: 注册图像回调函数", deviceIp);
 
                     // 使用Ex2版本的回调
-                    instance.ImageCallback = (pData, pstFrameInfoEx2, pUser) =>
+                    instance.ImageCallback = (pData, pstFrameInfoEx2, _) =>
                     {
                         try
                         {
@@ -481,31 +434,29 @@ public class HikvisionSmartCameraService : ICameraService
                                 return;
                             }
 
-                            var ipAddress = deviceIp; // 使用正确的IP地址
-
                             // 将帧信息转换为结构体
                             var frameInfo = (MvCodeReader.MV_CODEREADER_IMAGE_OUT_INFO_EX2)Marshal.PtrToStructure(
                                 pstFrameInfoEx2,
                                 typeof(MvCodeReader.MV_CODEREADER_IMAGE_OUT_INFO_EX2))!;
 
-                            Log.Debug("相机 {IP}: 收到图像回调 (Ex2)", ipAddress);
+                            Log.Debug("相机 {IP}: 收到图像回调 (Ex2)", deviceIp);
                             Log.Debug("相机 {IP}: 图像信息 - 宽度:{Width}, 高度:{Height}, 帧号:{FrameNum}",
-                                ipAddress, frameInfo.nWidth, frameInfo.nHeight, frameInfo.nFrameNum);
+                                deviceIp, frameInfo.nWidth, frameInfo.nHeight, frameInfo.nFrameNum);
 
                             if (frameInfo.nFrameLen <= 0)
                             {
-                                Log.Warning("相机 {IP}: 获取到的帧长度为0", ipAddress);
+                                Log.Warning("相机 {IP}: 获取到的帧长度为0", deviceIp);
                                 return;
                             }
 
-                            Log.Debug("相机 {IP}: 成功获取一帧图像", ipAddress);
-                            Log.Debug("相机 {IP}: 图像大小 {Size} 字节", ipAddress, frameInfo.nFrameLen);
+                            Log.Debug("相机 {IP}: 成功获取一帧图像", deviceIp);
+                            Log.Debug("相机 {IP}: 图像大小 {Size} 字节", deviceIp, frameInfo.nFrameLen);
 
                             // 确保缓冲区大小足够
                             if (frameInfo.nFrameLen > instance.ImageBuffer.Length)
                             {
                                 Log.Warning("相机 {IP}: 图像数据大小({Size})超过缓冲区大小({BufferSize})",
-                                    ipAddress, frameInfo.nFrameLen, instance.ImageBuffer.Length);
+                                    deviceIp, frameInfo.nFrameLen, instance.ImageBuffer.Length);
                                 return;
                             }
 
@@ -522,14 +473,15 @@ public class HikvisionSmartCameraService : ICameraService
                                         frameInfo.UnparsedBcrList.pstCodeListEx2,
                                         typeof(MvCodeReader.MV_CODEREADER_RESULT_BCR_EX2))!;
 
-                                    if (bcrResult.nCodeNum > 0 && bcrResult.stBcrInfoEx2 != null &&
-                                        bcrResult.stBcrInfoEx2.Length > 0)
+                                    if (bcrResult is { nCodeNum: > 0, stBcrInfoEx2.Length: > 0 })
                                     {
                                         // 检查编码并正确解码
                                         string decodedBarcode;
-                                        if (IsTextUTF8(bcrResult.stBcrInfoEx2[0].chCode))
+                                        if (IsTextUtf8(bcrResult.stBcrInfoEx2[0].chCode))
+                                        {
                                             decodedBarcode = Encoding.UTF8.GetString(bcrResult.stBcrInfoEx2[0].chCode)
                                                 .Trim().TrimEnd('\0');
+                                        }
                                         else
                                             try
                                             {
@@ -547,11 +499,11 @@ public class HikvisionSmartCameraService : ICameraService
                                         if (_codeRules.IsValidBarcode(decodedBarcode))
                                         {
                                             barcode = decodedBarcode;
-                                            Log.Information("相机 {IP}: 条码 {Barcode} 符合规则要求", ipAddress, barcode);
+                                            Log.Information("相机 {IP}: 条码 {Barcode} 符合规则要求", deviceIp, barcode);
                                         }
                                         else
                                         {
-                                            Log.Warning("相机 {IP}: 条码 {Barcode} 不符合规则要求，标记为NoRead", ipAddress,
+                                            Log.Warning("相机 {IP}: 条码 {Barcode} 不符合规则要求，标记为NoRead", deviceIp,
                                                 decodedBarcode);
                                             barcode = "NoRead";
                                         }
@@ -559,13 +511,13 @@ public class HikvisionSmartCameraService : ICameraService
                                 }
                                 catch (Exception ex)
                                 {
-                                    Log.Error(ex, "相机 {IP}: 处理条码数据时发生错误", ipAddress);
+                                    Log.Error(ex, "相机 {IP}: 处理条码数据时发生错误", deviceIp);
                                 }
 
-                            Log.Debug("相机 {IP}: 处理条码结果: {Barcode}", ipAddress, barcode);
+                            Log.Debug("相机 {IP}: 处理条码结果: {Barcode}", deviceIp, barcode);
 
                             // 处理条码结果，传入相机IP地址
-                            ProcessBarcodeResult(barcode, frameInfo, tempBuffer, ipAddress);
+                            ProcessBarcodeResult(barcode, frameInfo, tempBuffer, deviceIp);
                         }
                         catch (Exception ex)
                         {
@@ -578,22 +530,13 @@ public class HikvisionSmartCameraService : ICameraService
                         IntPtr.Zero);
                     if (nRet != MvCodeReader.MV_CODEREADER_OK)
                     {
-                        string errorMsg;
-                        switch (nRet)
+                        var errorMsg = nRet switch
                         {
-                            case MvCodeReader.MV_CODEREADER_E_HANDLE:
-                                errorMsg = "无效的句柄";
-                                break;
-                            case MvCodeReader.MV_CODEREADER_E_SUPPORT:
-                                errorMsg = "不支持的功能";
-                                break;
-                            case MvCodeReader.MV_CODEREADER_E_PARAMETER:
-                                errorMsg = "参数错误";
-                                break;
-                            default:
-                                errorMsg = $"未知错误 (错误码: 0x{nRet:X})";
-                                break;
-                        }
+                            MvCodeReader.MV_CODEREADER_E_HANDLE => "无效的句柄",
+                            MvCodeReader.MV_CODEREADER_E_SUPPORT => "不支持的功能",
+                            MvCodeReader.MV_CODEREADER_E_PARAMETER => "参数错误",
+                            _ => $"未知错误 (错误码: 0x{nRet:X})"
+                        };
 
                         Log.Error("相机 {IP} 注册回调函数失败: {Error} (错误码: 0x{Code:X})", deviceIp, errorMsg, nRet);
                         Log.Warning("相机 {IP}: 将使用轮询模式获取图像", deviceIp);
@@ -716,44 +659,37 @@ public class HikvisionSmartCameraService : ICameraService
                     deviceList.pDeviceInfo[i],
                     typeof(MvCodeReader.MV_CODEREADER_DEVICE_INFO))!;
 
-                if (deviceInfo.nTLayerType == MvCodeReader.MV_CODEREADER_GIGE_DEVICE)
-                {
-                    // 获取GigE设备的特殊信息
-                    var buffer = Marshal.UnsafeAddrOfPinnedArrayElement(deviceInfo.SpecialInfo.stGigEInfo, 0);
-                    var gigEInfo = (MvCodeReader.MV_CODEREADER_GIGE_DEVICE_INFO)Marshal.PtrToStructure(
-                        buffer,
-                        typeof(MvCodeReader.MV_CODEREADER_GIGE_DEVICE_INFO))!;
+                if (deviceInfo.nTLayerType != MvCodeReader.MV_CODEREADER_GIGE_DEVICE) continue;
+                // 获取GigE设备的特殊信息
+                var buffer = Marshal.UnsafeAddrOfPinnedArrayElement(deviceInfo.SpecialInfo.stGigEInfo, 0);
+                var gigEInfo = (MvCodeReader.MV_CODEREADER_GIGE_DEVICE_INFO)Marshal.PtrToStructure(
+                    buffer,
+                    typeof(MvCodeReader.MV_CODEREADER_GIGE_DEVICE_INFO))!;
 
-                    var cameraInfo = new DeviceCameraInfo { Index = i };
-                    cameraInfo.UpdateFromDeviceInfo(deviceInfo);
+                var cameraInfo = new DeviceCameraInfo { Index = i };
+                cameraInfo.UpdateFromDeviceInfo(deviceInfo);
 
-                    // 记录更详细的设备信息
-                    string deviceName;
-                    if (!string.IsNullOrEmpty(gigEInfo.chUserDefinedName))
-                        deviceName = $"GEV: {gigEInfo.chUserDefinedName} ({gigEInfo.chSerialNumber})";
-                    else
-                        deviceName =
-                            $"GEV: {gigEInfo.chManufacturerName} {gigEInfo.chModelName} ({gigEInfo.chSerialNumber})";
+                // 记录更详细的设备信息
+                var deviceName = !string.IsNullOrEmpty(gigEInfo.chUserDefinedName) ? $"GEV: {gigEInfo.chUserDefinedName} ({gigEInfo.chSerialNumber})" : $"GEV: {gigEInfo.chManufacturerName} {gigEInfo.chModelName} ({gigEInfo.chSerialNumber})";
 
-                    Log.Information("发现相机: {Name}", deviceName);
-                    Log.Debug("相机详细信息: IP={IP}, MAC={MAC:X8}{MAC2:X8}, 制造商={Manufacturer}, 型号={Model}",
-                        cameraInfo.IpAddress,
-                        deviceInfo.nMacAddrHigh,
-                        deviceInfo.nMacAddrLow,
-                        gigEInfo.chManufacturerName,
-                        gigEInfo.chModelName);
+                Log.Information("发现相机: {Name}", deviceName);
+                Log.Debug("相机详细信息: IP={IP}, MAC={MAC:X8}{MAC2:X8}, 制造商={Manufacturer}, 型号={Model}",
+                    cameraInfo.IpAddress,
+                    deviceInfo.nMacAddrHigh,
+                    deviceInfo.nMacAddrLow,
+                    gigEInfo.chManufacturerName,
+                    gigEInfo.chModelName);
 
-                    result.Add(cameraInfo);
-                }
+                result.Add(cameraInfo);
             }
 
             // 如果发现多个相机具有相同的IP地址，记录警告
-            var duplicateIPs = result.GroupBy(x => x.IpAddress)
-                .Where(g => g.Count() > 1)
-                .Select(g => g.Key)
+            var duplicateIPs = result.GroupBy(static x => x.IpAddress)
+                .Where(static g => g.Count() > 1)
+                .Select(static g => g.Key)
                 .ToList();
 
-            if (duplicateIPs.Any())
+            if (duplicateIPs.Count != 0)
                 foreach (var ip in duplicateIPs)
                 {
                     var cameras = result.Where(x => x.IpAddress == ip).ToList();
@@ -811,8 +747,8 @@ public class HikvisionSmartCameraService : ICameraService
     {
         _codeRules = rules;
         Log.Information("已更新条码规则配置，共 {Count} 条规则，其中 {EnabledCount} 条已启用",
-            rules.coderules.Count,
-            rules.coderules.Count(r => r.enable));
+            rules.Coderules.Count,
+            rules.Coderules.Count(static r => r.Enable));
     }
 
     private void ReceiveImages(string ipAddress, CameraInstance instance)
@@ -866,25 +802,14 @@ public class HikvisionSmartCameraService : ICameraService
                 {
                     // 记录获取图像失败的错误
                     errorCount++;
-                    string errorMsg;
-                    switch (nRet)
+                    var errorMsg = nRet switch
                     {
-                        case MvCodeReader.MV_CODEREADER_E_NET_TIMEOUT:
-                            errorMsg = "获取图像超时";
-                            break;
-                        case MvCodeReader.MV_CODEREADER_E_HANDLE:
-                            errorMsg = "无效的句柄";
-                            break;
-                        case MvCodeReader.MV_CODEREADER_E_SUPPORT:
-                            errorMsg = "不支持的功能";
-                            break;
-                        case MvCodeReader.MV_CODEREADER_E_NODATA:
-                            errorMsg = "无数据";
-                            break;
-                        default:
-                            errorMsg = $"未知错误 (错误码: 0x{nRet:X})";
-                            break;
-                    }
+                        MvCodeReader.MV_CODEREADER_E_NET_TIMEOUT => "获取图像超时",
+                        MvCodeReader.MV_CODEREADER_E_HANDLE => "无效的句柄",
+                        MvCodeReader.MV_CODEREADER_E_SUPPORT => "不支持的功能",
+                        MvCodeReader.MV_CODEREADER_E_NODATA => "无数据",
+                        _ => $"未知错误 (错误码: 0x{nRet:X})"
+                    };
 
                     // 每分钟最多记录一次错误，避免日志过多
                     if ((DateTime.Now - lastLogTime).TotalMinutes >= 1)
@@ -922,8 +847,10 @@ public class HikvisionSmartCameraService : ICameraService
             try
             {
                 string decodedBarcode;
-                if (IsTextUTF8(bcrResult.stBcrInfoEx2[i].chCode))
+                if (IsTextUtf8(bcrResult.stBcrInfoEx2[i].chCode))
+                {
                     decodedBarcode = Encoding.UTF8.GetString(bcrResult.stBcrInfoEx2[i].chCode).Trim().TrimEnd('\0');
+                }
                 else
                     try
                     {
@@ -981,96 +908,59 @@ public class HikvisionSmartCameraService : ICameraService
                 // 检查是否所有相机都已处理完毕
                 var allCamerasProcessed = _cameras.Count == _cameraProcessed.Count;
 
-                if (allCamerasProcessed)
+                if (!allCamerasProcessed) return;
+
+                _currentTriggerCount++;
+                Log.Debug("当前触发计数：{Count}", _currentTriggerCount);
+
+                try
                 {
-                    _currentTriggerCount++;
-                    Log.Debug("当前触发计数：{Count}", _currentTriggerCount);
+                    // 检查所有相机的条码结果
+                    var validBarcode = _cameraBarcodeCaches.Values
+                        .Where(static cache => cache.Barcode != "NoRead")
+                        .Select(static cache => cache.Barcode)
+                        .FirstOrDefault();
 
-                    try
+                    // 只在第一次触发时发布数据
+                    if (_currentTriggerCount == 1)
                     {
-                        // 检查所有相机的条码结果
-                        var validBarcode = _cameraBarcodeCaches.Values
-                            .Where(cache => cache.Barcode != "NoRead")
-                            .Select(cache => cache.Barcode)
-                            .FirstOrDefault();
-
-                        // 只在第一次触发时发布数据
-                        if (_currentTriggerCount == 1)
+                        // 创建包裹信息
+                        var package = new PackageInfo
                         {
-                            // 创建包裹信息
-                            var package = new PackageInfo
-                            {
-                                Barcode = validBarcode ?? "NoRead"
-                            };
+                            Barcode = validBarcode ?? "NoRead"
+                        };
 
-                            // 处理图像数据
-                            using var image = ProcessImage(frameInfo, imageBuffer);
-                            if (image != null)
-                                package.Image = image;
-                            else
-                                Log.Warning("无法处理图像数据");
-
-                            // 发布数据
-                            if (validBarcode != null)
-                                Log.Information("发布条码：{Barcode}", validBarcode);
-                            else
-                                Log.Debug("所有相机都未识别到有效条码，发布NoRead");
-                            PublishData(package, image);
+                        // 处理图像数据
+                        using var image = ProcessImage(frameInfo, imageBuffer);
+                        if (image != null)
+                        {
+                            package.Image = image;
                         }
                         else
-                        {
-                            Log.Debug("跳过重复触发的数据发布，触发计数：{Count}", _currentTriggerCount);
-                        }
+                            Log.Warning("无法处理图像数据");
+
+                        // 发布数据
+                        if (validBarcode != null)
+                            Log.Information("发布条码：{Barcode}", validBarcode);
+                        else
+                            Log.Debug("所有相机都未识别到有效条码，发布NoRead");
+                        PublishData(package, image);
                     }
-                    finally
+                    else
                     {
-                        // 重置相机处理状态
-                        _cameraProcessed.Clear();
+                        Log.Debug("跳过重复触发的数据发布，触发计数：{Count}", _currentTriggerCount);
                     }
+                }
+                finally
+                {
+                    // 重置相机处理状态
+                    _cameraProcessed.Clear();
                 }
             }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "处理条码结果时发生错误");
-        }
-    }
-
-    private void PublishThrottled(PackageInfo package, Image<Rgba32>? image)
-    {
-        lock (_publishLock)
-        {
-            var cameraId = package.Barcode; // 使用条码作为唯一标识
-            var now = DateTime.Now;
-
-            if (!_lastPublishTime.TryGetValue(cameraId, out var lastTime) ||
-                (now - lastTime).TotalMilliseconds >= ThrottleIntervalMs)
-            {
-                // 如果超过节流时间间隔，直接发布
-                PublishData(package, image);
-                _lastPublishTime[cameraId] = now;
-                _pendingPackages.Remove(cameraId);
-            }
-            else
-            {
-                // 如果在节流时间内，更新待发布的数据
-                _pendingPackages[cameraId] = package;
-
-                // 启动一个延迟任务来发布待处理的数据
-                Task.Delay(ThrottleIntervalMs - (int)(now - lastTime).TotalMilliseconds)
-                    .ContinueWith(_ =>
-                    {
-                        lock (_publishLock)
-                        {
-                            if (_pendingPackages.TryGetValue(cameraId, out var pendingPackage))
-                            {
-                                PublishData(pendingPackage, pendingPackage.Image);
-                                _lastPublishTime[cameraId] = DateTime.Now;
-                                _pendingPackages.Remove(cameraId);
-                            }
-                        }
-                    });
-            }
         }
     }
 
@@ -1085,7 +975,7 @@ public class HikvisionSmartCameraService : ICameraService
             image != null ? $"{image.Width}x{image.Height}" : "无图像");
     }
 
-    private Image<Rgba32>? ProcessImage(MvCodeReader.MV_CODEREADER_IMAGE_OUT_INFO_EX2 frameInfo, byte[] imageBuffer)
+    private static Image<Rgba32>? ProcessImage(MvCodeReader.MV_CODEREADER_IMAGE_OUT_INFO_EX2 frameInfo, byte[] imageBuffer)
     {
         try
         {
@@ -1131,6 +1021,79 @@ public class HikvisionSmartCameraService : ICameraService
                         goto case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_Mono8;
                     }
                 }
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_Undefined:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_Mono1p:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_Mono2p:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_Mono4p:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_Mono8_Signed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_Mono10:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_Mono10_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_Mono12:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_Mono12_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_Mono14:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_Mono16:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerGR8:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerRG8:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerGB8:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerBG8:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerGR10:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerRG10:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerGB10:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerBG10:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerGR12:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerRG12:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerGB12:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerBG12:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerGR10_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerRG10_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerGB10_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerBG10_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerGR12_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerRG12_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerGB12_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerBG12_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerGR16:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerRG16:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerGB16:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BayerBG16:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_RGB8_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BGR8_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_RGBA8_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BGRA8_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_RGB10_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BGR10_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_RGB12_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BGR12_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_RGB16_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_RGB10V1_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_RGB10V2_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_RGB12V1_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_RGB565_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_BGR565_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_YUV411_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_YUV422_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_YUV422_YUYV_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_YUV444_Packed:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_YCBCR8_CBYCR:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_YCBCR422_8:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_YCBCR422_8_CBYCRY:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_YCBCR411_8_CBYYCRYY:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_YCBCR601_8_CBYCR:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_YCBCR601_422_8:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_YCBCR601_422_8_CBYCRY:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_YCBCR601_411_8_CBYYCRYY:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_YCBCR709_8_CBYCR:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_YCBCR709_422_8:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_YCBCR709_422_8_CBYCRY:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_YCBCR709_411_8_CBYYCRYY:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_RGB8_Planar:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_RGB10_Planar:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_RGB12_Planar:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_RGB16_Planar:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_Coord3D_ABC32f:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_Coord3D_ABC32f_Planar:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_Coord3D_AC32f:
+                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_COORD3D_DEPTH_PLUS_MASK:
                 default:
                     Log.Warning("不支持的像素格式: {PixelType}", frameInfo.enPixelType);
                     return null;
@@ -1143,92 +1106,20 @@ public class HikvisionSmartCameraService : ICameraService
         }
     }
 
-    private Image<Rgba32>? ProcessImageFromBuffer(int width, int height, byte[] buffer,
-        MvCodeReader.MvCodeReaderGvspPixelType pixelType)
-    {
-        try
-        {
-            switch (pixelType)
-            {
-                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_Mono8:
-                {
-                    // 处理黑白图像
-                    var monoImage = new Image<Rgba32>(width, height);
-
-                    // 将8位灰度值转换为32位RGBA值
-                    monoImage.ProcessPixelRows(accessor =>
-                    {
-                        for (var y = 0; y < height; y++)
-                        {
-                            var row = accessor.GetRowSpan(y);
-                            for (var x = 0; x < width; x++)
-                                if (y * width + x < buffer.Length)
-                                {
-                                    var gray = buffer[y * width + x];
-                                    row[x] = new Rgba32(gray, gray, gray, 255);
-                                }
-                        }
-                    });
-
-                    return monoImage;
-                }
-                case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_Jpeg:
-                {
-                    // 处理JPEG图像
-                    try
-                    {
-                        Log.Debug("开始处理JPEG图像数据，数据大小: {Size} 字节", buffer.Length);
-                        using var ms = new MemoryStream(buffer);
-                        var image = Image.Load<Rgba32>(ms);
-                        Log.Debug("JPEG图像加载成功，分辨率: {Width}x{Height}", image.Width, image.Height);
-                        return image;
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex, "JPEG图像处理失败");
-                        // 如果JPEG处理失败，尝试作为Mono8处理
-                        Log.Information("尝试以Mono8格式处理图像");
-                        goto case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_Mono8;
-                    }
-                }
-                default:
-                    Log.Warning("不支持的像素格式: {PixelType}", pixelType);
-
-                    // 尝试以 Mono8 格式处理
-                    var defaultImage = new Image<Rgba32>(width, height);
-                    defaultImage.ProcessPixelRows(accessor =>
-                    {
-                        for (var y = 0; y < height; y++)
-                        {
-                            var row = accessor.GetRowSpan(y);
-                            for (var x = 0; x < width; x++)
-                                if (y * width + x < buffer.Length)
-                                {
-                                    var gray = buffer[y * width + x];
-                                    row[x] = new Rgba32(gray, gray, gray, 255);
-                                }
-                        }
-                    });
-                    return defaultImage;
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "处理图像数据时发生错误");
-            return null;
-        }
-    }
-
-    private static bool IsTextUTF8(byte[] inputStream)
+    private static bool IsTextUtf8(IEnumerable<byte> inputStream)
     {
         var encodingBytesCount = 0;
-        var allTextsAreASCIIChars = true;
+        var allTextsAreAsciiChars = true;
 
-        for (var i = 0; i < inputStream.Length; i++)
+        foreach (var t in inputStream)
         {
-            var current = inputStream[i];
+            var current = t;
 
-            if ((current & 0x80) == 0x80) allTextsAreASCIIChars = false;
+            if ((current & 0x80) == 0x80)
+            {
+                allTextsAreAsciiChars = false;
+            }
+
             // First byte
             if (encodingBytesCount == 0)
             {
@@ -1241,7 +1132,7 @@ public class HikvisionSmartCameraService : ICameraService
                     encodingBytesCount = 1;
                     current <<= 2;
 
-                    // More than two bytes used to encoding a unicode char.
+                    // More than two bytes used to encoding a Unicode char.
                     // Calculate the real length.
                     while ((current & 0x80) == 0x80)
                     {
@@ -1259,7 +1150,9 @@ public class HikvisionSmartCameraService : ICameraService
             {
                 // Following bytes, must start with 10.
                 if ((current & 0xC0) == 0x80)
+                {
                     encodingBytesCount--;
+                }
                 else
                     // Invalid bits structure for UTF8 encoding rule.
                     return false;
@@ -1271,8 +1164,8 @@ public class HikvisionSmartCameraService : ICameraService
             // Wrong following bytes count.
             return false;
 
-        // Although UTF8 supports encoding for ASCII chars, we regard as a input stream, whose contents are all ASCII as default encoding.
-        return !allTextsAreASCIIChars;
+        // Although UTF8 supports encoding for ASCII chars, we regard as an input stream, whose contents are all ASCII as default encoding.
+        return !allTextsAreAsciiChars;
     }
 
     private class CameraInstance

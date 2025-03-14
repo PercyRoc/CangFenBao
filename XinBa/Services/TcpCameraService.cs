@@ -5,12 +5,12 @@ using System.Reactive.Subjects;
 using System.Text;
 using Common.Models.Package;
 using Common.Services.Settings;
-using Presentation_XinBa.Services.Models;
 using Serilog;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
+using XinBa.Services.Models;
 
-namespace Presentation_XinBa.Services;
+namespace XinBa.Services;
 
 /// <summary>
 ///     TCP相机服务，用于连接相机服务器并接收数据
@@ -40,12 +40,12 @@ public class TcpCameraService : IDisposable
     /// <summary>
     ///     相机是否已连接
     /// </summary>
-    public bool IsConnected { get; private set; }
+    internal bool IsConnected { get; private set; }
 
     /// <summary>
     ///     包裹信息流
     /// </summary>
-    public IObservable<PackageInfo> PackageStream => _packageSubject.AsObservable();
+    internal IObservable<PackageInfo> PackageStream => _packageSubject.AsObservable();
 
     /// <summary>
     ///     释放资源
@@ -73,7 +73,7 @@ public class TcpCameraService : IDisposable
     ///     启动相机服务
     /// </summary>
     /// <returns>是否成功</returns>
-    public bool Start()
+    private bool Start()
     {
         try
         {
@@ -100,9 +100,9 @@ public class TcpCameraService : IDisposable
     /// <summary>
     ///     异步启动相机服务
     /// </summary>
-    public async Task<bool> StartAsync()
+    internal Task<bool> StartAsync()
     {
-        return await Task.Run(Start);
+        return Task.Run(Start);
     }
 
     /// <summary>
@@ -110,7 +110,7 @@ public class TcpCameraService : IDisposable
     /// </summary>
     /// <param name="timeoutMs">超时时间（毫秒）</param>
     /// <returns>操作是否成功</returns>
-    public async Task<bool> StopAsync(int timeoutMs = 3000)
+    internal async Task<bool> StopAsync(int timeoutMs = 3000)
     {
         if (!IsConnected && _tcpClient == null) return true;
 
@@ -119,7 +119,7 @@ public class TcpCameraService : IDisposable
             Log.Information("正在停止TCP相机客户端服务...");
 
             // 取消所有任务
-            _cancellationTokenSource.Cancel();
+            await _cancellationTokenSource.CancelAsync();
 
             // 关闭TCP客户端
             if (_tcpClient != null)
@@ -342,19 +342,34 @@ public class TcpCameraService : IDisposable
                     };
 
                     // 解析重量
-                    if (float.TryParse(parts[1].Trim(), out var weight)) packageInfo.Weight = weight;
+                    if (float.TryParse(parts[1].Trim(), out var weight))
+                    {
+                        packageInfo.Weight = weight;
+                    }
 
                     // 解析长度
-                    if (double.TryParse(parts[2].Trim(), out var length)) packageInfo.Length = length;
+                    if (double.TryParse(parts[2].Trim(), out var length))
+                    {
+                        packageInfo.Length = length;
+                    }
 
                     // 解析宽度
-                    if (double.TryParse(parts[3].Trim(), out var width)) packageInfo.Width = width;
+                    if (double.TryParse(parts[3].Trim(), out var width))
+                    {
+                        packageInfo.Width = width;
+                    }
 
                     // 解析高度
-                    if (double.TryParse(parts[4].Trim(), out var height)) packageInfo.Height = height;
+                    if (double.TryParse(parts[4].Trim(), out var height))
+                    {
+                        packageInfo.Height = height;
+                    }
 
                     // 解析时间戳
-                    if (DateTime.TryParse(parts[5].Trim(), out var timestamp)) packageInfo.TriggerTimestamp = timestamp;
+                    if (DateTime.TryParse(parts[5].Trim(), out var timestamp))
+                    {
+                        packageInfo.TriggerTimestamp = timestamp;
+                    }
 
                     // 查找并加载图像
                     try
@@ -424,11 +439,11 @@ public class TcpCameraService : IDisposable
 
             // 查找匹配条码的图像文件
             var imageFiles = Directory.GetFiles(imagePath, $"{barcode}*.*")
-                .Where(f => f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
-                            f.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
-                            f.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
-                            f.EndsWith(".bmp", StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(f => new FileInfo(f).CreationTime)
+                .Where(static f => f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                                   f.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
+                                   f.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
+                                   f.EndsWith(".bmp", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(static f => new FileInfo(f).CreationTime)
                 .ToArray();
 
             if (imageFiles.Length > 0)
@@ -460,6 +475,7 @@ public class TcpCameraService : IDisposable
                 return false;
 
             if (!client.Client.Poll(0, SelectMode.SelectRead)) return true;
+
             var buff = new byte[1];
             return client.Client.Receive(buff, SocketFlags.Peek) != 0;
         }

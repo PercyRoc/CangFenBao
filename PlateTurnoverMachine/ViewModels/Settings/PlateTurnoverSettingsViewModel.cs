@@ -3,15 +3,15 @@ using Common.Services.Settings;
 using Common.Services.Ui;
 using Microsoft.Win32;
 using OfficeOpenXml;
-using Presentation_PlateTurnoverMachine.Models;
+using PlateTurnoverMachine.Models;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
 using Wpf.Ui.Controls;
 
-namespace Presentation_PlateTurnoverMachine.ViewModels.Settings;
+namespace PlateTurnoverMachine.ViewModels.Settings;
 
-public class PlateTurnoverSettingsViewModel : BindableBase
+internal class PlateTurnoverSettingsViewModel : BindableBase
 {
     private readonly INotificationService _notificationService;
     private readonly ISettingsService _settingsService;
@@ -79,7 +79,7 @@ public class PlateTurnoverSettingsViewModel : BindableBase
     public DelegateCommand<PlateTurnoverItem> RemoveItemCommand { get; private set; }
     public DelegateCommand ImportFromExcelCommand { get; private set; }
     public DelegateCommand ExportToExcelCommand { get; private set; }
-    public DelegateCommand SaveConfigurationCommand { get; private set; }
+    public DelegateCommand SaveConfigurationCommand { get; set; }
 
     #endregion
 
@@ -187,7 +187,10 @@ public class PlateTurnoverSettingsViewModel : BindableBase
 
             // 创建表头
             var headers = new[] { "序号", "TCP模块", "IO点位", "映射格口", "距离当前点位位置", "分拣延迟系数(0-1)", "磁铁吸合时间(ms)" };
-            for (var i = 0; i < headers.Length; i++) worksheet.Cells[1, i + 1].Value = headers[i];
+            for (var i = 0; i < headers.Length; i++)
+            {
+                worksheet.Cells[1, i + 1].Value = headers[i];
+            }
 
             // 写入数据
             for (var i = 0; i < Settings.Items.Count; i++)

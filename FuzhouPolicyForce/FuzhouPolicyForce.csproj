@@ -8,6 +8,7 @@
         <UseWPF>true</UseWPF>
         <ApplicationIcon>Resources\favicon.ico</ApplicationIcon>
         <AssemblyName>仓分宝-福州策力</AssemblyName>
+        <LangVersion>default</LangVersion>
     </PropertyGroup>
 
     <ItemGroup>
@@ -50,10 +51,6 @@
         <Resource Include="Resources\favicon.ico">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Resource>
-    </ItemGroup>
-
-    <ItemGroup>
-        <Folder Include="Models\Settings\"/>
     </ItemGroup>
 
 </Project>

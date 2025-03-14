@@ -6,7 +6,7 @@ using SharedUI.Views.Settings;
 
 namespace FuzhouPolicyForce.Views;
 
-public partial class SettingsDialog
+internal partial class SettingsDialog
 {
     public SettingsDialog(INotificationService notificationService)
     {

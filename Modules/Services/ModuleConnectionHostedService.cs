@@ -1,11 +1,11 @@
 using Common.Services.Settings;
 using Microsoft.Extensions.Hosting;
-using Presentation_Modules.Models;
+using Modules.Models;
 using Serilog;
 
-namespace Presentation_Modules.Services;
+namespace Modules.Services;
 
-public class ModuleConnectionHostedService(
+internal class ModuleConnectionHostedService(
     IModuleConnectionService moduleConnectionService,
     ISettingsService settingsService)
     : IHostedService

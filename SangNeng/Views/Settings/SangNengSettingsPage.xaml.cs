@@ -1,6 +1,6 @@
-namespace Presentation_SangNeng.Views.Settings;
+namespace SangNeng.Views.Settings;
 
-public partial class SangNengSettingsPage
+internal partial class SangNengSettingsPage
 {
     public SangNengSettingsPage()
     {

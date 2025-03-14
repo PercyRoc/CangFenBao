@@ -1,16 +1,16 @@
 using Serilog;
 
-namespace Presentation_KuaiLv.Services.Warning;
+namespace KuaiLv.Services.Warning;
 
 /// <summary>
 ///     警示灯托管服务
 /// </summary>
-public class WarningLightStartupService(IWarningLightService warningLightService)
+internal class WarningLightStartupService(IWarningLightService warningLightService)
 {
     /// <summary>
     ///     启动服务
     /// </summary>
-    public async Task StartAsync()
+    internal async Task StartAsync()
     {
         try
         {

@@ -1,15 +1,15 @@
 ﻿using Common.Services.Ui;
-using Presentation_XiYiGu.ViewModels.Settings;
 using Prism.Commands;
 using Prism.Ioc;
 using Prism.Mvvm;
 using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.ViewModels.Settings;
+using XiYiGu.ViewModels.Settings;
 
-namespace Presentation_XiYiGu.ViewModels;
+namespace XiYiGu.ViewModels;
 
-public class SettingsDialogViewModel : BindableBase, IDialogAware
+internal class SettingsDialogViewModel : BindableBase, IDialogAware
 {
     private readonly ApiSettingsViewModel _apiSettingsViewModel;
 

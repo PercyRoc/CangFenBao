@@ -85,19 +85,17 @@ public class DeviceCameraInfo : BindableBase
     /// <summary>
     ///     从设备信息更新相机信息
     /// </summary>
-    public void UpdateFromDeviceInfo(MvCodeReader.MV_CODEREADER_DEVICE_INFO deviceInfo)
+    internal void UpdateFromDeviceInfo(MvCodeReader.MV_CODEREADER_DEVICE_INFO deviceInfo)
     {
-        if (deviceInfo.nTLayerType == MvCodeReader.MV_CODEREADER_GIGE_DEVICE)
-        {
-            // 从设备信息中获取IP地址和MAC地址
-            IpAddress =
-                $"{deviceInfo.nMacAddrHigh >> 24}.{(deviceInfo.nMacAddrHigh >> 16) & 0xFF}.{(deviceInfo.nMacAddrHigh >> 8) & 0xFF}.{deviceInfo.nMacAddrHigh & 0xFF}";
-            MacAddress = $"{deviceInfo.nMacAddrHigh:X2}-{deviceInfo.nMacAddrLow:X2}";
+        if (deviceInfo.nTLayerType != MvCodeReader.MV_CODEREADER_GIGE_DEVICE) return;
+        // 从设备信息中获取IP地址和MAC地址
+        IpAddress =
+            $"{deviceInfo.nMacAddrHigh >> 24}.{(deviceInfo.nMacAddrHigh >> 16) & 0xFF}.{(deviceInfo.nMacAddrHigh >> 8) & 0xFF}.{deviceInfo.nMacAddrHigh & 0xFF}";
+        MacAddress = $"{deviceInfo.nMacAddrHigh:X2}-{deviceInfo.nMacAddrLow:X2}";
 
-            // 序列号和型号从设备信息中获取
-            SerialNumber = deviceInfo.nDeviceType.ToString();
-            Model = deviceInfo.nMajorVer.ToString();
-            Status = CameraStatus.Online;
-        }
+        // 序列号和型号从设备信息中获取
+        SerialNumber = deviceInfo.nDeviceType.ToString();
+        Model = deviceInfo.nMajorVer.ToString();
+        Status = CameraStatus.Online;
     }
 }

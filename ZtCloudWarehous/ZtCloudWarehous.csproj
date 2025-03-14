@@ -3,12 +3,12 @@
     <PropertyGroup>
         <OutputType>WinExe</OutputType>
         <TargetFramework>net8.0-windows</TargetFramework>
-        <RootNamespace>Presentation_ZtCloudWarehous</RootNamespace>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
         <UseWPF>true</UseWPF>
         <AssemblyName>仓分宝-中通云仓</AssemblyName>
+        <LangVersion>default</LangVersion>
     </PropertyGroup>
 
     <ItemGroup>

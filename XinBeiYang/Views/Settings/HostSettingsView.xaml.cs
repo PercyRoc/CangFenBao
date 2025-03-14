@@ -1,6 +1,6 @@
-namespace Presentation_XinBeiYang.Views.Settings;
+namespace XinBeiYang.Views.Settings;
 
-public partial class HostSettingsView
+internal partial class HostSettingsView
 {
     public HostSettingsView()
     {

@@ -5,22 +5,22 @@ using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
 using Microsoft.Extensions.Hosting;
-using Presentation_PlateTurnoverMachine.Models;
-using Presentation_PlateTurnoverMachine.Services;
-using Presentation_PlateTurnoverMachine.ViewModels;
-using Presentation_PlateTurnoverMachine.ViewModels.Settings;
-using Presentation_PlateTurnoverMachine.Views;
-using Presentation_PlateTurnoverMachine.Views.Settings;
+using PlateTurnoverMachine.Models;
+using PlateTurnoverMachine.Services;
+using PlateTurnoverMachine.ViewModels;
+using PlateTurnoverMachine.ViewModels.Settings;
+using PlateTurnoverMachine.Views;
+using PlateTurnoverMachine.Views.Settings;
 using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 
-namespace Presentation_PlateTurnoverMachine;
+namespace PlateTurnoverMachine;
 
 /// <summary>
 ///     Interaction logic for App.xaml
 /// </summary>
-public partial class App
+internal partial class App
 {
     protected override Window CreateShell()
     {
@@ -53,13 +53,13 @@ public partial class App
         containerRegistry.RegisterSingleton<SortingService>();
         containerRegistry.RegisterSingleton<PlateTurnoverSettings>();
         containerRegistry.RegisterSingleton<TcpConnectionHostedService>();
-        containerRegistry.Register<IHostedService>(sp => sp.Resolve<TcpConnectionHostedService>());
+        containerRegistry.Register<IHostedService>(static sp => sp.Resolve<TcpConnectionHostedService>());
     }
 
     /// <summary>
     ///     启动
     /// </summary>
-    protected override async void OnStartup(StartupEventArgs e)
+    protected override void OnStartup(StartupEventArgs e)
     {
         // 配置Serilog
         Log.Logger = new LoggerConfiguration()
@@ -74,42 +74,47 @@ public partial class App
         Log.Information("应用程序启动");
         // 先调用基类方法初始化容器
         base.OnStartup(e);
-        try
-        {
-            // 启动托管服务
-            var hostedService = Container.Resolve<TcpConnectionHostedService>();
-            await hostedService.StartAsync(CancellationToken.None);
 
-            var cameraStartupService = Container.Resolve<CameraStartupService>();
-            await cameraStartupService.StartAsync(CancellationToken.None);
-        }
-        catch (Exception ex)
+        _ = Task.Run(async () =>
         {
-            Log.Error(ex, "启动服务时发生错误");
-        }
+            try
+            {
+                // 启动托管服务
+                var hostedService = Container.Resolve<TcpConnectionHostedService>();
+                await hostedService.StartAsync(CancellationToken.None);
+
+                var cameraStartupService = Container.Resolve<CameraStartupService>();
+                await cameraStartupService.StartAsync(CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "启动服务时发生错误");
+            }
+        });
     }
 
     /// <summary>
     ///     退出
     /// </summary>
-    protected override async void OnExit(ExitEventArgs e)
+    protected override void OnExit(ExitEventArgs e)
     {
         try
         {
             // 停止托管服务
             var hostedService = Container.Resolve<TcpConnectionHostedService>();
-            await hostedService.StopAsync(CancellationToken.None);
+            hostedService.StopAsync(CancellationToken.None).Wait();
 
             var cameraStartupService = Container.Resolve<CameraStartupService>();
-            await cameraStartupService.StopAsync(CancellationToken.None);
+            cameraStartupService.StopAsync(CancellationToken.None).Wait();
+
             // 等待所有日志写入完成
             Log.Information("应用程序关闭");
-            await Log.CloseAndFlushAsync();
+            Log.CloseAndFlush();
         }
         catch (Exception ex)
         {
             Log.Error(ex, "应用程序关闭时发生错误");
-            await Log.CloseAndFlushAsync();
+            Log.CloseAndFlush();
         }
         finally
         {

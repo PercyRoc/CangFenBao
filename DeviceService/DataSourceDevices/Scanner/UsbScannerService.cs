@@ -9,7 +9,7 @@ namespace DeviceService.DataSourceDevices.Scanner;
 /// <summary>
 ///     USB扫码枪服务实现
 /// </summary>
-public class UsbScannerService : IScannerService
+internal partial class UsbScannerService : IScannerService
 {
     private const int ScannerTimeout = 50; // 扫码枪输入超时时间（毫秒）
     private readonly StringBuilder _barcodeBuilder = new();
@@ -68,12 +68,14 @@ public class UsbScannerService : IScannerService
         using var curProcess = Process.GetCurrentProcess();
         using var curModule = curProcess.MainModule;
         if (curModule == null) throw new InvalidOperationException("无法获取当前进程主模块");
+
         return SetWindowsHookEx(13, proc, GetModuleHandle(curModule.ModuleName), 0);
     }
 
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
         if (nCode < 0 || wParam != 0x0100) return CallNextHookEx(_hookId, nCode, wParam, lParam); // WM_KEYDOWN
+
         var vkCode = Marshal.ReadInt32(lParam);
         var currentTime = DateTime.Now;
 
@@ -87,6 +89,7 @@ public class UsbScannerService : IScannerService
         if (vkCode == 13) // 回车键
         {
             if (_barcodeBuilder.Length <= 0) return CallNextHookEx(_hookId, nCode, wParam, lParam);
+
             var barcode = _barcodeBuilder.ToString();
             _barcodeBuilder.Clear();
             BarcodeScanned?.Invoke(this, barcode);
@@ -99,24 +102,22 @@ public class UsbScannerService : IScannerService
 
         return CallNextHookEx(_hookId, nCode, wParam, lParam);
     }
-
-    //TODO
     private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
 
     #region Native Methods
 
-    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
+    [LibraryImport("user32.dll", SetLastError = true)]
+    private static partial IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
 
-    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool UnhookWindowsHookEx(IntPtr hhk);
+    private static partial void UnhookWindowsHookEx(IntPtr hhk);
 
-    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+    [LibraryImport("user32.dll", SetLastError = true)]
+    private static partial IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr GetModuleHandle(string? lpModuleName);
+    [LibraryImport("kernel32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    private static partial IntPtr GetModuleHandle(string? lpModuleName);
 
     #endregion
 }

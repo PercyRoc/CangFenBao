@@ -1,4 +1,3 @@
-using Common.Models.Settings.Weight;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using Microsoft.Extensions.Hosting;
@@ -122,7 +121,7 @@ public class WeightStartupService : IHostedService
     /// <summary>
     ///     获取重量称服务实例
     /// </summary>
-    public SerialPortWeightService GetWeightService()
+    internal SerialPortWeightService GetWeightService()
     {
         _initLock.Wait();
         try

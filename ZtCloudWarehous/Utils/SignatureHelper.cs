@@ -2,14 +2,14 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Web;
-using Presentation_ZtCloudWarehous.Models;
+using ZtCloudWarehous.Models;
 
-namespace Presentation_ZtCloudWarehous.Utils;
+namespace ZtCloudWarehous.Utils;
 
 /// <summary>
 ///     签名工具类
 /// </summary>
-public static class SignatureHelper
+internal static class SignatureHelper
 {
     /// <summary>
     ///     计算签名
@@ -18,7 +18,7 @@ public static class SignatureHelper
     /// <param name="businessParams">业务参数对象</param>
     /// <param name="secret">密钥</param>
     /// <returns>签名</returns>
-    public static string CalculateSignature(IDictionary<string, string> commonParams, object businessParams,
+    internal static string CalculateSignature(IDictionary<string, string> commonParams, object businessParams,
         string secret)
     {
         // 1. 按ASCII顺序排序公共参数
@@ -26,9 +26,8 @@ public static class SignatureHelper
 
         // 2. 拼接公共参数
         var stringBuilder = new StringBuilder();
-        foreach (var param in sortedParams)
-            if (!string.IsNullOrEmpty(param.Value))
-                stringBuilder.Append(param.Key).Append(param.Value);
+        foreach (var param in sortedParams.Where(static param => !string.IsNullOrEmpty(param.Value)))
+            stringBuilder.Append(param.Key).Append(param.Value);
 
         // 3. 添加业务参数JSON字符串
         var businessJson = JsonSerializer.Serialize(businessParams);
@@ -54,7 +53,7 @@ public static class SignatureHelper
     /// </summary>
     /// <param name="request">请求对象</param>
     /// <returns>公共参数字典</returns>
-    public static Dictionary<string, string> GetCommonParameters(WeighingRequest request)
+    internal static Dictionary<string, string> GetCommonParameters(WeighingRequest request)
     {
         return new Dictionary<string, string>
         {
@@ -72,7 +71,7 @@ public static class SignatureHelper
     /// </summary>
     /// <param name="request">请求对象</param>
     /// <returns>业务参数对象</returns>
-    public static object GetBusinessParameters(WeighingRequest request)
+    internal static object GetBusinessParameters(WeighingRequest request)
     {
         return new
         {
@@ -99,9 +98,11 @@ public static class SignatureHelper
         var jsonElement = JsonSerializer.SerializeToElement(obj);
 
         if (jsonElement.ValueKind != JsonValueKind.Object) return parameters;
+
         foreach (var property in jsonElement.EnumerateObject())
         {
             if (property.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined) continue;
+
             var value = property.Value.ValueKind == JsonValueKind.String
                 ? property.Value.GetString()
                 : property.Value.ToString();
@@ -121,7 +122,7 @@ public static class SignatureHelper
     {
         var sortedParams = new SortedDictionary<string, string>(parameters);
         var pairs = sortedParams
-            .Select(p => $"{HttpUtility.UrlEncode(p.Key)}={HttpUtility.UrlEncode(p.Value)}");
+            .Select(static p => $"{HttpUtility.UrlEncode(p.Key)}={HttpUtility.UrlEncode(p.Value)}");
         return string.Join("&", pairs);
     }
 }

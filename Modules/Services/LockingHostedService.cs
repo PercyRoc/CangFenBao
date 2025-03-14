@@ -2,12 +2,12 @@ using Common.Services.Settings;
 using Modules.Models;
 using Serilog;
 
-namespace Presentation_Modules.Services;
+namespace Modules.Services;
 
 /// <summary>
 ///     锁格服务托管服务，负责管理锁格服务的生命周期
 /// </summary>
-public class LockingHostedService : IDisposable
+internal class LockingHostedService : IDisposable
 {
     private readonly CancellationTokenSource _cts = new();
     private readonly ISettingsService _settingsService;
@@ -17,9 +17,8 @@ public class LockingHostedService : IDisposable
     /// <summary>
     ///     初始化锁格服务托管服务
     /// </summary>
-    /// <param name="lockingService">锁格服务</param>
     /// <param name="settingsService">设置服务</param>
-    public LockingHostedService(LockingService lockingService, ISettingsService settingsService)
+    public LockingHostedService(ISettingsService settingsService)
     {
         _settingsService = settingsService;
     }
@@ -49,7 +48,7 @@ public class LockingHostedService : IDisposable
     /// <summary>
     ///     启动服务
     /// </summary>
-    public async Task StartAsync()
+    internal async Task StartAsync()
     {
         if (_isRunning) return;
 
@@ -78,7 +77,7 @@ public class LockingHostedService : IDisposable
     /// <summary>
     ///     停止服务
     /// </summary>
-    public async Task StopAsync()
+    internal async Task StopAsync()
     {
         if (!_isRunning) return;
 
@@ -87,7 +86,7 @@ public class LockingHostedService : IDisposable
             Log.Information("正在停止锁格服务托管服务...");
 
             // 取消后台任务
-            _cts.Cancel();
+            await _cts.CancelAsync();
 
             // 标记为已停止
             _isRunning = false;

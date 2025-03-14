@@ -1,5 +1,5 @@
 using Common.Services.Ui;
-using Presentation_KuaiLv.ViewModels.Settings;
+using KuaiLv.ViewModels.Settings;
 using Prism.Commands;
 using Prism.Ioc;
 using Prism.Mvvm;
@@ -7,9 +7,9 @@ using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.ViewModels.Settings;
 
-namespace Presentation_KuaiLv.ViewModels.Dialogs;
+namespace KuaiLv.ViewModels.Dialogs;
 
-public class SettingsDialogViewModel : BindableBase, IDialogAware
+internal class SettingsDialogViewModel : BindableBase, IDialogAware
 {
     // 保存各个设置页面的ViewModel实例
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;

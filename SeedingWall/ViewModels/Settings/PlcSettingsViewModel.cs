@@ -10,7 +10,7 @@ namespace Presentation_SeedingWall.ViewModels.Settings;
 /// <summary>
 ///     PLC设置视图模型
 /// </summary>
-public class PlcSettingsViewModel : BindableBase
+internal class PlcSettingsViewModel : BindableBase
 {
     private readonly INotificationService _notificationService;
     private readonly ISettingsService _settingsService;
@@ -44,7 +44,7 @@ public class PlcSettingsViewModel : BindableBase
     /// <summary>
     ///     保存配置命令
     /// </summary>
-    public DelegateCommand SaveConfigurationCommand { get; }
+    internal DelegateCommand SaveConfigurationCommand { get; }
 
     /// <summary>
     ///     加载配置

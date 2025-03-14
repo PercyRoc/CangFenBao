@@ -1,8 +1,8 @@
 using System.Windows.Controls;
 
-namespace Presentation_SangNeng.Views.Settings;
+namespace SangNeng.Views.Settings;
 
-public partial class WeightSettingsView : Page
+internal partial class WeightSettingsView
 {
     public WeightSettingsView()
     {

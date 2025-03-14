@@ -1,14 +1,14 @@
 using System.Collections.ObjectModel;
 using Common.Services.Settings;
 using Common.Services.Ui;
-using Presentation_Modules.Models;
+using Modules.Models;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
 
-namespace Presentation_Modules.ViewModels.Settings;
+namespace Modules.ViewModels.Settings;
 
-public class ModuleConfigViewModel : BindableBase
+internal class ModuleConfigViewModel : BindableBase
 {
     private readonly ModuleConfig _config = null!;
     private readonly INotificationService _notificationService;
@@ -39,7 +39,7 @@ public class ModuleConfigViewModel : BindableBase
         new() { Value = "1002", Display = "1002-深圳" }
     ];
 
-    public DelegateCommand SaveConfigurationCommand { get; }
+    internal DelegateCommand SaveConfigurationCommand { get; }
 
     private void ExecuteSaveConfiguration()
     {

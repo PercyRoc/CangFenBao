@@ -1,13 +1,13 @@
 ﻿using Common.Services.Ui;
-using Presentation_XinBeiYang.ViewModels.Settings;
 using Prism.Commands;
 using Prism.Ioc;
 using Prism.Mvvm;
 using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.ViewModels.Settings;
+using XinBeiYang.ViewModels.Settings;
 
-namespace Presentation_XinBeiYang.ViewModels;
+namespace XinBeiYang.ViewModels;
 
 public class SettingsDialogViewModel : BindableBase, IDialogAware
 {

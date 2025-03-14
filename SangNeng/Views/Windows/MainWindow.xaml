@@ -6,8 +6,9 @@
                  xmlns:windows="clr-namespace:Presentation_SangNeng.ViewModels.Windows"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:hc="https://handyorg.github.io/handycontrol"
+                 xmlns:windows1="clr-namespace:SangNeng.ViewModels.Windows"
                  mc:Ignorable="d"
-                 d:DataContext="{d:DesignInstance Type=windows:MainWindowViewModel}"
+                 d:DataContext="{d:DesignInstance Type=windows1:MainWindowViewModel}"
                  Title="CangFenBao-SangNeng"
                  Height="900"
                  Width="1600"
@@ -209,9 +210,6 @@
                                                         Height="24"
                                                         HorizontalAlignment="Right">
                                                     <ui:SymbolIcon Symbol="{Binding Icon}"
-                                                                   Width="14"
-                                                                   Height="14"
-                                                                   Foreground="White"
                                                                    HorizontalAlignment="Center"
                                                                    VerticalAlignment="Center" />
                                                 </Border>
@@ -386,9 +384,6 @@
                                                         Height="24"
                                                         HorizontalAlignment="Right">
                                                     <ui:SymbolIcon Symbol="{Binding Icon}"
-                                                                   Width="14"
-                                                                   Height="14"
-                                                                   Foreground="White"
                                                                    HorizontalAlignment="Center"
                                                                    VerticalAlignment="Center" />
                                                 </Border>

@@ -9,7 +9,7 @@ namespace Presentation_SeedingWall.Services;
 /// <summary>
 ///     聚水潭WebSocket通信服务实现
 /// </summary>
-public class JuShuiTanService : IJuShuiTanService
+internal class JuShuiTanService : IJuShuiTanService
 {
     private readonly Dispatcher _dispatcher;
     private bool _disposed;
@@ -119,6 +119,7 @@ public class JuShuiTanService : IJuShuiTanService
     public void Disconnect()
     {
         if (_webSocket == null) return;
+
         try
         {
             if (_webSocket.ReadyState == WebSocketState.Open)

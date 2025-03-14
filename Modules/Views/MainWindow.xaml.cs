@@ -4,12 +4,12 @@ using System.Windows.Input;
 using Common.Services.Ui;
 using Serilog;
 
-namespace Presentation_Modules.Views;
+namespace Modules.Views;
 
 /// <summary>
 ///     Interaction logic for MainWindow.xaml
 /// </summary>
-public partial class MainWindow
+internal partial class MainWindow
 {
     private readonly IDialogService _dialogService;
 
@@ -49,6 +49,7 @@ public partial class MainWindow
                 MessageBoxImage.Question);
 
             if (result != MessageBoxResult.Yes) return;
+
             e.Cancel = false;
             Application.Current.Shutdown();
         }

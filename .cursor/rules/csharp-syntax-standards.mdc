@@ -1,0 +1,255 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# C# 代码语法规范
+
+## 1. 类定义与构造
+
+### 主构造函数使用
+- 优先使用主构造函数语法
+```csharp
+// ✅ 推荐
+public class Person(string name, int age)
+{
+    public string Name { get; init; } = name;
+    public int Age { get; init; } = age;
+}
+
+// ❌ 避免
+public class Person
+{
+    public Person(string name, int age)
+    {
+        Name = name;
+        Age = age;
+    }
+    
+    public string Name { get; init; }
+    public int Age { get; init; }
+}
+```
+
+### 属性初始化
+- 使用自动属性初始化器
+```csharp
+// ✅ 推荐
+public class Configuration
+{
+    public string Environment { get; init; } = "Development";
+    public int Timeout { get; init; } = 30;
+}
+
+// ❌ 避免
+public class Configuration
+{
+    public string Environment { get; init; }
+    public int Timeout { get; init; }
+
+    public Configuration()
+    {
+        Environment = "Development";
+        Timeout = 30;
+    }
+}
+```
+
+## 2. 集合操作
+
+### 集合初始化
+- 使用集合初始化器和范围语法
+```csharp
+// ✅ 推荐
+var numbers = new List<int> { 1, 2, 3, 4, 5 };
+var subset = numbers[1..4];
+
+// ❌ 避免
+var numbers = new List<int>();
+numbers.Add(1);
+numbers.Add(2);
+numbers.Add(3);
+```
+
+### LINQ 查询
+- 优先使用方法语法而非查询语法
+```csharp
+// ✅ 推荐
+var result = items
+    .Where(x => x.IsActive)
+    .Select(x => x.Name)
+    .ToList();
+
+// ❌ 避免
+var result = (from item in items
+             where item.IsActive
+             select item.Name).ToList();
+```
+
+## 3. 异步编程
+
+### 异步方法
+- 使用 async/await 语法
+- 方法名添加 Async 后缀
+```csharp
+// ✅ 推荐
+public async Task<Result> ProcessDataAsync()
+{
+    var data = await _repository.GetDataAsync();
+    return await TransformDataAsync(data);
+}
+
+// ❌ 避免
+public async Task<Result> ProcessData()
+{
+    var data = _repository.GetData().Result;
+    return TransformData(data).Result;
+}
+```
+
+## 4. 模式匹配
+
+### Switch 表达式
+- 优先使用 switch 表达式而非 switch 语句
+```csharp
+// ✅ 推荐
+var result = status switch
+{
+    Status.Active => ProcessActive(),
+    Status.Pending => ProcessPending(),
+    Status.Deleted => ProcessDeleted(),
+    _ => throw new ArgumentException("Invalid status")
+};
+
+// ❌ 避免
+switch (status)
+{
+    case Status.Active:
+        return ProcessActive();
+    case Status.Pending:
+        return ProcessPending();
+    case Status.Deleted:
+        return ProcessDeleted();
+    default:
+        throw new ArgumentException("Invalid status");
+}
+```
+
+### 类型模式
+- 使用 is 模式匹配
+```csharp
+// ✅ 推荐
+if (obj is Person { Age: > 18 } person)
+{
+    ProcessAdult(person);
+}
+
+// ❌ 避免
+if (obj is Person)
+{
+    var person = (Person)obj;
+    if (person.Age > 18)
+    {
+        ProcessAdult(person);
+    }
+}
+```
+
+## 5. 空值处理
+
+### 空值检查
+- 使用空合并运算符和空条件运算符
+```csharp
+// ✅ 推荐
+var name = user?.Name ?? "Unknown";
+var count = items?.Count ?? 0;
+
+// ❌ 避免
+var name = user != null ? user.Name : "Unknown";
+var count = items == null ? 0 : items.Count;
+```
+
+### 必需引用类型
+- 适当使用必需引用类型标注
+```csharp
+public class Order
+{
+    public required string OrderId { get; init; }
+    public required Customer Customer { get; init; }
+}
+```
+
+## 6. 字符串处理
+
+### 字符串插值
+- 使用字符串插值而非字符串连接
+```csharp
+// ✅ 推荐
+var message = $"Welcome {user.Name}! You have {user.Points} points.";
+
+// ❌ 避免
+var message = "Welcome " + user.Name + "! You have " + user.Points + " points.";
+```
+
+### 原始字符串文本
+- 使用原始字符串文本处理多行字符串
+```csharp
+// ✅ 推荐
+var query = """
+    SELECT *
+    FROM Users
+    WHERE Age > 18
+    ORDER BY Name
+    """;
+
+// ❌ 避免
+var query = "SELECT * \n" +
+           "FROM Users \n" +
+           "WHERE Age > 18 \n" +
+           "ORDER BY Name";
+```
+
+## 7. 记录类型
+
+### 不可变数据
+- 使用记录类型表示不可变数据
+```csharp
+// ✅ 推荐
+public record Person(string Name, int Age);
+
+// ❌ 避免
+public class Person
+{
+    public string Name { get; init; }
+    public int Age { get; init; }
+}
+```
+
+## 8. 代码组织
+
+### 文件布局
+- 使用文件范围命名空间声明
+```csharp
+// ✅ 推荐
+namespace Company.Project;
+
+public class MyClass
+{
+}
+
+// ❌ 避免
+namespace Company.Project
+{
+    public class MyClass
+    {
+    }
+}
+```
+
+### 成员排序
+1. 常量
+2. 字段
+3. 构造函数
+4. 属性
+5. 方法
+6. 嵌套类型

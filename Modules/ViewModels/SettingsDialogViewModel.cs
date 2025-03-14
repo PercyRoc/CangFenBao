@@ -1,6 +1,5 @@
 ﻿using Common.Services.Ui;
-using Modules.ViewModels;
-using Presentation_Modules.ViewModels.Settings;
+using Modules.ViewModels.Settings;
 using Prism.Commands;
 using Prism.Ioc;
 using Prism.Mvvm;
@@ -8,7 +7,7 @@ using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.ViewModels.Settings;
 
-namespace Presentation_Modules.ViewModels;
+namespace Modules.ViewModels;
 
 public class SettingsDialogViewModel : BindableBase, IDialogAware
 {

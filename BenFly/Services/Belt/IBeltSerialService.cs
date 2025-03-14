@@ -1,6 +1,6 @@
 using System.IO.Ports;
 
-namespace Presentation_BenFly.Services.Belt;
+namespace BenFly.Services.Belt;
 
 /// <summary>
 ///     皮带串口服务接口

@@ -2,19 +2,18 @@ using System.Net.Sockets;
 using System.Text;
 using Common.Services.Settings;
 using Common.Services.Ui;
-using Presentation_KuaiLv.Models.Settings.Warning;
+using KuaiLv.Models.Settings.Warning;
 using Serilog;
 
-namespace Presentation_KuaiLv.Services.Warning;
+namespace KuaiLv.Services.Warning;
 
 /// <summary>
 ///     警示灯服务实现
 /// </summary>
-public class WarningLightService : IWarningLightService, IDisposable
+internal class WarningLightService : IWarningLightService, IDisposable
 {
     private readonly INotificationService _notificationService;
     private readonly SemaphoreSlim _semaphore = new(1, 1);
-    private readonly ISettingsService _settingsService;
     private WarningLightConfiguration _currentConfig;
     private bool _disposed;
     private bool _isConnected;
@@ -25,9 +24,8 @@ public class WarningLightService : IWarningLightService, IDisposable
         ISettingsService settingsService,
         INotificationService notificationService)
     {
-        _settingsService = settingsService;
         _notificationService = notificationService;
-        _currentConfig = _settingsService.LoadSettings<WarningLightConfiguration>();
+        _currentConfig = settingsService.LoadSettings<WarningLightConfiguration>();
 
         // 订阅配置变更事件
         settingsService.OnSettingsChanged<WarningLightConfiguration>(OnConfigurationChanged);
@@ -49,6 +47,7 @@ public class WarningLightService : IWarningLightService, IDisposable
         private set
         {
             if (_isConnected == value) return;
+
             _isConnected = value;
             ConnectionChanged?.Invoke(value);
         }
@@ -85,6 +84,7 @@ public class WarningLightService : IWarningLightService, IDisposable
                 var connectTask = _tcpClient.ConnectAsync(_currentConfig.IpAddress, _currentConfig.Port);
                 if (await Task.WhenAny(connectTask, Task.Delay(_currentConfig.ConnectionTimeout)) != connectTask)
                     throw new TimeoutException($"连接超时（{_currentConfig.ConnectionTimeout}ms）");
+
                 await connectTask;
             }
             catch (Exception ex)
@@ -149,47 +149,58 @@ public class WarningLightService : IWarningLightService, IDisposable
     }
 
     /// <inheritdoc />
-    public async Task ShowGreenLightAsync()
+    public Task ShowGreenLightAsync()
     {
         // 绿灯指令：AT+STACH1=1
         var command = "AT+STACH3=1\r\n"u8.ToArray();
-        await SendCommandAsync(command);
+        return SendCommandAsync(command);
     }
 
     /// <inheritdoc />
-    public async Task ShowRedLightAsync()
+    public Task ShowRedLightAsync()
     {
         // 红灯指令：AT+STACH2=1
         var command = "AT+STACH2=1\r\n"u8.ToArray();
-        await SendCommandAsync(command);
+        return SendCommandAsync(command);
     }
 
     /// <inheritdoc />
-    public async Task TurnOffGreenLightAsync()
+    public Task TurnOffGreenLightAsync()
     {
         var command = "AT+STACH3=0\r\n"u8.ToArray();
-        await SendCommandAsync(command);
+        return SendCommandAsync(command);
     }
 
     /// <inheritdoc />
-    public async Task TurnOffRedLightAsync()
+    public Task TurnOffRedLightAsync()
     {
         var command = "AT+STACH2=0\r\n"u8.ToArray();
-        await SendCommandAsync(command);
+        return SendCommandAsync(command);
     }
 
     /// <summary>
     ///     处理配置变更事件
     /// </summary>
-    private async void OnConfigurationChanged(WarningLightConfiguration newConfig)
+    private void OnConfigurationChanged(WarningLightConfiguration newConfig)
     {
         Log.Information("警示灯配置已更新");
         _currentConfig = newConfig;
 
         // 如果配置发生变化，重新连接服务
         if (!IsConnected) return;
+
         Log.Information("正在重新连接警示灯服务...");
-        await ConnectAsync();
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await ConnectAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "重新连接警示灯服务失败");
+            }
+        });
     }
 
     private async Task SendCommandAsync(byte[] command)
@@ -235,6 +246,7 @@ public class WarningLightService : IWarningLightService, IDisposable
     protected virtual void Dispose(bool disposing)
     {
         if (_disposed) return;
+
         if (disposing)
         {
             _semaphore.Dispose();

@@ -1,11 +1,11 @@
 using System.Net.Http;
 using System.Net.Http.Json;
 using Common.Services.Settings;
-using Presentation_ZtCloudWarehous.Models;
-using Presentation_ZtCloudWarehous.ViewModels.Settings;
 using Serilog;
+using ZtCloudWarehous.Models;
+using ZtCloudWarehous.ViewModels.Settings;
 
-namespace Presentation_ZtCloudWarehous.Services;
+namespace ZtCloudWarehous.Services;
 
 /// <summary>
 ///     设备服务实现
@@ -25,10 +25,10 @@ public class DeviceService : IDeviceService
         _settingsService = settingsService;
 
         // 创建心跳定时器（5分钟）
-        _heartbeatTimer = new Timer(async _ => await SendHeartbeatAsync(), null, Timeout.Infinite, Timeout.Infinite);
+        _heartbeatTimer = new Timer(state => { _ = SendHeartbeatAsync(); }, null, Timeout.Infinite, Timeout.Infinite);
 
         // 创建业务数据同步定时器（10分钟）
-        _businessDataTimer = new Timer(async _ => await SyncBusinessDataInternalAsync(), null, Timeout.Infinite,
+        _businessDataTimer = new Timer(state => { _ = SyncBusinessDataInternalAsync(); }, null, Timeout.Infinite,
             Timeout.Infinite);
     }
 

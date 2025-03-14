@@ -1,13 +1,13 @@
 using System.Text.Json.Serialization;
 using Common.Services.Settings;
 
-namespace Presentation_KuaiLv.Models.Settings.Warning;
+namespace KuaiLv.Models.Settings.Warning;
 
 /// <summary>
 ///     警示灯配置
 /// </summary>
 [Configuration("WarningLightSettings")]
-public class WarningLightConfiguration
+internal class WarningLightConfiguration
 {
     /// <summary>
     ///     IP地址

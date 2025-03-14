@@ -1,4 +1,4 @@
-namespace Presentation_XinBeiYang.Models.Communication;
+namespace XinBeiYang.Models.Communication;
 
 /// <summary>
 ///     设备状态码

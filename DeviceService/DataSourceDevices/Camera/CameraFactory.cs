@@ -64,10 +64,9 @@ public class CameraFactory : IDisposable
             if (_currentCamera == null ||
                 (_currentCamera is DahuaCameraService && settings.Manufacturer != CameraManufacturer.Dahua) ||
                 (_currentCamera is HikvisionIndustrialCameraSdkClient &&
-                 settings.Manufacturer == CameraManufacturer.Hikvision &&
-                 settings.CameraType == CameraType.Industrial) ||
+                 settings is { Manufacturer: CameraManufacturer.Hikvision, CameraType: CameraType.Industrial }) ||
                 (_currentCamera is HikvisionSmartCameraService &&
-                 settings.Manufacturer == CameraManufacturer.Hikvision && settings.CameraType == CameraType.Smart) ||
+                 settings is { Manufacturer: CameraManufacturer.Hikvision, CameraType: CameraType.Smart }) ||
                 (_currentCamera is TcpCameraService && settings.Manufacturer != CameraManufacturer.Tcp))
             {
                 Log.Information("相机制造商或类型发生变更，准备重新初始化相机");
@@ -135,7 +134,7 @@ public class CameraFactory : IDisposable
     /// <summary>
     ///     创建相机服务
     /// </summary>
-    public ICameraService CreateCamera()
+    internal ICameraService CreateCamera()
     {
         var settings = LoadCameraSettings();
         var camera = CreateCameraByManufacturer(settings.Manufacturer, settings.CameraType);

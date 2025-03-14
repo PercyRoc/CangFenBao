@@ -1,11 +1,11 @@
 using System.Net.Http;
 
-namespace Presentation_XiYiGu.Services;
+namespace XiYiGu.Services;
 
 /// <summary>
 ///     默认HTTP客户端工厂
 /// </summary>
-public class DefaultHttpClientFactory : IHttpClientFactory
+internal class DefaultHttpClientFactory : IHttpClientFactory
 {
     private readonly HttpClient _httpClient;
 

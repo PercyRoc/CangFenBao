@@ -1,16 +1,15 @@
-<Page x:Class="Presentation_XiYiGu.Views.Settings.ApiSettingsView"
+<Page x:Class="XiYiGu.Views.Settings.ApiSettingsView"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       xmlns:prism="http://prismlibrary.com/"
-      xmlns:settings="clr-namespace:Presentation_XiYiGu.ViewModels.Settings"
-      xmlns:local="clr-namespace:Presentation_XiYiGu.Converters"
+      xmlns:settings="clr-namespace:XiYiGu.ViewModels.Settings"
       prism:ViewModelLocator.AutoWireViewModel="True"
       d:DataContext="{d:DesignInstance Type=settings:ApiSettingsViewModel}"
       mc:Ignorable="d"
-      Title="API设置">
+      Title="API设置" x:ClassModifier="internal">
     <Page.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>

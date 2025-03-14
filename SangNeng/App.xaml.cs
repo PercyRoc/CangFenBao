@@ -7,21 +7,21 @@ using DeviceService.DataSourceDevices.Scanner;
 using DeviceService.DataSourceDevices.Weight;
 using DeviceService.Extensions;
 using HandyControl.Controls;
-using Presentation_SangNeng.Services;
-using Presentation_SangNeng.ViewModels.Dialogs;
 using Presentation_SangNeng.ViewModels.Settings;
 using Presentation_SangNeng.ViewModels.Windows;
-using Presentation_SangNeng.Views.Dialogs;
-using Presentation_SangNeng.Views.Settings;
 using Presentation_SangNeng.Views.Windows;
 using Prism.Ioc;
 using SangNeng.Services;
+using SangNeng.ViewModels.Dialogs;
 using SangNeng.ViewModels.Settings;
+using SangNeng.ViewModels.Windows;
+using SangNeng.Views.Dialogs;
+using SangNeng.Views.Settings;
 using Serilog;
 using SharedUI.Extensions;
 using Window = System.Windows.Window;
 
-namespace Presentation_SangNeng;
+namespace SangNeng;
 
 /// <summary>
 ///     应用程序入口
@@ -225,7 +225,12 @@ public partial class App
         {
             if (_loadingWindow.Content is not Grid grid ||
                 grid.Children[1] is not StackPanel stackPanel) return;
-            if (stackPanel.Children[1] is TextBlock textBlock) textBlock.Text = message;
+
+            if (stackPanel.Children[1] is TextBlock textBlock)
+            {
+                textBlock.Text = message;
+            }
+
             _loadingControl.Value = progress;
         });
 

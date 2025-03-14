@@ -1,6 +1,6 @@
-namespace Presentation_ZtCloudWarehous.Views.Settings;
+namespace ZtCloudWarehous.Views.Settings;
 
-public partial class WeighingSettingsPage
+internal partial class WeighingSettingsPage
 {
     public WeighingSettingsPage()
     {

@@ -29,7 +29,7 @@ public static class ServiceCollectionExtensions
 
         // 创建数据库上下文选项
         var options = new DbContextOptionsBuilder<PackageDbContext>()
-            .UseSqlite($"Data Source={dbPath}", sqliteOptions =>
+            .UseSqlite($"Data Source={dbPath}", static sqliteOptions =>
             {
                 sqliteOptions.CommandTimeout(30); // 设置命令超时时间（秒）
             })

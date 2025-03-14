@@ -8,7 +8,7 @@ namespace Presentation_SeedingWall.Services;
 /// <summary>
 ///     PLC启动服务
 /// </summary>
-public class PlcStartupService : IHostedService
+internal class PlcStartupService : IHostedService
 {
     private readonly IPlcService _plcService;
     private readonly ISettingsService _settingsService;

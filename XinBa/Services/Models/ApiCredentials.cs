@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Common.Services.Settings;
 
-namespace Presentation_XinBa.Services.Models;
+namespace XinBa.Services.Models;
 
 /// <summary>
 ///     API凭证配置

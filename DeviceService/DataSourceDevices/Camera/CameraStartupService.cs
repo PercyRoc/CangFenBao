@@ -89,7 +89,7 @@ public class CameraStartupService(
     /// <summary>
     ///     获取相机服务实例
     /// </summary>
-    public ICameraService GetCameraService()
+    internal ICameraService GetCameraService()
     {
         _initLock.Wait();
         try

@@ -41,7 +41,7 @@ public interface IPackageDataService
 /// <summary>
 ///     包裹数据服务实现
 /// </summary>
-public class PackageDataService : IPackageDataService
+internal class PackageDataService : IPackageDataService
 {
     private readonly string _dbPath;
     private readonly DbContextOptions<PackageDbContext> _options;
@@ -120,11 +120,15 @@ public class PackageDataService : IPackageDataService
 
                     // 如果是起始月份，添加开始时间过滤
                     if (month == startMonth)
+                    {
                         query = query.Where(p => p.CreateTime >= startTime);
+                    }
 
                     // 如果是结束月份，添加结束时间过滤
                     if (month == endMonth)
+                    {
                         query = query.Where(p => p.CreateTime <= endTime);
+                    }
 
                     return await query.ToListAsync();
                 }
@@ -136,7 +140,7 @@ public class PackageDataService : IPackageDataService
             });
 
             var results = await Task.WhenAll(tasks);
-            return results.SelectMany(x => x).OrderByDescending(p => p.CreateTime).ToList();
+            return results.SelectMany(static x => x).OrderByDescending(static p => p.CreateTime).ToList();
         }
         catch (Exception ex)
         {
@@ -272,7 +276,7 @@ public class PackageDataService : IPackageDataService
     /// <summary>
     ///     创建月度数据表
     /// </summary>
-    private static async Task CreateMonthlyTableAsync(PackageDbContext dbContext, string tableName)
+    private static async Task CreateMonthlyTableAsync(DbContext dbContext, string tableName)
     {
         try
         {
@@ -388,6 +392,7 @@ public class PackageDataService : IPackageDataService
                 if (table.Length <= 9 || !DateTime.TryParseExact(table[9..], "yyyyMM", null,
                         DateTimeStyles.None, out var tableDate)) continue;
                 if (tableDate >= cutoffDate) continue;
+
                 Log.Information("清理旧表：{Table}", table);
                 await dbContext.Database.ExecuteSqlAsync($"DROP TABLE IF EXISTS {table}");
             }

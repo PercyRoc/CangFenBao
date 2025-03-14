@@ -6,6 +6,7 @@ using ChongqingJushuitan.ViewModels.Settings;
 using ChongqingJushuitan.Views;
 using ChongqingJushuitan.Views.Settings;
 using Common.Extensions;
+using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
@@ -18,14 +19,13 @@ using SharedUI.Extensions;
 using SharedUI.ViewModels.Settings;
 using SortingServices.Pendulum;
 using SortingServices.Pendulum.Extensions;
-using SortingServices.Pendulum.Models;
 
 namespace ChongqingJushuitan;
 
 /// <summary>
 ///     Interaction logic for App.xaml
 /// </summary>
-public partial class App
+internal partial class App
 {
     /// <summary>
     ///     创建主窗口

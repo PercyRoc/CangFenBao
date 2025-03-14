@@ -1,16 +1,15 @@
-using Presentation_XinBa.ViewModels;
 using Prism.Services.Dialogs;
 using Serilog;
-using Wpf.Ui.Controls;
+using XinBa.ViewModels;
 
-namespace Presentation_XinBa.Views;
+namespace XinBa.Views;
 
 /// <summary>
 ///     LoginDialog.xaml 的交互逻辑
 /// </summary>
-public partial class LoginDialog : FluentWindow
+internal partial class LoginDialog
 {
-    public LoginDialog()
+    internal LoginDialog()
     {
         InitializeComponent();
         Log.Debug("LoginDialog初始化完成");
@@ -30,21 +29,20 @@ public partial class LoginDialog : FluentWindow
                 Log.Debug("已设置初始密码");
 
                 // 添加密码变更事件
-                PasswordBox.PasswordChanged += (s, e) =>
+                PasswordBox.PasswordChanged += (_, _) =>
                 {
                     viewModel.Password = PasswordBox.Password;
                     Log.Debug("密码已更新: {Length}字符", PasswordBox.Password.Length);
                 };
 
                 // 监听ViewModel密码变更
-                viewModel.PropertyChanged += (s, e) =>
+                viewModel.PropertyChanged += (_, e) =>
                 {
-                    if (e.PropertyName == nameof(LoginViewModel.Password) &&
-                        PasswordBox.Password != viewModel.Password)
-                    {
-                        PasswordBox.Password = viewModel.Password;
-                        Log.Debug("从ViewModel更新密码: {Length}字符", viewModel.Password.Length);
-                    }
+                    if (e.PropertyName != nameof(LoginViewModel.Password) ||
+                        PasswordBox.Password == viewModel.Password) return;
+
+                    PasswordBox.Password = viewModel.Password;
+                    Log.Debug("从ViewModel更新密码: {Length}字符", viewModel.Password.Length);
                 };
 
                 Log.Debug("所有事件处理程序已注册");

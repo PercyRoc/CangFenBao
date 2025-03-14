@@ -1,6 +1,6 @@
 using Common.Models.Package;
 
-namespace Presentation_SangNeng.Models;
+namespace SangNeng.Models;
 
 /// <summary>
 ///     状态选项
@@ -10,7 +10,7 @@ public class StatusOption
     /// <summary>
     ///     构造函数
     /// </summary>
-    public StatusOption(PackageStatus? status, string displayName)
+    internal StatusOption(PackageStatus? status, string displayName)
     {
         Status = status;
         DisplayName = displayName;
@@ -19,7 +19,7 @@ public class StatusOption
     /// <summary>
     ///     状态值
     /// </summary>
-    public PackageStatus? Status { get; }
+    internal PackageStatus? Status { get; }
 
     /// <summary>
     ///     显示名称

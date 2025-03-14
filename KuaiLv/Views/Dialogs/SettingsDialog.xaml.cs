@@ -4,9 +4,9 @@ using Common.Services.Ui;
 using Serilog;
 using SharedUI.Views.Settings;
 
-namespace Presentation_KuaiLv.Views.Dialogs;
+namespace KuaiLv.Views.Dialogs;
 
-public partial class SettingsDialog
+internal partial class SettingsDialog
 {
     public SettingsDialog(INotificationService notificationService)
     {

@@ -1,27 +1,20 @@
 using System.IO.Ports;
 using Common.Services.Settings;
 using Microsoft.Extensions.Hosting;
-using Presentation_BenFly.Models.Settings;
+using BenFly.Models.Settings;
 using Serilog;
 
-namespace Presentation_BenFly.Services.Belt;
+namespace BenFly.Services.Belt;
 
 /// <summary>
 ///     皮带串口托管服务
 /// </summary>
-public class BeltSerialHostedService : IHostedService
+internal class BeltSerialHostedService(
+    IBeltSerialService serialService,
+    ISettingsService settingsService)
+    : IHostedService
 {
     private readonly CancellationTokenSource _cts = new();
-    private readonly IBeltSerialService _serialService;
-    private readonly ISettingsService _settingsService;
-
-    public BeltSerialHostedService(
-        IBeltSerialService serialService,
-        ISettingsService settingsService)
-    {
-        _serialService = serialService;
-        _settingsService = settingsService;
-    }
 
     /// <inheritdoc />
     public Task StartAsync(CancellationToken cancellationToken)
@@ -29,7 +22,7 @@ public class BeltSerialHostedService : IHostedService
         try
         {
             // 加载串口设置
-            var settings = _settingsService.LoadSettings<BeltSettings>();
+            var settings = settingsService.LoadSettings<BeltSettings>();
 
             // 如果没有配置串口或串口不存在，则不打开
             if (string.IsNullOrEmpty(settings.PortName) ||
@@ -50,10 +43,10 @@ public class BeltSerialHostedService : IHostedService
             };
 
             // 打开串口
-            _serialService.Open(serialPort);
+            serialService.Open(serialPort);
 
             // 监听设置变更
-            _settingsService.OnSettingsChanged<BeltSettings>(OnSettingsChanged);
+            settingsService.OnSettingsChanged<BeltSettings>(OnSettingsChanged);
 
             return Task.CompletedTask;
         }
@@ -70,7 +63,7 @@ public class BeltSerialHostedService : IHostedService
         try
         {
             _cts.Cancel();
-            _serialService.Close();
+            serialService.Close();
             return Task.CompletedTask;
         }
         catch (Exception ex)
@@ -102,7 +95,7 @@ public class BeltSerialHostedService : IHostedService
             };
 
             // 重新打开串口
-            _serialService.Open(serialPort);
+            serialService.Open(serialPort);
         }
         catch (Exception ex)
         {

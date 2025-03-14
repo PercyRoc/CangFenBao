@@ -11,9 +11,9 @@ using OfficeOpenXml.Style;
 using Prism.Commands;
 using Prism.Mvvm;
 
-namespace Presentation_BenFly.ViewModels.Settings;
+namespace BenFly.ViewModels.Settings;
 
-public class ChuteSettingsViewModel : BindableBase
+internal class ChuteSettingsViewModel : BindableBase
 {
     private const string NotificationToken = "SettingWindowGrowl";
     private readonly INotificationService _notificationService;
@@ -45,7 +45,7 @@ public class ChuteSettingsViewModel : BindableBase
     public ICommand DeleteRuleCommand { get; }
     public ICommand ImportExcelCommand { get; }
     public ICommand ExportExcelCommand { get; }
-    public ICommand SaveCommand { get; }
+    internal ICommand SaveCommand { get; }
 
     private void ExecuteAddRule()
     {
@@ -210,6 +210,7 @@ public class ChuteSettingsViewModel : BindableBase
             validationContext = new ValidationContext(rule);
             validationResults = [];
             if (Validator.TryValidateObject(rule, validationContext, validationResults, true)) continue;
+
             _notificationService.ShowWarningWithToken(validationResults[0].ErrorMessage, NotificationToken);
             return;
         }

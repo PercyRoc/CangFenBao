@@ -5,7 +5,7 @@ using Modules.Models;
 using Serilog;
 using SortingServices.Common;
 
-namespace Presentation_Modules.Services;
+namespace Modules.Services;
 
 /// <summary>
 ///     锁格服务，负责与锁格设备通信
@@ -164,7 +164,7 @@ public partial class LockingService : IDisposable
     ///     获取连接状态
     /// </summary>
     /// <returns>是否已连接</returns>
-    public bool IsConnected()
+    internal bool IsConnected()
     {
         return _isConnected;
     }
@@ -175,6 +175,7 @@ public partial class LockingService : IDisposable
     private void DisposeTcpClient()
     {
         if (_tcpClient == null) return;
+
         try
         {
             _tcpClient.Dispose();

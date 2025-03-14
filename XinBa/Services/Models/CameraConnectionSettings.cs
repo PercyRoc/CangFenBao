@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using Common.Services.Settings;
 
-namespace Presentation_XinBa.Services.Models;
+namespace XinBa.Services.Models;
 
 /// <summary>
 ///     相机连接配置

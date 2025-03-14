@@ -1,14 +1,14 @@
 using Common.Services.Settings;
 using Microsoft.Extensions.Hosting;
-using Presentation_XinBeiYang.Models;
 using Serilog;
+using XinBeiYang.Models;
 
-namespace Presentation_XinBeiYang.Services;
+namespace XinBeiYang.Services;
 
 /// <summary>
 ///     PLC通讯托管服务
 /// </summary>
-public class PlcCommunicationHostedService(
+internal class PlcCommunicationHostedService(
     IPlcCommunicationService plcCommunicationService,
     ISettingsService settingsService)
     : BackgroundService

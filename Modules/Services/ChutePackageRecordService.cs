@@ -5,10 +5,10 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Common.Models.Package;
 using Common.Services.Settings;
-using Presentation_Modules.Models;
+using Modules.Models;
 using Serilog;
 
-namespace Presentation_Modules.Services;
+namespace Modules.Services;
 
 /// <summary>
 ///     格口包裹记录服务，用于记录每个格口分配的包裹，并在格口锁定时将数据上传到指定接口并清空
@@ -38,7 +38,7 @@ public class ChutePackageRecordService
     ///     添加包裹记录
     /// </summary>
     /// <param name="package">包裹信息</param>
-    public void AddPackageRecord(PackageInfo package)
+    internal void AddPackageRecord(PackageInfo package)
     {
         try
         {
@@ -53,7 +53,7 @@ public class ChutePackageRecordService
             }
 
             // 获取或创建格口包裹列表
-            var packages = _chutePackages.GetOrAdd(chuteNumber, _ => new List<PackageInfo>());
+            var packages = _chutePackages.GetOrAdd(chuteNumber, static _ => []);
 
             // 添加包裹记录
             lock (packages)
@@ -74,7 +74,7 @@ public class ChutePackageRecordService
     /// </summary>
     /// <param name="chuteNumber">格口号</param>
     /// <param name="isLocked">是否锁定</param>
-    public async Task SetChuteLockStatusAsync(int chuteNumber, bool isLocked)
+    internal async Task SetChuteLockStatusAsync(int chuteNumber, bool isLocked)
     {
         try
         {
@@ -133,7 +133,7 @@ public class ChutePackageRecordService
     /// </summary>
     /// <param name="chuteNumber">格口号</param>
     /// <param name="packages">包裹列表</param>
-    private async Task UploadPackagesToApiAsync(int chuteNumber, List<PackageInfo> packages)
+    private async Task UploadPackagesToApiAsync(int chuteNumber, IEnumerable<PackageInfo> packages)
     {
         try
         {
@@ -141,7 +141,7 @@ public class ChutePackageRecordService
             var handlers = _config.SiteCode == "1002" ? "深圳收货组03" : "上海收货组03";
 
             // 构建包裹条码字符串，用逗号分隔
-            var packageCodes = string.Join(",", packages.Select(p => p.Barcode));
+            var packageCodes = string.Join(",", packages.Select(static p => p.Barcode));
 
             // 构建请求数据
             var requestData = new
@@ -226,6 +226,7 @@ public class ChutePackageRecordService
     public int GetChutePackageCount(int chuteNumber)
     {
         if (!_chutePackages.TryGetValue(chuteNumber, out var packages)) return 0;
+
         lock (packages)
         {
             return packages.Count;

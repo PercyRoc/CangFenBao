@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera.Models.Camera;
@@ -6,7 +5,7 @@ using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
 
-namespace Presentation_SangNeng.ViewModels.Settings;
+namespace SangNeng.ViewModels.Settings;
 
 public class VolumeSettingsViewModel : BindableBase
 {
@@ -33,17 +32,6 @@ public class VolumeSettingsViewModel : BindableBase
         set => SetProperty(ref _configuration, value);
     }
 
-    public DeviceCameraInfo? SelectedCamera
-    {
-        get => Configuration?.SelectedCamera;
-        set
-        {
-            if (Configuration == null) return;
-            Configuration.SelectedCamera = value;
-            RaisePropertyChanged();
-        }
-    }
-
     public int TimeoutMs
     {
         get => Configuration?.TimeoutMs ?? 5000;
@@ -54,8 +42,6 @@ public class VolumeSettingsViewModel : BindableBase
             RaisePropertyChanged();
         }
     }
-
-    public ObservableCollection<DeviceCameraInfo> AvailableCameras { get; } = [];
 
     public DelegateCommand SaveConfigurationCommand { get; }
 

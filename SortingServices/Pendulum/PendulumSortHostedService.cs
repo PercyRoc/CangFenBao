@@ -1,7 +1,7 @@
+using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
 using Microsoft.Extensions.Hosting;
 using Serilog;
-using SortingServices.Pendulum.Models;
 
 namespace SortingServices.Pendulum;
 

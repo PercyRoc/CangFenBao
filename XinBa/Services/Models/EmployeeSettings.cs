@@ -1,6 +1,6 @@
 using Common.Services.Settings;
 
-namespace Presentation_XinBa.Services.Models;
+namespace XinBa.Services.Models;
 
 /// <summary>
 ///     员工设置

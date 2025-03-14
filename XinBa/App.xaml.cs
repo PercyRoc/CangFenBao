@@ -1,20 +1,20 @@
 ﻿using System.Windows;
 using Common.Extensions;
-using Presentation_XinBa.Services;
-using Presentation_XinBa.ViewModels;
-using Presentation_XinBa.ViewModels.Settings;
-using Presentation_XinBa.Views;
-using Presentation_XinBa.Views.Settings;
 using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
+using XinBa.Services;
+using XinBa.ViewModels;
+using XinBa.ViewModels.Settings;
+using XinBa.Views;
+using XinBa.Views.Settings;
 
-namespace Presentation_XinBa;
+namespace XinBa;
 
 /// <summary>
 ///     Interaction logic for App.xaml
 /// </summary>
-public partial class App
+internal partial class App
 {
     private Window? _currentMainWindow;
 
@@ -94,7 +94,7 @@ public partial class App
         base.OnStartup(e);
 
         // 注册全局异常处理
-        Current.DispatcherUnhandledException += (_, args) =>
+        Current.DispatcherUnhandledException += static (_, args) =>
         {
             Log.Error(args.Exception, "未处理的异常");
             args.Handled = true;
@@ -256,6 +256,7 @@ public partial class App
                 try
                 {
                     if (window == Current.MainWindow) continue;
+
                     window.Close();
                     Log.Information($"已关闭窗口: {window.GetType().Name}");
                 }
@@ -280,6 +281,7 @@ public partial class App
             // 登出当前用户
             var apiService = Container.Resolve<IApiService>();
             if (apiService == null || !apiService.IsLoggedIn()) return;
+
             {
                 try
                 {

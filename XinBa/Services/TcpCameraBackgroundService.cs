@@ -1,12 +1,12 @@
 using Microsoft.Extensions.Hosting;
 using Serilog;
 
-namespace Presentation_XinBa.Services;
+namespace XinBa.Services;
 
 /// <summary>
 ///     TCP相机后台服务
 /// </summary>
-public class TcpCameraBackgroundService : BackgroundService
+internal class TcpCameraBackgroundService : BackgroundService
 {
     private readonly SemaphoreSlim _initLock = new(1, 1);
     private readonly TcpCameraService _tcpCameraService;
@@ -74,7 +74,7 @@ public class TcpCameraBackgroundService : BackgroundService
             Log.Information("正在停止TCP相机后台服务...");
 
             // 取消后台任务
-            _stoppingTokenSource?.Cancel();
+            await _stoppingTokenSource?.CancelAsync()!;
 
             // 取消订阅
             _packageSubscription?.Dispose();

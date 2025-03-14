@@ -1,16 +1,16 @@
 using System.Collections.Concurrent;
 using System.Net.Sockets;
 using Common.Services.Ui;
-using Presentation_XinBeiYang.Models.Communication;
-using Presentation_XinBeiYang.Models.Communication.Packets;
 using Serilog;
+using XinBeiYang.Models.Communication;
+using XinBeiYang.Models.Communication.Packets;
 
-namespace Presentation_XinBeiYang.Services;
+namespace XinBeiYang.Services;
 
 /// <summary>
 ///     PLC通讯服务实现
 /// </summary>
-public class PlcCommunicationService(INotificationService notificationService) : IPlcCommunicationService, IDisposable
+internal class PlcCommunicationService(INotificationService notificationService) : IPlcCommunicationService, IDisposable
 {
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly object _connectionLock = new();
@@ -22,7 +22,7 @@ public class PlcCommunicationService(INotificationService notificationService) :
     private ushort _nextCommandId = 1;
     private Task? _receiveTask;
     private TcpClient? _tcpClient;
-    public DeviceStatusCode CurrentDeviceStatus { get; private set; } = DeviceStatusCode.Normal;
+    private DeviceStatusCode CurrentDeviceStatus { get; set; } = DeviceStatusCode.Normal;
 
     public void Dispose()
     {
@@ -241,6 +241,7 @@ public class PlcCommunicationService(INotificationService notificationService) :
                 // 检查心跳超时
                 if (DateTime.Now - _lastReceivedTime <=
                     TimeSpan.FromMilliseconds(PlcConstants.HeartbeatTimeout)) continue;
+
                 Log.Warning("心跳超时");
                 await DisconnectAsync();
                 break;
@@ -279,6 +280,7 @@ public class PlcCommunicationService(INotificationService notificationService) :
                 var response = await tcs.Task;
                 if (response is T typedResponse)
                     return typedResponse;
+
                 throw new InvalidOperationException($"收到意外的响应类型: {response.GetType().Name}");
             }
 

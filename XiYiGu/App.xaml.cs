@@ -4,21 +4,21 @@ using Common.Extensions;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
-using Presentation_XiYiGu.Services;
-using Presentation_XiYiGu.ViewModels;
-using Presentation_XiYiGu.ViewModels.Settings;
-using Presentation_XiYiGu.Views;
-using Presentation_XiYiGu.Views.Settings;
 using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
+using XiYiGu.Services;
+using XiYiGu.ViewModels;
+using XiYiGu.ViewModels.Settings;
+using XiYiGu.Views;
+using XiYiGu.Views.Settings;
 
-namespace Presentation_XiYiGu;
+namespace XiYiGu;
 
 /// <summary>
 ///     Interaction logic for App.xaml
 /// </summary>
-public partial class App
+internal partial class App
 {
     /// <summary>
     ///     创建主窗口

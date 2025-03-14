@@ -5,12 +5,11 @@ using System.Text.Json;
 using Common.Services.Settings;
 using SangNeng.Models;
 using SangNeng.Models.Settings;
-using SangNeng.Services;
 using Serilog;
 
-namespace Presentation_SangNeng.Services;
+namespace SangNeng.Services;
 
-public class SangNengService : ISangNengService
+internal class SangNengService : ISangNengService
 {
     private readonly HttpClient _httpClient;
     private readonly JsonSerializerOptions _jsonOptions;
@@ -56,6 +55,7 @@ public class SangNengService : ISangNengService
 
             var result = JsonSerializer.Deserialize<SangNengWeightResponse>(responseContent, _jsonOptions);
             if (result != null) return result;
+
             Log.Error("无法解析桑能服务器响应");
             return new SangNengWeightResponse
             {

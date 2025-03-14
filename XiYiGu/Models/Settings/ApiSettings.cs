@@ -1,7 +1,7 @@
 using Common.Services.Settings;
 using Prism.Mvvm;
 
-namespace Presentation_XiYiGu.Models.Settings;
+namespace XiYiGu.Models.Settings;
 
 /// <summary>
 ///     API设置

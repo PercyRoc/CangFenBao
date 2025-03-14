@@ -1,5 +1,5 @@
 ﻿using Common.Models.Package;
-using SortingServices.Pendulum.Models;
+using Common.Models.Settings.Sort.PendulumSort;
 
 namespace SortingServices.Pendulum;
 
@@ -43,15 +43,4 @@ public interface IPendulumSortService : IDisposable
     /// </summary>
     /// <returns>设备名称和连接状态的字典</returns>
     Dictionary<string, bool> GetAllDeviceConnectionStates();
-
-    /// <summary>
-    ///     更新分检服务配置
-    /// </summary>
-    /// <param name="configuration">新的分检配置</param>
-    /// <returns>更新是否成功</returns>
-    /// <remarks>
-    ///     此方法允许在服务运行时更新配置。
-    ///     根据实现，某些配置更改可能需要重启服务才能生效。
-    /// </remarks>
-    Task<bool> UpdateConfigurationAsync(PendulumSortConfig configuration);
 }

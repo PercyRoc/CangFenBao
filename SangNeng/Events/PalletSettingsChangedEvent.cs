@@ -1,7 +1,7 @@
 using Prism.Events;
 
-namespace Presentation_SangNeng.Events;
+namespace SangNeng.Events;
 
-public class PalletSettingsChangedEvent : PubSubEvent
+internal class PalletSettingsChangedEvent : PubSubEvent
 {
 }

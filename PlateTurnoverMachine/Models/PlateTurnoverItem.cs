@@ -1,4 +1,4 @@
-namespace Presentation_PlateTurnoverMachine.Models;
+namespace PlateTurnoverMachine.Models;
 
 /// <summary>
 ///     翻板机配置项

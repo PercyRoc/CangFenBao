@@ -12,7 +12,7 @@ namespace ChongqingJushuitan.Services;
 /// <summary>
 ///     聚水潭服务实现
 /// </summary>
-public class JuShuiTanService : IJuShuiTanService
+internal class JuShuiTanService : IJuShuiTanService
 {
     private const string ProductionUrl = "https://openapi.jushuitan.com";
     private const string DevelopmentUrl = "https://dev-api.jushuitan.com";
@@ -31,9 +31,9 @@ public class JuShuiTanService : IJuShuiTanService
     }
 
     /// <inheritdoc />
-    public async Task<WeightSendResponse> WeightAndSendAsync(WeightSendRequest request)
+    public Task<WeightSendResponse> WeightAndSendAsync(WeightSendRequest request)
     {
-        return await BatchWeightAndSendAsync([request]);
+        return BatchWeightAndSendAsync([request]);
     }
 
     /// <inheritdoc />
@@ -72,7 +72,7 @@ public class JuShuiTanService : IJuShuiTanService
                 "application/json");
 
             // 添加查询参数
-            var query = string.Join("&", parameters.Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value)}"));
+            var query = string.Join("&", parameters.Select(static p => $"{p.Key}={Uri.EscapeDataString(p.Value)}"));
             var requestUrl = $"{url}?{query}";
 
             Log.Debug("聚水潭API请求URL: {Url}", requestUrl);
@@ -105,7 +105,7 @@ public class JuShuiTanService : IJuShuiTanService
         }
     }
 
-    private string CalculateSign(Dictionary<string, string> parameters, WeightSendRequest[] requests)
+    private string CalculateSign(IDictionary<string, string> parameters, WeightSendRequest[] requests)
     {
         try
         {
@@ -114,7 +114,7 @@ public class JuShuiTanService : IJuShuiTanService
 
             // 构建签名字符串
             var signBuilder = new StringBuilder();
-            foreach (var param in sortedParams.Where(param => !string.IsNullOrEmpty(param.Value)))
+            foreach (var param in sortedParams.Where(static param => !string.IsNullOrEmpty(param.Value)))
                 signBuilder.Append(param.Key).Append(param.Value);
 
             // 添加请求体

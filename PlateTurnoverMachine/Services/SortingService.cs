@@ -2,10 +2,10 @@ using System.Collections.Concurrent;
 using System.Text;
 using Common.Models.Package;
 using Common.Services.Settings;
-using Presentation_PlateTurnoverMachine.Models;
+using PlateTurnoverMachine.Models;
 using Serilog;
 
-namespace Presentation_PlateTurnoverMachine.Services;
+namespace PlateTurnoverMachine.Services;
 
 /// <summary>
 ///     分拣服务
@@ -35,9 +35,11 @@ public class SortingService : IDisposable
         _lastTriggerTime = DateTime.Now;
 
         // 初始化所有TCP配置
-        foreach (var item in Settings.Items)
-            if (!string.IsNullOrEmpty(item.TcpAddress))
+        foreach (var item in Settings.Items.Where(static item => !string.IsNullOrEmpty(item.TcpAddress)))
+            if (item.TcpAddress != null)
+            {
                 _tcpConfigs[item.TcpAddress] = new TcpConnectionConfig(item.TcpAddress, 2000);
+            }
     }
 
     private PlateTurnoverSettings Settings => _settingsService.LoadSettings<PlateTurnoverSettings>();
@@ -67,7 +69,7 @@ public class SortingService : IDisposable
     ///     添加包裹到分拣队列
     /// </summary>
     /// <param name="package">包裹信息</param>
-    public void EnqueuePackage(PackageInfo package)
+    internal void EnqueuePackage(PackageInfo package)
     {
         try
         {
@@ -125,7 +127,7 @@ public class SortingService : IDisposable
             var message = Encoding.ASCII.GetString(e.Data);
 
             // 处理OCCH_ALL消息
-            if (!message.StartsWith("+OCCH_ALL:")) return;
+            if (!message.StartsWith("+OCCH_ALL:", StringComparison.Ordinal)) return;
 
             var channelStates = message.Replace("+OCCH_ALL:", "").Split(',');
             if (channelStates.Length != 8)
@@ -204,6 +206,7 @@ public class SortingService : IDisposable
 
                     // 如果当前计数等于配置的距离，说明包裹到达了目标位置
                     if (!(_currentCount >= turnoverItem.Distance)) continue;
+
                     Log.Information("包裹 {Barcode} 已到达目标位置，触发次数：{Count}，目标格口：{ChuteName}，总耗时：{TotalTime:F2}毫秒",
                         package.Barcode, _currentCount, package.ChuteName,
                         (triggerTime - package.CreateTime).TotalMilliseconds);

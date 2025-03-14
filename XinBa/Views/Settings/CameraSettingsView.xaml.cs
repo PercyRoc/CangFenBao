@@ -1,6 +1,6 @@
-﻿namespace Presentation_XinBa.Views.Settings;
+﻿namespace XinBa.Views.Settings;
 
-public partial class CameraSettingsView
+internal partial class CameraSettingsView
 {
     public CameraSettingsView()
     {

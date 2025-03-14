@@ -20,7 +20,7 @@
                  WindowBackdropType="Mica"
                  WindowCornerPreference="Round"
                  WindowStyle="SingleBorderWindow"
-                 ShowInTaskbar="False">
+                 ShowInTaskbar="False" x:ClassModifier="internal">
 
     <ui:FluentWindow.Resources>
         <ResourceDictionary>

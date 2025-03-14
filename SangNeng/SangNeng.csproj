@@ -3,11 +3,11 @@
     <PropertyGroup>
         <OutputType>WinExe</OutputType>
         <TargetFramework>net8.0-windows</TargetFramework>
-        <RootNamespace>Presentation_SangNeng</RootNamespace>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
         <AssemblyName>Sunnen</AssemblyName>
+        <LangVersion>default</LangVersion>
     </PropertyGroup>
 
     <ItemGroup>

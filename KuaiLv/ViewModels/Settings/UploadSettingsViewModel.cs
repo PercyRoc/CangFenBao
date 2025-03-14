@@ -1,12 +1,12 @@
 using Common.Services.Settings;
-using Presentation_KuaiLv.Models.Settings.Upload;
+using KuaiLv.Models.Settings.Upload;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
 
-namespace Presentation_KuaiLv.ViewModels.Settings;
+namespace KuaiLv.ViewModels.Settings;
 
-public class UploadSettingsViewModel : BindableBase
+internal class UploadSettingsViewModel : BindableBase
 {
     private readonly ISettingsService _settingsService;
     private UploadConfiguration _configuration = new();
@@ -30,7 +30,7 @@ public class UploadSettingsViewModel : BindableBase
 
     public static Array Environments => Enum.GetValues(typeof(UploadEnvironment));
 
-    public DelegateCommand SaveConfigurationCommand { get; }
+    internal DelegateCommand SaveConfigurationCommand { get; }
 
     private void ExecuteSaveConfiguration()
     {

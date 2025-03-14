@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace Presentation_XinBa.Services.Models;
+namespace XinBa.Services.Models;
 
 /// <summary>
 ///     员工登录请求

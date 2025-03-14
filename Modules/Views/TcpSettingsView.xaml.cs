@@ -1,13 +1,11 @@
-using System.Windows.Controls;
-
 namespace Modules.Views;
 
 /// <summary>
 ///     TCP设置页面
 /// </summary>
-public partial class TcpSettingsView : Page
+internal partial class TcpSettingsView
 {
-    public TcpSettingsView()
+    internal TcpSettingsView()
     {
         InitializeComponent();
     }

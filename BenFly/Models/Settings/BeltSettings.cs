@@ -2,10 +2,10 @@ using System.IO.Ports;
 using Common.Services.Settings;
 using Prism.Mvvm;
 
-namespace Presentation_BenFly.Models.Settings;
+namespace BenFly.Models.Settings;
 
 [Configuration("BeltSettings")]
-public class BeltSettings : BindableBase
+internal class BeltSettings : BindableBase
 {
     private int _baudRate = 9600;
     private int _dataBits = 8;

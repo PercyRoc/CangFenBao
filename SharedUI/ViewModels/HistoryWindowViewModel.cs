@@ -91,13 +91,24 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
             foreach (var record in value)
             {
                 if (record.Length.HasValue)
+                {
                     record.Length = record.Length.Value / 10.0;
+                }
+
                 if (record.Width.HasValue)
+                {
                     record.Width = record.Width.Value / 10.0;
+                }
+
                 if (record.Height.HasValue)
+                {
                     record.Height = record.Height.Value / 10.0;
+                }
+
                 if (record.Volume.HasValue)
+                {
                     record.Volume = record.Volume.Value / 1000.0; // 将立方毫米转换为立方厘米
+                }
             }
 
             SetProperty(ref _packageRecords, value);
@@ -173,12 +184,16 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
 
             // 如果有条码搜索条件，进行过滤
             if (!string.IsNullOrWhiteSpace(SearchBarcode))
+            {
                 records = records.Where(r => r.Barcode.Contains(SearchBarcode, StringComparison.OrdinalIgnoreCase))
                     .ToList();
+            }
 
             // 如果有格口搜索条件，进行过滤
             if (!string.IsNullOrWhiteSpace(SearchChute) && int.TryParse(SearchChute, out var chuteNumber))
+            {
                 records = records.Where(r => r.ChuteName == chuteNumber).ToList();
+            }
 
             PackageRecords = [.. records];
             _notificationService.ShowSuccessWithToken("查询成功", "HistoryWindowGrowl");
@@ -268,7 +283,10 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
                 "体积(cm³)", "状态", "创建时间"
             };
 
-            for (var i = 0; i < headers.Length; i++) worksheet.Cells[1, i + 1].Value = headers[i];
+            for (var i = 0; i < headers.Length; i++)
+            {
+                worksheet.Cells[1, i + 1].Value = headers[i];
+            }
 
             // 设置表头样式
             using (var range = worksheet.Cells[1, 1, 1, headers.Length])

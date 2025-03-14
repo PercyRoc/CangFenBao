@@ -1,6 +1,6 @@
-namespace Presentation_SangNeng.Views.Settings;
+namespace SangNeng.Views.Settings;
 
-public partial class VolumeSettingsView
+internal partial class VolumeSettingsView
 {
     public VolumeSettingsView()
     {

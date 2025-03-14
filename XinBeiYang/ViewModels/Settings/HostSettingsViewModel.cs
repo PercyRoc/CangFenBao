@@ -1,13 +1,13 @@
 using Common.Services.Settings;
 using Common.Services.Ui;
-using Presentation_XinBeiYang.Models;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
+using XinBeiYang.Models;
 
-namespace Presentation_XinBeiYang.ViewModels.Settings;
+namespace XinBeiYang.ViewModels.Settings;
 
-public class HostSettingsViewModel : BindableBase
+internal class HostSettingsViewModel : BindableBase
 {
     private readonly INotificationService _notificationService;
     private readonly ISettingsService _settingsService;
@@ -26,7 +26,7 @@ public class HostSettingsViewModel : BindableBase
         LoadConfiguration();
     }
 
-    public DelegateCommand SaveConfigurationCommand { get; }
+    internal DelegateCommand SaveConfigurationCommand { get; }
 
     public HostConfiguration Configuration
     {

@@ -19,11 +19,12 @@ using DeviceService.DataSourceDevices.Camera.Models.Camera.Enums;
 using DeviceService.DataSourceDevices.Camera.RenJia;
 using DeviceService.DataSourceDevices.Scanner;
 using DeviceService.DataSourceDevices.Weight;
-using Presentation_SangNeng.Events;
 using Presentation_SangNeng.ViewModels.Settings;
+using Presentation_SangNeng.ViewModels.Windows;
 using Prism.Commands;
 using Prism.Events;
 using Prism.Mvvm;
+using SangNeng.Events;
 using SangNeng.Models;
 using SangNeng.Services;
 using Serilog;
@@ -34,7 +35,7 @@ using SixLabors.ImageSharp.Processing;
 using Color = System.Drawing.Color;
 using Timer = System.Timers.Timer;
 
-namespace Presentation_SangNeng.ViewModels.Windows;
+namespace SangNeng.ViewModels.Windows;
 
 /// <summary>
 ///     主窗口视图模型
@@ -709,8 +710,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         $"Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}"
                     };
 
-                    var padding = 20;
-                    var lineSpacing = 50;
+                    const int padding = 20;
+                    const int lineSpacing = 50;
                     var startY = padding;
 
                     foreach (var line in watermarkLines)
@@ -914,10 +915,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         PackageInfoItems =
         [
-            new PackageInfoItem("Weight", "0.00", "kg", "Package Weight", "Scale24"),
+            new PackageInfoItem("Weight", "0.00", "kg", "Package Weight", "Scales24"),
             new PackageInfoItem("Size", "0 × 0 × 0", "cm", "Length × Width × Height", "Ruler24"),
             new PackageInfoItem("Time", "--:--:--", "", "Processing Time", "Timer24"),
-            new PackageInfoItem("Status", "Waiting", "", "Processing Status", "AlertCircle24")
+            new PackageInfoItem("Status", "Waiting", "", "Processing Status", "Alert24")
         ];
     }
 
@@ -938,7 +939,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         [
             new DeviceStatus { Name = "Photo Camera", Status = "Offline", Icon = "Camera24", StatusColor = "#FFA500" },
             new DeviceStatus { Name = "Volume Camera", Status = "Offline", Icon = "Cube24", StatusColor = "#FFA500" },
-            new DeviceStatus { Name = "Weight Scale", Status = "Offline", Icon = "Scale24", StatusColor = "#FFA500" }
+            new DeviceStatus { Name = "Weight Scale", Status = "Offline", Icon = "Scales24", StatusColor = "#FFA500" }
         ];
     }
 

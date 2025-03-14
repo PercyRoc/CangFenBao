@@ -2,15 +2,15 @@
 using System.Windows;
 using System.Windows.Input;
 using Common.Services.Ui;
-using Presentation_ZtCloudWarehous.ViewModels;
 using Serilog;
+using ZtCloudWarehous.ViewModels;
 
-namespace Presentation_ZtCloudWarehous.Views;
+namespace ZtCloudWarehous.Views;
 
 /// <summary>
 ///     Interaction logic for MainWindow.xaml
 /// </summary>
-public partial class MainWindow
+internal partial class MainWindow
 {
     private readonly IDialogService _dialogService;
 

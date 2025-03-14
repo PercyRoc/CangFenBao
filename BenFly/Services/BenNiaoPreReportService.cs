@@ -3,13 +3,13 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using BenFly.Models.BenNiao;
 using Common.Services.Settings;
-using Presentation_BenFly.Models.BenNiao;
-using Presentation_BenFly.Models.Upload;
+using BenFly.Models.Upload;
 using Serilog;
 using Timer = System.Timers.Timer;
 
-namespace Presentation_BenFly.Services;
+namespace BenFly.Services;
 
 /// <summary>
 ///     笨鸟预报数据服务
@@ -143,7 +143,7 @@ public class BenNiaoPreReportService : IDisposable
     /// <summary>
     ///     获取预报数据
     /// </summary>
-    public List<PreReportDataResponse>? GetPreReportData()
+    internal IEnumerable<PreReportDataResponse>? GetPreReportData()
     {
         return _preReportData;
     }
@@ -171,7 +171,7 @@ public class BenNiaoPreReportService : IDisposable
     /// <summary>
     ///     更新预报数据
     /// </summary>
-    public async Task UpdatePreReportDataAsync()
+    private async Task UpdatePreReportDataAsync()
     {
         try
         {

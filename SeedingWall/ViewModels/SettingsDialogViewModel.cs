@@ -9,7 +9,7 @@ using SharedUI.ViewModels.Settings;
 
 namespace Presentation_SeedingWall.ViewModels;
 
-public class SettingsDialogViewModel : BindableBase, IDialogAware
+internal class SettingsDialogViewModel : BindableBase, IDialogAware
 {
     // 保存各个设置页面的ViewModel实例
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;

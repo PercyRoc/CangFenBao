@@ -1,6 +1,6 @@
 using Common.Models.Package;
 
-namespace Presentation_Modules.Services;
+namespace Modules.Services;
 
 public interface IModuleConnectionService
 {

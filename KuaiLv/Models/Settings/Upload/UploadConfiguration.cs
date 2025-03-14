@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using Common.Services.Settings;
 
-namespace Presentation_KuaiLv.Models.Settings.Upload;
+namespace KuaiLv.Models.Settings.Upload;
 
 /// <summary>
 ///     上传环境

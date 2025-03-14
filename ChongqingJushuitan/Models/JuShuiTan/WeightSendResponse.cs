@@ -59,13 +59,13 @@ public class WeightSendResponseData
     ///     快递单号
     /// </summary>
     [JsonPropertyName("l_id")]
-    public string LogisticsId { get; set; } = null!;
+    internal string LogisticsId { get; set; } = null!;
 
     /// <summary>
     ///     物流公司
     /// </summary>
     [JsonPropertyName("logistics_company")]
-    public string LogisticsCompany { get; set; } = null!;
+    internal string LogisticsCompany { get; set; } = null!;
 
     /// <summary>
     ///     省

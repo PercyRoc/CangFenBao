@@ -1,4 +1,4 @@
-namespace Presentation_XinBeiYang.Services;
+namespace XinBeiYang.Services;
 
 /// <summary>
 ///     PLC通讯服务接口

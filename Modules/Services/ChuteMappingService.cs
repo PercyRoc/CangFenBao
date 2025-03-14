@@ -4,10 +4,10 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Common.Models.Package;
 using Common.Services.Settings;
-using Presentation_Modules.Models;
+using Modules.Models;
 using Serilog;
 
-namespace Presentation_Modules.Services;
+namespace Modules.Services;
 
 /// <summary>
 ///     格口映射服务，负责与服务器通信获取格口号
@@ -62,7 +62,7 @@ public class ChuteMappingService : IDisposable
     /// </summary>
     /// <param name="package">包裹信息</param>
     /// <returns>格口号，如果获取失败则返回null</returns>
-    public async Task<int?> GetChuteNumberAsync(PackageInfo package)
+    internal async Task<int?> GetChuteNumberAsync(PackageInfo package)
     {
         if (string.IsNullOrEmpty(package.Barcode) ||
             package.Barcode.Equals("NoRead", StringComparison.OrdinalIgnoreCase))

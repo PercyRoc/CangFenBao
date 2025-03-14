@@ -1,12 +1,12 @@
 using System.Buffers.Binary;
 using System.Text;
 
-namespace Presentation_XinBeiYang.Models.Communication.Packets;
+namespace XinBeiYang.Models.Communication.Packets;
 
 /// <summary>
 ///     上包请求数据包
 /// </summary>
-public class UploadRequestPacket(
+internal class UploadRequestPacket(
     ushort commandId,
     float weight,
     float length,
@@ -20,37 +20,37 @@ public class UploadRequestPacket(
     /// <summary>
     ///     重量（kg）
     /// </summary>
-    public float Weight { get; } = weight;
+    private float Weight { get; } = weight;
 
     /// <summary>
     ///     长度（mm）
     /// </summary>
-    public float Length { get; } = length;
+    private float Length { get; } = length;
 
     /// <summary>
     ///     宽度（mm）
     /// </summary>
-    public float Width { get; } = width;
+    private float Width { get; } = width;
 
     /// <summary>
     ///     高度（mm）
     /// </summary>
-    public float Height { get; } = height;
+    private float Height { get; } = height;
 
     /// <summary>
     ///     一维码
     /// </summary>
-    public string Barcode1D { get; } = barcode1D;
+    private string Barcode1D { get; } = barcode1D;
 
     /// <summary>
     ///     二维码
     /// </summary>
-    public string Barcode2D { get; } = barcode2D;
+    private string Barcode2D { get; } = barcode2D;
 
     /// <summary>
     ///     扫描时间戳
     /// </summary>
-    public ulong ScanTimestamp { get; } = scanTimestamp;
+    private ulong ScanTimestamp { get; } = scanTimestamp;
 
     protected override byte[] GetMessageBody()
     {
@@ -100,7 +100,7 @@ public class UploadRequestPacket(
 /// <summary>
 ///     上包请求应答数据包
 /// </summary>
-public class UploadRequestAckPacket : PlcPacket
+internal class UploadRequestAckPacket : PlcPacket
 {
     private UploadRequestAckPacket(ushort commandId, bool isAccepted)
         : base(CommandType.UploadRequestAck, commandId)
@@ -111,14 +111,14 @@ public class UploadRequestAckPacket : PlcPacket
     /// <summary>
     ///     结果反馈
     /// </summary>
-    public bool IsAccepted { get; }
+    internal bool IsAccepted { get; }
 
     protected override byte[] GetMessageBody()
     {
         return [0x00, IsAccepted ? (byte)0x00 : (byte)0x01];
     }
 
-    public static UploadRequestAckPacket Parse(ushort commandId, ReadOnlySpan<byte> data)
+    internal static UploadRequestAckPacket Parse(ushort commandId, ReadOnlySpan<byte> data)
     {
         var isAccepted = data[1] == 0x00;
         return new UploadRequestAckPacket(commandId, isAccepted);

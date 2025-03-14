@@ -1,6 +1,6 @@
 using System.Net;
 
-namespace Presentation_PlateTurnoverMachine.Models;
+namespace PlateTurnoverMachine.Models;
 
 /// <summary>
 ///     TCP连接配置
@@ -12,7 +12,7 @@ public class TcpConnectionConfig
     /// </summary>
     /// <param name="ipAddress">IP地址</param>
     /// <param name="port">端口号</param>
-    public TcpConnectionConfig(string ipAddress, int port)
+    internal TcpConnectionConfig(string ipAddress, int port)
     {
         IpAddress = ipAddress;
         Port = port;
@@ -21,7 +21,7 @@ public class TcpConnectionConfig
     /// <summary>
     ///     IP地址
     /// </summary>
-    public string IpAddress { get; }
+    internal string IpAddress { get; }
 
     /// <summary>
     ///     端口号
@@ -31,7 +31,7 @@ public class TcpConnectionConfig
     /// <summary>
     ///     获取IPEndPoint
     /// </summary>
-    public IPEndPoint GetIpEndPoint()
+    internal IPEndPoint GetIpEndPoint()
     {
         return new IPEndPoint(IPAddress.Parse(IpAddress), Port);
     }

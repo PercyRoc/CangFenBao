@@ -1,10 +1,10 @@
 using Common.Services.Settings;
 using Prism.Mvvm;
 
-namespace Presentation_ZtCloudWarehous.ViewModels.Settings;
+namespace ZtCloudWarehous.ViewModels.Settings;
 
 [Configuration("weighing")]
-public class WeighingSettings : BindableBase
+internal class WeighingSettings : BindableBase
 {
     // 公共参数
     private string _api = "shanhaitong.wms.dws.weight";

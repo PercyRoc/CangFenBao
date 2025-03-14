@@ -2,16 +2,16 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using Common.Services.Ui;
-using Presentation_BenFly.ViewModels.Windows;
+using BenFly.ViewModels.Windows;
 using Serilog;
 using MessageBoxResult = System.Windows.MessageBoxResult;
 
-namespace Presentation_BenFly.Views.Windows;
+namespace BenFly.Views.Windows;
 
 /// <summary>
 ///     MainWindow.xaml 的交互逻辑
 /// </summary>
-public partial class MainWindow
+internal partial class MainWindow
 {
     private readonly IDialogService _dialogService;
 

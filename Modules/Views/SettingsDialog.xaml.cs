@@ -5,9 +5,9 @@ using Serilog;
 using SharedUI.Views.Settings;
 using Wpf.Ui.Controls;
 
-namespace Presentation_Modules.Views;
+namespace Modules.Views;
 
-public partial class SettingsDialog : FluentWindow
+internal partial class SettingsDialog
 {
     public SettingsDialog(INotificationService notificationService)
     {

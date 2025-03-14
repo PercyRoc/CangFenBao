@@ -42,13 +42,9 @@ public class ChuteSettings : BindableBase
     {
         if (string.IsNullOrEmpty(barcode)) return null;
 
-        foreach (var rule in ChuteRules)
+        foreach (var chuteNumber in from rule in ChuteRules let chuteNumber = rule.Key let chuteRule = rule.Value where chuteRule.IsMatching(barcode) select chuteNumber)
         {
-            var chuteNumber = rule.Key;
-            var chuteRule = rule.Value;
-
-            // 检查是否匹配所有规则
-            if (chuteRule.IsMatching(barcode)) return chuteNumber;
+            return chuteNumber;
         }
 
         return null;
@@ -149,7 +145,7 @@ public class BarcodeMatchRule : BindableBase
     /// </summary>
     /// <param name="barcode">包裹条码</param>
     /// <returns>是否匹配</returns>
-    public bool IsMatching(string barcode)
+    internal bool IsMatching(string barcode)
     {
         // 检查长度限制
         if (MinLength > 0 && barcode.Length < MinLength) return false;
@@ -158,25 +154,25 @@ public class BarcodeMatchRule : BindableBase
         // 检查字符类型限制
         if (IsDigitOnly && !barcode.All(char.IsDigit)) return false;
         if (IsLetterOnly && !barcode.All(char.IsLetter)) return false;
-        if (IsAlphanumeric && !barcode.All(c => char.IsLetterOrDigit(c))) return false;
+        if (IsAlphanumeric && !barcode.All(static c => char.IsLetterOrDigit(c))) return false;
 
         // 检查前缀和后缀
         if (!string.IsNullOrEmpty(StartsWith))
         {
             var startValues = StartsWith.Replace("，", ",")
                 .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.Trim())
-                .Where(s => !string.IsNullOrEmpty(s));
-            if (!startValues.Any(start => barcode.StartsWith(start))) return false;
+                .Select(static s => s.Trim())
+                .Where(static s => !string.IsNullOrEmpty(s));
+            if (!startValues.Any(start => barcode.StartsWith(start, StringComparison.Ordinal))) return false;
         }
 
         if (!string.IsNullOrEmpty(EndsWith))
         {
             var endValues = EndsWith.Replace("，", ",")
                 .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.Trim())
-                .Where(s => !string.IsNullOrEmpty(s));
-            if (!endValues.Any(end => barcode.EndsWith(end))) return false;
+                .Select(static s => s.Trim())
+                .Where(static s => !string.IsNullOrEmpty(s));
+            if (!endValues.Any(end => barcode.EndsWith(end, StringComparison.Ordinal))) return false;
         }
 
         // 检查不包含的前缀和后缀
@@ -184,18 +180,18 @@ public class BarcodeMatchRule : BindableBase
         {
             var notStartValues = NotStartsWith.Replace("，", ",")
                 .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.Trim())
-                .Where(s => !string.IsNullOrEmpty(s));
-            if (notStartValues.Any(start => barcode.StartsWith(start))) return false;
+                .Select(static s => s.Trim())
+                .Where(static s => !string.IsNullOrEmpty(s));
+            if (notStartValues.Any(start => barcode.StartsWith(start, StringComparison.Ordinal))) return false;
         }
 
         if (!string.IsNullOrEmpty(NotEndsWith))
         {
             var notEndValues = NotEndsWith.Replace("，", ",")
                 .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.Trim())
-                .Where(s => !string.IsNullOrEmpty(s));
-            if (notEndValues.Any(end => barcode.EndsWith(end))) return false;
+                .Select(static s => s.Trim())
+                .Where(static s => !string.IsNullOrEmpty(s));
+            if (notEndValues.Any(end => barcode.EndsWith(end, StringComparison.Ordinal))) return false;
         }
 
         // 检查包含和不包含的字符串
@@ -203,32 +199,33 @@ public class BarcodeMatchRule : BindableBase
         {
             var containValues = Contains.Replace("，", ",")
                 .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.Trim())
-                .Where(s => !string.IsNullOrEmpty(s));
-            if (!containValues.Any(contain => barcode.Contains(contain))) return false;
+                .Select(static s => s.Trim())
+                .Where(static s => !string.IsNullOrEmpty(s));
+            if (!containValues.Any(barcode.Contains)) return false;
         }
 
         if (!string.IsNullOrEmpty(NotContains))
         {
             var notContainValues = NotContains.Replace("，", ",")
                 .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.Trim())
-                .Where(s => !string.IsNullOrEmpty(s));
-            if (notContainValues.Any(notContain => barcode.Contains(notContain))) return false;
+                .Select(static s => s.Trim())
+                .Where(static s => !string.IsNullOrEmpty(s));
+            if (notContainValues.Any(barcode.Contains)) return false;
         }
 
         // 检查正则表达式
-        if (!string.IsNullOrEmpty(RegexPattern) && RegexPattern != "(?=.*(?))")
-            try
-            {
-                if (!Regex.IsMatch(barcode, RegexPattern))
-                    return false;
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "正则表达式匹配错误：{Pattern}", RegexPattern);
+        if (string.IsNullOrEmpty(RegexPattern) || RegexPattern == "(?=.*(?))") return true;
+
+        try
+        {
+            if (!Regex.IsMatch(barcode, RegexPattern))
                 return false;
-            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "正则表达式匹配错误：{Pattern}", RegexPattern);
+            return false;
+        }
 
         // 所有规则都匹配
         return true;

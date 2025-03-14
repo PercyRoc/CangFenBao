@@ -4,9 +4,9 @@ using Common.Services.Ui;
 using Serilog;
 using SharedUI.Views.Settings;
 
-namespace Presentation_SangNeng.Views.Dialogs;
+namespace SangNeng.Views.Dialogs;
 
-public partial class SettingsDialog
+internal partial class SettingsDialog
 {
     public SettingsDialog(INotificationService notificationService)
     {

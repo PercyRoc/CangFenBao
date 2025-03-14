@@ -1,19 +1,28 @@
 using System.IO.Ports;
 using Serilog;
 
-namespace Presentation_BenFly.Services.Belt;
+namespace BenFly.Services.Belt;
 
 /// <summary>
 ///     皮带串口服务实现
 /// </summary>
-public class BeltSerialService : IBeltSerialService
+internal class BeltSerialService : IBeltSerialService
 {
     private readonly object _lock = new();
     private bool _isDisposed;
     private SerialPort? _serialPort;
 
     /// <inheritdoc />
-    public bool IsOpen => _serialPort?.IsOpen ?? false;
+    public bool IsOpen
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _serialPort?.IsOpen ?? false;
+            }
+        }
+    }
 
     /// <inheritdoc />
     public event EventHandler<bool>? ConnectionStatusChanged;
@@ -26,37 +35,37 @@ public class BeltSerialService : IBeltSerialService
     {
         lock (_lock)
         {
-            if (_isDisposed)
-                throw new ObjectDisposedException(nameof(BeltSerialService));
-
-            try
-            {
-                // 如果已经打开，先关闭
-                Close();
-
-                _serialPort = new SerialPort
+            if (!_isDisposed)
+                try
                 {
-                    PortName = settings.PortName,
-                    BaudRate = settings.BaudRate,
-                    DataBits = settings.DataBits,
-                    Parity = settings.Parity,
-                    StopBits = settings.StopBits
-                };
+                    // 如果已经打开，先关闭
+                    Close();
 
-                // 注册数据接收事件
-                _serialPort.DataReceived += SerialPortOnDataReceived;
+                    _serialPort = new SerialPort
+                    {
+                        PortName = settings.PortName,
+                        BaudRate = settings.BaudRate,
+                        DataBits = settings.DataBits,
+                        Parity = settings.Parity,
+                        StopBits = settings.StopBits
+                    };
 
-                _serialPort.Open();
-                Log.Information("串口 {PortName} 已打开", settings.PortName);
+                    // 注册数据接收事件
+                    _serialPort.DataReceived += SerialPortOnDataReceived;
 
-                // 触发状态变更事件
-                ConnectionStatusChanged?.Invoke(this, true);
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "打开串口 {PortName} 时发生错误", settings.PortName);
-                throw;
-            }
+                    _serialPort.Open();
+                    Log.Information("串口 {PortName} 已打开", settings.PortName);
+
+                    // 触发状态变更事件
+                    ConnectionStatusChanged?.Invoke(this, true);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "打开串口 {PortName} 时发生错误", settings.PortName);
+                    throw;
+                }
+            else
+                throw new ObjectDisposedException(nameof(BeltSerialService));
         }
     }
 
@@ -65,22 +74,22 @@ public class BeltSerialService : IBeltSerialService
     {
         lock (_lock)
         {
-            if (_serialPort?.IsOpen == true)
-                try
-                {
-                    _serialPort.DataReceived -= SerialPortOnDataReceived;
-                    _serialPort.Close();
-                    _serialPort.Dispose();
-                    _serialPort = null;
-                    Log.Information("串口已关闭");
+            if (_serialPort?.IsOpen != true) return;
+            try
+            {
+                _serialPort.DataReceived -= SerialPortOnDataReceived;
+                _serialPort.Close();
+                _serialPort.Dispose();
+                _serialPort = null;
+                Log.Information("串口已关闭");
 
-                    // 触发状态变更事件
-                    ConnectionStatusChanged?.Invoke(this, false);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "关闭串口时发生错误");
-                }
+                // 触发状态变更事件
+                ConnectionStatusChanged?.Invoke(this, false);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "关闭串口时发生错误");
+            }
         }
     }
 
@@ -89,21 +98,25 @@ public class BeltSerialService : IBeltSerialService
     {
         lock (_lock)
         {
-            if (_isDisposed)
-                throw new ObjectDisposedException(nameof(BeltSerialService));
-
-            if (_serialPort?.IsOpen != true)
-                throw new InvalidOperationException("串口未打开");
-
-            try
+            if (!_isDisposed)
             {
-                _serialPort.Write(data, 0, data.Length);
-                Log.Debug("发送数据: {Data}", BitConverter.ToString(data));
+                if (_serialPort?.IsOpen != true)
+                    throw new InvalidOperationException("串口未打开");
+
+                try
+                {
+                    _serialPort.Write(data, 0, data.Length);
+                    Log.Debug("发送数据: {Data}", BitConverter.ToString(data));
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "发送数据时发生错误");
+                    throw;
+                }
             }
-            catch (Exception ex)
+            else
             {
-                Log.Error(ex, "发送数据时发生错误");
-                throw;
+                throw new ObjectDisposedException(nameof(BeltSerialService));
             }
         }
     }
@@ -126,7 +139,7 @@ public class BeltSerialService : IBeltSerialService
 
     private void SerialPortOnDataReceived(object sender, SerialDataReceivedEventArgs e)
     {
-        if (_serialPort == null || !_serialPort.IsOpen) return;
+        if (_serialPort is not { IsOpen: true }) return;
 
         try
         {

@@ -1,13 +1,13 @@
 using Common.Services.Settings;
-using Presentation_KuaiLv.Models.Settings.Warning;
+using KuaiLv.Models.Settings.Warning;
 using Prism.Mvvm;
 
-namespace Presentation_KuaiLv.ViewModels.Settings;
+namespace KuaiLv.ViewModels.Settings;
 
 /// <summary>
 ///     警示灯设置视图模型
 /// </summary>
-public class WarningLightSettingsViewModel : BindableBase
+internal class WarningLightSettingsViewModel : BindableBase
 {
     private readonly ISettingsService _settingsService;
     private WarningLightConfiguration _configuration = new();
@@ -40,7 +40,7 @@ public class WarningLightSettingsViewModel : BindableBase
         Configuration = _settingsService.LoadSettings<WarningLightConfiguration>();
     }
 
-    public void SaveConfiguration()
+    internal void SaveConfiguration()
     {
         _settingsService.SaveSettings(Configuration);
     }

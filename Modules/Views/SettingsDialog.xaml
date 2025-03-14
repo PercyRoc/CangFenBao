@@ -1,4 +1,4 @@
-﻿<ui:FluentWindow x:Class="Presentation_Modules.Views.SettingsDialog"
+﻿<ui:FluentWindow x:Class="Modules.Views.SettingsDialog"
                  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -6,13 +6,13 @@
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:prism="http://prismlibrary.com/"
                  xmlns:hc="https://handyorg.github.io/handycontrol"
-                 xmlns:viewModels1="clr-namespace:Presentation_Modules.ViewModels"
-                 xmlns:settings="clr-namespace:Presentation_Modules.Views.Settings"
                  xmlns:settings1="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
                  xmlns:views="clr-namespace:Modules.Views"
+                 xmlns:viewModels="clr-namespace:Modules.ViewModels"
+                 xmlns:settings="clr-namespace:Modules.Views.Settings"
                  prism:ViewModelLocator.AutoWireViewModel="True"
                  mc:Ignorable="d"
-                 d:DataContext="{d:DesignInstance Type=viewModels1:SettingsDialogViewModel}"
+                 d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}"
                  Title="系统设置"
                  Height="720"
                  Width="1280"
@@ -21,7 +21,7 @@
                  WindowBackdropType="Mica"
                  WindowCornerPreference="Round"
                  WindowStyle="SingleBorderWindow"
-                 ShowInTaskbar="False">
+                 ShowInTaskbar="False" x:ClassModifier="internal">
     <ui:FluentWindow.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>

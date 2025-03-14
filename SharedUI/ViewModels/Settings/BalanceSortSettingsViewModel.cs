@@ -1,7 +1,7 @@
-﻿using Common.Services.Settings;
+﻿using Common.Models.Settings.Sort.PendulumSort;
+using Common.Services.Settings;
 using Prism.Commands;
 using Prism.Mvvm;
-using SortingServices.Pendulum.Models;
 
 namespace SharedUI.ViewModels.Settings;
 

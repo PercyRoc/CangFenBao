@@ -4,9 +4,9 @@ using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
 
-namespace Presentation_ZtCloudWarehous.ViewModels.Settings;
+namespace ZtCloudWarehous.ViewModels.Settings;
 
-public class WeighingSettingsViewModel : BindableBase
+internal class WeighingSettingsViewModel : BindableBase
 {
     private readonly INotificationService _notificationService;
     private readonly ISettingsService _settingsService;
@@ -24,7 +24,7 @@ public class WeighingSettingsViewModel : BindableBase
 
     public WeighingSettings Settings { get; }
 
-    public DelegateCommand SaveConfigurationCommand { get; }
+    internal DelegateCommand SaveConfigurationCommand { get; }
 
     private void ExecuteSaveConfiguration()
     {
@@ -33,7 +33,7 @@ public class WeighingSettingsViewModel : BindableBase
             var results = _settingsService.SaveSettings(Settings, true);
             if (results.Length > 0)
             {
-                var errorMessage = string.Join("\n", results.Select(r => r.ErrorMessage));
+                var errorMessage = string.Join("\n", results.Select(static r => r.ErrorMessage));
                 _notificationService.ShowError($"保存设置失败：\n{errorMessage}");
                 return;
             }

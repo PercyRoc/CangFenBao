@@ -5,25 +5,24 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Common.Models.Package;
 using Common.Models.Settings.ChuteRules;
+using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Camera.DaHua;
 using DeviceService.DataSourceDevices.Services;
-using Presentation_ZtCloudWarehous.Models;
-using Presentation_ZtCloudWarehous.Services;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
 using SharedUI.Models;
 using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
 using SortingServices.Pendulum;
-using SortingServices.Pendulum.Models;
+using ZtCloudWarehous.Models;
+using ZtCloudWarehous.Services;
 
-namespace Presentation_ZtCloudWarehous.ViewModels;
+namespace ZtCloudWarehous.ViewModels;
 
-public class MainWindowViewModel : BindableBase, IDisposable
+internal class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
@@ -304,7 +303,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            var cameraStatus = DeviceStatuses.FirstOrDefault(x => x.Name == "相机");
+            var cameraStatus = DeviceStatuses.FirstOrDefault(static x => x.Name == "相机");
             if (cameraStatus == null) return;
 
             Application.Current.Dispatcher.Invoke(() =>
@@ -324,7 +323,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             // 更新相机状态
-            var cameraStatus = DeviceStatuses.FirstOrDefault(x => x.Name == "相机");
+            var cameraStatus = DeviceStatuses.FirstOrDefault(static x => x.Name == "相机");
             if (cameraStatus != null)
             {
                 var isConnected = _cameraService.IsConnected;
@@ -339,7 +338,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 var deviceStates = _sortService.GetAllDeviceConnectionStates();
 
                 // 更新触发光电状态
-                var triggerStatus = DeviceStatuses.FirstOrDefault(x => x.Name == "触发光电");
+                var triggerStatus = DeviceStatuses.FirstOrDefault(static x => x.Name == "触发光电");
                 if (triggerStatus != null && deviceStates.TryGetValue("触发光电", out var triggerConnected))
                 {
                     triggerStatus.Status = triggerConnected ? "已连接" : "已断开";
@@ -347,9 +346,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 }
 
                 // 更新分检光电状态
-                foreach (var status in DeviceStatuses.Where(x => x.Name != "相机" && x.Name != "触发光电"))
+                foreach (var status in DeviceStatuses.Where(static x => x.Name != "相机" && x.Name != "触发光电"))
                 {
                     if (!deviceStates.TryGetValue(status.Name, out var isConnected)) continue;
+
                     status.Status = isConnected ? "已连接" : "已断开";
                     status.StatusColor = isConnected ? "#4CAF50" : "#F44336";
 
@@ -361,7 +361,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             else
             {
                 // 如果服务未运行，将所有设备状态设置为未连接
-                foreach (var status in DeviceStatuses.Where(x => x.Name != "相机"))
+                foreach (var status in DeviceStatuses.Where(static x => x.Name != "相机"))
                 {
                     status.Status = "未连接";
                     status.StatusColor = "#F44336";
@@ -376,7 +376,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         return Task.CompletedTask;
     }
 
-    private static void UpdateImageDisplay(Image<Rgba32> image, Action<BitmapSource> imageUpdater)
+    private static void UpdateImageDisplay(Image image, Action<BitmapSource> imageUpdater)
     {
         try
         {
@@ -524,60 +524,62 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     private void UpdatePackageInfoItems(PackageInfo package)
     {
-        var weightItem = PackageInfoItems.FirstOrDefault(x => x.Label == "重量");
+        var weightItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "重量");
         if (weightItem != null)
         {
             weightItem.Value = package.Weight.ToString("F2");
             weightItem.Unit = "kg";
         }
 
-        var sizeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "尺寸");
+        var sizeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "尺寸");
         if (sizeItem != null)
         {
             sizeItem.Value = package.VolumeDisplay;
             sizeItem.Unit = "mm";
         }
 
-        var timeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "时间");
+        var timeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "时间");
         if (timeItem != null)
         {
             timeItem.Value = package.CreateTime.ToString("HH:mm:ss");
             timeItem.Description = $"处理于 {package.CreateTime:yyyy-MM-dd}";
         }
 
-        var statusItem = PackageInfoItems.FirstOrDefault(x => x.Label == "状态");
+        var statusItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "状态");
         if (statusItem == null) return;
+
         statusItem.Value = package.StatusDisplay;
         statusItem.Description = package.ErrorMessage ?? "处理状态";
     }
 
     private void UpdateStatistics()
     {
-        var totalItem = StatisticsItems.FirstOrDefault(x => x.Label == "总包裹数");
+        var totalItem = StatisticsItems.FirstOrDefault(static x => x.Label == "总包裹数");
         if (totalItem != null)
         {
             totalItem.Value = PackageHistory.Count.ToString();
             totalItem.Description = $"累计处理 {PackageHistory.Count} 个包裹";
         }
 
-        var successItem = StatisticsItems.FirstOrDefault(x => x.Label == "成功数");
+        var successItem = StatisticsItems.FirstOrDefault(static x => x.Label == "成功数");
         if (successItem != null)
         {
-            var successCount = PackageHistory.Count(p => string.IsNullOrEmpty(p.ErrorMessage));
+            var successCount = PackageHistory.Count(static p => string.IsNullOrEmpty(p.ErrorMessage));
             successItem.Value = successCount.ToString();
             successItem.Description = $"成功处理 {successCount} 个包裹";
         }
 
-        var failedItem = StatisticsItems.FirstOrDefault(x => x.Label == "失败数");
+        var failedItem = StatisticsItems.FirstOrDefault(static x => x.Label == "失败数");
         if (failedItem != null)
         {
-            var failedCount = PackageHistory.Count(p => !string.IsNullOrEmpty(p.ErrorMessage));
+            var failedCount = PackageHistory.Count(static p => !string.IsNullOrEmpty(p.ErrorMessage));
             failedItem.Value = failedCount.ToString();
             failedItem.Description = $"失败处理 {failedCount} 个包裹";
         }
 
-        var rateItem = StatisticsItems.FirstOrDefault(x => x.Label == "处理速率");
+        var rateItem = StatisticsItems.FirstOrDefault(static x => x.Label == "处理速率");
         if (rateItem == null) return;
+
         {
             var hourAgo = DateTime.Now.AddHours(-1);
             var hourlyCount = PackageHistory.Count(p => p.CreateTime > hourAgo);

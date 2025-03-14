@@ -4,12 +4,12 @@ using System.Windows.Input;
 using Common.Services.Ui;
 using Serilog;
 
-namespace Presentation_KuaiLv.Views;
+namespace KuaiLv.Views;
 
 /// <summary>
 ///     Interaction logic for MainWindow.xaml
 /// </summary>
-public partial class MainWindow
+internal partial class MainWindow
 {
     private readonly IDialogService _dialogService;
 

@@ -10,7 +10,7 @@ namespace Modules.ViewModels;
 /// <summary>
 ///     TCP设置视图模型
 /// </summary>
-public class TcpSettingsViewModel : BindableBase
+internal class TcpSettingsViewModel : BindableBase
 {
     private readonly INotificationService _notificationService;
     private readonly TcpSettings _settings;
@@ -81,7 +81,7 @@ public class TcpSettingsViewModel : BindableBase
 
             if (validationResults.Length > 0)
             {
-                var errorMessage = string.Join("\n", validationResults.Select(r => r.ErrorMessage));
+                var errorMessage = string.Join("\n", validationResults.Select(static r => r.ErrorMessage));
                 _notificationService.ShowError($"保存设置失败：\n{errorMessage}");
                 Log.Error("保存TCP设置失败: {ErrorMessage}", errorMessage);
                 return;

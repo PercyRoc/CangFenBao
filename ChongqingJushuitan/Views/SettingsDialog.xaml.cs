@@ -6,7 +6,7 @@ using SharedUI.Views.Settings;
 
 namespace ChongqingJushuitan.Views;
 
-public partial class SettingsDialog
+internal partial class SettingsDialog
 {
     public SettingsDialog(INotificationService notificationService)
     {

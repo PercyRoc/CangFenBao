@@ -1,14 +1,14 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Presentation_XiYiGu.Models;
+using XiYiGu.Models;
 
-namespace Presentation_XiYiGu.Utils;
+namespace XiYiGu.Utils;
 
 /// <summary>
 ///     签名工具类
 /// </summary>
-public static class SignatureUtil
+internal static class SignatureUtil
 {
     /// <summary>
     ///     生成MD5签名
@@ -17,7 +17,7 @@ public static class SignatureUtil
     /// <param name="aesKey">AES密钥</param>
     /// <param name="isImageUpload">是否是图片上传</param>
     /// <returns>MD5签名</returns>
-    public static string GenerateMd5Signature(IDictionary<string, string> parameters, string aesKey,
+    internal static string GenerateMd5Signature(IDictionary<string, string> parameters, string aesKey,
         bool isImageUpload = false)
     {
         // 构建签名字符串
@@ -29,7 +29,7 @@ public static class SignatureUtil
             if (isImageUpload)
             {
                 var request = JsonSerializer.Deserialize<WaybillImageUploadRequest>(dataJson);
-                if (request?.Data?.Count > 0)
+                if (request?.Data.Count > 0)
                 {
                     var waybill = request.Data[0];
                     sb.Append("data=[{");
@@ -41,7 +41,7 @@ public static class SignatureUtil
             else
             {
                 var request = JsonSerializer.Deserialize<WaybillUploadRequest>(dataJson);
-                if (request?.Data?.Count > 0)
+                if (request?.Data.Count > 0)
                 {
                     var waybill = request.Data[0];
                     sb.Append("data=[{");

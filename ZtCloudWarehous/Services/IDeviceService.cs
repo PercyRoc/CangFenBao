@@ -1,11 +1,11 @@
-using Presentation_ZtCloudWarehous.Models;
+using ZtCloudWarehous.Models;
 
-namespace Presentation_ZtCloudWarehous.Services;
+namespace ZtCloudWarehous.Services;
 
 /// <summary>
 ///     设备服务接口
 /// </summary>
-public interface IDeviceService
+internal interface IDeviceService
 {
     /// <summary>
     ///     设备注册

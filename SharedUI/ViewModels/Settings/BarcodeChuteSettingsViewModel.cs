@@ -89,7 +89,10 @@ public class BarcodeChuteSettingsViewModel : BindableBase
         ChuteNumbers.Clear();
         for (var i = 1; i <= Configuration.ChuteCount; i++) ChuteNumbers.Add(i);
 
-        if (SelectedChuteNumber > Configuration.ChuteCount) SelectedChuteNumber = 1;
+        if (SelectedChuteNumber > Configuration.ChuteCount)
+        {
+            SelectedChuteNumber = 1;
+        }
     }
 
     private void LoadChuteRule(int chuteNumber)

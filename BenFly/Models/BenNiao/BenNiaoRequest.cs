@@ -4,12 +4,12 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Presentation_BenFly.Models.BenNiao;
+namespace BenFly.Models.BenNiao;
 
 /// <summary>
 ///     笨鸟请求基类
 /// </summary>
-public class BenNiaoRequest
+internal class BenNiaoRequest
 {
     /// <summary>
     ///     合作者唯一ID号
@@ -39,7 +39,7 @@ public class BenNiaoRequest
 /// <summary>
 ///     笨鸟签名帮助类
 /// </summary>
-public static class BenNiaoSignHelper
+internal static class BenNiaoSignHelper
 {
     // 创建JSON序列化选项，避免中文转义
     private static readonly JsonSerializerOptions JsonOptions = new()

@@ -10,7 +10,7 @@ namespace Presentation_SeedingWall.Services;
 /// <summary>
 ///     PLC通信服务实现
 /// </summary>
-public class PlcService : IPlcService
+internal class PlcService : IPlcService
 {
     private readonly byte[] _buffer = new byte[1024];
     private readonly Dispatcher _dispatcher;

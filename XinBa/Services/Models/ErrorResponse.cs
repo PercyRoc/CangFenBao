@@ -1,4 +1,4 @@
-namespace Presentation_XinBa.Services.Models;
+namespace XinBa.Services.Models;
 
 /// <summary>
 ///     API错误响应

@@ -1,9 +1,9 @@
-namespace Presentation_KuaiLv.Services.Warning;
+namespace KuaiLv.Services.Warning;
 
 /// <summary>
 ///     警示灯服务接口
 /// </summary>
-public interface IWarningLightService
+internal interface IWarningLightService
 {
     /// <summary>
     ///     是否已连接

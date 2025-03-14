@@ -1,4 +1,4 @@
-namespace SortingServices.Pendulum.Models;
+namespace Common.Models.Settings.Sort.PendulumSort;
 
 /// <summary>
 ///     摆轮服务类型

@@ -69,7 +69,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
     /// <summary>
     ///     初始化海康工业相机SDK客户端
     /// </summary>
-    public HikvisionIndustrialCameraSdkClient()
+    internal HikvisionIndustrialCameraSdkClient()
     {
         // 创建有限容量的通道，控制积压
         _imageChannel = Channel.CreateBounded<(IntPtr imageData, int imageSize)>(new BoundedChannelOptions(5)
@@ -337,21 +337,21 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
                 {
                     info.IpAddress = deviceInfo.ToString()
                         ?.Split(',')
-                        .FirstOrDefault(x => x.Contains("IP"))?.Split(':').LastOrDefault()?.Trim() ?? "Unknown";
+                        .FirstOrDefault(static x => x.Contains("IP"))?.Split(':').LastOrDefault()?.Trim() ?? "Unknown";
 
                     // 如果序列号为空，尝试使用MAC地址
                     if (string.IsNullOrEmpty(info.SerialNumber))
                     {
                         var macAddress = deviceInfo.ToString()
                             ?.Split(',')
-                            .FirstOrDefault(x => x.Contains("MAC"))?.Split(':').LastOrDefault()?.Trim();
+                            .FirstOrDefault(static x => x.Contains("MAC"))?.Split(':').LastOrDefault()?.Trim();
                         info.SerialNumber = !string.IsNullOrEmpty(macAddress) ? macAddress : deviceInfo.chSerialNumber;
                         Log.Warning("相机序列号为空，使用MAC地址作为备选：{Mac}", macAddress);
                     }
 
                     info.MacAddress = deviceInfo.ToString()
                                           ?.Split(',')
-                                          .FirstOrDefault(x => x.Contains("MAC"))?.Split(':').LastOrDefault()?.Trim() ??
+                                          .FirstOrDefault(static x => x.Contains("MAC"))?.Split(':').LastOrDefault()?.Trim() ??
                                       deviceInfo.chSerialNumber;
                 }
                 else
@@ -783,6 +783,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
                 MVIDCodeReader.MVID_BCR | MVIDCodeReader.MVID_TDCR));
 
             if (result != MVIDCodeReader.MVID_CR_OK) return;
+
             procParam = (MVIDCodeReader.MVID_PROC_PARAM)Marshal.PtrToStructure(pProcParam,
                 typeof(MVIDCodeReader.MVID_PROC_PARAM))!;
 
@@ -793,6 +794,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
 
             // 如果识别到条码，创建包裹信息
             if (barcodeLocations.Count <= 0) return;
+
             var package = new PackageInfo
             {
                 Barcode = barcodeLocations[0].Code,
@@ -865,6 +867,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
         }
 
         if (_device != null && _isGrabbing) return true;
+
         Log.Debug("设备未就绪或未在采集状态，跳过回调处理");
         return false;
     }
@@ -1034,6 +1037,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
             Log.Debug("检查设备 {Index}: 序列号={Current}, 目标={Target}", i, currentSerialNumber, _deviceIdentifier);
 
             if (!string.Equals(currentSerialNumber, _deviceIdentifier, StringComparison.OrdinalIgnoreCase)) continue;
+
             Log.Information("找到目标相机：{SerialNumber}", currentSerialNumber);
             return i;
         }
@@ -1065,6 +1069,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
                     retry + 1, nRet, GetErrorMessage(nRet));
 
                 if (retry >= maxRetries - 1) continue;
+
                 Log.Debug("等待1秒后重试...");
                 await Task.Delay(1000);
                 _device = new MVIDCodeReader();
@@ -1119,6 +1124,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
 
         _deviceIdentifier = _configuration.SelectedCameras.FirstOrDefault()?.SerialNumber;
         if (!string.IsNullOrEmpty(_deviceIdentifier)) return true;
+
         Log.Error("相机序列号为空");
         return false;
     }
@@ -1162,12 +1168,12 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
     /// <summary>
     ///     从图像缓冲区创建图像
     /// </summary>
-    private Image<Rgba32> CreateImageFromBuffer(byte[] imageData)
+    private Image<Rgba32> CreateImageFromBuffer(IReadOnlyList<byte> imageData)
     {
         var image = GetImageFromPool();
 
         // 确定图像是灰度还是彩色
-        var isGrayscale = imageData.Length <= _imageWidth * _imageHeight;
+        var isGrayscale = imageData.Count <= _imageWidth * _imageHeight;
 
         image.ProcessPixelRows(accessor =>
         {
@@ -1194,12 +1200,14 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
                     for (var x = 0; x < _imageWidth; x++)
                     {
                         var pixelOffset = rowOffset + x * 3;
-                        if (pixelOffset + 2 < imageData.Length)
+                        if (pixelOffset + 2 < imageData.Count)
+                        {
                             row[x] = new Rgba32(
                                 imageData[pixelOffset], // R
                                 imageData[pixelOffset + 1], // G
                                 imageData[pixelOffset + 2], // B
                                 255); // A
+                        }
                     }
                 }
         });
@@ -1216,7 +1224,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
         {
             if (_device == null)
             {
-                Log.Warning($"设备未初始化，无法执行 {caller}");
+                Log.Warning("设备未初始化，无法执行 {Caller}", caller);
                 return default!;
             }
 
@@ -1226,7 +1234,7 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
             }
             catch (Exception ex)
             {
-                Log.Error(ex, $"SDK调用失败：{caller}");
+                Log.Error(ex, "SDK调用失败：{Caller}", caller);
                 return default!;
             }
         }
@@ -1239,14 +1247,17 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
     {
         var barcodes = new List<BarcodeLocation>();
         if (procParam.stCodeList.nCodeNum <= 0) return barcodes;
+
         for (var i = 0; i < procParam.stCodeList.nCodeNum; i++)
         {
             var codeInfo = procParam.stCodeList.stCodeInfo[i];
             var corners = new Point[4];
             for (var j = 0; j < 4; j++)
+            {
                 corners[j] = new Point(codeInfo.stCornerPt[j].nX, codeInfo.stCornerPt[j].nY);
+            }
 
-            var barcodeLocation = new BarcodeLocation(corners.ToList())
+            var barcodeLocation = new BarcodeLocation()
             {
                 Code = codeInfo.strCode.TrimEnd('\0'),
                 Type = codeInfo.enBarType.ToString()
@@ -1283,11 +1294,11 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
         try
         {
             var result = action();
-            if (result) Log.Information(successMsg);
+            if (result) Log.Information("操作成功: {successMsg}",successMsg);
         }
         catch (Exception ex)
         {
-            Log.Error(ex, errorMsg);
+            Log.Error(ex, "操作失败: {ErrorMessage}", errorMsg);
         }
     }
 
@@ -1299,12 +1310,12 @@ public class HikvisionIndustrialCameraSdkClient : ICameraService
         try
         {
             var result = await action();
-            if (result) Log.Information(successMsg);
+            if (result) Log.Information("操作成功: {successMsg}",successMsg);
             return result;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, errorMsg);
+            Log.Error(ex, "操作失败: {ErrorMessage}", errorMsg);
             return false;
         }
     }

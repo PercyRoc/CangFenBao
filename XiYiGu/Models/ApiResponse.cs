@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Presentation_XiYiGu.Models;
+namespace XiYiGu.Models;
 
 /// <summary>
 ///     API响应

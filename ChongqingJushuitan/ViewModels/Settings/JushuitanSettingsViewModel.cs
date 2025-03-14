@@ -6,7 +6,7 @@ using Serilog;
 
 namespace ChongqingJushuitan.ViewModels.Settings;
 
-public class JushuitanSettingsViewModel : BindableBase
+internal class JushuitanSettingsViewModel : BindableBase
 {
     private readonly INotificationService _notificationService;
     private readonly ISettingsService _settingsService;
@@ -33,7 +33,7 @@ public class JushuitanSettingsViewModel : BindableBase
             var results = _settingsService.SaveSettings(Settings, true);
             if (results.Length > 0)
             {
-                var errorMessage = string.Join("\n", results.Select(r => r.ErrorMessage));
+                var errorMessage = string.Join("\n", results.Select(static r => r.ErrorMessage));
                 _notificationService.ShowError($"保存设置失败：\n{errorMessage}");
                 return;
             }

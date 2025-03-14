@@ -1,6 +1,6 @@
-namespace Presentation_BenFly.Views.Settings;
+namespace BenFly.Views.Settings;
 
-public partial class ChuteSettingsView
+internal partial class ChuteSettingsView
 {
     public ChuteSettingsView()
     {

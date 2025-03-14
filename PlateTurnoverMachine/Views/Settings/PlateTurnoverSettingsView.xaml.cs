@@ -1,6 +1,6 @@
-namespace Presentation_PlateTurnoverMachine.Views.Settings;
+namespace PlateTurnoverMachine.Views.Settings;
 
-public partial class PlateTurnoverSettingsView
+internal partial class PlateTurnoverSettingsView
 {
     public PlateTurnoverSettingsView()
     {

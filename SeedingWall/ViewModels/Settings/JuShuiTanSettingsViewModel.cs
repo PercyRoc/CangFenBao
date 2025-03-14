@@ -10,7 +10,7 @@ namespace Presentation_SeedingWall.ViewModels.Settings;
 /// <summary>
 ///     聚水潭设置页面ViewModel
 /// </summary>
-public class JuShuiTanSettingsViewModel : BindableBase
+internal class JuShuiTanSettingsViewModel : BindableBase
 {
     private readonly INotificationService _notificationService;
     private readonly ISettingsService _settingsService;
@@ -46,7 +46,7 @@ public class JuShuiTanSettingsViewModel : BindableBase
     /// <summary>
     ///     保存配置命令
     /// </summary>
-    public DelegateCommand SaveConfigurationCommand { get; }
+    internal DelegateCommand SaveConfigurationCommand { get; }
 
     /// <summary>
     ///     保存配置

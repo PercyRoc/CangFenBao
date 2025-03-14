@@ -1,14 +1,14 @@
 using Common.Services.Settings;
 using Microsoft.Extensions.Hosting;
-using Presentation_PlateTurnoverMachine.Models;
+using PlateTurnoverMachine.Models;
 using Serilog;
 
-namespace Presentation_PlateTurnoverMachine.Services;
+namespace PlateTurnoverMachine.Services;
 
 /// <summary>
 ///     TCP连接托管服务
 /// </summary>
-public class TcpConnectionHostedService(
+internal class TcpConnectionHostedService(
     ITcpConnectionService tcpConnectionService,
     ISettingsService settingsService)
     : BackgroundService
@@ -60,8 +60,8 @@ public class TcpConnectionHostedService(
 
             // 连接TCP模块
             var tcpConfigs = _settings.Items
-                .Where(item => !string.IsNullOrEmpty(item.TcpAddress))
-                .Select(item =>
+                .Where(static item => !string.IsNullOrEmpty(item.TcpAddress))
+                .Select(static item =>
                 {
                     var parts = item.TcpAddress!.Split(':');
                     return new TcpConnectionConfig(
@@ -84,10 +84,10 @@ public class TcpConnectionHostedService(
         }
     }
 
-    public override async Task StopAsync(CancellationToken cancellationToken)
+    public override Task StopAsync(CancellationToken cancellationToken)
     {
         Log.Information("TCP连接托管服务正在停止");
         _timer.Dispose();
-        await base.StopAsync(cancellationToken);
+        return base.StopAsync(cancellationToken);
     }
 }

@@ -4,17 +4,17 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using BenFly.Models.BenNiao;
 using Common.Models.Package;
 using Common.Services.Settings;
-using Presentation_BenFly.Models.BenNiao;
-using Presentation_BenFly.Models.Upload;
+using BenFly.Models.Upload;
 using Renci.SshNet;
 using Renci.SshNet.Common;
 using Serilog;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace Presentation_BenFly.Services;
+namespace BenFly.Services;
 
 /// <summary>
 ///     笨鸟包裹回传服务
@@ -85,7 +85,7 @@ public class BenNiaoPackageService : IDisposable
     {
         var baseUrl = _config.BenNiaoEnvironment == BenNiaoEnvironment.Production
             ? "https://api.benniao.com"
-            : "http://sit.bnsy.rhb56.cn";
+            : "https://sit.bnsy.rhb56.cn";
 
         var client = _httpClientFactory.CreateClient("BenNiao");
         client.BaseAddress = new Uri(baseUrl);
@@ -120,12 +120,11 @@ public class BenNiaoPackageService : IDisposable
             }
 
             // 如果SFTP配置变更，重新连接
-            if (needReconnectSftp)
-            {
-                Log.Information("SFTP连接配置已变更，准备重新连接");
-                await DisconnectSftpAsync();
-                await InitializeSftpConnectionAsync();
-            }
+            if (!needReconnectSftp) return;
+
+            Log.Information("SFTP连接配置已变更，准备重新连接");
+            await DisconnectSftpAsync();
+            await InitializeSftpConnectionAsync();
         }
         catch (Exception ex)
         {
@@ -234,9 +233,10 @@ public class BenNiaoPackageService : IDisposable
     }
 
     // 检查SFTP连接是否活跃并尝试重新连接
-    private static Task<bool> EnsureSftpConnectionAsync(SftpClient sftpClient)
+    private static Task<bool> EnsureSftpConnectionAsync(BaseClient sftpClient)
     {
         if (sftpClient.IsConnected) return Task.FromResult(true);
+
         try
         {
             Log.Information("SFTP连接已断开，尝试重新连接...");
@@ -253,7 +253,7 @@ public class BenNiaoPackageService : IDisposable
     /// <summary>
     ///     处理包裹
     /// </summary>
-    public async Task<bool> ProcessPackageAsync(PackageInfo package)
+    internal async Task<bool> ProcessPackageAsync(PackageInfo package)
     {
         try
         {
@@ -501,7 +501,7 @@ public class BenNiaoPackageService : IDisposable
 
                         // 列出根目录内容
                         var rootFiles = sftpClient.ListDirectory("/");
-                        Log.Information("根目录内容：{Files}", string.Join(", ", rootFiles.Select(f => f.Name)));
+                        Log.Information("根目录内容：{Files}", string.Join(", ", rootFiles.Select(static f => f.Name)));
                     }
                     catch (Exception ex)
                     {
@@ -509,10 +509,10 @@ public class BenNiaoPackageService : IDisposable
                     }
 
                     // 创建dws目录（如果不存在）
-                    if (!sftpClient.Exists("/dws"))
+                    if (!await sftpClient.ExistsAsync("/dws"))
                     {
                         Log.Debug("正在创建目录 /dws...");
-                        sftpClient.CreateDirectory("/dws");
+                        await sftpClient.CreateDirectoryAsync("/dws");
                         Log.Information("成功创建 /dws 目录");
                     }
                     else
@@ -524,17 +524,17 @@ public class BenNiaoPackageService : IDisposable
                     var dateDirPath = $"/dws/{scanTime:yyyyMMdd}";
                     var fullDateDir = $"/{dateDir}";
 
-                    if (!sftpClient.Exists(dateDirPath))
+                    if (!await sftpClient.ExistsAsync(dateDirPath))
                     {
                         Log.Debug("正在创建目录 {DateDir}...", dateDirPath);
-                        sftpClient.CreateDirectory(dateDirPath);
+                        await sftpClient.CreateDirectoryAsync(dateDirPath);
                         Log.Information("成功创建 {DateDir} 目录", dateDirPath);
                     }
 
-                    if (!sftpClient.Exists(fullDateDir))
+                    if (!await sftpClient.ExistsAsync(fullDateDir))
                     {
                         Log.Debug("正在创建小时目录 {HourDir}...", fullDateDir);
-                        sftpClient.CreateDirectory(fullDateDir);
+                        await sftpClient.CreateDirectoryAsync(fullDateDir);
                         Log.Information("成功创建小时目录 {HourDir}", fullDateDir);
                     }
                     else
@@ -553,7 +553,7 @@ public class BenNiaoPackageService : IDisposable
                     var endTime = DateTime.Now;
 
                     // 验证上传结果
-                    if (sftpClient.Exists(remotePath))
+                    if (await sftpClient.ExistsAsync(remotePath))
                     {
                         var uploadedFileInfo = sftpClient.GetAttributes(remotePath);
                         Log.Information("文件上传成功 - 路径：{RemotePath}, 大小：{Size:N0} 字节, 耗时：{Duration:N0}ms",
@@ -583,7 +583,7 @@ public class BenNiaoPackageService : IDisposable
                     retryCount++;
 
                     // 连接问题时，重置SFTP客户端以便下次重试创建新连接
-                    if (ex is SshConnectionException || ex is IOException)
+                    if (ex is SshConnectionException or IOException)
                     {
                         Log.Error(ex, "SFTP连接错误，将断开连接并在下次重试时重新连接");
                         await DisconnectSftpAsync(); // 强制断开当前连接
@@ -610,7 +610,7 @@ public class BenNiaoPackageService : IDisposable
     /// <summary>
     ///     将图片保存到临时文件
     /// </summary>
-    private static async Task<string?> SaveImageToTempFileAsync(Image<Rgba32> image, string waybillNum,
+    private static async Task<string?> SaveImageToTempFileAsync(Image image, string waybillNum,
         DateTime scanTime)
     {
         try
@@ -638,7 +638,7 @@ public class BenNiaoPackageService : IDisposable
     /// <summary>
     ///     异步上传包裹数据和图片
     /// </summary>
-    private async Task UploadPackageDataAndImageAsync(PackageInfo package, Image<Rgba32>? imageCopy)
+    private async Task UploadPackageDataAndImageAsync(PackageInfo package, Image? imageCopy)
     {
         try
         {
@@ -677,7 +677,7 @@ public class BenNiaoPackageService : IDisposable
     /// <summary>
     ///     上传异常数据（Noread或空条码）
     /// </summary>
-    private async Task<bool> UploadNoReadDataAsync(PackageInfo package, Image<Rgba32>? imageCopy)
+    private async Task<bool> UploadNoReadDataAsync(PackageInfo package, Image? imageCopy)
     {
         try
         {

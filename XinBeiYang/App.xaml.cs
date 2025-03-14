@@ -5,16 +5,16 @@ using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
 using Microsoft.Extensions.Hosting;
-using Presentation_XinBeiYang.Services;
-using Presentation_XinBeiYang.ViewModels;
-using Presentation_XinBeiYang.ViewModels.Settings;
-using Presentation_XinBeiYang.Views;
-using Presentation_XinBeiYang.Views.Settings;
 using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
+using XinBeiYang.Services;
+using XinBeiYang.ViewModels;
+using XinBeiYang.ViewModels.Settings;
+using XinBeiYang.Views;
+using XinBeiYang.Views.Settings;
 
-namespace Presentation_XinBeiYang;
+namespace XinBeiYang;
 
 /// <summary>
 ///     Interaction logic for App.xaml

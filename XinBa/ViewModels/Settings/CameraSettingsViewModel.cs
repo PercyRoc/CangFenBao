@@ -1,11 +1,11 @@
 ﻿using System.Windows.Forms;
 using System.Windows.Input;
 using Common.Services.Settings;
-using Presentation_XinBa.Services.Models;
 using Prism.Commands;
 using Prism.Mvvm;
+using XinBa.Services.Models;
 
-namespace Presentation_XinBa.ViewModels.Settings;
+namespace XinBa.ViewModels.Settings;
 
 public class CameraSettingsViewModel : BindableBase
 {
@@ -73,7 +73,7 @@ public class CameraSettingsViewModel : BindableBase
         set => SetProperty(ref _isSaving, value);
     }
 
-    public ICommand SaveConfigurationCommand { get; }
+    internal ICommand SaveConfigurationCommand { get; }
     public ICommand BrowseImagePathCommand { get; }
 
     private void LoadSettings()
@@ -141,7 +141,10 @@ public class CameraSettingsViewModel : BindableBase
                 ShowNewFolderButton = true
             };
 
-            if (dialog.ShowDialog() == DialogResult.OK) ImageSavePath = dialog.SelectedPath;
+            if (dialog.ShowDialog() == DialogResult.OK)
+            {
+                ImageSavePath = dialog.SelectedPath;
+            }
         }
         catch (Exception ex)
         {

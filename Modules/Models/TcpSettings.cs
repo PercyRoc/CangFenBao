@@ -4,7 +4,7 @@ using Prism.Mvvm;
 namespace Modules.Models;
 
 [Configuration("TcpSettings")]
-public class TcpSettings : BindableBase
+internal class TcpSettings : BindableBase
 {
     private string _address = "127.0.0.1";
     private int _port = 8080;

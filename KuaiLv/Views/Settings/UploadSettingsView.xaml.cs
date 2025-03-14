@@ -1,6 +1,6 @@
-namespace Presentation_KuaiLv.Views.Settings;
+namespace KuaiLv.Views.Settings;
 
-public partial class UploadSettingsView
+internal partial class UploadSettingsView
 {
     public UploadSettingsView()
     {

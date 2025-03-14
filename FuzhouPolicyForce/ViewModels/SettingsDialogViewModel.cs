@@ -8,7 +8,7 @@ using SharedUI.ViewModels.Settings;
 
 namespace FuzhouPolicyForce.ViewModels;
 
-public class SettingsDialogViewModel : BindableBase, IDialogAware
+internal class SettingsDialogViewModel : BindableBase, IDialogAware
 {
     private readonly BalanceSortSettingsViewModel _balanceSortSettingsViewModel;
 

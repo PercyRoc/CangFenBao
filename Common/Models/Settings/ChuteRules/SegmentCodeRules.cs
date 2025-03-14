@@ -42,8 +42,8 @@ public class SegmentCodeRules : BindableBase
         {
             // 首先按逗号分割二段码
             var secondSegmentParts = secondSegment.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.Trim())
-                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Select(static s => s.Trim())
+                .Where(static s => !string.IsNullOrWhiteSpace(s))
                 .ToList();
 
             foreach (var part in secondSegmentParts)
@@ -61,6 +61,7 @@ public class SegmentCodeRules : BindableBase
 
                     // 如果还有更多部分，尝试匹配第二部分
                     if (segments.Length < 2) continue;
+
                     {
                         matchedRule = Rules.FirstOrDefault(rule =>
                             !string.IsNullOrWhiteSpace(rule.SecondSegment) && rule.SecondSegment == segments[1]);
@@ -83,8 +84,8 @@ public class SegmentCodeRules : BindableBase
         // 在匹配一段码的规则中查找二段码匹配
         // 首先按逗号分割二段码
         var secondSegmentPartsWithFirst = secondSegment.Split(',', StringSplitOptions.RemoveEmptyEntries)
-            .Select(s => s.Trim())
-            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(static s => s.Trim())
+            .Where(static s => !string.IsNullOrWhiteSpace(s))
             .ToList();
 
         foreach (var part in secondSegmentPartsWithFirst)
@@ -102,6 +103,7 @@ public class SegmentCodeRules : BindableBase
 
                 // 如果还有更多部分，尝试第二部分
                 if (segments.Length < 2) continue;
+
                 {
                     perfectMatch = matchedFirstSegmentRules.FirstOrDefault(rule =>
                         !string.IsNullOrWhiteSpace(rule.SecondSegment) && rule.SecondSegment == segments[1]);
@@ -118,7 +120,7 @@ public class SegmentCodeRules : BindableBase
                 if (perfectMatch != null) return perfectMatch.Chute;
             }
 
-        // 如果有匹配一段码的规则但没有匹配二段码的规则，返回第一个匹配一段码的规则
+        // 如果有匹配一段码的规则但没有匹配两段码的规则，返回第一个匹配一段码的规则
         return matchedFirstSegmentRules.First().Chute;
     }
 

@@ -3,12 +3,12 @@ using System.Net;
 using System.Net.Sockets;
 using Common.Models.Package;
 using Common.Services.Settings;
-using Presentation_Modules.Models;
+using Modules.Models;
 using Serilog;
 
-namespace Presentation_Modules.Services;
+namespace Modules.Services;
 
-public class ModuleConnectionService(ISettingsService settingsService) : IModuleConnectionService
+internal class ModuleConnectionService(ISettingsService settingsService) : IModuleConnectionService
 {
     // 数据包相关常量
     private const byte StartCode = 0xF9; // 起始码 16#F9
@@ -262,7 +262,10 @@ public class ModuleConnectionService(ISettingsService settingsService) : IModule
                         if (packageIndex == 0)
                         {
                             // 检查起始码
-                            if (buffer[i] == StartCode) packageBuffer[packageIndex++] = buffer[i];
+                            if (buffer[i] == StartCode)
+                            {
+                                packageBuffer[packageIndex++] = buffer[i];
+                            }
                         }
                         else
                         {
@@ -366,6 +369,7 @@ public class ModuleConnectionService(ISettingsService settingsService) : IModule
 
         // 检查校验和
         if (data[^1] == Checksum) return true;
+
         Log.Warning("数据包校验和错误: 期望=0x{Expected:X2}, 实际=0x{Actual:X2}", Checksum, data[^1]);
         return false;
     }
@@ -429,7 +433,10 @@ public class ModuleConnectionService(ISettingsService settingsService) : IModule
                         {
                             // 检查是否有绑定的条码
                             var boundBarcode = "无";
-                            if (_packageBindings.TryGetValue(packageNumber, out var barcode)) boundBarcode = barcode;
+                            if (_packageBindings.TryGetValue(packageNumber, out var barcode))
+                            {
+                                boundBarcode = barcode;
+                            }
 
                             Log.Warning("包裹等待超时: 序号={PackageNumber}, 最大等待时间={MaxWaitTime}ms, 绑定条码={Barcode}",
                                 packageNumber, _config.MaxWaitTime, boundBarcode);
@@ -592,6 +599,6 @@ public class ModuleConnectionService(ISettingsService settingsService) : IModule
         public ushort PackageNumber { get; init; }
         public TaskCompletionSource<bool> ProcessCompleted { get; } = new();
         public TaskCompletionSource<bool>? FeedbackTask { get; set; }
-        public CancellationTokenSource? TimeoutCts { get; set; }
+        public CancellationTokenSource? TimeoutCts { get; init; }
     }
 }

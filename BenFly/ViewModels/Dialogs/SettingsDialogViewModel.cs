@@ -1,5 +1,5 @@
 using Common.Services.Ui;
-using Presentation_BenFly.ViewModels.Settings;
+using BenFly.ViewModels.Settings;
 using Prism.Commands;
 using Prism.Ioc;
 using Prism.Mvvm;
@@ -7,9 +7,9 @@ using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.ViewModels.Settings;
 
-namespace Presentation_BenFly.ViewModels.Dialogs;
+namespace BenFly.ViewModels.Dialogs;
 
-public class SettingsDialogViewModel : BindableBase, IDialogAware
+internal class SettingsDialogViewModel : BindableBase, IDialogAware
 {
     private readonly BalanceSortSettingsViewModel _balanceSortSettingsViewModel;
 

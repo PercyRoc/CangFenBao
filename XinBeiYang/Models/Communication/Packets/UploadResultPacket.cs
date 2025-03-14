@@ -1,11 +1,11 @@
 using System.Buffers.Binary;
 
-namespace Presentation_XinBeiYang.Models.Communication.Packets;
+namespace XinBeiYang.Models.Communication.Packets;
 
 /// <summary>
 ///     上包结果数据包
 /// </summary>
-public class UploadResultPacket : PlcPacket
+internal class UploadResultPacket : PlcPacket
 {
     private UploadResultPacket(ushort commandId, bool isTimeout, int packageId)
         : base(CommandType.UploadResult, commandId)
@@ -17,12 +17,12 @@ public class UploadResultPacket : PlcPacket
     /// <summary>
     ///     上包结果
     /// </summary>
-    public bool IsTimeout { get; }
+    internal bool IsTimeout { get; }
 
     /// <summary>
     ///     包裹流水号
     /// </summary>
-    public int PackageId { get; }
+    internal int PackageId { get; }
 
     protected override byte[] GetMessageBody()
     {
@@ -38,7 +38,7 @@ public class UploadResultPacket : PlcPacket
         return buffer;
     }
 
-    public static UploadResultPacket Parse(ushort commandId, ReadOnlySpan<byte> data)
+    internal static UploadResultPacket Parse(ushort commandId, ReadOnlySpan<byte> data)
     {
         var isTimeout = BinaryPrimitives.ReadUInt16BigEndian(data) == 1;
         var packageId = BinaryPrimitives.ReadInt32BigEndian(data[2..]);
@@ -49,7 +49,7 @@ public class UploadResultPacket : PlcPacket
 /// <summary>
 ///     上包结果应答数据包
 /// </summary>
-public class UploadResultAckPacket(ushort commandId) : PlcPacket(CommandType.UploadResultAck, commandId)
+internal class UploadResultAckPacket(ushort commandId) : PlcPacket(CommandType.UploadResultAck, commandId)
 {
     protected override byte[]? GetMessageBody()
     {

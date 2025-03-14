@@ -1,15 +1,15 @@
 using System.Text;
+using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
 using Serilog;
 using SortingServices.Common;
-using SortingServices.Pendulum.Models;
 
 namespace SortingServices.Pendulum;
 
 /// <summary>
 ///     单光电单摆轮分拣服务实现
 /// </summary>
-public class SinglePendulumSortService(ISettingsService settingsService) : BasePendulumSortService(settingsService)
+internal class SinglePendulumSortService(ISettingsService settingsService) : BasePendulumSortService(settingsService)
 {
     public override Task InitializeAsync(PendulumSortConfig configuration)
     {
@@ -41,9 +41,9 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
         return Task.CompletedTask;
     }
 
-    public override async Task StartAsync()
+    public override Task StartAsync()
     {
-        if (IsRunningFlag) return;
+        if (IsRunningFlag) return Task.CompletedTask;
 
         // 启动超时检查定时器
         TimeoutCheckTimer.Start();
@@ -100,7 +100,7 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
             }
         }, CancellationTokenSource.Token);
 
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
     public override async Task StopAsync()

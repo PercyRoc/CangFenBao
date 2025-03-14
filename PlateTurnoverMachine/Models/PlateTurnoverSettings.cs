@@ -2,7 +2,7 @@ using System.Collections.ObjectModel;
 using Common.Services.Settings;
 using Prism.Mvvm;
 
-namespace Presentation_PlateTurnoverMachine.Models;
+namespace PlateTurnoverMachine.Models;
 
 /// <summary>
 ///     翻板机配置
@@ -22,7 +22,7 @@ public class PlateTurnoverSettings : BindableBase
     public ObservableCollection<PlateTurnoverItem> Items
     {
         get => _items;
-        set
+        internal set
         {
             if (SetProperty(ref _items, value)) RaisePropertyChanged();
         }

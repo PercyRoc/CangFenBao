@@ -1,9 +1,9 @@
-<ui:FluentWindow x:Class="Presentation_BenFly.Views.Windows.MainWindow"
+<ui:FluentWindow x:Class="BenFly.Views.Windows.MainWindow"
                  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
                  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-                 xmlns:windows="clr-namespace:Presentation_BenFly.ViewModels.Windows"
+                 xmlns:windows="clr-namespace:BenFly.ViewModels.Windows"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:hc="https://handyorg.github.io/handycontrol"
                  mc:Ignorable="d"
@@ -13,7 +13,7 @@
                  Width="1600"
                  WindowStartupLocation="CenterScreen"
                  Closing="MetroWindow_Closing"
-                 ExtendsContentIntoTitleBar="True">
+                 ExtendsContentIntoTitleBar="True" x:ClassModifier="internal">
 
     <ui:FluentWindow.Resources>
         <ResourceDictionary>
@@ -206,9 +206,6 @@
                                                         Height="24"
                                                         HorizontalAlignment="Right">
                                                     <ui:SymbolIcon Symbol="{Binding Icon}"
-                                                                   Width="14"
-                                                                   Height="14"
-                                                                   Foreground="White"
                                                                    HorizontalAlignment="Center"
                                                                    VerticalAlignment="Center" />
                                                 </Border>

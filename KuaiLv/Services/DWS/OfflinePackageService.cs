@@ -2,19 +2,19 @@ using Common.Data;
 using Common.Models.Package;
 using Serilog;
 
-namespace Presentation_KuaiLv.Services.DWS;
+namespace KuaiLv.Services.DWS;
 
 /// <summary>
 ///     离线包裹存储服务
 /// </summary>
-public class OfflinePackageService(IPackageDataService packageDataService)
+internal class OfflinePackageService(IPackageDataService packageDataService)
 {
     private readonly SemaphoreSlim _lock = new(1, 1);
 
     /// <summary>
     ///     保存离线包裹
     /// </summary>
-    public async Task SaveOfflinePackageAsync(PackageInfo package)
+    internal async Task SaveOfflinePackageAsync(PackageInfo package)
     {
         await _lock.WaitAsync();
         try
@@ -36,7 +36,7 @@ public class OfflinePackageService(IPackageDataService packageDataService)
     /// <summary>
     ///     获取所有离线包裹
     /// </summary>
-    public async Task<List<PackageInfo>> GetOfflinePackagesAsync()
+    internal async Task<List<PackageInfo>> GetOfflinePackagesAsync()
     {
         await _lock.WaitAsync();
         try
@@ -45,7 +45,7 @@ public class OfflinePackageService(IPackageDataService packageDataService)
             var offlineRecords = await packageDataService.GetPackagesByStatusAsync(PackageStatus.Offline);
 
             // 转换为PackageInfo对象
-            var packages = offlineRecords.Select(record => new PackageInfo
+            var packages = offlineRecords.Select(static record => new PackageInfo
             {
                 Barcode = record.Barcode,
                 Weight = record.Weight,
@@ -68,7 +68,7 @@ public class OfflinePackageService(IPackageDataService packageDataService)
     /// <summary>
     ///     删除已处理的离线包裹
     /// </summary>
-    public async Task DeleteOfflinePackageAsync(string barcode)
+    internal async Task DeleteOfflinePackageAsync(string barcode)
     {
         await _lock.WaitAsync();
         try

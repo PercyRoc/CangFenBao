@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Presentation_ZtCloudWarehous.Models;
+namespace ZtCloudWarehous.Models;
 
 /// <summary>
 ///     设备注册请求

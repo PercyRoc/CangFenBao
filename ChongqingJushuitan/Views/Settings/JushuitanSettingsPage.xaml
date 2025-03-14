@@ -8,7 +8,7 @@
     xmlns:converters="clr-namespace:SharedUI.Converters;assembly=SharedUI"
     mc:Ignorable="d"
     d:DataContext="{d:DesignInstance Type=settings:JushuitanSettingsViewModel}"
-    Title="聚水潭称重接口设置">
+    Title="聚水潭称重接口设置" x:ClassModifier="internal">
 
     <Page.Resources>
         <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />

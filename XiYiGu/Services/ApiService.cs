@@ -2,16 +2,16 @@ using System.IO;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
-using Presentation_XiYiGu.Models;
-using Presentation_XiYiGu.Utils;
 using Serilog;
+using XiYiGu.Models;
+using XiYiGu.Utils;
 
-namespace Presentation_XiYiGu.Services;
+namespace XiYiGu.Services;
 
 /// <summary>
 ///     API服务，用于与服务器通信
 /// </summary>
-public class ApiService
+internal class ApiService
 {
     private readonly string _aesKey;
     private readonly string _baseUrl;

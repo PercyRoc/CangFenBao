@@ -1,12 +1,12 @@
 using System.Buffers.Binary;
-using Presentation_XinBeiYang.Models.Communication.Packets;
+using XinBeiYang.Models.Communication.Packets;
 
-namespace Presentation_XinBeiYang.Models.Communication;
+namespace XinBeiYang.Models.Communication;
 
 /// <summary>
 ///     PLC通讯数据包基类
 /// </summary>
-public abstract class PlcPacket(CommandType commandType, ushort commandId)
+internal abstract class PlcPacket(CommandType commandType, ushort commandId)
 {
     /// <summary>
     ///     指令类型
@@ -16,12 +16,12 @@ public abstract class PlcPacket(CommandType commandType, ushort commandId)
     /// <summary>
     ///     指令ID
     /// </summary>
-    public ushort CommandId { get; } = commandId;
+    internal ushort CommandId { get; } = commandId;
 
     /// <summary>
     ///     获取数据包的字节数组
     /// </summary>
-    public byte[] ToBytes()
+    internal byte[] ToBytes()
     {
         // 获取消息体
         var messageBody = GetMessageBody();
@@ -47,7 +47,7 @@ public abstract class PlcPacket(CommandType commandType, ushort commandId)
         BinaryPrimitives.WriteUInt16BigEndian(span[6..], CommandId);
 
         // 写入消息体
-        if (messageBody != null) messageBody.CopyTo(span[8..]);
+        messageBody?.CopyTo(span[8..]);
 
         // 写入报文尾
         span[^2] = PlcConstants.EndTail1;
@@ -64,7 +64,7 @@ public abstract class PlcPacket(CommandType commandType, ushort commandId)
     /// <summary>
     ///     解析数据包
     /// </summary>
-    public static bool TryParse(ReadOnlySpan<byte> data, out PlcPacket? packet)
+    internal static bool TryParse(ReadOnlySpan<byte> data, out PlcPacket? packet)
     {
         packet = null;
 

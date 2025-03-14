@@ -25,7 +25,7 @@ public class PlcSettings
 /// <summary>
 ///     PLC通信指令类型
 /// </summary>
-public enum PlcCommandType
+internal enum PlcCommandType
 {
     /// <summary>
     ///     分拣指令（上位机->PLC）
@@ -46,22 +46,22 @@ public class PlcCommand
     /// <summary>
     ///     指令类型
     /// </summary>
-    public PlcCommandType CommandType { get; set; }
+    internal PlcCommandType CommandType { get; set; }
 
     /// <summary>
     ///     包裹号（1-100循环）
     /// </summary>
-    public int PackageNumber { get; set; }
+    internal int PackageNumber { get; set; }
 
     /// <summary>
     ///     格口号
     /// </summary>
-    public int SlotNumber { get; set; }
+    internal int SlotNumber { get; set; }
 
     /// <summary>
     ///     报文序号（1-9循环）
     /// </summary>
-    public int SequenceNumber { get; set; }
+    internal int SequenceNumber { get; set; }
 
     /// <summary>
     ///     将指令转换为字符串
@@ -78,16 +78,16 @@ public class PlcCommand
     /// </summary>
     /// <param name="commandString">指令字符串</param>
     /// <returns>PLC指令对象</returns>
-    public static PlcCommand Parse(string commandString)
+    internal static PlcCommand Parse(string commandString)
     {
         if (string.IsNullOrEmpty(commandString) || commandString.Length != 11)
             throw new ArgumentException("指令格式错误，长度必须为11字节", nameof(commandString));
 
         // 解析指令类型
         PlcCommandType commandType;
-        if (commandString.StartsWith("[C"))
+        if (commandString.StartsWith("[C", StringComparison.Ordinal))
             commandType = PlcCommandType.SortingCommand;
-        else if (commandString.StartsWith("[O"))
+        else if (commandString.StartsWith("[O", StringComparison.Ordinal))
             commandType = PlcCommandType.FeedbackCommand;
         else
             throw new ArgumentException("指令格式错误，头字节必须为[C或[O", nameof(commandString));

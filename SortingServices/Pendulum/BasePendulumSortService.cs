@@ -2,10 +2,10 @@ using System.Collections.Concurrent;
 using System.Text;
 using System.Timers;
 using Common.Models.Package;
+using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
 using Serilog;
 using SortingServices.Common;
-using SortingServices.Pendulum.Models;
 using Timer = System.Timers.Timer;
 
 namespace SortingServices.Pendulum;
@@ -153,7 +153,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
             if (remainingTimes.Count != 0)
                 Log.Debug("重建后的触发时间队列（{Count}个）: {Times}",
                     remainingTimes.Count,
-                    string.Join(", ", remainingTimes.Select(t => t.ToString("HH:mm:ss.fff"))));
+                    string.Join(", ", remainingTimes.Select(static t => t.ToString("HH:mm:ss.fff"))));
 
             if (matchedTriggerTime.HasValue && !found)
                 Log.Warning("尝试从触发时间队列中移除时间戳 {TriggerTime}，但未找到", matchedTriggerTime.Value);
@@ -176,6 +176,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
             // 获取对应分拣光电的配置
             var photoelectricName = GetPhotoelectricNameBySlot(package.ChuteName);
             if (photoelectricName == null) return;
+
             var photoelectricConfig = GetPhotoelectricConfig(photoelectricName);
             // 设置超时时间为时间范围上限 + 500ms
             timer.Interval = photoelectricConfig.TimeRangeUpper + 500;
@@ -385,7 +386,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
             var times = _triggerTimes.ToList();
             if (times.Count != 0)
                 Log.Information("当前触发时间队列：{Times}",
-                    string.Join(", ", times.Select(t => t.ToString("HH:mm:ss.fff"))));
+                    string.Join(", ", times.Select(static t => t.ToString("HH:mm:ss.fff"))));
         }
 
         // 计算并记录触发延迟
@@ -424,8 +425,8 @@ public abstract class BasePendulumSortService : IPendulumSortService
         // 获取所有待分拣包裹
         var packages = PendingSortPackages.Values
             .Where(p => !IsPackageProcessing(p.Barcode))
-            .OrderBy(p => p.TriggerTimestamp)
-            .ThenBy(p => p.Index)
+            .OrderBy(static p => p.TriggerTimestamp)
+            .ThenBy(static p => p.Index)
             .ToList();
 
         if (packages.Count == 0)
@@ -605,8 +606,8 @@ public abstract class BasePendulumSortService : IPendulumSortService
                                 !ProcessingPackages.ContainsKey(p.Barcode) &&
                                 // 确保是这个分拣光电负责的格口
                                 SlotBelongsToPhotoelectric(p.ChuteName, photoelectricName))
-                            .OrderBy(p => p.TriggerTimestamp)
-                            .ThenBy(p => p.Index)
+                            .OrderBy(static p => p.TriggerTimestamp)
+                            .ThenBy(static p => p.Index)
                             .FirstOrDefault();
 
                         // 如果下一个包裹存在且目标格口与当前包裹相同，则不需要回正
@@ -621,6 +622,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
 
                         // 如果没有下一个包裹或目标格口不同，则执行回正
                         if (!client.IsConnected()) return;
+
                         var resetCommand = ShouldSwingLeft(targetSlot)
                             ? GetCommandBytes(PendulumCommands.Module2.ResetLeft)
                             : GetCommandBytes(PendulumCommands.Module2.ResetRight);

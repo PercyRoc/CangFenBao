@@ -1,11 +1,11 @@
 using Common.Services.Settings;
-using Presentation_BenFly.Models.Upload;
+using BenFly.Models.Upload;
 using Prism.Commands;
 using Prism.Mvvm;
 
-namespace Presentation_BenFly.ViewModels.Settings;
+namespace BenFly.ViewModels.Settings;
 
-public class UploadSettingsViewModel : BindableBase
+internal class UploadSettingsViewModel : BindableBase
 {
     private readonly ISettingsService _settingsService;
 
@@ -23,12 +23,12 @@ public class UploadSettingsViewModel : BindableBase
     public UploadConfiguration Configuration
     {
         get => _configuration;
-        set => SetProperty(ref _configuration, value);
+        private set => SetProperty(ref _configuration, value);
     }
 
     public IEnumerable<BenNiaoEnvironment> BenNiaoEnvironments => Enum.GetValues<BenNiaoEnvironment>();
 
-    public DelegateCommand SaveConfigurationCommand { get; }
+    internal DelegateCommand SaveConfigurationCommand { get; }
 
     private void ExecuteSaveConfiguration()
     {

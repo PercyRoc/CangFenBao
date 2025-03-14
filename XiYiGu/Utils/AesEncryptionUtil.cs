@@ -1,12 +1,12 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Presentation_XiYiGu.Utils;
+namespace XiYiGu.Utils;
 
 /// <summary>
 ///     AES加密工具类
 /// </summary>
-public static class AesEncryptionUtil
+internal static class AesEncryptionUtil
 {
     /// <summary>
     ///     AES加密

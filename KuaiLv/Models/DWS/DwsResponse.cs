@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Presentation_KuaiLv.Models.DWS;
+namespace KuaiLv.Models.DWS;
 
 /// <summary>
 ///     DWS响应模型
