@@ -23,7 +23,7 @@ namespace PlateTurnoverMachine;
 internal partial class App
 {
     private static Mutex? _mutex;
-    private const string MutexName = "PlateTurnoverMachine_App_Mutex";
+    private const string MutexName = "Global\\PlateTurnoverMachine_App_Mutex";
 
     protected override Window CreateShell()
     {
@@ -42,7 +42,6 @@ internal partial class App
         // 注册视图和ViewModel
         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
         containerRegistry.RegisterForNavigation<PlateTurnoverSettingsView, PlateTurnoverSettingsViewModel>();
-        containerRegistry.RegisterForNavigation<ChuteSettingsView, ChuteSettingsViewModel>();
 
         // 注册公共服务
         containerRegistry.AddCommonServices();
@@ -86,48 +85,51 @@ internal partial class App
         // 先调用基类方法初始化容器
         base.OnStartup(e);
 
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                // 启动托管服务
-                var hostedService = Container.Resolve<TcpConnectionHostedService>();
-                await hostedService.StartAsync(CancellationToken.None);
+        // 启动异步初始化
+        _ = InitializeAsync();
+    }
 
-                var cameraStartupService = Container.Resolve<CameraStartupService>();
-                await cameraStartupService.StartAsync(CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "启动服务时发生错误");
-            }
-        });
+    private async Task InitializeAsync()
+    {
+        try
+        {
+            // 启动托管服务
+            var hostedService = Container.Resolve<TcpConnectionHostedService>();
+            await hostedService.StartAsync(CancellationToken.None);
+
+            var cameraStartupService = Container.Resolve<CameraStartupService>();
+            await cameraStartupService.StartAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "启动服务时发生错误");
+            // 这里可以添加其他错误处理逻辑，比如显示错误对话框
+            MessageBox.Show($"启动服务时发生错误：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     /// <summary>
     ///     退出
     /// </summary>
-    protected override void OnExit(ExitEventArgs e)
+    protected override async void OnExit(ExitEventArgs e)
     {
         try
         {
-            
-
             // 停止托管服务
             var hostedService = Container.Resolve<TcpConnectionHostedService>();
-            hostedService.StopAsync(CancellationToken.None).Wait();
+            await hostedService.StopAsync(CancellationToken.None);
 
             var cameraStartupService = Container.Resolve<CameraStartupService>();
-            cameraStartupService.StopAsync(CancellationToken.None).Wait();
+            await cameraStartupService.StopAsync(CancellationToken.None);
 
             // 等待所有日志写入完成
             Log.Information("应用程序关闭");
-            Log.CloseAndFlush();
+            await Log.CloseAndFlushAsync();
         }
         catch (Exception ex)
         {
             Log.Error(ex, "应用程序关闭时发生错误");
-            Log.CloseAndFlush();
+            await Log.CloseAndFlushAsync();
         }
         finally
         {

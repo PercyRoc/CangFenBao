@@ -60,14 +60,33 @@ public class CameraFactory : IDisposable
     {
         try
         {
+            bool needReinitialize = false;
+            
             // 检查制造商和类型是否发生变化
-            if (_currentCamera == null ||
-                (_currentCamera is DahuaCameraService && settings.Manufacturer != CameraManufacturer.Dahua) ||
-                (_currentCamera is HikvisionIndustrialCameraSdkClient &&
-                 settings is { Manufacturer: CameraManufacturer.Hikvision, CameraType: CameraType.Industrial }) ||
-                (_currentCamera is HikvisionSmartCameraService &&
-                 settings is { Manufacturer: CameraManufacturer.Hikvision, CameraType: CameraType.Smart }) ||
-                (_currentCamera is TcpCameraService && settings.Manufacturer != CameraManufacturer.Tcp))
+            if (_currentCamera == null)
+            {
+                needReinitialize = true;
+            }
+            else if (_currentCamera is DahuaCameraService && settings.Manufacturer != CameraManufacturer.Dahua)
+            {
+                needReinitialize = true;
+            }
+            else if (_currentCamera is HikvisionIndustrialCameraSdkClient && 
+                    (settings.Manufacturer != CameraManufacturer.Hikvision || settings.CameraType != CameraType.Industrial))
+            {
+                needReinitialize = true;
+            }
+            else if (_currentCamera is HikvisionSmartCameraService &&
+                    (settings.Manufacturer != CameraManufacturer.Hikvision || settings.CameraType != CameraType.Smart))
+            {
+                needReinitialize = true;
+            }
+            else if (_currentCamera is TcpCameraService && settings.Manufacturer != CameraManufacturer.Tcp)
+            {
+                needReinitialize = true;
+            }
+            
+            if (needReinitialize)
             {
                 Log.Information("相机制造商或类型发生变更，准备重新初始化相机");
                 _notificationService.ShowSuccess("相机制造商或类型发生变更，准备重新初始化相机");

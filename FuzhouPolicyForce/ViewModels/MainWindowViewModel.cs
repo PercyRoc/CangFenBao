@@ -15,6 +15,7 @@ using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Scanner;
 using DeviceService.DataSourceDevices.Services;
+using FuzhouPolicyForce.WangDianTong;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
@@ -42,6 +43,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private int _currentPackageIndex;
     private bool _disposed;
 
+    private readonly IWangDianTongApiService _wangDianTongApiService;
+
     private SystemStatus _systemStatus = new();
 
     public MainWindowViewModel(
@@ -51,13 +54,15 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         IPendulumSortService sortService,
         PackageTransferService packageTransferService,
         ScannerStartupService scannerStartupService,
-        IPackageDataService packageDataService)
+        IPackageDataService packageDataService,
+        IWangDianTongApiService wangDianTongApiService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
         _settingsService = settingsService;
         _sortService = sortService;
         _packageDataService = packageDataService;
+        _wangDianTongApiService = wangDianTongApiService;
         scannerStartupService.GetScannerService();
 
         // 初始化命令
@@ -429,6 +434,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 package.SetError($"获取格口号失败：{ex.Message}");
             }
 
+            _ = _wangDianTongApiService.PushWeightAsync(package.Barcode, (decimal)package.Weight);
             Application.Current.Dispatcher.Invoke(() =>
             {
                 try
@@ -438,7 +444,11 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     // 6. 更新统计信息和历史包裹列表
                     PackageHistory.Insert(0, package);
                     while (PackageHistory.Count > 1000) // 保持最近1000条记录
+                    {
+                        var removedPackage = PackageHistory[^1];
                         PackageHistory.RemoveAt(PackageHistory.Count - 1);
+                        removedPackage.Dispose(); // 释放被移除的包裹
+                    }
 
                     // 更新统计数据
                     UpdateStatistics();
@@ -464,6 +474,10 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         {
             Log.Error(ex, "处理包裹信息时发生错误：{Barcode}", package.Barcode);
             package.SetError($"处理失败：{ex.Message}");
+        }
+        finally
+        {
+            package.Dispose(); // 确保包裹被释放
         }
     }
 
@@ -524,8 +538,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         var totalItem = StatisticsItems.FirstOrDefault(static x => x.Label == "总包裹数");
         if (totalItem != null)
         {
-            totalItem.Value = PackageHistory.Count.ToString();
-            totalItem.Description = $"累计处理 {PackageHistory.Count} 个包裹";
+            totalItem.Value = _currentPackageIndex.ToString();
+            totalItem.Description = $"累计处理 {_currentPackageIndex} 个包裹";
         }
 
         var errorItem = StatisticsItems.FirstOrDefault(static x => x.Label == "异常数");

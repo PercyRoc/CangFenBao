@@ -22,6 +22,8 @@ using SortingServices.Pendulum;
 using SortingServices.Pendulum.Extensions;
 using Timer = System.Timers.Timer;
 using System.Diagnostics;
+using FuzhouPolicyForce.ViewModels.Settings;
+using FuzhouPolicyForce.WangDianTong;
 
 namespace FuzhouPolicyForce;
 
@@ -44,13 +46,14 @@ internal partial class App
         containerRegistry.AddCommonServices();
         containerRegistry.AddShardUi();
         containerRegistry.AddPhotoCamera();
-        
+
         // 注册授权服务
         containerRegistry.RegisterSingleton<ILicenseService, LicenseService>();
 
         // 注册设置页面的ViewModel
         containerRegistry.RegisterForNavigation<BalanceSortSettingsView, BalanceSortSettingsViewModel>();
         containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<WangDianTongSettingsView, WangDianTongSettingsViewModel>();
 
         containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
         containerRegistry.Register<SettingsDialogViewModel>();
@@ -63,6 +66,7 @@ internal partial class App
         // 注册多摆轮分拣服务
         containerRegistry.RegisterPendulumSortService(settingsService, PendulumServiceType.Multi);
         containerRegistry.RegisterSingleton<IHostedService, PendulumSortHostedService>();
+        containerRegistry.RegisterSingleton<IWangDianTongApiService, WangDianTongApiService>();
     }
 
     protected override Window CreateShell()
@@ -118,36 +122,36 @@ internal partial class App
     {
         var currentProcess = Process.GetCurrentProcess();
         var processes = Process.GetProcessesByName(currentProcess.ProcessName);
-        
+
         // 当前进程也会被计入，所以如果数量大于1则说明有其他实例
         return processes.Length > 1;
     }
 
-    protected override async void OnStartup(StartupEventArgs e)
+    protected override void OnStartup(StartupEventArgs e)
     {
-        // 配置Serilog
-        Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Debug()
-            .WriteTo.Console()
-            .WriteTo.Debug()
-            .WriteTo.File("logs/app-.log",
-                rollingInterval: RollingInterval.Day,
-                rollOnFileSizeLimit: true)
-            .CreateLogger();
-
-        // 注册全局异常处理
-        DispatcherUnhandledException += App_DispatcherUnhandledException;
-        AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
-        TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
-
-        // 启动DUMP文件清理任务
-        StartCleanupTask();
-
-        Log.Information("应用程序启动");
-        base.OnStartup(e);
-
         try
         {
+            // 配置Serilog
+            Log.Logger = new LoggerConfiguration()
+                .MinimumLevel.Debug()
+                .WriteTo.Console()
+                .WriteTo.Debug()
+                .WriteTo.File("logs/app-.log",
+                    rollingInterval: RollingInterval.Day,
+                    rollOnFileSizeLimit: true)
+                .CreateLogger();
+
+            // 注册全局异常处理
+            DispatcherUnhandledException += App_DispatcherUnhandledException;
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+            TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
+
+            // 启动DUMP文件清理任务
+            StartCleanupTask();
+
+            Log.Information("应用程序启动");
+            base.OnStartup(e);
+
             // 验证授权
             if (!CheckLicense())
             {
@@ -155,7 +159,22 @@ internal partial class App
                 Current.Shutdown();
                 return;
             }
-            
+
+            // 启动服务
+            _ = InitializeServicesAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "应用程序启动时发生错误");
+            MessageBox.Show($"应用程序启动时发生错误: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            Current.Shutdown();
+        }
+    }
+
+    private async Task InitializeServicesAsync()
+    {
+        try
+        {
             // 启动相机托管服务
             var cameraStartupService = Container.Resolve<CameraStartupService>();
             await cameraStartupService.StartAsync(CancellationToken.None);
@@ -169,10 +188,11 @@ internal partial class App
         catch (Exception ex)
         {
             Log.Error(ex, "启动托管服务时发生错误");
-            throw;
+            MessageBox.Show($"启动服务时发生错误: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            Current.Shutdown();
         }
     }
-    
+
     /// <summary>
     ///     验证授权
     /// </summary>
@@ -183,21 +203,21 @@ internal partial class App
         {
             var licenseService = Container.Resolve<ILicenseService>();
             var notificationService = Container.Resolve<INotificationService>();
-            
+
             var (isValid, message) = licenseService.ValidateLicenseAsync().Result;
-            
+
             if (!isValid)
             {
                 Log.Warning("授权验证失败: {Message}", message);
                 MessageBox.Show(message ?? "软件授权验证失败，请联系厂家获取授权。", "授权验证", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
-            
+
             // 获取授权过期时间并计算剩余天数
             var expirationDate = licenseService.GetExpirationDateAsync().Result;
             var daysLeft = (expirationDate - DateTime.Now).TotalDays;
             Log.Information("授权剩余天数: {DaysLeft} 天", Math.Ceiling(daysLeft));
-            
+
             if (!string.IsNullOrEmpty(message))
             {
                 // 有效但有警告消息（如即将过期）
@@ -209,7 +229,7 @@ internal partial class App
             {
                 Log.Information("授权验证通过");
             }
-            
+
             return true;
         }
         catch (Exception ex)
@@ -332,7 +352,7 @@ internal partial class App
         }
     }
 
-    protected override async void OnExit(ExitEventArgs e)
+    protected override void OnExit(ExitEventArgs e)
     {
         try
         {
@@ -346,6 +366,43 @@ internal partial class App
                 Log.Information("清理定时器已停止");
             }
 
+            // 停止服务
+            _ = ShutdownServicesAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "应用程序关闭时发生错误");
+            Log.CloseAndFlush();
+        }
+        finally
+        {
+            try
+            {
+                // 安全释放 Mutex
+                if (_mutex != null)
+                {
+                    if (_ownsMutex && _mutex.SafeWaitHandle is { IsClosed: false, IsInvalid: false })
+                    {
+                        _mutex.ReleaseMutex();
+                        Log.Information("Mutex已释放");
+                    }
+                    _mutex.Dispose();
+                    _mutex = null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "释放Mutex时发生错误");
+            }
+
+            base.OnExit(e);
+        }
+    }
+
+    private async Task ShutdownServicesAsync()
+    {
+        try
+        {
             // 停止摆轮分拣托管服务
             var pendulumHostedService = Container.Resolve<IHostedService>();
             await pendulumHostedService.StopAsync(CancellationToken.None);
@@ -372,31 +429,8 @@ internal partial class App
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "应用程序关闭时发生错误");
+            Log.Error(ex, "关闭服务时发生错误");
             await Log.CloseAndFlushAsync();
-        }
-        finally
-        {
-            try
-            {
-                // 安全释放 Mutex
-                if (_mutex != null)
-                {
-                    if (_ownsMutex && _mutex.SafeWaitHandle is { IsClosed: false, IsInvalid: false })
-                    {
-                        _mutex.ReleaseMutex();
-                        Log.Information("Mutex已释放");
-                    }
-                    _mutex.Dispose();
-                    _mutex = null;
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "释放Mutex时发生错误");
-            }
-            
-            base.OnExit(e);
         }
     }
 }

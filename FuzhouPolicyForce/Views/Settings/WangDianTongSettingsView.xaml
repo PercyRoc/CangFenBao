@@ -1,0 +1,82 @@
+<Page x:Class="FuzhouPolicyForce.Views.Settings.WangDianTongSettingsView"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:prism="http://prismlibrary.com/"
+      xmlns:settings1="clr-namespace:FuzhouPolicyForce.ViewModels.Settings"
+      xmlns:local="clr-namespace:FuzhouPolicyForce.Converters"
+      prism:ViewModelLocator.AutoWireViewModel="True"
+      d:DataContext="{d:DesignInstance Type=settings1:WangDianTongSettingsViewModel}"
+      Title="旺店通设置"
+      mc:Ignorable="d">
+
+    <Page.Resources>
+        <local:BooleanToEnvironmentConverter x:Key="BooleanToEnvironmentConverter"/>
+    </Page.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <ui:Card Grid.Row="1" Grid.Column="1" Width="400">
+            <StackPanel Margin="16">
+                <TextBlock Text="旺店通API设置"
+                          Style="{DynamicResource SubtitleTextBlockStyle}"
+                          Margin="0,0,0,16" />
+
+                <Grid Margin="0,0,0,16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <ui:ToggleSwitch Grid.Column="0"
+                                   IsChecked="{Binding Configuration.IsProductionEnvironment}"
+                                   OnContent="正式环境"
+                                   OffContent="测试环境" />
+                    <TextBlock Grid.Column="1"
+                             Text="{Binding Configuration.IsProductionEnvironment, Converter={StaticResource BooleanToEnvironmentConverter}}"
+                             VerticalAlignment="Center"
+                             Margin="8,0,0,0"
+                             Style="{DynamicResource BodyTextBlockStyle}"/>
+                </Grid>
+
+                <ui:TextBox Text="{Binding Configuration.SellerAccount}"
+                           PlaceholderText="请输入卖家账号"
+                           Width="300"
+                           Margin="0,0,0,16">
+                    <ui:TextBox.Icon>
+                        <ui:SymbolIcon Symbol="Person24" />
+                    </ui:TextBox.Icon>
+                </ui:TextBox>
+
+                <ui:TextBox Text="{Binding Configuration.ApiAccount}"
+                           PlaceholderText="请输入接口账号"
+                           Width="300"
+                           Margin="0,0,0,16">
+                    <ui:TextBox.Icon>
+                        <ui:SymbolIcon Symbol="Key24" />
+                    </ui:TextBox.Icon>
+                </ui:TextBox>
+
+                <ui:TextBox Text="{Binding Configuration.ApiSecret}"
+                           PlaceholderText="请输入接口密钥"
+                           Width="300"
+                           Margin="0,0,0,16">
+                    <ui:TextBox.Icon>
+                        <ui:SymbolIcon Symbol="Password24" />
+                    </ui:TextBox.Icon>
+                </ui:TextBox>
+            </StackPanel>
+        </ui:Card>
+    </Grid>
+</Page>

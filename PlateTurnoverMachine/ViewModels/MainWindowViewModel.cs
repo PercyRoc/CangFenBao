@@ -13,7 +13,6 @@ using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using PlateTurnoverMachine.Models;
-using PlateTurnoverMachine.Models.Settings;
 using PlateTurnoverMachine.Services;
 using Prism.Commands;
 using Prism.Mvvm;
@@ -226,15 +225,15 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             if (package.Barcode.Equals("noread", StringComparison.OrdinalIgnoreCase))
             {
                 // 获取异常格口设置
-                var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
-                package.ChuteName = chuteSettings.ErrorChute;
+                var settings = _settingsService.LoadSettings<PlateTurnoverSettings>();
+                package.ChuteName = settings.ErrorChute;
                 Log.Information("包裹 {Barcode} 为未读包裹，分配至异常格口 {Chute}", package.Barcode, package.ChuteName);
             }
             else
             {
                 // 获取格口设置
-                var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
-                var chuteCount = chuteSettings.ChuteCount;
+                var settings = _settingsService.LoadSettings<PlateTurnoverSettings>();
+                var chuteCount = settings.ChuteCount;
                 
                 // 根据序号循环分配格口
                 var chuteNumber = ((package.Index - 1) % chuteCount) + 1;
@@ -401,7 +400,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             {
                 Name = "TCP模块",
                 Status = "0/0",
-                Icon = "DeviceLaptop24",
+                Icon = "DeviceEq24",
                 StatusColor = "#F44336"
             });
 
@@ -491,7 +490,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             Value = "0.00",
             Unit = "kg",
             Description = "包裹重量",
-            Icon = "Scale24"
+            Icon = "Scales24"
         });
 
         PackageInfoItems.Add(new PackageInfoItem
@@ -524,7 +523,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             Label = "状态",
             Value = "等待",
             Description = "处理状态",
-            Icon = "AlertCircle24"
+            Icon = "Alert24"
         });
     }
 

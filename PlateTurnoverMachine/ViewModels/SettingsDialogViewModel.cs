@@ -15,7 +15,7 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
     private readonly INotificationService _notificationService;
     private readonly PlateTurnoverSettingsViewModel _plateTurnoverSettingsViewModel;
-    private readonly ChuteSettingsViewModel _chuteSettingsViewModel;
+    
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
         INotificationService notificationService)
@@ -25,7 +25,7 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
         // 创建各个设置页面的ViewModel实例
         _cameraSettingsViewModel = containerProvider.Resolve<CameraSettingsViewModel>();
         _plateTurnoverSettingsViewModel = containerProvider.Resolve<PlateTurnoverSettingsViewModel>();
-        _chuteSettingsViewModel = containerProvider.Resolve<ChuteSettingsViewModel>();
+        
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
     }
@@ -57,7 +57,7 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
             // 保存所有设置
             _cameraSettingsViewModel.SaveConfigurationCommand.Execute();
             _plateTurnoverSettingsViewModel.SaveConfigurationCommand.Execute();
-            _chuteSettingsViewModel.SaveConfigurationCommand.Execute();
+            
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");
             RequestClose?.Invoke(new DialogResult(ButtonResult.OK));

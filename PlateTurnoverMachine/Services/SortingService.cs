@@ -13,18 +13,19 @@ namespace PlateTurnoverMachine.Services;
 public class SortingService : IDisposable
 {
     private const int MaxIntervalCount = 100;
-    private readonly Dictionary<(string IpAddress, int Channel), bool> _channelStates = new();
+    private readonly Dictionary<(string IpAddress, int Channel), bool> _channelStates = [];
     private readonly object _channelStatesLock = new();
     private readonly object _countLock = new();
     private readonly object _intervalsLock = new();
     private readonly ConcurrentQueue<PackageInfo> _packageQueue = new();
     private readonly ISettingsService _settingsService;
-    private readonly Dictionary<string, TcpConnectionConfig> _tcpConfigs = new();
+    private readonly Dictionary<string, TcpConnectionConfig> _tcpConfigs = [];
     private readonly ITcpConnectionService _tcpConnectionService;
     private readonly Queue<double> _triggerIntervals = new();
     private int _currentCount;
     private bool _disposed;
     private DateTime _lastTriggerTime;
+    private PlateTurnoverSettings? _cachedSettings;
 
     public SortingService(ITcpConnectionService tcpConnectionService, ISettingsService settingsService)
     {
@@ -40,9 +41,15 @@ public class SortingService : IDisposable
             {
                 _tcpConfigs[item.TcpAddress] = new TcpConnectionConfig(item.TcpAddress, 2000);
             }
+
+        // 订阅配置变更事件
+        Settings.SettingsChanged += OnSettingsChanged;
     }
 
-    private PlateTurnoverSettings Settings => _settingsService.LoadSettings<PlateTurnoverSettings>();
+    private PlateTurnoverSettings Settings
+    {
+        get { return _cachedSettings ??= _settingsService.LoadSettings<PlateTurnoverSettings>(); }
+    }
 
     /// <summary>
     ///     获取最近100次触发的平均时间间隔（毫秒）
@@ -324,6 +331,55 @@ public class SortingService : IDisposable
         }
     }
 
+    private void OnSettingsChanged(object? sender, EventArgs e)
+    {
+        // 清除缓存的设置
+        _cachedSettings = null;
+
+        // 获取新的配置
+        var newSettings = _settingsService.LoadSettings<PlateTurnoverSettings>();
+        
+        // 检查TCP地址和端口号是否发生变化
+        var changedConfigs = new List<(string IpAddress, TcpConnectionConfig Config)>();
+        foreach (var item in newSettings.Items.Where(static item => !string.IsNullOrEmpty(item.TcpAddress)))
+        {
+            if (item.TcpAddress == null) continue;
+            
+            // 检查是否已存在该TCP地址的配置
+            if (!_tcpConfigs.ContainsKey(item.TcpAddress))
+            {
+                // 添加新的配置
+                changedConfigs.Add((item.TcpAddress, new TcpConnectionConfig(item.TcpAddress, 2000)));
+            }
+        }
+
+        // 检查是否有需要移除的配置
+        var removedConfigs = _tcpConfigs.Keys
+            .Where(ip => newSettings.Items.All(item => item.TcpAddress != ip))
+            .ToList();
+
+        // 更新配置
+        foreach (var (ipAddress, config) in changedConfigs)
+        {
+            _tcpConfigs[ipAddress] = config;
+            Log.Information("更新TCP配置：{Address}", ipAddress);
+        }
+
+        // 移除不再使用的配置
+        foreach (var ipAddress in removedConfigs)
+        {
+            _tcpConfigs.Remove(ipAddress);
+            Log.Information("移除TCP配置：{Address}", ipAddress);
+        }
+
+        // 如果有配置变更，记录日志
+        if (changedConfigs.Count > 0 || removedConfigs.Count > 0)
+        {
+            Log.Information("翻板机配置已更新，变更：{ChangedCount}个，移除：{RemovedCount}个", 
+                changedConfigs.Count, removedConfigs.Count);
+        }
+    }
+
     protected virtual void Dispose(bool disposing)
     {
         if (_disposed)
@@ -333,6 +389,7 @@ public class SortingService : IDisposable
         {
             _tcpConnectionService.TriggerPhotoelectricDataReceived -= OnTriggerPhotoelectricDataReceived;
             _tcpConnectionService.TcpModuleDataReceived -= OnTcpModuleDataReceived;
+            Settings.SettingsChanged -= OnSettingsChanged;
         }
 
         _disposed = true;

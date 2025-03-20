@@ -5,8 +5,8 @@
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       xmlns:prism="http://prismlibrary.com/"
-      xmlns:models1="clr-namespace:PlateTurnoverMachine.Models"
       xmlns:settings="clr-namespace:PlateTurnoverMachine.ViewModels.Settings"
+      xmlns:models="clr-namespace:PlateTurnoverMachine.Models"
       prism:ViewModelLocator.AutoWireViewModel="True"
       d:DataContext="{d:DesignInstance Type=settings:PlateTurnoverSettingsViewModel}"
       mc:Ignorable="d"
@@ -59,12 +59,58 @@
             </StackPanel>
         </Grid>
 
-        <!-- InfoBar -->
-        <ui:InfoBar Title="{Binding InfoTitle}"
-                    Message="{Binding InfoMessage}"
-                    IsOpen="{Binding IsInfoBarOpen}"
-                    Severity="{Binding InfoSeverity}"
-                    Margin="16,8,16,0" />
+        <!-- 格口基本设置 -->
+        <Border Margin="16,16,16,16"
+                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="4"
+                Padding="16">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Text="格口基本设置"
+                           Grid.Row="0"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,8" />
+
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Text="格口总数："
+                               Grid.Column="0"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+
+                    <ui:NumberBox Value="{Binding Settings.ChuteCount, UpdateSourceTrigger=PropertyChanged}"
+                                  Grid.Column="1"
+                                  Minimum="1"
+                                  Maximum="100"
+                                  SpinButtonPlacementMode="Inline"
+                                  Margin="0,0,16,0" />
+
+                    <TextBlock Text="异常格口："
+                               Grid.Column="2"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+
+                    <ui:NumberBox Value="{Binding Settings.ErrorChute, UpdateSourceTrigger=PropertyChanged}"
+                                  Grid.Column="3"
+                                  Minimum="0"
+                                  Maximum="100"
+                                  SpinButtonPlacementMode="Inline" />
+                </Grid>
+            </Grid>
+        </Border>
 
         <!-- 触发光电配置 -->
         <Border Margin="16,16,16,16"
@@ -122,39 +168,57 @@
         <DataGrid Margin="16,0,16,16"
                   Height="400"
                   ItemsSource="{Binding Settings.Items}"
-                  d:ItemsSource="{d:DesignInstance Type=models1:PlateTurnoverItem}"
+                  d:ItemsSource="{d:DesignInstance Type=models:PlateTurnoverItem}"
                   AutoGenerateColumns="False"
                   CanUserAddRows="False"
                   Background="Transparent"
                   BorderThickness="1"
                   BorderBrush="{DynamicResource ControlElevationBorderBrush}">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="序号" Binding="{Binding Index}" Width="60" IsReadOnly="True" />
-                <DataGridTextColumn Header="TCP地址" Binding="{Binding TcpAddress}" Width="100">
-                    <DataGridTextColumn.EditingElementStyle>
-                        <Style TargetType="TextBox">
-                            <Setter Property="BorderThickness" Value="0" />
-                        </Style>
-                    </DataGridTextColumn.EditingElementStyle>
-                </DataGridTextColumn>
+                <DataGridTemplateColumn Header="序号" Width="80">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ui:TextBox Text="{Binding Index, UpdateSourceTrigger=PropertyChanged}"
+                                     VerticalAlignment="Center"
+                                     Margin="4,0"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
 
-                <DataGridTextColumn Header="IO点位" Binding="{Binding IoPoint}" Width="100">
-                    <DataGridTextColumn.EditingElementStyle>
-                        <Style TargetType="TextBox">
-                            <Setter Property="BorderThickness" Value="0" />
-                        </Style>
-                    </DataGridTextColumn.EditingElementStyle>
-                </DataGridTextColumn>
+                <DataGridTemplateColumn Header="TCP地址" Width="150">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ui:TextBox Text="{Binding TcpAddress, UpdateSourceTrigger=PropertyChanged}"
+                                     VerticalAlignment="Center"
+                                     Margin="4,0"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
 
-                <DataGridTextColumn Header="映射格口" Binding="{Binding MappingChute}" Width="100">
-                    <DataGridTextColumn.EditingElementStyle>
-                        <Style TargetType="TextBox">
-                            <Setter Property="BorderThickness" Value="0" />
-                        </Style>
-                    </DataGridTextColumn.EditingElementStyle>
-                </DataGridTextColumn>
+                <DataGridTemplateColumn Header="IO点位" Width="100">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ui:TextBox Text="{Binding IoPoint, UpdateSourceTrigger=PropertyChanged}"
+                                     VerticalAlignment="Center"
+                                     Margin="4,0"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
 
-                <DataGridTemplateColumn Header="距离当前点位位置" Width="150">
+                <DataGridTemplateColumn Header="映射格口" Width="120">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ui:NumberBox Value="{Binding MappingChute, UpdateSourceTrigger=PropertyChanged}"
+                                       VerticalAlignment="Center"
+                                       Minimum="1"
+                                       Maximum="100"
+                                       SpinButtonPlacementMode="Inline"
+                                       Margin="4,0"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTemplateColumn Header="距离当前点位位置" Width="120">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <ui:NumberBox Value="{Binding Distance}"
@@ -165,21 +229,43 @@
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <DataGridTextColumn Header="分拣延迟系数(0-1)" Binding="{Binding DelayFactor}" Width="150">
-                    <DataGridTextColumn.EditingElementStyle>
-                        <Style TargetType="TextBox">
-                            <Setter Property="BorderThickness" Value="0" />
-                        </Style>
-                    </DataGridTextColumn.EditingElementStyle>
-                </DataGridTextColumn>
+                <DataGridTemplateColumn Header="分拣延迟系数(0-1)" Width="150">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Slider Grid.Column="0"
+                                        Value="{Binding DelayFactor, UpdateSourceTrigger=PropertyChanged}"
+                                        Minimum="0"
+                                        Maximum="1"
+                                        TickFrequency="0.01"
+                                        IsSnapToTickEnabled="True"
+                                        VerticalAlignment="Center"
+                                        Margin="4,0"/>
+                                <TextBlock Grid.Column="1"
+                                         Text="{Binding DelayFactor, StringFormat={}{0:F2}}"
+                                         VerticalAlignment="Center"
+                                         Margin="4,0,0,0"/>
+                            </Grid>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
 
-                <DataGridTextColumn Header="磁铁吸合时间(ms)" Binding="{Binding MagnetTime}" Width="150">
-                    <DataGridTextColumn.EditingElementStyle>
-                        <Style TargetType="TextBox">
-                            <Setter Property="BorderThickness" Value="0" />
-                        </Style>
-                    </DataGridTextColumn.EditingElementStyle>
-                </DataGridTextColumn>
+                <DataGridTemplateColumn Header="磁铁吸合时间(ms)" Width="150">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ui:NumberBox Value="{Binding MagnetTime, UpdateSourceTrigger=PropertyChanged}"
+                                       VerticalAlignment="Center"
+                                       Minimum="0"
+                                       Maximum="1000"
+                                       SpinButtonPlacementMode="Inline"
+                                       Margin="4,0"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
 
                 <DataGridTemplateColumn Width="50">
                     <DataGridTemplateColumn.CellTemplate>

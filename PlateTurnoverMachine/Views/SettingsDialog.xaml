@@ -20,7 +20,7 @@
                  WindowBackdropType="Mica"
                  WindowCornerPreference="Round"
                  WindowStyle="SingleBorderWindow"
-                 ShowInTaskbar="False" x:ClassModifier="internal">
+                 ShowInTaskbar="True" x:ClassModifier="internal">
 
     <ui:FluentWindow.Resources>
         <ResourceDictionary>
@@ -133,16 +133,6 @@
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
                                 <x:Type Type="local:PlateTurnoverSettingsView" />
-                            </ui:NavigationViewItem.TargetPageType>
-                        </ui:NavigationViewItem>
-
-                        <ui:NavigationViewItem Content="格口设置"
-                                               Tag="Chute">
-                            <ui:NavigationViewItem.Icon>
-                                <ui:SymbolIcon Symbol="DeviceMeetingRoom24" />
-                            </ui:NavigationViewItem.Icon>
-                            <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="local:ChuteSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>

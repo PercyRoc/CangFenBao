@@ -6,23 +6,18 @@ using Common.Services.Ui;
 using Microsoft.Win32;
 using OfficeOpenXml;
 using PlateTurnoverMachine.Models;
-using PlateTurnoverMachine.Models.Settings;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
-using Wpf.Ui.Controls;
 
 namespace PlateTurnoverMachine.ViewModels.Settings;
 
-internal class PlateTurnoverSettingsViewModel : BindableBase
+internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
 {
     private readonly INotificationService _notificationService;
     private readonly ISettingsService _settingsService;
-    private string _infoMessage = string.Empty;
-    private InfoBarSeverity _infoSeverity;
-    private string _infoTitle = string.Empty;
-    private bool _isInfoBarOpen;
     private PlateTurnoverSettings _settings = new();
+    private bool _isAutoSaveEnabled = true;
 
     public PlateTurnoverSettingsViewModel(
         ISettingsService settingsService,
@@ -40,6 +35,16 @@ internal class PlateTurnoverSettingsViewModel : BindableBase
 
         // 加载配置
         LoadSettings();
+
+        // 订阅配置变更事件以实现自动保存
+        Settings.SettingsChanged += OnSettingsChanged;
+
+        // 订阅格口总数变更事件
+        Settings.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName != nameof(PlateTurnoverSettings.ChuteCount)) return;
+            InitializeSettingsByChuteCount();
+        };
     }
 
     #region Properties
@@ -48,30 +53,6 @@ internal class PlateTurnoverSettingsViewModel : BindableBase
     {
         get => _settings;
         private set => SetProperty(ref _settings, value);
-    }
-
-    public string InfoTitle
-    {
-        get => _infoTitle;
-        set => SetProperty(ref _infoTitle, value);
-    }
-
-    public string InfoMessage
-    {
-        get => _infoMessage;
-        set => SetProperty(ref _infoMessage, value);
-    }
-
-    public bool IsInfoBarOpen
-    {
-        get => _isInfoBarOpen;
-        set => SetProperty(ref _isInfoBarOpen, value);
-    }
-
-    public InfoBarSeverity InfoSeverity
-    {
-        get => _infoSeverity;
-        set => SetProperty(ref _infoSeverity, value);
     }
 
     #endregion
@@ -99,13 +80,10 @@ internal class PlateTurnoverSettingsViewModel : BindableBase
             {
                 InitializeSettingsByChuteCount();
             }
-
-            ShowInfo("配置加载成功", "已从配置文件加载翻板机设置", InfoBarSeverity.Success);
         }
         catch (Exception ex)
         {
             Log.Error(ex, "加载翻板机配置失败");
-            ShowInfo("配置加载失败", ex.Message, InfoBarSeverity.Error);
             Settings.Items = [];
         }
     }
@@ -115,14 +93,14 @@ internal class PlateTurnoverSettingsViewModel : BindableBase
         try
         {
             // 获取格口设置
-            var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
-            if (chuteSettings.ChuteCount <= 0)
+            var settings = _settingsService.LoadSettings<PlateTurnoverSettings>();
+            if (settings.ChuteCount <= 0)
             {
                 Log.Warning("格口数量未设置，无法初始化翻板机配置");
                 return;
             }
 
-            var chuteCount = chuteSettings.ChuteCount;
+            var chuteCount = settings.ChuteCount;
             const int itemsPerIp = 8; // 每个IP地址对应8个格口
             var ipCount = (int)Math.Ceiling(chuteCount / (double)itemsPerIp);
 
@@ -144,34 +122,35 @@ internal class PlateTurnoverSettingsViewModel : BindableBase
                 for (var chute = startChute; chute <= endChute; chute++)
                 {
                     var outNumber = chute - startChute + 1;
-                    items.Add(new PlateTurnoverItem
+                    var item = new PlateTurnoverItem
                     {
+                        Index = (items.Count + 1).ToString(),
                         TcpAddress = ipAddress.ToString(),
                         IoPoint = $"out{outNumber}",
                         MappingChute = chute,
                         Distance = 0,
                         DelayFactor = 1,
                         MagnetTime = 100
-                    });
+                    };
+                    item.SetParentSettings(Settings);
+                    items.Add(item);
                 }
             }
 
             Settings.Items = items;
-            Log.Information($"已根据格口数量({chuteCount})初始化{items.Count}条翻板机配置");
-            ShowInfo("初始化成功", $"已根据格口数量({chuteCount})初始化{items.Count}条配置", InfoBarSeverity.Success);
+            Log.Information("已根据格口数量({ChuteCount})初始化{ItemsCount}条翻板机配置", chuteCount, items.Count);
         }
         catch (Exception ex)
         {
             Log.Error(ex, "初始化翻板机配置失败");
-            ShowInfo("初始化失败", ex.Message, InfoBarSeverity.Error);
         }
     }
 
     private void AddItem()
     {
         var newItem = new PlateTurnoverItem();
+        newItem.SetParentSettings(Settings);
         Settings.Items.Add(newItem);
-        ShowInfo("添加成功", "已添加新的翻板机配置项", InfoBarSeverity.Success);
     }
 
     private void RemoveItem(PlateTurnoverItem item)
@@ -180,7 +159,6 @@ internal class PlateTurnoverSettingsViewModel : BindableBase
         if (index == -1) return;
 
         Settings.Items.Remove(item);
-        ShowInfo("删除成功", "已删除选中的翻板机配置项", InfoBarSeverity.Success);
     }
 
     private void ExecuteImportFromExcel()
@@ -194,6 +172,9 @@ internal class PlateTurnoverSettingsViewModel : BindableBase
             };
 
             if (dialog.ShowDialog() != true) return;
+
+            // 导入时关闭自动保存，避免频繁触发保存
+            _isAutoSaveEnabled = false;
 
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
             using var package = new ExcelPackage(new FileInfo(dialog.FileName));
@@ -212,16 +193,18 @@ internal class PlateTurnoverSettingsViewModel : BindableBase
                     DelayFactor = double.Parse(GetCellValue(worksheet.Cells[row, 6])),
                     MagnetTime = int.Parse(GetCellValue(worksheet.Cells[row, 7]))
                 };
+                item.SetParentSettings(Settings);
                 Settings.Items.Add(item);
                 row++;
             }
 
-            ShowInfo("导入成功", $"已从Excel导入 {Settings.Items.Count} 条配置", InfoBarSeverity.Success);
+            // 恢复自动保存并手动保存一次
+            _isAutoSaveEnabled = true;
+            SaveSettings();
         }
         catch (Exception ex)
         {
             Log.Error(ex, "导入Excel失败");
-            ShowInfo("导入失败", ex.Message, InfoBarSeverity.Error);
         }
     }
 
@@ -266,22 +249,23 @@ internal class PlateTurnoverSettingsViewModel : BindableBase
 
             // 保存文件
             package.SaveAs(new FileInfo(dialog.FileName));
-
-            ShowInfo("导出成功", $"已导出 {Settings.Items.Count} 条配置到Excel", InfoBarSeverity.Success);
         }
         catch (Exception ex)
         {
             Log.Error(ex, "导出Excel失败");
-            ShowInfo("导出失败", ex.Message, InfoBarSeverity.Error);
         }
     }
 
     private void ExecuteSaveConfiguration()
     {
+        SaveSettings();
+    }
+
+    private void SaveSettings()
+    {
         try
         {
             _settingsService.SaveSettings(Settings);
-            ShowInfo("保存成功", "翻板机配置已保存", InfoBarSeverity.Success);
             _notificationService.ShowSuccessWithToken("翻板机配置已保存", "SettingWindowGrowl");
 
             // 更新光电设备配置
@@ -299,7 +283,6 @@ internal class PlateTurnoverSettingsViewModel : BindableBase
         catch (Exception ex)
         {
             Log.Error(ex, "保存翻板机配置失败");
-            ShowInfo("保存失败", ex.Message, InfoBarSeverity.Error);
             _notificationService.ShowErrorWithToken("保存翻板机配置失败", "SettingWindowGrowl");
         }
     }
@@ -309,12 +292,24 @@ internal class PlateTurnoverSettingsViewModel : BindableBase
         return cell.Value?.ToString() ?? string.Empty;
     }
 
-    private void ShowInfo(string title, string message, InfoBarSeverity severity)
+    private void OnSettingsChanged(object? sender, EventArgs e)
     {
-        InfoTitle = title;
-        InfoMessage = message;
-        InfoSeverity = severity;
-        IsInfoBarOpen = true;
+        // 属性变更时自动保存
+        if (!_isAutoSaveEnabled) return;
+        try
+        {
+            _settingsService.SaveSettings(Settings);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "自动保存翻板机配置失败");
+        }
+    }
+
+    // 释放资源，取消事件订阅
+    public void Dispose()
+    {
+        Settings.SettingsChanged -= OnSettingsChanged;
     }
 
     #endregion

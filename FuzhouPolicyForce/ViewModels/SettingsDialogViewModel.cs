@@ -1,4 +1,5 @@
 ﻿using Common.Services.Ui;
+using FuzhouPolicyForce.ViewModels.Settings;
 using Prism.Commands;
 using Prism.Ioc;
 using Prism.Mvvm;
@@ -16,6 +17,7 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
 
     // 保存各个设置页面的ViewModel实例
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
+    private readonly WangDianTongSettingsViewModel _wangDianTongSettingsViewModel;
     private readonly INotificationService _notificationService;
 
     public SettingsDialogViewModel(
@@ -28,6 +30,7 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
         _cameraSettingsViewModel = containerProvider.Resolve<CameraSettingsViewModel>();
         _balanceSortSettingsViewModel = containerProvider.Resolve<BalanceSortSettingsViewModel>();
         _barcodeChuteSettingsViewModel = containerProvider.Resolve<BarcodeChuteSettingsViewModel>();
+        _wangDianTongSettingsViewModel = containerProvider.Resolve<WangDianTongSettingsViewModel>();
 
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
@@ -61,6 +64,7 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
             _cameraSettingsViewModel.SaveConfigurationCommand.Execute();
             _balanceSortSettingsViewModel.SaveConfigurationCommand.Execute();
             _barcodeChuteSettingsViewModel.SaveConfigurationCommand.Execute();
+            _wangDianTongSettingsViewModel.SaveConfigurationCommand.Execute();
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");
             RequestClose?.Invoke(new DialogResult(ButtonResult.OK));

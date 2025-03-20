@@ -241,16 +241,16 @@ internal class TcpCameraService(string host = "127.0.0.1", int port = 20011) : I
         if (!content.Contains(',')) return;
 
         // 提取所有可能的数据包
-        var dataPackets = ExtractDataPackets(content);
+        var (Packets, RemainingData) = ExtractDataPackets(content);
 
         // 清除缓冲区
         data.Clear();
 
         // 如果有未处理完的数据，保留在缓冲区中
-        if (dataPackets.RemainingData.Length > 0) data.Append(dataPackets.RemainingData);
+        if (RemainingData.Length > 0) data.Append(RemainingData);
 
         // 处理所有完整的数据包
-        foreach (var packet in dataPackets.Packets)
+        foreach (var packet in Packets)
         {
             // 检查是否与上一次处理的数据相同，并且时间间隔是否足够
             var now = DateTime.Now;
@@ -296,7 +296,6 @@ internal class TcpCameraService(string host = "127.0.0.1", int port = 20011) : I
 
         // 查找所有符合格式的数据包
         // 格式: 条码,重量,长度,宽度,高度,体积,时间戳
-        // 例如: UNAM26278846CN,0,0,0,0,0,1741564603
 
         // 简单的方法：检查是否包含7个字段
         var parts = data.Split(',');

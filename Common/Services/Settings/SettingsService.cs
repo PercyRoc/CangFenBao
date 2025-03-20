@@ -162,7 +162,7 @@ public class SettingsService : ISettingsService
         var results = new List<ValidationResult>();
         var validationContext = new ValidationContext(settings);
         Validator.TryValidateObject(settings, validationContext, results, true);
-        return results.ToArray();
+        return [.. results];
     }
 
     /// <summary>

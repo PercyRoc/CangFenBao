@@ -9,6 +9,7 @@
                  xmlns:hc="https://handyorg.github.io/handycontrol"
                  xmlns:settings="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
                  xmlns:local1="clr-namespace:FuzhouPolicyForce.Views.Settings;assembly=SharedUI"
+                 xmlns:settings1="clr-namespace:FuzhouPolicyForce.Views.Settings"
                  prism:ViewModelLocator.AutoWireViewModel="True"
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}"
@@ -21,7 +22,7 @@
                  WindowBackdropType="Mica"
                  WindowCornerPreference="Round"
                  WindowStyle="SingleBorderWindow"
-                 ShowInTaskbar="False" x:ClassModifier="internal">
+                 ShowInTaskbar="True">
     <ui:FluentWindow.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -143,6 +144,16 @@
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
                                 <x:Type Type="local1:BarcodeChuteSettingsView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
+
+                        <ui:NavigationViewItem Content="旺店通设置"
+                                               Tag="WangDianTong">
+                            <ui:NavigationViewItem.Icon>
+                                <ui:SymbolIcon Symbol="DataUsage24" />
+                            </ui:NavigationViewItem.Icon>
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="settings1:WangDianTongSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>

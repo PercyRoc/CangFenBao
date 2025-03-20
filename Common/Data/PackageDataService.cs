@@ -140,7 +140,7 @@ internal class PackageDataService : IPackageDataService
             });
 
             var results = await Task.WhenAll(tasks);
-            return results.SelectMany(static x => x).OrderByDescending(static p => p.CreateTime).ToList();
+            return [.. results.SelectMany(static x => x).OrderByDescending(static p => p.CreateTime)];
         }
         catch (Exception ex)
         {
@@ -179,7 +179,7 @@ internal class PackageDataService : IPackageDataService
         catch (Exception ex)
         {
             Log.Error(ex, "获取原始表数据失败：{Date}", date.ToString("yyyy-MM-dd"));
-            return new List<PackageRecord>();
+            return [];
         }
     }
 

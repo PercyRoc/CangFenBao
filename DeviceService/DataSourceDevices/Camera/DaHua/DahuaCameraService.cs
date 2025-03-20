@@ -109,11 +109,7 @@ public class DahuaCameraService : ICameraService
                     if (_firstCameraId == null)
                         lock (_cameraIdLock)
                         {
-                            if (_firstCameraId == null)
-                            {
-                                _firstCameraId = args.CameraID;
-                                Log.Information("设置首次处理图像的相机ID: {CameraId}", _firstCameraId);
-                            }
+                            _firstCameraId ??= args.CameraID;
                         }
 
                     if (args.OutputResult == 1)
@@ -171,7 +167,7 @@ public class DahuaCameraService : ICameraService
                             if (args.CameraID == _firstCameraId)
                             {
                                 var locations = args.AreaList?
-                                    .Select(static points =>
+                                    .Select(static _ =>
                                         new BarcodeLocation())
                                     .ToList() ?? [];
                                 _imageSubject.OnNext((image, locations));
@@ -467,7 +463,7 @@ public class DahuaCameraService : ICameraService
             }
 
             var locations = barcodeLocations?
-                .Select(static points => new BarcodeLocation())
+                .Select(static _ => new BarcodeLocation())
                 .ToList() ?? [];
 
             return (image, locations);
