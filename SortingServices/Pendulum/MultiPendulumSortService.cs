@@ -70,6 +70,27 @@ internal class MultiPendulumSortService(ISettingsService settingsService) : Base
     {
         if (IsRunningFlag) return Task.CompletedTask;
 
+        // 在启动服务前直接发送启动命令到所有连接的分拣光电
+        try
+        {
+            foreach (var client in _sortingClients)
+            {
+                if (!client.Value.IsConnected()) continue;
+
+                var startCommand = GetCommandBytes(PendulumCommands.Module2.Start);
+                client.Value.Send(startCommand);
+                var resetLeftCommand = GetCommandBytes(PendulumCommands.Module2.ResetLeft);
+                var resetRightCommand = GetCommandBytes(PendulumCommands.Module2.ResetRight);
+                client.Value.Send(resetLeftCommand);
+                client.Value.Send(resetRightCommand);
+                Log.Information("已发送启动和回正命令到分拣光电 {Name}", client.Key);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "向分拣光电发送启动命令失败");
+        }
+
         // 启动超时检查定时器
         TimeoutCheckTimer.Start();
 
@@ -82,20 +103,6 @@ internal class MultiPendulumSortService(ISettingsService settingsService) : Base
         {
             try
             {
-                // 向所有分拣光电发送启动命令和回正命令
-                foreach (var client in _sortingClients)
-                {
-                    if (!client.Value.IsConnected()) continue;
-
-                    var startCommand = GetCommandBytes(PendulumCommands.Module2.Start);
-                    client.Value.Send(startCommand);
-                    var resetLeftCommand = GetCommandBytes(PendulumCommands.Module2.ResetLeft);
-                    var resetRightCommand = GetCommandBytes(PendulumCommands.Module2.ResetRight);
-                    client.Value.Send(resetLeftCommand);
-                    client.Value.Send(resetRightCommand);
-                    Log.Debug("已发送启动和回正命令到分拣光电 {Name}", client.Key);
-                }
-
                 // 主循环
                 while (!CancellationTokenSource.Token.IsCancellationRequested)
                 {
@@ -138,34 +145,35 @@ internal class MultiPendulumSortService(ISettingsService settingsService) : Base
 
         try
         {
+            // 先向所有分拣光电发送停止命令，确保在改变服务状态前发送
+            foreach (var client in _sortingClients.Where(static client => client.Value.IsConnected()))
+            {
+                try
+                {
+                    // 先发送停止命令
+                    var stopCommand = GetCommandBytes(PendulumCommands.Module2.Stop);
+                    client.Value.Send(stopCommand);
+                    
+                    // 然后发送回正指令
+                    var resetLeftCommand = GetCommandBytes(PendulumCommands.Module2.ResetLeft);
+                    var resetRightCommand = GetCommandBytes(PendulumCommands.Module2.ResetRight);
+                    client.Value.Send(resetLeftCommand);
+                    client.Value.Send(resetRightCommand);
+                    
+                    Log.Information("已发送停止和回正命令到分拣光电 {Name}", client.Key);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "向分拣光电 {Name} 发送停止命令失败", client.Key);
+                }
+            }
+
             // 停止主循环
             await CancellationTokenSource?.CancelAsync()!;
             IsRunningFlag = false;
 
             // 停止超时检查定时器
             TimeoutCheckTimer.Stop();
-
-            // 向所有分拣光电发送回正命令和停止命令
-            foreach (var client in _sortingClients.Where(static client => client.Value.IsConnected()))
-            {
-                try
-                {
-                    // 发送左右回正指令
-                    var resetLeftCommand = GetCommandBytes(PendulumCommands.Module2.ResetLeft);
-                    var resetRightCommand = GetCommandBytes(PendulumCommands.Module2.ResetRight);
-                    client.Value.Send(resetLeftCommand);
-                    client.Value.Send(resetRightCommand);
-
-                    // 发送停止命令
-                    var stopCommand = GetCommandBytes(PendulumCommands.Module2.Stop);
-                    client.Value.Send(stopCommand);
-                    Log.Debug("已发送回正和停止命令到分拣光电 {Name}", client.Key);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "向分拣光电 {Name} 发送回正和停止命令失败", client.Key);
-                }
-            }
 
             // 清空处理中的包裹
             ProcessingPackages.Clear();

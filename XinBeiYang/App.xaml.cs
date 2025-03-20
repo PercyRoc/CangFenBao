@@ -111,10 +111,7 @@ internal partial class App
     {
         try
         {
-            // 释放 Mutex
-            _mutex?.Dispose();
-            _mutex = null;
-
+         
             Log.Information("应用程序开始关闭...");
 
             // 停止托管服务
@@ -162,18 +159,17 @@ internal partial class App
             // 等待所有日志写入完成
             Log.Information("应用程序关闭");
             await Log.CloseAndFlushAsync();
-
-            // 确保所有后台线程都已完成
-            await Task.Delay(500);
         }
         catch (Exception ex)
         {
             Log.Error(ex, "应用程序关闭时发生错误");
             await Log.CloseAndFlushAsync();
-            await Task.Delay(500);
         }
         finally
         {
+            // 释放 Mutex
+            _mutex?.Dispose();
+            _mutex = null;
             base.OnExit(e);
         }
     }

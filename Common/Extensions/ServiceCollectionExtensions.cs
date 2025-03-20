@@ -1,10 +1,12 @@
 using System.IO;
 using Common.Data;
 using Common.Services.Audio;
+using Common.Services.License;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Prism.Ioc;
 
 namespace Common.Extensions;
@@ -55,5 +57,19 @@ public static class ServiceCollectionExtensions
 
         // 注册通知服务
         services.RegisterSingleton<INotificationService, NotificationService>();
+        
+        // 注册授权服务
+        services.RegisterSingleton<ILicenseService, LicenseService>();
+    }
+    
+    /// <summary>
+    ///     添加授权验证服务
+    /// </summary>
+    public static IContainerRegistry AddLicenseService(this IContainerRegistry containerRegistry)
+    {
+        // 注册授权服务
+        containerRegistry.RegisterSingleton<ILicenseService, LicenseService>();
+        
+        return containerRegistry;
     }
 }

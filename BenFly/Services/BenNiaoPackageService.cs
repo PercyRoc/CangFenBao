@@ -19,7 +19,7 @@ namespace BenFly.Services;
 /// <summary>
 ///     笨鸟包裹回传服务
 /// </summary>
-public class BenNiaoPackageService : IDisposable
+internal class BenNiaoPackageService : IDisposable
 {
     private const string SettingsKey = "UploadSettings";
     private readonly IHttpClientFactory _httpClientFactory;
@@ -84,7 +84,7 @@ public class BenNiaoPackageService : IDisposable
     private HttpClient CreateHttpClient()
     {
         var baseUrl = _config.BenNiaoEnvironment == BenNiaoEnvironment.Production
-            ? "https://api.benniao.com"
+            ? "http://bnsy.benniaosuyun.com"
             : "https://sit.bnsy.rhb56.cn";
 
         var client = _httpClientFactory.CreateClient("BenNiao");
@@ -333,9 +333,6 @@ public class BenNiaoPackageService : IDisposable
 
             // 记录请求参数
             var requestParams = new { waybillNum, deviceId = _config.DeviceId };
-            Log.Information("实时查询三段码请求参数：{@RequestParams}", requestParams);
-            Log.Information("实时查询三段码使用的AppId: {AppId}, 分拨中心: {Center}", _config.BenNiaoAppId,
-                _config.BenNiaoDistributionCenterName);
 
             const string url = "/api/openApi/realTimeQuery";
             var request = BenNiaoSignHelper.CreateRequest(
@@ -345,25 +342,15 @@ public class BenNiaoPackageService : IDisposable
 
             // 序列化请求并记录日志
             var jsonContent = JsonSerializer.Serialize(request, _jsonOptions);
-            Log.Information("实时查询三段码完整请求内容：{@JsonContent}", jsonContent);
-            Log.Information("实时查询三段码请求地址：{BaseUrl}{Url}", _httpClient.BaseAddress, url);
 
             // 使用 StringContent 发送请求
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-            Log.Information("开始发送请求...");
             var response = await _httpClient.PostAsync(url, content);
-
-            // 记录响应状态和内容
-            Log.Information("实时查询三段码响应状态码：{StatusCode}", response.StatusCode);
-            var responseContent = await response.Content.ReadAsStringAsync();
-            Log.Information("实时查询三段码响应内容：{@Response}", responseContent);
-
             response.EnsureSuccessStatusCode();
 
             var result = await response.Content.ReadFromJsonAsync<BenNiaoResponse<string>>(_jsonOptions);
             if (result is { IsSuccess: true })
             {
-                Log.Information("实时查询三段码成功，结果：{@Result}", result.Result);
                 return result.Result;
             }
 
@@ -405,27 +392,18 @@ public class BenNiaoPackageService : IDisposable
                 _config.BenNiaoAppSecret,
                 new[] { uploadItem });
 
-            Log.Information("上传包裹数据请求：{@Request}", JsonSerializer.Serialize(request, _jsonOptions));
 
             // 使用 JsonContent 替代 PostAsJsonAsync，以便使用自定义序列化选项
             var jsonContent = JsonSerializer.Serialize(request, _jsonOptions);
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
             var response = await _httpClient.PostAsync(url, content);
-
-            var responseContent = await response.Content.ReadAsStringAsync();
-            Log.Information("上传包裹数据响应：{@Response}", responseContent);
-
             response.EnsureSuccessStatusCode();
 
             var result = await response.Content.ReadFromJsonAsync<BenNiaoResponse<object>>(_jsonOptions);
-            if (result is not { IsSuccess: true })
-            {
-                Log.Error("上传包裹 {Barcode} 数据失败：{Message}", package.Barcode, result?.Message);
-                return (false, DateTime.MinValue);
-            }
+            if (result is { IsSuccess: true }) return (true, uploadTime);
+            Log.Error("上传包裹 {Barcode} 数据失败：{Message}", package.Barcode, result?.Message);
+            return (false, DateTime.MinValue);
 
-            Log.Information("成功上传包裹 {Barcode} 的数据", package.Barcode);
-            return (true, uploadTime);
         }
         catch (Exception ex)
         {
@@ -496,12 +474,8 @@ public class BenNiaoPackageService : IDisposable
                     // 输出当前工作目录
                     try
                     {
-                        var workingDirectory = sftpClient.WorkingDirectory;
-                        Log.Information("当前SFTP工作目录：{WorkingDirectory}", workingDirectory);
-
                         // 列出根目录内容
-                        var rootFiles = sftpClient.ListDirectory("/");
-                        Log.Information("根目录内容：{Files}", string.Join(", ", rootFiles.Select(static f => f.Name)));
+                        sftpClient.ListDirectory("/");
                     }
                     catch (Exception ex)
                     {
@@ -511,9 +485,7 @@ public class BenNiaoPackageService : IDisposable
                     // 创建dws目录（如果不存在）
                     if (!await sftpClient.ExistsAsync("/dws"))
                     {
-                        Log.Debug("正在创建目录 /dws...");
                         await sftpClient.CreateDirectoryAsync("/dws");
-                        Log.Information("成功创建 /dws 目录");
                     }
                     else
                     {
@@ -526,16 +498,12 @@ public class BenNiaoPackageService : IDisposable
 
                     if (!await sftpClient.ExistsAsync(dateDirPath))
                     {
-                        Log.Debug("正在创建目录 {DateDir}...", dateDirPath);
                         await sftpClient.CreateDirectoryAsync(dateDirPath);
-                        Log.Information("成功创建 {DateDir} 目录", dateDirPath);
                     }
 
                     if (!await sftpClient.ExistsAsync(fullDateDir))
                     {
-                        Log.Debug("正在创建小时目录 {HourDir}...", fullDateDir);
                         await sftpClient.CreateDirectoryAsync(fullDateDir);
-                        Log.Information("成功创建小时目录 {HourDir}", fullDateDir);
                     }
                     else
                     {
@@ -544,7 +512,6 @@ public class BenNiaoPackageService : IDisposable
 
                     // 上传文件
                     var remotePath = $"/{dateDir}/{fileName}";
-                    Log.Debug("开始上传文件到 {RemotePath}...", remotePath);
                     await using var fileStream = File.OpenRead(imagePath);
 
                     // 记录上传开始时间

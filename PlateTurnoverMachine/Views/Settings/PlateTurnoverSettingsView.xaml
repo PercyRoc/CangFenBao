@@ -130,7 +130,6 @@
                   BorderBrush="{DynamicResource ControlElevationBorderBrush}">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="序号" Binding="{Binding Index}" Width="60" IsReadOnly="True" />
-
                 <DataGridTextColumn Header="TCP地址" Binding="{Binding TcpAddress}" Width="100">
                     <DataGridTextColumn.EditingElementStyle>
                         <Style TargetType="TextBox">

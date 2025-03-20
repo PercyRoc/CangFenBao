@@ -154,8 +154,6 @@ internal partial class App
         try
         {
             Log.Information("应用程序开始关闭...");
-            _mutex?.Dispose();
-            _mutex = null;
             // 停止托管服务
             try
             {
@@ -218,6 +216,8 @@ internal partial class App
         }
         finally
         {
+            _mutex?.Dispose();
+            _mutex = null;
             base.OnExit(e);
         }
     }

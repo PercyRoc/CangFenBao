@@ -45,6 +45,29 @@ internal class SinglePendulumSortService(ISettingsService settingsService) : Bas
     {
         if (IsRunningFlag) return Task.CompletedTask;
 
+        // 在启动服务前先发送启动命令
+        if (TriggerClient != null && TriggerClient.IsConnected())
+        {
+            try
+            {
+                var startCommand = GetCommandBytes(PendulumCommands.Module2.Start);
+                TriggerClient.Send(startCommand);
+                var resetLeftCommand = GetCommandBytes(PendulumCommands.Module2.ResetLeft);
+                var resetRightCommand = GetCommandBytes(PendulumCommands.Module2.ResetRight);
+                TriggerClient.Send(resetLeftCommand);
+                TriggerClient.Send(resetRightCommand);
+                Log.Information("已发送启动命令到触发光电");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "发送启动命令到触发光电失败");
+            }
+        }
+        else
+        {
+            Log.Warning("触发光电未连接，将在连接后自动发送启动命令");
+        }
+
         // 启动超时检查定时器
         TimeoutCheckTimer.Start();
 
@@ -57,22 +80,6 @@ internal class SinglePendulumSortService(ISettingsService settingsService) : Bas
         {
             try
             {
-                // 向触发光电发送启动命令
-                if (TriggerClient != null && TriggerClient.IsConnected())
-                {
-                    var startCommand = GetCommandBytes(PendulumCommands.Module2.Start);
-                    TriggerClient.Send(startCommand);
-                    var resetLeftCommand = GetCommandBytes(PendulumCommands.Module2.ResetLeft);
-                    var resetRightCommand = GetCommandBytes(PendulumCommands.Module2.ResetRight);
-                    TriggerClient.Send(resetLeftCommand);
-                    TriggerClient.Send(resetRightCommand);
-                    Log.Debug("已发送启动命令到触发光电");
-                }
-                else
-                {
-                    Log.Warning("触发光电未连接，无法发送启动命令");
-                }
-
                 // 主循环
                 while (!CancellationTokenSource.Token.IsCancellationRequested)
                 {
@@ -109,33 +116,39 @@ internal class SinglePendulumSortService(ISettingsService settingsService) : Bas
 
         try
         {
+            // 先向触发光电发送停止命令，确保在改变服务状态前发送
+            if (TriggerClient != null && TriggerClient.IsConnected())
+            {
+                try
+                {
+                    // 先发送停止命令
+                    var stopCommand = GetCommandBytes(PendulumCommands.Module2.Stop);
+                    TriggerClient.Send(stopCommand);
+                    Log.Information("已发送停止命令到触发光电");
+                    
+                    // 然后发送回正指令
+                    var resetLeftCommand = GetCommandBytes(PendulumCommands.Module2.ResetLeft);
+                    var resetRightCommand = GetCommandBytes(PendulumCommands.Module2.ResetRight);
+                    TriggerClient.Send(resetLeftCommand);
+                    TriggerClient.Send(resetRightCommand);
+                    Log.Information("已发送左右回正命令到触发光电");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "向触发光电发送停止命令失败");
+                }
+            }
+            else
+            {
+                Log.Warning("触发光电未连接，无法发送停止命令");
+            }
+
             // 停止主循环
             await CancellationTokenSource?.CancelAsync()!;
             IsRunningFlag = false;
 
             // 停止超时检查定时器
             TimeoutCheckTimer.Stop();
-
-            // 向触发光电发送停止命令
-            if (TriggerClient != null && TriggerClient.IsConnected())
-                try
-                {
-                    // 发送左右回正指令
-                    var resetLeftCommand = GetCommandBytes(PendulumCommands.Module2.ResetLeft);
-                    var resetRightCommand = GetCommandBytes(PendulumCommands.Module2.ResetRight);
-                    TriggerClient.Send(resetLeftCommand);
-                    TriggerClient.Send(resetRightCommand);
-                    Log.Debug("已发送左右回正命令到触发光电");
-
-                    // 发送停止命令
-                    var stopCommand = GetCommandBytes(PendulumCommands.Module2.Stop);
-                    TriggerClient.Send(stopCommand);
-                    Log.Debug("已发送停止命令到触发光电");
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "向触发光电发送停止命令失败");
-                }
 
             // 清空处理中的包裹
             ProcessingPackages.Clear();
@@ -217,38 +230,40 @@ internal class SinglePendulumSortService(ISettingsService settingsService) : Bas
         _ = ExecuteSortingAction(package, "默认");
     }
 
-    protected override Task ReconnectAsync()
+    protected override async Task ReconnectAsync()
     {
         try
         {
-            // 重连触发光电
-            if (TriggerClient != null)
+            // 检查触发光电配置是否有效
+            if (string.IsNullOrEmpty(Configuration.TriggerPhotoelectric.IpAddress) || 
+                Configuration.TriggerPhotoelectric.Port == 0)
             {
-                TriggerClient.Dispose();
-                TriggerClient = new TcpClientService(
-                    "触发光电",
-                    Configuration.TriggerPhotoelectric.IpAddress,
-                    Configuration.TriggerPhotoelectric.Port,
-                    ProcessTriggerData,
-                    connected => UpdateDeviceConnectionState("触发光电", connected)
-                );
-                TriggerClient.Connect();
+                Log.Warning("触发光电未配置，跳过重连");
+                return;
+            }
 
-                // 如果服务正在运行，发送启动命令
-                if (IsRunningFlag)
-                {
-                    var startCommand = GetCommandBytes(PendulumCommands.Module2.Start);
-                    TriggerClient.Send(startCommand);
-                    Log.Debug("重连后已发送启动命令到触发光电");
-                }
+            // 重新创建触发光电客户端
+            TriggerClient = new TcpClientService(
+                "触发光电",
+                Configuration.TriggerPhotoelectric.IpAddress,
+                Configuration.TriggerPhotoelectric.Port,
+                ProcessTriggerData,
+                connected => UpdateDeviceConnectionState("触发光电", connected)
+            );
+            await Task.Run(() => TriggerClient.Connect());
+
+            // 如果服务正在运行，发送启动命令
+            if (IsRunningFlag)
+            {
+                var startCommand = GetCommandBytes(PendulumCommands.Module2.Start);
+                TriggerClient.Send(startCommand);
+                Log.Debug("重连后已发送启动命令到触发光电");
             }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "重连设备失败");
         }
-
-        return Task.CompletedTask;
     }
 
     protected override bool SlotBelongsToPhotoelectric(int targetSlot, string photoelectricName)

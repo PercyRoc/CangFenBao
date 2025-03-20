@@ -146,7 +146,7 @@
                                 <ui:SymbolIcon Symbol="Backpack24"
                                                Width="24"
                                                Height="24"
-                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                               Foreground="{DynamicResource AccentBrush}"
                                                VerticalAlignment="Center" />
                                 <TextBlock Text="实时包裹信息"
                                            Margin="8,0,0,0"
@@ -165,13 +165,14 @@
                                        FontWeight="SemiBold"
                                        Foreground="{DynamicResource AccentBrush}" />
 
-                            <ui:TextBox Icon="Barcode24"
-                                        Text="{Binding CurrentBarcode, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
-                                        IsReadOnly="True"
+                            <ui:TextBox Icon="BarcodeScanner24"
+                                        Text="{Binding CurrentBarcode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                         FontSize="20"
                                         FontWeight="Bold"
                                         Foreground="{StaticResource AccentBrush}"
-                                        PlaceholderText="等待扫描..." />
+                                        PlaceholderText="等待扫描..."
+                                        Tag="barcode"
+                                        KeyDown="BarcodeTextBox_KeyDown" />
                         </StackPanel>
 
                         <!-- 信息卡片网格 -->
@@ -254,7 +255,7 @@
                                 <ui:SymbolIcon Symbol="ChartMultiple24"
                                                Width="24"
                                                Height="24"
-                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                               Foreground="{DynamicResource AccentBrush}"
                                                VerticalAlignment="Center" />
                                 <TextBlock Text="统计信息"
                                            Margin="8,0,0,0"
@@ -398,7 +399,8 @@
                                     Margin="0,0,0,8">
                             <ui:SymbolIcon Symbol="History24"
                                            Margin="0,0,8,0"
-                                           VerticalAlignment="Center" />
+                                           VerticalAlignment="Center" 
+                                           Foreground="{StaticResource AccentBrush}"/>
                             <TextBlock Text="历史包裹信息"
                                        Foreground="{StaticResource AccentBrush}"
                                        FontSize="16"

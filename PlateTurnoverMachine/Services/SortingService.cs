@@ -91,6 +91,51 @@ public class SortingService : IDisposable
                     Log.Warning("包裹 {Barcode} 的目标格口 {ChuteName} 已锁定，重新分配到异常格口", package.Barcode, package.ChuteName);
                     package.ChuteName = Settings.ErrorChute;
                 }
+                else if (turnoverItem.Distance == 0)
+                {
+                    // 如果距离为0，直接计算延迟时间并发送落格命令
+                    var delayMs = (int)(AverageInterval * turnoverItem.DelayFactor);
+                    Log.Information("包裹 {Barcode} 距离为0，将在 {Delay} 毫秒后触发落格，平均间隔：{Average:F2}毫秒，延迟系数：{Factor:F2}",
+                        package.Barcode, delayMs, AverageInterval, turnoverItem.DelayFactor);
+
+                    // 异步发送落格命令
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            if (string.IsNullOrEmpty(turnoverItem.TcpAddress))
+                            {
+                                Log.Error("包裹 {Barcode} 的翻板机未配置TCP地址", package.Barcode);
+                                return;
+                            }
+
+                            // 等待指定的延迟时间
+                            await Task.Delay(delayMs);
+
+                            // 准备落格命令
+                            var lockCommand = $"AT+STACH{outNumber}=1";
+                            var commandData = Encoding.ASCII.GetBytes(lockCommand);
+
+                            // 发送落格命令
+                            await _tcpConnectionService.SendToTcpModuleAsync(_tcpConfigs[turnoverItem.TcpAddress],
+                                commandData);
+                            Log.Information("包裹 {Barcode} 已发送落格命令：{Command}", package.Barcode, lockCommand);
+
+                            // 等待磁铁吸合时间后复位
+                            await Task.Delay(turnoverItem.MagnetTime);
+                            var resetCommand = $"AT+STACH{outNumber}=0";
+                            var resetData = Encoding.ASCII.GetBytes(resetCommand);
+                            await _tcpConnectionService.SendToTcpModuleAsync(_tcpConfigs[turnoverItem.TcpAddress],
+                                resetData);
+                            Log.Debug("包裹 {Barcode} 已发送复位命令：{Command}", package.Barcode, resetCommand);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error(ex, "包裹 {Barcode} 发送落格命令时发生错误", package.Barcode);
+                        }
+                    });
+                    return;
+                }
                 else
                 {
                     Log.Information("包裹 {Barcode} 需要触发 {Distance} 次光电信号", package.Barcode, turnoverItem.Distance);
@@ -184,7 +229,7 @@ public class SortingService : IDisposable
                 lock (_intervalsLock)
                 {
                     _triggerIntervals.Enqueue(intervalMs);
-                    if (_triggerIntervals.Count > MaxIntervalCount) _triggerIntervals.Dequeue();
+                    if (_triggerIntervals.Count > MaxIntervalCount)  _triggerIntervals.Dequeue();
                 }
 
                 Log.Debug("触发光电信号时间间隔：{Interval:F2}毫秒，最近{Count}次平均间隔：{Average:F2}毫秒",

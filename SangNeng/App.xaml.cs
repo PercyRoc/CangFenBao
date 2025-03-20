@@ -254,10 +254,6 @@ internal partial class App
     {
         try
         {
-            // 释放 Mutex
-            _mutex?.Dispose();
-            _mutex = null;
-
             // 停止托管服务
             var cameraStartupService = Container.Resolve<CameraStartupService>();
             var volumeCameraStartupService = Container.Resolve<VolumeCameraStartupService>();
@@ -294,6 +290,9 @@ internal partial class App
         }
         finally
         {
+            // 释放 Mutex
+            _mutex?.Dispose();
+            _mutex = null;
             base.OnExit(e);
         }
     }

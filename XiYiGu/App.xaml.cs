@@ -31,14 +31,11 @@ internal partial class App
         // 检查是否已经运行
         _mutex = new Mutex(true, MutexName, out var createdNew);
 
-        if (!createdNew)
-        {
-            // 关闭当前实例
-            Current.Shutdown();
-            return null!;
-        }
+        if (createdNew) return Container.Resolve<MainWindow>();
+        // 关闭当前实例
+        Current.Shutdown();
+        return null!;
 
-        return Container.Resolve<MainWindow>();
     }
 
     /// <summary>
@@ -114,11 +111,6 @@ internal partial class App
         try
         {
             Log.Information("应用程序开始关闭...");
-
-            // 释放 Mutex
-            _mutex?.Dispose();
-            _mutex = null;
-
             // 停止托管服务
             try
             {
@@ -157,16 +149,17 @@ internal partial class App
             Log.CloseAndFlush();
 
             // 确保所有操作完成
-            Thread.Sleep(1000);
         }
         catch (Exception ex)
         {
             Log.Error(ex, "应用程序关闭时发生错误");
             Log.CloseAndFlush();
-            Thread.Sleep(1000);
         }
         finally
         {
+            // 释放 Mutex
+            _mutex?.Dispose();
+            _mutex = null;
             base.OnExit(e);
         }
     }

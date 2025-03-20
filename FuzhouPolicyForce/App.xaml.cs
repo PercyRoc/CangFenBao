@@ -3,7 +3,9 @@ using System.Windows;
 using System.Windows.Threading;
 using Common.Extensions;
 using Common.Models.Settings.Sort.PendulumSort;
+using Common.Services.License;
 using Common.Services.Settings;
+using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.Extensions;
 using FuzhouPolicyForce.ViewModels;
@@ -19,6 +21,7 @@ using SharedUI.Views;
 using SortingServices.Pendulum;
 using SortingServices.Pendulum.Extensions;
 using Timer = System.Timers.Timer;
+using System.Diagnostics;
 
 namespace FuzhouPolicyForce;
 
@@ -28,8 +31,9 @@ namespace FuzhouPolicyForce;
 internal partial class App
 {
     private static Mutex? _mutex;
-    private const string MutexName = "FuzhouPolicyForce_App_Mutex";
+    private const string MutexName = "Global\\FuzhouPolicyForce_App_Mutex";
     private Timer? _cleanupTimer;
+    private bool _ownsMutex;
 
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
@@ -40,6 +44,9 @@ internal partial class App
         containerRegistry.AddCommonServices();
         containerRegistry.AddShardUi();
         containerRegistry.AddPhotoCamera();
+        
+        // 注册授权服务
+        containerRegistry.RegisterSingleton<ILicenseService, LicenseService>();
 
         // 注册设置页面的ViewModel
         containerRegistry.RegisterForNavigation<BalanceSortSettingsView, BalanceSortSettingsViewModel>();
@@ -60,17 +67,63 @@ internal partial class App
 
     protected override Window CreateShell()
     {
-        // 检查是否已经运行
-        _mutex = new Mutex(true, MutexName, out var createdNew);
+        // 检查是否已经运行（进程级检查）
+        if (IsApplicationAlreadyRunning())
+        {
+            MessageBox.Show("程序已在运行中，请勿重复启动！", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            Current.Shutdown();
+            return null!;
+        }
 
-        if (createdNew) return Container.Resolve<MainWindow>();
+        try
+        {
+            // 尝试创建全局Mutex
+            _mutex = new Mutex(true, MutexName, out var createdNew);
+            _ownsMutex = createdNew;
 
-        // 关闭当前实例
-        Current.Shutdown();
-        return null!;
+            if (createdNew)
+            {
+                return Container.Resolve<MainWindow>();
+            }
+
+            // 尝试获取已存在的Mutex，如果无法获取，说明有一个正在运行的实例
+            var canAcquire = _mutex.WaitOne(TimeSpan.Zero, false);
+            if (!canAcquire)
+            {
+                MessageBox.Show("程序已在运行中，请勿重复启动！", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                Current.Shutdown();
+                return null!;
+            }
+            else
+            {
+                // 可以获取Mutex，说明前一个实例可能异常退出但Mutex已被释放
+                _ownsMutex = true;
+                return Container.Resolve<MainWindow>();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Mutex创建或获取失败
+            Log.Error(ex, "检查应用程序实例时发生错误");
+            MessageBox.Show($"启动程序时发生错误: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            Current.Shutdown();
+            return null!;
+        }
     }
 
-    protected override void OnStartup(StartupEventArgs e)
+    /// <summary>
+    /// 检查是否已有相同名称的应用程序实例在运行
+    /// </summary>
+    private static bool IsApplicationAlreadyRunning()
+    {
+        var currentProcess = Process.GetCurrentProcess();
+        var processes = Process.GetProcessesByName(currentProcess.ProcessName);
+        
+        // 当前进程也会被计入，所以如果数量大于1则说明有其他实例
+        return processes.Length > 1;
+    }
+
+    protected override async void OnStartup(StartupEventArgs e)
     {
         // 配置Serilog
         Log.Logger = new LoggerConfiguration()
@@ -95,20 +148,75 @@ internal partial class App
 
         try
         {
+            // 验证授权
+            if (!CheckLicense())
+            {
+                // 授权验证失败，退出应用
+                Current.Shutdown();
+                return;
+            }
+            
             // 启动相机托管服务
             var cameraStartupService = Container.Resolve<CameraStartupService>();
-            cameraStartupService.StartAsync(CancellationToken.None).Wait();
+            await cameraStartupService.StartAsync(CancellationToken.None);
             Log.Information("相机托管服务启动成功");
 
             // 启动摆轮分拣托管服务
             var pendulumHostedService = Container.Resolve<IHostedService>();
-            pendulumHostedService.StartAsync(CancellationToken.None).Wait();
+            await pendulumHostedService.StartAsync(CancellationToken.None);
             Log.Information("摆轮分拣托管服务启动成功");
         }
         catch (Exception ex)
         {
             Log.Error(ex, "启动托管服务时发生错误");
             throw;
+        }
+    }
+    
+    /// <summary>
+    ///     验证授权
+    /// </summary>
+    /// <returns>验证是否通过</returns>
+    private bool CheckLicense()
+    {
+        try
+        {
+            var licenseService = Container.Resolve<ILicenseService>();
+            var notificationService = Container.Resolve<INotificationService>();
+            
+            var (isValid, message) = licenseService.ValidateLicenseAsync().Result;
+            
+            if (!isValid)
+            {
+                Log.Warning("授权验证失败: {Message}", message);
+                MessageBox.Show(message ?? "软件授权验证失败，请联系厂家获取授权。", "授权验证", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
+            }
+            
+            // 获取授权过期时间并计算剩余天数
+            var expirationDate = licenseService.GetExpirationDateAsync().Result;
+            var daysLeft = (expirationDate - DateTime.Now).TotalDays;
+            Log.Information("授权剩余天数: {DaysLeft} 天", Math.Ceiling(daysLeft));
+            
+            if (!string.IsNullOrEmpty(message))
+            {
+                // 有效但有警告消息（如即将过期）
+                Log.Warning("授权警告: {Message}", message);
+                MessageBox.Show(message, "授权提醒", MessageBoxButton.OK, MessageBoxImage.Warning);
+                notificationService.ShowWarning(message);
+            }
+            else
+            {
+                Log.Information("授权验证通过");
+            }
+            
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "授权验证过程发生错误");
+            MessageBox.Show("授权验证过程发生错误，请联系厂家获取支持。", "授权验证", MessageBoxButton.OK, MessageBoxImage.Error);
+            return false;
         }
     }
 
@@ -224,14 +332,10 @@ internal partial class App
         }
     }
 
-    protected override void OnExit(ExitEventArgs e)
+    protected override async void OnExit(ExitEventArgs e)
     {
         try
         {
-            // 释放 Mutex
-            _mutex?.Dispose();
-            _mutex = null;
-
             Log.Information("应用程序开始关闭...");
 
             // 停止清理定时器
@@ -244,12 +348,12 @@ internal partial class App
 
             // 停止摆轮分拣托管服务
             var pendulumHostedService = Container.Resolve<IHostedService>();
-            pendulumHostedService.StopAsync(CancellationToken.None).Wait();
+            await pendulumHostedService.StopAsync(CancellationToken.None);
             Log.Information("摆轮分拣托管服务已停止");
 
             // 停止相机托管服务
             var cameraStartupService = Container.Resolve<CameraStartupService>();
-            cameraStartupService.StopAsync(CancellationToken.None).Wait();
+            await cameraStartupService.StopAsync(CancellationToken.None);
             Log.Information("相机托管服务已停止");
 
             // 释放相机工厂
@@ -264,15 +368,34 @@ internal partial class App
 
             // 等待所有日志写入完成
             Log.Information("应用程序关闭");
-            Log.CloseAndFlush();
+            await Log.CloseAndFlushAsync();
         }
         catch (Exception ex)
         {
             Log.Error(ex, "应用程序关闭时发生错误");
-            Log.CloseAndFlush();
+            await Log.CloseAndFlushAsync();
         }
         finally
         {
+            try
+            {
+                // 安全释放 Mutex
+                if (_mutex != null)
+                {
+                    if (_ownsMutex && _mutex.SafeWaitHandle is { IsClosed: false, IsInvalid: false })
+                    {
+                        _mutex.ReleaseMutex();
+                        Log.Information("Mutex已释放");
+                    }
+                    _mutex.Dispose();
+                    _mutex = null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "释放Mutex时发生错误");
+            }
+            
             base.OnExit(e);
         }
     }

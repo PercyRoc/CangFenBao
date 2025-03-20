@@ -3,10 +3,11 @@ using System.Windows.Input;
 using Common.Services.Ui;
 using Serilog;
 using SharedUI.Views.Settings;
+using Wpf.Ui.Controls;
 
 namespace BenFly.Views.Dialogs;
 
-internal partial class SettingsDialog
+internal partial class SettingsDialog : FluentWindow
 {
     public SettingsDialog(INotificationService notificationService)
     {
@@ -32,7 +33,7 @@ internal partial class SettingsDialog
             Log.Error(ex, "拖动窗口时发生错误");
         }
     }
-
+ 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         // 导航到相机设置页面

@@ -3,6 +3,7 @@ using System.Windows.Input;
 using Common.Services.Ui;
 using Serilog;
 using SharedUI.Views.Settings;
+using Wpf.Ui.Controls;
 
 namespace ChongqingJushuitan.Views;
 

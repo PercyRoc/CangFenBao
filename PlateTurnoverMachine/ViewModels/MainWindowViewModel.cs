@@ -8,10 +8,12 @@ using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Common.Models.Package;
+using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using PlateTurnoverMachine.Models;
+using PlateTurnoverMachine.Models.Settings;
 using PlateTurnoverMachine.Services;
 using Prism.Commands;
 using Prism.Mvvm;
@@ -34,18 +36,21 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private int _currentPackageIndex;
     private bool _disposed;
     private SystemStatus _systemStatus = new();
+    private readonly ISettingsService _settingsService;
 
     public MainWindowViewModel(
         IDialogService dialogService,
         ICameraService cameraService,
         PackageTransferService packageTransferService,
         SortingService sortingService,
-        ITcpConnectionService tcpConnectionService)
+        ITcpConnectionService tcpConnectionService,
+        ISettingsService settingsService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
         _sortingService = sortingService;
         _tcpConnectionService = tcpConnectionService;
+        _settingsService = settingsService;
 
         // 初始化命令
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
@@ -217,6 +222,26 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             package.Index = Interlocked.Increment(ref _currentPackageIndex);
             Log.Information("收到包裹信息：{Barcode}, 序号：{Index}", package.Barcode, package.Index);
 
+            // 分配格口号
+            if (package.Barcode.Equals("noread", StringComparison.OrdinalIgnoreCase))
+            {
+                // 获取异常格口设置
+                var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
+                package.ChuteName = chuteSettings.ErrorChute;
+                Log.Information("包裹 {Barcode} 为未读包裹，分配至异常格口 {Chute}", package.Barcode, package.ChuteName);
+            }
+            else
+            {
+                // 获取格口设置
+                var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
+                var chuteCount = chuteSettings.ChuteCount;
+                
+                // 根据序号循环分配格口
+                var chuteNumber = ((package.Index - 1) % chuteCount) + 1;
+                package.ChuteName = chuteNumber;
+                Log.Information("包裹 {Barcode} 分配至格口 {Chute}", package.Barcode, package.ChuteName);
+            }
+
             Application.Current.Dispatcher.Invoke(() =>
             {
                 try
@@ -227,10 +252,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     UpdatePackageInfoItems(package);
                     // 将包裹添加到分拣队列
                     _sortingService.EnqueuePackage(package);
-
                     // 更新历史包裹列表
                     UpdatePackageHistory(package);
-
                     // 更新统计信息
                     UpdateStatistics(package);
                 }

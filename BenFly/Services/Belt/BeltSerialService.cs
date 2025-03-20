@@ -35,37 +35,71 @@ internal class BeltSerialService : IBeltSerialService
     {
         lock (_lock)
         {
-            if (!_isDisposed)
+            if (_isDisposed)
+                throw new ObjectDisposedException(nameof(BeltSerialService));
+
+            try
+            {
+                // 如果已经打开，先关闭
+                Close();
+
+                _serialPort = new SerialPort
+                {
+                    PortName = settings.PortName,
+                    BaudRate = settings.BaudRate,
+                    DataBits = settings.DataBits,
+                    Parity = settings.Parity,
+                    StopBits = settings.StopBits
+                };
+
+                // 注册数据接收事件
+                _serialPort.DataReceived += SerialPortOnDataReceived;
+
                 try
                 {
-                    // 如果已经打开，先关闭
-                    Close();
-
-                    _serialPort = new SerialPort
-                    {
-                        PortName = settings.PortName,
-                        BaudRate = settings.BaudRate,
-                        DataBits = settings.DataBits,
-                        Parity = settings.Parity,
-                        StopBits = settings.StopBits
-                    };
-
-                    // 注册数据接收事件
-                    _serialPort.DataReceived += SerialPortOnDataReceived;
-
                     _serialPort.Open();
-                    Log.Information("串口 {PortName} 已打开", settings.PortName);
-
-                    // 触发状态变更事件
-                    ConnectionStatusChanged?.Invoke(this, true);
                 }
-                catch (Exception ex)
+                catch (UnauthorizedAccessException ex)
                 {
-                    Log.Error(ex, "打开串口 {PortName} 时发生错误", settings.PortName);
-                    throw;
+                    Log.Error(ex, "无法访问串口 {PortName}，可能是权限不足或串口被占用", settings.PortName);
+                    
+                    // 检查串口是否被其他程序占用
+                    var processes = System.Diagnostics.Process.GetProcesses()
+                        .Where(p => 
+                        {
+                            try
+                            {
+                                using var port = new SerialPort(settings.PortName);
+                                port.Open();
+                                port.Close();
+                                return false;
+                            }
+                            catch
+                            {
+                                return true;
+                            }
+                        });
+
+                    if (processes.Any())
+                    {
+                        Log.Warning("串口 {PortName} 可能被以下进程占用: {Processes}", 
+                            settings.PortName, 
+                            string.Join(", ", processes.Select(p => $"{p.ProcessName}({p.Id})")));
+                    }
+
+                    throw new InvalidOperationException($"无法访问串口 {settings.PortName}，请检查权限或是否被其他程序占用", ex);
                 }
-            else
-                throw new ObjectDisposedException(nameof(BeltSerialService));
+
+                Log.Information("串口 {PortName} 已打开", settings.PortName);
+
+                // 触发状态变更事件
+                ConnectionStatusChanged?.Invoke(this, true);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "打开串口 {PortName} 时发生错误", settings.PortName);
+                throw;
+            }
         }
     }
 

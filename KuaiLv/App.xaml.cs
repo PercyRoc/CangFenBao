@@ -18,7 +18,6 @@ using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 using Timer = System.Timers.Timer;
-using System.Threading;
 
 namespace KuaiLv;
 
@@ -132,7 +131,7 @@ internal partial class App
         }
     }
 
-    private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    private static void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         try
         {
@@ -147,7 +146,7 @@ internal partial class App
         }
     }
 
-    private void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+    private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
         try
         {
@@ -160,7 +159,7 @@ internal partial class App
         }
     }
 
-    private void TaskScheduler_UnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    private static void TaskScheduler_UnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
     {
         try
         {
@@ -216,7 +215,7 @@ internal partial class App
     /// <summary>
     ///     清理DUMP文件
     /// </summary>
-    private void CleanupDumpFiles()
+    private static void CleanupDumpFiles()
     {
         try
         {
@@ -251,10 +250,6 @@ internal partial class App
     {
         try
         {
-            // 释放 Mutex
-            _mutex?.Dispose();
-            _mutex = null;
-
             Log.Information("应用程序开始关闭...");
 
             // 停止托管服务
@@ -314,6 +309,9 @@ internal partial class App
         }
         finally
         {
+            // 释放 Mutex
+            _mutex?.Dispose();
+            _mutex = null;
             base.OnExit(e);
         }
     }

@@ -5,13 +5,14 @@ using Common.Services.Ui;
 using BenFly.ViewModels.Windows;
 using Serilog;
 using MessageBoxResult = System.Windows.MessageBoxResult;
+using Wpf.Ui.Controls;
 
 namespace BenFly.Views.Windows;
 
 /// <summary>
 ///     MainWindow.xaml 的交互逻辑
 /// </summary>
-internal partial class MainWindow
+internal partial class MainWindow : FluentWindow
 {
     private readonly IDialogService _dialogService;
 
@@ -76,6 +77,16 @@ internal partial class MainWindow
             Log.Error(ex, "关闭程序时发生错误");
             e.Cancel = true;
             await _dialogService.ShowErrorAsync("关闭程序时发生错误，请重试", "错误");
+        }
+    }
+
+    private void BarcodeTextBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.OnBarcodeInput();
         }
     }
 }

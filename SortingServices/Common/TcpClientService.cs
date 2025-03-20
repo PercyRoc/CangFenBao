@@ -60,6 +60,13 @@ public class TcpClientService : IDisposable
     {
         if (_isConnected) return;
 
+        // 检查IP地址和端口是否为空或为0
+        if (string.IsNullOrEmpty(_ipAddress) || _port == 0)
+        {
+            Log.Warning("设备 {DeviceName} 的IP地址或端口未配置，不启动连接", _deviceName);
+            return;
+        }
+
         try
         {
             lock (_lockObject)

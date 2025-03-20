@@ -1,9 +1,12 @@
 using System.IO;
+using System.Net;
+using System.Collections.ObjectModel;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using Microsoft.Win32;
 using OfficeOpenXml;
 using PlateTurnoverMachine.Models;
+using PlateTurnoverMachine.Models.Settings;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
@@ -90,6 +93,13 @@ internal class PlateTurnoverSettingsViewModel : BindableBase
         try
         {
             Settings = _settingsService.LoadSettings<PlateTurnoverSettings>();
+
+            // 如果配置为空，则根据格口数量初始化配置
+            if (Settings.Items.Count == 0)
+            {
+                InitializeSettingsByChuteCount();
+            }
+
             ShowInfo("配置加载成功", "已从配置文件加载翻板机设置", InfoBarSeverity.Success);
         }
         catch (Exception ex)
@@ -100,12 +110,66 @@ internal class PlateTurnoverSettingsViewModel : BindableBase
         }
     }
 
+    private void InitializeSettingsByChuteCount()
+    {
+        try
+        {
+            // 获取格口设置
+            var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
+            if (chuteSettings.ChuteCount <= 0)
+            {
+                Log.Warning("格口数量未设置，无法初始化翻板机配置");
+                return;
+            }
+
+            var chuteCount = chuteSettings.ChuteCount;
+            const int itemsPerIp = 8; // 每个IP地址对应8个格口
+            var ipCount = (int)Math.Ceiling(chuteCount / (double)itemsPerIp);
+
+            // 从192.168.0.100开始
+            var baseIpParts = new byte[] { 192, 168, 0, 100 };
+            var items = new ObservableCollection<PlateTurnoverItem>();
+
+            for (var i = 0; i < ipCount; i++)
+            {
+                // 计算当前IP地址
+                var currentIpParts = (byte[])baseIpParts.Clone();
+                currentIpParts[3] = (byte)(100 + i);
+                var ipAddress = new IPAddress(currentIpParts);
+
+                // 计算当前IP对应的格口范围
+                var startChute = i * itemsPerIp + 1;
+                var endChute = Math.Min(startChute + itemsPerIp - 1, chuteCount);
+
+                for (var chute = startChute; chute <= endChute; chute++)
+                {
+                    var outNumber = chute - startChute + 1;
+                    items.Add(new PlateTurnoverItem
+                    {
+                        TcpAddress = ipAddress.ToString(),
+                        IoPoint = $"out{outNumber}",
+                        MappingChute = chute,
+                        Distance = 0,
+                        DelayFactor = 1,
+                        MagnetTime = 100
+                    });
+                }
+            }
+
+            Settings.Items = items;
+            Log.Information($"已根据格口数量({chuteCount})初始化{items.Count}条翻板机配置");
+            ShowInfo("初始化成功", $"已根据格口数量({chuteCount})初始化{items.Count}条配置", InfoBarSeverity.Success);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "初始化翻板机配置失败");
+            ShowInfo("初始化失败", ex.Message, InfoBarSeverity.Error);
+        }
+    }
+
     private void AddItem()
     {
-        var newItem = new PlateTurnoverItem
-        {
-            // Index = Settings.Items.Count + 1  // 直接设置新项的索引
-        };
+        var newItem = new PlateTurnoverItem();
         Settings.Items.Add(newItem);
         ShowInfo("添加成功", "已添加新的翻板机配置项", InfoBarSeverity.Success);
     }
@@ -116,13 +180,6 @@ internal class PlateTurnoverSettingsViewModel : BindableBase
         if (index == -1) return;
 
         Settings.Items.Remove(item);
-
-        // // 更新后续项的索引
-        // for (int i = index; i < Settings.Items.Count; i++)
-        // {
-        //     Settings.Items[i].Index = i + 1;
-        // }
-
         ShowInfo("删除成功", "已删除选中的翻板机配置项", InfoBarSeverity.Success);
     }
 
@@ -150,7 +207,7 @@ internal class PlateTurnoverSettingsViewModel : BindableBase
                 {
                     TcpAddress = GetCellValue(worksheet.Cells[row, 2]),
                     IoPoint = GetCellValue(worksheet.Cells[row, 3]),
-                    // MappedPort = GetCellValue(worksheet.Cells[row, 4]),
+                    MappingChute = int.Parse(GetCellValue(worksheet.Cells[row, 4])),
                     Distance = double.Parse(GetCellValue(worksheet.Cells[row, 5])),
                     DelayFactor = double.Parse(GetCellValue(worksheet.Cells[row, 6])),
                     MagnetTime = int.Parse(GetCellValue(worksheet.Cells[row, 7]))
@@ -198,7 +255,7 @@ internal class PlateTurnoverSettingsViewModel : BindableBase
                 var item = Settings.Items[i];
                 var row = i + 2;
 
-                // worksheet.Cells[row, 1].Value = item.Index;
+                worksheet.Cells[row, 1].Value = i + 1;
                 worksheet.Cells[row, 2].Value = item.TcpAddress;
                 worksheet.Cells[row, 3].Value = item.IoPoint;
                 worksheet.Cells[row, 4].Value = item.MappingChute;

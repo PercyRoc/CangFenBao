@@ -14,7 +14,7 @@ namespace BenFly.Services;
 /// <summary>
 ///     笨鸟预报数据服务
 /// </summary>
-public class BenNiaoPreReportService : IDisposable
+internal class BenNiaoPreReportService : IDisposable
 {
     private const string SettingsKey = "UploadSettings";
     private readonly IHttpClientFactory _httpClientFactory;
@@ -87,7 +87,7 @@ public class BenNiaoPreReportService : IDisposable
     private HttpClient CreateHttpClient()
     {
         var baseUrl = _config.BenNiaoEnvironment == BenNiaoEnvironment.Production
-            ? "https://api.benniao.com"
+            ? "http://bnsy.benniaosuyun.com"
             : "http://sit.bnsy.rhb56.cn";
 
         var client = _httpClientFactory.CreateClient("BenNiao");
@@ -175,35 +175,21 @@ public class BenNiaoPreReportService : IDisposable
     {
         try
         {
-            Log.Information("开始获取笨鸟预报数据");
 
             const string url = "/api/openApi/dataDownload";
 
             // 构建请求参数
             var requestBody = new { netWorkName = _config.BenNiaoDistributionCenterName };
-            Log.Information("笨鸟预报数据请求参数：{@RequestBody}", requestBody);
 
             // 创建签名请求
             var request = BenNiaoSignHelper.CreateRequest(
                 _config.BenNiaoAppId,
                 _config.BenNiaoAppSecret,
                 requestBody);
-
-            Log.Information("笨鸟预报数据签名请求：{@Request}", JsonSerializer.Serialize(request, _jsonOptions));
-            Log.Information("笨鸟预报数据请求地址：{BaseUrl}{Url}", _httpClient.BaseAddress, url);
-
             // 发送请求
             var jsonContent = JsonSerializer.Serialize(request, _jsonOptions);
-            Log.Information("笨鸟预报数据请求JSON：{@JsonContent}", jsonContent);
-
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
             var response = await _httpClient.PostAsync(url, content);
-
-            Log.Information("笨鸟预报数据响应状态码：{StatusCode}", response.StatusCode);
-
-            var responseContent = await response.Content.ReadAsStringAsync();
-            Log.Information("笨鸟预报数据响应内容：{@Response}", responseContent);
-
             response.EnsureSuccessStatusCode();
 
             var result =

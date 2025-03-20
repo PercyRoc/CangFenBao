@@ -539,10 +539,24 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         var efficiencyItem = StatisticsItems.FirstOrDefault(static x => x.Label == "预测效率");
         if (efficiencyItem != null)
         {
-            var hourAgo = DateTime.Now.AddHours(-1);
-            var hourlyCount = PackageHistory.Count(p => p.CreateTime > hourAgo);
-            efficiencyItem.Value = hourlyCount.ToString();
-            efficiencyItem.Description = $"最近一小时处理 {hourlyCount} 个";
+            // 获取最近30秒内的包裹
+            var thirtySecondsAgo = DateTime.Now.AddSeconds(-30);
+            var recentPackages = PackageHistory.Where(p => p.CreateTime > thirtySecondsAgo).ToList();
+            
+            if (recentPackages.Count > 0)
+            {
+                // 计算30秒内的平均处理速度（个/秒）
+                var packagesPerSecond = recentPackages.Count / 30.0;
+                // 转换为每小时处理量
+                var hourlyRate = (int)(packagesPerSecond * 3600);
+                efficiencyItem.Value = hourlyRate.ToString();
+                efficiencyItem.Description = $"基于最近{recentPackages.Count}个包裹的处理速度";
+            }
+            else
+            {
+                efficiencyItem.Value = "0";
+                efficiencyItem.Description = "暂无处理数据";
+            }
         }
 
         var avgTimeItem = StatisticsItems.FirstOrDefault(static x => x.Label == "平均处理时间");
@@ -576,32 +590,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     Application.Current.Dispatcher.Invoke(() => _timer.Stop());
                 else
                     _timer.Stop();
-
-                // 停止分拣服务
-                if (_sortService.IsRunning())
-                    try
-                    {
-                        // 使用超时避免无限等待
-                        var stopTask = _sortService.StopAsync();
-                        var timeoutTask = Task.Delay(TimeSpan.FromSeconds(5));
-                        var completedTask = Task.WhenAny(stopTask, timeoutTask).Result;
-
-                        if (completedTask == stopTask)
-                            Log.Information("摆轮分拣服务已停止");
-                        else
-                            Log.Warning("摆轮分拣服务停止超时");
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex, "停止摆轮分拣服务时发生错误");
-                    }
-
-                // 释放分拣服务资源
-                if (_sortService is IDisposable disposableSortService)
-                {
-                    disposableSortService.Dispose();
-                    Log.Information("摆轮分拣服务资源已释放");
-                }
 
                 // 取消订阅事件
                 _sortService.DeviceConnectionStatusChanged -= OnDeviceConnectionStatusChanged;

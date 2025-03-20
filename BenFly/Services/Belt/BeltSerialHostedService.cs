@@ -25,25 +25,42 @@ internal class BeltSerialHostedService(
             var settings = settingsService.LoadSettings<BeltSettings>();
 
             // 如果没有配置串口或串口不存在，则不打开
-            if (string.IsNullOrEmpty(settings.PortName) ||
-                !SerialPort.GetPortNames().Contains(settings.PortName))
+            if (string.IsNullOrEmpty(settings.PortName))
             {
-                Log.Warning("未配置串口或串口不存在");
+                Log.Warning("未配置串口");
                 return Task.CompletedTask;
             }
 
-            // 创建串口配置
-            var serialPort = new SerialPort
+            var availablePorts = SerialPort.GetPortNames();
+            if (!availablePorts.Contains(settings.PortName))
             {
-                PortName = settings.PortName,
-                BaudRate = settings.BaudRate,
-                DataBits = settings.DataBits,
-                Parity = settings.Parity,
-                StopBits = settings.StopBits
-            };
+                Log.Warning("配置的串口 {PortName} 不存在。可用串口: {AvailablePorts}", 
+                    settings.PortName, 
+                    string.Join(", ", availablePorts));
+                return Task.CompletedTask;
+            }
 
-            // 打开串口
-            serialService.Open(serialPort);
+            try
+            {
+                // 创建串口配置
+                var serialPort = new SerialPort
+                {
+                    PortName = settings.PortName,
+                    BaudRate = settings.BaudRate,
+                    DataBits = settings.DataBits,
+                    Parity = settings.Parity,
+                    StopBits = settings.StopBits
+                };
+
+                // 打开串口
+                serialService.Open(serialPort);
+            }
+            catch (InvalidOperationException ex) when (ex.InnerException is UnauthorizedAccessException)
+            {
+                Log.Error(ex, "无法访问串口 {PortName}，请以管理员身份运行程序或检查串口是否被占用", settings.PortName);
+                // 不抛出异常，让服务继续运行
+                return Task.CompletedTask;
+            }
 
             // 监听设置变更
             settingsService.OnSettingsChanged<BeltSettings>(OnSettingsChanged);
@@ -77,10 +94,12 @@ internal class BeltSerialHostedService(
     {
         try
         {
-            // 如果串口不存在，则不打开
-            if (!SerialPort.GetPortNames().Contains(settings.PortName))
+            var availablePorts = SerialPort.GetPortNames();
+            if (!availablePorts.Contains(settings.PortName))
             {
-                Log.Warning("串口 {PortName} 不存在", settings.PortName);
+                Log.Warning("串口 {PortName} 不存在。可用串口: {AvailablePorts}", 
+                    settings.PortName, 
+                    string.Join(", ", availablePorts));
                 return;
             }
 
@@ -94,8 +113,15 @@ internal class BeltSerialHostedService(
                 StopBits = settings.StopBits
             };
 
-            // 重新打开串口
-            serialService.Open(serialPort);
+            try
+            {
+                // 重新打开串口
+                serialService.Open(serialPort);
+            }
+            catch (InvalidOperationException ex) when (ex.InnerException is UnauthorizedAccessException)
+            {
+                Log.Error(ex, "无法访问串口 {PortName}，请以管理员身份运行程序或检查串口是否被占用", settings.PortName);
+            }
         }
         catch (Exception ex)
         {

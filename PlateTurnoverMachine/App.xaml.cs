@@ -42,6 +42,7 @@ internal partial class App
         // 注册视图和ViewModel
         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
         containerRegistry.RegisterForNavigation<PlateTurnoverSettingsView, PlateTurnoverSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<ChuteSettingsView, ChuteSettingsViewModel>();
 
         // 注册公共服务
         containerRegistry.AddCommonServices();
@@ -110,9 +111,7 @@ internal partial class App
     {
         try
         {
-            // 释放 Mutex
-            _mutex?.Dispose();
-            _mutex = null;
+            
 
             // 停止托管服务
             var hostedService = Container.Resolve<TcpConnectionHostedService>();
@@ -132,6 +131,9 @@ internal partial class App
         }
         finally
         {
+            // 释放 Mutex
+            _mutex?.Dispose();
+            _mutex = null;
             base.OnExit(e);
         }
     }

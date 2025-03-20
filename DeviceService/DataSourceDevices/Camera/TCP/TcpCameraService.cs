@@ -14,7 +14,7 @@ namespace DeviceService.DataSourceDevices.Camera.TCP;
 /// <summary>
 ///     TCP相机服务实现
 /// </summary>
-internal class TcpCameraService(string host = "127.0.0.1", int port = 2000) : ICameraService
+internal class TcpCameraService(string host = "127.0.0.1", int port = 20011) : ICameraService
 {
     private const int ReconnectInterval = 5000; // 重连间隔5秒
     private const int MinProcessInterval = 1000; // 最小处理间隔（毫秒）

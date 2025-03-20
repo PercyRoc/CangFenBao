@@ -262,11 +262,6 @@ internal partial class App
         try
         {
             Log.Information("应用程序开始关闭...");
-
-            // 释放 Mutex
-            _mutex?.Dispose();
-            _mutex = null;
-
             // 关闭所有窗口，无论是否可见
             foreach (Window window in Current.Windows)
                 try
@@ -320,17 +315,12 @@ internal partial class App
         }
         finally
         {
-            try
-            {
-                // 等待所有日志写入完成
-                Log.Information("应用程序关闭");
-                Log.CloseAndFlush();
-            }
-            catch
-            {
-                // 忽略最终清理时的任何错误
-            }
-
+            // 等待所有日志写入完成
+            Log.Information("应用程序关闭");
+            Log.CloseAndFlush();
+            // 释放 Mutex
+            _mutex?.Dispose();
+            _mutex = null;
             base.OnExit(e);
         }
     }
