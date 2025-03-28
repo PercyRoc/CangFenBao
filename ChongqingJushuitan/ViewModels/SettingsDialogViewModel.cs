@@ -5,6 +5,7 @@ using Prism.Mvvm;
 using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.ViewModels.Settings;
+using ChongqingJushuitan.ViewModels.Settings;
 
 namespace ChongqingJushuitan.ViewModels;
 
@@ -16,6 +17,7 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
 
     // 保存各个设置页面的ViewModel实例
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
+    private readonly JushuitanSettingsViewModel _jushuitanSettingsViewModel;
     private readonly INotificationService _notificationService;
 
     public SettingsDialogViewModel(
@@ -28,7 +30,8 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
         _cameraSettingsViewModel = containerProvider.Resolve<CameraSettingsViewModel>();
         _balanceSortSettingsViewModel = containerProvider.Resolve<BalanceSortSettingsViewModel>();
         _barcodeChuteSettingsViewModel = containerProvider.Resolve<BarcodeChuteSettingsViewModel>();
-
+        _jushuitanSettingsViewModel = containerProvider.Resolve<JushuitanSettingsViewModel>();
+        
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
     }
@@ -61,6 +64,7 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
             _cameraSettingsViewModel.SaveConfigurationCommand.Execute();
             _balanceSortSettingsViewModel.SaveConfigurationCommand.Execute();
             _barcodeChuteSettingsViewModel.SaveConfigurationCommand.Execute();
+            _jushuitanSettingsViewModel.SaveConfigurationCommand.Execute();
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");
             RequestClose?.Invoke(new DialogResult(ButtonResult.OK));

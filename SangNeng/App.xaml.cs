@@ -99,7 +99,8 @@ internal partial class App
             .WriteTo.Debug()
             .WriteTo.File("logs/app-.log",
                 rollingInterval: RollingInterval.Day,
-                rollOnFileSizeLimit: true)
+                rollOnFileSizeLimit: true,
+                retainedFileCountLimit: 30)
             .CreateLogger();
 
         Log.Information("应用程序启动");
@@ -193,10 +194,25 @@ internal partial class App
 
                 // 重点修复：扫码枪服务需要同步初始化
                 UpdateProgress("Initializing scanner...", 60);
-                await Current.Dispatcher.InvokeAsync(() =>
+                try 
                 {
-                    scannerStartupService.StartAsync(CancellationToken.None).Wait();
-                });
+                    await Current.Dispatcher.InvokeAsync(async () =>
+                    {
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                        await scannerStartupService.StartAsync(cts.Token);
+                        Log.Information("扫码枪服务初始化成功");
+                    });
+                }
+                catch (OperationCanceledException)
+                {
+                    Log.Error("扫码枪服务初始化超时");
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "扫码枪服务初始化失败");
+                    throw;
+                }
 
                 UpdateProgress("Initializing weight scale...", 80);
                 await weightStartupService.StartAsync(CancellationToken.None);

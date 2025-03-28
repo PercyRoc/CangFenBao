@@ -383,44 +383,41 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             // 设置包裹序号
             package.Index = Interlocked.Increment(ref _currentPackageIndex);
             Log.Information("收到包裹信息：{Barcode}, 序号：{Index}", package.Barcode, package.Index);
-            _sortService.ProcessPackage(package);
-            try
-            {
-                // 获取格口规则配置
-                var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
 
-                // 判断条码是否为空或noread
-                if (string.IsNullOrEmpty(package.Barcode) ||
-                    string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase))
+            // 获取格口规则配置
+            var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
+
+            // 判断条码是否为空或noread
+            if (string.IsNullOrEmpty(package.Barcode) ||
+                string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase))
+            {
+                // 使用异常口
+                package.ChuteName = chuteSettings.ErrorChuteNumber;
+                package.Information = "条码为空或noread";
+                Log.Warning("包裹条码为空或noread，使用异常口：{ErrorChute}", chuteSettings.ErrorChuteNumber);
+            }
+            else
+            {
+                // 尝试匹配格口规则
+                var matchedChute = chuteSettings.FindMatchingChute(package.Barcode);
+
+                if (matchedChute.HasValue)
                 {
-                    // 使用异常口
-                    package.ChuteName = chuteSettings.ErrorChuteNumber;
-                    Log.Warning("包裹条码为空或noread，使用异常口：{ErrorChute}", chuteSettings.ErrorChuteNumber);
+                    package.ChuteName = matchedChute.Value;
+                    Log.Information("包裹 {Barcode} 匹配到格口 {Chute}", package.Barcode, matchedChute.Value);
                 }
                 else
                 {
-                    // 尝试匹配格口规则
-                    var matchedChute = chuteSettings.FindMatchingChute(package.Barcode);
-
-                    if (matchedChute.HasValue)
-                    {
-                        package.ChuteName = matchedChute.Value;
-                        Log.Information("包裹 {Barcode} 匹配到格口 {Chute}", package.Barcode, matchedChute.Value);
-                    }
-                    else
-                    {
-                        // 没有匹配到规则，使用异常口
-                        package.ChuteName = chuteSettings.ErrorChuteNumber;
-                        Log.Warning("包裹 {Barcode} 未匹配到任何规则，使用异常口：{ErrorChute}",
-                            package.Barcode, chuteSettings.ErrorChuteNumber);
-                    }
+                    // 没有匹配到规则，使用异常口
+                    package.ChuteName = chuteSettings.ErrorChuteNumber;
+                    package.Information = "未匹配到格口规则";
+                    Log.Warning("包裹 {Barcode} 未匹配到任何规则，使用异常口：{ErrorChute}",
+                        package.Barcode, chuteSettings.ErrorChuteNumber);
                 }
             }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "获取格口号时发生错误：{Barcode}", package.Barcode);
-                package.SetError($"获取格口号失败：{ex.Message}");
-            }
+
+            // 确定格口后再处理包裹
+            _sortService.ProcessPackage(package);
 
             // 上传包裹数据到聚水潭
             try
@@ -437,41 +434,48 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 {
                     LogisticsId = package.Barcode,
                     Weight = Convert.ToDecimal(package.Weight),
-                    IsInternational = false, // 根据实际情况设置
-                    Type = 5, // 自动判断称重并发货
-                    Volume = package.Volume.HasValue
-                        ? Convert.ToDecimal(package.Volume.Value / 1000000)
-                        : null // 将立方厘米转换为立方米
+                    IsUnLid = false, // 根据实际情况设置
+                    Type = 5,
                 };
 
                 Log.Debug("准备上传包裹数据到聚水潭: {@Request}", request);
                 var response = await _juShuiTanService.WeightAndSendAsync(request);
 
-                if (response.IsSuccess)
+                if (response.Code == 0)
                 {
                     Log.Information("包裹 {Barcode} 数据已成功上传到聚水潭", package.Barcode);
 
                     // 检查返回的数据
-                    if (response.Data.Count > 0)
+                    if (response.Data?.Items?.Count > 0)
                     {
-                        var data = response.Data[0];
-                        if (!data.IsSuccess)
+                        var data = response.Data.Items[0];
+                        if (data.Code != 0)
+                        {
                             Log.Warning("包裹 {Barcode} 数据上传到聚水潭返回错误: {ErrorMessage}",
                                 package.Barcode, data.Message);
+                            package.Information = $"聚水潭返回错误: {data.Message}";
+                            package.ChuteName = _settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber;
+                        }
                         else
+                        {
                             Log.Debug("包裹 {Barcode} 上传成功，物流公司：{Company}，运单号：{TrackingNumber}",
                                 package.Barcode, data.LogisticsCompany, data.LogisticsId);
+                        }
                     }
                 }
                 else
                 {
                     Log.Warning("包裹 {Barcode} 数据上传到聚水潭失败: {ErrorCode} - {ErrorMessage}",
                         package.Barcode, response.Code, response.Message);
+                    package.Information = $"聚水潭API错误: {response.Message}";
+                    package.ChuteName = _settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber;
                 }
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "上传包裹 {Barcode} 数据到聚水潭时发生错误", package.Barcode);
+                package.Information = $"聚水潭服务异常: {ex.Message}";
+                package.ChuteName = _settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber;
             }
 
             Application.Current.Dispatcher.Invoke(() =>

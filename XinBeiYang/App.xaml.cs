@@ -76,7 +76,8 @@ internal partial class App
             .WriteTo.Debug()
             .WriteTo.File("logs/app-.log",
                 rollingInterval: RollingInterval.Day,
-                rollOnFileSizeLimit: true)
+                rollOnFileSizeLimit: true,
+                retainedFileCountLimit: 30)
             .CreateLogger();
 
         Log.Information("应用程序启动");

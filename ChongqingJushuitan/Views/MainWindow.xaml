@@ -8,7 +8,7 @@
                  xmlns:viewModels="clr-namespace:ChongqingJushuitan.ViewModels"
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=viewModels:MainWindowViewModel}"
-                 Title="仓分宝-重庆聚水潭"
+                 Title="仓分宝-重庆夜客来"
                  Height="900"
                  Width="1600"
                  WindowStartupLocation="CenterScreen"
@@ -78,7 +78,7 @@
 
             <!-- 标题 -->
             <TextBlock Grid.Column="2"
-                       Text="仓分宝-福州策力"
+                       Text="仓分宝-重庆夜客来"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
                        Margin="0,0,8,0"

@@ -47,7 +47,9 @@ public class PackageInfo : IDisposable
     /// <summary>
     ///     体积显示
     /// </summary>
-    public string VolumeDisplay { get; set; } = string.Empty;
+    public string VolumeDisplay => Length.HasValue && Width.HasValue && Height.HasValue 
+        ? $"{Length:F1}*{Width:F1}*{Height:F1}"
+        : string.Empty;
 
     /// <summary>
     ///     格口名称

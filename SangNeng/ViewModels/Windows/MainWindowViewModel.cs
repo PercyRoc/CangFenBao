@@ -360,32 +360,41 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                 if (_cameraService is HikvisionIndustrialCameraSdkClient hikvisionCamera)
                 {
-                    // 先订阅图像流，准备接收触发后的图像
-                    hikvisionCamera.ImageStream.Subscribe(imageData =>
-                    {
-                        lock (imageLock)
-                        {
-                            if (imageCaptured) return;
-                            capturedImage = imageData.image.Clone();
-                            imageCaptured = true;
-                            Log.Information("已捕获软触发图像");
-                        }
-                    });
-
-                    // 然后执行软触发
-                    photoTask = Task.Run(() =>
+                    // 订阅图像流，等待一帧图像
+                    var imageTask = Task.Run(() =>
                     {
                         try
                         {
-                            return hikvisionCamera.ExecuteSoftTrigger();
+                            using var imageSubscription = hikvisionCamera.ImageStream
+                                .Take(1) // 只取一帧
+                                .Timeout(TimeSpan.FromSeconds(5)) // 5秒超时
+                                .Subscribe(imageData =>
+                                {
+                                    lock (imageLock)
+                                    {
+                                        if (imageCaptured) return;
+                                        capturedImage = imageData.image.Clone();
+                                        imageCaptured = true;
+                                        Log.Information("已从图像流获取一帧图像");
+                                    }
+                                });
+
+                            // 等待图像被捕获
+                            while (!imageCaptured && !cts.Token.IsCancellationRequested)
+                            {
+                                Thread.Sleep(100);
+                            }
+
+                            return imageCaptured;
                         }
                         catch (Exception ex)
                         {
-                            Log.Error(ex, "触发相机拍照失败");
-                            PlayErrorSound();
+                            Log.Error(ex, "从图像流获取图像失败");
                             return false;
                         }
                     }, cts.Token);
+
+                    photoTask = imageTask;
                 }
                 else
                 {
@@ -431,13 +440,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 // 等待所有任务完成
                 await Task.WhenAll(photoTask, volumeTask, weightTask);
 
-                // 等待一小段时间，确保图像被捕获
-                if (await photoTask && !imageCaptured)
-                {
-                    Log.Debug("软触发成功，等待图像数据...");
-                    await Task.Delay(5000, cts.Token); // 等待5秒钟
-                }
-
                 // 处理体积数据
                 if (_currentPackage.Status == PackageStatus.MeasureSuccess && SelectedPallet != null &&
                     SelectedPallet.Name != "noPallet")
@@ -462,49 +464,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     _currentPackage.Height = originalHeight + palletHeight;
                     // 更新体积（使用cm³作为单位）
                     _currentPackage.Volume = _currentPackage.Length * _currentPackage.Width * _currentPackage.Height;
-                    // 显示尺寸（厘米）
-                    _currentPackage.VolumeDisplay =
-                        $"{_currentPackage.Length:F1}cm × {_currentPackage.Width:F1}cm × {_currentPackage.Height:F1}cm";
 
                     // 播放成功音效
                     _ = _audioService.PlayPresetAsync(AudioType.Success);
-                }
-
-                // 在体积测量完成后保存捕获的图像
-                Image<Rgba32>? imageToProcess = null;
-                string? base64Image = null;
-                string? imageName = null;
-
-                try
-                {
-                    lock (imageLock)
-                    {
-                        if (capturedImage != null)
-                        {
-                            imageToProcess = capturedImage.Clone();
-                            capturedImage.Dispose(); // 释放原始图像
-                            capturedImage = null;
-                        }
-                    }
-
-                    if (imageToProcess != null)
-                        try
-                        {
-                            var cameraSettings = _settingsService.LoadSettings<CameraSettings>("CameraSettings");
-                            var result = await SaveImageAsync(imageToProcess, cameraSettings, _currentPackage,
-                                cts.Token);
-                            if (result.HasValue) (base64Image, imageName) = result.Value;
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Error(ex, "保存图像到文件时发生错误");
-                        }
-                    else
-                        Log.Warning("未能捕获到软触发图像");
-                }
-                finally
-                {
-                    imageToProcess?.Dispose();
                 }
 
                 Application.Current.Dispatcher.Invoke(() =>
@@ -527,6 +489,45 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     UpdateStatistics();
                 });
 
+                // 在体积测量完成后保存捕获的图像
+                Image<Rgba32>? imageToProcess = null;
+                string? base64Image = null;
+                string? imageName = null;
+
+                try
+                {
+                    lock (imageLock)
+                    {
+                        if (capturedImage != null)
+                        {
+                            imageToProcess = capturedImage.Clone();
+                            capturedImage.Dispose(); // 释放原始图像
+                            capturedImage = null;
+                        }
+                    }
+
+                    if (imageToProcess != null)
+                        try
+                        {
+                            var cameraSettings = _settingsService.LoadSettings<CameraSettings>("CameraSettings");
+                            // 使用新的CancellationTokenSource，不设置超时
+                            using var imageSaveCts = new CancellationTokenSource();
+                            var result = await SaveImageAsync(imageToProcess, cameraSettings, _currentPackage,
+                                imageSaveCts.Token);
+                            if (result.HasValue) (base64Image, imageName) = result.Value;
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error(ex, "保存图像到文件时发生错误");
+                        }
+                    else
+                        Log.Warning("未能捕获到图像");
+                }
+                finally
+                {
+                    imageToProcess?.Dispose();
+                }
+
                 // 调用桑能接口上传数据
                 try
                 {
@@ -544,7 +545,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     };
 
                     var response = await _sangNengService.SendWeightDataAsync(request);
-                    if (response.Code != 0) // 假设 0 表示成功
+                    if (response.Code != 1) // 修改为判断 Code == 1 表示成功
                     {
                         Log.Warning("上传数据到桑能服务器失败: {Message}", response.Message);
                         Application.Current.Dispatcher.Invoke(() => UpdatePackageStatus("Upload Failed"));
@@ -623,7 +624,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 {
                     Log.Error("体积测量失败：{Error}", result.ErrorMessage);
                     _currentPackage.Status = PackageStatus.MeasureFailed;
-                    _currentPackage.StatusDisplay = "测量失败";
+                    _currentPackage.StatusDisplay = "Measurement Failed";
                     _currentPackage.ErrorMessage = result.ErrorMessage;
                     PlayErrorSound();
                     return;
@@ -634,8 +635,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 _currentPackage.Width = result.Width / 10.0;
                 _currentPackage.Height = result.Height / 10.0;
                 _currentPackage.Volume = result.Length * result.Width * result.Height;
-                _currentPackage.VolumeDisplay =
-                    $"{_currentPackage.Length:F1}cm × {_currentPackage.Width:F1}cm × {_currentPackage.Height:F1}cm";
                 _currentPackage.Status = PackageStatus.MeasureSuccess;
             }
             finally
@@ -667,79 +666,98 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
             await Task.Run(async () =>
             {
-                // 确保保存目录存在
-                if (!Directory.Exists(settings.ImageSavePath)) Directory.CreateDirectory(settings.ImageSavePath);
-
-                // 生成文件名（使用条码和时间戳）
-                var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff");
-                imageName = $"{package.Barcode}_{timestamp}";
-                var extension = settings.ImageFormat switch
+                try
                 {
-                    ImageFormat.Jpeg => ".jpg",
-                    ImageFormat.Png => ".png",
-                    ImageFormat.Bmp => ".bmp",
-                    ImageFormat.Tiff => ".tiff",
-                    _ => ".jpg"
-                };
-                var filePath = Path.Combine(settings.ImageSavePath, imageName + extension);
+                    // 确保保存目录存在
+                    if (!Directory.Exists(settings.ImageSavePath)) Directory.CreateDirectory(settings.ImageSavePath);
 
-                // 先保存原始图像到临时文件
-                tempFilePath = Path.Combine(settings.ImageSavePath, $"temp_{imageName}{extension}");
-                await using (var fileStream =
-                             new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
-                {
-                    await image.SaveAsJpegAsync(fileStream, cancellationToken);
-                }
-
-                // 使用 System.Drawing 添加水印
-                using (var bitmap = new Bitmap(tempFilePath))
-                using (var graphics = Graphics.FromImage(bitmap))
-                using (var font = new Font("Arial", 40))
-                using (var brush = new SolidBrush(Color.Green))
-                {
-                    graphics.SmoothingMode = SmoothingMode.AntiAlias;
-                    graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                    graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
-
-                    var watermarkLines = new[]
+                    // 生成文件名（使用条码和时间戳）
+                    var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff");
+                    imageName = $"{package.Barcode}_{timestamp}";
+                    var extension = settings.ImageFormat switch
                     {
-                        $"Barcode: {package.Barcode}",
-                        $"Size: {package.Length:F1}cm × {package.Width:F1}cm × {package.Height:F1}cm",
-                        $"Weight: {package.Weight:F3}kg",
-                        $"Volume: {package.Volume / 1000.0:N0}cm³",
-                        $"Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}"
+                        ImageFormat.Jpeg => ".jpg",
+                        ImageFormat.Png => ".png",
+                        ImageFormat.Bmp => ".bmp",
+                        ImageFormat.Tiff => ".tiff",
+                        _ => ".jpg"
                     };
+                    var filePath = Path.Combine(settings.ImageSavePath, imageName + extension);
 
-                    const int padding = 20;
-                    const int lineSpacing = 50;
-                    var startY = padding;
-
-                    foreach (var line in watermarkLines)
+                    // 先保存原始图像到临时文件
+                    tempFilePath = Path.Combine(settings.ImageSavePath, $"temp_{imageName}{extension}");
+                    await using (var fileStream =
+                                 new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
                     {
-                        graphics.DrawString(line, font, brush, padding, startY);
-                        startY += lineSpacing;
+                        try
+                        {
+                            await image.SaveAsJpegAsync(fileStream, cancellationToken);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            Log.Warning("保存图像操作被取消");
+                            throw; // 重新抛出异常，让上层处理
+                        }
                     }
 
-                    // 保存带水印的图像
-                    bitmap.Save(filePath, System.Drawing.Imaging.ImageFormat.Jpeg);
-
-                    // 转换为Base64
-                    using (var ms = new MemoryStream())
+                    // 使用 System.Drawing 添加水印
+                    using (var bitmap = new Bitmap(tempFilePath))
+                    using (var graphics = Graphics.FromImage(bitmap))
+                    using (var font = new Font("Arial", 40))
+                    using (var brush = new SolidBrush(Color.Green))
                     {
+                        graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                        graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                        graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+                        var watermarkLines = new[]
+                        {
+                            $"Barcode: {package.Barcode}",
+                            $"Size: {package.Length:F1}cm × {package.Width:F1}cm × {package.Height:F1}cm",
+                            $"Weight: {package.Weight:F3}kg",
+                            $"Volume: {package.Volume / 1000.0:N0}cm³",
+                            $"Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}"
+                        };
+
+                        const int padding = 20;
+                        const int lineSpacing = 50;
+                        var startY = padding;
+
+                        foreach (var line in watermarkLines)
+                        {
+                            graphics.DrawString(line, font, brush, padding, startY);
+                            startY += lineSpacing;
+                        }
+
+                        // 保存带水印的图像
+                        bitmap.Save(filePath, System.Drawing.Imaging.ImageFormat.Jpeg);
+
+                        // 转换为Base64
+                        using var ms = new MemoryStream();
                         bitmap.Save(ms, System.Drawing.Imaging.ImageFormat.Jpeg);
                         base64Image = Convert.ToBase64String(ms.ToArray());
                     }
+
+                    // 保存图片路径到包裹对象
+                    package.ImagePath = filePath;
+
+                    Log.Debug("图像已保存：{FilePath}", filePath);
                 }
-
-                // 保存图片路径到包裹对象
-                package.ImagePath = filePath;
-
-                Log.Debug("图像已保存：{FilePath}", filePath);
+                catch (OperationCanceledException)
+                {
+                    Log.Warning("图像处理操作被取消");
+                    throw; // 重新抛出异常，让上层处理
+                }
             }, cancellationToken);
 
             return (base64Image!, imageName);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException)
+        {
+            Log.Warning("保存图像任务被取消");
+            return null;
+        }
+        catch (Exception ex)
         {
             Log.Error(ex, "保存图像时发生错误");
             return null;
@@ -761,13 +779,34 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     private void UpdatePackageStatus(string status)
     {
-        Application.Current.Dispatcher.Invoke(() =>
+        Application.Current.Dispatcher.Invoke(UpdateAction);
+        return;
+
+        void UpdateAction()
         {
             var items = PackageInfoItems.ToList();
-            items[3].Value = status; // 更新状态项
+            var statusItem = items[3]; // 状态项
             items[2].Value = DateTime.Now.ToString("HH:mm:ss"); // 更新时间项
+
+            // 根据状态设置文字和颜色
+            var (displayText, color) = status.ToLower() switch
+            {
+                "success" or "complete" => ("Success", "#4CAF50"), // 绿色
+                "failed" or "error" or "timeout" or "upload failed" or "database error" => ("Failed", "#FF0000"), // 红色
+                _ => ("Waiting", "#808080") // 灰色（默认）
+            };
+
+            statusItem.Value = displayText;
+            statusItem.StatusColor = color;
+
+            // 更新当前包裹的状态显示
+            if (_currentPackage != null)
+            {
+                _currentPackage.StatusDisplay = displayText;
+            }
+
             PackageInfoItems = [.. items];
-        });
+        }
     }
 
     private void OnVolumeCameraConnectionChanged(string deviceId, bool isConnected)

@@ -1,10 +1,14 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.Windows.Input;
 using Common.Data;
 using Common.Models.Package;
 using Common.Services.Ui;
+using Microsoft.Win32;
+using OfficeOpenXml;
+using OfficeOpenXml.Style;
 using Prism.Commands;
 using Prism.Mvvm;
 using Prism.Services.Dialogs;
@@ -41,6 +45,8 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
         SelectedStatus = StatusList[0]; // 默认选择"All"
         QueryCommand = new DelegateCommand(QueryAsync);
         ViewImageCommand = new DelegateCommand<PackageRecord>(ViewImage);
+        ExportToExcelCommand = new DelegateCommand(ExecuteExportToExcel, CanExportToExcel)
+            .ObservesProperty(() => PackageRecords.Count);
     }
 
     /// <summary>
@@ -97,23 +103,7 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
     public ObservableCollection<PackageRecord> PackageRecords
     {
         get => _packageRecords;
-        private set
-        {
-            // 将毫米转换为厘米
-            foreach (var record in value)
-            {
-                if (record.Length.HasValue)
-                    record.Length = record.Length.Value / 10.0;
-                if (record.Width.HasValue)
-                    record.Width = record.Width.Value / 10.0;
-                if (record.Height.HasValue)
-                    record.Height = record.Height.Value / 10.0;
-                if (record.Volume.HasValue)
-                    record.Volume = record.Volume.Value / 1000.0; // 将立方毫米转换为立方厘米
-            }
-
-            SetProperty(ref _packageRecords, value);
-        }
+        private set => SetProperty(ref _packageRecords, value);
     }
 
     /// <summary>
@@ -125,6 +115,11 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
     ///     查看图片命令
     /// </summary>
     public ICommand ViewImageCommand { get; }
+
+    /// <summary>
+    ///     导出Excel命令
+    /// </summary>
+    public DelegateCommand ExportToExcelCommand { get; }
 
     /// <summary>
     ///     是否正在加载
@@ -241,7 +236,7 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
         catch (Exception ex)
         {
             Log.Error(ex, "检查表数据时出错");
-            return new List<PackageRecord>();
+            return [];
         }
     }
 
@@ -279,5 +274,92 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
     {
         if (record?.ImagePath == null || !File.Exists(record.ImagePath)) return;
         Process.Start(new ProcessStartInfo(record.ImagePath) { UseShellExecute = true });
+    }
+
+    /// <summary>
+    ///     判断是否可以导出Excel
+    /// </summary>
+    private bool CanExportToExcel()
+    {
+        return PackageRecords.Count > 0;
+    }
+
+    /// <summary>
+    ///     导出Excel
+    /// </summary>
+    private void ExecuteExportToExcel()
+    {
+        try
+        {
+            var dialog = new SaveFileDialog
+            {
+                Filter = "Excel Files|*.xlsx",
+                Title = "Export Package Records",
+                FileName = $"PackageRecords_{DateTime.Now:yyyyMMddHHmmss}.xlsx"
+            };
+
+            if (dialog.ShowDialog() != true) return;
+
+            // 设置EPPlus许可证
+            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+
+            using var package = new ExcelPackage();
+            var worksheet = package.Workbook.Worksheets.Add("Package Records");
+
+            // 设置表头
+            var headers = new[]
+            {
+                "No.", "Barcode", "Weight(kg)", "Length(cm)", "Width(cm)", "Height(cm)",
+                "Volume(cm³)", "Status", "Create Time"
+            };
+
+            for (var i = 0; i < headers.Length; i++)
+            {
+                worksheet.Cells[1, i + 1].Value = headers[i];
+            }
+
+            // 设置表头样式
+            using (var range = worksheet.Cells[1, 1, 1, headers.Length])
+            {
+                range.Style.Font.Bold = true;
+                range.Style.Fill.PatternType = ExcelFillStyle.Solid;
+                range.Style.Fill.BackgroundColor.SetColor(Color.LightGray);
+                range.Style.Border.BorderAround(ExcelBorderStyle.Thin);
+                range.Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+            }
+
+            // 写入数据
+            for (var i = 0; i < PackageRecords.Count; i++)
+            {
+                var record = PackageRecords[i];
+                var row = i + 2;
+
+                worksheet.Cells[row, 1].Value = record.Id;
+                worksheet.Cells[row, 2].Value = record.Barcode;
+                worksheet.Cells[row, 3].Value = record.Weight;
+                worksheet.Cells[row, 4].Value = record.Length.HasValue ? Math.Round(record.Length.Value, 1) : null;
+                worksheet.Cells[row, 5].Value = record.Width.HasValue ? Math.Round(record.Width.Value, 1) : null;
+                worksheet.Cells[row, 6].Value = record.Height.HasValue ? Math.Round(record.Height.Value, 1) : null;
+                worksheet.Cells[row, 7].Value = record.Volume;
+                worksheet.Cells[row, 8].Value = record.Status.ToString();
+                worksheet.Cells[row, 9].Value = record.CreateTime;
+
+                // 设置日期格式
+                worksheet.Cells[row, 9].Style.Numberformat.Format = "yyyy-MM-dd HH:mm:ss";
+            }
+
+            // 自动调整列宽
+            worksheet.Cells[worksheet.Dimension.Address].AutoFitColumns();
+
+            // 保存文件
+            package.SaveAs(new FileInfo(dialog.FileName));
+
+            _notificationService.ShowSuccess($"Successfully exported {PackageRecords.Count} records");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to export Excel");
+            _notificationService.ShowError($"Export failed: {ex.Message}");
+        }
     }
 }

@@ -251,15 +251,22 @@ internal class MultiPendulumSortService(ISettingsService settingsService) : Base
 
             if (message.Contains("OCCH1:1"))
             {
-                Log.Information("分拣光电 {Name} 收到上升沿信号，开始匹配包裹", photoelectricName);
+                Log.Information("分拣光电 {Name} 收到上升沿信号，开始匹配包裹并执行分拣", photoelectricName);
                 // 使用基类的匹配逻辑
                 var package = MatchPackageForSorting(photoelectricName);
                 if (package != null)
                 {
+                    Log.Information("分拣光电 {Name} 匹配到包裹 {Barcode}，开始执行分拣动作",
+                        photoelectricName, package.Barcode);
+                    // 直接执行分拣动作
+                    _ = ExecuteSortingAction(package, photoelectricName);
+
+                    /* 原逻辑：等待下降沿信号
                     // 临时存储匹配到的包裹
                     MatchedPackages[photoelectricName] = package;
                     Log.Information("分拣光电 {Name} 匹配到包裹 {Barcode}，等待下降沿信号",
                         photoelectricName, package.Barcode);
+                    */
                 }
                 else
                 {
@@ -288,15 +295,15 @@ internal class MultiPendulumSortService(ISettingsService settingsService) : Base
             if (!message.Contains("OCCH1:0")) return;
 
             {
-                Log.Information("分拣光电 {Name} 收到下降沿信号，准备执行分拣动作", photoelectricName);
+                Log.Information("分拣光电 {Name} 收到下降沿信号，检查是否有未处理的包裹", photoelectricName);
                 // 检查是否有匹配到的包裹
                 if (!MatchedPackages.TryRemove(photoelectricName, out var package))
                 {
-                    Log.Warning("分拣光电 {Name} 未找到匹配的包裹，无法执行分拣动作", photoelectricName);
+                    Log.Warning("分拣光电 {Name} 未找到匹配的包裹", photoelectricName);
                     return;
                 }
 
-                Log.Information("分拣光电 {Name} 开始处理包裹 {Barcode} 的分拣动作",
+                Log.Information("分拣光电 {Name} 发现未处理的包裹 {Barcode}，开始执行分拣动作",
                     photoelectricName, package.Barcode);
 
                 // 执行分拣动作

@@ -6,8 +6,11 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:settings="clr-namespace:ChongqingJushuitan.ViewModels.Settings"
     xmlns:converters="clr-namespace:SharedUI.Converters;assembly=SharedUI"
+    xmlns:prism="http://prismlibrary.com/"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
     mc:Ignorable="d"
     d:DataContext="{d:DesignInstance Type=settings:JushuitanSettingsViewModel}"
+    prism:ViewModelLocator.AutoWireViewModel="True"
     Title="聚水潭称重接口设置" x:ClassModifier="internal">
 
     <Page.Resources>
@@ -15,52 +18,95 @@
     </Page.Resources>
 
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+        <StackPanel MaxWidth="500" Margin="16" VerticalAlignment="Top">
+            <TextBlock Text="聚水潭服务配置"
+                       Style="{DynamicResource SubtitleTextBlockStyle}"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,16" />
 
-        <StackPanel Margin="20" Grid.Row="0">
-            <GroupBox Header="环境设置" Margin="0,0,0,10">
-                <StackPanel Margin="10">
-                    <RadioButton Content="正式环境"
-                                 IsChecked="{Binding Settings.IsProduction}"
-                                 Margin="0,0,0,5" />
-                    <RadioButton Content="测试环境"
-                                 IsChecked="{Binding Settings.IsProduction, Converter={StaticResource InverseBooleanConverter}}"
-                                 Margin="0,0,0,5" />
+            <ui:Card>
+                <StackPanel Margin="16">
+                    <TextBlock Text="聚水潭服务配置"
+                               Style="{DynamicResource SubtitleTextBlockStyle}"
+                               Margin="0,0,0,16" />
+
+                    <!-- 环境选择 -->
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Text="环境选择："
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <RadioButton Content="正式环境"
+                                       IsChecked="{Binding Settings.IsProduction}"
+                                       Margin="0,0,16,0" />
+                            <RadioButton Content="测试环境"
+                                       IsChecked="{Binding Settings.IsProduction, Converter={StaticResource InverseBooleanConverter}}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- AppKey -->
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Text="AppKey："
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
+
+                        <ui:TextBox Grid.Column="1"
+                                    Text="{Binding Settings.AppKey, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="请输入AppKey" />
+                    </Grid>
+
+                    <!-- AccessToken -->
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Text="AccessToken："
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
+
+                        <ui:TextBox Grid.Column="1"
+                                    Text="{Binding Settings.AccessToken, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="请输入AccessToken" />
+                    </Grid>
+
+                    <!-- AppSecret -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Text="AppSecret："
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
+
+                        <ui:TextBox Grid.Column="1"
+                                    Text="{Binding Settings.AppSecret, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="请输入AppSecret" />
+                    </Grid>
                 </StackPanel>
-            </GroupBox>
-
-            <GroupBox Header="接口参数" Margin="0,0,0,10">
-                <Grid Margin="10">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-
-                    <TextBlock Text="AppKey：" Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,5" />
-                    <TextBox Text="{Binding Settings.AppKey}" Grid.Row="0" Grid.Column="1" Margin="0,0,0,5" />
-
-                    <TextBlock Text="AppSecret：" Grid.Row="1" Grid.Column="0" VerticalAlignment="Center"
-                               Margin="0,0,10,5" />
-                    <TextBox Text="{Binding Settings.AppSecret}" Grid.Row="1" Grid.Column="1" Margin="0,0,0,5" />
-
-                    <TextBlock Text="AccessToken：" Grid.Row="2" Grid.Column="0" VerticalAlignment="Center"
-                               Margin="0,0,10,5" />
-                    <TextBox Text="{Binding Settings.AccessToken}" Grid.Row="2" Grid.Column="1" Margin="0,0,0,5" />
-
-                    <TextBlock Text="RefreshToken：" Grid.Row="3" Grid.Column="0" VerticalAlignment="Center"
-                               Margin="0,0,10,5" />
-                    <TextBox Text="{Binding Settings.RefreshToken}" Grid.Row="3" Grid.Column="1" Margin="0,0,0,5" />
-                </Grid>
-            </GroupBox>
+            </ui:Card>
         </StackPanel>
     </Grid>
 </Page>

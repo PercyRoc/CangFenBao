@@ -6,11 +6,10 @@ namespace ChongqingJushuitan.ViewModels.Settings;
 [Configuration("jushuitanSettings")]
 public class JushuitanSettings : BindableBase
 {
-    private string _accessToken = string.Empty;
     private string _appKey = string.Empty;
     private string _appSecret = string.Empty;
+    private string _accessToken = string.Empty;
     private bool _isProduction;
-    private string _refreshToken = string.Empty;
 
     /// <summary>
     ///     是否使用正式环境
@@ -31,15 +30,6 @@ public class JushuitanSettings : BindableBase
     }
 
     /// <summary>
-    ///     应用密钥
-    /// </summary>
-    public string AppSecret
-    {
-        get => _appSecret;
-        set => SetProperty(ref _appSecret, value);
-    }
-
-    /// <summary>
     ///     访问令牌
     /// </summary>
     public string AccessToken
@@ -49,11 +39,11 @@ public class JushuitanSettings : BindableBase
     }
 
     /// <summary>
-    ///     刷新令牌
+    ///     应用密钥
     /// </summary>
-    public string RefreshToken
+    public string AppSecret
     {
-        get => _refreshToken;
-        set => SetProperty(ref _refreshToken, value);
+        get => _appSecret;
+        set => SetProperty(ref _appSecret, value);
     }
 }

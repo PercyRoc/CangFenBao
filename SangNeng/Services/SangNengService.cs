@@ -24,6 +24,8 @@ internal class SangNengService : ISangNengService
 
         // 配置基本认证
         var settings = settingsService.LoadSettings<SangNengSettings>();
+        Log.Information("加载桑能配置: Username={Username}, Password={Password}", settings.Username, settings.Password);
+        
         var authToken = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{settings.Username}:{settings.Password}"));
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authToken);
     }
@@ -34,10 +36,17 @@ internal class SangNengService : ISangNengService
         {
             const string url = "http://247tech.xyz:12009/api/DWSController/ProvidedByDWS";
 
+            // 修改时间戳为本地时间
+            if (!string.IsNullOrEmpty(request.Timestamp))
+            {
+                var utcTime = DateTime.Parse(request.Timestamp).ToUniversalTime();
+                var localTime = TimeZoneInfo.ConvertTimeFromUtc(utcTime, TimeZoneInfo.Local);
+                request.Timestamp = localTime.ToString("yyyy-MM-dd HH:mm:ss");
+            }
+
             var json = JsonSerializer.Serialize(request, _jsonOptions);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            Log.Debug("正在发送数据到桑能服务器: {@Request}", request);
             var response = await _httpClient.PostAsync(url, content);
 
             var responseContent = await response.Content.ReadAsStringAsync();

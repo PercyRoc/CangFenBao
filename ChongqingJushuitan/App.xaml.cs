@@ -7,6 +7,7 @@ using ChongqingJushuitan.Views;
 using ChongqingJushuitan.Views.Settings;
 using Common.Extensions;
 using Common.Models.Settings.Sort.PendulumSort;
+using Common.Services.License;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
@@ -57,6 +58,7 @@ internal partial class App
         containerRegistry.AddCommonServices();
         containerRegistry.AddShardUi();
         containerRegistry.AddPhotoCamera();
+        containerRegistry.AddLicenseService(); // 添加授权服务
 
         containerRegistry.RegisterSingleton<HttpClient>();
 
@@ -66,6 +68,7 @@ internal partial class App
         // 注册包裹中转服务
         containerRegistry.RegisterSingleton<PackageTransferService>();
         containerRegistry.RegisterForNavigation<BalanceSortSettingsView, BalanceSortSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
         // 注册设置窗口
         containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
         containerRegistry.Register<SettingsDialogViewModel>();
@@ -101,6 +104,13 @@ internal partial class App
 
         try
         {
+            // 验证授权
+            if (!CheckLicense())
+            {
+                Current.Shutdown();
+                return;
+            }
+
             // 启动相机托管服务
             var cameraStartupService = Container.Resolve<CameraStartupService>();
             cameraStartupService.StartAsync(CancellationToken.None).Wait();
@@ -115,6 +125,50 @@ internal partial class App
         {
             Log.Error(ex, "启动托管服务时发生错误");
             throw;
+        }
+    }
+
+    /// <summary>
+    ///     验证授权
+    /// </summary>
+    /// <returns>验证是否通过</returns>
+    private bool CheckLicense()
+    {
+        try
+        {
+            var licenseService = Container.Resolve<ILicenseService>();
+            var (isValid, message) = licenseService.ValidateLicenseAsync().Result;
+
+            if (!isValid)
+            {
+                Log.Warning("授权验证失败: {Message}", message);
+                MessageBox.Show(message ?? "软件授权验证失败，请联系厂家获取授权。", "授权验证", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
+            }
+
+            // 获取授权过期时间并计算剩余天数
+            var expirationDate = licenseService.GetExpirationDateAsync().Result;
+            var daysLeft = (expirationDate - DateTime.Now).TotalDays;
+            Log.Information("授权剩余天数: {DaysLeft} 天", Math.Ceiling(daysLeft));
+
+            if (!string.IsNullOrEmpty(message))
+            {
+                // 有效但有警告消息（如即将过期）
+                Log.Warning("授权警告: {Message}", message);
+                MessageBox.Show(message, "授权提醒", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            else
+            {
+                Log.Information("授权验证通过");
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "授权验证过程发生错误");
+            MessageBox.Show("授权验证过程发生错误，请联系厂家获取支持。", "授权验证", MessageBoxButton.OK, MessageBoxImage.Error);
+            return false;
         }
     }
 

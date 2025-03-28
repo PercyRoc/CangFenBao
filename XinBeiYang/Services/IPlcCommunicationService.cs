@@ -28,6 +28,12 @@ public interface IPlcCommunicationService
     /// <summary>
     ///     发送上包请求
     /// </summary>
-    Task<bool> SendUploadRequestAsync(float weight, float length, float width, float height,
+    /// <returns>
+    ///     - IsSuccess: 是否成功
+    ///     - IsTimeout: 是否超时
+    ///     - CommandId: 指令ID
+    ///     - PackageId: 包裹ID
+    /// </returns>
+    Task<(bool IsSuccess, bool IsTimeout, ushort CommandId, int PackageId)> SendUploadRequestAsync(float weight, float length, float width, float height,
         string barcode1D, string barcode2D, ulong scanTimestamp);
 }

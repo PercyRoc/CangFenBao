@@ -12,10 +12,10 @@ public class SerialPortWeightService : IDisposable
 {
     // 常量定义
     private const int MaxCacheSize = 100;
-    private const int ReadBufferSize = 4096;
+    private const int ReadBufferSize = 8192;
     private const int MaxCacheAgeMinutes = 2;
     private const double StableThreshold = 0.001;
-    private const int ProcessInterval = 50;
+    private const int ProcessInterval = 100;
     private readonly CancellationTokenSource _cts = new();
 
     private readonly object _lock = new();
@@ -156,31 +156,64 @@ public class SerialPortWeightService : IDisposable
 
         IsConnected = false;
 
-        lock (_lock)
+        try
         {
-            try
-            {
-                // 移除事件处理器
-                _serialPort.DataReceived -= OnDataReceived;
-                _serialPort.ErrorReceived -= OnErrorReceived;
+            // 先移除事件处理器，避免新的数据进入
+            _serialPort.DataReceived -= OnDataReceived;
+            _serialPort.ErrorReceived -= OnErrorReceived;
 
-                if (_serialPort.IsOpen)
+            if (_serialPort.IsOpen)
+            {
+                Log.Debug("正在关闭串口 {PortName}...", _serialPort.PortName);
+                
+                // 设置关闭超时
+                var closeTimeout = TimeSpan.FromSeconds(1);
+                var serialPort = _serialPort; // 创建本地引用
+                var closeTask = Task.Run(() =>
                 {
-                    Log.Debug("正在关闭串口 {PortName}...", _serialPort.PortName);
-                    _serialPort.Close();
-                    Log.Debug("串口 {PortName} 已关闭", _serialPort.PortName);
+                    try
+                    {
+                        serialPort.Close();
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "关闭串口时发生错误");
+                    }
+                });
+
+                if (!closeTask.Wait(closeTimeout))
+                {
+                    Log.Warning("关闭串口超时，强制关闭");
+                    try
+                    {
+                        serialPort.DiscardInBuffer();
+                        serialPort.DiscardOutBuffer();
+                        serialPort.Close();
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "强制关闭串口时发生错误");
+                    }
                 }
 
-                _serialPort.Dispose();
-                _serialPort = null;
-                _bufferPosition = 0;
+                Log.Debug("串口 {PortName} 已关闭", serialPort.PortName);
+            }
 
-                Log.Information("串口重量称服务已停止");
-            }
-            catch (Exception ex)
+            // 清理资源
+            _serialPort.Dispose();
+            _serialPort = null;
+            _bufferPosition = 0;
+            _weightSamples.Clear();
+            lock (_lock)
             {
-                Log.Error(ex, "关闭串口时发生错误");
+                _weightCache.Clear();
             }
+
+            Log.Information("串口重量称服务已停止");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "停止串口重量称服务时发生错误");
         }
     }
 
@@ -305,8 +338,8 @@ public class SerialPortWeightService : IDisposable
 
             if (_bufferPosition + bytesToRead > ReadBufferSize)
             {
-                Log.Debug("Buffer is full, resetting buffer");
-                _bufferPosition = 0;
+                Log.Warning("Buffer is full, cleaning buffer");
+                CleanBuffer();
             }
 
             var availableSpace = ReadBufferSize - _bufferPosition;
@@ -314,7 +347,8 @@ public class SerialPortWeightService : IDisposable
 
             if (actualBytesToRead <= 0)
             {
-                Log.Warning("Buffer space insufficient, skipping this read");
+                Log.Warning("Buffer space insufficient, cleaning buffer");
+                CleanBuffer();
                 return;
             }
 
@@ -326,6 +360,15 @@ public class SerialPortWeightService : IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "Error occurred while processing serial port data");
+            CleanBuffer();
+        }
+    }
+
+    private void CleanBuffer()
+    {
+        if (_serialPort?.IsOpen == true)
+        {
+            _serialPort.DiscardInBuffer();
             _bufferPosition = 0;
         }
     }

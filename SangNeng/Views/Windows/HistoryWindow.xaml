@@ -159,15 +159,24 @@
                                     Icon="Barcode24"
                                     Margin="0,0,16,0" />
 
-                        <ui:Button Grid.Column="8"
-                                   Appearance="Primary"
-                                   Command="{Binding QueryCommand}"
-                                   HorizontalAlignment="Left">
-                            <StackPanel Orientation="Horizontal">
-                                <ui:SymbolIcon Symbol="Search24" Margin="0,0,8,0" />
-                                <TextBlock Text="Search" />
-                            </StackPanel>
-                        </ui:Button>
+                        <StackPanel Grid.Column="8" Orientation="Horizontal">
+                            <ui:Button Appearance="Primary"
+                                       Command="{Binding QueryCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="Search24" Margin="0,0,8,0" />
+                                    <TextBlock Text="Search" />
+                                </StackPanel>
+                            </ui:Button>
+
+                            <ui:Button Appearance="Secondary"
+                                       Command="{Binding ExportToExcelCommand}"
+                                       Margin="8,0,0,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="DocumentTable24" Margin="0,0,8,0" />
+                                    <TextBlock Text="Export Excel" />
+                                </StackPanel>
+                            </ui:Button>
+                        </StackPanel>
                     </Grid>
                 </Border>
 
@@ -198,8 +207,23 @@
                                                 Width="100" />
                             <DataGridTextColumn Header="Height(cm)" Binding="{Binding Height, StringFormat={}{0:F1}}"
                                                 Width="100" />
-                            <DataGridTextColumn Header="Volume(cm³)" Binding="{Binding Volume}" Width="120" />
-                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
+                            <DataGridTextColumn Header="Volume(cm³)" Binding="{Binding Volume}" Width="180" />
+                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100">
+                                <DataGridTextColumn.CellStyle>
+                                    <Style TargetType="DataGridCell">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Status}" Value="MeasureSuccess">
+                                                <Setter Property="Background" Value="#4CAF50"/>
+                                                <Setter Property="Foreground" Value="White"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Status}" Value="MeasureFailed">
+                                                <Setter Property="Background" Value="#F44336"/>
+                                                <Setter Property="Foreground" Value="White"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </DataGridTextColumn.CellStyle>
+                            </DataGridTextColumn>
                             <DataGridTextColumn Header="Create Time"
                                                 Binding="{Binding CreateTime, StringFormat=yyyy-MM-dd HH:mm:ss}"
                                                 Width="*" />

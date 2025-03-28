@@ -3,17 +3,21 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
 using Serilog;
+using Timer = System.Timers.Timer;
 
 namespace DeviceService.DataSourceDevices.Scanner;
 
 /// <summary>
 ///     USB扫码枪服务实现
 /// </summary>
-internal partial class UsbScannerService : IScannerService
+internal class UsbScannerService : IScannerService
 {
-    private const int ScannerTimeout = 50; // 扫码枪输入超时时间（毫秒）
+    private const int ScannerTimeout = 200; // 扫码枪输入超时时间
     private readonly StringBuilder _barcodeBuilder = new();
     private readonly LowLevelKeyboardProc _proc;
+    private readonly Queue<string> _barcodeQueue = new();
+    private readonly object _lock = new();
+    private readonly Timer _processTimer;
     private IntPtr _hookId = IntPtr.Zero;
     private bool _isRunning;
     private DateTime _lastKeyTime = DateTime.MinValue;
@@ -21,6 +25,11 @@ internal partial class UsbScannerService : IScannerService
     public UsbScannerService()
     {
         _proc = HookCallback;
+        
+        // 初始化处理定时器
+        _processTimer = new Timer(100); // 每100ms处理一次
+        _processTimer.Elapsed += ProcessBarcodeQueue;
+        _processTimer.Start();
     }
 
     public event EventHandler<string>? BarcodeScanned;
@@ -32,6 +41,12 @@ internal partial class UsbScannerService : IScannerService
             if (_isRunning) return true;
 
             _hookId = SetHook(_proc);
+            if (_hookId == IntPtr.Zero)
+            {
+                Log.Error("设置键盘钩子失败");
+                return false;
+            }
+
             _isRunning = true;
             Log.Information("USB扫码枪服务已启动");
             return true;
@@ -47,19 +62,29 @@ internal partial class UsbScannerService : IScannerService
     {
         if (!_isRunning) return;
 
-        if (_hookId != IntPtr.Zero)
+        try
         {
-            UnhookWindowsHookEx(_hookId);
-            _hookId = IntPtr.Zero;
-        }
+            if (_hookId != IntPtr.Zero)
+            {
+                UnhookWindowsHookEx(_hookId);
+                _hookId = IntPtr.Zero;
+            }
 
-        _isRunning = false;
-        Log.Information("USB扫码枪服务已停止");
+            _isRunning = false;
+            _barcodeBuilder.Clear();
+            _barcodeQueue.Clear();
+            Log.Information("USB扫码枪服务已停止");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "停止USB扫码枪服务时发生错误");
+        }
     }
 
     public void Dispose()
     {
         Stop();
+        _processTimer.Dispose();
         GC.SuppressFinalize(this);
     }
 
@@ -69,7 +94,7 @@ internal partial class UsbScannerService : IScannerService
         using var curModule = curProcess.MainModule;
         if (curModule == null) throw new InvalidOperationException("无法获取当前进程主模块");
 
-        return SetWindowsHookEx(13, proc, GetModuleHandle(curModule.ModuleName), 0);
+        return SetWindowsHookEx(13, proc, GetModuleHandle(null), 0);
     }
 
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
@@ -81,7 +106,10 @@ internal partial class UsbScannerService : IScannerService
 
         // 检查是否超时，如果超时则清空缓存
         if ((currentTime - _lastKeyTime).TotalMilliseconds > ScannerTimeout && _barcodeBuilder.Length > 0)
+        {
+            Log.Debug("扫码超时，清空缓存");
             _barcodeBuilder.Clear();
+        }
 
         _lastKeyTime = currentTime;
 
@@ -92,7 +120,21 @@ internal partial class UsbScannerService : IScannerService
 
             var barcode = _barcodeBuilder.ToString();
             _barcodeBuilder.Clear();
-            BarcodeScanned?.Invoke(this, barcode);
+            
+            // 验证条码
+            if (ValidateBarcode(barcode))
+            {
+                // 将条码添加到队列
+                lock (_lock)
+                {
+                    _barcodeQueue.Enqueue(barcode);
+                }
+                Log.Debug("收到有效条码：{Barcode}", barcode);
+            }
+            else
+            {
+                Log.Warning("收到无效条码：{Barcode}", barcode);
+            }
         }
         else
         {
@@ -102,22 +144,52 @@ internal partial class UsbScannerService : IScannerService
 
         return CallNextHookEx(_hookId, nCode, wParam, lParam);
     }
+
+    private void ProcessBarcodeQueue(object? sender, System.Timers.ElapsedEventArgs e)
+    {
+        lock (_lock)
+        {
+            while (_barcodeQueue.Count > 0)
+            {
+                var barcode = _barcodeQueue.Dequeue();
+                try
+                {
+                    BarcodeScanned?.Invoke(this, barcode);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "处理条码事件时发生错误：{Barcode}", barcode);
+                }
+            }
+        }
+    }
+
+    private static bool ValidateBarcode(string barcode)
+    {
+        // 添加条码格式验证
+        if (string.IsNullOrEmpty(barcode) || barcode.Length < 5)
+        {
+            return false;
+        }
+        return true;
+    }
+
     private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
 
     #region Native Methods
 
-    [LibraryImport("user32.dll", SetLastError = true)]
-    private static partial IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
 
-    [LibraryImport("user32.dll", SetLastError = true)]
+    [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial void UnhookWindowsHookEx(IntPtr hhk);
+    private static extern bool UnhookWindowsHookEx(IntPtr hhk);
 
-    [LibraryImport("user32.dll", SetLastError = true)]
-    private static partial IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
 
-    [LibraryImport("kernel32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
-    private static partial IntPtr GetModuleHandle(string? lpModuleName);
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern IntPtr GetModuleHandle(string? lpModuleName);
 
     #endregion
 }

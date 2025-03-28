@@ -183,10 +183,11 @@ internal class BenNiaoPackageService : IDisposable
 
             // 创建新客户端
             _sftpClient = new SftpClient(_config.BenNiaoFtpHost, _config.BenNiaoFtpPort,
-                _config.BenNiaoFtpUsername, _config.BenNiaoFtpPassword);
-
-            // 配置SFTP客户端超时设置
-            _sftpClient.OperationTimeout = TimeSpan.FromSeconds(30);
+                _config.BenNiaoFtpUsername, _config.BenNiaoFtpPassword)
+            {
+                // 配置SFTP客户端超时设置
+                OperationTimeout = TimeSpan.FromSeconds(30)
+            };
             _sftpClient.ConnectionInfo.Timeout = TimeSpan.FromSeconds(15);
 
             Log.Debug("正在连接到SFTP服务器 {Host}:{Port}...", _config.BenNiaoFtpHost, _config.BenNiaoFtpPort);

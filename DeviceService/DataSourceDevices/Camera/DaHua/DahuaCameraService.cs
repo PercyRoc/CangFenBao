@@ -138,8 +138,6 @@ public class DahuaCameraService : ICameraService
                             packageInfo.Length = Math.Round(args.VolumeInfo.length / 10, 2);
                             packageInfo.Width = Math.Round(args.VolumeInfo.width / 10, 2);
                             packageInfo.Height = Math.Round(args.VolumeInfo.height / 10, 2);
-                            packageInfo.VolumeDisplay =
-                                $"{packageInfo.Length:F1} × {packageInfo.Width:F1} × {packageInfo.Height:F1}";
                         }
 
                         // 处理图像数据

@@ -71,7 +71,17 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         // 订阅包裹流
         _subscriptions.Add(packageTransferService.PackageStream
             .ObserveOn(Scheduler.CurrentThread)
-            .Subscribe(OnPackageInfo));
+            .Subscribe(package => 
+            {
+                try 
+                {
+                    _ = OnPackageInfo(package);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "处理包裹时发生错误");
+                }
+            }));
 
         // 订阅图像流
         _subscriptions.Add(_cameraService.ImageStream
@@ -248,14 +258,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
         PackageInfoItems.Add(new PackageInfoItem
         {
-            Label = "格口",
-            Value = "--",
-            Description = "目标格口",
-            Icon = "BoxMultiple24"
-        });
-
-        PackageInfoItems.Add(new PackageInfoItem
-        {
             Label = "时间",
             Value = "--:--:--",
             Description = "处理时间",
@@ -287,88 +289,83 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     {
         Application.Current.Dispatcher.Invoke(() =>
         {
-            var plcStatus = DeviceStatuses.FirstOrDefault(static s => s.Name == "PLC");
-            if (plcStatus == null) return;
+            try
+            {
+                var plcStatus = DeviceStatuses.FirstOrDefault(static s => s.Name == "PLC");
+                if (plcStatus == null) return;
 
-            plcStatus.Status = isConnected ? "已连接" : "已断开";
-            plcStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
+                plcStatus.Status = isConnected ? "已连接" : "未连接";
+                plcStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336"; // 绿色表示已连接，红色表示未连接
+                Log.Information("PLC状态已更新：{Status}", plcStatus.Status);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "更新PLC状态栏时发生错误");
+            }
         });
     }
 
-    private async void OnPackageInfo(PackageInfo package)
+    private async Task OnPackageInfo(PackageInfo package)
     {
         try
         {
-            package.Index = Interlocked.Increment(ref _currentPackageIndex);
-            Log.Information("收到包裹信息：{Barcode}, 序号：{Index}", package.Barcode, package.Index);
-            // 发送上包请求
-            if (_plcCommunicationService.IsConnected)
+            // 更新包裹序号和条码
+            _currentPackageIndex++;
+            package.Index = _currentPackageIndex;
+            CurrentBarcode = package.Barcode;
+
+            // 先更新UI显示
+            Application.Current.Dispatcher.Invoke(() => 
             {
-                try
+                UpdatePackageInfoItems(package);
+            });
+
+            // 发送上包请求
+            var (isSuccess, isTimeout, commandId, packageId) = await _plcCommunicationService.SendUploadRequestAsync(
+                package.Weight,
+                (float)(package.Length ?? 0),
+                (float)(package.Width ?? 0),
+                (float)(package.Height ?? 0),
+                package.Barcode,
+                string.Empty,
+                (ulong)DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+
+            if (!isSuccess)
+            {
+                if (isTimeout)
                 {
-                    // 处理尺寸为空的情况，使用默认值0
-                    var length = package.Length ?? 0;
-                    var width = package.Width ?? 0;
-                    var height = package.Height ?? 0;
-
-                    var scanTimestamp = (ulong)DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                    var result = await _plcCommunicationService.SendUploadRequestAsync(
-                        package.Weight,
-                        (float)length,
-                        (float)width,
-                        (float)height,
-                        package.Barcode,
-                        string.Empty,
-                        scanTimestamp);
-
-                    if (!result)
-                    {
-                        package.SetError("PLC上包请求被拒绝");
-                        Log.Warning("PLC上包请求被拒绝：{Barcode}", package.Barcode);
-                    }
-                    else
-                    {
-                        // 记录发送的尺寸信息
-                        Log.Information("发送上包请求成功：{Barcode}, 尺寸：{Length}×{Width}×{Height}mm",
-                            package.Barcode, length, width, height);
-                    }
+                    Log.Warning("包裹 {Barcode}(序号:{Index}) 上包超时，CommandId={CommandId}", 
+                        package.Barcode, package.Index, commandId);
+                    package.SetError($"上包超时 (序号: {package.Index})");
                 }
-                catch (Exception ex)
+                else
                 {
-                    package.SetError($"PLC上包请求失败：{ex.Message}");
-                    Log.Error(ex, "发送PLC上包请求时发生错误：{Barcode}", package.Barcode);
+                    Log.Warning("包裹 {Barcode}(序号:{Index}) 上包请求被拒绝，CommandId={CommandId}", 
+                        package.Barcode, package.Index, commandId);
+                    package.SetError($"上包请求被拒绝 (序号: {package.Index})");
                 }
             }
             else
             {
-                package.SetError("PLC未连接，无法发送上包请求");
-                Log.Warning("PLC未连接，无法发送上包请求：{Barcode}", package.Barcode);
+                // 更新包裹信息
+                package.Status = PackageStatus.Processed;
+                package.Information = $"上包成功 (序号: {package.Index}, 包裹流水号: {packageId})";
+                Log.Information("包裹 {Barcode}(序号:{Index}) 上包成功，CommandId={CommandId}, 包裹流水号={PackageId}", 
+                    package.Barcode, package.Index, commandId, packageId);
             }
 
-            Application.Current.Dispatcher.Invoke(() =>
+            // 更新UI
+            Application.Current.Dispatcher.Invoke(() => 
             {
-                try
-                {
-                    // 更新当前条码和图像
-                    CurrentBarcode = package.Barcode;
-                    // 更新实时包裹数据
-                    UpdatePackageInfoItems(package);
-                    // 更新历史包裹列表
-                    UpdatePackageHistory(package);
-
-                    // 更新统计信息
-                    UpdateStatistics(package);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "更新UI时发生错误");
-                }
+                UpdatePackageInfoItems(package);
+                UpdatePackageHistory(package);
+                UpdateStatistics(package);
             });
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "处理包裹信息时发生错误：{Barcode}", package.Barcode);
-            package.SetError($"处理失败：{ex.Message}");
+            Log.Error(ex, "处理包裹 {Barcode}(序号:{Index}) 时发生错误", package.Barcode, package.Index);
+            package.SetError($"处理失败：{ex.Message} (序号: {package.Index})");
         }
     }
 
@@ -387,13 +384,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             sizeItem.Value = package.VolumeDisplay;
         }
 
-        var chuteItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "格口");
-        if (chuteItem != null)
-        {
-            chuteItem.Value = package.ChuteName.ToString();
-            chuteItem.Description = string.IsNullOrEmpty(package.ChuteName.ToString()) ? "等待分配..." : "目标格口";
-        }
-
         var timeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "时间");
         if (timeItem != null)
         {
@@ -404,8 +394,16 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         var statusItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "状态");
         if (statusItem == null) return;
 
-        statusItem.Value = string.IsNullOrEmpty(package.ErrorMessage) ? "正常" : "异常";
-        statusItem.Description = string.IsNullOrEmpty(package.ErrorMessage) ? "处理成功" : package.ErrorMessage;
+        if (string.IsNullOrEmpty(package.ErrorMessage))
+        {
+            statusItem.Value = "正常";
+            statusItem.Description = $"处理成功 (序号: {package.Index})";
+        }
+        else
+        {
+            statusItem.Value = "异常";
+            statusItem.Description = $"{package.ErrorMessage} (序号: {package.Index})";
+        }
     }
 
     private void UpdatePackageHistory(PackageInfo package)
@@ -413,19 +411,21 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             // 限制历史记录数量，保持最新的100条记录
-            const int maxHistoryCount = 100;
+            const int maxHistoryCount = 1000;
+
+            // 如果Information为空，才设置默认信息
+            if (string.IsNullOrEmpty(package.Information))
+            {
+                package.Information = string.IsNullOrEmpty(package.ErrorMessage) 
+                    ? $"处理成功 (序号: {package.Index})" 
+                    : $"{package.ErrorMessage} (序号: {package.Index})";
+            }
 
             // 添加到历史记录开头
             PackageHistory.Insert(0, package);
 
             // 如果超出最大数量，移除多余的记录
             while (PackageHistory.Count > maxHistoryCount) PackageHistory.RemoveAt(PackageHistory.Count - 1);
-
-            // 更新序号
-            for (var i = 0; i < PackageHistory.Count; i++)
-            {
-                PackageHistory[i].Index = i + 1;
-            }
         }
         catch (Exception ex)
         {

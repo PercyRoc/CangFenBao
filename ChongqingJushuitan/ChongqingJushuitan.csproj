@@ -8,7 +8,7 @@
         <UseWPF>true</UseWPF>
         <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
         <UseWPF>true</UseWPF>
-        <AssemblyName>仓分宝-中通云仓</AssemblyName>
+        <AssemblyName>仓分宝-重庆夜客来</AssemblyName>
         <LangVersion>default</LangVersion>
     </PropertyGroup>
 

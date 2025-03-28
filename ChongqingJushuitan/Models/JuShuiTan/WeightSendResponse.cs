@@ -20,22 +20,10 @@ public class WeightSendResponse
     public string Message { get; set; } = null!;
 
     /// <summary>
-    ///     是否成功
-    /// </summary>
-    [JsonPropertyName("issuccess")]
-    public bool IsSuccess { get; set; }
-
-    /// <summary>
-    ///     请求ID
-    /// </summary>
-    [JsonPropertyName("requestId")]
-    public string? RequestId { get; set; }
-
-    /// <summary>
     ///     数据集合
     /// </summary>
-    [JsonPropertyName("datas")]
-    public List<WeightSendResponseData> Data { get; set; } = new();
+    [JsonPropertyName("data")]
+    public WeightSendResponseData Data { get; set; } = new();
 }
 
 /// <summary>
@@ -43,6 +31,30 @@ public class WeightSendResponse
 /// </summary>
 public class WeightSendResponseData
 {
+    /// <summary>
+    ///     数据集合
+    /// </summary>
+    [JsonPropertyName("datas")]
+    public List<WeightSendResponseItem> Items { get; set; } = new();
+}
+
+/// <summary>
+///     称重发货响应项
+/// </summary>
+public class WeightSendResponseItem
+{
+    /// <summary>
+    ///     错误码
+    /// </summary>
+    [JsonPropertyName("code")]
+    public int Code { get; set; }
+
+    /// <summary>
+    ///     错误描述
+    /// </summary>
+    [JsonPropertyName("msg")]
+    public string Message { get; set; } = null!;
+
     /// <summary>
     ///     预估重量
     /// </summary>
@@ -59,13 +71,13 @@ public class WeightSendResponseData
     ///     快递单号
     /// </summary>
     [JsonPropertyName("l_id")]
-    internal string LogisticsId { get; set; } = null!;
+    public string LogisticsId { get; set; } = null!;
 
     /// <summary>
     ///     物流公司
     /// </summary>
     [JsonPropertyName("logistics_company")]
-    internal string LogisticsCompany { get; set; } = null!;
+    public string LogisticsCompany { get; set; } = null!;
 
     /// <summary>
     ///     省
@@ -84,34 +96,4 @@ public class WeightSendResponseData
     /// </summary>
     [JsonPropertyName("receiver_district")]
     public string ReceiverDistrict { get; set; } = null!;
-
-    /// <summary>
-    ///     国际物流编码
-    /// </summary>
-    [JsonPropertyName("cb_lc_id")]
-    public string? CrossBorderLogisticsCompanyId { get; set; }
-
-    /// <summary>
-    ///     国际运单号
-    /// </summary>
-    [JsonPropertyName("cb_l_id")]
-    public string? CrossBorderLogisticsId { get; set; }
-
-    /// <summary>
-    ///     国际物流渠道
-    /// </summary>
-    [JsonPropertyName("cb_logistics_company")]
-    public string? CrossBorderLogisticsCompany { get; set; }
-
-    /// <summary>
-    ///     是否成功
-    /// </summary>
-    [JsonPropertyName("is_success")]
-    public bool IsSuccess { get; set; }
-
-    /// <summary>
-    ///     错误信息
-    /// </summary>
-    [JsonPropertyName("msg")]
-    public string? Message { get; set; }
 }

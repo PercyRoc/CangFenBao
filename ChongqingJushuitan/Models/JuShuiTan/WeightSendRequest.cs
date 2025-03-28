@@ -14,16 +14,16 @@ public class WeightSendRequest
     public string LogisticsId { get; set; } = null!;
 
     /// <summary>
-    ///     重量，kg。传0保存0重量，传-1出库单重量为null
+    ///     重量，kg。传0保存0重量，传-1出库单重量为null。需要传空重量的联系我们开开关
     /// </summary>
     [JsonPropertyName("weight")]
-    public decimal Weight { get; set; }
+    public decimal Weight { get; set; } = 0.001m;
 
     /// <summary>
     ///     是否是国际运单号：默认为false国内快递
     /// </summary>
     [JsonPropertyName("is_un_lid")]
-    public bool IsInternational { get; set; }
+    public bool IsUnLid { get; set; }
 
     /// <summary>
     ///     默认值为1

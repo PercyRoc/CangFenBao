@@ -670,7 +670,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                             Width = package.Width,
                             Height = package.Height,
                             Volume = package.Volume,
-                            VolumeDisplay = package.VolumeDisplay,
                             CreateTime = DateTime.Now,
                             Index = package.Index
                         };

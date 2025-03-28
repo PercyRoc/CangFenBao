@@ -69,6 +69,26 @@
                                       ClearButtonEnabled="False"
                                       Value="{Binding Configuration.Port, UpdateSourceTrigger=PropertyChanged}" />
                     </Grid>
+
+                    <!-- 上包超时时间 -->
+                    <Grid Margin="0,16,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Text="超时时间："
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
+
+                        <ui:NumberBox Grid.Column="1"
+                                      Width="120"
+                                      HorizontalAlignment="Left"
+                                      ClearButtonEnabled="False"
+                                      Value="{Binding Configuration.UploadTimeoutSeconds,Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
                 </StackPanel>
             </ui:Card>
         </StackPanel>

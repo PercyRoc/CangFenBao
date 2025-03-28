@@ -492,15 +492,17 @@
                                         </DockPanel>
                                     </Border>
 
-                                    <Image Grid.Row="1"
+                                    <Border Grid.Row="1"
                                            Margin="8"
-                                           Source="{Binding CurrentImage}"
-                                           RenderOptions.BitmapScalingMode="HighQuality"
-                                           RenderOptions.EdgeMode="Aliased"
-                                           Stretch="Uniform"
-                                           StretchDirection="Both"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center" />
+                                           Background="Black">
+                                        <Image Source="{Binding CurrentImage}"
+                                               RenderOptions.BitmapScalingMode="HighQuality"
+                                               RenderOptions.EdgeMode="Aliased"
+                                               Stretch="Uniform"
+                                               StretchDirection="Both"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                    </Border>
                                 </Grid>
                             </Border>
 
@@ -534,15 +536,17 @@
                                         </DockPanel>
                                     </Border>
 
-                                    <Image Grid.Row="1"
+                                    <Border Grid.Row="1"
                                            Margin="8"
-                                           Source="{Binding VolumeImage}"
-                                           RenderOptions.BitmapScalingMode="HighQuality"
-                                           RenderOptions.EdgeMode="Aliased"
-                                           Stretch="Uniform"
-                                           StretchDirection="Both"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center" />
+                                           Background="Black">
+                                        <Image Source="{Binding VolumeImage}"
+                                               RenderOptions.BitmapScalingMode="HighQuality"
+                                               RenderOptions.EdgeMode="Aliased"
+                                               Stretch="Uniform"
+                                               StretchDirection="Both"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                    </Border>
                                 </Grid>
                             </Border>
                         </Grid>
@@ -588,8 +592,23 @@
                                 <DataGridTextColumn Header="No." Binding="{Binding Index}" Width="60" />
                                 <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" Width="160" />
                                 <DataGridTextColumn Header="Weight" Binding="{Binding WeightDisplay}" Width="80" />
-                                <DataGridTextColumn Header="Size" Binding="{Binding VolumeDisplay}" Width="120" />
-                                <DataGridTextColumn Header="Status" Binding="{Binding StatusDisplay}" Width="80" />
+                                <DataGridTextColumn Header="Size" Binding="{Binding VolumeDisplay}" Width="200" />
+                                <DataGridTextColumn Header="Status" Binding="{Binding StatusDisplay}" Width="80">
+                                    <DataGridTextColumn.CellStyle>
+                                        <Style TargetType="DataGridCell">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Status}" Value="MeasureSuccess">
+                                                    <Setter Property="Background" Value="#4CAF50"/>
+                                                    <Setter Property="Foreground" Value="White"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Status}" Value="MeasureFailed">
+                                                    <Setter Property="Background" Value="#F44336"/>
+                                                    <Setter Property="Foreground" Value="White"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGridTextColumn.CellStyle>
+                                </DataGridTextColumn>
                                 <DataGridTextColumn Header="Time"
                                                     Binding="{Binding CreateTime, StringFormat={}{0:HH:mm:ss}}"
                                                     Width="100" />

@@ -295,11 +295,10 @@ internal class TcpCameraService(string host = "127.0.0.1", int port = 20011) : I
         var remainingData = string.Empty;
 
         // 查找所有符合格式的数据包
-        // 格式: 条码,重量,长度,宽度,高度,体积,时间戳
-
-        // 简单的方法：检查是否包含7个字段
+        // 格式: 条码1,条码2,...,条码N,重量,长度,宽度,高度,体积,时间戳
         var parts = data.Split(',');
 
+        // 检查是否有足够的基本字段（至少7个字段：1个条码 + 重量 + 长度 + 宽度 + 高度 + 体积 + 时间戳）
         if (parts.Length >= 7)
         {
             // 可能有一个或多个完整的数据包
@@ -312,11 +311,21 @@ internal class TcpCameraService(string host = "127.0.0.1", int port = 20011) : I
                 currentPacket.Add(part);
                 fieldCount++;
 
-                if (fieldCount != 7) continue;
-                // 找到一个完整的数据包
-                completePackets.Add(string.Join(",", currentPacket));
-                currentPacket.Clear();
-                fieldCount = 0;
+                // 检查是否达到完整数据包（至少7个字段）
+                if (fieldCount >= 7)
+                {
+                    // 验证数据包格式
+                    if (ValidatePacket(currentPacket))
+                    {
+                        completePackets.Add(string.Join(",", currentPacket));
+                    }
+                    else
+                    {
+                        Log.Warning("无效的数据包格式: {Packet}", string.Join(",", currentPacket));
+                    }
+                    currentPacket.Clear();
+                    fieldCount = 0;
+                }
             }
 
             // 添加所有完整的数据包
@@ -337,13 +346,33 @@ internal class TcpCameraService(string host = "127.0.0.1", int port = 20011) : I
         return (result, remainingData);
     }
 
+    /// <summary>
+    ///     验证数据包格式
+    /// </summary>
+    private static bool ValidatePacket(List<string> packet)
+    {
+        if (packet.Count < 7) return false;
+
+        // 验证时间戳
+        if (!long.TryParse(packet[^1], out _)) return false;
+
+        // 验证数值字段
+        if (!float.TryParse(packet[^6], out _)) return false; // 重量
+        if (!double.TryParse(packet[^5], out _)) return false; // 长度
+        if (!double.TryParse(packet[^4], out _)) return false; // 宽度
+        if (!double.TryParse(packet[^3], out _)) return false; // 高度
+        if (!double.TryParse(packet[^2], out _)) return false; // 体积
+
+        return true;
+    }
+
     private void ProcessPackageData(string data)
     {
         try
         {
             Log.Debug("开始处理数据: {Data}", data);
             var parts = data.Split(',');
-            if (parts.Length != 7)
+            if (parts.Length < 7)
             {
                 Log.Warning("无效的数据格式: {Data}", data);
                 return;
@@ -351,50 +380,71 @@ internal class TcpCameraService(string host = "127.0.0.1", int port = 20011) : I
 
             // 解析时间戳
             DateTime timestamp;
-            if (long.TryParse(parts[6], out var unixTimestamp))
+            if (long.TryParse(parts[^1], out var unixTimestamp))
             {
-                timestamp = DateTimeOffset.FromUnixTimeMilliseconds(unixTimestamp).LocalDateTime;
+                // 判断时间戳是秒还是毫秒
+                // 如果时间戳大于当前时间戳，说明是毫秒
+                var currentTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                if (unixTimestamp > currentTimestamp)
+                {
+                    // 毫秒时间戳
+                    timestamp = DateTimeOffset.FromUnixTimeMilliseconds(unixTimestamp).LocalDateTime;
+                }
+                else
+                {
+                    // 秒时间戳
+                    timestamp = DateTimeOffset.FromUnixTimeSeconds(unixTimestamp).LocalDateTime;
+                }
             }
             else
             {
                 timestamp = DateTime.Now;
-                Log.Warning("无法解析时间戳: {Timestamp}，使用当前时间", parts[6]);
+                Log.Warning("无法解析时间戳: {Timestamp}，使用当前时间", parts[^1]);
             }
 
             _lastPackageIndex++; // 使用自增操作符
+
+            // 只使用第一个条码
+            var firstBarcode = parts[0].Trim();
+            if (string.IsNullOrEmpty(firstBarcode))
+            {
+                Log.Warning("第一个条码为空，跳过处理");
+                return;
+            }
+
             var package = new PackageInfo
             {
                 Index = _lastPackageIndex,
-                Barcode = parts[0].Trim(),
+                Barcode = firstBarcode,
                 CreateTime = timestamp
             };
 
             // 解析重量
-            if (float.TryParse(parts[1], out var weight))
+            if (float.TryParse(parts[^6], out var weight))
             {
                 package.Weight = weight;
             }
 
             // 解析长度
-            if (double.TryParse(parts[2], out var length))
+            if (double.TryParse(parts[^5], out var length))
             {
                 package.Length = length;
             }
 
             // 解析宽度
-            if (double.TryParse(parts[3], out var width))
+            if (double.TryParse(parts[^4], out var width))
             {
                 package.Width = width;
             }
 
             // 解析高度
-            if (double.TryParse(parts[4], out var height))
+            if (double.TryParse(parts[^3], out var height))
             {
                 package.Height = height;
             }
 
             // 解析体积
-            if (double.TryParse(parts[5], out var volume))
+            if (double.TryParse(parts[^2], out var volume))
             {
                 package.Volume = volume;
             }
@@ -402,10 +452,22 @@ internal class TcpCameraService(string host = "127.0.0.1", int port = 20011) : I
             package.SetTriggerTimestamp(timestamp);
             _packageSubject.OnNext(package);
 
-            Log.Information(
-                "收到包裹: 序号={Index}, 条码={Barcode}, 时间={Time}, 重量={Weight:F2}kg, 长={Length:F2}cm, 宽={Width:F2}cm, 高={Height:F2}cm, 体积={Volume:F2}cm³",
-                package.Index, package.Barcode, timestamp, package.Weight, package.Length, package.Width,
-                package.Height, package.Volume);
+            // 如果存在多个条码，记录日志
+            if (parts.Length > 7)
+            {
+                var additionalBarcodes = string.Join(",", parts[1..^6].Select(b => b.Trim()));
+                Log.Information(
+                    "收到包裹: 序号={Index}, 条码={Barcode}, 时间={Time}, 重量={Weight:F2}kg, 长={Length:F2}cm, 宽={Width:F2}cm, 高={Height:F2}cm, 体积={Volume:F2}cm³, 额外条码={AdditionalBarcodes}",
+                    package.Index, package.Barcode, timestamp, package.Weight, package.Length, package.Width,
+                    package.Height, package.Volume, additionalBarcodes);
+            }
+            else
+            {
+                Log.Information(
+                    "收到包裹: 序号={Index}, 条码={Barcode}, 时间={Time}, 重量={Weight:F2}kg, 长={Length:F2}cm, 宽={Width:F2}cm, 高={Height:F2}cm, 体积={Volume:F2}cm³",
+                    package.Index, package.Barcode, timestamp, package.Weight, package.Length, package.Width,
+                    package.Height, package.Volume);
+            }
         }
         catch (Exception ex)
         {
