@@ -51,6 +51,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         // 初始化命令
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
         ResetWarningCommand = new DelegateCommand(ExecuteResetWarning);
+        OpenHistoryCommand = new DelegateCommand(ExecuteOpenHistory);
 
         // 初始化系统状态更新定时器
         _timer = new DispatcherTimer
@@ -62,6 +63,14 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
         // 初始化设备状态
         InitializeDeviceStatuses();
+
+        // 主动查询一次警示灯状态
+        var warningLightStatus = DeviceStatuses.FirstOrDefault(static x => x.Name == "警示灯");
+        if (warningLightStatus != null)
+        {
+            warningLightStatus.Status = _warningLightService.IsConnected ? "已连接" : "已断开";
+            warningLightStatus.StatusColor = _warningLightService.IsConnected ? "#4CAF50" : "#F44336";
+        }
 
         // 初始化统计数据
         InitializeStatisticsItems();
@@ -107,6 +116,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     public DelegateCommand OpenSettingsCommand { get; }
     public DelegateCommand ResetWarningCommand { get; private set; }
+    public DelegateCommand OpenHistoryCommand { get; }
 
     public string CurrentBarcode
     {
@@ -138,6 +148,11 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private void ExecuteOpenSettings()
     {
         _dialogService.ShowDialog("SettingsDialog");
+    }
+
+    private void ExecuteOpenHistory()
+    {
+        _dialogService.ShowDialog("HistoryWindow");
     }
 
     private async void ExecuteResetWarning()
@@ -462,21 +477,52 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 });
             }
 
+            Log.Debug("开始更新历史记录和统计数据，当前历史记录数量: {Count}", PackageHistory.Count);
+            
+            // 计算处理时间
+            package.ProcessingTime = (DateTime.Now - package.CreateTime).TotalMilliseconds;
+            
             Application.Current.Dispatcher.Invoke(() =>
             {
                 try
                 {
+                    // 创建PackageInfo的新实例，避免引用原始对象导致的问题
+                    var packageCopy = new PackageInfo
+                    {
+                        Index = package.Index,
+                        Barcode = package.Barcode,
+                        Weight = package.Weight,
+                        Length = package.Length,
+                        Width = package.Width,
+                        Height = package.Height,
+                        Volume = package.Volume,
+                        StatusDisplay = package.StatusDisplay,
+                        ProcessingTime = package.ProcessingTime,
+                        CreateTime = package.CreateTime,
+                        Information = package.Information,
+                        ErrorMessage = package.ErrorMessage
+                    };
+                    
                     // 更新历史记录
-                    PackageHistory.Insert(0, package);
+                    Log.Debug("添加包裹到历史记录: {Barcode}, 序号: {Index}", packageCopy.Barcode, packageCopy.Index);
+                    
+                    // 在UI线程上更新ObservableCollection
+                    PackageHistory.Insert(0, packageCopy);
+                    Log.Debug("历史记录更新后数量: {Count}", PackageHistory.Count);
+                    
                     while (PackageHistory.Count > 1000) // 保持最近1000条记录
                         PackageHistory.RemoveAt(PackageHistory.Count - 1);
 
                     // 更新统计数据
                     UpdateStatistics();
+                    Log.Debug("统计数据更新完成");
+                    
+                    // 强制通知UI刷新
+                    RaisePropertyChanged(nameof(PackageHistory));
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "更新统计信息时发生错误");
+                    Log.Error(ex, "更新历史记录和统计信息时发生错误");
                     package.SetError($"更新统计失败：{ex.Message}");
                     UpdatePackageInfoItems(package);
                 }

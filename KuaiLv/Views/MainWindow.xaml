@@ -14,7 +14,7 @@
                  Width="1600"
                  WindowStartupLocation="CenterScreen"
                  Closing="MetroWindow_Closing"
-                 ExtendsContentIntoTitleBar="True" x:ClassModifier="internal">
+                 ExtendsContentIntoTitleBar="True">
 
     <ui:FluentWindow.Resources>
         <ResourceDictionary>
@@ -42,9 +42,10 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <!-- 应用图标 -->
@@ -81,8 +82,21 @@
                 </StackPanel>
             </ui:Button>
 
-            <!-- 关闭报警按钮 -->
+            <!-- 历史记录按钮 -->
             <ui:Button Grid.Column="2"
+                       Appearance="Primary"
+                       Command="{Binding OpenHistoryCommand}"
+                       Margin="0,0,8,0"
+                       Padding="8,6"
+                       ToolTip="历史记录">
+                <StackPanel Orientation="Horizontal">
+                    <ui:SymbolIcon Symbol="History24" Margin="0,0,8,0" />
+                    <TextBlock Text="历史记录" VerticalAlignment="Center" />
+                </StackPanel>
+            </ui:Button>
+
+            <!-- 关闭报警按钮 -->
+            <ui:Button Grid.Column="3"
                        Appearance="Primary"
                        Background="Red"
                        Command="{Binding ResetWarningCommand}"
@@ -96,11 +110,10 @@
             </ui:Button>
 
             <!-- 标题 -->
-            <TextBlock Grid.Column="3"
+            <TextBlock Grid.Column="4"
                        Text="仓分宝-快驴"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
-                       Margin="0,0,8,0"
                        FontSize="20"
                        FontFamily="微软雅黑"
                        FontWeight="SemiBold"
@@ -116,7 +129,7 @@
             </TextBlock>
 
             <!-- TitleBar -->
-            <ui:TitleBar Grid.Column="4"
+            <ui:TitleBar Grid.Column="5"
                          Title=""
                          ButtonsForeground="#FF008891"
                          ShowMaximize="True"
@@ -124,7 +137,7 @@
                          ShowClose="True" />
 
             <Border Grid.Column="0"
-                    Grid.ColumnSpan="5"
+                    Grid.ColumnSpan="6"
                     Height="1"
                     VerticalAlignment="Bottom"
                     Background="#20008080"
@@ -411,6 +424,9 @@
                                   CellStyle="{DynamicResource DefaultDataGridCellStyle}"
                                   RowStyle="{DynamicResource DefaultDataGridRowStyle}"
                                   ItemsSource="{Binding PackageHistory}"
+                                  IsSynchronizedWithCurrentItem="True"
+                                  VirtualizingPanel.IsVirtualizing="True"
+                                  VirtualizingPanel.VirtualizationMode="Recycling"
                                   CanUserAddRows="False"
                                   CanUserDeleteRows="False"
                                   GridLinesVisibility="Horizontal">

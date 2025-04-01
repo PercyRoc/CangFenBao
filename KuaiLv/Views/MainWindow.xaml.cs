@@ -9,7 +9,7 @@ namespace KuaiLv.Views;
 /// <summary>
 ///     Interaction logic for MainWindow.xaml
 /// </summary>
-internal partial class MainWindow
+public partial class MainWindow
 {
     private readonly IDialogService _dialogService;
 

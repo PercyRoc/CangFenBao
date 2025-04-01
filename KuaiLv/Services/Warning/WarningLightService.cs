@@ -13,7 +13,6 @@ namespace KuaiLv.Services.Warning;
 internal class WarningLightService : IWarningLightService, IDisposable
 {
     private readonly INotificationService _notificationService;
-    private readonly SemaphoreSlim _semaphore = new(1, 1);
     private WarningLightConfiguration _currentConfig;
     private bool _disposed;
     private bool _isConnected;
@@ -50,13 +49,22 @@ internal class WarningLightService : IWarningLightService, IDisposable
 
             _isConnected = value;
             ConnectionChanged?.Invoke(value);
+            
+            // 连接状态改变时记录日志
+            if (value)
+            {
+                Log.Information("警示灯连接已建立");
+            }
+            else
+            {
+                Log.Warning("警示灯连接已断开");
+            }
         }
     }
 
     /// <inheritdoc />
     public async Task ConnectAsync()
     {
-        await _semaphore.WaitAsync();
         try
         {
             Log.Information("开始连接警示灯...");
@@ -106,17 +114,13 @@ internal class WarningLightService : IWarningLightService, IDisposable
             Log.Error(ex, "警示灯连接失败");
             _notificationService.ShowError($"警示灯连接失败: {ex.Message}");
             await DisconnectAsync();
-        }
-        finally
-        {
-            _semaphore.Release();
+            throw; // 重新抛出异常，让调用者知道发生了错误
         }
     }
 
     /// <inheritdoc />
     public async Task DisconnectAsync()
     {
-        await _semaphore.WaitAsync();
         try
         {
             Log.Information("开始断开警示灯连接...");
@@ -141,10 +145,6 @@ internal class WarningLightService : IWarningLightService, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "警示灯断开连接失败");
-        }
-        finally
-        {
-            _semaphore.Release();
         }
     }
 
@@ -209,7 +209,6 @@ internal class WarningLightService : IWarningLightService, IDisposable
 
         var commandText = Encoding.UTF8.GetString(command).Trim();
 
-        await _semaphore.WaitAsync();
         try
         {
             // 检查连接状态
@@ -237,10 +236,6 @@ internal class WarningLightService : IWarningLightService, IDisposable
             await DisconnectAsync();
             throw; // 重新抛出异常，让调用者知道发生了错误
         }
-        finally
-        {
-            _semaphore.Release();
-        }
     }
 
     protected virtual void Dispose(bool disposing)
@@ -249,7 +244,6 @@ internal class WarningLightService : IWarningLightService, IDisposable
 
         if (disposing)
         {
-            _semaphore.Dispose();
             DisconnectAsync().Wait();
         }
 

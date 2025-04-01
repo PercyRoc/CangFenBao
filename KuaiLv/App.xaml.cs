@@ -17,6 +17,8 @@ using KuaiLv.Views.Settings;
 using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
+using SharedUI.ViewModels;
+using SharedUI.Views;
 using Timer = System.Timers.Timer;
 
 namespace KuaiLv;
@@ -78,6 +80,9 @@ internal partial class App
         // 注册设置窗口
         containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
         containerRegistry.Register<SettingsDialogViewModel>();
+        
+        containerRegistry.Register<Window,HistoryWindow>("HistoryWindow");
+        containerRegistry.Register<HistoryWindowViewModel>();
     }
 
     /// <summary>

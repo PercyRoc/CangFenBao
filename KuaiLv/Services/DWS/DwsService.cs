@@ -313,28 +313,87 @@ internal class DwsService : IDwsService, IDisposable
 
     private async Task RetryOfflinePackagesAsync()
     {
-        if (!_isNetworkAvailable) return;
+        if (!_isNetworkAvailable)
+        {
+            Log.Information("网络未恢复，跳过离线包裹重试");
+            return;
+        }
 
         try
         {
-            var offlinePackages = await _offlinePackageService.GetOfflinePackagesAsync();
-            foreach (var package in offlinePackages)
-                try
+            while (true)
+            {
+                var offlinePackages = await _offlinePackageService.GetOfflinePackagesAsync();
+                if (offlinePackages.Count == 0)
                 {
-                    var result = await ReportPackageAsync(package);
-                    if (result.Code != 200) continue;
+                    Log.Information("没有待上传的离线包裹");
+                    break;
+                }
 
-                    await _offlinePackageService.DeleteOfflinePackageAsync(package.Barcode);
-                    Log.Information("离线包裹上传成功：{Barcode}", package.Barcode);
-                }
-                catch (Exception ex)
+                Log.Information("发现 {Count} 个离线包裹待上传", offlinePackages.Count);
+                var successCount = 0;
+                var failCount = 0;
+                var errorMessages = new List<string>();
+
+                foreach (var package in offlinePackages)
                 {
-                    Log.Error(ex, "重试上传离线包裹失败：{Barcode}", package.Barcode);
+                    try
+                    {
+                        Log.Information("开始重试上传包裹：{Barcode}", package.Barcode);
+                        var result = await ReportPackageAsync(package);
+
+                        if (result.Code != 200)
+                        {
+                            failCount++;
+                            var errorMessage = $"包裹 {package.Barcode} 上传失败：{result.Message}";
+                            errorMessages.Add(errorMessage);
+                            Log.Warning(errorMessage);
+                            continue;
+                        }
+
+                        await _offlinePackageService.DeleteOfflinePackageAsync(package.Barcode);
+                        successCount++;
+                        Log.Information("离线包裹上传成功并已从数据库中删除：{Barcode}", package.Barcode);
+                    }
+                    catch (Exception ex)
+                    {
+                        failCount++;
+                        var errorMessage = $"包裹 {package.Barcode} 上传异常：{ex.Message}";
+                        errorMessages.Add(errorMessage);
+                        Log.Error(ex, errorMessage);
+                    }
                 }
+
+                // 显示上传结果通知
+                if (successCount > 0)
+                {
+                    _notificationService.ShowSuccess($"成功上传 {successCount} 个包裹");
+                }
+
+                if (failCount > 0)
+                {
+                    var message = $"有 {failCount} 个包裹上传失败";
+                    if (errorMessages.Count > 0)
+                    {
+                        message += $"\n{string.Join("\n", errorMessages.Take(3))}";
+                        if (errorMessages.Count > 3)
+                        {
+                            message += $"\n...等 {errorMessages.Count} 个错误";
+                        }
+                    }
+                    _notificationService.ShowWarning(message);
+                }
+
+                // 如果所有包裹都上传失败，等待一段时间后重试
+                if (failCount != offlinePackages.Count) continue;
+                Log.Warning("所有包裹上传失败，等待30秒后重试");
+                await Task.Delay(TimeSpan.FromSeconds(30));
+            }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "处理离线包裹时发生错误");
+            _notificationService.ShowError("处理离线包裹时发生错误");
         }
     }
 
