@@ -20,7 +20,7 @@ public class WangDianTongApiService(HttpClient httpClient, ISettingsService sett
     public async Task<WeightPushResponse> PushWeightAsync(
         string logisticsNo, 
         decimal weight, 
-        bool isCheckWeight = false, 
+        bool isCheckWeight = true, 
         bool isCheckTradeStatus = false, 
         string packagerNo = "")
     {

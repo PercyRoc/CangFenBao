@@ -17,7 +17,7 @@ public interface IWangDianTongApiService
     Task<WeightPushResponse> PushWeightAsync(
         string logisticsNo, 
         decimal weight, 
-        bool isCheckWeight = false, 
+        bool isCheckWeight = true, 
         bool isCheckTradeStatus = false, 
         string packagerNo = "");
 }

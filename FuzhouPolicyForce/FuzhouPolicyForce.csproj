@@ -7,7 +7,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
         <ApplicationIcon>Resources\favicon.ico</ApplicationIcon>
-        <AssemblyName>仓分宝-福州策力</AssemblyName>
+        <AssemblyName>泉州市策力自动化科技有限公司</AssemblyName>
         <LangVersion>default</LangVersion>
     </PropertyGroup>
 

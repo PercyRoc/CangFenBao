@@ -395,7 +395,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             // 设置包裹序号
             package.Index = Interlocked.Increment(ref _currentPackageIndex);
             Log.Information("收到包裹信息：{Barcode}, 序号：{Index}", package.Barcode, package.Index);
-            _sortService.ProcessPackage(package);
+
             try
             {
                 // 获取格口规则配置
@@ -434,7 +434,39 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 package.SetError($"获取格口号失败：{ex.Message}");
             }
 
-            _ = _wangDianTongApiService.PushWeightAsync(package.Barcode, (decimal)package.Weight);
+            // 调用网店通API并处理响应
+            try
+            {
+                var response = await _wangDianTongApiService.PushWeightAsync(package.Barcode, (decimal)package.Weight);
+                if (!response.IsSuccess)
+                {
+                    var errorMessage = $"网店通重量回传失败：{response.Message}";
+                    Log.Warning("网店通重量回传失败：{Barcode}, 错误码={Code}, 错误信息={Message}",
+                        package.Barcode, response.Code, response.Message);
+                    package.SetError(errorMessage);
+                    package.Information = errorMessage;
+                    // 使用异常口
+                    package.ChuteName = _settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber;
+                }
+                else
+                {
+                    Log.Information("网店通重量回传成功：{Barcode}, 物流名称={LogisticsName}",
+                        package.Barcode, response.LogisticsName);
+                    package.Information = $"网店通重量回传成功，物流名称：{response.LogisticsName}";
+                }
+            }
+            catch (Exception ex)
+            {
+                var errorMessage = $"网店通重量回传失败：{ex.Message}";
+                Log.Error(ex, "网店通重量回传时发生错误：{Barcode}", package.Barcode);
+                package.SetError(errorMessage);
+                package.Information = errorMessage;
+                // 使用异常口
+                package.ChuteName = _settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber;
+            }
+
+            _sortService.ProcessPackage(package);
+
             Application.Current.Dispatcher.Invoke(() =>
             {
                 try
@@ -556,7 +588,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             // 获取最近30秒内的包裹
             var thirtySecondsAgo = DateTime.Now.AddSeconds(-30);
             var recentPackages = PackageHistory.Where(p => p.CreateTime > thirtySecondsAgo).ToList();
-            
+
             if (recentPackages.Count > 0)
             {
                 // 计算30秒内的平均处理速度（个/秒）

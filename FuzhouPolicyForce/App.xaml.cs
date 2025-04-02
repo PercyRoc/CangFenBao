@@ -24,6 +24,7 @@ using Timer = System.Timers.Timer;
 using System.Diagnostics;
 using FuzhouPolicyForce.ViewModels.Settings;
 using FuzhouPolicyForce.WangDianTong;
+using SharedUI.Views.Settings;
 
 namespace FuzhouPolicyForce;
 
