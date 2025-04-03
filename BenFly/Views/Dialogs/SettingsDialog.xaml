@@ -9,7 +9,6 @@
                  xmlns:dialogs="clr-namespace:BenFly.ViewModels.Dialogs"
                  xmlns:controls="https://handyorg.github.io/handycontrol"
                  xmlns:settings="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
-                 xmlns:settings1="clr-namespace:FuzhouPolicyForce.Views.Settings;assembly=SharedUI"
                  prism:ViewModelLocator.AutoWireViewModel="True"
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=dialogs:SettingsDialogViewModel}"
@@ -21,8 +20,7 @@
                  ExtendsContentIntoTitleBar="True"
                  WindowBackdropType="Mica"
                  WindowCornerPreference="Round"
-                 WindowStyle="SingleBorderWindow"
-                 ShowInTaskbar="False" x:ClassModifier="internal">
+                 WindowStyle="SingleBorderWindow">
 
     <ui:FluentWindow.Resources>
         <ResourceDictionary>
@@ -134,7 +132,7 @@
                                 <ui:SymbolIcon Symbol="ArrowSort24" />
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="settings1:BalanceSortSettingsView" />
+                                <x:Type Type="settings:BalanceSortSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
 

@@ -415,7 +415,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         });
     }
 
-    private void OnCameraConnectionChanged(string cameraId, bool isConnected)
+    private void OnCameraConnectionChanged(string? cameraId, bool isConnected)
     {
         Application.Current.Dispatcher.Invoke(() =>
         {
@@ -722,11 +722,26 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             _sortService.ProcessPackage(package);
 
             // 2. 通过笨鸟系统服务获取三段码并处理上传
-            var benNiaoResult = await _benNiaoService.ProcessPackageAsync(package);
-            if (!benNiaoResult)
+            var (benNiaoSuccess, errorMessage) = await _benNiaoService.ProcessPackageAsync(package);
+            if (!benNiaoSuccess)
             {
-                Log.Warning("笨鸟系统处理包裹失败：{Barcode}", package.Barcode);
+                Log.Warning("笨鸟系统处理包裹失败：{Barcode}, 错误：{Error}", package.Barcode, errorMessage);
                 package.SetError("笨鸟系统处理失败");
+                // 将详细错误信息设置到Information属性中
+                package.Information = $"笨鸟系统上传失败: {errorMessage}";
+                // 设置为异常格口（使用-1表示异常格口）
+                package.ChuteName = -1;
+                // 设置状态为异常
+                package.Status = PackageStatus.Error;
+                package.StatusDisplay = "异常";
+                Log.Information("包裹 {Barcode} 因笨鸟系统处理失败，分配到异常格口", package.Barcode);
+            }
+            else
+            {
+                // 处理成功，设置状态为分拣成功
+                package.Status = PackageStatus.SortSuccess;
+                package.StatusDisplay = "正常";
+                Log.Information("包裹 {Barcode} 笨鸟系统处理成功", package.Barcode);
             }
 
             // 笨鸟系统处理完成后释放图像资源
@@ -740,17 +755,28 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             // 3. 获取格口信息
             try
             {
-                var chuteConfig = _settingsService.LoadSettings<SegmentCodeRules>();
-                var chute = chuteConfig.GetChuteBySpaceSeparatedSegments(package.SegmentCode);
-                package.ChuteName = chute;
-                Log.Information("包裹 {Barcode} 分配到格口 {Chute}，段码：{SegmentCode}",
-                    package.Barcode, chute, package.SegmentCode);
+                // 如果已经分配到异常格口，则跳过正常格口分配逻辑
+                if (package.ChuteName == -1)
+                {
+                    Log.Information("包裹 {Barcode} 已分配到异常格口，跳过正常格口分配", package.Barcode);
+                }
+                else
+                {
+                    var chuteConfig = _settingsService.LoadSettings<SegmentCodeRules>();
+                    var chute = chuteConfig.GetChuteBySpaceSeparatedSegments(package.SegmentCode);
+                    package.ChuteName = chute;
+                    Log.Information("包裹 {Barcode} 分配到格口 {Chute}，段码：{SegmentCode}",
+                        package.Barcode, chute, package.SegmentCode);
+                }
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "获取格口号时发生错误：{Barcode}, {SegmentCode}",
                     package.Barcode, package.SegmentCode);
                 package.SetError($"获取格口号失败：{ex.Message}");
+                // 异常时也分配到异常格口，使用-1表示
+                package.ChuteName = -1;
+                Log.Information("包裹 {Barcode} 因获取格口号失败，分配到异常格口", package.Barcode);
             }
 
             // 4. 更新UI显示

@@ -254,7 +254,7 @@ internal class BenNiaoPackageService : IDisposable
     /// <summary>
     ///     处理包裹
     /// </summary>
-    internal async Task<bool> ProcessPackageAsync(PackageInfo package)
+    internal async Task<(bool Success, string ErrorMessage)> ProcessPackageAsync(PackageInfo package)
     {
         try
         {
@@ -272,9 +272,14 @@ internal class BenNiaoPackageService : IDisposable
                     Log.Debug("已复制异常包裹 {Barcode} 的图像用于上传", package.Barcode);
                 }
 
-                // 异步上传，不等待完成，传入复制的图像
-                _ = UploadNoReadDataAsync(package, noReadImageCopy);
-                return true;
+                // 改为等待上传完成并获取结果
+                var noReadResult = await UploadNoReadDataAsync(package, noReadImageCopy);
+                if (!noReadResult)
+                {
+                    Log.Warning("异常包裹 {Barcode} 上传失败", package.Barcode);
+                    return (false, "异常包裹上传失败");
+                }
+                return (true, string.Empty);
             }
 
             // 从预报数据服务中获取预报数据
@@ -298,7 +303,7 @@ internal class BenNiaoPackageService : IDisposable
                 else
                 {
                     Log.Warning("无法获取包裹 {Barcode} 的三段码", package.Barcode);
-                    return false;
+                    return (false, "无法获取三段码");
                 }
             }
 
@@ -310,16 +315,21 @@ internal class BenNiaoPackageService : IDisposable
                 Log.Debug("已复制包裹 {Barcode} 的图像用于上传", package.Barcode);
             }
 
-            // 恢复异步上传方式，不等待完成，传入复制的图像
-            _ = UploadPackageDataAndImageAsync(package, packageImageCopy);
+            // 改为等待上传完成并获取结果
+            var (uploadSuccess, errorMessage) = await UploadPackageDataAndImageAsync(package, packageImageCopy);
+            if (!uploadSuccess)
+            {
+                Log.Warning("包裹 {Barcode} 数据上传失败: {Error}", package.Barcode, errorMessage);
+                return (false, errorMessage);
+            }
 
             Log.Information("包裹 {Barcode} 处理完成", package.Barcode);
-            return true;
+            return (true, string.Empty);
         }
         catch (Exception ex)
         {
             Log.Error(ex, "处理包裹 {Barcode} 时发生错误", package.Barcode);
-            return false;
+            return (false, $"处理异常: {ex.Message}");
         }
     }
 
@@ -368,7 +378,7 @@ internal class BenNiaoPackageService : IDisposable
     /// <summary>
     ///     上传包裹数据
     /// </summary>
-    private async Task<(bool Success, DateTime UploadTime)> UploadPackageDataAsync(PackageInfo package)
+    private async Task<(bool Success, DateTime UploadTime, string ErrorMessage)> UploadPackageDataAsync(PackageInfo package)
     {
         try
         {
@@ -401,15 +411,17 @@ internal class BenNiaoPackageService : IDisposable
             response.EnsureSuccessStatusCode();
 
             var result = await response.Content.ReadFromJsonAsync<BenNiaoResponse<object>>(_jsonOptions);
-            if (result is { IsSuccess: true }) return (true, uploadTime);
-            Log.Error("上传包裹 {Barcode} 数据失败：{Message}", package.Barcode, result?.Message);
-            return (false, DateTime.MinValue);
+            if (result is { IsSuccess: true }) return (true, uploadTime, string.Empty);
+            
+            var errorMessage = result?.Message ?? "未知错误";
+            Log.Error("上传包裹 {Barcode} 数据失败：{Message}", package.Barcode, errorMessage);
+            return (false, DateTime.MinValue, $"API返回错误: {errorMessage}");
 
         }
         catch (Exception ex)
         {
             Log.Error(ex, "上传包裹 {Barcode} 数据时发生错误", package.Barcode);
-            return (false, DateTime.MinValue);
+            return (false, DateTime.MinValue, $"上传异常: {ex.Message}");
         }
     }
 
@@ -606,12 +618,18 @@ internal class BenNiaoPackageService : IDisposable
     /// <summary>
     ///     异步上传包裹数据和图片
     /// </summary>
-    private async Task UploadPackageDataAndImageAsync(PackageInfo package, Image? imageCopy)
+    private async Task<(bool Success, string ErrorMessage)> UploadPackageDataAndImageAsync(PackageInfo package, Image? imageCopy)
     {
         try
         {
-            var (success, uploadTime) = await UploadPackageDataAsync(package);
-            if (success && imageCopy != null)
+            var (success, uploadTime, errorMessage) = await UploadPackageDataAsync(package);
+            if (!success)
+            {
+                Log.Warning("包裹 {Barcode} 数据上传失败: {Error}", package.Barcode, errorMessage);
+                return (false, errorMessage);
+            }
+            
+            if (imageCopy != null)
                 try
                 {
                     // 使用复制的图像进行上传
@@ -635,10 +653,13 @@ internal class BenNiaoPackageService : IDisposable
                     imageCopy.Dispose();
                     Log.Debug("已释放包裹 {Barcode} 的复制图像", package.Barcode);
                 }
+                
+            return (true, string.Empty);
         }
         catch (Exception ex)
         {
             Log.Error(ex, "异步上传包裹 {Barcode} 数据和图片时发生错误", package.Barcode);
+            return (false, $"上传异常: {ex.Message}");
         }
     }
 

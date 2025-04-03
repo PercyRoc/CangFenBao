@@ -35,8 +35,7 @@ internal class BeltSerialService : IBeltSerialService
     {
         lock (_lock)
         {
-            if (_isDisposed)
-                throw new ObjectDisposedException(nameof(BeltSerialService));
+            ObjectDisposedException.ThrowIf(_isDisposed, this);
 
             try
             {
@@ -134,8 +133,7 @@ internal class BeltSerialService : IBeltSerialService
         {
             if (!_isDisposed)
             {
-                if (_serialPort?.IsOpen != true)
-                    throw new InvalidOperationException("串口未打开");
+                ObjectDisposedException.ThrowIf(_serialPort?.IsOpen != true, this);
 
                 try
                 {

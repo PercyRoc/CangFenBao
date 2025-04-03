@@ -4,7 +4,6 @@ using Common.Extensions;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.Extensions;
-using FuzhouPolicyForce.Views.Settings;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using BenFly.Services;
@@ -89,8 +88,9 @@ internal partial class App
         // 检查是否已经运行（进程级检查）
         if (IsApplicationAlreadyRunning())
         {
-            System.Windows.MessageBox.Show("程序已在运行中，请勿重复启动！", "提示", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
-            Current.Shutdown();
+            System.Windows.MessageBox.Show("程序已在运行中，请勿重复启动！", "提示", System.Windows.MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            Environment.Exit(0); // 直接退出进程
             return null!;
         }
 
@@ -109,9 +109,10 @@ internal partial class App
             var canAcquire = _mutex.WaitOne(TimeSpan.Zero, false);
             if (!canAcquire)
             {
-                System.Windows.MessageBox.Show("程序已在运行中，请勿重复启动！", "提示", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
-                Current.Shutdown();
-                return null!;
+                System.Windows.MessageBox.Show("程序已在运行中，请勿重复启动！", "提示", System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Information);
+                Environment.Exit(0); // 直接退出进程
+                return null!; // 虽然不会执行到这里，但需要满足返回类型
             }
             else
             {
@@ -124,7 +125,8 @@ internal partial class App
         {
             // Mutex创建或获取失败
             Log.Error(ex, "检查应用程序实例时发生错误");
-            System.Windows.MessageBox.Show($"启动程序时发生错误: {ex.Message}", "错误", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            System.Windows.MessageBox.Show($"启动程序时发生错误: {ex.Message}", "错误", System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
             Current.Shutdown();
             return null!;
         }
@@ -137,7 +139,7 @@ internal partial class App
     {
         var currentProcess = Process.GetCurrentProcess();
         var processes = Process.GetProcessesByName(currentProcess.ProcessName);
-        
+
         // 当前进程也会被计入，所以如果数量大于1则说明有其他实例
         return processes.Length > 1;
     }
@@ -315,6 +317,7 @@ internal partial class App
                         _mutex.ReleaseMutex();
                         Log.Information("Mutex已释放");
                     }
+
                     _mutex.Dispose();
                     _mutex = null;
                 }
@@ -323,7 +326,7 @@ internal partial class App
             {
                 Log.Error(ex, "释放Mutex时发生错误");
             }
-            
+
             base.OnExit(e);
         }
     }

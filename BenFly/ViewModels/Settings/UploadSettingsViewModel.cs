@@ -26,7 +26,10 @@ internal class UploadSettingsViewModel : BindableBase
         private set => SetProperty(ref _configuration, value);
     }
 
-    public IEnumerable<BenNiaoEnvironment> BenNiaoEnvironments => Enum.GetValues<BenNiaoEnvironment>();
+    public static IEnumerable<BenNiaoEnvironment> GetBenNiaoEnvironments()
+    {
+        return Enum.GetValues<BenNiaoEnvironment>();
+    }
 
     internal DelegateCommand SaveConfigurationCommand { get; }
 

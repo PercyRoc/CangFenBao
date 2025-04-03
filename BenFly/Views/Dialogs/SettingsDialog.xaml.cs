@@ -7,7 +7,7 @@ using Wpf.Ui.Controls;
 
 namespace BenFly.Views.Dialogs;
 
-internal partial class SettingsDialog : FluentWindow
+public partial class SettingsDialog
 {
     public SettingsDialog(INotificationService notificationService)
     {
