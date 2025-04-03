@@ -6,11 +6,11 @@
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:prism="http://prismlibrary.com/"
                  xmlns:hc="https://handyorg.github.io/handycontrol"
-                 xmlns:windows="clr-namespace:Presentation_SangNeng.ViewModels.Windows"
                  xmlns:converters="clr-namespace:SharedUI.Converters;assembly=SharedUI"
+                 xmlns:viewModels="clr-namespace:SharedUI.ViewModels;assembly=SharedUI"
                  prism:ViewModelLocator.AutoWireViewModel="True"
                  mc:Ignorable="d"
-                 d:DataContext="{d:DesignInstance Type=windows:HistoryWindowViewModel}"
+                 d:DataContext="{d:DesignInstance Type=viewModels:HistoryWindowViewModel}"
                  Title="Package History"
                  Height="720"
                  Width="1280"
@@ -213,12 +213,12 @@
                                     <Style TargetType="DataGridCell">
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding Status}" Value="MeasureSuccess">
-                                                <Setter Property="Background" Value="#4CAF50"/>
-                                                <Setter Property="Foreground" Value="White"/>
+                                                <Setter Property="Background" Value="#4CAF50" />
+                                                <Setter Property="Foreground" Value="White" />
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding Status}" Value="MeasureFailed">
-                                                <Setter Property="Background" Value="#F44336"/>
-                                                <Setter Property="Foreground" Value="White"/>
+                                                <Setter Property="Background" Value="#F44336" />
+                                                <Setter Property="Foreground" Value="White" />
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>

@@ -16,7 +16,7 @@ using SangNeng.Models;
 using Serilog;
 using static Common.Models.Package.PackageStatus;
 
-namespace Presentation_SangNeng.ViewModels.Windows;
+namespace SangNeng.ViewModels.Windows;
 
 /// <summary>
 ///     历史记录查询窗口视图模型
@@ -267,7 +267,7 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
             currentDate = currentDate.AddDays(1);
         }
 
-        return result.OrderByDescending(p => p.CreateTime).ToList();
+        return [.. result.OrderByDescending(p => p.CreateTime)];
     }
 
     private void ViewImage(PackageRecord? record)

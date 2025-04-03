@@ -1,7 +1,7 @@
-using Presentation_SangNeng.ViewModels.Settings;
 using Prism.Mvvm;
+using SangNeng.ViewModels.Settings;
 
-namespace Presentation_SangNeng.ViewModels.Windows;
+namespace SangNeng.ViewModels.Windows;
 
 public class SelectablePalletModel(PalletModel palletModel, bool isSelected = false) : BindableBase
 {

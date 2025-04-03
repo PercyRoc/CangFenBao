@@ -19,14 +19,13 @@ using DeviceService.DataSourceDevices.Camera.Models.Camera.Enums;
 using DeviceService.DataSourceDevices.Camera.RenJia;
 using DeviceService.DataSourceDevices.Scanner;
 using DeviceService.DataSourceDevices.Weight;
-using Presentation_SangNeng.ViewModels.Settings;
-using Presentation_SangNeng.ViewModels.Windows;
 using Prism.Commands;
 using Prism.Events;
 using Prism.Mvvm;
 using SangNeng.Events;
 using SangNeng.Models;
 using SangNeng.Services;
+using SangNeng.ViewModels.Settings;
 using Serilog;
 using SharedUI.Models;
 using SixLabors.ImageSharp;
@@ -67,6 +66,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private ObservableCollection<StatisticsItem> _statisticsItems = [];
     private SystemStatus _systemStatus = SystemStatus.GetCurrentStatus();
     private ImageSource? _volumeImage;
+    private string _lastProcessedBarcode = string.Empty;
+    private DateTime _lastProcessedTime = DateTime.MinValue;
+    private const int DuplicateBarcodeIntervalMs = 500; // Define the interval in milliseconds
 
     /// <summary>
     ///     构造函数
@@ -140,7 +142,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             });
 
         // 订阅海康相机图像流
-        if (_cameraService is HikvisionIndustrialCameraSdkClient hikvisionCamera)
+        if (_cameraService is HikvisionIndustrialCameraService hikvisionCamera)
             hikvisionCamera.ImageStream
                 .Subscribe(imageData =>
                 {
@@ -320,10 +322,70 @@ public class MainWindowViewModel : BindableBase, IDisposable
         });
     }
 
-    private async void OnBarcodeScanned(object? sender, string barcode)
+    public void OnBarcodeScanned(object? sender, string barcode)
     {
+        // 直接在事件处理程序中调用异步方法，并添加异常处理
+        ProcessBarcodeAsync(barcode).ContinueWith(task => 
+        {
+            if (task is { IsFaulted: true, Exception: not null })
+            {
+                // 记录任何未处理的异常
+                Log.Error(task.Exception, "处理条码时发生未捕获的异常: {Barcode}", barcode);
+                
+                // 确保在UI线程更新界面和播放错误音效
+                Application.Current.Dispatcher.Invoke(() => 
+                {
+                    PlayErrorSound();
+                    UpdatePackageStatus("Error");
+                });
+            }
+        }, TaskScheduler.Current);
+    }
+    
+    // 将原有的实现移到这个私有异步方法中
+    private async Task ProcessBarcodeAsync(string barcode)
+    {
+        // 加载体积相机设置
+        var volumeSettings = _settingsService.LoadSettings<VolumeSettings>();
+        Log.Information("等待处理包裹，延时: {TimeoutMs}毫秒", volumeSettings.TimeoutMs);
+
+        // 等待配置的时间
+        await Task.Delay(volumeSettings.TimeoutMs);
+
+        Log.Information("开始处理包裹: {Barcode}", barcode);
+        
         try
         {
+            // 防止短时间内重复处理相同或相似条码
+            var now = DateTime.Now;
+            bool isDuplicate = barcode == _lastProcessedBarcode &&
+                               (now - _lastProcessedTime).TotalMilliseconds < DuplicateBarcodeIntervalMs;
+            
+            // 检查完全相同的条码
+            
+            // 检查包含关系的条码（处理条码前缀或后缀问题）
+            if (!isDuplicate && !string.IsNullOrEmpty(_lastProcessedBarcode) && 
+                (now - _lastProcessedTime).TotalMilliseconds < DuplicateBarcodeIntervalMs)
+            {
+                // 较长的条码包含较短的条码
+                if ((_lastProcessedBarcode.Contains(barcode) && barcode.Length > 5) || 
+                    (barcode.Contains(_lastProcessedBarcode) && _lastProcessedBarcode.Length > 5))
+                {
+                    isDuplicate = true;
+                }
+            }
+            
+            if (isDuplicate)
+            {
+                Log.Warning("忽略相似条码：{Barcode}，上一条码：{LastBarcode}，间隔仅 {Interval} 毫秒", 
+                    barcode, _lastProcessedBarcode, (now - _lastProcessedTime).TotalMilliseconds);
+                return;
+            }
+            
+            // 更新最后处理的条码和时间
+            _lastProcessedBarcode = barcode;
+            _lastProcessedTime = now;
+            
             // 重置错误音效播放标志
             _hasPlayedErrorSound = false;
 
@@ -349,7 +411,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             };
 
             // 并行执行相机拍照、体积测量和重量获取，添加超时处理
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10)); // 10秒超时
+            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10)); // 10秒超时
             try
             {
                 // 创建三个并行任务
@@ -358,8 +420,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 var imageCaptured = false;
                 var imageLock = new object();
 
-                if (_cameraService is HikvisionIndustrialCameraSdkClient hikvisionCamera)
+                if (_cameraService is HikvisionIndustrialCameraService hikvisionCamera)
                 {
+                    // 在任务开始前复制Token，避免闭包捕获可能被释放的cts
+                    var cancellationToken = cts.Token;
                     // 订阅图像流，等待一帧图像
                     var imageTask = Task.Run(() =>
                     {
@@ -379,8 +443,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                     }
                                 });
 
-                            // 等待图像被捕获
-                            while (!imageCaptured && !cts.Token.IsCancellationRequested)
+                            // 使用局部变量cancellationToken而非闭包中的cts.Token
+                            while (!imageCaptured && !cancellationToken.IsCancellationRequested)
                             {
                                 Thread.Sleep(100);
                             }
@@ -392,7 +456,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                             Log.Error(ex, "从图像流获取图像失败");
                             return false;
                         }
-                    }, cts.Token);
+                    }, cancellationToken); // 使用复制的Token
 
                     photoTask = imageTask;
                 }
@@ -403,6 +467,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                 var volumeTask = TriggerVolumeCamera(cts.Token);
 
+                // 同样为重量任务复制Token
+                var weightCancellationToken = cts.Token;
                 var weightTask = Task.Run(() =>
                 {
                     try
@@ -435,39 +501,15 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         Log.Error(ex, "获取重量数据失败");
                         return null;
                     }
-                }, cts.Token);
+                }, weightCancellationToken); // 使用复制的Token
 
                 // 等待所有任务完成
                 await Task.WhenAll(photoTask, volumeTask, weightTask);
+                // 更新体积（使用cm³作为单位）
+                _currentPackage.Volume = _currentPackage.Length * _currentPackage.Width * _currentPackage.Height;
+                // 播放成功音效
+                _ = _audioService.PlayPresetAsync(AudioType.Success);
 
-                // 处理体积数据
-                if (_currentPackage.Status == PackageStatus.MeasureSuccess && SelectedPallet != null &&
-                    SelectedPallet.Name != "noPallet")
-                {
-                    var originalLength = _currentPackage.Length;
-                    var originalWidth = _currentPackage.Width;
-                    var originalHeight = _currentPackage.Height;
-
-                    // 托盘尺寸已经是厘米单位，直接使用
-                    var palletLength = SelectedPallet.Length;
-                    var palletWidth = SelectedPallet.Width;
-                    var palletHeight = SelectedPallet.Height;
-
-                    // 如果获取到的长度或宽度小于托盘尺寸，使用托盘尺寸
-                    if (originalLength < palletLength || originalWidth < palletWidth)
-                    {
-                        _currentPackage.Length = Math.Max(originalLength ?? 0, palletLength);
-                        _currentPackage.Width = Math.Max(originalWidth ?? 0, palletWidth);
-                    }
-
-                    // 高度始终要加上托盘高度
-                    _currentPackage.Height = originalHeight + palletHeight;
-                    // 更新体积（使用cm³作为单位）
-                    _currentPackage.Volume = _currentPackage.Length * _currentPackage.Width * _currentPackage.Height;
-
-                    // 播放成功音效
-                    _ = _audioService.PlayPresetAsync(AudioType.Success);
-                }
 
                 Application.Current.Dispatcher.Invoke(() =>
                 {
@@ -581,6 +623,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 Log.Warning("处理包裹超时：{Barcode}", barcode);
                 UpdatePackageStatus("Timeout");
             }
+            finally
+            {
+                // 手动释放CancellationTokenSource
+                cts.Dispose();
+            }
         }
         catch (Exception ex)
         {
@@ -677,7 +724,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     var extension = settings.ImageFormat switch
                     {
                         ImageFormat.Jpeg => ".jpg",
-                        ImageFormat.Png => ".png",
+                        ImageFormat.Png => ".png", 
                         ImageFormat.Bmp => ".bmp",
                         ImageFormat.Tiff => ".tiff",
                         _ => ".jpg"
@@ -828,7 +875,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    private void OnCameraConnectionChanged(string deviceId, bool isConnected)
+    private void OnCameraConnectionChanged(string? deviceId, bool isConnected)
     {
         try
         {
@@ -871,7 +918,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     public string CurrentBarcode
     {
         get => _currentBarcode;
-        private set => SetProperty(ref _currentBarcode, value);
+        set => SetProperty(ref _currentBarcode, value);
     }
 
     public ImageSource? CurrentImage
@@ -987,6 +1034,25 @@ public class MainWindowViewModel : BindableBase, IDisposable
         foreach (var availablePallet in AvailablePallets) availablePallet.IsSelected = availablePallet == pallet;
 
         SelectedPallet = pallet;
+
+        try
+        {
+            // 设置托盘高度给人加相机SDK
+            var palletHeightMm = (int)(pallet.Height);
+            var result = _volumeCamera.SetPalletHeight(palletHeightMm);
+            if (result != 0)
+            {
+                Log.Warning("设置托盘高度失败：{Result}", result);
+            }
+            else
+            {
+                Log.Information("成功设置托盘高度：{Height}mm", palletHeightMm);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "设置托盘高度时发生错误");
+        }
     }
 
     private void LoadAvailablePallets()

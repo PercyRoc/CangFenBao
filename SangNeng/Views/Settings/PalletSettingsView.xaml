@@ -5,11 +5,11 @@
       xmlns:prism="http://prismlibrary.com/"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-      xmlns:settings="clr-namespace:Presentation_SangNeng.ViewModels.Settings"
+      xmlns:settings="clr-namespace:SangNeng.ViewModels.Settings"
       mc:Ignorable="d"
       d:DataContext="{d:DesignInstance Type=settings:PalletSettingsViewModel}"
       Title="Pallet Settings"
-      prism:ViewModelLocator.AutoWireViewModel="True" x:ClassModifier="internal">
+      prism:ViewModelLocator.AutoWireViewModel="True">
 
     <Grid>
         <StackPanel MaxWidth="800" 

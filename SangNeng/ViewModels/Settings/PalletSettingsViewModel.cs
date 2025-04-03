@@ -5,7 +5,7 @@ using Prism.Events;
 using Prism.Mvvm;
 using SangNeng.Events;
 
-namespace Presentation_SangNeng.ViewModels.Settings;
+namespace SangNeng.ViewModels.Settings;
 
 public class PalletModel : BindableBase
 {

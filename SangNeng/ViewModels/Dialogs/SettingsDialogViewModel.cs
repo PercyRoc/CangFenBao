@@ -1,5 +1,4 @@
 using Common.Services.Ui;
-using Presentation_SangNeng.ViewModels.Settings;
 using Prism.Commands;
 using Prism.Ioc;
 using Prism.Mvvm;

@@ -1,6 +1,6 @@
 namespace SangNeng.Views.Settings;
 
-internal partial class PalletSettingsView
+public partial class PalletSettingsView
 {
     public PalletSettingsView()
     {

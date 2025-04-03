@@ -2,10 +2,11 @@
 using System.Windows;
 using System.Windows.Input;
 using Common.Services.Ui;
+using SangNeng.ViewModels.Windows;
 using Serilog;
 using MessageBoxResult = System.Windows.MessageBoxResult;
 
-namespace Presentation_SangNeng.Views.Windows;
+namespace SangNeng.Views.Windows;
 
 /// <summary>
 ///     Interaction logic for MainWindow.xaml
@@ -30,8 +31,8 @@ public partial class MainWindow
         {
             e.Cancel = true;
             var result = await _dialogService.ShowIconConfirmAsync(
-                "Are you sure you want to close the program?",
-                "Close Confirmation",
+                    "Are you sure you want to close the program?",
+                    "Close Confirmation",
                 MessageBoxImage.Question);
 
             if (result != MessageBoxResult.Yes) return;
@@ -56,6 +57,20 @@ public partial class MainWindow
         catch (Exception ex)
         {
             Log.Error(ex, "拖动窗口时发生错误");
+        }
+    }
+
+    private void BarcodeTextBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && DataContext is MainWindowViewModel viewModel)
+        {
+            if (sender is System.Windows.Controls.TextBox textBox && !string.IsNullOrWhiteSpace(textBox.Text))
+            {
+                // 触发条码扫描事件
+                viewModel.OnBarcodeScanned(null, textBox.Text);
+                // 清空输入框
+                textBox.Text = string.Empty;
+            }
         }
     }
 }
