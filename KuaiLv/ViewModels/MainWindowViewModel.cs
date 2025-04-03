@@ -5,10 +5,12 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Common.Models.Package;
 using Common.Services.Audio;
+using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Camera.DaHua;
 using DeviceService.DataSourceDevices.Services;
+using KuaiLv.Models.Settings.App;
 using KuaiLv.Services.DWS;
 using KuaiLv.Services.Warning;
 using Prism.Commands;
@@ -28,11 +30,13 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
     private readonly IWarningLightService _warningLightService;
+    private readonly ISettingsService _settingsService;
     private string _currentBarcode = string.Empty;
     private BitmapSource? _currentImage;
     private int _currentPackageIndex;
     private bool _disposed;
     private SystemStatus _systemStatus = new();
+    private int _selectedScenario = 0; // 默认为0，称重模式
 
     public MainWindowViewModel(
         IDialogService dialogService,
@@ -40,18 +44,27 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         IDwsService dwsService,
         IWarningLightService warningLightService,
         PackageTransferService packageTransferService,
-        IAudioService audioService)
+        IAudioService audioService,
+        ISettingsService settingsService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
         _dwsService = dwsService;
         _warningLightService = warningLightService;
         _audioService = audioService;
+        _settingsService = settingsService;
 
         // 初始化命令
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
         ResetWarningCommand = new DelegateCommand(ExecuteResetWarning);
         OpenHistoryCommand = new DelegateCommand(ExecuteOpenHistory);
+        ScenarioChangedCommand = new DelegateCommand<object>(ExecuteScenarioChanged);
+
+        // 初始化使用场景列表
+        InitializeScenarios();
+        
+        // 加载应用设置
+        LoadAppSettings();
 
         // 初始化系统状态更新定时器
         _timer = new DispatcherTimer
@@ -117,6 +130,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     public DelegateCommand OpenSettingsCommand { get; }
     public DelegateCommand ResetWarningCommand { get; private set; }
     public DelegateCommand OpenHistoryCommand { get; }
+    public DelegateCommand<object> ScenarioChangedCommand { get; }
 
     public string CurrentBarcode
     {
@@ -136,6 +150,21 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         private set => SetProperty(ref _systemStatus, value);
     }
 
+    public int SelectedScenario
+    {
+        get => _selectedScenario;
+        set
+        {
+            if (SetProperty(ref _selectedScenario, value))
+            {
+                Log.Information("使用场景已更改为: {Scenario}", Scenarios[value]);
+                // 保存设置
+                SaveAppSettings();
+            }
+        }
+    }
+
+    public ObservableCollection<string> Scenarios { get; } = [];
     public ObservableCollection<PackageInfo> PackageHistory { get; } = [];
     public ObservableCollection<StatisticsItem> StatisticsItems { get; } = [];
     public ObservableCollection<DeviceStatus> DeviceStatuses { get; } = [];
@@ -144,6 +173,54 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     #endregion
 
     #region Private Methods
+
+    private void LoadAppSettings()
+    {
+        try
+        {
+            var settings = _settingsService.LoadSettings<AppSettings>();
+            SelectedScenario = settings.OperationMode;
+            Log.Information("已加载应用设置，操作模式: {Mode}", Scenarios[SelectedScenario]);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "加载应用设置时发生错误");
+        }
+    }
+
+    private void SaveAppSettings()
+    {
+        try
+        {
+            var settings = new AppSettings
+            {
+                OperationMode = SelectedScenario
+            };
+            _settingsService.SaveSettings(settings);
+            Log.Information("已保存应用设置，操作模式: {Mode}", Scenarios[SelectedScenario]);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "保存应用设置时发生错误");
+        }
+    }
+
+    private void InitializeScenarios()
+    {
+        Scenarios.Add("称重模式");
+        Scenarios.Add("收货模式");
+        Scenarios.Add("称重+收货模式");
+        Log.Information("初始化使用场景列表完成，当前使用场景: {Scenario}", Scenarios[SelectedScenario]);
+    }
+
+    private void ExecuteScenarioChanged(object parameter)
+    {
+        if (parameter is int index && index >= 0 && index < Scenarios.Count)
+        {
+            SelectedScenario = index;
+            Log.Information("切换使用场景为: {Scenario}", Scenarios[index]);
+        }
+    }
 
     private void ExecuteOpenSettings()
     {
@@ -284,7 +361,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         });
     }
 
-    private void OnCameraConnectionChanged(string deviceId, bool isConnected)
+    private void OnCameraConnectionChanged(string? deviceId, bool isConnected)
     {
         try
         {
@@ -417,7 +494,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         if (string.IsNullOrEmpty(package.ErrorMessage))
         {
             statusItem.Value = "正常";
-            statusItem.Description = "处理状态";
+            statusItem.Description = package.Information ?? "处理状态";
             statusItem.StatusColor = "#4CAF50"; // 绿色表示正常
         }
         else
@@ -473,6 +550,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     package.StatusDisplay = "成功";
+                    // Information属性在DwsService中已经设置，这里只需要更新UI
                     UpdatePackageInfoItems(package);
                 });
             }

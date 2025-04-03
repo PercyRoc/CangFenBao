@@ -7,6 +7,7 @@ using Common.Models.Package;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using KuaiLv.Models.DWS;
+using KuaiLv.Models.Settings.App;
 using KuaiLv.Models.Settings.Upload;
 using KuaiLv.Services.Warning;
 using Serilog;
@@ -23,8 +24,10 @@ internal class DwsService : IDwsService, IDisposable
     private readonly INotificationService _notificationService;
     private readonly Timer _offlinePackageRetryTimer;
     private readonly OfflinePackageService _offlinePackageService;
+    private readonly ISettingsService _settingsService;
     private readonly IWarningLightService _warningLightService;
     private UploadConfiguration _currentConfig;
+
     private bool _disposed;
     private bool _isNetworkAvailable = true;
 
@@ -36,6 +39,7 @@ internal class DwsService : IDwsService, IDisposable
         OfflinePackageService offlinePackageService)
     {
         _httpClient = httpClient;
+        _settingsService = settingsService;
         _notificationService = notificationService;
         _warningLightService = warningLightService;
         _offlinePackageService = offlinePackageService;
@@ -78,6 +82,11 @@ internal class DwsService : IDwsService, IDisposable
             // 使用当前配置
             var config = _currentConfig;
 
+            // 获取当前操作模式
+            var appSettings = _settingsService.LoadSettings<AppSettings>();
+            var operationMode = appSettings.OperationMode + 1; // 加1是因为UI从0开始，接口从1开始
+            Log.Debug("当前操作场景：{OperateScene}", operationMode);
+
             // 构建请求数据
             var request = new DwsRequest
             {
@@ -87,7 +96,8 @@ internal class DwsService : IDwsService, IDisposable
                 Width = package.Width ?? 0,
                 Height = package.Height ?? 0,
                 Volume = package.Volume ?? 0,
-                Timestamp = package.CreateTime.ToString("yyyy-MM-dd HH:mm:ss")
+                Timestamp = package.CreateTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                OperateScene = operationMode // 设置操作场景
             };
 
             // 序列化请求数据
@@ -163,6 +173,7 @@ internal class DwsService : IDwsService, IDisposable
                     _notificationService.ShowSuccess("包裹上报成功");
                     await _warningLightService.ShowGreenLightAsync();
                     package.StatusDisplay = "成功";
+                    package.Information = "上报成功：多退少补品";
                     return result;
 
                 case 200:
@@ -171,6 +182,7 @@ internal class DwsService : IDwsService, IDisposable
                     _notificationService.ShowSuccess("包裹上报成功");
                     await _warningLightService.ShowGreenLightAsync();
                     package.StatusDisplay = "成功";
+                    package.Information = result.Message ?? "上报成功";
                     return result;
 
                 case 1003:

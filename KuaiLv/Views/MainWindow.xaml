@@ -44,6 +44,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
@@ -109,8 +110,37 @@
                 </StackPanel>
             </ui:Button>
 
+            <!-- 使用场景选择 -->
+            <Grid Grid.Column="4" Margin="0,0,8,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                
+                <TextBlock Grid.Column="0" 
+                           Text="操作模式:"
+                           VerticalAlignment="Center"
+                           Margin="0,0,4,0"
+                           FontSize="13"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                
+                <ComboBox Grid.Column="1"
+                          MinWidth="120"
+                          ItemsSource="{Binding Scenarios}"
+                          SelectedIndex="{Binding SelectedScenario, Mode=TwoWay}"
+                          ToolTip="选择使用场景"
+                          FontSize="12"
+                          VerticalAlignment="Center">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </Grid>
+
             <!-- 标题 -->
-            <TextBlock Grid.Column="4"
+            <TextBlock Grid.Column="5"
                        Text="仓分宝-快驴"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
@@ -129,7 +159,7 @@
             </TextBlock>
 
             <!-- TitleBar -->
-            <ui:TitleBar Grid.Column="5"
+            <ui:TitleBar Grid.Column="6"
                          Title=""
                          ButtonsForeground="#FF008891"
                          ShowMaximize="True"
@@ -137,7 +167,7 @@
                          ShowClose="True" />
 
             <Border Grid.Column="0"
-                    Grid.ColumnSpan="6"
+                    Grid.ColumnSpan="7"
                     Height="1"
                     VerticalAlignment="Bottom"
                     Background="#20008080"
@@ -436,14 +466,13 @@
                                 <DataGridTextColumn Header="重量" Binding="{Binding Weight, StringFormat='{}{0:F2}斤'}"
                                                     Width="80" />
                                 <DataGridTextColumn Header="尺寸" Binding="{Binding VolumeDisplay}" Width="120" />
-                                <DataGridTextColumn Header="状态" Binding="{Binding StatusDisplay}" Width="80" />
+                                <DataGridTextColumn Header="状态" Binding="{Binding Information}" Width="*" />
                                 <DataGridTextColumn Header="处理时间"
                                                     Binding="{Binding ProcessingTime, StringFormat={}{0:0}ms}"
                                                     Width="100" />
                                 <DataGridTextColumn Header="时间"
                                                     Binding="{Binding CreateTime, StringFormat={}{0:HH:mm:ss}}"
                                                     Width="100" />
-                                <DataGridTextColumn Header="备注" Binding="{Binding Information}" Width="*" />
                             </DataGrid.Columns>
                         </DataGrid>
                     </Grid>

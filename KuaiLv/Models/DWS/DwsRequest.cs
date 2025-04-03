@@ -44,6 +44,12 @@ internal class DwsRequest
     public double Volume { get; set; }
 
     /// <summary>
+    ///     场景描述：1称重，2收货，3称重+收货
+    /// </summary>
+    [JsonPropertyName("operateScene")]
+    public int OperateScene { get; set; } = 1;
+
+    /// <summary>
     ///     采集时间（格式：yyyy-MM-dd HH:mm:ss）
     /// </summary>
     [JsonPropertyName("timestamp")]
