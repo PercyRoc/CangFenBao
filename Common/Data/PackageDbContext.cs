@@ -28,14 +28,14 @@ public class PackageDbContext(DbContextOptions<PackageDbContext> options, DateTi
             entity.Property(static e => e.Barcode).IsRequired();
             entity.Property(static e => e.SegmentCode);
             entity.Property(static e => e.Weight);
-            entity.Property(static e => e.ChuteName);
+            entity.Property(static e => e.ChuteNumber);
             entity.Property(static e => e.Status);
+            entity.Property(static e => e.StatusDisplay);
             entity.Property(static e => e.CreateTime);
             entity.Property(static e => e.Length);
             entity.Property(static e => e.Width);
             entity.Property(static e => e.Height);
             entity.Property(static e => e.Volume);
-            entity.Property(static e => e.Information);
             entity.Property(static e => e.ErrorMessage);
             entity.Property(static e => e.ImagePath);
         });

@@ -6,92 +6,91 @@ namespace Common.Models.Package;
 public enum PackageStatus
 {
     /// <summary>
-    ///     初始状态
-    /// </summary>
-    Initial = 0,
-
-    /// <summary>
     ///     包裹创建
     /// </summary>
-    Created = 1,
+    Created = 0,
 
     /// <summary>
     ///     正在测量
     /// </summary>
-    Measuring = 2,
+    Measuring = 1,
 
     /// <summary>
     ///     测量成功
     /// </summary>
-    MeasureSuccess = 3,
+    MeasureSuccess = 2,
 
     /// <summary>
     ///     测量失败
     /// </summary>
-    MeasureFailed = 4,
+    MeasureFailed = 3,
 
     /// <summary>
     ///     正在称重
     /// </summary>
-    Weighing = 5,
+    Weighing = 4,
 
     /// <summary>
     ///     称重成功
     /// </summary>
-    WeighSuccess = 6,
+    WeighSuccess = 5,
 
     /// <summary>
     ///     称重失败
     /// </summary>
-    WeighFailed = 7,
+    WeighFailed = 6,
 
     /// <summary>
     ///     等待分配格口
     /// </summary>
-    WaitingForChute = 8,
-
-    /// <summary>
-    ///     等待模组带处理
-    /// </summary>
-    WaitingForModule = 9,
-
+    WaitingForChute = 7,
     /// <summary>
     ///     正在分拣
     /// </summary>
-    Sorting = 10,
+    Sorting = 8,
 
     /// <summary>
     ///     分拣成功
     /// </summary>
-    SortSuccess = 11,
+    SortSuccess = 9,
 
     /// <summary>
     ///     分拣失败
     /// </summary>
-    SortFailed = 12,
-
-    /// <summary>
-    ///     分拣完成
-    /// </summary>
-    Completed = 13,
+    SortFailed = 10,
 
     /// <summary>
     ///     处理异常
     /// </summary>
-    Error = 14,
+    Error = 11,
 
     /// <summary>
     ///     超时
     /// </summary>
-    Timeout = 15,
+    Timeout = 12,
 
     /// <summary>
     ///     离线状态
     /// </summary>
-    Offline = 16,
+    Offline = 13,
 
     /// <summary>
-    ///     已处理
+    ///     等待上包
     /// </summary>
-    Processed = 17
+    WaitingForLoading = 14,
+
+    /// <summary>
+    ///     拒绝上包
+    /// </summary>
+    LoadingRejected = 15,
+
+    /// <summary>
+    ///     上包成功
+    /// </summary>
+    LoadingSuccess = 16,
+
+    /// <summary>
+    ///     上包超时
+    /// </summary>
+    LoadingTimeout = 17,
 }

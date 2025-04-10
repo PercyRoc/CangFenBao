@@ -6,7 +6,6 @@ using Common.Services.Settings;
 using Common.Services.Ui;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Prism.Ioc;
 
 namespace Common.Extensions;
@@ -42,19 +41,12 @@ public static class ServiceCollectionExtensions
         {
             context.Database.EnsureCreated();
         }
-
         // 注册数据库上下文选项
         services.RegisterInstance(options);
-
         // 注册数据服务
         services.RegisterSingleton<IPackageDataService, PackageDataService>();
-
         // 注册音频服务
         services.RegisterSingleton<IAudioService, AudioService>();
-
-        // 注册对话框服务
-        services.RegisterSingleton<IDialogService, DialogService>();
-
         // 注册通知服务
         services.RegisterSingleton<INotificationService, NotificationService>();
         

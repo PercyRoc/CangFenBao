@@ -115,12 +115,10 @@ public class SegmentCodeRules : BindableBase
                             .Select(static s => s.Trim())
                             .Contains(part));
 
-                    if (matchedRule != null)
-                    {
-                        Log.Information("找到匹配规则 - 格口: {Chute}, 一段码: {FirstSegment}, 二段码: {SecondSegment}",
-                            matchedRule.Chute, matchedRule.FirstSegment, matchedRule.SecondSegment);
-                        return matchedRule.Chute;
-                    }
+                    if (matchedRule == null) continue;
+                    Log.Information("找到匹配规则 - 格口: {Chute}, 一段码: {FirstSegment}, 二段码: {SecondSegment}",
+                        matchedRule.Chute, matchedRule.FirstSegment, matchedRule.SecondSegment);
+                    return matchedRule.Chute;
                 }
             }
 

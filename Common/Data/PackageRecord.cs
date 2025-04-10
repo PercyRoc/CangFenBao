@@ -33,23 +33,17 @@ public class PackageRecord
     /// <summary>
     ///     重量（千克）
     /// </summary>
-    public float Weight { get; set; }
+    public double Weight { get; set; }
 
     /// <summary>
-    ///     格口名称
+    ///     格口号
     /// </summary>
-    public int? ChuteName { get; set; }
+    public int? ChuteNumber { get; set; }
 
     /// <summary>
     ///     创建时间
     /// </summary>
     public DateTime CreateTime { get; set; }
-
-    /// <summary>
-    ///     附加信息
-    /// </summary>
-    [MaxLength(500)]
-    public string? Information { get; set; }
 
     /// <summary>
     ///     错误信息
@@ -83,6 +77,11 @@ public class PackageRecord
     public PackageStatus Status { get; set; }
 
     /// <summary>
+    ///     状态显示文本
+    /// </summary>
+    public string StatusDisplay { get; set; } = string.Empty;
+
+    /// <summary>
     ///     图片路径
     /// </summary>
     [MaxLength(255)]
@@ -93,22 +92,23 @@ public class PackageRecord
     /// </summary>
     internal static PackageRecord FromPackageInfo(PackageInfo info)
     {
-        return new PackageRecord
+        var record = new PackageRecord
         {
             Index = info.Index,
             Barcode = info.Barcode,
             SegmentCode = info.SegmentCode,
             Weight = info.Weight,
-            ChuteName = info.ChuteName,
+            ChuteNumber = info.ChuteNumber,
             CreateTime = info.CreateTime,
-            Information = info.Information,
             ErrorMessage = info.ErrorMessage,
             Length = info.Length,
             Width = info.Width,
             Height = info.Height,
             Volume = info.Volume,
             Status = info.Status,
-            ImagePath = info.ImagePath
+            ImagePath = info.ImagePath,
+            StatusDisplay = info.StatusDisplay
         };
+        return record;
     }
 }

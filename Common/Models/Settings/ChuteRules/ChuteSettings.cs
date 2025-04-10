@@ -10,7 +10,7 @@ namespace Common.Models.Settings.ChuteRules;
 public class ChuteSettings : BindableBase
 {
     private int _chuteCount = 1;
-    private Dictionary<int, BarcodeMatchRule> _chuteRules = new();
+    private Dictionary<int, BarcodeMatchRule> _chuteRules = [];
     private int _errorChuteNumber;
 
     [Range(1, 100, ErrorMessage = "格口数量必须在1-100之间")]

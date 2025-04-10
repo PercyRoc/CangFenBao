@@ -37,7 +37,37 @@ public enum AudioType
     /// <summary>
     ///     通用成功音效
     /// </summary>
-    Success
+    Success,
+    
+    /// <summary>
+    ///     PLC未连接
+    /// </summary>
+    PlcDisconnected,
+    
+    /// <summary>
+    ///     等待扫码
+    /// </summary>
+    WaitingScan,
+    
+    /// <summary>
+    ///     等待上包
+    /// </summary>
+    WaitingForLoading,
+    
+    /// <summary>
+    ///     上包超时
+    /// </summary>
+    LoadingTimeout,
+    
+    /// <summary>
+    ///     拒绝上包
+    /// </summary>
+    LoadingRejected,
+    
+    /// <summary>
+    ///     上包成功
+    /// </summary>
+    LoadingSuccess
 }
 
 /// <summary>
@@ -63,7 +93,13 @@ public class AudioService : IAudioService, IDisposable
         _presetAudios = new Dictionary<AudioType, string>
         {
             { AudioType.SystemError, Path.Combine(audioDirectory, "error.wav") },
-            { AudioType.Success, Path.Combine(audioDirectory, "biu.wav") }
+            { AudioType.Success, Path.Combine(audioDirectory, "biu.wav") },
+            { AudioType.PlcDisconnected, Path.Combine(audioDirectory, "PLC未连接.wav") },
+            { AudioType.WaitingScan, Path.Combine(audioDirectory, "等待扫码.wav") },
+            { AudioType.WaitingForLoading, Path.Combine(audioDirectory, "等待上包.wav") },
+            { AudioType.LoadingTimeout, Path.Combine(audioDirectory, "超时.wav") },
+            { AudioType.LoadingRejected, Path.Combine(audioDirectory, "拒绝上包.wav") },
+            { AudioType.LoadingSuccess, Path.Combine(audioDirectory, "上包成功.wav") }
         };
 
         // 确保音频目录存在
