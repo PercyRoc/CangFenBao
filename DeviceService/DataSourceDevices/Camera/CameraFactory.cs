@@ -1,6 +1,6 @@
 using Common.Services.Settings;
 using Common.Services.Ui;
-using DeviceService.DataSourceDevices.Camera.DaHua;
+using DeviceService.DataSourceDevices.Camera.HuaRay;
 using DeviceService.DataSourceDevices.Camera.Hikvision;
 using DeviceService.DataSourceDevices.Camera.Models.Camera;
 using DeviceService.DataSourceDevices.Camera.Models.Camera.Enums;
@@ -67,17 +67,12 @@ public class CameraFactory : IDisposable
             {
                 needReinitialize = true;
             }
-            else if (_currentCamera is DahuaCameraService && settings.Manufacturer != CameraManufacturer.Dahua)
+            else if (_currentCamera is HuaRayCameraService && settings.Manufacturer != CameraManufacturer.HuaRay)
             {
                 needReinitialize = true;
             }
-            else if (_currentCamera is HikvisionIndustrialCameraSdkClient && 
+            else if (_currentCamera is HikvisionIndustrialCameraService && 
                     (settings.Manufacturer != CameraManufacturer.Hikvision || settings.CameraType != CameraType.Industrial))
-            {
-                needReinitialize = true;
-            }
-            else if (_currentCamera is HikvisionSmartCameraService &&
-                    (settings.Manufacturer != CameraManufacturer.Hikvision || settings.CameraType != CameraType.Smart))
             {
                 needReinitialize = true;
             }
@@ -107,7 +102,6 @@ public class CameraFactory : IDisposable
                 {
                     // 创建并初始化新相机
                     _currentCamera = CreateCameraByManufacturer(settings.Manufacturer, settings.CameraType);
-                    _currentCamera.UpdateConfiguration(settings);
 
                     Log.Information("相机重新初始化完成");
                     _notificationService.ShowSuccess("相机重新初始化完成");
@@ -124,7 +118,6 @@ public class CameraFactory : IDisposable
                 // 只更新配置
                 Log.Information("相机配置发生变更，更新配置");
                 _currentCamera?.Stop();
-                _currentCamera?.UpdateConfiguration(settings);
                 Log.Information("相机配置更新完成");
             }
         }
@@ -141,7 +134,6 @@ public class CameraFactory : IDisposable
         {
             var settings = LoadCameraSettings();
             _currentCamera = CreateCameraByManufacturer(settings.Manufacturer, settings.CameraType);
-            _currentCamera.UpdateConfiguration(settings);
         }
         catch (Exception ex)
         {
@@ -157,7 +149,6 @@ public class CameraFactory : IDisposable
     {
         var settings = LoadCameraSettings();
         var camera = CreateCameraByManufacturer(settings.Manufacturer, settings.CameraType);
-        camera.UpdateConfiguration(settings);
         return camera;
     }
 
@@ -173,10 +164,9 @@ public class CameraFactory : IDisposable
         {
             ICameraService camera = manufacturer switch
             {
-                CameraManufacturer.Dahua => new DahuaCameraService(),
+                CameraManufacturer.HuaRay => new HuaRayCameraService(),
                 CameraManufacturer.Hikvision when cameraType == CameraType.Industrial =>
-                    new HikvisionIndustrialCameraSdkClient(),
-                CameraManufacturer.Hikvision when cameraType == CameraType.Smart => new HikvisionSmartCameraService(),
+                    new HikvisionIndustrialCameraService(),
                 CameraManufacturer.Tcp => new TcpCameraService(),
                 _ => throw new ArgumentException($"不支持的相机厂商和类型组合: {manufacturer} - {cameraType}")
             };
@@ -185,8 +175,8 @@ public class CameraFactory : IDisposable
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "创建 {Manufacturer} {Type} 相机服务失败，将使用大华相机作为默认选项", manufacturer, cameraType);
-            return new DahuaCameraService();
+            Log.Error(ex, "创建 {Manufacturer} {Type} 相机服务失败，将使用华睿相机作为默认选项", manufacturer, cameraType);
+            return new HuaRayCameraService();
         }
     }
 
@@ -202,7 +192,7 @@ public class CameraFactory : IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "加载相机设置失败，使用默认设置");
-            return new CameraSettings { Manufacturer = CameraManufacturer.Dahua };
+            return new CameraSettings { Manufacturer = CameraManufacturer.HuaRay };
         }
     }
 }

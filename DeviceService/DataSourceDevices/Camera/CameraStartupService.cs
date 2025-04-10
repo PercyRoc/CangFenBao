@@ -55,7 +55,6 @@ public class CameraStartupService(
     {
         try
         {
-            Log.Information("正在停止相机服务...");
 
             if (_cameraService != null)
             {

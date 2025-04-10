@@ -3,11 +3,11 @@ using System.Reactive.Subjects;
 using System.Runtime.InteropServices;
 using System.Text;
 using Common.Models.Package;
+using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera.Models;
 using DeviceService.DataSourceDevices.Camera.Models.Camera;
 using Serilog;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
+using System.Windows.Media.Imaging;
 
 namespace DeviceService.DataSourceDevices.Camera.RenJia;
 
@@ -24,14 +24,13 @@ public record MeasureResult(
 /// <summary>
 ///     人加体积相机服务
 /// </summary>
-public class RenJiaCameraService : ICameraService
+public class RenJiaCameraService(ISettingsService settingsService) : ICameraService
 {
-    private readonly Subject<(Image<Rgba32> image, IReadOnlyList<BarcodeLocation> barcodes)> _imageSubject = new();
+    private readonly Subject<(BitmapSource image, IReadOnlyList<BarcodeLocation> barcodes)> _imageSubject = new();
     private readonly Subject<PackageInfo> _packageSubject = new();
     private readonly CancellationTokenSource _processingCancellation = new();
     private bool _disposed;
     private bool _isConnected;
-    private VolumeSettings? _settings;
 
     public event Action<string, bool>? ConnectionChanged;
 
@@ -49,8 +48,7 @@ public class RenJiaCameraService : ICameraService
 
     public IObservable<PackageInfo> PackageStream => _packageSubject.AsObservable();
 
-    public IObservable<(Image<Rgba32> image, IReadOnlyList<BarcodeLocation> barcodes)> ImageStream =>
-        _imageSubject.AsObservable();
+    public IObservable<BitmapSource> ImageStream => _imageSubject.Select(static t => t.image).AsObservable();
 
     public bool Start()
     {
@@ -153,54 +151,6 @@ public class RenJiaCameraService : ICameraService
         }
     }
 
-    public IEnumerable<DeviceCameraInfo>? GetCameraInfos()
-    {
-        try
-        {
-            var deviceNum = NativeMethods.ScanDevice();
-            if (deviceNum <= 0)
-            {
-                Log.Warning("未发现人加体积相机设备");
-                return null;
-            }
-
-            var cameras = new List<DeviceCameraInfo>();
-            for (var i = 0; i < deviceNum; i++)
-                cameras.Add(new DeviceCameraInfo
-                {
-                    SerialNumber = $"RenJia_{i}",
-                    Model = "RenJia Volume Camera",
-                    IpAddress = "USB",
-                    MacAddress = $"RenJia_{i}"
-                });
-
-            return cameras;
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "获取人加体积相机列表失败");
-            return null;
-        }
-    }
-
-    public void UpdateConfiguration(CameraSettings config)
-    {
-        if (config is not VolumeSettings volumeSettings)
-        {
-            Log.Warning("配置类型错误，期望 VolumeSettings 类型");
-            return;
-        }
-
-        try
-        {
-            _settings = volumeSettings;
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "更新人加体积相机配置失败");
-        }
-    }
-
     /// <summary>
     ///     异步释放资源
     /// </summary>
@@ -246,7 +196,8 @@ public class RenJiaCameraService : ICameraService
         try
         {
             var startTime = DateTime.Now;
-            var timeoutMs = _settings?.TimeoutMs ?? 5000;
+
+            var timeoutMs = settingsService.LoadSettings<VolumeSettings>().TimeoutMs;
             // 创建测量任务
             var measureTask = Task.Run(() =>
             {
@@ -298,8 +249,15 @@ public class RenJiaCameraService : ICameraService
                         var imageData = new byte[len];
                         Array.Copy(imageDataBuffer, imageData, len);
 
-                        using var image = Image.Load<Rgba32>(imageData);
-                        _imageSubject.OnNext((image.Clone(), new List<BarcodeLocation>()));
+                        using var memoryStream = new MemoryStream(imageData);
+                        var bitmapImage = new BitmapImage();
+                        bitmapImage.BeginInit();
+                        bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
+                        bitmapImage.StreamSource = memoryStream;
+                        bitmapImage.EndInit();
+                        bitmapImage.Freeze(); // 确保可以跨线程访问
+
+                        _imageSubject.OnNext((bitmapImage, new List<BarcodeLocation>()));
                     }
                     catch (Exception ex)
                     {
@@ -365,6 +323,40 @@ public class RenJiaCameraService : ICameraService
             return "获取错误信息失败";
         }
     }
+
+    /// <summary>
+    ///     设置托盘高度
+    /// </summary>
+    /// <param name="palletHeightMm">托盘高度（毫米）</param>
+    /// <returns>0表示成功，其他值表示失败</returns>
+    public int SetPalletHeight(int palletHeightMm)
+    {
+        try
+        {
+            if (!IsConnected)
+            {
+                Log.Warning("相机未连接，无法设置托盘高度");
+                return -1;
+            }
+
+            var result = NativeMethods.SetPalletHeight(palletHeightMm);
+            if (result != 0)
+            {
+                Log.Warning("设置托盘高度失败：{Result}", result);
+            }
+            else
+            {
+                Log.Information("成功设置托盘高度：{Height}mm", palletHeightMm);
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "设置托盘高度时发生错误");
+            return -1;
+        }
+    }
 }
 
 /// <summary>
@@ -408,14 +400,11 @@ internal static class NativeMethods
     [DllImport("VolumeMeasurementDll.dll", EntryPoint = "GetErrorMes", CallingConvention = CallingConvention.Cdecl)]
     public static extern int GetErrorMes([Out] byte[] errMes);
 
-    // 获取测量时刻的图像信息
-    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "GetMeasureImageFromId",
-        CallingConvention = CallingConvention.Cdecl)]
-    public static extern int GetMeasureImageFromId(
-        IntPtr imageData,
-        int cameraId);
-
     // 获取系统状态
     [DllImport("VolumeMeasurementDll.dll", EntryPoint = "GetSystemState", CallingConvention = CallingConvention.Cdecl)]
     public static extern int GetSystemState([Out] int[] systemState);
+
+    // 设置托盘高度
+    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "SetPalletHeight", CallingConvention = CallingConvention.Cdecl)]
+    public static extern int SetPalletHeight(int palletHeight);
 }

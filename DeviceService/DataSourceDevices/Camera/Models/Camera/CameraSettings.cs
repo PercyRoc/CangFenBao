@@ -41,12 +41,6 @@ public class CameraSettings
     public int RepeatTimeMs { get; set; } = 1000;
 
     /// <summary>
-    ///     已选择的相机列表
-    /// </summary>
-    [JsonPropertyName("SelectedCameras")]
-    public List<DeviceCameraInfo> SelectedCameras { get; set; } = [];
-
-    /// <summary>
     ///     是否启用图像保存
     /// </summary>
     [JsonPropertyName("EnableImageSaving")]

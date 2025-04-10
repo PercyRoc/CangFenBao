@@ -1,4 +1,3 @@
-using Common.Services.Ui;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 
@@ -7,24 +6,18 @@ namespace DeviceService.DataSourceDevices.Scanner;
 /// <summary>
 ///     扫码枪启动服务
 /// </summary>
+/// <remarks>
+///     构造函数
+/// </remarks>
 public class ScannerStartupService : IHostedService
 {
-    private readonly IDialogService _dialogService;
     private readonly SemaphoreSlim _initLock = new(1, 1);
     private UsbScannerService? _scannerService;
 
     /// <summary>
-    ///     构造函数
-    /// </summary>
-    public ScannerStartupService(IDialogService dialogService)
-    {
-        _dialogService = dialogService;
-    }
-
-    /// <summary>
     ///     启动服务
     /// </summary>
-    public async Task StartAsync(CancellationToken cancellationToken)
+    public Task StartAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -35,7 +28,6 @@ public class ScannerStartupService : IHostedService
             {
                 const string message = "扫码枪服务启动失败";
                 Log.Warning(message);
-                await _dialogService.ShowErrorAsync(message, "扫码枪服务错误");
             }
             else
             {
@@ -45,8 +37,9 @@ public class ScannerStartupService : IHostedService
         catch (Exception ex)
         {
             Log.Error(ex, "启动扫码枪服务时发生错误");
-            await _dialogService.ShowErrorAsync(ex.Message, "扫码枪服务错误");
         }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>

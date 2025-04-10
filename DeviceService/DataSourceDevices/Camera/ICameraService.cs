@@ -1,8 +1,6 @@
 using Common.Models.Package;
 using DeviceService.DataSourceDevices.Camera.Models;
-using DeviceService.DataSourceDevices.Camera.Models.Camera;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
+using System.Windows.Media.Imaging;
 
 namespace DeviceService.DataSourceDevices.Camera;
 
@@ -24,12 +22,12 @@ public interface ICameraService : IDisposable
     /// <summary>
     ///     图像信息流
     /// </summary>
-    IObservable<(Image<Rgba32> image, IReadOnlyList<BarcodeLocation> barcodes)> ImageStream { get; }
+    IObservable<BitmapSource> ImageStream { get; }
 
     /// <summary>
     ///     相机连接状态改变事件
     /// </summary>
-    event Action<string, bool>? ConnectionChanged;
+    event Action<string?, bool>? ConnectionChanged;
 
     /// <summary>
     ///     启动相机服务
@@ -42,16 +40,4 @@ public interface ICameraService : IDisposable
     /// </summary>
     /// <returns>操作是否成功</returns>
     bool Stop();
-
-    /// <summary>
-    ///     获取相机信息列表
-    /// </summary>
-    /// <returns>相机信息列表</returns>
-    IEnumerable<DeviceCameraInfo>? GetCameraInfos();
-
-    /// <summary>
-    ///     更新相机配置
-    /// </summary>
-    /// <param name="config">相机配置</param>
-    void UpdateConfiguration(CameraSettings config);
 }

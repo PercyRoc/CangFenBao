@@ -1,6 +1,5 @@
 using Common.Services.Settings;
 using Common.Services.Ui;
-using DeviceService.DataSourceDevices.Camera.Models.Camera;
 using DeviceService.DataSourceDevices.Camera.RenJia;
 using Microsoft.Extensions.Hosting;
 using Serilog;
@@ -10,24 +9,15 @@ namespace DeviceService.DataSourceDevices.Camera;
 /// <summary>
 ///     体积相机启动服务
 /// </summary>
-public class VolumeCameraStartupService : IHostedService
+/// <remarks>
+///     构造函数
+/// </remarks>
+public class VolumeCameraStartupService(
+    INotificationService notificationService,
+    ISettingsService settingsService) : IHostedService
 {
     private readonly SemaphoreSlim _initLock = new(1, 1);
-    private readonly INotificationService _notificationService;
-    private readonly ISettingsService _settingsService;
     private RenJiaCameraService? _cameraService;
-
-    /// <summary>
-    ///     构造函数
-    /// </summary>
-    public VolumeCameraStartupService(
-        INotificationService notificationService,
-        ISettingsService settingsService)
-    {
-        _notificationService = notificationService;
-        _settingsService = settingsService;
-        _settingsService.OnSettingsChanged<VolumeSettings>(OnVolumeSettingsChanged);
-    }
 
     /// <summary>
     ///     启动服务
@@ -37,25 +27,22 @@ public class VolumeCameraStartupService : IHostedService
         try
         {
             var camera = GetCameraService();
-            var config = _settingsService.LoadSettings<VolumeSettings>();
-            camera.UpdateConfiguration(config);
-
             if (!camera.Start())
             {
                 const string message = "Failed to start volume camera service";
                 Log.Warning(message);
-                _notificationService.ShowError(message);
+                notificationService.ShowError(message);
             }
             else
             {
                 Log.Information("体积相机已成功启动");
-                _notificationService.ShowSuccess("Volume camera service started successfully");
+                notificationService.ShowSuccess("Volume camera service started successfully");
             }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "启动体积相机服务时发生错误");
-            _notificationService.ShowError(ex.Message);
+            notificationService.ShowError(ex.Message);
         }
 
         return Task.CompletedTask;
@@ -106,27 +93,11 @@ public class VolumeCameraStartupService : IHostedService
         _initLock.Wait();
         try
         {
-            return _cameraService ??= new RenJiaCameraService();
+            return _cameraService ??= new RenJiaCameraService(settingsService);
         }
         finally
         {
             _initLock.Release();
-        }
-    }
-
-    private void OnVolumeSettingsChanged(VolumeSettings settings)
-    {
-        try
-        {
-            Log.Information("检测到体积相机配置变更，准备更新配置...");
-            var camera = GetCameraService();
-            camera.UpdateConfiguration(settings);
-            Log.Information("体积相机配置更新成功");
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "更新体积相机配置时发生错误");
-            _notificationService.ShowError("更新体积相机配置失败：" + ex.Message);
         }
     }
 }

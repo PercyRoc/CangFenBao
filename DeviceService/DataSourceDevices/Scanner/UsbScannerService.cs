@@ -12,7 +12,7 @@ namespace DeviceService.DataSourceDevices.Scanner;
 /// </summary>
 internal class UsbScannerService : IScannerService
 {
-    private const int ScannerTimeout = 200; // 扫码枪输入超时时间
+    private const int ScannerTimeout = 100; // 扫码枪输入超时时间 (增加到 500ms)
     private readonly StringBuilder _barcodeBuilder = new();
     private readonly LowLevelKeyboardProc _proc;
     private readonly Queue<string> _barcodeQueue = new();
@@ -21,6 +21,11 @@ internal class UsbScannerService : IScannerService
     private IntPtr _hookId = IntPtr.Zero;
     private bool _isRunning;
     private DateTime _lastKeyTime = DateTime.MinValue;
+    
+    // 添加最后处理条码的记录
+    private string _lastBarcode = string.Empty;
+    private DateTime _lastBarcodeTime = DateTime.MinValue;
+    private const int DuplicateBarcodeIntervalMs = 3000; // 3秒内不重复处理相同条码
 
     public UsbScannerService()
     {
@@ -91,9 +96,7 @@ internal class UsbScannerService : IScannerService
     private static IntPtr SetHook(LowLevelKeyboardProc proc)
     {
         using var curProcess = Process.GetCurrentProcess();
-        using var curModule = curProcess.MainModule;
-        if (curModule == null) throw new InvalidOperationException("无法获取当前进程主模块");
-
+        using var curModule = curProcess.MainModule ?? throw new InvalidOperationException("无法获取当前进程主模块");
         return SetWindowsHookEx(13, proc, GetModuleHandle(null), 0);
     }
 
@@ -154,6 +157,20 @@ internal class UsbScannerService : IScannerService
                 var barcode = _barcodeQueue.Dequeue();
                 try
                 {
+                    // 检查是否是在短时间内的重复条码
+                    var now = DateTime.Now;
+                    if (barcode == _lastBarcode && 
+                        (now - _lastBarcodeTime).TotalMilliseconds < DuplicateBarcodeIntervalMs)
+                    {
+                        Log.Warning("忽略重复条码：{Barcode}，间隔仅 {Interval} 毫秒", 
+                            barcode, (now - _lastBarcodeTime).TotalMilliseconds);
+                        continue;
+                    }
+                    
+                    // 更新最后处理的条码记录
+                    _lastBarcode = barcode;
+                    _lastBarcodeTime = now;
+                    
                     BarcodeScanned?.Invoke(this, barcode);
                 }
                 catch (Exception ex)

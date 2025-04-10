@@ -1,6 +1,5 @@
 using System.Text.Json.Serialization;
 using DeviceService.DataSourceDevices.Camera.Models.Camera.Enums;
-using MvCodeReaderSDKNet;
 using Prism.Mvvm;
 
 namespace DeviceService.DataSourceDevices.Camera.Models.Camera;
@@ -80,22 +79,5 @@ public class DeviceCameraInfo : BindableBase
     {
         get => _status;
         set => SetProperty(ref _status, value);
-    }
-
-    /// <summary>
-    ///     从设备信息更新相机信息
-    /// </summary>
-    internal void UpdateFromDeviceInfo(MvCodeReader.MV_CODEREADER_DEVICE_INFO deviceInfo)
-    {
-        if (deviceInfo.nTLayerType != MvCodeReader.MV_CODEREADER_GIGE_DEVICE) return;
-        // 从设备信息中获取IP地址和MAC地址
-        IpAddress =
-            $"{deviceInfo.nMacAddrHigh >> 24}.{(deviceInfo.nMacAddrHigh >> 16) & 0xFF}.{(deviceInfo.nMacAddrHigh >> 8) & 0xFF}.{deviceInfo.nMacAddrHigh & 0xFF}";
-        MacAddress = $"{deviceInfo.nMacAddrHigh:X2}-{deviceInfo.nMacAddrLow:X2}";
-
-        // 序列号和型号从设备信息中获取
-        SerialNumber = deviceInfo.nDeviceType.ToString();
-        Model = deviceInfo.nMajorVer.ToString();
-        Status = CameraStatus.Online;
     }
 }
