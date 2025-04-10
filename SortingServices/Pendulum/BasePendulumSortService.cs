@@ -71,130 +71,149 @@ public abstract class BasePendulumSortService : IPendulumSortService
             return;
         }
 
-        Log.Information("收到包裹 {Barcode}(序号:{Index})，开始查找匹配的触发时间",
-            package.Barcode, package.Index);
-
-        // 查找匹配的触发时间并处理
-        DateTime? matchedTriggerTime = null;
-
-        // 使用锁确保线程安全
-        lock (_triggerTimes)
+        // 如果包裹已经有关联的触发时间戳，则跳过匹配逻辑
+        if (package.TriggerTimestamp != default)
         {
-            var currentTime = DateTime.Now;
-            var tempTriggerTimesList = _triggerTimes.ToList();
-
-            // 记录当前时间和触发时间队列状态
-            Log.Information("当前时间: {CurrentTime:HH:mm:ss.fff}, 触发时间队列中有 {Count} 个时间戳待匹配",
-                currentTime, tempTriggerTimesList.Count);
-
-            if (tempTriggerTimesList.Count != 0)
-                Log.Information("触发时间队列内容: {Times}",
-                    string.Join(", ", tempTriggerTimesList.Select(t =>
-                        $"{t:HH:mm:ss.fff}[延迟:{(currentTime - t).TotalMilliseconds:F0}ms]")));
-
-            // 清空原队列，准备重建
-            _triggerTimes.Clear();
-
-            // 查找匹配的触发时间并重建队列
-            var found = false;
-            var matchCount = 0; // 记录匹配的时间戳数量
-
-            // 按时间顺序遍历触发时间
-            foreach (var triggerTime in tempTriggerTimesList)
-            {
-                // 计算时间差
-                var delay = (currentTime - triggerTime).TotalMilliseconds;
-
-                // 如果延迟已经超过上限，则将剩余时间戳全部重新入队
-                if (delay > Configuration.TriggerPhotoelectric.TimeRangeUpper)
-                {
-                    Log.Debug("触发时间 {TriggerTime:HH:mm:ss.fff} 延迟 {Delay:F0}ms 超过上限 {Upper}ms，跳过",
-                        triggerTime, delay, Configuration.TriggerPhotoelectric.TimeRangeUpper);
-                    continue;
-                }
-
-                // 如果延迟小于下限，说明后面的时间戳更新，不可能匹配，提前结束查找
-                if (delay < Configuration.TriggerPhotoelectric.TimeRangeLower)
-                {
-                    Log.Debug("触发时间 {TriggerTime:HH:mm:ss.fff} 延迟 {Delay:F0}ms 小于下限 {Lower}ms，重新入队",
-                        triggerTime, delay, Configuration.TriggerPhotoelectric.TimeRangeLower);
-                    // 将当前和剩余的时间戳重新入队
-                    _triggerTimes.Enqueue(triggerTime);
-                    continue;
-                }
-
-                // 时间戳在有效范围内
-                matchCount++;
-
-                if (!found)
-                {
-                    matchedTriggerTime = triggerTime;
-                    found = true;
-                    Log.Information("包裹 {Barcode}(序号:{Index}) 匹配到触发时间 {TriggerTime:HH:mm:ss.fff}，延迟 {Delay:F0}ms",
-                        package.Barcode, package.Index, triggerTime, delay);
-                    package.ProcessingTime = delay;
-                    continue;
-                }
-
-                // 将未匹配的时间戳重新入队
-                _triggerTimes.Enqueue(triggerTime);
-            }
-
-            // 检查是否有多个匹配的时间戳
-            if (matchCount > 1)
-                Log.Warning("包裹 {Barcode}(序号:{Index}) 在时间范围内找到 {MatchCount} 个匹配的触发时间，" +
-                            "建议调整触发时间范围设置（当前设置：{Lower}ms - {Upper}ms）",
-                    package.Barcode, package.Index, matchCount,
-                    Configuration.TriggerPhotoelectric.TimeRangeLower,
-                    Configuration.TriggerPhotoelectric.TimeRangeUpper);
-
-            // 记录重建后的队列状态
-            var remainingTimes = _triggerTimes.ToList();
-            if (remainingTimes.Count != 0)
-                Log.Debug("重建后的触发时间队列（{Count}个）: {Times}",
-                    remainingTimes.Count,
-                    string.Join(", ", remainingTimes.Select(static t => t.ToString("HH:mm:ss.fff"))));
-
-            if (matchedTriggerTime.HasValue && !found)
-                Log.Warning("尝试从触发时间队列中移除时间戳 {TriggerTime}，但未找到", matchedTriggerTime.Value);
-        }
-
-        // 处理匹配结果
-        if (matchedTriggerTime.HasValue)
-        {
-            // 设置包裹的触发时间戳
-            package.TriggerTimestamp = matchedTriggerTime.Value;
-
-            // 添加到待处理队列
-            PendingSortPackages[package.Index] = package;
-            Log.Information("包裹 {Barcode}(序号:{Index}) 已添加到待处理队列", package.Barcode, package.Index);
-
-            // 创建超时定时器
-            var timer = new Timer();
-            timer.Elapsed += (_, _) => HandlePackageTimeout(package);
-
-            // 获取对应分拣光电的配置
-            var photoelectricName = GetPhotoelectricNameBySlot(package.ChuteName);
-            if (photoelectricName == null) return;
-
-            var photoelectricConfig = GetPhotoelectricConfig(photoelectricName);
-            // 设置超时时间为时间范围上限 + 500ms
-            timer.Interval = photoelectricConfig.TimeRangeUpper + 500;
-            timer.AutoReset = false;
-            PackageTimers[package.Index] = timer;
-            timer.Start();
-
-            Log.Debug("包裹 {Barcode}(序号:{Index}) 设置超时时间 {Timeout}ms",
-                package.Barcode, package.Index, timer.Interval);
+            Log.Information("包裹 {Barcode}(序号:{Index}) 已有关联的触发时间戳 {Timestamp:HH:mm:ss.fff}，跳过匹配逻辑",
+                package.Barcode, package.Index, package.TriggerTimestamp);
         }
         else
         {
-            // 未找到匹配的触发时间，不添加到待处理队列
-            Log.Warning("包裹 {Barcode}(序号:{Index}) 未找到匹配的触发时间，不添加到待处理队列",
+            Log.Information("收到包裹 {Barcode}(序号:{Index})，开始查找匹配的触发时间",
                 package.Barcode, package.Index);
-            // 确保包裹不在待处理队列中
-            PendingSortPackages.TryRemove(package.Index, out _);
+
+            // 查找匹配的触发时间并处理
+            DateTime? matchedTriggerTime = null;
+
+            // 使用锁确保线程安全
+            lock (_triggerTimes)
+            {
+                var currentTime = DateTime.Now;
+                var tempTriggerTimesList = _triggerTimes.ToList();
+
+                // 记录当前时间和触发时间队列状态
+                Log.Information("当前时间: {CurrentTime:HH:mm:ss.fff}, 触发时间队列中有 {Count} 个时间戳待匹配",
+                    currentTime, tempTriggerTimesList.Count);
+
+                if (tempTriggerTimesList.Count != 0)
+                    Log.Information("触发时间队列内容: {Times}",
+                        string.Join(", ", tempTriggerTimesList.Select(t =>
+                            $"{t:HH:mm:ss.fff}[延迟:{(currentTime - t).TotalMilliseconds:F0}ms]")));
+
+                // 清空原队列，准备重建
+                _triggerTimes.Clear();
+
+                // 查找匹配的触发时间并重建队列
+                var found = false;
+                var matchCount = 0; // 记录匹配的时间戳数量
+
+                // 按时间顺序遍历触发时间
+                foreach (var triggerTime in tempTriggerTimesList)
+                {
+                    // 计算时间差
+                    var delay = (currentTime - triggerTime).TotalMilliseconds;
+
+                    // 如果延迟已经超过上限，则将剩余时间戳全部重新入队
+                    if (delay > Configuration.TriggerPhotoelectric.TimeRangeUpper)
+                    {
+                        Log.Debug("触发时间 {TriggerTime:HH:mm:ss.fff} 延迟 {Delay:F0}ms 超过上限 {Upper}ms，跳过",
+                            triggerTime, delay, Configuration.TriggerPhotoelectric.TimeRangeUpper);
+                        continue;
+                    }
+
+                    // 如果延迟小于下限，说明后面的时间戳更新，不可能匹配，提前结束查找
+                    if (delay < Configuration.TriggerPhotoelectric.TimeRangeLower)
+                    {
+                        Log.Debug("触发时间 {TriggerTime:HH:mm:ss.fff} 延迟 {Delay:F0}ms 小于下限 {Lower}ms，重新入队",
+                            triggerTime, delay, Configuration.TriggerPhotoelectric.TimeRangeLower);
+                        // 将当前和剩余的时间戳重新入队
+                        _triggerTimes.Enqueue(triggerTime);
+                        continue;
+                    }
+
+                    // 时间戳在有效范围内
+                    matchCount++;
+
+                    if (!found)
+                    {
+                        matchedTriggerTime = triggerTime;
+                        found = true;
+                        Log.Information("包裹 {Barcode}(序号:{Index}) 匹配到触发时间 {TriggerTime:HH:mm:ss.fff}，延迟 {Delay:F0}ms",
+                            package.Barcode, package.Index, triggerTime, delay);
+                        package.ProcessingTime = delay;
+                        continue;
+                    }
+
+                    // 将未匹配的时间戳重新入队
+                    _triggerTimes.Enqueue(triggerTime);
+                }
+
+                // 检查是否有多个匹配的时间戳
+                if (matchCount > 1)
+                    Log.Warning("包裹 {Barcode}(序号:{Index}) 在时间范围内找到 {MatchCount} 个匹配的触发时间，" +
+                                "建议调整触发时间范围设置（当前设置：{Lower}ms - {Upper}ms）",
+                        package.Barcode, package.Index, matchCount,
+                        Configuration.TriggerPhotoelectric.TimeRangeLower,
+                        Configuration.TriggerPhotoelectric.TimeRangeUpper);
+
+                // 记录重建后的队列状态
+                var remainingTimes = _triggerTimes.ToList();
+                if (remainingTimes.Count != 0)
+                    Log.Debug("重建后的触发时间队列（{Count}个）: {Times}",
+                        remainingTimes.Count,
+                        string.Join(", ", remainingTimes.Select(static t => t.ToString("HH:mm:ss.fff"))));
+
+                if (matchedTriggerTime.HasValue && !found)
+                    Log.Warning("尝试从触发时间队列中移除时间戳 {TriggerTime}，但未找到", matchedTriggerTime.Value);
+            }
+             // 处理匹配结果
+            if (matchedTriggerTime.HasValue)
+            {
+                // 设置包裹的触发时间戳
+                package.SetTriggerTimestamp(matchedTriggerTime.Value);
+            }
+            else
+            {
+                 // 未找到匹配的触发时间
+                Log.Warning("包裹 {Barcode}(序号:{Index}) 未找到匹配的触发时间", package.Barcode, package.Index);
+            }
         }
+
+        // 添加到待处理队列
+        PendingSortPackages[package.Index] = package;
+        Log.Information("包裹 {Barcode}(序号:{Index}) 已添加到待处理队列", package.Barcode, package.Index);
+
+        // 创建超时定时器
+        var timer = new Timer();
+        timer.Elapsed += (_, _) => HandlePackageTimeout(package);
+
+        // 默认超时时间 10 秒
+        double timeoutInterval = 10000;
+        string timeoutReason;
+
+        // 获取对应分拣光电的配置
+        var photoelectricName = GetPhotoelectricNameBySlot(package.ChuteNumber);
+        if (photoelectricName != null)
+        {
+            var photoelectricConfig = GetPhotoelectricConfig(photoelectricName);
+            // 设置超时时间为时间范围上限 + 500ms
+            timeoutInterval = photoelectricConfig.TimeRangeUpper + 500;
+            timeoutReason = $"光电配置上限 {photoelectricConfig.TimeRangeUpper}ms + 500ms";
+        }
+        else
+        {
+            Log.Warning("包裹 {Barcode}(序号:{Index}) 无法确定目标光电名称，使用默认超时 {DefaultTimeout}ms",
+                package.Barcode, package.Index, timeoutInterval);
+            timeoutReason = "无法确定目标光电，使用默认值";
+        }
+
+        timer.Interval = timeoutInterval;
+        timer.AutoReset = false;
+        PackageTimers[package.Index] = timer;
+        timer.Start();
+
+        Log.Debug("包裹 {Barcode}(序号:{Index}) 设置超时时间 {Timeout}ms ({Reason})",
+            package.Barcode, package.Index, timer.Interval, timeoutReason);
     }
 
     public Dictionary<string, bool> GetAllDeviceConnectionStates()
@@ -375,10 +394,10 @@ public abstract class BasePendulumSortService : IPendulumSortService
             Log.Information("触发时间已入队，当前队列长度: {Count}", _triggerTimes.Count);
 
             // 如果队列中的时间戳太多，移除最早的
-            while (_triggerTimes.Count > 100)
+            while (_triggerTimes.Count > 5) // <-- 修改此处，限制队列长度为 5
             {
                 var removed = _triggerTimes.Dequeue();
-                Log.Warning("触发时间队列已满，移除最早的时间戳: {RemovedTime:HH:mm:ss.fff}", removed);
+                Log.Warning("触发时间队列超过5个，移除最早的时间戳: {RemovedTime:HH:mm:ss.fff}", removed);
             }
 
             // 打印当前队列中的所有触发时间
@@ -454,7 +473,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
         foreach (var pkg in packages)
         {
             Log.Information("检查包裹 {Barcode}(序号:{Index}) 触发时间:{TriggerTime:HH:mm:ss.fff} 目标格口:{Slot}",
-                pkg.Barcode, pkg.Index, pkg.TriggerTimestamp, pkg.ChuteName);
+                pkg.Barcode, pkg.Index, pkg.TriggerTimestamp, pkg.ChuteNumber);
 
             // 检查包裹是否已超时
             if (PackageTimers.TryGetValue(pkg.Index, out var timer))
@@ -472,7 +491,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
             }
 
             // 检查包裹触发时间是否有效且是否应该由这个分拣光电处理
-            if (pkg.TriggerTimestamp == default || !SlotBelongsToPhotoelectric(pkg.ChuteName, photoelectricName))
+            if (pkg.TriggerTimestamp == default || !SlotBelongsToPhotoelectric(pkg.ChuteNumber, photoelectricName))
             {
                 Log.Debug("包裹 {Barcode}(序号:{Index}) 不满足基本条件，跳过",
                     pkg.Barcode, pkg.Index);
@@ -512,15 +531,15 @@ public abstract class BasePendulumSortService : IPendulumSortService
 
             if (delay < timeRangeLower || delay > timeRangeUpper)
             {
-                Log.Debug("包裹 {Barcode}(序号:{Index}) 分拣时间延迟验证失败，延迟:{Delay}ms，允许范围:{Lower}-{Upper}ms",
+                Log.Information("包裹 {Barcode}(序号:{Index}) 目标格口匹配但时间延迟不符，延迟:{Delay:F2}ms，允许范围:{Lower}-{Upper}ms",
                     pkg.Barcode, pkg.Index, delay,
                     timeRangeLower,
                     timeRangeUpper);
                 continue;
             }
 
-            // 从待处理队列中移除
-            if (!PendingSortPackages.TryRemove(pkg.Index, out _))
+            // 修改：不再从待处理队列中移除，只标记为处理中
+            if (IsPackageProcessing(pkg.Barcode))
             {
                 Log.Warning("包裹 {Barcode} 已被其他分拣光电处理", pkg.Barcode);
                 continue;
@@ -528,10 +547,6 @@ public abstract class BasePendulumSortService : IPendulumSortService
 
             // 标记包裹为处理中
             MarkPackageAsProcessing(pkg.Barcode, photoelectricName);
-
-            Log.Information("分拣光电 {Name} 匹配到包裹 {Barcode}，等待执行分拣动作",
-                photoelectricName, pkg.Barcode);
-
             return pkg;
         }
 
@@ -558,7 +573,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// <summary>
     ///     执行分拣动作
     /// </summary>
-    protected virtual async Task ExecuteSortingAction(PackageInfo package, string photoelectricName)
+    protected async Task ExecuteSortingAction(PackageInfo package, string photoelectricName)
     {
         try
         {
@@ -581,7 +596,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
                 package.Barcode, photoelectricConfig.SortingDelay);
 
             // 根据包裹目标格口决定摆动方向
-            var targetSlot = package.ChuteName;
+            var targetSlot = package.ChuteNumber;
             var command = string.Empty;
 
             // 根据目标格口和当前状态决定命令
@@ -670,16 +685,14 @@ public abstract class BasePendulumSortService : IPendulumSortService
                         // 如果没有连接，直接返回
                         if (!client.IsConnected()) return;
 
-                        // 延迟结束后，重新检查下一个包裹
-                        var nextPackage = PendingSortPackages.Values
-                            .Where(p =>
-                                // 确保序号比当前包裹大
-                                p.Index > package.Index &&
-                                // 确保包裹有有效的触发时间
-                                p.TriggerTimestamp != default)
-                            .OrderBy(static p => p.Index)
-                            .ThenBy(static p => p.TriggerTimestamp)
-                            .FirstOrDefault();
+                        // 修改：现在从PendingSortPackages中移除包裹，分拣动作完成
+                        PendingSortPackages.TryRemove(package.Index, out _);
+                        Log.Debug("包裹 {Barcode}(序号:{Index}) 分拣动作完成，从待处理队列中移除",
+                            package.Barcode, package.Index);
+
+                        // 延迟结束后，查找序号+1的包裹
+                        var nextPackageIndex = package.Index + 1;
+                        PendingSortPackages.TryGetValue(nextPackageIndex, out var nextPackage);
 
                         // 判断当前包裹和下一个包裹的摆动方向是否相同
                         var currentIsLeft = ShouldSwingLeft(targetSlot);
@@ -687,20 +700,20 @@ public abstract class BasePendulumSortService : IPendulumSortService
 
                         if (nextPackage != null)
                         {
-                            var nextIsLeft = ShouldSwingLeft(nextPackage.ChuteName);
-                            // 只有当两个包裹的目标格口相同时才跳过回正
-                            skipReset = targetSlot == nextPackage.ChuteName;
+                            // 检查下一个包裹的目标格口是否与当前相同
+                            skipReset = targetSlot == nextPackage.ChuteNumber;
+                            var nextIsLeft = ShouldSwingLeft(nextPackage.ChuteNumber);
 
                             Log.Debug(
-                                "延迟结束后发现下一个包裹 {Barcode} (序号: {Index}, 触发时间: {TriggerTime})，当前格口: {CurrentSlot}({CurrentDirection})，下一个格口: {NextSlot}({NextDirection}){Action}",
-                                nextPackage.Barcode, nextPackage.Index, nextPackage.TriggerTimestamp,
-                                targetSlot, currentIsLeft ? "左摆" : "右摆",
-                                nextPackage.ChuteName, nextIsLeft ? "左摆" : "右摆",
-                                skipReset ? "，跳过回正" : "，需要回正");
+                                "延迟结束后找到下一个序号包裹 {NextBarcode} (序号: {NextIndex})，当前格口: {CurrentSlot}，下一个格口: {NextSlot}{Action}",
+                                nextPackage.Barcode, nextPackage.Index,
+                                targetSlot,
+                                nextPackage.ChuteNumber,
+                                skipReset ? "，格口相同，跳过回正" : "，格口不同，需要回正");
                         }
                         else
                         {
-                            Log.Debug("没有找到序号比 {Index} 更大的包裹，将执行回正", package.Index);
+                            Log.Debug("没有找到序号为 {NextIndex} 的待处理包裹，将执行回正", nextPackageIndex);
                         }
 
                         if (skipReset)
@@ -727,7 +740,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
                                 commandStr,
                                 nextPackage == null
                                     ? "无后续包裹"
-                                    : $"下一个包裹目标格口不同 (当前格口:{targetSlot}, 下一个格口:{nextPackage.ChuteName})");
+                                    : $"下一个序号包裹目标格口不同 (当前:{targetSlot}, 下一个:{nextPackage.ChuteNumber})");
                         }
                         else
                         {
@@ -750,10 +763,19 @@ public abstract class BasePendulumSortService : IPendulumSortService
 
                 resetTimer.Start();
             }
+            else
+            {
+                // 对于不需要回正的情况，直接从待处理队列中移除
+                PendingSortPackages.TryRemove(package.Index, out _);
+                Log.Debug("包裹 {Barcode}(序号:{Index}) 分拣动作完成且不需要回正，从待处理队列中移除",
+                    package.Barcode, package.Index);
+            }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "执行分拣动作时发生错误");
+            // 发生错误时，从待处理队列中移除
+            PendingSortPackages.TryRemove(package.Index, out _);
         }
         finally
         {
@@ -800,7 +822,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// <summary>
     ///     摆轮命令结构体
     /// </summary>
-    protected struct PendulumCommands
+    protected readonly struct PendulumCommands
     {
         // 二代模块命令，使用静态属性
         public static PendulumCommands Module2 => new()

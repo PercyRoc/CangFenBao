@@ -13,138 +13,215 @@ namespace SortingServices.Pendulum;
 internal class MultiPendulumSortService(ISettingsService settingsService) : BasePendulumSortService(settingsService)
 {
     private readonly ConcurrentDictionary<string, TcpClientService> _sortingClients = new();
+    private readonly SemaphoreSlim _initializationLock = new(1, 1);
+    private bool _isInitialized;
+    
+    // 记录光电信号状态的字典，true 表示高电平，false 表示低电平
+    private readonly ConcurrentDictionary<string, bool> _photoelectricSignalStates = new();
+    // 记录上一次信号状态的字典
+    private readonly ConcurrentDictionary<string, bool> _previousPhotoelectricSignalStates = new();
 
-    public override Task InitializeAsync(PendulumSortConfig configuration)
+    public override async Task InitializeAsync(PendulumSortConfig configuration)
     {
-        Configuration = configuration;
-
-        // 初始化触发光电连接
-        TriggerClient = new TcpClientService(
-            "触发光电",
-            configuration.TriggerPhotoelectric.IpAddress,
-            configuration.TriggerPhotoelectric.Port,
-            ProcessTriggerData,
-            connected => UpdateDeviceConnectionState("触发光电", connected)
-        );
-
         try
         {
-            TriggerClient.Connect();
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "初始化触发光电连接失败");
-            // 连接失败不抛出异常，后续会自动重连
-        }
+            await _initializationLock.WaitAsync();
+            
+            if (_isInitialized)
+            {
+                Log.Debug("多光电多摆轮分拣服务已经初始化，跳过初始化操作");
+                return;
+            }
 
-        // 初始化分拣光电连接
-        foreach (var photoelectric in configuration.SortingPhotoelectrics)
-        {
-            var client = new TcpClientService(
-                photoelectric.Name,
-                photoelectric.IpAddress,
-                photoelectric.Port,
-                data => ProcessSortingData(data, photoelectric.Name),
-                connected => UpdateDeviceConnectionState(photoelectric.Name, connected)
+            Log.Information("开始初始化多光电多摆轮分拣服务...");
+            Configuration = configuration;
+
+            // 初始化触发光电连接
+            TriggerClient = new TcpClientService(
+                "触发光电",
+                configuration.TriggerPhotoelectric.IpAddress,
+                configuration.TriggerPhotoelectric.Port,
+                ProcessTriggerData,
+                connected => UpdateDeviceConnectionState("触发光电", connected)
             );
 
-            _sortingClients[photoelectric.Name] = client;
-            PendulumStates[photoelectric.Name] = new PendulumState();
+            // 初始化触发光电信号状态
+            _photoelectricSignalStates["触发光电"] = false;
+            _previousPhotoelectricSignalStates["触发光电"] = false;
 
             try
             {
-                client.Connect();
+                TriggerClient.Connect();
+                Log.Debug("触发光电连接初始化完成");
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "初始化分拣光电 {Name} 连接失败", photoelectric.Name);
+                Log.Error(ex, "初始化触发光电连接失败");
                 // 连接失败不抛出异常，后续会自动重连
             }
-        }
 
-        Log.Information("多光电多摆轮分拣服务初始化完成");
-        return Task.CompletedTask;
+            // 初始化分拣光电连接
+            foreach (var photoelectric in configuration.SortingPhotoelectrics)
+            {
+                Log.Debug("开始初始化分拣光电 {Name} 连接", photoelectric.Name);
+                var client = new TcpClientService(
+                    photoelectric.Name,
+                    photoelectric.IpAddress,
+                    photoelectric.Port,
+                    data => ProcessSortingData(data, photoelectric.Name),
+                    connected => UpdateDeviceConnectionState(photoelectric.Name, connected)
+                );
+
+                _sortingClients[photoelectric.Name] = client;
+                PendulumStates[photoelectric.Name] = new PendulumState();
+                
+                // 初始化分拣光电信号状态
+                _photoelectricSignalStates[photoelectric.Name] = false;
+                _previousPhotoelectricSignalStates[photoelectric.Name] = false;
+
+                try
+                {
+                    client.Connect();
+                    Log.Debug("分拣光电 {Name} 连接初始化完成", photoelectric.Name);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "初始化分拣光电 {Name} 连接失败", photoelectric.Name);
+                    // 连接失败不抛出异常，后续会自动重连
+                }
+            }
+
+            _isInitialized = true;
+            Log.Information("多光电多摆轮分拣服务初始化完成");
+        }
+        finally
+        {
+            _initializationLock.Release();
+        }
     }
 
-    public override Task StartAsync()
+    public override async Task StartAsync()
     {
-        if (IsRunningFlag) return Task.CompletedTask;
+        if (IsRunningFlag)
+        {
+            Log.Debug("多光电多摆轮分拣服务已经在运行，跳过启动操作");
+            return;
+        }
 
-        // 在启动服务前直接发送启动命令到所有连接的分拣光电
         try
         {
-            foreach (var client in _sortingClients)
-            {
-                if (!client.Value.IsConnected()) continue;
+            Log.Information("开始启动多光电多摆轮分拣服务...");
 
-                var startCommand = GetCommandBytes(PendulumCommands.Module2.Start);
-                client.Value.Send(startCommand);
-                var resetLeftCommand = GetCommandBytes(PendulumCommands.Module2.ResetLeft);
-                var resetRightCommand = GetCommandBytes(PendulumCommands.Module2.ResetRight);
-                client.Value.Send(resetLeftCommand);
-                client.Value.Send(resetRightCommand);
-                Log.Information("已发送启动和回正命令到分拣光电 {Name}", client.Key);
+            // 确保服务已初始化
+            if (!_isInitialized)
+            {
+                Log.Warning("多光电多摆轮分拣服务未初始化，尝试初始化");
+                await InitializeAsync(Configuration);
             }
+
+            // 在启动服务前直接发送启动命令到所有连接的分拣光电
+            try
+            {
+                foreach (var client in _sortingClients)
+                {
+                    if (!client.Value.IsConnected())
+                    {
+                        Log.Warning("分拣光电 {Name} 未连接，跳过发送启动命令", client.Key);
+                        continue;
+                    }
+
+                    var startCommand = GetCommandBytes(PendulumCommands.Module2.Start);
+                    client.Value.Send(startCommand);
+                    var resetLeftCommand = GetCommandBytes(PendulumCommands.Module2.ResetLeft);
+                    var resetRightCommand = GetCommandBytes(PendulumCommands.Module2.ResetRight);
+                    client.Value.Send(resetLeftCommand);
+                    client.Value.Send(resetRightCommand);
+                    Log.Information("已发送启动和回正命令到分拣光电 {Name}", client.Key);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "向分拣光电发送启动命令失败");
+            }
+
+            // 启动超时检查定时器
+            TimeoutCheckTimer.Start();
+            Log.Debug("超时检查定时器已启动");
+
+            // 创建取消令牌
+            CancellationTokenSource = new CancellationTokenSource();
+            IsRunningFlag = true;
+
+            // 启动主循环
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    Log.Debug("多光电多摆轮分拣服务主循环开始运行");
+                    // 主循环
+                    while (!CancellationTokenSource.Token.IsCancellationRequested)
+                    {
+                        try
+                        {
+                            // 检查设备连接状态
+                            if (TriggerClient != null && !TriggerClient.IsConnected())
+                            {
+                                Log.Warning("触发光电连接断开，尝试重连");
+                                await ReconnectAsync();
+                            }
+
+                            foreach (var client in _sortingClients.Where(static client => !client.Value.IsConnected()))
+                            {
+                                Log.Warning("分拣光电 {Name} 连接断开，尝试重连", client.Key);
+                                await ReconnectAsync();
+                            }
+
+                            await Task.Delay(1000, CancellationTokenSource.Token); // 每秒检查一次连接状态
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            Log.Debug("多光电多摆轮分拣服务主循环收到取消信号");
+                            break;
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error(ex, "多光电多摆轮分拣服务主循环发生错误");
+                            await Task.Delay(1000, CancellationTokenSource.Token); // 发生错误时等待一秒再继续
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "多光电多摆轮分拣服务主循环发生致命错误");
+                }
+                finally
+                {
+                    IsRunningFlag = false;
+                    Log.Debug("多光电多摆轮分拣服务主循环结束运行");
+                }
+            }, CancellationTokenSource.Token);
+
+            Log.Information("多光电多摆轮分拣服务启动完成");
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "向分拣光电发送启动命令失败");
+            Log.Error(ex, "启动多光电多摆轮分拣服务失败");
+            throw;
         }
-
-        // 启动超时检查定时器
-        TimeoutCheckTimer.Start();
-
-        // 创建取消令牌
-        CancellationTokenSource = new CancellationTokenSource();
-        IsRunningFlag = true;
-
-        // 启动主循环
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                // 主循环
-                while (!CancellationTokenSource.Token.IsCancellationRequested)
-                {
-                    // 检查设备连接状态
-                    if (TriggerClient != null && !TriggerClient.IsConnected())
-                    {
-                        Log.Warning("触发光电连接断开，尝试重连");
-                        await ReconnectAsync();
-                    }
-
-                    foreach (var client in _sortingClients.Where(static client => !client.Value.IsConnected()))
-                    {
-                        Log.Warning("分拣光电 {Name} 连接断开，尝试重连", client.Key);
-                        await ReconnectAsync();
-                    }
-
-                    await Task.Delay(1000, CancellationTokenSource.Token);
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                // 正常取消，不做处理
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "多光电多摆轮分拣服务发生错误");
-            }
-            finally
-            {
-                IsRunningFlag = false;
-            }
-        }, CancellationTokenSource.Token);
-
-        return Task.CompletedTask;
     }
 
     public override async Task StopAsync()
     {
-        if (!IsRunningFlag) return;
+        if (!IsRunningFlag)
+        {
+            Log.Debug("多光电多摆轮分拣服务未运行，跳过停止操作");
+            return;
+        }
 
         try
         {
+            Log.Information("开始停止多光电多摆轮分拣服务...");
+
             // 先向所有分拣光电发送停止命令，确保在改变服务状态前发送
             foreach (var client in _sortingClients.Where(static client => client.Value.IsConnected()))
             {
@@ -169,11 +246,17 @@ internal class MultiPendulumSortService(ISettingsService settingsService) : Base
             }
 
             // 停止主循环
-            await CancellationTokenSource?.CancelAsync()!;
+            if (CancellationTokenSource != null)
+            {
+                await CancellationTokenSource.CancelAsync();
+                Log.Debug("已发送取消信号到主循环");
+            }
+            
             IsRunningFlag = false;
 
             // 停止超时检查定时器
             TimeoutCheckTimer.Stop();
+            Log.Debug("超时检查定时器已停止");
 
             // 清空处理中的包裹
             ProcessingPackages.Clear();
@@ -232,6 +315,18 @@ internal class MultiPendulumSortService(ISettingsService settingsService) : Base
         {
             var message = Encoding.ASCII.GetString(data);
             Log.Debug("收到触发光电数据: {Message}", message);
+            
+            // 更新触发光电信号状态
+            if (message.Contains("OCCH2:1"))
+            {
+                // 高电平
+                UpdatePhotoelectricSignalState("触发光电", true);
+            }
+            else if (message.Contains("OCCH2:0"))
+            {
+                // 低电平
+                UpdatePhotoelectricSignalState("触发光电", false);
+            }
 
             // 使用基类的信号处理方法
             HandlePhotoelectricSignal(message);
@@ -248,72 +343,52 @@ internal class MultiPendulumSortService(ISettingsService settingsService) : Base
         {
             var message = Encoding.ASCII.GetString(data);
             Log.Information("收到分拣光电 {Name} 数据: {Message}", photoelectricName, message);
+            
+            // 更新分拣光电信号状态
+            if (!message.Contains("OCCH2:1")) return;
+            // 高电平
+            UpdatePhotoelectricSignalState(photoelectricName, true);
+            Log.Information("分拣光电 {Name} 收到上升沿信号，开始匹配包裹并执行分拣", photoelectricName);
+            // 使用基类的匹配逻辑
+            var package = MatchPackageForSorting(photoelectricName);
+            if (package == null) return;
+            // Calculate the time difference
+            var matchTime = DateTime.Now;
+            var timeSinceTrigger = matchTime - package.TriggerTimestamp;
 
-            if (message.Contains("OCCH1:1"))
-            {
-                Log.Information("分拣光电 {Name} 收到上升沿信号，开始匹配包裹并执行分拣", photoelectricName);
-                // 使用基类的匹配逻辑
-                var package = MatchPackageForSorting(photoelectricName);
-                if (package != null)
-                {
-                    Log.Information("分拣光电 {Name} 匹配到包裹 {Barcode}，开始执行分拣动作",
-                        photoelectricName, package.Barcode);
-                    // 直接执行分拣动作
-                    _ = ExecuteSortingAction(package, photoelectricName);
-
-                    /* 原逻辑：等待下降沿信号
-                    // 临时存储匹配到的包裹
-                    MatchedPackages[photoelectricName] = package;
-                    Log.Information("分拣光电 {Name} 匹配到包裹 {Barcode}，等待下降沿信号",
-                        photoelectricName, package.Barcode);
-                    */
-                }
-                else
-                {
-                    Log.Warning("分拣光电 {Name} 未匹配到包裹", photoelectricName);
-                    // 打印当前待分拣队列状态
-                    var pendingPackages = PendingSortPackages.Values
-                        .Where(p => !IsPackageProcessing(p.Barcode))
-                        .OrderBy(static p => p.TriggerTimestamp)
-                        .ThenBy(static p => p.Index)
-                        .ToList();
-
-                    if (pendingPackages.Count != 0)
-                    {
-                        Log.Information("当前待分拣队列中有 {Count} 个包裹:", pendingPackages.Count);
-                        foreach (var pkg in pendingPackages)
-                            Log.Information("包裹 {Barcode}(序号:{Index}) 触发时间:{TriggerTime:HH:mm:ss.fff} 目标格口:{Slot}",
-                                pkg.Barcode, pkg.Index, pkg.TriggerTimestamp, pkg.ChuteName);
-                    }
-                    else
-                    {
-                        Log.Information("当前待分拣队列为空");
-                    }
-                }
-            }
-
-            if (!message.Contains("OCCH1:0")) return;
-
-            {
-                Log.Information("分拣光电 {Name} 收到下降沿信号，检查是否有未处理的包裹", photoelectricName);
-                // 检查是否有匹配到的包裹
-                if (!MatchedPackages.TryRemove(photoelectricName, out var package))
-                {
-                    Log.Warning("分拣光电 {Name} 未找到匹配的包裹", photoelectricName);
-                    return;
-                }
-
-                Log.Information("分拣光电 {Name} 发现未处理的包裹 {Barcode}，开始执行分拣动作",
-                    photoelectricName, package.Barcode);
-
-                // 执行分拣动作
-                _ = ExecuteSortingAction(package, photoelectricName);
-            }
+            Log.Information("分拣光电 {Name} 匹配到包裹 {Barcode} (耗时: {MatchDuration:F2}ms)，开始执行分拣动作",
+                photoelectricName, package.Barcode, timeSinceTrigger.TotalMilliseconds);
+            // 直接执行分拣动作
+            _ = ExecuteSortingAction(package, photoelectricName);
         }
         catch (Exception ex)
         {
             Log.Error(ex, "处理分拣光电 {Name} 数据时发生错误", photoelectricName);
         }
+    }
+    
+    /// <summary>
+    /// 更新光电信号状态并检测异常情况
+    /// </summary>
+    /// <param name="photoelectricName">光电名称</param>
+    /// <param name="isHighLevel">是否为高电平</param>
+    private void UpdatePhotoelectricSignalState(string photoelectricName, bool isHighLevel)
+    {
+        // 获取上一次的信号状态
+        _previousPhotoelectricSignalStates.TryGetValue(photoelectricName, out var previousState);
+        
+        // 如果当前是低电平，且上一次也是低电平，记录警告
+        if (!isHighLevel && !previousState)
+        {
+            Log.Warning("光电 {Name} 出现连续两次低电平信号，可能存在异常", photoelectricName);
+        }
+        
+        // 记录当前信号状态
+        Log.Debug("光电 {Name} 信号状态: {State}", photoelectricName, isHighLevel ? "高电平" : "低电平");
+        
+        // 更新状态记录
+        _previousPhotoelectricSignalStates[photoelectricName] = _photoelectricSignalStates[photoelectricName];
+        _photoelectricSignalStates[photoelectricName] = isHighLevel;
     }
 
     /// <summary>
