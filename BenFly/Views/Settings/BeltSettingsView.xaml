@@ -9,7 +9,7 @@
       d:DataContext="{d:DesignInstance Type=settings:BeltSettingsViewModel}"
       mvvm:ViewModelLocator.AutoWireViewModel="True"
       mc:Ignorable="d"
-      Title="皮带设置" x:ClassModifier="internal">
+      Title="皮带设置">
 
     <Grid>
         <StackPanel MaxWidth="500" Margin="16" VerticalAlignment="Center">

@@ -1,24 +1,20 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
-using Common.Services.Ui;
 using BenFly.ViewModels.Windows;
+using Common.Services.Ui;
 using Serilog;
 using MessageBoxResult = System.Windows.MessageBoxResult;
-using Wpf.Ui.Controls;
 
 namespace BenFly.Views.Windows;
 
 /// <summary>
 ///     MainWindow.xaml 的交互逻辑
 /// </summary>
-internal partial class MainWindow : FluentWindow
+public partial class MainWindow
 {
-    private readonly IDialogService _dialogService;
-
-    public MainWindow(IDialogService dialogService, INotificationService notificationService)
+    public MainWindow(INotificationService notificationService)
     {
-        _dialogService = dialogService;
         InitializeComponent();
 
         // 注册Growl容器
@@ -26,6 +22,15 @@ internal partial class MainWindow : FluentWindow
 
         // 添加标题栏鼠标事件处理
         MouseDown += OnWindowMouseDown;
+    }
+
+    private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        // 根据当前屏幕的工作区自动计算并设置窗口位置和大小
+        Left = SystemParameters.WorkArea.Left;
+        Top = SystemParameters.WorkArea.Top;
+        Width = SystemParameters.WorkArea.Width;
+        Height = SystemParameters.WorkArea.Height;
     }
 
     private void OnWindowMouseDown(object sender, MouseButtonEventArgs e)
@@ -41,14 +46,15 @@ internal partial class MainWindow : FluentWindow
         }
     }
 
-    private async void MetroWindow_Closing(object sender, CancelEventArgs e)
+    private void MetroWindow_Closing(object sender, CancelEventArgs e)
     {
         try
         {
             e.Cancel = true;
-            var result = await _dialogService.ShowIconConfirmAsync(
+            var result = HandyControl.Controls.MessageBox.Show(
                 "确定要关闭程序吗？",
                 "关闭确认",
+                MessageBoxButton.YesNo,
                 MessageBoxImage.Question);
 
             if (result != MessageBoxResult.Yes) return;
@@ -56,7 +62,7 @@ internal partial class MainWindow : FluentWindow
             // 释放MainWindowViewModel
             if (DataContext is MainWindowViewModel viewModel)
                 // 在后台线程中执行Dispose操作，避免UI线程阻塞
-                await Task.Run(() =>
+                Task.Run(() =>
                 {
                     try
                     {
@@ -76,7 +82,11 @@ internal partial class MainWindow : FluentWindow
         {
             Log.Error(ex, "关闭程序时发生错误");
             e.Cancel = true;
-            await _dialogService.ShowErrorAsync("关闭程序时发生错误，请重试", "错误");
+            HandyControl.Controls.MessageBox.Show(
+                "关闭程序时发生错误，请重试",
+                "错误",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
         }
     }
 

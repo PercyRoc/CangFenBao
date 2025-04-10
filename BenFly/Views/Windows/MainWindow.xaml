@@ -7,13 +7,16 @@
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:hc="https://handyorg.github.io/handycontrol"
                  mc:Ignorable="d"
+                 xmlns:prism="http://prismlibrary.com/"
+                 prism:ViewModelLocator.AutoWireViewModel="True"
                  d:DataContext="{d:DesignInstance Type=windows:MainWindowViewModel}"
                  Title="仓分宝-笨鸟"
                  Height="900"
                  Width="1600"
-                 WindowStartupLocation="CenterScreen"
+                 WindowStartupLocation="Manual"
                  Closing="MetroWindow_Closing"
-                 ExtendsContentIntoTitleBar="True" x:ClassModifier="internal">
+                 Loaded="MainWindow_Loaded"
+                 ExtendsContentIntoTitleBar="False">
 
     <ui:FluentWindow.Resources>
         <ResourceDictionary>
@@ -424,7 +427,7 @@
                                 <DataGridTextColumn Header="段码" Binding="{Binding SegmentCode}" Width="160" />
                                 <DataGridTextColumn Header="重量" Binding="{Binding WeightDisplay}" Width="80" />
                                 <DataGridTextColumn Header="尺寸" Binding="{Binding VolumeDisplay}" Width="120" />
-                                <DataGridTextColumn Header="格口" Binding="{Binding ChuteName}" Width="100" />
+                                <DataGridTextColumn Header="格口" Binding="{Binding ChuteNumber}" Width="100" />
                                 <DataGridTextColumn Header="状态" Binding="{Binding StatusDisplay}" Width="80" />
                                 <DataGridTextColumn Header="处理时间"
                                                     Binding="{Binding ProcessingTime, StringFormat={}{0:0}ms}"
@@ -432,7 +435,6 @@
                                 <DataGridTextColumn Header="时间"
                                                     Binding="{Binding CreateTime, StringFormat={}{0:HH:mm:ss}}"
                                                     Width="100" />
-                                <DataGridTextColumn Header="备注" Binding="{Binding Information}" Width="*" />
                             </DataGrid.Columns>
                         </DataGrid>
                     </Grid>

@@ -1,6 +1,6 @@
 namespace BenFly.Views.Settings;
 
-internal partial class UploadSettingsView
+public partial class UploadSettingsView
 {
     public UploadSettingsView()
     {

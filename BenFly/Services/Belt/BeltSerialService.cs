@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO.Ports;
 using Serilog;
 
@@ -64,7 +65,7 @@ internal class BeltSerialService : IBeltSerialService
                     
                     // 检查串口是否被其他程序占用
                     var processes = System.Diagnostics.Process.GetProcesses()
-                        .Where(p => 
+                        .Where(_ => 
                         {
                             try
                             {
@@ -79,11 +80,12 @@ internal class BeltSerialService : IBeltSerialService
                             }
                         });
 
-                    if (processes.Any())
+                    var enumerable = processes as Process[] ?? processes.ToArray();
+                    if (enumerable.Length != 0)
                     {
                         Log.Warning("串口 {PortName} 可能被以下进程占用: {Processes}", 
                             settings.PortName, 
-                            string.Join(", ", processes.Select(p => $"{p.ProcessName}({p.Id})")));
+                            string.Join(", ", enumerable.Select(p => $"{p.ProcessName}({p.Id})")));
                     }
 
                     throw new InvalidOperationException($"无法访问串口 {settings.PortName}，请检查权限或是否被其他程序占用", ex);

@@ -15,6 +15,7 @@ internal class UploadSettingsViewModel : BindableBase
     {
         _settingsService = settingsService;
         SaveConfigurationCommand = new DelegateCommand(ExecuteSaveConfiguration);
+        BenNiaoEnvironments = GetBenNiaoEnvironments();
 
         // 加载配置
         LoadSettings();
@@ -26,7 +27,9 @@ internal class UploadSettingsViewModel : BindableBase
         private set => SetProperty(ref _configuration, value);
     }
 
-    public static IEnumerable<BenNiaoEnvironment> GetBenNiaoEnvironments()
+    public IEnumerable<BenNiaoEnvironment> BenNiaoEnvironments { get; }
+
+    private static IEnumerable<BenNiaoEnvironment> GetBenNiaoEnvironments()
     {
         return Enum.GetValues<BenNiaoEnvironment>();
     }

@@ -268,18 +268,15 @@ internal class BenNiaoPackageService : IDisposable
                 Image<Rgba32>? noReadImageCopy = null;
                 if (package.Image != null)
                 {
-                    noReadImageCopy = package.Image.Clone();
+                    // noReadImageCopy = package.Image.Clone();
                     Log.Debug("已复制异常包裹 {Barcode} 的图像用于上传", package.Barcode);
                 }
 
                 // 改为等待上传完成并获取结果
                 var noReadResult = await UploadNoReadDataAsync(package, noReadImageCopy);
-                if (!noReadResult)
-                {
-                    Log.Warning("异常包裹 {Barcode} 上传失败", package.Barcode);
-                    return (false, "异常包裹上传失败");
-                }
-                return (true, string.Empty);
+                if (noReadResult) return (true, string.Empty);
+                Log.Warning("异常包裹 {Barcode} 上传失败", package.Barcode);
+                return (false, "异常包裹上传失败");
             }
 
             // 从预报数据服务中获取预报数据
@@ -289,7 +286,7 @@ internal class BenNiaoPackageService : IDisposable
             if (preReportItem != null && !string.IsNullOrWhiteSpace(preReportItem.SegmentCode))
             {
                 Log.Information("在预报数据中找到包裹 {Barcode} 的三段码：{SegmentCode}", package.Barcode, preReportItem.SegmentCode);
-                package.SegmentCode = preReportItem.SegmentCode;
+                package.SetSegmentCode(preReportItem.SegmentCode);
             }
             else
             {
@@ -298,7 +295,7 @@ internal class BenNiaoPackageService : IDisposable
                 if (!string.IsNullOrWhiteSpace(segmentCode))
                 {
                     Log.Information("通过实时查询获取到包裹 {Barcode} 的三段码：{SegmentCode}", package.Barcode, segmentCode);
-                    package.SegmentCode = segmentCode;
+                    package.SetSegmentCode(segmentCode);
                 }
                 else
                 {
@@ -311,7 +308,7 @@ internal class BenNiaoPackageService : IDisposable
             Image<Rgba32>? packageImageCopy = null;
             if (package.Image != null)
             {
-                packageImageCopy = package.Image.Clone();
+                // packageImageCopy = package.Image.Clone();
                 Log.Debug("已复制包裹 {Barcode} 的图像用于上传", package.Barcode);
             }
 
@@ -632,19 +629,31 @@ internal class BenNiaoPackageService : IDisposable
             if (imageCopy != null)
                 try
                 {
-                    // 使用复制的图像进行上传
+                    // 使用复制的图像进行上传，但不等待上传完成
                     var tempImagePath = await SaveImageToTempFileAsync(imageCopy, package.Barcode, uploadTime);
                     if (!string.IsNullOrWhiteSpace(tempImagePath))
                     {
-                        await UploadImageAsync(package.Barcode, uploadTime, tempImagePath);
-                        try
+                        // 在后台执行图片上传，不等待返回
+                        _ = Task.Run(async () =>
                         {
-                            File.Delete(tempImagePath);
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Warning(ex, "删除临时图片文件 {TempImagePath} 失败", tempImagePath);
-                        }
+                            try
+                            {
+                                await UploadImageAsync(package.Barcode, uploadTime, tempImagePath);
+                                try
+                                {
+                                    File.Delete(tempImagePath);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Log.Warning(ex, "删除临时图片文件 {TempImagePath} 失败", tempImagePath);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.Error(ex, "后台上传包裹 {Barcode} 的图片时发生错误", package.Barcode);
+                            }
+                        });
+                        Log.Information("已启动包裹 {Barcode} 的图片后台上传", package.Barcode);
                     }
                 }
                 finally

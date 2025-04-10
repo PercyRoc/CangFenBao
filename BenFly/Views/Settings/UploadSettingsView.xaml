@@ -10,7 +10,7 @@
       prism:ViewModelLocator.AutoWireViewModel="True"
       d:DataContext="{d:DesignInstance Type=settings:UploadSettingsViewModel}"
       mc:Ignorable="d"
-      Title="回传设置" x:ClassModifier="internal">
+      Title="回传设置">
     <Page.Resources>
         <ResourceDictionary>
             <converters1:EnumDescriptionConverter x:Key="EnumDescriptionConverter" />

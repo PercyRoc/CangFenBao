@@ -9,7 +9,7 @@
       prism:ViewModelLocator.AutoWireViewModel="True"
       mc:Ignorable="d"
       d:DataContext="{d:DesignInstance Type=settings:ChuteSettingsViewModel}"
-      Title="格口设置" x:ClassModifier="internal">
+      Title="格口设置">
 
     <Grid>
         <StackPanel MaxWidth="800" Margin="16" VerticalAlignment="Top">
@@ -73,10 +73,19 @@
                         </ui:Button>
                     </StackPanel>
 
-                    <!-- 规则列表 -->
-                    <ui:ListView ItemsSource="{Binding Configuration.Rules}">
-                        <ui:ListView.Resources>
-                            <Style TargetType="GridViewColumnHeader">
+                    <!-- 规则表格 - 使用DataGrid替代ListView -->
+                    <DataGrid ItemsSource="{Binding Configuration.Rules}" 
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              CanUserDeleteRows="False"
+                              HeadersVisibility="Column"
+                              BorderThickness="1"
+                              BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                              Background="Transparent"
+                              RowBackground="{DynamicResource ControlFillColorDefaultBrush}"
+                              AlternatingRowBackground="{DynamicResource ControlFillColorSecondaryBrush}">
+                        <DataGrid.Resources>
+                            <Style TargetType="DataGridColumnHeader">
                                 <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
                                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                                 <Setter Property="BorderBrush" Value="{DynamicResource ControlElevationBorderBrush}" />
@@ -85,60 +94,74 @@
                                 <Setter Property="Height" Value="32" />
                                 <Setter Property="HorizontalContentAlignment" Value="Center" />
                             </Style>
-                        </ui:ListView.Resources>
-                        <ui:ListView.View>
-                            <GridView>
-                                <GridViewColumn Header="格口号" Width="80">
-                                    <GridViewColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <ui:TextBox
-                                                Text="{Binding Chute, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                Width="60"
-                                                PlaceholderText="1-999" />
-                                        </DataTemplate>
-                                    </GridViewColumn.CellTemplate>
-                                </GridViewColumn>
-                                <GridViewColumn Header="一段码" Width="120">
-                                    <GridViewColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <ui:TextBox
-                                                Text="{Binding FirstSegment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                Width="100" />
-                                        </DataTemplate>
-                                    </GridViewColumn.CellTemplate>
-                                </GridViewColumn>
-                                <GridViewColumn Header="二段码" Width="120">
-                                    <GridViewColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <ui:TextBox
-                                                Text="{Binding SecondSegment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                Width="200" />
-                                        </DataTemplate>
-                                    </GridViewColumn.CellTemplate>
-                                </GridViewColumn>
-                                <GridViewColumn Header="三段码" Width="120">
-                                    <GridViewColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <ui:TextBox
-                                                Text="{Binding ThirdSegment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                Width="100" />
-                                        </DataTemplate>
-                                    </GridViewColumn.CellTemplate>
-                                </GridViewColumn>
-                                <GridViewColumn Header="操作" Width="60">
-                                    <GridViewColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <ui:Button Appearance="Danger"
-                                                       Command="{Binding DataContext.DeleteRuleCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                       CommandParameter="{Binding}">
-                                                <ui:SymbolIcon Symbol="Delete24" />
-                                            </ui:Button>
-                                        </DataTemplate>
-                                    </GridViewColumn.CellTemplate>
-                                </GridViewColumn>
-                            </GridView>
-                        </ui:ListView.View>
-                    </ui:ListView>
+                            <Style TargetType="DataGridCell">
+                                <Setter Property="BorderThickness" Value="0" />
+                                <Setter Property="Padding" Value="8,4" />
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="DataGridCell">
+                                            <Border Padding="{TemplateBinding Padding}" 
+                                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                                    Background="{TemplateBinding Background}">
+                                                <ContentPresenter VerticalAlignment="Center" />
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </DataGrid.Resources>
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="格口号" Width="80">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ui:TextBox
+                                            Text="{Binding Chute, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                            Width="60"
+                                            PlaceholderText="1-999" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="一段码" Width="120">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ui:TextBox
+                                            Text="{Binding FirstSegment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                            Width="100" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="二段码" Width="120">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ui:TextBox
+                                            Text="{Binding SecondSegment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                            Width="200" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="三段码" Width="120">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ui:TextBox
+                                            Text="{Binding ThirdSegment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                            Width="100" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="操作" Width="60">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ui:Button Appearance="Danger"
+                                                   Command="{Binding DataContext.DeleteRuleCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                   CommandParameter="{Binding}">
+                                            <ui:SymbolIcon Symbol="Delete24" />
+                                        </ui:Button>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
                 </StackPanel>
             </ui:Card>
         </StackPanel>

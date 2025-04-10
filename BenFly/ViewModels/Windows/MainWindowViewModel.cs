@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
-using System.IO;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Windows;
@@ -23,9 +22,9 @@ using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
 using SharedUI.Models;
-using SixLabors.ImageSharp;
 using SortingServices.Pendulum;
 using Common.Services.Audio;
+using Prism.Services.Dialogs;
 
 namespace BenFly.ViewModels.Windows;
 
@@ -41,7 +40,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private readonly INotificationService _notificationService;
     private readonly IAudioService _audioService;
     private readonly List<IDisposable> _subscriptions = [];
-    private int _totalPackageCount; // 修改为 int 类型
 
     private readonly DispatcherTimer _timer;
     private TaskCompletionSource<string>? _barcodeScanCompletionSource;
@@ -120,47 +118,22 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             {
                 try
                 {
-                    var image = imageData.image;
-
-                    // 使用 TaskPool 进行图像编码
-                    Task.Run(() =>
+                    Application.Current.Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
                     {
                         try
                         {
-                            using var memoryStream = new MemoryStream();
-                            image.SaveAsPng(memoryStream);
-                            memoryStream.Position = 0;
-                            var imageBytes = memoryStream.ToArray();
-
-                            Application.Current.Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
-                            {
-                                try
-                                {
-                                    var bitmap = new BitmapImage();
-                                    bitmap.BeginInit();
-                                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                                    bitmap.StreamSource = new MemoryStream(imageBytes);
-                                    bitmap.EndInit();
-                                    bitmap.Freeze(); // 使图像可以跨线程访问
-
-                                    // 更新UI
-                                    CurrentImage = bitmap;
-                                }
-                                catch (Exception ex)
-                                {
-                                    Log.Error(ex, "创建BitmapImage时发生错误");
-                                }
-                            });
+                            // 更新UI
+                            CurrentImage = imageData;
                         }
                         catch (Exception ex)
                         {
-                            Log.Error(ex, "编码图像数据时发生错误");
+                            Log.Error(ex, "更新UI图像时发生错误");
                         }
                     });
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "处理图像数据时发生错误");
+                    Log.Error(ex, "处理图像流时发生错误");
                 }
             }));
     }
@@ -536,9 +509,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            // 增加包裹计数并设置序号
-            var newCount = Interlocked.Increment(ref _totalPackageCount);
-            package.Index = newCount;
             // 如果不是noread，播放成功音效
             if (!string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase))
             {
@@ -662,17 +632,15 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     {
                         Log.Information("创建新的包裹记录，条码: {Barcode}", newBarcode);
                         // 创建新的包裹记录，复制原有包裹的信息
-                        var newPackage = new PackageInfo
-                        {
-                            Barcode = newBarcode,
-                            Weight = package.Weight,
-                            Length = package.Length,
-                            Width = package.Width,
-                            Height = package.Height,
-                            Volume = package.Volume,
-                            CreateTime = DateTime.Now,
-                            Index = package.Index
-                        };
+                        var newPackage = PackageInfo.Create();
+                        newPackage.SetBarcode(newBarcode);
+                        newPackage.SetWeight(package.Weight);
+                        newPackage.SetDimensions(
+                            package.Length ?? 0,
+                            package.Width ?? 0,
+                            package.Height ?? 0
+                        );
+                        newPackage.Index = package.Index;
 
                         // 更新包裹对象为新的包裹
                         package = newPackage;
@@ -726,28 +694,24 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             if (!benNiaoSuccess)
             {
                 Log.Warning("笨鸟系统处理包裹失败：{Barcode}, 错误：{Error}", package.Barcode, errorMessage);
-                package.SetError("笨鸟系统处理失败");
-                // 将详细错误信息设置到Information属性中
-                package.Information = $"笨鸟系统上传失败: {errorMessage}";
+                package.SetError($"笨鸟系统上传失败: {errorMessage}");
                 // 设置为异常格口（使用-1表示异常格口）
-                package.ChuteName = -1;
+                package.SetChute(-1);
                 // 设置状态为异常
-                package.Status = PackageStatus.Error;
-                package.StatusDisplay = "异常";
+                package.SetStatus(PackageStatus.Error, "异常");
                 Log.Information("包裹 {Barcode} 因笨鸟系统处理失败，分配到异常格口", package.Barcode);
             }
             else
             {
                 // 处理成功，设置状态为分拣成功
-                package.Status = PackageStatus.SortSuccess;
-                package.StatusDisplay = "正常";
+                package.SetStatus(PackageStatus.SortSuccess, "正常");
                 Log.Information("包裹 {Barcode} 笨鸟系统处理成功", package.Barcode);
             }
 
             // 笨鸟系统处理完成后释放图像资源
             if (package.Image != null)
             {
-                package.Image.Dispose();
+                // package.Image.Dispose();
                 package.Image = null;
                 Log.Debug("已释放包裹 {Barcode} 的图像资源", package.Barcode);
             }
@@ -756,7 +720,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             try
             {
                 // 如果已经分配到异常格口，则跳过正常格口分配逻辑
-                if (package.ChuteName == -1)
+                if (package.ChuteNumber == -1)
                 {
                     Log.Information("包裹 {Barcode} 已分配到异常格口，跳过正常格口分配", package.Barcode);
                 }
@@ -764,7 +728,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 {
                     var chuteConfig = _settingsService.LoadSettings<SegmentCodeRules>();
                     var chute = chuteConfig.GetChuteBySpaceSeparatedSegments(package.SegmentCode);
-                    package.ChuteName = chute;
+                    package.SetChute(chute);
                     Log.Information("包裹 {Barcode} 分配到格口 {Chute}，段码：{SegmentCode}",
                         package.Barcode, chute, package.SegmentCode);
                 }
@@ -775,7 +739,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     package.Barcode, package.SegmentCode);
                 package.SetError($"获取格口号失败：{ex.Message}");
                 // 异常时也分配到异常格口，使用-1表示
-                package.ChuteName = -1;
+                package.SetChute(-1);
                 Log.Information("包裹 {Barcode} 因获取格口号失败，分配到异常格口", package.Barcode);
             }
 
@@ -808,7 +772,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private void UpdatePackageInfoItems(PackageInfo package)
     {
-
         var weightItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "重量");
         if (weightItem != null)
         {
@@ -832,8 +795,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         var chuteItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "分拣口");
         if (chuteItem != null)
         {
-            chuteItem.Value = package.ChuteName.ToString();
-            chuteItem.Description = string.IsNullOrEmpty(package.ChuteName.ToString()) ? "等待分配..." : "目标分拣位置";
+            chuteItem.Value = package.ChuteNumber.ToString();
+            chuteItem.Description = package.ChuteNumber == 0 ? "等待分配..." : "目标分拣位置";
         }
 
         var timeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "时间");

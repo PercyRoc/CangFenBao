@@ -25,7 +25,6 @@ using SortingServices.Pendulum.Extensions;
 using System.IO;
 using System.Diagnostics;
 using Timer = System.Timers.Timer;
-using Wpf.Ui.Controls;
 
 namespace BenFly;
 
@@ -56,8 +55,7 @@ internal partial class App
         containerRegistry.RegisterForNavigation<ChuteSettingsView, ChuteSettingsViewModel>();
         containerRegistry.RegisterForNavigation<BeltSettingsView, BeltSettingsViewModel>();
 
-        // 注册设置对话框
-        containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>();
+        containerRegistry.RegisterDialog<SettingsDialogs, SettingsDialogViewModel>("SettingsDialog");
 
         // 注册串口服务
         containerRegistry.RegisterSingleton<IBeltSerialService, BeltSerialService>();
@@ -88,7 +86,7 @@ internal partial class App
         // 检查是否已经运行（进程级检查）
         if (IsApplicationAlreadyRunning())
         {
-            System.Windows.MessageBox.Show("程序已在运行中，请勿重复启动！", "提示", System.Windows.MessageBoxButton.OK,
+            MessageBox.Show("程序已在运行中，请勿重复启动！", "提示", MessageBoxButton.OK,
                 MessageBoxImage.Information);
             Environment.Exit(0); // 直接退出进程
             return null!;
@@ -109,8 +107,8 @@ internal partial class App
             var canAcquire = _mutex.WaitOne(TimeSpan.Zero, false);
             if (!canAcquire)
             {
-                System.Windows.MessageBox.Show("程序已在运行中，请勿重复启动！", "提示", System.Windows.MessageBoxButton.OK,
-                    System.Windows.MessageBoxImage.Information);
+                MessageBox.Show("程序已在运行中，请勿重复启动！", "提示", MessageBoxButton.OK,
+                    MessageBoxImage.Information);
                 Environment.Exit(0); // 直接退出进程
                 return null!; // 虽然不会执行到这里，但需要满足返回类型
             }
@@ -125,8 +123,8 @@ internal partial class App
         {
             // Mutex创建或获取失败
             Log.Error(ex, "检查应用程序实例时发生错误");
-            System.Windows.MessageBox.Show($"启动程序时发生错误: {ex.Message}", "错误", System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Error);
+            MessageBox.Show($"启动程序时发生错误: {ex.Message}", "错误", MessageBoxButton.OK,
+                MessageBoxImage.Error);
             Current.Shutdown();
             return null!;
         }

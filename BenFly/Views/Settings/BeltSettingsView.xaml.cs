@@ -1,6 +1,6 @@
 namespace BenFly.Views.Settings;
 
-internal partial class BeltSettingsView
+public partial class BeltSettingsView
 {
     public BeltSettingsView()
     {
