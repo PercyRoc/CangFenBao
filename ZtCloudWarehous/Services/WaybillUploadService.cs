@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Text;
@@ -166,7 +167,7 @@ public class WaybillUploadService : IWaybillUploadService
         if (package.Volume.HasValue)
         {
             // 将立方厘米转换为立方米，保留6位小数
-            volumeStr = $"{package.Volume.Value / 1000000:F6}";
+            volumeStr = package.Volume.Value.ToString(CultureInfo.InvariantCulture);
         }
 
         return new WaybillRecord
@@ -441,11 +442,9 @@ public class WaybillUploadService : IWaybillUploadService
             // 6. 创建multipart/form-data请求
             var url = $"{_apiSettings.BaseUrl}/jt/upload_waybill_img";
 
-            using var formData = new MultipartFormDataContent
-            {
-                // 添加加密字符串
-                { new StringContent(encryptedData), "encryptStr" }
-            };
+            using var formData = new MultipartFormDataContent();
+            // 添加加密字符串
+            formData.Add(new StringContent(encryptedData), "encryptStr");
 
             // 添加文件
             var fileContent = new StreamContent(File.OpenRead(imageFilePath));
