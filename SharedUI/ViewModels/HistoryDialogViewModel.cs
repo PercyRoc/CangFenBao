@@ -3,6 +3,7 @@ using System.Drawing;
 using System.IO;
 using System.Windows.Input;
 using Common.Data;
+using Common.Models.Package;
 using Common.Services.Ui;
 using Microsoft.Win32;
 using OfficeOpenXml;
@@ -17,27 +18,58 @@ namespace SharedUI.ViewModels;
 /// <summary>
 ///     历史记录查询窗口视图模型
 /// </summary>
-public class HistoryWindowViewModel : BindableBase, IDialogAware
+public class HistoryDialogViewModel : BindableBase, IDialogAware
 {
     private readonly INotificationService _notificationService;
     private readonly IPackageDataService _packageDataService;
     private DateTime _endDate = DateTime.Today;
-
     private bool _isLoading;
     private ObservableCollection<PackageRecord> _packageRecords = [];
     private string _searchBarcode = string.Empty;
     private string _searchChute = string.Empty;
     private DateTime _startDate = DateTime.Today;
+    private string _selectedStatus = "全部";
+
+    /// <summary>
+    ///     状态列表 - 动态生成
+    /// </summary>
+    public List<string> StatusList { get; }
+
+    /// <summary>
+    ///     选中的状态
+    /// </summary>
+    public string SelectedStatus
+    {
+        get => _selectedStatus;
+        set
+        {
+            if (SetProperty(ref _selectedStatus, value))
+            {
+                QueryAsync();
+            }
+        }
+    }
 
     /// <summary>
     ///     构造函数
     /// </summary>
-    public HistoryWindowViewModel(
+    public HistoryDialogViewModel(
         IPackageDataService packageDataService,
         INotificationService notificationService)
     {
         _packageDataService = packageDataService;
         _notificationService = notificationService;
+
+        // 动态生成状态列表
+        var statusOptions = new List<string> { "全部" }; // 添加 "全部" 选项
+        var displayNames = Enum.GetValues<PackageStatus>()
+                               .Select(GetStatusDisplay) // 获取所有状态的显示名称
+                               .Distinct() // 去除重复的显示名称
+                               .OrderBy(s => s); // 按名称排序
+        statusOptions.AddRange(displayNames);
+        StatusList = statusOptions;
+        // _selectedStatus 默认是 "全部", 无需重新设置
+
         QueryCommand = new DelegateCommand(QueryAsync);
         ExportToExcelCommand = new DelegateCommand(ExecuteExportToExcel, CanExportToExcel)
             .ObservesProperty(() => PackageRecords.Count);
@@ -85,34 +117,7 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
     public ObservableCollection<PackageRecord> PackageRecords
     {
         get => _packageRecords;
-        private set
-        {
-            // 将毫米转换为厘米
-            foreach (var record in value)
-            {
-                if (record.Length.HasValue)
-                {
-                    record.Length = record.Length.Value / 10.0;
-                }
-
-                if (record.Width.HasValue)
-                {
-                    record.Width = record.Width.Value / 10.0;
-                }
-
-                if (record.Height.HasValue)
-                {
-                    record.Height = record.Height.Value / 10.0;
-                }
-
-                if (record.Volume.HasValue)
-                {
-                    record.Volume = record.Volume.Value / 1000.0; // 将立方毫米转换为立方厘米
-                }
-            }
-
-            SetProperty(ref _packageRecords, value);
-        }
+        private set => SetProperty(ref _packageRecords, value);
     }
 
     /// <summary>
@@ -164,20 +169,11 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
             var endTime = EndDate.Date.AddDays(1).AddSeconds(-1);
 
             // 打印查询参数用于调试
-            Log.Information("历史记录查询参数 - 开始日期: {StartDate}, 结束日期: {EndDate}, 条码: {Barcode}, 格口: {Chute}",
-                startTime, endTime, SearchBarcode, SearchChute);
+            Log.Information("历史记录查询参数 - 开始日期: {StartDate}, 结束日期: {EndDate}, 条码: {Barcode}, 格口: {Chute}, 状态: {Status}",
+                startTime, endTime, SearchBarcode, SearchChute, SelectedStatus);
 
             // 显示加载状态
             IsLoading = true;
-
-            // 检查特定的表中是否有数据(调试用)
-            if (StartDate.Date == EndDate.Date)
-            {
-                var tableRecords = await CheckTableDataAsync(StartDate);
-                if (tableRecords.Count > 0)
-                    Log.Information("表 Packages_{Date} 中有 {Count} 条数据, 但查询条件可能过滤了它们",
-                        StartDate.ToString("yyyyMMdd"), tableRecords.Count);
-            }
 
             // 获取基础查询结果
             var records = await _packageDataService.GetPackagesInTimeRangeAsync(startTime, endTime);
@@ -192,7 +188,28 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
             // 如果有格口搜索条件，进行过滤
             if (!string.IsNullOrWhiteSpace(SearchChute) && int.TryParse(SearchChute, out var chuteNumber))
             {
-                records = records.Where(r => r.ChuteName == chuteNumber).ToList();
+                records = records.Where(r => r.ChuteNumber == chuteNumber).ToList();
+            }
+
+            // 根据状态进行过滤
+            if (SelectedStatus != "全部")
+            {
+                // 查找与所选显示名称匹配的状态枚举值
+                var targetStatuses = Enum.GetValues<PackageStatus>()
+                                         .Where(s => GetStatusDisplay(s) == SelectedStatus)
+                                         .ToList();
+
+                if (targetStatuses.Count != 0)
+                {
+                    // 过滤记录，使其状态必须是目标状态之一
+                    records = records.Where(r => targetStatuses.Contains(r.Status)).ToList();
+                }
+                else
+                {
+                    // 如果选中的状态字符串没有匹配到任何枚举值（理论上不应发生）
+                    Log.Warning("无法将选择的状态 '{SelectedStatus}' 映射到任何 PackageStatus。", SelectedStatus);
+                    records = []; // 清空结果
+                }
             }
 
             PackageRecords = [.. records];
@@ -213,36 +230,6 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
         {
             // 无论成功失败，都结束加载状态
             IsLoading = false;
-        }
-    }
-
-    /// <summary>
-    ///     检查特定日期的表中是否有数据，不做任何过滤（调试用）
-    /// </summary>
-    private async Task<List<PackageRecord>> CheckTableDataAsync(DateTime date)
-    {
-        try
-        {
-            var records = await _packageDataService.GetRawTableDataAsync(date);
-            if (records.Count > 0)
-            {
-                // 打印表中的一些数据用于调试
-                var sample = records.Take(3).ToList();
-                foreach (var record in sample)
-                    Log.Information("表中数据示例 - ID: {Id}, 条码: {Barcode}, 创建时间: {CreateTime}, 状态: {Status}, 格口: {Chute}",
-                        record.Id, record.Barcode, record.CreateTime, record.Status, record.ChuteName);
-            }
-            else
-            {
-                Log.Warning("表 Packages_{Date} 中没有数据", date.ToString("yyyyMMdd"));
-            }
-
-            return records;
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "检查表数据时出错");
-            return new List<PackageRecord>();
         }
     }
 
@@ -280,7 +267,7 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
             var headers = new[]
             {
                 "编号", "条码", "格口", "重量(kg)", "长度(cm)", "宽度(cm)", "高度(cm)",
-                "体积(cm³)", "状态", "创建时间"
+                "体积(cm³)", "状态", "备注", "创建时间"
             };
 
             for (var i = 0; i < headers.Length; i++)
@@ -306,17 +293,18 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
 
                 worksheet.Cells[row, 1].Value = record.Id;
                 worksheet.Cells[row, 2].Value = record.Barcode;
-                worksheet.Cells[row, 3].Value = record.ChuteName;
+                worksheet.Cells[row, 3].Value = record.ChuteNumber;
                 worksheet.Cells[row, 4].Value = record.Weight;
                 worksheet.Cells[row, 5].Value = record.Length.HasValue ? Math.Round(record.Length.Value, 1) : null;
                 worksheet.Cells[row, 6].Value = record.Width.HasValue ? Math.Round(record.Width.Value, 1) : null;
                 worksheet.Cells[row, 7].Value = record.Height.HasValue ? Math.Round(record.Height.Value, 1) : null;
                 worksheet.Cells[row, 8].Value = record.Volume;
-                worksheet.Cells[row, 9].Value = record.Status.ToString();
-                worksheet.Cells[row, 10].Value = record.CreateTime;
+                worksheet.Cells[row, 9].Value = record.StatusDisplay;
+                worksheet.Cells[row, 10].Value = record.ErrorMessage;
+                worksheet.Cells[row, 11].Value = record.CreateTime;
 
                 // 设置日期格式
-                worksheet.Cells[row, 10].Style.Numberformat.Format = "yyyy-MM-dd HH:mm:ss";
+                worksheet.Cells[row, 11].Style.Numberformat.Format = "yyyy-MM-dd HH:mm:ss";
             }
 
             // 自动调整列宽
@@ -332,5 +320,34 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
             Log.Error(ex, "导出Excel失败");
             _notificationService.ShowErrorWithToken($"导出失败: {ex.Message}", "HistoryWindowGrowl");
         }
+    }
+
+    /// <summary>
+    ///     获取状态的中文显示
+    /// </summary>
+    private static string GetStatusDisplay(PackageStatus status)
+    {
+        return status switch
+        {
+            PackageStatus.Created => "已创建",
+            PackageStatus.Measuring => "正在测量",
+            PackageStatus.MeasureSuccess => "测量成功",
+            PackageStatus.MeasureFailed => "测量失败",
+            PackageStatus.Weighing => "正在称重",
+            PackageStatus.WeighSuccess => "称重成功",
+            PackageStatus.WeighFailed => "称重失败",
+            PackageStatus.WaitingForChute => "等待分配",
+            PackageStatus.Sorting => "正在分拣",
+            PackageStatus.SortSuccess => "分拣成功",
+            PackageStatus.SortFailed => "分拣失败",
+            PackageStatus.WaitingForLoading => "等待上传",
+            PackageStatus.LoadingRejected => "上传拒绝",
+            PackageStatus.LoadingSuccess => "上传成功",
+            PackageStatus.LoadingTimeout => "上传超时",
+            PackageStatus.Error => "异常",
+            PackageStatus.Timeout => "超时",
+            PackageStatus.Offline => "离线",
+            _ => status.ToString()
+        };
     }
 }

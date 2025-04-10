@@ -1,4 +1,4 @@
-﻿namespace FuzhouPolicyForce.Views.Settings;
+﻿namespace SharedUI.Views.Settings;
 
 public partial class BalanceSortSettingsView
 {

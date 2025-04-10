@@ -20,7 +20,6 @@
                     Source="pack://application:,,,/SharedUI;component/Resources/Styles/ColorStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
-            <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
             <converters1:EnumDescriptionConverter x:Key="EnumDescriptionConverter" />
         </ResourceDictionary>
     </Page.Resources>
@@ -71,47 +70,7 @@
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
                         </StackPanel>
-
-                        <!-- 枚举相机按钮 -->
-                        <ui:Button Appearance="Secondary"
-                                   Command="{Binding RefreshCameraListCommand}"
-                                   IsEnabled="{Binding IsRefreshing, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                   Icon="ArrowClockwise24">
-                            <TextBlock Text="枚举相机" />
-                        </ui:Button>
                     </WrapPanel>
-
-                    <!-- 相机列表 -->
-                    <TextBlock Text="可用相机列表"
-                               Style="{DynamicResource BodyStrong}"
-                               Margin="0,0,0,8" />
-
-                    <DataGrid ItemsSource="{Binding AvailableCameras}"
-                              Style="{DynamicResource DefaultDataGridStyle}"
-                              ColumnHeaderStyle="{DynamicResource DefaultDataGridColumnHeaderStyle}"
-                              CellStyle="{DynamicResource DefaultDataGridCellStyle}"
-                              RowStyle="{DynamicResource DefaultDataGridRowStyle}"
-                              IsReadOnly="False"
-                              CanUserAddRows="False"
-                              CanUserDeleteRows="False"
-                              Height="200"
-                              Margin="0,0,0,16"
-                              AlternationCount="2">
-                        <DataGrid.Columns>
-                            <DataGridCheckBoxColumn Header="选择"
-                                                    Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
-                                                    Width="50" />
-                            <DataGridTextColumn Header="序号" Binding="{Binding Index}" Width="60" IsReadOnly="True" />
-                            <DataGridTextColumn Header="IP地址" Binding="{Binding IpAddress}" Width="120"
-                                                IsReadOnly="True" />
-                            <DataGridTextColumn Header="MAC地址" Binding="{Binding MacAddress}" Width="150"
-                                                IsReadOnly="True" />
-                            <DataGridTextColumn Header="序列号" Binding="{Binding SerialNumber}" Width="150"
-                                                IsReadOnly="True" />
-                            <DataGridTextColumn Header="型号" Binding="{Binding Model}" Width="120" IsReadOnly="True" />
-                            <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="80" IsReadOnly="True" />
-                        </DataGrid.Columns>
-                    </DataGrid>
                 </StackPanel>
             </ui:Card>
 
@@ -151,8 +110,65 @@
                                    Margin="16,0,8,0" />
                         <ui:NumberBox Grid.Column="3"
                                       ClearButtonEnabled="False"
-                                      Value="{Binding Configuration.RepeatTimeMs}"
+                                      Value="{Binding Configuration.RepeatTimeMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                       IsEnabled="{Binding Configuration.BarcodeRepeatFilterEnabled}" />
+                    </Grid>
+                </StackPanel>
+            </ui:Card>
+
+            <!-- 图像保存配置 -->
+            <ui:Card Margin="0,16,0,0">
+                <StackPanel Margin="16">
+                    <TextBlock Text="图像保存配置"
+                               Style="{DynamicResource SubtitleTextBlockStyle}"
+                               Margin="0,0,0,16" />
+
+                    <!-- 启用图像保存 -->
+                    <ui:ToggleSwitch Content="启用图像保存"
+                                     IsChecked="{Binding Configuration.EnableImageSaving}"
+                                     Margin="0,0,0,16" />
+
+                    <!-- 图像保存路径 -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="保存路径："
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,8,0" />
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding Configuration.ImageSavePath}"
+                                 IsEnabled="{Binding Configuration.EnableImageSaving}" />
+                        <ui:Button Grid.Column="2"
+                                  Content="浏览..."
+                                  Margin="8,0,0,0"
+                                  Command="{Binding BrowseImagePathCommand}"
+                                  IsEnabled="{Binding Configuration.EnableImageSaving}" />
+                    </Grid>
+
+                    <!-- 图像保存格式 -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="120" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="保存格式："
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,8,0" />
+                        <ComboBox Grid.Column="1"
+                                  ItemsSource="{Binding ImageFormats}"
+                                  SelectedItem="{Binding Configuration.ImageFormat}"
+                                  IsEnabled="{Binding Configuration.EnableImageSaving}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Converter={StaticResource EnumDescriptionConverter}}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
                     </Grid>
                 </StackPanel>
             </ui:Card>
