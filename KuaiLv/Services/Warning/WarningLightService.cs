@@ -49,7 +49,7 @@ internal class WarningLightService : IWarningLightService, IDisposable
 
             _isConnected = value;
             ConnectionChanged?.Invoke(value);
-            
+
             // 连接状态改变时记录日志
             if (value)
             {
@@ -121,31 +121,93 @@ internal class WarningLightService : IWarningLightService, IDisposable
     /// <inheritdoc />
     public async Task DisconnectAsync()
     {
+        // Prevent multiple simultaneous disconnections if needed (using a simple flag or SemaphoreSlim)
+        // For now, assume external coordination or low risk of concurrent calls.
+
+        Log.Information("开始断开警示灯连接 (IsConnected: {InitialState})...", _isConnected);
+        // 如果已经断开或者内部对象已为null，则可能正在断开或已完成，直接返回
+        if (!_isConnected && _tcpClient == null && _networkStream == null)
+        {
+            Log.Debug("警示灯似乎已断开或正在断开，跳过重复操作");
+            return;
+        }
+
+        bool wasConnected = IsConnected; // Record state before changing
+
+        // 1. 立即更新状态并清除内部引用，防止新命令使用旧资源
+        //    ConnectionChanged 事件会在这里触发
+        IsConnected = false;
+        NetworkStream? streamToDispose = _networkStream;
+        TcpClient? clientToDispose = _tcpClient;
+        _networkStream = null; // Nullify references early
+        _tcpClient = null;
+
         try
         {
-            Log.Information("开始断开警示灯连接...");
-
-            if (_networkStream != null)
+            // 2. 异步释放网络流
+            if (streamToDispose != null)
             {
-                Log.Information("正在关闭网络流...");
-                await _networkStream.DisposeAsync();
-                _networkStream = null;
+                Log.Debug("正在异步释放网络流...");
+                try
+                {
+                    // 注意: DisposeAsync 本身可能阻塞，但通常优于在异步方法中调用同步 Dispose
+                    await streamToDispose.DisposeAsync();
+                    Log.Debug("网络流已异步释放");
+                }
+                catch (ObjectDisposedException)
+                {
+                    Log.Debug("网络流已被释放");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "异步释放网络流期间发生错误");
+                    // 继续尝试释放客户端
+                }
+            }
+            else
+            {
+                Log.Debug("网络流实例为 null，跳过释放");
             }
 
-            if (_tcpClient != null)
+            // 3. 释放 TCP 客户端 (Dispose 应处理关闭连接)
+            if (clientToDispose != null)
             {
-                Log.Information("正在关闭TCP连接...");
-                _tcpClient.Dispose();
-                _tcpClient = null;
+                Log.Debug("正在释放 TCP 客户端...");
+                try
+                {
+                    clientToDispose.Dispose(); // 同步释放，Dispose 应该关闭连接
+                    Log.Debug("TCP 客户端已释放");
+                }
+                catch (ObjectDisposedException)
+                {
+                    Log.Debug("TCP 客户端已被释放");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "释放 TCP 客户端期间发生错误");
+                }
+            }
+            else
+            {
+                Log.Debug("TCP 客户端实例为 null，跳过释放");
             }
 
-            IsConnected = false;
-            Log.Information("警示灯断开连接完成");
+            if (wasConnected)
+            {
+                Log.Information("警示灯断开连接流程完成");
+            }
+            else
+            {
+                Log.Debug("警示灯断开连接处理完成 (初始状态或已为断开)");
+            }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "警示灯断开连接失败");
+            // 捕获整个过程中的意外错误
+            Log.Error(ex, "警示灯断开连接期间发生意外错误");
+            // 状态已经设置为断开
         }
+        // Final state is IsConnected = false, _tcpClient = null, _networkStream = null
     }
 
     /// <inheritdoc />
@@ -244,9 +306,73 @@ internal class WarningLightService : IWarningLightService, IDisposable
 
         if (disposing)
         {
-            DisconnectAsync().Wait();
+            Log.Information("Disposing WarningLightService (同步)...");
+
+            // 同步释放拥有的资源，以防 DisconnectAsync 未被调用或未完全执行
+            // 直接检查实例字段，因为 DisconnectAsync 会将其设为 null
+            NetworkStream? currentStream = _networkStream;
+            TcpClient? currentClient = _tcpClient;
+
+            // 在 Dispose 之前立即将字段设为 null，减少竞争条件窗口
+            _networkStream = null;
+            _tcpClient = null;
+            // 确保状态反映 Dispose
+            if (_isConnected) // 仅在需要时记录状态更改日志
+            {
+                IsConnected = false; // 这会触发事件，确保事件处理器是安全的
+                Log.Debug("Dispose: 将 IsConnected 设为 false");
+            }
+
+
+            try
+            {
+                // 先释放流，再释放客户端
+                if (currentStream != null)
+                {
+                    Log.Debug("Dispose: 同步释放 NetworkStream...");
+                    try
+                    {
+                        currentStream.Dispose();
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        Log.Debug("Dispose: NetworkStream 已被释放.");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "Dispose: 同步释放 NetworkStream 时出错.");
+                    }
+                }
+
+                if (currentClient != null)
+                {
+                    Log.Debug("Dispose: 同步释放 TcpClient...");
+                    try
+                    {
+                        currentClient.Dispose();
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        Log.Debug("Dispose: TcpClient 已被释放.");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "Dispose: 同步释放 TcpClient 时出错.");
+                    }
+                }
+
+                Log.Information("同步 Dispose 完成资源清理尝试.");
+            }
+            catch (Exception ex)
+            {
+                // 捕获 Dispose 逻辑本身的错误
+                Log.Error(ex, "同步 Dispose 期间发生意外错误.");
+            }
+            // 取消订阅事件，如果在这里订阅的话
+            // settingsService.OnSettingsChanged -= OnConfigurationChanged; // 需要实际的取消订阅逻辑
         }
 
         _disposed = true;
+        Log.Information("WarningLightService disposed 标志已设置.");
     }
 }

@@ -13,7 +13,7 @@
                  Height="900"
                  Width="1600"
                  WindowStartupLocation="CenterScreen"
-                 Closing="MetroWindow_Closing"
+                 Closing="MainWindow_Closing"
                  ExtendsContentIntoTitleBar="True">
 
     <ui:FluentWindow.Resources>
@@ -417,7 +417,7 @@
                                Source="{Binding CurrentImage}"
                                RenderOptions.BitmapScalingMode="HighQuality"
                                RenderOptions.EdgeMode="Aliased"
-                               Stretch="Uniform"
+                               Stretch="Fill"
                                StretchDirection="Both"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center" />
@@ -465,8 +465,7 @@
                                 <DataGridTextColumn Header="条码" Binding="{Binding Barcode}" Width="160" />
                                 <DataGridTextColumn Header="重量" Binding="{Binding Weight, StringFormat='{}{0:F2}斤'}"
                                                     Width="80" />
-                                <DataGridTextColumn Header="尺寸" Binding="{Binding VolumeDisplay}" Width="120" />
-                                <DataGridTextColumn Header="状态" Binding="{Binding Information}" Width="*" />
+                                <DataGridTextColumn Header="状态" Binding="{Binding StatusDisplay}" Width="*" />
                                 <DataGridTextColumn Header="处理时间"
                                                     Binding="{Binding ProcessingTime, StringFormat={}{0:0}ms}"
                                                     Width="100" />

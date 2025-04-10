@@ -19,6 +19,7 @@ using Serilog;
 using SharedUI.Extensions;
 using SharedUI.ViewModels;
 using SharedUI.Views;
+using System.Diagnostics;
 using Timer = System.Timers.Timer;
 
 namespace KuaiLv;
@@ -29,22 +30,64 @@ namespace KuaiLv;
 internal partial class App
 {
     private static Mutex? _mutex;
-    private const string MutexName = "KuaiLv_App_Mutex";
+    private const string MutexName = "Global\\KuaiLv_App_Mutex";
+    private bool _ownsMutex;
     private Timer? _cleanupTimer;
+    internal bool _isShuttingDown = false;
 
     /// <summary>
     ///     创建主窗口
     /// </summary>
     protected override Window CreateShell()
     {
-        // 检查是否已经运行
-        _mutex = new Mutex(true, MutexName, out var createdNew);
+        if (IsApplicationAlreadyRunning())
+        {
+            MessageBox.Show("程序已在运行中，请勿重复启动！", "提示", MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            Environment.Exit(0);
+            return null!;
+        }
 
-        if (createdNew) return Container.Resolve<MainWindow>();
+        try
+        {
+            _mutex = new Mutex(true, MutexName, out var createdNew);
+            _ownsMutex = createdNew;
 
-        // 关闭当前实例
-        Current.Shutdown();
-        return null!;
+            if (createdNew)
+            {
+                return Container.Resolve<MainWindow>();
+            }
+
+            var canAcquire = _mutex.WaitOne(TimeSpan.Zero, false);
+            if (!canAcquire)
+            {
+                MessageBox.Show("程序已在运行中，请勿重复启动！", "提示", MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                Environment.Exit(0);
+                return null!;
+            }
+            else
+            {
+                _ownsMutex = true;
+                return Container.Resolve<MainWindow>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "检查应用程序实例时发生错误");
+            MessageBox.Show($"启动程序时发生错误: {ex.Message}", "错误", MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            Current.Shutdown();
+            return null!;
+        }
+    }
+
+    private static bool IsApplicationAlreadyRunning()
+    {
+        var currentProcess = Process.GetCurrentProcess();
+        var processes = Process.GetProcessesByName(currentProcess.ProcessName);
+
+        return processes.Length > 1;
     }
 
     /// <summary>
@@ -76,13 +119,8 @@ internal partial class App
         containerRegistry.Register<UploadSettingsViewModel>();
         containerRegistry.Register<WarningLightSettingsView>();
         containerRegistry.Register<WarningLightSettingsViewModel>();
-
-        // 注册设置窗口
-        containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
-        containerRegistry.Register<SettingsDialogViewModel>();
-        
-        containerRegistry.Register<Window,HistoryWindow>("HistoryWindow");
-        containerRegistry.Register<HistoryWindowViewModel>();
+        containerRegistry.RegisterDialog<SettingsDialog,SettingsDialogViewModel>("SettingsDialog");
+        containerRegistry.RegisterDialog<HistoryDialogView,HistoryDialogViewModel>("HistoryDialog");
     }
 
     /// <summary>
@@ -97,7 +135,8 @@ internal partial class App
             .WriteTo.Debug()
             .WriteTo.File("logs/app-.log",
                 rollingInterval: RollingInterval.Day,
-                rollOnFileSizeLimit: true)
+                rollOnFileSizeLimit: true,
+                retainedFileCountLimit: 30)
             .CreateLogger();
 
         // 注册全局异常处理
@@ -112,27 +151,42 @@ internal partial class App
         // 先调用基类方法初始化容器
         base.OnStartup(e);
 
+        Task.Run(InitializeServicesAsync)
+            .ContinueWith(task =>
+            {
+                if (!task.IsFaulted) return;
+                Log.Error(task.Exception, "初始化服务时发生错误");
+                Current.Dispatcher.Invoke(() =>
+                {
+                    MessageBox.Show(
+                        $"初始化服务失败，应用程序将关闭。\n\n错误: {task.Exception?.InnerException?.Message}",
+                        "启动错误",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                        
+                    Current.Shutdown();
+                });
+            });
+    }
+
+    private async Task InitializeServicesAsync()
+    {
         try
         {
             // 启动相机托管服务
             var cameraStartupService = Container.Resolve<CameraStartupService>();
-            _ = Task.Run(async () =>
-            {
-                await cameraStartupService.StartAsync(CancellationToken.None);
-                Log.Information("相机托管服务启动成功");
-            });
+            await cameraStartupService.StartAsync(CancellationToken.None);
+            Log.Information("相机托管服务启动成功");
 
             // 启动警示灯托管服务
             var warningLightStartupService = Container.Resolve<WarningLightStartupService>();
-            _ = Task.Run(async () =>
-            {
-                await warningLightStartupService.StartAsync();
-                Log.Information("警示灯托管服务启动成功");
-            });
+            await warningLightStartupService.StartAsync();
+            Log.Information("警示灯托管服务启动成功");
         }
         catch (Exception ex)
         {
             Log.Error(ex, "启动服务时发生错误");
+            throw;
         }
     }
 
@@ -185,7 +239,7 @@ internal partial class App
         try
         {
             _cleanupTimer = new Timer(1000 * 60 * 60); // 每1小时执行一次
-            _cleanupTimer.Elapsed += (_, _) =>
+            _cleanupTimer.Elapsed += static (_, _) =>
             {
                 try
                 {
@@ -196,10 +250,11 @@ internal partial class App
                     Log.Error(ex, "清理DUMP文件时发生错误");
                 }
             };
+            _cleanupTimer.AutoReset = true; // 确保定时器重复执行
             _cleanupTimer.Start();
 
             // 应用启动时立即执行一次清理
-            Task.Run(() =>
+            Task.Run(static () =>
             {
                 try
                 {
@@ -244,7 +299,7 @@ internal partial class App
         catch (Exception ex)
         {
             Log.Error(ex, "清理DUMP文件过程中发生错误");
-            throw;
+            throw; // 重新抛出异常，以便上层可以记录
         }
     }
 
@@ -253,71 +308,112 @@ internal partial class App
     /// </summary>
     protected override void OnExit(ExitEventArgs e)
     {
+        Log.Information("应用程序开始退出...");
         try
         {
-            Log.Information("应用程序开始关闭...");
-
-            // 停止托管服务
-            try
-            {
-                Log.Information("正在停止托管服务...");
-
-                // 停止相机托管服务
-                var cameraStartupService = Container.Resolve<CameraStartupService>();
-                Task.Run(async () => await cameraStartupService.StopAsync(CancellationToken.None)).Wait(2000);
-
-                // 停止警示灯托管服务
-                var warningLightStartupService = Container.Resolve<WarningLightStartupService>();
-                Task.Run(warningLightStartupService.StopAsync).Wait(2000);
-
-                Log.Information("托管服务已停止");
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "停止托管服务时发生错误");
-            }
-
-            // 释放资源
-            try
-            {
-                // 释放相机工厂
-                if (Container.Resolve<CameraFactory>() is IDisposable cameraFactory)
-                {
-                    cameraFactory.Dispose();
-                    Log.Information("相机工厂已释放");
-                }
-
-                // 释放相机服务
-                if (Container.Resolve<ICameraService>() is IDisposable cameraService)
-                {
-                    cameraService.Dispose();
-                    Log.Information("相机服务已释放");
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "释放资源时发生错误");
-            }
-
-            // 等待所有日志写入完成
-            Log.Information("应用程序关闭");
-            Log.CloseAndFlush();
-
-            // 确保所有操作完成
-            Thread.Sleep(1000);
+            // 停止清理定时器
+            _cleanupTimer?.Stop();
+            _cleanupTimer?.Dispose();
         }
         catch (Exception ex)
         {
             Log.Error(ex, "应用程序关闭时发生错误");
-            Log.CloseAndFlush();
-            Thread.Sleep(1000);
+            Task.Run(async () => await Log.CloseAndFlushAsync()).Wait(TimeSpan.FromSeconds(2));
         }
         finally
         {
-            // 释放 Mutex
-            _mutex?.Dispose();
-            _mutex = null;
+            try
+            {
+                if (_mutex != null)
+                {
+                    if (_ownsMutex && _mutex.SafeWaitHandle is { IsClosed: false, IsInvalid: false })
+                    {
+                        try
+                        {
+                           _mutex.ReleaseMutex();
+                        } catch (ApplicationException) {
+                            // 忽略可能不拥有 mutex 的情况
+                        }
+                    }
+                    _mutex.Dispose();
+                    _mutex = null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "释放Mutex时发生错误");
+            }
             base.OnExit(e);
         }
+    }
+
+    internal async Task ShutdownServicesAsync(IContainerProvider containerProvider)
+    {
+         if (_isShuttingDown)
+         {
+            return;
+         }
+        _isShuttingDown = true;
+
+        Log.Information("开始关闭服务...");
+
+        try
+        {
+            // 解析服务实例
+            var cameraStartupService = containerProvider.Resolve<CameraStartupService>();
+            var warningLightStartupService = containerProvider.Resolve<WarningLightStartupService>();
+
+            // 停止相机托管服务
+            var cameraStopTask = cameraStartupService.StopAsync(CancellationToken.None);
+            if (await Task.WhenAny(cameraStopTask, Task.Delay(TimeSpan.FromSeconds(10))) == cameraStopTask) {
+                 await cameraStopTask;
+                 Log.Information("相机服务已停止");
+            } else {
+                 Log.Warning("相机服务停止超时");
+            }
+
+            // 停止警示灯托管服务
+            var warningStopTask = warningLightStartupService.StopAsync();
+            if (await Task.WhenAny(warningStopTask, Task.Delay(TimeSpan.FromSeconds(10))) == warningStopTask) {
+                 await warningStopTask;
+                 Log.Information("警示灯服务已停止");
+            } else {
+                 Log.Warning("警示灯服务停止超时");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "停止服务时发生错误");
+        }
+
+        try
+        {
+            // 释放相机工厂
+            if (containerProvider.Resolve<CameraFactory>() is IDisposable cameraFactory)
+            {
+                cameraFactory.Dispose();
+                Log.Information("相机工厂已释放");
+            }
+
+            // 释放相机服务
+            if (containerProvider.Resolve<ICameraService>() is IDisposable cameraService)
+            {
+                cameraService.Dispose();
+                Log.Information("相机服务已释放");
+            }
+
+            // 释放DWS服务
+            if (containerProvider.Resolve<IDwsService>() is IDisposable dwsService)
+            {
+                dwsService.Dispose();
+                Log.Information("DWS服务已释放");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "释放资源时发生错误");
+        }
+
+        await Log.CloseAndFlushAsync();
     }
 }

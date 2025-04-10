@@ -1,23 +1,23 @@
 ﻿using System.Collections.ObjectModel;
-using System.IO;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Common.Models.Package;
 using Common.Services.Audio;
 using Common.Services.Settings;
-using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
-using DeviceService.DataSourceDevices.Camera.DaHua;
 using DeviceService.DataSourceDevices.Services;
 using KuaiLv.Models.Settings.App;
 using KuaiLv.Services.DWS;
 using KuaiLv.Services.Warning;
 using Prism.Commands;
 using Prism.Mvvm;
+using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.Models;
-using SixLabors.ImageSharp;
+using System.Reactive.Concurrency;
+using System.Reactive.Linq;
+using Common.Data;
 
 namespace KuaiLv.ViewModels;
 
@@ -27,16 +27,16 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
     private readonly IDwsService _dwsService;
+    private readonly ISettingsService _settingsService;
+    private readonly IPackageDataService _packageDataService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
     private readonly IWarningLightService _warningLightService;
-    private readonly ISettingsService _settingsService;
     private string _currentBarcode = string.Empty;
     private BitmapSource? _currentImage;
-    private int _currentPackageIndex;
     private bool _disposed;
     private SystemStatus _systemStatus = new();
-    private int _selectedScenario = 0; // 默认为0，称重模式
+    private int _selectedScenario; // 默认为0，称重模式
 
     public MainWindowViewModel(
         IDialogService dialogService,
@@ -45,7 +45,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         IWarningLightService warningLightService,
         PackageTransferService packageTransferService,
         IAudioService audioService,
-        ISettingsService settingsService)
+        ISettingsService settingsService,
+        IPackageDataService packageDataService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
@@ -53,12 +54,12 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         _warningLightService = warningLightService;
         _audioService = audioService;
         _settingsService = settingsService;
+        _packageDataService = packageDataService;
 
         // 初始化命令
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
         ResetWarningCommand = new DelegateCommand(ExecuteResetWarning);
         OpenHistoryCommand = new DelegateCommand(ExecuteOpenHistory);
-        ScenarioChangedCommand = new DelegateCommand<object>(ExecuteScenarioChanged);
 
         // 初始化使用场景列表
         InitializeScenarios();
@@ -98,27 +99,30 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         _warningLightService.ConnectionChanged += OnWarningLightConnectionChanged;
 
         // 订阅图像流
-        if (_cameraService is DahuaCameraService dahuaCamera)
-            _subscriptions.Add(dahuaCamera.ImageStream
-                .Subscribe(imageData =>
+        _subscriptions.Add(_cameraService.ImageStream
+            .ObserveOn(TaskPoolScheduler.Default) // 使用任务池调度器
+            .Subscribe(imageData =>
+            {
+                try
                 {
-                    try
+                    Application.Current.Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
                     {
-                        Log.Debug("收到大华相机图像流数据，尺寸：{Width}x{Height}",
-                            imageData.image.Width,
-                            imageData.image.Height);
-
-                        UpdateImageDisplay(imageData.image, bitmap =>
+                        try
                         {
-                            Log.Debug("从图像流更新CurrentImage");
-                            CurrentImage = bitmap;
-                        });
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex, "处理大华相机图像流数据时发生错误");
-                    }
-                }));
+                            // 更新UI
+                            CurrentImage = imageData;
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error(ex, "更新UI图像时发生错误");
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "处理图像流时发生错误");
+                }
+            }));
 
         // 订阅包裹流
         _subscriptions.Add(packageTransferService.PackageStream
@@ -130,7 +134,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     public DelegateCommand OpenSettingsCommand { get; }
     public DelegateCommand ResetWarningCommand { get; private set; }
     public DelegateCommand OpenHistoryCommand { get; }
-    public DelegateCommand<object> ScenarioChangedCommand { get; }
 
     public string CurrentBarcode
     {
@@ -155,12 +158,10 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         get => _selectedScenario;
         set
         {
-            if (SetProperty(ref _selectedScenario, value))
-            {
-                Log.Information("使用场景已更改为: {Scenario}", Scenarios[value]);
-                // 保存设置
-                SaveAppSettings();
-            }
+            if (!SetProperty(ref _selectedScenario, value)) return;
+            Log.Information("使用场景已更改为: {Scenario}", Scenarios[value]);
+            // 保存设置
+            SaveAppSettings();
         }
     }
 
@@ -213,15 +214,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         Log.Information("初始化使用场景列表完成，当前使用场景: {Scenario}", Scenarios[SelectedScenario]);
     }
 
-    private void ExecuteScenarioChanged(object parameter)
-    {
-        if (parameter is int index && index >= 0 && index < Scenarios.Count)
-        {
-            SelectedScenario = index;
-            Log.Information("切换使用场景为: {Scenario}", Scenarios[index]);
-        }
-    }
-
     private void ExecuteOpenSettings()
     {
         _dialogService.ShowDialog("SettingsDialog");
@@ -229,7 +221,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private void ExecuteOpenHistory()
     {
-        _dialogService.ShowDialog("HistoryWindow");
+        _dialogService.ShowDialog("HistoryDialog");
     }
 
     private async void ExecuteResetWarning()
@@ -399,39 +391,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    private static void UpdateImageDisplay(Image image, Action<BitmapSource> imageUpdater)
-    {
-        try
-        {
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                try
-                {
-                    using var memoryStream = new MemoryStream();
-                    image.SaveAsJpeg(memoryStream);
-                    memoryStream.Position = 0;
-
-                    var bitmap = new BitmapImage();
-                    bitmap.BeginInit();
-                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                    bitmap.StreamSource = memoryStream;
-                    bitmap.EndInit();
-                    bitmap.Freeze(); // 使图像可以跨线程访问
-
-                    imageUpdater(bitmap);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "在UI线程更新图像显示时发生错误");
-                }
-            });
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "更新图像显示时发生错误");
-        }
-    }
-
     protected virtual void Dispose(bool disposing)
     {
         if (_disposed) return;
@@ -491,29 +450,26 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         if (statusItem == null) return;
 
         // 更新状态显示
-        if (string.IsNullOrEmpty(package.ErrorMessage))
+        statusItem.Value = package.StatusDisplay; // 直接使用 StatusDisplay
+        statusItem.Description = package.ErrorMessage ?? package.StatusDisplay; // 优先显示错误信息，否则显示状态文本
+
+        // 根据状态设置颜色
+        statusItem.StatusColor = package.Status switch
         {
-            statusItem.Value = "正常";
-            statusItem.Description = package.Information ?? "处理状态";
-            statusItem.StatusColor = "#4CAF50"; // 绿色表示正常
-        }
-        else
-        {
-            statusItem.Value = "异常";
-            statusItem.Description = package.ErrorMessage;
-            statusItem.StatusColor = "#F44336"; // 红色表示异常
-        }
+            PackageStatus.SortSuccess or PackageStatus.LoadingSuccess or PackageStatus.MeasureSuccess or PackageStatus.WeighSuccess 
+                => "#4CAF50", // 绿色表示成功
+            PackageStatus.Error or PackageStatus.Timeout or PackageStatus.MeasureFailed or PackageStatus.WeighFailed or PackageStatus.SortFailed or PackageStatus.LoadingRejected 
+                => "#F44336", // 红色表示错误、超时或失败
+            _ => "#2196F3" // 其他状态（如进行中、等待中）使用蓝色或其他中性色
+        };
     }
 
     private async void OnPackageInfo(PackageInfo package)
     {
         try
         {
-            // 设置包裹序号
-            package.Index = Interlocked.Increment(ref _currentPackageIndex);
-            Log.Information("收到包裹信息：{Barcode}, 序号：{Index}", package.Barcode, package.Index);
-            package.Weight *= 2;
-
+            // 更新重量（千克转斤）
+            package.SetWeight(package.Weight * 2);
             // 更新UI
             Application.Current.Dispatcher.Invoke(() =>
             {
@@ -537,64 +493,59 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             if (!dwsResponse.IsSuccess)
             {
                 Log.Warning("DWS上报失败：{Message}", dwsResponse.Message);
-                package.SetError($"DWS上报失败：{dwsResponse.Message}");
-                await _audioService.PlayPresetAsync(AudioType.SystemError);
 
-                // 更新UI显示错误状态
-                Application.Current.Dispatcher.Invoke(() => UpdatePackageInfoItems(package));
+                // 检查是否是网络离线的特殊情况
+                if (dwsResponse.Code?.ToString() == "NETWORK_OFFLINE")
+                {
+                    Log.Information("网络离线，包裹已保存到离线存储：{Barcode}", package.Barcode);
+                    // 设置离线状态和显示信息
+                    package.SetStatus(PackageStatus.Offline, "网络离线，已保存到离线存储");
+                }
+                else
+                {
+                    // 其他失败情况，设置错误信息
+                    package.SetError($"DWS上报失败：{dwsResponse.Message}");
+                }
+
+                await _audioService.PlayPresetAsync(AudioType.SystemError);
             }
             else
             {
                 await _audioService.PlayPresetAsync(AudioType.Success);
-                // 更新UI显示成功状态
-                Application.Current.Dispatcher.Invoke(() =>
-                {
-                    package.StatusDisplay = "成功";
-                    // Information属性在DwsService中已经设置，这里只需要更新UI
-                    UpdatePackageInfoItems(package);
-                });
+                // DWS 上报成功后，设置包裹状态为成功并显示服务器返回信息
+                package.SetStatus(PackageStatus.SortSuccess, $"成功：{dwsResponse.Message}");
             }
 
+            Application.Current.Dispatcher.Invoke(() => UpdatePackageInfoItems(package));
+
             Log.Debug("开始更新历史记录和统计数据，当前历史记录数量: {Count}", PackageHistory.Count);
-            
+
             // 计算处理时间
             package.ProcessingTime = (DateTime.Now - package.CreateTime).TotalMilliseconds;
-            
+            try
+            {
+                await _packageDataService.AddPackageAsync(package);
+                Log.Information("包裹记录已保存到数据库: {Barcode}, 状态: {Status}", package.Barcode, package.Status);
+            }
+            catch (Exception dbEx)
+            {
+                Log.Error(dbEx, "保存包裹记录到数据库时出错: {Barcode}", package.Barcode);
+            }
+
             Application.Current.Dispatcher.Invoke(() =>
             {
                 try
                 {
-                    // 创建PackageInfo的新实例，避免引用原始对象导致的问题
-                    var packageCopy = new PackageInfo
-                    {
-                        Index = package.Index,
-                        Barcode = package.Barcode,
-                        Weight = package.Weight,
-                        Length = package.Length,
-                        Width = package.Width,
-                        Height = package.Height,
-                        Volume = package.Volume,
-                        StatusDisplay = package.StatusDisplay,
-                        ProcessingTime = package.ProcessingTime,
-                        CreateTime = package.CreateTime,
-                        Information = package.Information,
-                        ErrorMessage = package.ErrorMessage
-                    };
-                    
-                    // 更新历史记录
-                    Log.Debug("添加包裹到历史记录: {Barcode}, 序号: {Index}", packageCopy.Barcode, packageCopy.Index);
-                    
-                    // 在UI线程上更新ObservableCollection
-                    PackageHistory.Insert(0, packageCopy);
+                    PackageHistory.Insert(0, package);
                     Log.Debug("历史记录更新后数量: {Count}", PackageHistory.Count);
-                    
+
                     while (PackageHistory.Count > 1000) // 保持最近1000条记录
                         PackageHistory.RemoveAt(PackageHistory.Count - 1);
 
                     // 更新统计数据
                     UpdateStatistics();
                     Log.Debug("统计数据更新完成");
-                    
+
                     // 强制通知UI刷新
                     RaisePropertyChanged(nameof(PackageHistory));
                 }
@@ -612,6 +563,10 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             package.SetError($"处理失败：{ex.Message}");
             // 确保在发生错误时更新UI显示
             Application.Current.Dispatcher.Invoke(() => UpdatePackageInfoItems(package));
+        }
+        finally
+        {
+            package.ReleaseImage();
         }
     }
 
