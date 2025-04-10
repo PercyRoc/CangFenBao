@@ -28,5 +28,10 @@ public enum DeviceStatusCode : byte
     /// <summary>
     ///     主线故障
     /// </summary>
-    MainLineFault = 0x04
+    MainLineFault = 0x04,
+    
+    /// <summary>
+    ///     设备未连接
+    /// </summary>
+    Disconnected = 0xFF
 }

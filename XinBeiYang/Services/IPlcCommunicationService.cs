@@ -1,5 +1,7 @@
 namespace XinBeiYang.Services;
 
+using XinBeiYang.Models.Communication;
+
 /// <summary>
 ///     PLC通讯服务接口
 /// </summary>
@@ -14,6 +16,11 @@ public interface IPlcCommunicationService
     ///     连接状态变更事件
     /// </summary>
     event EventHandler<bool> ConnectionStatusChanged;
+    
+    /// <summary>
+    ///     设备状态变更事件
+    /// </summary>
+    event EventHandler<DeviceStatusCode> DeviceStatusChanged;
 
     /// <summary>
     ///     连接到PLC

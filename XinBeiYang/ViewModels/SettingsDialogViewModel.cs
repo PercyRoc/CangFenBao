@@ -15,7 +15,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
     private readonly HostSettingsViewModel _hostSettingsViewModel;
     private readonly INotificationService _notificationService;
-
+    
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
         INotificationService notificationService)
@@ -29,7 +29,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
     }
-
+    
     public DelegateCommand SaveCommand { get; }
     public DelegateCommand CancelCommand { get; }
 
@@ -58,14 +58,13 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
             _cameraSettingsViewModel.SaveConfigurationCommand.Execute();
             _hostSettingsViewModel.SaveConfigurationCommand.Execute();
 
-            Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");
             RequestClose?.Invoke(new DialogResult(ButtonResult.OK));
         }
         catch (Exception ex)
         {
             Log.Error(ex, "保存设置时发生错误");
-            _notificationService.ShowError("保存设置时发生错误");
+            _notificationService.ShowError($"保存设置失败: {ex.Message}");
         }
     }
 

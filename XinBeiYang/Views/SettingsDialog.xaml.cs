@@ -1,41 +1,39 @@
-﻿using System.Windows;
-using System.Windows.Input;
-using Common.Services.Ui;
+﻿using Common.Services.Ui;
 using Serilog;
-using SharedUI.Views.Settings;
+using System.Windows;
+using Wpf.Ui.Controls;
 
 namespace XinBeiYang.Views;
 
-internal partial class SettingsDialog
+public partial class SettingsDialog
 {
     public SettingsDialog(INotificationService notificationService)
     {
         InitializeComponent();
 
         notificationService.Register("SettingWindowGrowl", GrowlPanel);
-
-        // 在窗口加载完成后设置服务提供程序并导航
-        Loaded += OnLoaded;
-        // 添加标题栏鼠标事件处理
-        MouseDown += OnWindowMouseDown;
     }
-
-    private void OnWindowMouseDown(object sender, MouseButtonEventArgs e)
+    
+    private void SettingsDialog_OnLoaded(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            // 当在标题栏区域按下左键时允许拖动窗口
-            if (e.ChangedButton == MouseButton.Left && e.GetPosition(this).Y <= 32) DragMove();
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "拖动窗口时发生错误");
-        }
-    }
+        // 确保 RootNavigation 存在并且已经加载
+        if (RootNavigation is not { } navigationView) return;
+        
+        // 找到 Tag 为 "Camera" 的导航项
+        var cameraItem = navigationView.MenuItems.OfType<NavigationViewItem>()
+            .FirstOrDefault(item => item.Tag is "Camera");
 
-    private void OnLoaded(object sender, RoutedEventArgs e)
-    {
-        // 导航到相机设置页面
-        RootNavigation?.Navigate(typeof(CameraSettingsView));
+        if (cameraItem != null)
+        {
+            // 导航到相机设置页面
+            if (cameraItem.TargetPageType != null) navigationView.Navigate(cameraItem.TargetPageType);
+
+            // 如果需要，也可以尝试直接设置选中项（但Navigate通常是更可靠的方式）
+            // navigationView.SetCurrentValue(NavigationView.SelectedItemProperty, cameraItem);
+        }
+        else
+        {
+            Log.Warning("未能在 NavigationView 中找到 Tag 为 'Camera' 的导航项。");
+        }
     }
 }

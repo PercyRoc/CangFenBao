@@ -6,14 +6,16 @@
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:hc="https://handyorg.github.io/handycontrol"
                  xmlns:viewModels1="clr-namespace:XinBeiYang.ViewModels"
+                 xmlns:converters="clr-namespace:XinBeiYang.Converters"
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=viewModels1:MainWindowViewModel}"
                  Title="仓分宝-新北洋"
                  Height="900"
                  Width="1600"
                  WindowStartupLocation="CenterScreen"
-                 Closing="MetroWindow_Closing"
-                 ExtendsContentIntoTitleBar="True" x:ClassModifier="internal">
+                 Closing="MainWindow_Closing"
+                 Loaded="MainWindow_Loaded"
+                 ExtendsContentIntoTitleBar="False">
 
     <ui:FluentWindow.Resources>
         <ResourceDictionary>
@@ -24,6 +26,9 @@
                     Source="pack://application:,,,/SharedUI;component/Resources/Styles/ColorStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+            <!-- 自定义转换器 -->
+            <converters:InvertBooleanToVisibilityConverter x:Key="InvertBooleanToVisibilityConverter" />
+            <!-- 默认图像资源 -->
         </ResourceDictionary>
     </ui:FluentWindow.Resources>
 
@@ -126,12 +131,13 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <!-- 实时包裹信息 -->
                 <Border Grid.Row="0"
-                        Style="{StaticResource CardStyle}"
-                        Margin="16">
+                        Margin="16"
+                        Background="{Binding RealtimeInfoBackgroundColor, FallbackValue=#334CAF50}">
                     <Grid Margin="16">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -333,6 +339,123 @@
                         </ItemsControl>
                     </Grid>
                 </Border>
+
+                <!-- PLC设备状态卡片 -->
+                <Border Grid.Row="2" Margin="16,0,16,16"
+                        Style="{StaticResource CardStyle}">
+                    <Grid Margin="16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!-- 标题 -->
+                        <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="DeveloperBoard24"
+                                               Width="24"
+                                               Height="24"
+                                               Foreground="{DynamicResource AccentBrush}"
+                                               VerticalAlignment="Center" />
+                                <TextBlock Text="设备状态"
+                                           Margin="8,0,0,0"
+                                           FontSize="16"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource AccentBrush}"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </DockPanel>
+
+                        <!-- 设备状态内容 -->
+                        <Grid Grid.Row="1" Margin="0,8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            
+                            <!-- PLC状态 -->
+                            <Border Grid.Row="0"
+                                    Padding="16,12"
+                                    CornerRadius="8"
+                                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{Binding DeviceStatusColor, FallbackValue=#4CAF50}"
+                                    BorderThickness="2">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <!-- 状态和图标 -->
+                                    <DockPanel Grid.Row="0">
+                                        <ui:SymbolIcon Symbol="Warning24"
+                                                       Foreground="{Binding DeviceStatusColor, FallbackValue=#4CAF50}"
+                                                       VerticalAlignment="Center"
+                                                       HorizontalAlignment="Right"
+                                                       Width="24"
+                                                       Height="24"
+                                                       Margin="0,0,0,0"
+                                                       DockPanel.Dock="Right" />
+                                        <TextBlock Text="{Binding DeviceStatusText, FallbackValue=正常}"
+                                                   FontSize="20"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{Binding DeviceStatusColor, FallbackValue=#4CAF50}"
+                                                   VerticalAlignment="Center" />
+                                    </DockPanel>
+
+                                    <!-- 详细状态描述 -->
+                                    <TextBlock Grid.Row="1"
+                                               Text="{Binding DeviceStatusDescription, FallbackValue=设备运行正常，可以扫码上包}"
+                                               Margin="0,8,0,0"
+                                               TextWrapping="Wrap"
+                                               FontSize="14"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </Grid>
+                            </Border>
+                            
+                            <!-- 京东WCS状态 -->
+                            <Border Grid.Row="1"
+                                    Margin="0,16,0,0"
+                                    Padding="16,12"
+                                    CornerRadius="8"
+                                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{Binding JdStatusColor, FallbackValue=#F44336}"
+                                    BorderThickness="2">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <!-- 状态和图标 -->
+                                    <DockPanel Grid.Row="0">
+                                        <ui:SymbolIcon Symbol="CloudArrowUp24"
+                                                       Foreground="{Binding JdStatusColor, FallbackValue=#F44336}"
+                                                       VerticalAlignment="Center"
+                                                       HorizontalAlignment="Right"
+                                                       Width="24"
+                                                       Height="24"
+                                                       Margin="0,0,0,0"
+                                                       DockPanel.Dock="Right" />
+                                        <TextBlock Text="{Binding JdStatusText, FallbackValue=未连接}"
+                                                   FontSize="20"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{Binding JdStatusColor, FallbackValue=#F44336}"
+                                                   VerticalAlignment="Center" />
+                                    </DockPanel>
+
+                                    <!-- 详细状态描述 -->
+                                    <TextBlock Grid.Row="1"
+                                               Text="{Binding JdStatusDescription, FallbackValue=京东WCS服务未连接，请检查网络连接}"
+                                               Margin="0,8,0,0"
+                                               TextWrapping="Wrap"
+                                               FontSize="14"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </Border>
             </Grid>
 
             <!-- 右侧面板 -->
@@ -360,22 +483,69 @@
                                            Margin="0,0,8,0"
                                            Foreground="{StaticResource AccentBrush}"
                                            VerticalAlignment="Center" />
-                            <TextBlock Text="实时图像"
+                            <TextBlock Text="相机监控"
                                        FontSize="16"
                                        FontWeight="SemiBold"
                                        Foreground="{StaticResource AccentBrush}"
                                        VerticalAlignment="Center" />
                         </StackPanel>
 
-                        <!-- 图片显示区 -->
-                        <Image Grid.Row="1"
-                               Source="{Binding CurrentImage}"
-                               RenderOptions.BitmapScalingMode="HighQuality"
-                               RenderOptions.EdgeMode="Aliased"
-                               Stretch="Uniform"
-                               StretchDirection="Both"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center" />
+                        <!-- 相机图像显示区 - 动态布局 -->
+                        <ItemsControl Grid.Row="1" ItemsSource="{Binding Cameras}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <!-- 使用 UniformGrid 并绑定行数和列数 -->
+                                    <UniformGrid Rows="{Binding GridRows}" Columns="{Binding GridColumns}" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <!-- ItemContainerStyle 已移除，UniformGrid 会自动布局 -->
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="4"
+                                            Margin="4"
+                                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="*" />
+                                            </Grid.RowDefinitions>
+
+                                            <!-- 相机名称 -->
+                                            <TextBlock Grid.Row="0" 
+                                                       Text="{Binding CameraName}"
+                                                       FontWeight="SemiBold"
+                                                       Margin="8,4"
+                                                       HorizontalAlignment="Center" />
+
+                                            <!-- 相机图像 -->
+                                            <Image Grid.Row="1"
+                                                   Source="{Binding CurrentImage}"
+                                                   RenderOptions.BitmapScalingMode="HighQuality"
+                                                   RenderOptions.EdgeMode="Aliased"
+                                                   Stretch="Fill"
+                                                   StretchDirection="Both"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"
+                                                   Margin="8" />
+
+                                            <!-- 等待连接状态覆盖层 -->
+                                            <Border Grid.Row="1"
+                                                    Background="#80000000"
+                                                    Visibility="{Binding IsOnline, Converter={StaticResource InvertBooleanToVisibilityConverter}}">
+                                                <TextBlock Text="等待连接..."
+                                                           Foreground="White"
+                                                           FontSize="18"
+                                                           FontWeight="Bold"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center" />
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </Grid>
                 </Border>
 
@@ -427,6 +597,56 @@
                     </Grid>
                 </Border>
             </Grid>
+            
+            <!-- PLC拒绝警告覆盖层 -->
+            <Border Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
+                    Background="#AA000000" 
+                    Visibility="{Binding IsPlcRejectWarningVisible, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}"
+                    Panel.ZIndex="10">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <ui:SymbolIcon Symbol="ErrorCircle48" Foreground="Red" FontSize="80" Margin="0,0,0,20" />
+                    <TextBlock Text="PLC 上包拒绝！" 
+                               Foreground="White" 
+                               FontSize="40"
+                               FontWeight="Bold"
+                               HorizontalAlignment="Center"
+                               Margin="0,0,0,10"/>
+                    <TextBlock Text="请勿放置新包裹！" 
+                               Foreground="White" 
+                               FontSize="24" 
+                               HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+            
+            <!-- PLC异常状态警告覆盖层 -->
+            <Border Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
+                    Background="#AA333300" 
+                    Visibility="{Binding IsPlcAbnormalWarningVisible, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}"
+                    Panel.ZIndex="9"> 
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <ui:SymbolIcon Symbol="Warning24" Foreground="Yellow" FontSize="80" Margin="0,0,0,20" />
+                    <TextBlock Text="PLC 状态异常！" 
+                               Foreground="White" 
+                               FontSize="40" 
+                               FontWeight="Bold" 
+                               HorizontalAlignment="Center" 
+                               Margin="0,0,0,10"/>
+                    <TextBlock Text="当前状态: " 
+                               Foreground="White" 
+                               FontSize="24" 
+                               HorizontalAlignment="Center"/>
+                    <TextBlock Text="{Binding DeviceStatusText}" 
+                               Foreground="Yellow" 
+                               FontSize="24" 
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Center" 
+                               Margin="0,5,0,10"/>
+                    <TextBlock Text="包裹处理已暂停，请等待状态恢复正常..." 
+                               Foreground="White" 
+                               FontSize="24" 
+                               HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
         </Grid>
 
         <!-- 状态栏 -->

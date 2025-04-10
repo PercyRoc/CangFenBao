@@ -54,7 +54,6 @@ internal class HostSettingsViewModel : BindableBase
         {
             _settingsService.SaveSettings(Configuration);
             Log.Information("主机配置已保存");
-            _notificationService.ShowSuccess("配置已保存");
         }
         catch (Exception ex)
         {
