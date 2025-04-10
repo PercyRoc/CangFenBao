@@ -10,7 +10,7 @@
       prism:ViewModelLocator.AutoWireViewModel="True"
       d:DataContext="{d:DesignInstance Type=settings:PlateTurnoverSettingsViewModel}"
       mc:Ignorable="d"
-      Title="翻板机设置" x:ClassModifier="internal">
+      Title="翻板机设置">
 
     <Page.Resources>
         <ResourceDictionary>
@@ -160,6 +160,112 @@
                                   Minimum="1"
                                   Maximum="65535"
                                   SpinButtonPlacementMode="Inline" />
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- 中通分拣配置 -->
+        <Border Margin="16,16,16,16"
+                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="4"
+                Padding="16">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Text="中通分拣接口配置"
+                           Grid.Row="0"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,8" />
+
+                <!-- 第一行：API地址和公司ID -->
+                <Grid Grid.Row="1" Margin="0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Text="API地址："
+                               Grid.Column="0"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+
+                    <ui:TextBox
+                        Text="{Binding Settings.ZtoApiUrl, UpdateSourceTrigger=PropertyChanged}"
+                        Grid.Column="1"
+                        PlaceholderText="例如: https://intelligent-2nd-pro.zt-express.com/branchweb/sortservice"
+                        Margin="0,0,16,0" />
+
+                    <TextBlock Text="公司ID："
+                               Grid.Column="2"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+
+                    <ui:TextBox 
+                        Text="{Binding Settings.ZtoCompanyId, UpdateSourceTrigger=PropertyChanged}"
+                        Grid.Column="3"
+                        PlaceholderText="公司英文缩写" />
+                </Grid>
+
+                <!-- 第二行：密钥和分拣线编码 -->
+                <Grid Grid.Row="2" Margin="0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Text="密钥："
+                               Grid.Column="0"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+
+                    <ui:PasswordBox
+                        Password="{Binding Settings.ZtoSecretKey, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}"
+                        Grid.Column="1"
+                        PlaceholderText="接口密钥"
+                        Margin="0,0,16,0" />
+
+                    <TextBlock Text="分拣线编码："
+                               Grid.Column="2"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+
+                    <ui:TextBox 
+                        Text="{Binding Settings.ZtoPipelineCode, UpdateSourceTrigger=PropertyChanged}"
+                        Grid.Column="3"
+                        PlaceholderText="例如: 55100-001" />
+                </Grid>
+
+                <!-- 第三行：小车编码 -->
+                <Grid Grid.Row="3" Margin="0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Text="小车编码："
+                               Grid.Column="0"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+
+                    <ui:TextBox 
+                        Text="{Binding Settings.ZtoTrayCode, UpdateSourceTrigger=PropertyChanged}"
+                        Grid.Column="1"
+                        PlaceholderText="小车编码"
+                        Margin="0,0,16,0" />
                 </Grid>
             </Grid>
         </Border>

@@ -55,11 +55,14 @@ internal partial class App
         containerRegistry.RegisterSingleton<PackageTransferService>();
 
         // 注册设置窗口
-        containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
-        containerRegistry.Register<SettingsDialogViewModel>();
+        containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>("SettingsDialog");
 
         // 注册TCP连接服务
         containerRegistry.RegisterSingleton<ITcpConnectionService, TcpConnectionService>();
+        
+        // 注册中通分拣服务
+        containerRegistry.RegisterSingleton<IZtoSortingService, ZtoSortingService>();
+        
         containerRegistry.RegisterSingleton<SortingService>();
         containerRegistry.RegisterSingleton<PlateTurnoverSettings>();
         containerRegistry.RegisterSingleton<TcpConnectionHostedService>();

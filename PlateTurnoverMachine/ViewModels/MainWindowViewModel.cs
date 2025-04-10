@@ -1,6 +1,5 @@
 ﻿using System.Collections.ObjectModel;
 using System.Globalization;
-using System.IO;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Text;
@@ -9,16 +8,15 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Common.Models.Package;
 using Common.Services.Settings;
-using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using PlateTurnoverMachine.Models;
 using PlateTurnoverMachine.Services;
 using Prism.Commands;
 using Prism.Mvvm;
+using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.Models;
-using SixLabors.ImageSharp;
 
 namespace PlateTurnoverMachine.ViewModels;
 
@@ -32,7 +30,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private readonly DispatcherTimer _timer;
     private string _currentBarcode = string.Empty;
     private BitmapSource? _currentImage;
-    private int _currentPackageIndex;
     private bool _disposed;
     private SystemStatus _systemStatus = new();
     private readonly ISettingsService _settingsService;
@@ -87,42 +84,29 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
         // 订阅图像流
         _subscriptions.Add(_cameraService.ImageStream
-            .ObserveOn(Scheduler.CurrentThread)
+            .ObserveOn(TaskPoolScheduler.Default) // 使用任务池调度器
             .Subscribe(imageData =>
             {
                 try
                 {
-                    var image = imageData.image;
+                    var bitmapSource = imageData;
 
-                    // 创建内存流并将其所有权转移给BitmapImage
-                    var memoryStream = new MemoryStream();
-                    // 由于现在是灰度图像，需要调整保存格式
-                    image.SaveAsPng(memoryStream); // 使用PNG格式保持灰度图像质量
-                    memoryStream.Position = 0;
-
-                    Application.Current.Dispatcher.Invoke(() =>
+                    Application.Current.Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
                     {
                         try
                         {
-                            var bitmap = new BitmapImage();
-                            bitmap.BeginInit();
-                            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                            bitmap.StreamSource = memoryStream;
-                            bitmap.EndInit();
-                            bitmap.Freeze(); // 使图像可以跨线程访问
-
-                            // 直接更新UI，不再绘制条码位置
-                            CurrentImage = bitmap;
+                            // 更新UI
+                            CurrentImage = bitmapSource;
                         }
-                        finally
+                        catch (Exception ex)
                         {
-                            memoryStream.Dispose();
+                            Log.Error(ex, "更新UI图像时发生错误");
                         }
                     });
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "处理图像数据时发生错误");
+                    Log.Error(ex, "处理图像流时发生错误");
                 }
             }));
     }
@@ -168,7 +152,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         SystemStatus = SystemStatus.GetCurrentStatus();
     }
 
-    private void OnCameraConnectionChanged(string cameraId, bool isConnected)
+    private void OnCameraConnectionChanged(string? cameraId, bool isConnected)
     {
         Application.Current.Dispatcher.Invoke(() =>
         {
@@ -218,29 +202,18 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            package.Index = Interlocked.Increment(ref _currentPackageIndex);
-            Log.Information("收到包裹信息：{Barcode}, 序号：{Index}", package.Barcode, package.Index);
-
             // 分配格口号
+            var settings = _settingsService.LoadSettings<PlateTurnoverSettings>();
             if (package.Barcode.Equals("noread", StringComparison.OrdinalIgnoreCase))
             {
-                // 获取异常格口设置
-                var settings = _settingsService.LoadSettings<PlateTurnoverSettings>();
-                package.ChuteName = settings.ErrorChute;
-                Log.Information("包裹 {Barcode} 为未读包裹，分配至异常格口 {Chute}", package.Barcode, package.ChuteName);
-            }
-            else
-            {
-                // 获取格口设置
-                var settings = _settingsService.LoadSettings<PlateTurnoverSettings>();
-                var chuteCount = settings.ChuteCount;
-                
-                // 根据序号循环分配格口
-                var chuteNumber = ((package.Index - 1) % chuteCount) + 1;
-                package.ChuteName = chuteNumber;
-                Log.Information("包裹 {Barcode} 分配至格口 {Chute}", package.Barcode, package.ChuteName);
+                var errorChuteNumber = settings.ErrorChute;
+                package.SetChute(errorChuteNumber);
+                Log.Information("包裹 {Barcode} 为未读包裹，分配至异常格口 {Chute}", package.Barcode, errorChuteNumber);
             }
 
+            // 将包裹添加到分拣队列
+            _sortingService.EnqueuePackage(package);
+            
             Application.Current.Dispatcher.Invoke(() =>
             {
                 try
@@ -249,8 +222,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     CurrentBarcode = package.Barcode;
                     // 更新实时包裹数据
                     UpdatePackageInfoItems(package);
-                    // 将包裹添加到分拣队列
-                    _sortingService.EnqueuePackage(package);
+
                     // 更新历史包裹列表
                     UpdatePackageHistory(package);
                     // 更新统计信息
@@ -287,8 +259,10 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         var chuteItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "格口");
         if (chuteItem != null)
         {
-            chuteItem.Value = package.ChuteName.ToString();
-            chuteItem.Description = string.IsNullOrEmpty(package.ChuteName.ToString()) ? "等待分配..." : "目标格口";
+            // Use ChuteNumber property (assuming it's available for getting)
+            var chuteDisplay = package.ChuteNumber > 0 ? package.ChuteNumber.ToString() : "--";
+            chuteItem.Value = chuteDisplay;
+            chuteItem.Description = package.ChuteNumber > 0 ? "目标格口" : "等待分配...";
         }
 
         var timeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "时间");
@@ -317,12 +291,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
             // 如果超出最大数量，移除多余的记录
             while (PackageHistory.Count > maxHistoryCount) PackageHistory.RemoveAt(PackageHistory.Count - 1);
-
-            // 更新序号
-            for (var i = 0; i < PackageHistory.Count; i++)
-            {
-                PackageHistory[i].Index = i + 1;
-            }
         }
         catch (Exception ex)
         {

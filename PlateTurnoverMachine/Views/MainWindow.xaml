@@ -449,7 +449,7 @@
                                 <DataGridTemplateColumn Header="格口" Width="100">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding ChuteName}" VerticalAlignment="Center" TextAlignment="Center" Padding="4,0" />
+                                            <TextBlock Text="{Binding ChuteNumber}" VerticalAlignment="Center" TextAlignment="Center" Padding="4,0" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
@@ -474,14 +474,6 @@
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding CreateTime, StringFormat={}{0:HH:mm:ss}}" VerticalAlignment="Center" TextAlignment="Center" Padding="4,0" />
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-                                
-                                <DataGridTemplateColumn Header="备注" Width="*">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding Information}" VerticalAlignment="Center" TextAlignment="Left" Padding="4,0" TextTrimming="CharacterEllipsis" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>

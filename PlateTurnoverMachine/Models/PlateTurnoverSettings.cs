@@ -112,6 +112,42 @@ public class PlateTurnoverSettings : BindableBase
     }
 
     /// <summary>
+    ///     中通API地址
+    /// </summary>
+    public string ZtoApiUrl { get; set; } = "https://intelligent-2nd-pro.zt-express.com/branchweb/sortservice";
+
+    /// <summary>
+    ///     中通公司ID
+    /// </summary>
+    public string ZtoCompanyId { get; set; } = string.Empty;
+
+    /// <summary>
+    ///     中通密钥
+    /// </summary>
+    public string ZtoSecretKey { get; set; } = string.Empty;
+
+    /// <summary>
+    ///     中通分拣线编码
+    /// </summary>
+    public string ZtoPipelineCode { get; set; } = string.Empty;
+
+    /// <summary>
+    ///     中通小车编码
+    /// </summary>
+    public string ZtoTrayCode { get; set; } = string.Empty;
+    
+    /// <summary>
+    ///     已配置的最大光电触发次数（即最远格口的距离）
+    /// </summary>
+    public int MaxConfiguredDistance
+    {
+        get
+        {
+            return Items.Count == 0 ? 0 : (int)Items.Max(static item => item.Distance);
+        }
+    }
+
+    /// <summary>
     ///     触发配置变更事件
     /// </summary>
     internal void OnSettingsChanged()

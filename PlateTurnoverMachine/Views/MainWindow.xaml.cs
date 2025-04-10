@@ -11,11 +11,8 @@ namespace PlateTurnoverMachine.Views;
 /// </summary>
 internal partial class MainWindow
 {
-    private readonly IDialogService _dialogService;
-
-    public MainWindow(IDialogService dialogService, INotificationService notificationService)
+    public MainWindow(INotificationService notificationService)
     {
-        _dialogService = dialogService;
         InitializeComponent();
 
         // 注册Growl容器
@@ -38,17 +35,42 @@ internal partial class MainWindow
         }
     }
 
-    private async void MetroWindow_Closing(object sender, CancelEventArgs e)
+    private void MetroWindow_Closing(object sender, CancelEventArgs e)
     {
         try
         {
             e.Cancel = true;
-            var result = await _dialogService.ShowIconConfirmAsync(
+
+            // Use HandyControl MessageBox for confirmation
+            var result = HandyControl.Controls.MessageBox.Show(
                 "确定要关闭程序吗？",
                 "关闭确认",
+                MessageBoxButton.YesNo,
                 MessageBoxImage.Question);
 
-            if (result != MessageBoxResult.Yes) return;
+            if (result != MessageBoxResult.Yes) 
+            {
+                e.Cancel = true;
+                return;
+            }
+
+            // Dispose ViewModel if applicable
+            if (DataContext is IDisposable viewModel)
+            {
+                // Run dispose in background
+                Task.Run(() =>
+                {
+                    try
+                    {
+                        viewModel.Dispose();
+                        Log.Information("主窗口ViewModel已释放");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "释放ViewModel时发生错误");
+                    }
+                });
+            }
 
             e.Cancel = false;
             Application.Current.Shutdown();
@@ -57,7 +79,13 @@ internal partial class MainWindow
         {
             Log.Error(ex, "关闭程序时发生错误");
             e.Cancel = true;
-            await _dialogService.ShowErrorAsync("关闭程序时发生错误，请重试", "错误");
+
+            // Use HandyControl MessageBox for error
+            HandyControl.Controls.MessageBox.Show(
+                "关闭程序时发生错误，请重试",
+                "错误",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
         }
     }
 }

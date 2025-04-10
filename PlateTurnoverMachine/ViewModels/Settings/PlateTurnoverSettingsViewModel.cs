@@ -132,7 +132,6 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
                         DelayFactor = 1,
                         MagnetTime = 100
                     };
-                    item.SetParentSettings(Settings);
                     items.Add(item);
                 }
             }
@@ -149,7 +148,6 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
     private void AddItem()
     {
         var newItem = new PlateTurnoverItem();
-        newItem.SetParentSettings(Settings);
         Settings.Items.Add(newItem);
     }
 
@@ -193,7 +191,6 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
                     DelayFactor = double.Parse(GetCellValue(worksheet.Cells[row, 6])),
                     MagnetTime = int.Parse(GetCellValue(worksheet.Cells[row, 7]))
                 };
-                item.SetParentSettings(Settings);
                 Settings.Items.Add(item);
                 row++;
             }

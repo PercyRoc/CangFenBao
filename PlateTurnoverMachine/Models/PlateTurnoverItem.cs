@@ -14,15 +14,6 @@ public class PlateTurnoverItem : BindableBase
     private double _distance;
     private double _delayFactor = 0.5;
     private int _magnetTime = 200;
-    private PlateTurnoverSettings? _parentSettings;
-
-    /// <summary>
-    ///     设置父配置对象
-    /// </summary>
-    internal void SetParentSettings(PlateTurnoverSettings settings)
-    {
-        _parentSettings = settings;
-    }
 
     /// <summary>
     ///     序号
@@ -30,10 +21,7 @@ public class PlateTurnoverItem : BindableBase
     public string Index
     {
         get => _index;
-        set
-        {
-            SetProperty(ref _index, value);
-        }
+        set => SetProperty(ref _index, value);
     }
 
     /// <summary>
@@ -42,10 +30,7 @@ public class PlateTurnoverItem : BindableBase
     public int MappingChute
     {
         get => _mappingChute;
-        set
-        {
-            SetProperty(ref _mappingChute, value);
-        }
+        set => SetProperty(ref _mappingChute, value);
     }
 
     /// <summary>
@@ -54,10 +39,7 @@ public class PlateTurnoverItem : BindableBase
     public string? TcpAddress
     {
         get => _tcpAddress;
-        set
-        {
-            SetProperty(ref _tcpAddress, value);
-        }
+        set => SetProperty(ref _tcpAddress, value);
     }
 
     /// <summary>
@@ -66,10 +48,7 @@ public class PlateTurnoverItem : BindableBase
     public string? IoPoint
     {
         get => _ioPoint;
-        set
-        {
-            SetProperty(ref _ioPoint, value);
-        }
+        set => SetProperty(ref _ioPoint, value);
     }
 
     /// <summary>
@@ -78,10 +57,7 @@ public class PlateTurnoverItem : BindableBase
     public double Distance
     {
         get => _distance;
-        set
-        {
-            SetProperty(ref _distance, value);
-        }
+        set => SetProperty(ref _distance, value);
     }
 
     /// <summary>
@@ -90,10 +66,7 @@ public class PlateTurnoverItem : BindableBase
     public double DelayFactor
     {
         get => _delayFactor;
-        set
-        {
-            SetProperty(ref _delayFactor, value);
-        }
+        set => SetProperty(ref _delayFactor, value);
     }
 
     /// <summary>
@@ -102,9 +75,6 @@ public class PlateTurnoverItem : BindableBase
     public int MagnetTime
     {
         get => _magnetTime;
-        set
-        {
-            SetProperty(ref _magnetTime, value);
-        }
+        set => SetProperty(ref _magnetTime, value);
     }
 }

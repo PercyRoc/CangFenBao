@@ -12,9 +12,9 @@ internal class TcpConnectionService : ITcpConnectionService
 {
     private readonly SemaphoreSlim _receiveLock = new(1, 1);
     private readonly SemaphoreSlim _sendLock = new(1, 1);
-    private readonly Dictionary<TcpConnectionConfig, TcpClient> _tcpModuleClients = new();
-    private readonly Dictionary<TcpConnectionConfig, CancellationTokenSource> _tcpModuleListeningCts = new();
-    private readonly Dictionary<TcpConnectionConfig, Task> _tcpModuleListeningTasks = new();
+    private readonly Dictionary<TcpConnectionConfig, TcpClient> _tcpModuleClients = [];
+    private readonly Dictionary<TcpConnectionConfig, CancellationTokenSource> _tcpModuleListeningCts = [];
+    private readonly Dictionary<TcpConnectionConfig, Task> _tcpModuleListeningTasks = [];
     private bool _disposed;
     private CancellationTokenSource? _listeningCts;
     private Task? _listeningTask;

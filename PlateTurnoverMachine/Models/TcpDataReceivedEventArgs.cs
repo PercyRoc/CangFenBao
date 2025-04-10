@@ -3,28 +3,23 @@ namespace PlateTurnoverMachine.Models;
 /// <summary>
 ///     TCP数据接收事件参数
 /// </summary>
-public class TcpDataReceivedEventArgs : EventArgs
+/// <remarks>
+///     构造函数
+/// </remarks>
+/// <param name="data">接收到的数据</param>
+/// <param name="receivedTime">接收时间</param>
+public class TcpDataReceivedEventArgs(byte[] data, DateTime receivedTime) : EventArgs
 {
-    /// <summary>
-    ///     构造函数
-    /// </summary>
-    /// <param name="data">接收到的数据</param>
-    /// <param name="receivedTime">接收时间</param>
-    public TcpDataReceivedEventArgs(byte[] data, DateTime receivedTime)
-    {
-        Data = data;
-        ReceivedTime = receivedTime;
-    }
 
     /// <summary>
     ///     接收到的数据
     /// </summary>
-    internal byte[] Data { get; }
+    internal byte[] Data { get; } = data;
 
     /// <summary>
     ///     接收时间
     /// </summary>
-    internal DateTime ReceivedTime { get; }
+    internal DateTime ReceivedTime { get; } = receivedTime;
 }
 
 /// <summary>
