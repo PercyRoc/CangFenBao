@@ -26,6 +26,10 @@ internal class WeighingSettings : BindableBase
 
     private string _warehouseCode = string.Empty;
 
+    private string _packagingMaterialCode = string.Empty;
+    private string _userId = string.Empty;
+    private decimal _defaultWeight = 0.0m;
+
     public bool IsProduction
     {
         get => _isProduction;
@@ -85,4 +89,27 @@ internal class WeighingSettings : BindableBase
         get => _userRealName;
         set => SetProperty(ref _userRealName, value);
     }
+
+    public string PackagingMaterialCode
+    {
+        get => _packagingMaterialCode;
+        set => SetProperty(ref _packagingMaterialCode, value);
+    }
+
+    public string UserId
+    {
+        get => _userId;
+        set => SetProperty(ref _userId, value);
+    }
+
+    public decimal DefaultWeight
+    {
+        get => _defaultWeight;
+        set => SetProperty(ref _defaultWeight, value);
+    }
+
+    public string ApiUrl => IsProduction ? ProdBaseUrl : UatBaseUrl;
+
+    private const string UatBaseUrl = "https://scm-gateway-uat.ztocwst.com/edi/service/inbound/bz";
+    private const string ProdBaseUrl = "https://scm-openapi.ztocwst.com/edi/service/inbound/bz";
 }

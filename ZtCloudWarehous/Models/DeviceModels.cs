@@ -35,7 +35,7 @@ public class DeviceActionRequest
 
     [JsonPropertyName("equipmentCode")] public string EquipmentCode { get; set; } = string.Empty;
 
-    [JsonPropertyName("data")] public List<object> Data { get; set; } = new();
+    [JsonPropertyName("data")] public List<object> Data { get; set; } = [];
 
     [JsonPropertyName("type")] public string Type { get; set; } = string.Empty;
 

@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace XiYiGu.Models;
+namespace ZtCloudWarehous.Models;
 
 /// <summary>
 ///     运单记录
@@ -11,35 +11,35 @@ public class WaybillRecord
     ///     运单号
     /// </summary>
     [JsonPropertyName("waybillNumber")]
-    public string WaybillNumber { get; set; } = string.Empty;
+    public string WaybillNumber { get; init; } = string.Empty;
 
     /// <summary>
     ///     重量
     /// </summary>
     [JsonPropertyName("weight")]
-    public float Weight { get; set; }
+    public double Weight { get; init; }
 
     /// <summary>
     ///     称重时间
     /// </summary>
     [JsonPropertyName("weightTime")]
-    public string WeightTime { get; set; } = string.Empty;
+    public string WeightTime { get; init; } = string.Empty;
 
     /// <summary>
     ///     体积
     /// </summary>
     [JsonPropertyName("jtWaybillVolume")]
-    public string JtWaybillVolume { get; set; } = string.Empty;
+    public string JtWaybillVolume { get; init; } = string.Empty;
 
     /// <summary>
     ///     尺寸
     /// </summary>
     [JsonPropertyName("jtWaybillSize")]
-    public string JtWaybillSize { get; set; } = string.Empty;
+    public string JtWaybillSize { get; init; } = string.Empty;
 
     /// <summary>
     ///     历史重量
     /// </summary>
     [JsonPropertyName("jtHistoryWeight")]
-    public float JtHistoryWeight { get; set; }
-}
+    public double JtHistoryWeight { get; init; }
+} 

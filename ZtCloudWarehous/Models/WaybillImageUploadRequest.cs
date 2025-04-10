@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace XiYiGu.Models;
+namespace ZtCloudWarehous.Models;
 
 /// <summary>
 ///     上传运单图片请求
@@ -17,7 +17,7 @@ public class WaybillImageUploadRequest
     ///     运单图片数据列表
     /// </summary>
     [JsonPropertyName("data")]
-    public List<WaybillImageData> Data { get; set; } = new();
+    public List<WaybillImageData> Data { get; set; } = [];
 
     /// <summary>
     ///     时间戳（毫秒）
@@ -48,4 +48,4 @@ public class WaybillImageData
     /// </summary>
     [JsonPropertyName("weightTime")]
     public string WeightTime { get; set; } = string.Empty;
-}
+} 

@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace XiYiGu.Models;
+namespace ZtCloudWarehous.Models;
 
 /// <summary>
 ///     API响应
@@ -30,4 +30,4 @@ public class ApiResponse
     /// </summary>
     [JsonIgnore]
     public bool IsSuccess => Code == 200;
-}
+} 

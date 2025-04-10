@@ -1,28 +1,14 @@
-using Common.Services.Settings;
+﻿using Common.Services.Settings;
 using Prism.Mvvm;
 
-namespace XiYiGu.Models.Settings;
+namespace ZtCloudWarehous.ViewModels.Settings;
 
-/// <summary>
-///     API设置
-/// </summary>
-[Configuration("ApiSettings")]
-public class ApiSettings : BindableBase
+[Configuration("XiyiguApiSettings")]
+public class XiyiguApiSettings: BindableBase
 {
     private string _aesKey = "H1ToUe8qCdz2sfIZ";
-    private bool _autoUpload = true;
     private string _baseUrl = "http://dx.y-open.com/dxiotmobile";
-    private bool _enabled = true;
     private string _machineMx = "864797040291235";
-
-    /// <summary>
-    ///     是否启用API
-    /// </summary>
-    public bool Enabled
-    {
-        get => _enabled;
-        set => SetProperty(ref _enabled, value);
-    }
 
     /// <summary>
     ///     基础URL
@@ -49,14 +35,5 @@ public class ApiSettings : BindableBase
     {
         get => _machineMx;
         set => SetProperty(ref _machineMx, value);
-    }
-
-    /// <summary>
-    ///     是否自动上传
-    /// </summary>
-    public bool AutoUpload
-    {
-        get => _autoUpload;
-        set => SetProperty(ref _autoUpload, value);
     }
 }

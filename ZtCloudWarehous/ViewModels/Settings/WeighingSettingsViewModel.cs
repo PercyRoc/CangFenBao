@@ -17,7 +17,19 @@ internal class WeighingSettingsViewModel : BindableBase
     {
         _settingsService = settingsService;
         _notificationService = notificationService;
-        Settings = _settingsService.LoadSettings<WeighingSettings>();
+        
+        // 加载配置
+        try
+        {
+            Settings = _settingsService.LoadSettings<WeighingSettings>();
+            Log.Information("称重设置加载成功");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "加载称重设置时发生错误");
+            _notificationService.ShowError("加载称重设置时发生错误");
+            Settings = new WeighingSettings();
+        }
 
         SaveConfigurationCommand = new DelegateCommand(ExecuteSaveConfiguration);
     }
@@ -38,6 +50,7 @@ internal class WeighingSettingsViewModel : BindableBase
                 return;
             }
 
+            _notificationService.ShowSuccess("称重设置已保存");
             Log.Information("称重设置已保存");
         }
         catch (Exception ex)

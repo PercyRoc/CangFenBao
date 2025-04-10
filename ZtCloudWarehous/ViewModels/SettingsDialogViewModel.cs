@@ -18,6 +18,7 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
     private readonly INotificationService _notificationService;
     private readonly BalanceSortSettingsViewModel _sortSettingsViewModel;
     private readonly WeighingSettingsViewModel _weighingSettingsViewModel;
+    private readonly XiyiguAPiSettingsViewModel _xiyiguAPiSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
@@ -31,6 +32,7 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
         _sortSettingsViewModel = containerProvider.Resolve<BalanceSortSettingsViewModel>();
         _weighingSettingsViewModel = containerProvider.Resolve<WeighingSettingsViewModel>();
         _barcodeChuteSettingsViewModel = containerProvider.Resolve<BarcodeChuteSettingsViewModel>();
+        _xiyiguAPiSettingsViewModel =  containerProvider.Resolve<XiyiguAPiSettingsViewModel>();
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
     }
@@ -64,6 +66,7 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
             _sortSettingsViewModel.SaveConfigurationCommand.Execute();
             _weighingSettingsViewModel.SaveConfigurationCommand.Execute();
             _barcodeChuteSettingsViewModel.SaveConfigurationCommand.Execute();
+            _xiyiguAPiSettingsViewModel.SaveConfigurationCommand.Execute();
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");
             RequestClose?.Invoke(new DialogResult(ButtonResult.OK));
