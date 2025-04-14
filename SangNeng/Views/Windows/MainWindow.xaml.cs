@@ -1,6 +1,8 @@
 ﻿using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
+using HandyControl.Controls;
+using HandyControl.Data;
 using Common.Services.Ui;
 using SangNeng.ViewModels.Windows;
 using Serilog;
@@ -13,11 +15,8 @@ namespace SangNeng.Views.Windows;
 /// </summary>
 public partial class MainWindow
 {
-    private readonly IDialogService _dialogService;
-
-    public MainWindow(IDialogService dialogService, INotificationService notificationService)
+    public MainWindow(INotificationService notificationService)
     {
-        _dialogService = dialogService;
         InitializeComponent();
         // 注册Growl容器
         notificationService.Register("MainWindowGrowl", GrowlPanel);
@@ -25,14 +24,24 @@ public partial class MainWindow
         MouseDown += OnWindowMouseDown;
     }
 
-    private async void MetroWindow_Closing(object sender, CancelEventArgs e)
+    private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        // 根据当前屏幕的工作区自动计算并设置窗口位置和大小
+        this.Left = SystemParameters.WorkArea.Left;
+        this.Top = SystemParameters.WorkArea.Top;
+        this.Width = SystemParameters.WorkArea.Width;
+        this.Height = SystemParameters.WorkArea.Height;
+    }
+
+    private void MetroWindow_Closing(object sender, CancelEventArgs e)
     {
         try
         {
             e.Cancel = true;
-            var result = await _dialogService.ShowIconConfirmAsync(
-                    "Are you sure you want to close the program?",
-                    "Close Confirmation",
+            var result = HandyControl.Controls.MessageBox.Show(
+                "Are you sure you want to close the program?",
+                "Close Confirmation",
+                MessageBoxButton.YesNo,
                 MessageBoxImage.Question);
 
             if (result != MessageBoxResult.Yes) return;
@@ -43,7 +52,11 @@ public partial class MainWindow
         {
             Log.Error(ex, "Error occurred while closing the program");
             e.Cancel = true;
-            await _dialogService.ShowErrorAsync("Error occurred while closing the program, please try again", "Error");
+            HandyControl.Controls.MessageBox.Show(
+                "Error occurred while closing the program, please try again",
+                "Error",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
         }
     }
 

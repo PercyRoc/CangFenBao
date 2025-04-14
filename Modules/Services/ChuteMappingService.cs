@@ -27,9 +27,6 @@ public class ChuteMappingService : IDisposable
         _config = settingsService.LoadSettings<ModuleConfig>();
         _siteCode = _config.SiteCode;
 
-        // 设置默认请求头
-        _httpClient.DefaultRequestHeaders.Add("equickToken", _config.Token);
-
         // 订阅配置更改事件
         _settingsService.OnSettingsChanged<ModuleConfig>(OnConfigChanged);
 
@@ -48,12 +45,6 @@ public class ChuteMappingService : IDisposable
     private void OnConfigChanged(ModuleConfig newConfig)
     {
         _siteCode = newConfig.SiteCode;
-
-        // 更新请求头中的Token
-        if (_httpClient.DefaultRequestHeaders.Contains("equickToken"))
-            _httpClient.DefaultRequestHeaders.Remove("equickToken");
-        _httpClient.DefaultRequestHeaders.Add("equickToken", newConfig.Token);
-
         Log.Information("格口映射服务配置已更新，站点代码: {SiteCode}", _siteCode);
     }
 
@@ -97,7 +88,13 @@ public class ChuteMappingService : IDisposable
 
             // 发送请求
             Log.Information("正在请求格口号: {Barcode}", package.Barcode);
-            var response = await _httpClient.PostAsync(ApiUrl, content, cts.Token);
+            
+            // 设置请求头
+            using var request = new HttpRequestMessage(HttpMethod.Post, ApiUrl);
+            request.Headers.Add("equickToken", _config.Token);
+            request.Content = content;
+            
+            var response = await _httpClient.SendAsync(request, cts.Token);
 
             // 检查响应状态
             if (!response.IsSuccessStatusCode)

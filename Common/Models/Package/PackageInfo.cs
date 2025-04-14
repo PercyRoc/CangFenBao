@@ -229,7 +229,6 @@ public class PackageInfo : IDisposable
         Length = length;
         Width = width;
         Height = height;
-        Volume = length * width * height;
     }
 
     /// <summary>
@@ -287,5 +286,14 @@ public class PackageInfo : IDisposable
         ErrorMessage = error;
         // 将错误信息同时设置为StatusDisplay，这样在历史记录中能看到详细的错误描述
         SetStatus(PackageStatus.Error, error);
+    }
+
+    /// <summary>
+    ///     设置体积。
+    /// </summary>
+    /// <param name="volume">体积（立方厘米）</param>
+    public void SetVolume(double volume)
+    {
+        Volume = volume;
     }
 }

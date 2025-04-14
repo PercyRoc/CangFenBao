@@ -7,21 +7,16 @@ namespace Modules.Services;
 /// <summary>
 ///     锁格服务托管服务，负责管理锁格服务的生命周期
 /// </summary>
-internal class LockingHostedService : IDisposable
+/// <remarks>
+///     初始化锁格服务托管服务
+/// </remarks>
+/// <param name="settingsService">设置服务</param>
+internal class LockingHostedService(ISettingsService settingsService) : IDisposable
 {
     private readonly CancellationTokenSource _cts = new();
-    private readonly ISettingsService _settingsService;
+    private readonly ISettingsService _settingsService = settingsService;
     private bool _disposed;
     private bool _isRunning;
-
-    /// <summary>
-    ///     初始化锁格服务托管服务
-    /// </summary>
-    /// <param name="settingsService">设置服务</param>
-    public LockingHostedService(ISettingsService settingsService)
-    {
-        _settingsService = settingsService;
-    }
 
     /// <summary>
     ///     释放资源

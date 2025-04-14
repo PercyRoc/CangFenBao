@@ -126,9 +126,7 @@ internal class JuShuiTanService : IJuShuiTanService
                 throw new HttpRequestException($"API request failed with status code: {response.StatusCode}");
             }
 
-            var result = JsonSerializer.Deserialize<WeightSendResponse>(responseContent, _jsonOptions);
-            if (result == null) throw new JsonException("Failed to deserialize response");
-
+            var result = JsonSerializer.Deserialize<WeightSendResponse>(responseContent, _jsonOptions) ?? throw new JsonException("Failed to deserialize response");
             if (result.Code != 0) Log.Warning("聚水潭API返回错误: {Code}, {Message}", result.Code, result.Message);
 
             return result;
@@ -155,7 +153,7 @@ internal class JuShuiTanService : IJuShuiTanService
             }
 
             // 添加app_secret到开头
-            var resultStr = _settings.AppSecret + signBuilder.ToString();
+            var resultStr = _settings.AppSecret + signBuilder;
 
             // 计算MD5
             var inputBytes = Encoding.UTF8.GetBytes(resultStr);

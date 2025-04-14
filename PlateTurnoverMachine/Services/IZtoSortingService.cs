@@ -16,7 +16,7 @@ public interface IZtoSortingService
     /// <param name="pipeline">分拣线编码</param>
     /// <param name="status">流水线状态: start | stop | synchronization</param>
     /// <returns>API响应</returns>
-    Task<ZtoSortingBaseResponse> ReportPipelineStatusAsync(string pipeline, string status);
+    Task<ZtoSortingBaseResponse?> ReportPipelineStatusAsync(string pipeline, string status);
     
     /// <summary>
     /// 获取分拣方案

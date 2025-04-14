@@ -27,78 +27,11 @@
     <Border Background="{StaticResource MainBackground}">
         <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition Height="32" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <!-- 标题栏 -->
-            <Grid Grid.Row="0" Background="{StaticResource TitleBarGradient}">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-
-                <!-- 应用图标 -->
-                <Border Grid.Column="0"
-                        Width="48"
-                        Height="32"
-                        Effect="{StaticResource IconGlowEffect}">
-                    <Image Source="/logo.ico"
-                           Width="32"
-                           Height="32"
-                           Margin="8,0,8,0"
-                           VerticalAlignment="Center"
-                           RenderOptions.BitmapScalingMode="HighQuality">
-                        <Image.Effect>
-                            <DropShadowEffect BlurRadius="8"
-                                              Color="#40000000"
-                                              Direction="315"
-                                              Opacity="0.6"
-                                              ShadowDepth="2" />
-                        </Image.Effect>
-                    </Image>
-                </Border>
-
-                <!-- 标题 -->
-                <TextBlock Grid.Column="1"
-                           Text="系统设置"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center"
-                           Margin="0,0,8,0"
-                           FontSize="20"
-                           FontFamily="微软雅黑"
-                           FontWeight="SemiBold"
-                           TextOptions.TextFormattingMode="Display"
-                           Foreground="black"
-                           TextOptions.TextRenderingMode="ClearType">
-                    <TextBlock.Effect>
-                        <DropShadowEffect BlurRadius="4"
-                                          Opacity="0.2"
-                                          Direction="270"
-                                          ShadowDepth="1" />
-                    </TextBlock.Effect>
-                </TextBlock>
-
-                <!-- TitleBar -->
-                <ui:TitleBar Grid.Column="2"
-                             Title=""
-                             ButtonsForeground="#FF008891"
-                             ShowMaximize="True"
-                             ShowMinimize="True"
-                             ShowClose="True" />
-
-                <Border Grid.Column="0"
-                        Grid.ColumnSpan="3"
-                        Height="1"
-                        VerticalAlignment="Bottom"
-                        Background="#20008080"
-                        BorderBrush="#40FFFFFF"
-                        BorderThickness="0,0,0,1" />
-            </Grid>
-
             <!-- 导航区域 -->
-            <Border Grid.Row="1" Background="{StaticResource MainBackground}">
+            <Border Grid.Row="0" Background="{StaticResource MainBackground}">
                 <Grid>
                     <ui:NavigationView IsPaneOpen="True"
                                        IsPaneVisible="True"
@@ -158,7 +91,7 @@
 
             <!-- Growl消息容器 -->
             <StackPanel Name="GrowlPanel"
-                        Grid.Row="1"
+                        Grid.Row="0"
                         hc:Growl.GrowlParent="True"
                         hc:Growl.Token="SettingWindowGrowl"
                         VerticalAlignment="Top"

@@ -1,6 +1,7 @@
 ﻿using System.Net.Http;
 using System.Windows;
 using Common.Extensions;
+using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
@@ -59,10 +60,10 @@ internal partial class App
 
         // 注册TCP连接服务
         containerRegistry.RegisterSingleton<ITcpConnectionService, TcpConnectionService>();
-        
+
         // 注册中通分拣服务
         containerRegistry.RegisterSingleton<IZtoSortingService, ZtoSortingService>();
-        
+
         containerRegistry.RegisterSingleton<SortingService>();
         containerRegistry.RegisterSingleton<PlateTurnoverSettings>();
         containerRegistry.RegisterSingleton<TcpConnectionHostedService>();
@@ -81,7 +82,9 @@ internal partial class App
             .WriteTo.Debug()
             .WriteTo.File("logs/app-.log",
                 rollingInterval: RollingInterval.Day,
-                rollOnFileSizeLimit: true)
+                rollOnFileSizeLimit: true,
+                fileSizeLimitBytes: 10 * 1024 * 1024, // Limit file size to 10MB
+                retainedFileCountLimit: 31) // Retain logs for 30 days (31 files total)
             .CreateLogger();
 
         Log.Information("应用程序启动");
@@ -102,6 +105,31 @@ internal partial class App
 
             var cameraStartupService = Container.Resolve<CameraStartupService>();
             await cameraStartupService.StartAsync(CancellationToken.None);
+
+            // 调用中通上线接口
+            var ztoSortingService = Container.Resolve<IZtoSortingService>();
+            var settings = Container.Resolve<ISettingsService>().LoadSettings<PlateTurnoverSettings>();
+
+            // 初始化中通分拣服务配置
+            ztoSortingService.Configure(settings.ZtoApiUrl, settings.ZtoCompanyId, settings.ZtoSecretKey);
+
+            if (!string.IsNullOrEmpty(settings.ZtoPipelineCode))
+            {
+                Log.Information("正在调用中通上线接口...");
+                var response = await ztoSortingService.ReportPipelineStatusAsync(settings.ZtoPipelineCode, "start");
+                if (response?.Status == true)
+                {
+                    Log.Information("中通上线接口调用成功");
+                }
+                else
+                {
+                    Log.Warning("中通上线接口调用失败: {Message}", response?.Message);
+                }
+            }
+            else
+            {
+                Log.Warning("未配置分拣线编码，无法调用中通上线接口");
+            }
         }
         catch (Exception ex)
         {
@@ -112,33 +140,99 @@ internal partial class App
     }
 
     /// <summary>
-    ///     退出
+    /// 执行异步关闭操作
     /// </summary>
-    protected override async void OnExit(ExitEventArgs e)
+    public async Task PerformShutdownAsync()
     {
         try
         {
-            // 停止托管服务
-            var hostedService = Container.Resolve<TcpConnectionHostedService>();
-            await hostedService.StopAsync(CancellationToken.None);
+            Log.Information("开始执行异步关闭操作...");
 
-            var cameraStartupService = Container.Resolve<CameraStartupService>();
-            await cameraStartupService.StopAsync(CancellationToken.None);
+            // 1. 先调用中通下线接口
+            var ztoSortingService = Container.Resolve<IZtoSortingService>();
+            var settings = Container.Resolve<ISettingsService>().LoadSettings<PlateTurnoverSettings>();
+
+            if (!string.IsNullOrEmpty(settings.ZtoPipelineCode))
+            {
+                Log.Information("正在调用中通下线接口...");
+                try
+                {
+                    var response = await ztoSortingService.ReportPipelineStatusAsync(settings.ZtoPipelineCode, "stop");
+                    if (response?.Status == true)
+                    {
+                        Log.Information("中通下线接口调用成功");
+                    }
+                    else
+                    {
+                        Log.Warning("中通下线接口调用失败: {Message}", response?.Message);
+                    }
+                }
+                catch (Exception downEx)
+                {
+                    Log.Error(downEx, "调用中通下线接口时发生错误");
+                }
+            }
+            else
+            {
+                Log.Warning("未配置分拣线编码，无法调用中通下线接口");
+            }
+
+            // 2. 停止托管服务
+            try
+            {
+                var hostedService = Container.Resolve<TcpConnectionHostedService>();
+                await hostedService.StopAsync(CancellationToken.None);
+            }
+            catch (Exception svcEx)
+            {
+                Log.Error(svcEx, "停止TCP连接托管服务时发生错误");
+            }
+
+            try
+            {
+                var cameraStartupService = Container.Resolve<CameraStartupService>();
+                await cameraStartupService.StopAsync(CancellationToken.None);
+            }
+            catch (Exception camEx)
+            {
+                Log.Error(camEx, "停止相机服务时发生错误");
+            }
 
             // 等待所有日志写入完成
-            Log.Information("应用程序关闭");
+            Log.Information("异步关闭操作完成，正在刷新日志...");
             await Log.CloseAndFlushAsync();
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "应用程序关闭时发生错误");
-            await Log.CloseAndFlushAsync();
+            Log.Error(ex, "执行异步关闭操作时发生错误");
+            try
+            {
+                await Log.CloseAndFlushAsync(); // 尝试刷新日志
+            }
+            catch (Exception logEx)
+            {
+                Console.WriteLine($"刷新日志时也发生错误: {logEx}");
+            }
+        }
+    }
+
+    /// <summary>
+    ///     退出
+    /// </summary>
+    protected override void OnExit(ExitEventArgs e)
+    {
+        // OnExit 主要用于非常快速、同步的最终清理
+        Log.Information("应用程序退出事件触发");
+        try
+        {
+            // 注意：避免在此处执行复杂的或异步的清理逻辑
         }
         finally
         {
             // 释放 Mutex
             _mutex?.Dispose();
             _mutex = null;
+            Log.Information("Mutex 已释放");
             base.OnExit(e);
         }
     }

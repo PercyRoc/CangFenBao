@@ -1,11 +1,9 @@
-using System;
-using System.Collections.Generic;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 using Common.Models.Package;
+using Common.Services.Settings;
 using PlateTurnoverMachine.Models;
 using Serilog;
 
@@ -17,20 +15,22 @@ namespace PlateTurnoverMachine.Services;
 public class ZtoSortingService : IZtoSortingService, IDisposable
 {
     private readonly HttpClient _httpClient;
-    private string _apiUrl = "https://intelligent-2nd-pro.zt-express.com/branchweb/sortservice";
-    private string _companyId = string.Empty;
-    private string _secretKey = string.Empty;
-    private bool _disposed = false;
+    private readonly ISettingsService _settingsService;
+    private bool _disposed;
 
     /// <summary>
     /// 中通分拣服务构造函数
     /// </summary>
-    public ZtoSortingService()
+    /// <param name="settingsService">设置服务</param>
+    public ZtoSortingService(ISettingsService settingsService)
     {
+        _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
         _httpClient = new HttpClient
         {
             Timeout = TimeSpan.FromSeconds(30)
         };
+        
+        Log.Information("中通分拣服务已初始化");
     }
 
     /// <summary>
@@ -41,9 +41,13 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
     /// <param name="secretKey">密钥</param>
     public void Configure(string apiUrl, string companyId, string secretKey)
     {
-        _apiUrl = apiUrl;
-        _companyId = companyId;
-        _secretKey = secretKey;
+        var settings = _settingsService.LoadSettings<PlateTurnoverSettings>();
+        settings.ZtoApiUrl = apiUrl;
+        settings.ZtoCompanyId = companyId;
+        settings.ZtoSecretKey = secretKey;
+        _settingsService.SaveSettings(settings);
+        
+        Log.Information("已更新中通分拣服务配置并保存到设置中");
     }
 
     /// <summary>
@@ -52,7 +56,7 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
     /// <param name="pipeline">分拣线编码</param>
     /// <param name="status">流水线状态: start | stop | synchronization</param>
     /// <returns>API响应</returns>
-    public async Task<ZtoSortingBaseResponse> ReportPipelineStatusAsync(string pipeline, string status)
+    public async Task<ZtoSortingBaseResponse?> ReportPipelineStatusAsync(string pipeline, string status)
     {
         try
         {
@@ -72,7 +76,7 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
             Log.Error(ex, "上报流水线状态异常: {Status}", status);
             return new ZtoSortingBaseResponse
             {
-                Status = "false",
+                Status = false,
                 Message = ex.Message
             };
         }
@@ -89,17 +93,17 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
         {
             var request = new
             {
-                pipeline = pipeline
+                pipeline
             };
 
             var requestJson = JsonSerializer.Serialize(request);
             var response = await SendRequestAsync<List<object>>("WCS_SORTING_SETTING", requestJson);
-            return response ?? new List<object>();
+            return response ?? [];
         }
         catch (Exception ex)
         {
             Log.Error(ex, "获取分拣方案异常: {Pipeline}", pipeline);
-            return new List<object>();
+            return [];
         }
     }
 
@@ -220,27 +224,31 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
     {
         try
         {
+            // 直接从设置服务获取最新配置
+            var settings = _settingsService.LoadSettings<PlateTurnoverSettings>();
+            var apiUrl = settings.ZtoApiUrl;
+            var companyId = settings.ZtoCompanyId;
+            var secretKey = settings.ZtoSecretKey;
+            
             // 构建请求参数
             var requestData = data ?? string.Empty;
-            var dataDigest = CalculateMd5(requestData + _secretKey);
+            var dataDigest = CalculateMd5(requestData + secretKey);
 
-            var request = new
-            {
-                data = requestData,
-                data_digest = dataDigest,
-                msg_type = msgType,
-                company_id = _companyId
-            };
+            // 不使用URL编码，直接拼接请求字符串
+            var requestBodyStr = $"data={requestData}&data_digest={dataDigest}&msg_type={msgType}&company_id={companyId}";
+            
+            // 使用@符号标记原始字符串，避免Serilog错误解析大括号
+            Log.Debug("发送中通请求(不使用URL编码): {@RequestBody}", requestBodyStr);
 
-            var json = JsonSerializer.Serialize(request);
-            Log.Debug("发送中通请求: {Request}", json);
-
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync(_apiUrl, content);
+            // 创建表单内容
+            var content = new StringContent(requestBodyStr, Encoding.UTF8, "application/x-www-form-urlencoded");
+            
+            var response = await _httpClient.PostAsync(apiUrl, content);
             response.EnsureSuccessStatusCode();
 
             var responseContent = await response.Content.ReadAsStringAsync();
-            Log.Debug("中通响应: {Response}", responseContent);
+            // 使用@符号标记原始字符串，避免Serilog错误解析大括号
+            Log.Debug("中通响应: {@Response}", responseContent);
 
             return JsonSerializer.Deserialize<T>(responseContent);
         }
@@ -258,16 +266,15 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
     /// <returns>MD5哈希值</returns>
     private static string CalculateMd5(string input)
     {
-        using var md5 = MD5.Create();
         var bytes = Encoding.UTF8.GetBytes(input);
-        var hash = md5.ComputeHash(bytes);
+        var hash = MD5.HashData(bytes);
         var sb = new StringBuilder();
-        
+
         foreach (var h in hash)
         {
             sb.Append(h.ToString("x2"));
         }
-        
+
         return sb.ToString();
     }
 

@@ -12,8 +12,9 @@
                  Height="900"
                  Width="1600"
                  Closing="MetroWindow_Closing"
-                 WindowStartupLocation="CenterScreen"
-                 ExtendsContentIntoTitleBar="True">
+                 Loaded="MainWindow_Loaded"
+                 WindowStartupLocation="Manual"
+                 ExtendsContentIntoTitleBar="False">
 
     <ui:FluentWindow.Resources>
         <ResourceDictionary>
@@ -597,11 +598,11 @@
                                     <DataGridTextColumn.CellStyle>
                                         <Style TargetType="DataGridCell">
                                             <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Status}" Value="MeasureSuccess">
+                                                <DataTrigger Binding="{Binding StatusDisplay}" Value="Success">
                                                     <Setter Property="Background" Value="#4CAF50"/>
                                                     <Setter Property="Foreground" Value="White"/>
                                                 </DataTrigger>
-                                                <DataTrigger Binding="{Binding Status}" Value="MeasureFailed">
+                                                <DataTrigger Binding="{Binding StatusDisplay}" Value="Failed">
                                                     <Setter Property="Background" Value="#F44336"/>
                                                     <Setter Property="Foreground" Value="White"/>
                                                 </DataTrigger>

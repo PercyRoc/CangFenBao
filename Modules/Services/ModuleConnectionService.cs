@@ -8,7 +8,7 @@ using Serilog;
 
 namespace Modules.Services;
 
-internal class ModuleConnectionService(ISettingsService settingsService) : IModuleConnectionService
+internal class ModuleConnectionService(ISettingsService settingsService, ChutePackageRecordService chutePackageRecordService) : IModuleConnectionService
 {
     // 数据包相关常量
     private const byte StartCode = 0xF9; // 起始码 16#F9
@@ -137,7 +137,7 @@ internal class ModuleConnectionService(ISettingsService settingsService) : IModu
             Log.Debug("当前等待队列中有 {Count} 个包裹等待处理", _waitingPackages.Count);
 
             // 如果等待队列为空，记录日志
-            if (_waitingPackages.Count == 0)
+            if (_waitingPackages.IsEmpty)
             {
                 Log.Warning("等待队列为空，无法匹配包裹: {Barcode}", package.Barcode);
                 return;
@@ -165,7 +165,7 @@ internal class ModuleConnectionService(ISettingsService settingsService) : IModu
                     {
                         Log.Debug("包裹等待时间 {TimeDiff}ms 大于最大等待时间 {MaxWaitTime}ms, 标记为超时",
                             timeDiff, _config.MaxWaitTime);
-                        package.StatusDisplay = "等待超时";
+                        package.SetStatus(PackageStatus.Error, "等待超时");
                     }
 
                     continue;
@@ -181,18 +181,18 @@ internal class ModuleConnectionService(ISettingsService settingsService) : IModu
 
                 // 设置包裹序号为模组带序号
                 package.Index = packageNumber;
-                package.StatusDisplay = "正在分拣";
+                package.SetStatus(PackageStatus.Sorting, "正在分拣");
 
                 Log.Information("找到匹配的等待包裹: 序号={PackageNumber}, 等待时间={TimeDiff}ms, 分配格口={ChuteNumber}",
-                    packageNumber, timeDiff, package.ChuteName);
+                    packageNumber, timeDiff, package.ChuteNumber);
                 package.ProcessingTime = timeDiff;
 
                 // 取消超时任务
                 waitInfo.TimeoutCts?.Cancel();
 
                 // 发送分拣指令
-                _ = SendSortingCommandAsync(packageNumber, (byte)package.ChuteName);
-
+                _ = SendSortingCommandAsync(packageNumber, (byte)package.ChuteNumber);
+                chutePackageRecordService.AddPackageRecord(package);
                 // 从等待队列中移除
                 _waitingPackages.TryRemove(packageNumber, out _);
                 return; // 找到匹配后直接返回
@@ -204,7 +204,7 @@ internal class ModuleConnectionService(ISettingsService settingsService) : IModu
         catch (Exception ex)
         {
             Log.Error(ex, "处理包裹对象时发生错误: {Barcode}", package.Barcode);
-            package.StatusDisplay = "处理异常";
+            package.SetStatus(PackageStatus.Error, "处理异常");
         }
     }
 

@@ -8,6 +8,7 @@
         <UseWPF>true</UseWPF>
         <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
         <LangVersion>default</LangVersion>
+        <AssemblyName>仓分宝-翻版机</AssemblyName>
     </PropertyGroup>
 
     <ItemGroup>

@@ -12,8 +12,9 @@
                  Height="900"
                  Width="1600"
                  WindowStartupLocation="CenterScreen"
-                 Closing="MetroWindow_Closing"
-                 ExtendsContentIntoTitleBar="True" x:ClassModifier="internal">
+                 Closing="MainWindow_Loaded"
+                 ExtendsContentIntoTitleBar="True"
+                 x:ClassModifier="internal">
     <ui:FluentWindow.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>

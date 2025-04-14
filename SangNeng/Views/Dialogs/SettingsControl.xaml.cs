@@ -1,17 +1,14 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Controls;
 using Common.Services.Ui;
 using Serilog;
 using SharedUI.Views.Settings;
 
-namespace Modules.Views;
+namespace SangNeng.Views.Dialogs;
 
-/// <summary>
-/// SettingsDialog 的交互逻辑
-/// </summary>
-public partial class SettingsDialog
+public partial class SettingsControl : UserControl
 {
-    public SettingsDialog(INotificationService notificationService)
+    public SettingsControl(INotificationService notificationService)
     {
         InitializeComponent();
 
@@ -25,7 +22,5 @@ public partial class SettingsDialog
     {
         // 导航到相机设置页面
         RootNavigation?.Navigate(typeof(CameraSettingsView));
-
-        Log.Information("SettingsDialog已加载，导航到CameraSettingsView");
     }
-}
+} 

@@ -120,7 +120,7 @@
         </Grid>
 
         <!-- 主要内容区域 -->
-        <Grid Grid.Row="1" Background="{StaticResource MainBackground}">
+        <Grid Grid.Row="1" Background="{Binding MainWindowBackgroundBrush}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="2*" />
                 <ColumnDefinition Width="3*" />
@@ -136,8 +136,7 @@
 
                 <!-- 实时包裹信息 -->
                 <Border Grid.Row="0"
-                        Margin="16"
-                        Background="{Binding RealtimeInfoBackgroundColor, FallbackValue=#334CAF50}">
+                        Margin="16">
                     <Grid Margin="16">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -588,7 +587,7 @@
                                 <DataGridTextColumn Header="条码" Binding="{Binding Barcode}" Width="160" />
                                 <DataGridTextColumn Header="重量" Binding="{Binding WeightDisplay}" Width="80" />
                                 <DataGridTextColumn Header="尺寸（mm）" Binding="{Binding VolumeDisplay}" Width="200" />
-                                <DataGridTextColumn Header="状态" Binding="{Binding Information}" Width="*" />
+                                <DataGridTextColumn Header="状态" Binding="{Binding StatusDisplay}" Width="*" />
                                 <DataGridTextColumn Header="时间"
                                                     Binding="{Binding CreateTime, StringFormat={}{0:HH:mm:ss}}"
                                                     Width="100" />

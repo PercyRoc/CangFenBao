@@ -7,13 +7,13 @@ using Common.Models.Package;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
-using DeviceService.DataSourceDevices.Camera.DaHua;
-using DeviceService.DataSourceDevices.Camera.Hikvision;
+using DeviceService.DataSourceDevices.Camera.HuaRay;
 using DeviceService.DataSourceDevices.Services;
 using Modules.Models;
 using Modules.Services;
 using Prism.Commands;
 using Prism.Mvvm;
+using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.Models;
 using SixLabors.ImageSharp;
@@ -28,7 +28,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private readonly ICameraService _cameraService;
 
     // 格口锁定状态字典
-    private readonly Dictionary<int, bool> _chuteLockStatus = new();
+    private readonly Dictionary<int, bool> _chuteLockStatus = [];
     private readonly ChuteMappingService _chuteMappingService;
     private readonly ChutePackageRecordService _chutePackageRecordService;
     private readonly IDialogService _dialogService;
@@ -90,52 +90,29 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
         switch (_cameraService)
         {
-            // 订阅图像流
-            case DahuaCameraService dahuaCamera:
-                _subscriptions.Add(dahuaCamera.ImageStream
-                    .Subscribe(imageData =>
-                    {
-                        try
-                        {
-                            Log.Debug("收到大华相机图像流数据，尺寸：{Width}x{Height}",
-                                imageData.image.Width,
-                                imageData.image.Height);
+            // // 订阅图像流
+            // case HuaRayCameraService dahuaCamera:
+            //     _subscriptions.Add(dahuaCamera.ImageStream
+            //         .Subscribe(imageData =>
+            //         {
+            //             try
+            //             {
+            //                 Log.Debug("收到大华相机图像流数据，尺寸：{Width}x{Height}",
+            //                     imageData.image.Width,
+            //                     imageData.image.Height);
 
-                            UpdateImageDisplay(imageData.image, bitmap =>
-                            {
-                                Log.Debug("从图像流更新CurrentImage");
-                                CurrentImage = bitmap;
-                            });
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Error(ex, "处理大华相机图像流数据时发生错误");
-                        }
-                    }));
-                break;
-            // 添加对海康相机图像流的订阅
-            case HikvisionSmartCameraService hikvisionCamera:
-                _subscriptions.Add(hikvisionCamera.ImageStream
-                    .Subscribe(imageData =>
-                    {
-                        try
-                        {
-                            Log.Debug("收到海康相机图像流数据，尺寸：{Width}x{Height}",
-                                imageData.image.Width,
-                                imageData.image.Height);
-
-                            UpdateImageDisplay(imageData.image, bitmap =>
-                            {
-                                Log.Debug("从图像流更新CurrentImage");
-                                CurrentImage = bitmap;
-                            });
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Error(ex, "处理海康相机图像流数据时发生错误");
-                        }
-                    }));
-                break;
+            //                 UpdateImageDisplay(imageData.image, bitmap =>
+            //                 {
+            //                     Log.Debug("从图像流更新CurrentImage");
+            //                     CurrentImage = bitmap;
+            //                 });
+            //             }
+            //             catch (Exception ex)
+            //             {
+            //                 Log.Error(ex, "处理大华相机图像流数据时发生错误");
+            //             }
+            //         }));
+            //     break;
         }
         // 订阅包裹流
         _subscriptions.Add(packageTransferService.PackageStream
@@ -301,7 +278,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         });
     }
 
-    private void OnCameraConnectionChanged(string deviceId, bool isConnected)
+    private void OnCameraConnectionChanged(string? deviceId, bool isConnected)
     {
         try
         {
@@ -385,12 +362,10 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             Log.Information("收到包裹信息: {Barcode}, 序号={Index}", package.Barcode, package.Index);
 
             // 设置初始状态
-            package.Status = PackageStatus.Initial;
-            package.StatusDisplay = "初始化";
+            package.SetStatus(PackageStatus.Created, "初始化");
 
             // 从服务器获取格口号
-            package.Status = PackageStatus.WaitingForChute;
-            package.StatusDisplay = "等待分配格口";
+            package.SetStatus(PackageStatus.WaitingForChute, "等待分配格口");
 
             var config = _settingsService.LoadSettings<ModuleConfig>();
             var chuteNumber = await _chuteMappingService.GetChuteNumberAsync(package);
@@ -399,8 +374,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             {
                 Log.Warning("无法获取格口号，使用异常格口: {Barcode}", package.Barcode);
                 chuteNumber = config.ExceptionChute;
-                package.Status = PackageStatus.Error;
-                package.StatusDisplay = "格口分配失败";
+                package.SetStatus(PackageStatus.Error, "格口分配失败");
             }
             else
             {
@@ -411,22 +385,23 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                         chuteNumber.Value, package.Barcode);
 
                     // 记录原始分配的格口号
-                    package.OriginalChuteName = chuteNumber.Value;
+                    var originalChuteNumber = chuteNumber.Value;
+                    package.SetChute(config.ExceptionChute, originalChuteNumber);
 
-                    // 重新分配到异常格口
-                    chuteNumber = config.ExceptionChute;
-                    package.Status = PackageStatus.Error;
-                    package.StatusDisplay = "格口已锁定，使用异常格口";
-                    package.ErrorMessage = $"原格口 {package.OriginalChuteName} 已锁定";
+                    // 设置为错误状态
+                    package.SetStatus(PackageStatus.Error, "格口已锁定，使用异常格口");
+                    package.SetError($"原格口 {originalChuteNumber} 已锁定");
                 }
             }
 
             // 更新包裹的格口号
-            package.ChuteName = chuteNumber.Value;
+            if (package.OriginalChuteNumber == null)
+            {
+                package.SetChute(chuteNumber.Value);
+            }
 
             // 设置等待模组带处理状态
-            package.Status = PackageStatus.WaitingForModule;
-            package.StatusDisplay = "等待模组带处理";
+            package.SetStatus(PackageStatus.Sorting, "等待模组带处理");
 
             // 通知模组带服务处理包裹
             _moduleConnectionService.OnPackageReceived(package);
@@ -434,11 +409,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             // 如果没有错误，设置为正常状态
             if (string.IsNullOrEmpty(package.ErrorMessage))
             {
-                package.StatusDisplay = "正常";
+                package.SetStatus(PackageStatus.SortSuccess, "正常");
             }
-
-            // 记录包裹分配到格口的信息
-            _chutePackageRecordService.AddPackageRecord(package);
 
             // 更新UI
             Application.Current.Dispatcher.Invoke(() =>
@@ -562,9 +534,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 // 记录状态变更
                 Log.Information("格口 {ChuteNumber} 锁定状态变更为: {Status}",
                     chuteNumber, isLocked ? "锁定" : "解锁");
-
-                // TODO: 可以在这里更新UI显示格口状态
-                // 例如，可以添加一个格口状态列表到UI中
             });
 
             // 更新格口包裹记录服务中的锁定状态

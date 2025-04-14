@@ -33,6 +33,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private bool _disposed;
     private SystemStatus _systemStatus = new();
     private readonly ISettingsService _settingsService;
+    private readonly IZtoSortingService _ztoSortingService;
+    private int _historyIndexCounter = 0;
 
     public MainWindowViewModel(
         IDialogService dialogService,
@@ -40,13 +42,15 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         PackageTransferService packageTransferService,
         SortingService sortingService,
         ITcpConnectionService tcpConnectionService,
-        ISettingsService settingsService)
+        ISettingsService settingsService,
+        IZtoSortingService ztoSortingService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
         _sortingService = sortingService;
         _tcpConnectionService = tcpConnectionService;
         _settingsService = settingsService;
+        _ztoSortingService = ztoSortingService;
 
         // 初始化命令
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
@@ -198,26 +202,89 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    private void OnPackageInfo(PackageInfo package)
+    private async void OnPackageInfo(PackageInfo package)
     {
         try
         {
             // 分配格口号
             var settings = _settingsService.LoadSettings<PlateTurnoverSettings>();
+            var errorChuteNumber = settings.ErrorChute;
+
+            // 处理未读包裹
             if (package.Barcode.Equals("noread", StringComparison.OrdinalIgnoreCase))
             {
-                var errorChuteNumber = settings.ErrorChute;
-                package.SetChute(errorChuteNumber);
-                Log.Information("包裹 {Barcode} 为未读包裹，分配至异常格口 {Chute}", package.Barcode, errorChuteNumber);
+                return;
             }
 
-            // 将包裹添加到分拣队列
-            _sortingService.EnqueuePackage(package);
-            
+
+            if (!string.IsNullOrEmpty(package.Barcode))
+            {
+                // 获取中通面单规则
+                var billRule = await _ztoSortingService.GetBillRuleAsync();
+
+                // 检查是否符合面单规则
+                if (!string.IsNullOrEmpty(billRule.Pattern) &&
+                    !System.Text.RegularExpressions.Regex.IsMatch(package.Barcode, billRule.Pattern))
+                {
+                    Log.Warning("包裹条码 {Barcode} 不符合中通面单规则，分配到异常口", package.Barcode);
+                    package.SetChute(errorChuteNumber);
+                    package.SetError("不符合中通面单规则");
+                }
+            }
+            // 先调用中通接口获取分拣格口信息
+            if (!string.IsNullOrEmpty(settings.ZtoPipelineCode) &&
+                !string.IsNullOrEmpty(package.Barcode))
+            {
+                // Directly call the service. Subsequent logic handles the response.
+                var sortingInfo = await _ztoSortingService.GetSortingInfoAsync(
+                    package.Barcode,
+                    settings.ZtoPipelineCode, // Use the local 'settings' variable
+                    1, // 使用 0 或 package.PackageCount
+                    settings.ZtoTrayCode, // Use the local 'settings' variable
+                    (float)package.Weight);
+
+                if (sortingInfo.SortPortCode.Count > 0)
+                {
+                    // 解析服务器返回的格口号
+                    if (int.TryParse(sortingInfo.SortPortCode[0], out var chuteNumber))
+                    {
+                        package.SetChute(chuteNumber);
+                        package.SetStatus(PackageStatus.Sorting); // 设置状态为 Sorting
+                        Log.Information("从中通服务器获取到格口号：{ChuteNumber}，状态设置为 Sorting，包裹：{Barcode}", chuteNumber, package.Barcode);
+                    }
+                    else
+                    {
+                        Log.Warning("无法解析从中通获取的格口号 '{PortCode}'，分配到异常口 {ErrorChute}，包裹：{Barcode}", sortingInfo.SortPortCode[0], errorChuteNumber, package.Barcode);
+                        package.SetChute(errorChuteNumber);
+                        package.SetError($"从中通获取的格口号无效: {sortingInfo.SortPortCode[0]}");
+                    }
+                }
+                else
+                {
+                    Log.Warning("中通未返回格口信息，分配到异常口 {ErrorChute}，包裹：{Barcode}", errorChuteNumber, package.Barcode);
+                    package.SetChute(errorChuteNumber);
+                    package.SetError("中通未返回格口信息");
+                }
+            }
+            else if (string.IsNullOrEmpty(package.Barcode))
+            {
+                // 处理无条码情况（如果需要，但前面已有 noread 处理）
+                Log.Warning("包裹无有效条码，分配到异常口 {ErrorChute}", errorChuteNumber);
+                package.SetChute(errorChuteNumber);
+                package.SetError("无有效条码");
+            }
+            // 如果未调用中通接口（例如未配置 PipelineCode），则可能需要默认逻辑或保持原状
+            // 此处可以添加 else if (!string.IsNullOrEmpty(Settings.ZtoPipelineCode)) 来区分是否调用了中通
+            // 如果没有调用 ZTO 且没有其他分配逻辑，包裹可能没有格口号，需要决定后续状态
+
+            // 将包裹添加到分拣队列 (Runs after ZTO logic or if ZTO logic was skipped)
+             _sortingService.EnqueuePackage(package);
+
             Application.Current.Dispatcher.Invoke(() =>
             {
                 try
                 {
+                    package.Index = Interlocked.Increment(ref _historyIndexCounter);
                     // 更新当前条码和图像
                     CurrentBarcode = package.Barcode;
                     // 更新实时包裹数据
@@ -283,14 +350,15 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            // 限制历史记录数量，保持最新的100条记录
-            const int maxHistoryCount = 100;
+            // 限制历史记录数量，保持最新的1000条记录
+            const int maxHistoryCount = 1000;
 
             // 添加到历史记录开头
             PackageHistory.Insert(0, package);
 
             // 如果超出最大数量，移除多余的记录
-            while (PackageHistory.Count > maxHistoryCount) PackageHistory.RemoveAt(PackageHistory.Count - 1);
+            while (PackageHistory.Count > maxHistoryCount)
+                PackageHistory.RemoveAt(PackageHistory.Count - 1);
         }
         catch (Exception ex)
         {

@@ -441,6 +441,7 @@ public class HuaRayCameraService : ICameraService
                         {
                             currentBitmapSource.Freeze();
                         }
+
                         processedBitmapSource = currentBitmapSource;
                         _imageSubject.OnNext((processedBitmapSource,
                             args.CameraId)); // Publish image stream
@@ -460,12 +461,13 @@ public class HuaRayCameraService : ICameraService
             {
                 _imageProcessingSemaphore.Release();
             }
+
             // 3. 处理 OutputResult == 1 的情况
             if (args.OutputResult == 1)
             {
                 // Create PackageInfo only if OutputResult is 1
                 var packageInfo = PackageInfo.Create();
-                
+
                 // Set trigger timestamp using TimeUp from args
                 try
                 {
@@ -475,22 +477,27 @@ public class HuaRayCameraService : ICameraService
                         packageInfo.SetTriggerTimestamp(triggerTime);
                     }
                 }
-                catch (ArgumentOutOfRangeException ex) 
+                catch (ArgumentOutOfRangeException ex)
                 {
-                    Log.Error(ex, "Failed to convert TriggerTimeTicks ({Ticks}) to DateTimeOffset. Using current time as fallback.", args.TriggerTimeTicks);
+                    Log.Error(ex,
+                        "Failed to convert TriggerTimeTicks ({Ticks}) to DateTimeOffset. Using current time as fallback.",
+                        args.TriggerTimeTicks);
                 }
+
                 packageInfo.SetBarcode(args.CodeList.FirstOrDefault() ?? "noread");
-                if (args.Weight > 0) 
+                if (args.Weight > 0)
                 {
                     packageInfo.SetWeight(args.Weight / 1000.0);
                     Log.Information("设置包裹重量: {Weight}", args.Weight);
                 }
+
                 try
                 {
                     if (args.VolumeInfo is { length: > 0, width: > 0, height: > 0 })
                     {
                         packageInfo.SetDimensions(args.VolumeInfo.length / 10.0, args.VolumeInfo.width / 10.0,
                             args.VolumeInfo.height / 10.0);
+                        packageInfo.SetVolume(Math.Round(args.VolumeInfo.volume / 1000.0, 2));
                     }
                 }
                 catch (Exception ex)
@@ -508,7 +515,7 @@ public class HuaRayCameraService : ICameraService
                 }
 
                 packageInfo.ProcessingTime = (packageInfo.CreateTime - packageInfo.TriggerTimestamp).TotalMilliseconds;
-                _packageSubject.OnNext(packageInfo); // Publish PackageInfo stream
+                _packageSubject.OnNext(packageInfo);
             }
         }
         catch (Exception ex)
@@ -526,7 +533,7 @@ public class HuaRayCameraService : ICameraService
     /// 处理JPEG图像数据
     /// </summary>
     private static BitmapSource? ProcessJpegImagePointerToBitmapSource(
-            IntPtr jpegDataPtr, int dataSize)
+        IntPtr jpegDataPtr, int dataSize)
     {
         const double dpiX = 96;
         const double dpiY = 96;
@@ -552,7 +559,7 @@ public class HuaRayCameraService : ICameraService
                 decompressedData = retImg.Data;
                 width = retImg.Width;
                 height = retImg.Height;
-                pixelFormat = PixelFormats.Bgr24; 
+                pixelFormat = PixelFormats.Bgr24;
                 stride = width * 3;
             }
             finally
@@ -583,8 +590,8 @@ public class HuaRayCameraService : ICameraService
     /// 处理非JPEG图像数据
     /// </summary>
     private static BitmapSource? ProcessNonJpegImagePointerToBitmapSource(
-            IntPtr imageDataPtr, int dataSize, int width, int height,
-            HuaRayApiStruct.EImageType imageType)
+        IntPtr imageDataPtr, int dataSize, int width, int height,
+        HuaRayApiStruct.EImageType imageType)
     {
         const double dpiX = 96;
         const double dpiY = 96;
@@ -847,15 +854,11 @@ public class HuaRayCameraService : ICameraService
                                 }
 
                                 cfgDir = Path.Combine(dir, "Cfg");
-                                if (Directory.Exists(cfgDir))
-                                {
-                                    configPath = Path.Combine(cfgDir, "LogisticsBase.cfg");
-                                    if (File.Exists(configPath))
-                                    {
-                                        Log.Information("在子目录的Cfg目录下找到配置文件: {FilePath}", configPath);
-                                        foundFiles.Add(configPath);
-                                    }
-                                }
+                                if (!Directory.Exists(cfgDir)) continue;
+                                configPath = Path.Combine(cfgDir, "LogisticsBase.cfg");
+                                if (!File.Exists(configPath)) continue;
+                                Log.Information("在子目录的Cfg目录下找到配置文件: {FilePath}", configPath);
+                                foundFiles.Add(configPath);
                             }
                             catch (UnauthorizedAccessException)
                             {

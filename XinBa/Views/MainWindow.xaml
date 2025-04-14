@@ -7,12 +7,10 @@
                  xmlns:hc="https://handyorg.github.io/handycontrol"
                  xmlns:viewModels1="clr-namespace:XinBa.ViewModels"
                  mc:Ignorable="d"
-                 d:DataContext="{d:DesignInstance Type=viewModels1:MainWindowViewModel}"
                  Title="XinBa"
                  Height="900"
                  Width="1600"
                  WindowStartupLocation="CenterScreen"
-                 Closing="MetroWindow_Closing"
                  ExtendsContentIntoTitleBar="True" x:ClassModifier="internal">
 
     <ui:FluentWindow.Resources>

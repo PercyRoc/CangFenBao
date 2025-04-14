@@ -1,10 +1,10 @@
 using System.Text.Json;
 using System.Windows.Threading;
-using Presentation_SeedingWall.Models;
+using SeedingWall.Models;
 using Serilog;
 using WebSocketSharp;
 
-namespace Presentation_SeedingWall.Services;
+namespace SeedingWall.Services;
 
 /// <summary>
 ///     聚水潭WebSocket通信服务实现

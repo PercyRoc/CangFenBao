@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 using Common.Services.Settings;
 
-namespace Presentation_SeedingWall.Models;
+namespace SeedingWall.Models;
 
 /// <summary>
 ///     聚水潭设置

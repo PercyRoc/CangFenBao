@@ -12,8 +12,8 @@
                  Height="900"
                  Width="1600"
                  WindowStartupLocation="CenterScreen"
-                 Closing="MetroWindow_Closing"
-                 ExtendsContentIntoTitleBar="True" x:ClassModifier="internal">
+                 Closing="MainWindow_Closing"
+                 ExtendsContentIntoTitleBar="True">
 
     <ui:FluentWindow.Resources>
         <ResourceDictionary>
@@ -437,15 +437,14 @@
                                 <DataGridTextColumn Header="条码" Binding="{Binding Barcode}" Width="160" />
                                 <DataGridTextColumn Header="重量" Binding="{Binding WeightDisplay}" Width="80" />
                                 <DataGridTextColumn Header="尺寸" Binding="{Binding VolumeDisplay}" Width="120" />
-                                <DataGridTextColumn Header="格口" Binding="{Binding ChuteName}" Width="100" />
-                                <DataGridTextColumn Header="状态" Binding="{Binding StatusDisplay}" Width="80" />
+                                <DataGridTextColumn Header="格口" Binding="{Binding ChuteNumber}" Width="100" />
+                                <DataGridTextColumn Header="状态" Binding="{Binding StatusDisplay}" Width="*" />
                                 <DataGridTextColumn Header="处理时间"
                                                     Binding="{Binding ProcessingTime, StringFormat={}{0:0}ms}"
                                                     Width="100" />
                                 <DataGridTextColumn Header="时间"
                                                     Binding="{Binding CreateTime, StringFormat={}{0:HH:mm:ss}}"
                                                     Width="100" />
-                                <DataGridTextColumn Header="备注" Binding="{Binding Information}" Width="*" />
                             </DataGrid.Columns>
                         </DataGrid>
                     </Grid>

@@ -1,13 +1,13 @@
 ﻿using Common.Services.Ui;
-using Presentation_SeedingWall.ViewModels.Settings;
 using Prism.Commands;
 using Prism.Ioc;
 using Prism.Mvvm;
 using Prism.Services.Dialogs;
+using SeedingWall.ViewModels.Settings;
 using Serilog;
 using SharedUI.ViewModels.Settings;
 
-namespace Presentation_SeedingWall.ViewModels;
+namespace SeedingWall.ViewModels;
 
 internal class SettingsDialogViewModel : BindableBase, IDialogAware
 {

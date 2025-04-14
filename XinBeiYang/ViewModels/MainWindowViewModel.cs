@@ -3,10 +3,12 @@ using System.Globalization;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Common.Models.Package;
 using Common.Services.Audio;
+using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Camera.HuaRay;
 using DeviceService.DataSourceDevices.Services;
@@ -15,6 +17,7 @@ using Prism.Mvvm;
 using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.Models;
+using XinBeiYang.Models;
 using XinBeiYang.Models.Communication;
 using XinBeiYang.Services;
 
@@ -157,6 +160,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     private readonly IPlcCommunicationService _plcCommunicationService;
     private readonly IJdWcsCommunicationService _jdWcsCommunicationService;
     private readonly IImageStorageService _imageStorageService;
+    private readonly ISettingsService _settingsService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
     private string _currentBarcode = string.Empty;
@@ -170,16 +174,18 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     private string _jdStatusDescription = "京东WCS服务未连接，请检查网络连接";
     private string _jdStatusColor = "#F44336";
     private bool _lastPackageWasSuccessful = true; // 初始状态为成功
-    private string _realtimeInfoBackgroundColor = "#334CAF50"; // 默认绿色
+    private Brush _mainWindowBackgroundBrush = new SolidColorBrush(Colors.White); // Add new Brush property with default
     private bool _isPlcRejectWarningVisible; // PLC拒绝警告可见性标志
     private bool _isPlcAbnormalWarningVisible; // PLC异常警告可见性标志
+    private CancellationTokenSource? _rejectionWarningCts;
 
-    // 定义包裹状态对应的颜色常量
-    private const string COLOR_WAITING = "#339C27B0"; // 等待上包 - 紫色
-    private const string COLOR_SUCCESS = "#334CAF50"; // 上包完成 - 绿色
-    private const string COLOR_TIMEOUT = "#4DFFC107"; // 上包超时 - 黄色
-    private const string COLOR_REJECTED = "#4DF44336"; // 上包拒绝 - 红色
-    private const string COLOR_ERROR = "#4DF44336"; // 通用错误 - 红色
+    // Define new Brush constants (or create them inline)
+    private static readonly Brush BackgroundWaiting = new SolidColorBrush(Color.FromArgb(0xAA, 0x21, 0x96, 0xF3)); // 蓝色 (增加透明度) - Changed from purple
+    private static readonly Brush BackgroundSuccess = new SolidColorBrush(Color.FromArgb(0xAA, 0x4C, 0xAF, 0x50)); // 绿色 (增加透明度)
+    private static readonly Brush BackgroundTimeout = new SolidColorBrush(Color.FromArgb(0xAA, 0xFF, 0xC1, 0x07)); // 黄色 (增加透明度)
+    private static readonly Brush BackgroundRejected = new SolidColorBrush(Color.FromArgb(0xAA, 0xF4, 0x43, 0x36)); // 红色 (增加透明度)
+    private static readonly Brush BackgroundError = new SolidColorBrush(Color.FromArgb(0xAA, 0xF4, 0x43, 0x36)); // 红色 (增加透明度)
+    private static readonly Brush BackgroundDefault = new SolidColorBrush(Colors.White); // 默认背景色
 
     public MainWindowViewModel(
         IDialogService dialogService,
@@ -188,7 +194,8 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         PackageTransferService packageTransferService,
         IPlcCommunicationService plcCommunicationService,
         IJdWcsCommunicationService jdWcsCommunicationService,
-        IImageStorageService imageStorageService)
+        IImageStorageService imageStorageService,
+        ISettingsService settingsService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
@@ -196,6 +203,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         _plcCommunicationService = plcCommunicationService;
         _jdWcsCommunicationService = jdWcsCommunicationService;
         _imageStorageService = imageStorageService;
+        _settingsService = settingsService;
 
         // 初始化命令
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
@@ -360,9 +368,9 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     private void OnPlcDeviceStatusChanged(object? sender, DeviceStatusCode statusCode)
     {
         // 获取对应的状态信息
-        string statusText = GetDeviceStatusDisplayText(statusCode);
-        string description = GetDeviceStatusDescription(statusCode);
-        string color = GetDeviceStatusColor(statusCode);
+        var statusText = GetDeviceStatusDisplayText(statusCode);
+        var description = GetDeviceStatusDescription(statusCode);
+        var color = GetDeviceStatusColor(statusCode);
 
         // 通过统一方法更新状态
         UpdateDeviceStatus(
@@ -372,14 +380,10 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         );
 
         // 如果PLC状态恢复正常，隐藏PLC异常警告
-        if (statusCode == DeviceStatusCode.Normal)
-        {
-            if (IsPlcAbnormalWarningVisible)
-            {
-                Log.Information("PLC状态恢复正常，隐藏PLC异常警告。");
-                IsPlcAbnormalWarningVisible = false;
-            }
-        }
+        if (statusCode != DeviceStatusCode.Normal) return;
+        if (!IsPlcAbnormalWarningVisible) return;
+        Log.Information("PLC状态恢复正常，隐藏PLC异常警告。");
+        IsPlcAbnormalWarningVisible = false;
         // 如果PLC状态变为非正常，则不需要在此处显示警告，
         // 而是在OnPackageInfo收到包裹时判断并显示。
     }
@@ -493,14 +497,14 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         get => _lastPackageWasSuccessful;
         private set => SetProperty(ref _lastPackageWasSuccessful, value);
     }
-    
+
     /// <summary>
-    /// 实时包裹信息区域的背景色
+    /// 主窗口内容区域背景画刷
     /// </summary>
-    public string RealtimeInfoBackgroundColor
+    public Brush MainWindowBackgroundBrush
     {
-        get => _realtimeInfoBackgroundColor;
-        private set => SetProperty(ref _realtimeInfoBackgroundColor, value);
+        get => _mainWindowBackgroundBrush;
+        private set => SetProperty(ref _mainWindowBackgroundBrush, value);
     }
 
     /// <summary>
@@ -538,14 +542,14 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                 if (huaRayCameras.Count > 0)
                 {
                     CalculateOptimalLayout(huaRayCameras.Count);
-                    int cameraIndex = 0;
+                    var cameraIndex = 0;
                     foreach (var camera in huaRayCameras)
                     {
                         var (row, column, rowSpan, columnSpan) = GetCameraPosition(cameraIndex, huaRayCameras.Count);
                         
                         // 构造与事件格式匹配的相机ID（供应商:序列号）
                         // 如果供应商或序列号缺失则使用备选
-                        string constructedCameraId = string.IsNullOrWhiteSpace(camera.camDevVendor) || string.IsNullOrWhiteSpace(camera.camDevSerialNumber)
+                        var constructedCameraId = string.IsNullOrWhiteSpace(camera.camDevVendor) || string.IsNullOrWhiteSpace(camera.camDevSerialNumber)
                                                    ? camera.camDevID // 如果部分缺失则使用原始ID
                                                    : $"{camera.camDevVendor}:{camera.camDevSerialNumber}"; 
             
@@ -557,7 +561,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                              constructedCameraId = $"fallback_{cameraIndex}"; 
                         }
                         
-                        string cameraName = string.IsNullOrEmpty(camera.camDevSerialNumber) 
+                        var cameraName = string.IsNullOrEmpty(camera.camDevSerialNumber) 
                             ? $"相机 {cameraIndex + 1}" 
                             : $"{camera.camDevModelName} {camera.camDevSerialNumber}"; // 保持名称不变
 
@@ -865,25 +869,15 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                     IsPlcAbnormalWarningVisible = true;
                     // 播放PLC未连接音效
                     _ = _audioService.PlayPresetAsync(AudioType.PlcDisconnected);
-                    return;
+                    return; // PLC 状态异常，直接返回
                 }
-                else
-                {
-                    // 如果PLC拒绝警告已显示，则优先显示它，只记录日志
-                    Log.Warning("PLC状态异常 ({Status}) 但PLC拒绝警告已显示，忽略新包裹: {Barcode} (序号: {Index})", DeviceStatusText, package.Barcode, package.Index);
-                    return;
-                }
-            }
-            
-            // 2. 如果PLC拒绝警告正在显示，则阻止处理新包裹
-            if (IsPlcRejectWarningVisible)
-            {
-                Log.Warning("PLC拒绝警告显示中，忽略新包裹: {Barcode} (序号: {Index})", package.Barcode, package.Index);
-                return;
+
+                Log.Warning("PLC状态异常 ({Status}) 但PLC拒绝警告可能已显示，忽略新包裹: {Barcode} (序号: {Index})", DeviceStatusText, package.Barcode, package.Index);
+                return; // PLC 状态异常，直接返回
             }
 
-            // 3. 重置PLC异常警告（如果之前显示了）
-            // 因为能执行到这里，说明PLC状态正常且PLC拒绝警告未显示
+            // 2. 重置PLC异常警告（如果之前显示了）
+            // 因为能执行到这里，说明PLC状态正常
             if (IsPlcAbnormalWarningVisible)
             {
                 IsPlcAbnormalWarningVisible = false;
@@ -1044,6 +1038,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         finally
         {
            package.ReleaseImage();
+           // Consider if _rejectionWarningCts needs cancellation here in case of exceptions
         }
     }
 
@@ -1077,9 +1072,11 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             statusItem.Value = $"上包完成 (序号: {package.Index})";
             // 如果在Information中可用，提取PackageId供描述使用
             statusItem.Description = $"PLC 包裹流水号: {GetPackageIdFromInformation(package.StatusDisplay)}";
-            RealtimeInfoBackgroundColor = COLOR_SUCCESS; // 成功状态颜色
+            MainWindowBackgroundBrush = BackgroundSuccess; // Update new Brush property
             statusItem.StatusColor = "#4CAF50"; // 绿色，表示成功
-            IsPlcRejectWarningVisible = false; // 成功时确保警告关闭
+            // 成功时确保警告关闭，并取消超时任务
+            IsPlcRejectWarningVisible = false;
+            _rejectionWarningCts?.Cancel();
         }
         else // 错误情况（isSuccess为假）
         {
@@ -1091,24 +1088,38 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             if (package.ErrorMessage.StartsWith("上包超时"))
             {
                 statusItem.Description = "上包请求未收到 PLC 响应";
-                RealtimeInfoBackgroundColor = COLOR_TIMEOUT; // 超时状态颜色
+                MainWindowBackgroundBrush = BackgroundTimeout; // Update new Brush property
                 statusItem.StatusColor = "#FFC107"; // 黄色，表示超时
-                IsPlcRejectWarningVisible = false; // 超时时关闭警告
+                // 超时时关闭警告，并取消超时任务
+                IsPlcRejectWarningVisible = false;
+                _rejectionWarningCts?.Cancel();
             }
             else if (package.ErrorMessage.StartsWith("上包拒绝"))
             {
                 statusItem.Description = "PLC 拒绝了上包请求";
-                RealtimeInfoBackgroundColor = COLOR_REJECTED; // 拒绝状态颜色
+                MainWindowBackgroundBrush = BackgroundRejected; // Update new Brush property
                 statusItem.StatusColor = "#F44336"; // 红色，表示拒绝
-                IsPlcRejectWarningVisible = true; // 拒绝时显示警告
+
+                // 取消上一个超时任务（如果有）
+                _rejectionWarningCts?.Cancel();
+                _rejectionWarningCts?.Dispose();
+                _rejectionWarningCts = new CancellationTokenSource();
+
+                IsPlcRejectWarningVisible = true; // 显示警告
                 IsPlcAbnormalWarningVisible = false; // 确保PLC异常警告关闭
+
+                // 启动超时隐藏任务
+                _ = StartRejectionWarningTimeoutAsync(_rejectionWarningCts.Token);
+
             }
             else // 通用错误
             {
                 statusItem.Description = $"处理失败 (序号: {package.Index})";
-                RealtimeInfoBackgroundColor = COLOR_ERROR; // 通用错误颜色
+                MainWindowBackgroundBrush = BackgroundError; // Update new Brush property
                 statusItem.StatusColor = "#F44336"; // 红色，表示错误
-                IsPlcRejectWarningVisible = false; // 其他错误确保警告关闭
+                // 其他错误确保警告关闭，并取消超时任务
+                IsPlcRejectWarningVisible = false;
+                _rejectionWarningCts?.Cancel();
             }
         }
     }
@@ -1124,10 +1135,10 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         statusItem.Value = $"等待上包 (序号: {package.Index})";
         statusItem.Description = "正在请求PLC...";
         // 使用等待状态的颜色
-        RealtimeInfoBackgroundColor = COLOR_WAITING;
+        MainWindowBackgroundBrush = BackgroundWaiting; // Update new Brush property
         
         // 更新状态项的颜色
-        statusItem.StatusColor = "#9C27B0"; // 紫色，表示等待中
+        statusItem.StatusColor = "#2196F3"; // 蓝色，表示等待中
     }
 
     /// <summary>
@@ -1246,6 +1257,47 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
+    /// <summary>
+    /// 异步任务，用于在超时后隐藏PLC拒绝警告
+    /// </summary>
+    private async Task StartRejectionWarningTimeoutAsync(CancellationToken token)
+    {
+        try
+        {
+            // 从配置加载超时时间
+            var timeoutSeconds = _settingsService.LoadSettings<HostConfiguration>().UploadTimeoutSeconds;
+            if (timeoutSeconds <= 0)
+            {
+                Log.Warning("UploadTimeoutSeconds 配置不大于 0 ({Seconds})，PLC拒绝警告将不会自动隐藏", timeoutSeconds);
+                return; // 不启动超时
+            }
+
+            Log.Information("PLC拒绝警告将在 {TimeoutSeconds} 秒后自动隐藏", timeoutSeconds);
+            await Task.Delay(TimeSpan.FromSeconds(timeoutSeconds), token);
+
+            // 如果没有被取消，则隐藏警告
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                if (!token.IsCancellationRequested) // 再次检查，以防在Invoke排队时被取消
+                {
+                    IsPlcRejectWarningVisible = false;
+                    Log.Information("PLC拒绝警告已超时自动隐藏");
+                }
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            // 预期异常，当被外部取消时（例如，成功处理或手动清除）
+            Log.Debug("PLC拒绝警告超时任务被取消");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "处理PLC拒绝警告超时时出错");
+            // 发生意外错误时，也尝试隐藏警告以防卡住
+             Application.Current.Dispatcher.Invoke(() => IsPlcRejectWarningVisible = false);
+        }
+    }
+
     protected virtual void Dispose(bool disposing)
     {
         if (_disposed) return;
@@ -1270,6 +1322,10 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
 
                 // 停止定时器
                 _timer.Stop();
+
+                // 取消并释放拒绝警告的CTS
+                _rejectionWarningCts?.Cancel();
+                _rejectionWarningCts?.Dispose();
             }
             catch (Exception ex)
             {

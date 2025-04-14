@@ -8,13 +8,13 @@ namespace PlateTurnoverMachine.Models;
 /// </remarks>
 /// <param name="data">接收到的数据</param>
 /// <param name="receivedTime">接收时间</param>
-public class TcpDataReceivedEventArgs(byte[] data, DateTime receivedTime) : EventArgs
+public class TcpDataReceivedEventArgs(byte[]? data, DateTime receivedTime) : EventArgs
 {
 
     /// <summary>
     ///     接收到的数据
     /// </summary>
-    internal byte[] Data { get; } = data;
+    internal byte[]? Data { get; } = data;
 
     /// <summary>
     ///     接收时间
@@ -33,7 +33,7 @@ public class TcpModuleDataReceivedEventArgs : TcpDataReceivedEventArgs
     /// <param name="config">TCP模块配置</param>
     /// <param name="data">接收到的数据</param>
     /// <param name="receivedTime">接收时间</param>
-    internal TcpModuleDataReceivedEventArgs(TcpConnectionConfig config, byte[] data, DateTime receivedTime)
+    internal TcpModuleDataReceivedEventArgs(TcpConnectionConfig config, byte[]? data, DateTime receivedTime)
         : base(data, receivedTime)
     {
         Config = config;

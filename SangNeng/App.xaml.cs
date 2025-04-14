@@ -7,18 +7,17 @@ using DeviceService.DataSourceDevices.Scanner;
 using DeviceService.DataSourceDevices.Weight;
 using DeviceService.Extensions;
 using HandyControl.Controls;
-using Presentation_SangNeng.Views.Windows;
 using Prism.Ioc;
 using SangNeng.Services;
-using SangNeng.ViewModels.Dialogs;
 using SangNeng.ViewModels.Settings;
 using SangNeng.ViewModels.Windows;
-using SangNeng.Views.Dialogs;
 using SangNeng.Views.Settings;
 using Serilog;
 using SharedUI.Extensions;
 using Window = System.Windows.Window;
 using System.Diagnostics;
+using SangNeng.ViewModels.Dialogs;
+using SangNeng.Views.Dialogs;
 using SangNeng.Views.Windows;
 
 namespace SangNeng;
@@ -118,15 +117,13 @@ internal partial class App
 
         // 注册窗口和ViewModel
         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
-        containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
-        containerRegistry.Register<SettingsDialogViewModel>();
-        containerRegistry.Register<Window, HistoryWindow>("HistoryWindow");
-        containerRegistry.Register<HistoryWindowViewModel>();
 
         // 注册设置页面
         containerRegistry.Register<VolumeSettingsView>();
         containerRegistry.Register<WeightSettingsView>();
         containerRegistry.RegisterForNavigation<PalletSettingsView, PalletSettingsViewModel>();
+        containerRegistry.RegisterDialog<HistoryControl, HistoryWindowViewModel>("HistoryWindow");
+        containerRegistry.RegisterDialog<SettingsControl, SettingsDialogViewModel>("SettingsDialog");
 
         // 注册设置页面的ViewModel
         containerRegistry.Register<VolumeSettingsViewModel>();

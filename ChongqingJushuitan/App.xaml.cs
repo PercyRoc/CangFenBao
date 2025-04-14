@@ -12,12 +12,12 @@ using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
-using FuzhouPolicyForce.Views.Settings;
 using Microsoft.Extensions.Hosting;
 using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 using SharedUI.ViewModels.Settings;
+using SharedUI.Views.Settings;
 using SortingServices.Pendulum;
 using SortingServices.Pendulum.Extensions;
 
@@ -69,9 +69,7 @@ internal partial class App
         containerRegistry.RegisterSingleton<PackageTransferService>();
         containerRegistry.RegisterForNavigation<BalanceSortSettingsView, BalanceSortSettingsViewModel>();
         containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
-        // 注册设置窗口
-        containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
-        containerRegistry.Register<SettingsDialogViewModel>();
+        containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>("SettingsDialog");
 
         // 注册聚水潭设置页面
         containerRegistry.RegisterForNavigation<JushuitanSettingsPage, JushuitanSettingsViewModel>();
@@ -117,7 +115,7 @@ internal partial class App
             Log.Information("相机托管服务启动成功");
 
             // 启动摆轮分拣托管服务
-            var pendulumHostedService = Container.Resolve<IHostedService>();
+            var pendulumHostedService = Container.Resolve<PendulumSortHostedService>();
             pendulumHostedService.StartAsync(CancellationToken.None).Wait();
             Log.Information("摆轮分拣托管服务启动成功");
         }

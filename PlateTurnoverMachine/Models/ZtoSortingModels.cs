@@ -11,7 +11,7 @@ public class ZtoSortingBaseRequest
     /// <summary>
     /// 消息类型
     /// </summary>
-    [JsonPropertyName("msg_type")]
+    [JsonPropertyName("msgType")]
     public string MsgType { get; set; } = string.Empty;
 
     /// <summary>
@@ -48,7 +48,7 @@ public class ZtoSortingBaseResponse
     /// 状态信息 true || false
     /// </summary>
     [JsonPropertyName("status")]
-    public string Status { get; set; } = string.Empty;
+    public bool Status { get; set; }
 
     /// <summary>
     /// 错误信息

@@ -1,111 +1,32 @@
-﻿<ui:FluentWindow x:Class="ChongqingJushuitan.Views.SettingsDialog"
-                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-                 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-                 xmlns:prism="http://prismlibrary.com/"
-                 xmlns:hc="https://handyorg.github.io/handycontrol"
-                 xmlns:settings="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
-                 xmlns:viewModels="clr-namespace:ChongqingJushuitan.ViewModels"
-                 xmlns:local="clr-namespace:FuzhouPolicyForce.Views.Settings;assembly=SharedUI"
-                 xmlns:local1="clr-namespace:ChongqingJushuitan.Views.Settings"
-                 prism:ViewModelLocator.AutoWireViewModel="True"
-                 mc:Ignorable="d"
-                 d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}"
-                 Title="系统设置"
-                 Height="720"
-                 Width="1280"
+﻿<UserControl x:Class="ChongqingJushuitan.Views.SettingsDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:prism="http://prismlibrary.com/"
+             xmlns:hc="https://handyorg.github.io/handycontrol"
+             xmlns:settings="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
+             xmlns:viewModels="clr-namespace:ChongqingJushuitan.ViewModels"
+             xmlns:local1="clr-namespace:ChongqingJushuitan.Views.Settings"
+             prism:ViewModelLocator.AutoWireViewModel="True"
+             mc:Ignorable="d"
+             Width="1280"
+             Height="720"
+             d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}">
 
-                 WindowStartupLocation="CenterOwner"
-                 ExtendsContentIntoTitleBar="True"
-                 WindowBackdropType="Mica"
-                 WindowCornerPreference="Round"
-                 WindowStyle="SingleBorderWindow"
-                 ShowInTaskbar="False" x:ClassModifier="internal">
-    <ui:FluentWindow.Resources>
+    <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary
                     Source="pack://application:,,,/SharedUI;component/Resources/Styles/ColorStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
-    </ui:FluentWindow.Resources>
+    </UserControl.Resources>
 
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="32" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-
-        <!-- 标题栏 -->
-        <Grid Grid.Row="0" Background="{StaticResource TitleBarGradient}">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-
-            <!-- 应用图标 -->
-            <Border Grid.Column="0"
-                    Width="48"
-                    Height="32"
-                    Effect="{StaticResource IconGlowEffect}">
-                <Image Source="/logo.ico"
-                       Width="32"
-                       Height="32"
-                       Margin="8,0,8,0"
-                       VerticalAlignment="Center"
-                       RenderOptions.BitmapScalingMode="HighQuality">
-                    <Image.Effect>
-                        <DropShadowEffect BlurRadius="8"
-                                          Color="#40000000"
-                                          Direction="315"
-                                          Opacity="0.6"
-                                          ShadowDepth="2" />
-                    </Image.Effect>
-                </Image>
-            </Border>
-
-            <!-- 标题 -->
-            <TextBlock Grid.Column="1"
-                       Text="系统设置"
-                       HorizontalAlignment="Center"
-                       VerticalAlignment="Center"
-                       Margin="0,0,8,0"
-                       FontSize="20"
-                       FontFamily="微软雅黑"
-                       FontWeight="SemiBold"
-                       TextOptions.TextFormattingMode="Display"
-                       Foreground="black"
-                       TextOptions.TextRenderingMode="ClearType">
-                <TextBlock.Effect>
-                    <DropShadowEffect BlurRadius="4"
-                                      Opacity="0.2"
-                                      Direction="270"
-                                      ShadowDepth="1" />
-                </TextBlock.Effect>
-            </TextBlock>
-
-            <!-- TitleBar -->
-            <ui:TitleBar Grid.Column="2"
-                         Title=""
-                         ButtonsForeground="#FF008891"
-                         ShowMaximize="True"
-                         ShowMinimize="True"
-                         ShowClose="True" />
-
-            <Border Grid.Column="0"
-                    Grid.ColumnSpan="3"
-                    Height="1"
-                    VerticalAlignment="Bottom"
-                    Background="#20008080"
-                    BorderBrush="#40FFFFFF"
-                    BorderThickness="0,0,0,1" />
-        </Grid>
-
         <!-- 导航区域 -->
-        <Border Grid.Row="1" Background="{StaticResource MainBackground}">
+        <Border Background="{StaticResource MainBackground}">
             <Grid>
                 <ui:NavigationView IsPaneOpen="True"
                                    IsPaneVisible="True"
@@ -133,7 +54,7 @@
                                 <ui:SymbolIcon Symbol="ArrowSort24" />
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="local:BalanceSortSettingsView" />
+                                <x:Type Type="settings:BalanceSortSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
 
@@ -143,7 +64,7 @@
                                 <ui:SymbolIcon Symbol="Grid24" />
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="local:BarcodeChuteSettingsView" />
+                                <x:Type Type="settings:BarcodeChuteSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
 
@@ -185,7 +106,6 @@
 
         <!-- Growl消息容器 -->
         <StackPanel Name="GrowlPanel"
-                    Grid.Row="1"
                     hc:Growl.GrowlParent="True"
                     hc:Growl.Token="SettingWindowGrowl"
                     VerticalAlignment="Top"
@@ -193,4 +113,4 @@
                     Margin="0,10,10,0"
                     Panel.ZIndex="1000" />
     </Grid>
-</ui:FluentWindow>
+</UserControl>

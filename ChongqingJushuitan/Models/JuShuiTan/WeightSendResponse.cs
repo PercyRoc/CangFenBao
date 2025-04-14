@@ -35,7 +35,7 @@ public class WeightSendResponseData
     ///     数据集合
     /// </summary>
     [JsonPropertyName("datas")]
-    public List<WeightSendResponseItem> Items { get; set; } = new();
+    public List<WeightSendResponseItem> Items { get; set; } = [];
 }
 
 /// <summary>

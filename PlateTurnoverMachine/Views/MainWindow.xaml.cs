@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Input;
 using Common.Services.Ui;
 using Serilog;
+using System.Threading.Tasks;
 
 namespace PlateTurnoverMachine.Views;
 
@@ -37,55 +38,66 @@ internal partial class MainWindow
 
     private void MetroWindow_Closing(object sender, CancelEventArgs e)
     {
+        // 1. 阻止窗口立即关闭，显示确认对话框
+        e.Cancel = true;
+
+        // 2. 弹出确认对话框
+        var result = HandyControl.Controls.MessageBox.Show(
+            "确定要关闭程序吗？",
+            "关闭确认",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (result != MessageBoxResult.Yes)
+        {
+            // 用户取消关闭，阻止窗口关闭
+            e.Cancel = true;
+            return;
+        }
+
+        // 3. 同步释放 ViewModel (如果需要)
+        if (DataContext is IDisposable viewModel)
+        {
+            try
+            {
+                viewModel.Dispose();
+                Log.Information("主窗口ViewModel已释放");
+            }
+            catch (Exception vmEx)
+            {
+                Log.Error(vmEx, "释放ViewModel时发生错误");
+                // 仅记录错误，不阻止关闭
+            }
+        }
+
+        // 4. 在后台执行清理工作，不等待完成
         try
         {
-            e.Cancel = true;
+            Log.Information("开始执行应用程序关闭逻辑(后台)...");
+            var app = (App)Application.Current;
 
-            // Use HandyControl MessageBox for confirmation
-            var result = HandyControl.Controls.MessageBox.Show(
-                "确定要关闭程序吗？",
-                "关闭确认",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question);
-
-            if (result != MessageBoxResult.Yes) 
+            // 不等待资源清理完成，直接允许窗口关闭
+            _ = Task.Run(async () =>
             {
-                e.Cancel = true;
-                return;
-            }
-
-            // Dispose ViewModel if applicable
-            if (DataContext is IDisposable viewModel)
-            {
-                // Run dispose in background
-                Task.Run(() =>
+                try
                 {
-                    try
-                    {
-                        viewModel.Dispose();
-                        Log.Information("主窗口ViewModel已释放");
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex, "释放ViewModel时发生错误");
-                    }
-                });
-            }
+                    await app.PerformShutdownAsync();
+                    Log.Information("后台资源清理已完成，但可能在应用程序已退出后不会显示此日志");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "后台资源清理过程中发生错误");
+                }
+            });
 
+            // 5. 立即允许窗口关闭
             e.Cancel = false;
-            Application.Current.Shutdown();
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "关闭程序时发生错误");
-            e.Cancel = true;
-
-            // Use HandyControl MessageBox for error
-            HandyControl.Controls.MessageBox.Show(
-                "关闭程序时发生错误，请重试",
-                "错误",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            Log.Error(ex, "启动后台清理任务时发生错误");
+            // 即使启动后台清理出错也允许关闭窗口
+            e.Cancel = false;
         }
     }
 }

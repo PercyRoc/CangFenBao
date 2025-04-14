@@ -11,7 +11,6 @@ using Common.Data;
 using Common.Models.Package;
 using Common.Services.Audio;
 using Common.Services.Settings;
-using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Camera.Hikvision;
 using DeviceService.DataSourceDevices.Camera.Models.Camera;
@@ -22,6 +21,7 @@ using DeviceService.DataSourceDevices.Weight;
 using Prism.Commands;
 using Prism.Events;
 using Prism.Mvvm;
+using Prism.Services.Dialogs;
 using SangNeng.Events;
 using SangNeng.Models;
 using SangNeng.Services;
@@ -30,7 +30,6 @@ using Serilog;
 using SharedUI.Models;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
 using Color = System.Drawing.Color;
 using Timer = System.Timers.Timer;
 
@@ -60,7 +59,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private bool _disposed;
     private bool _hasPlayedErrorSound;
     private ObservableCollection<PackageInfo> _packageHistory = [];
-    private int _packageIndex = 1;
     private ObservableCollection<PackageInfoItem> _packageInfoItems = [];
     private SelectablePalletModel? _selectedPallet;
     private ObservableCollection<StatisticsItem> _statisticsItems = [];
@@ -126,10 +124,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 try
                 {
                     Log.Debug("收到体积相机图像流数据，尺寸：{Width}x{Height}",
-                        imageData.image.Width,
-                        imageData.image.Height);
+                        imageData.Width,
+                        imageData.Height);
 
-                    UpdateImageDisplay(imageData.image, bitmap =>
+                    UpdateImageDisplay(imageData, bitmap =>
                     {
                         Log.Debug("从图像流更新VolumeImage");
                         VolumeImage = bitmap;
@@ -148,7 +146,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 {
                     try
                     {
-                        UpdateImageDisplay(imageData.image, bitmap => { CurrentImage = bitmap; });
+                        UpdateImageDisplay(imageData, bitmap => { CurrentImage = bitmap; });
                     }
                     catch (Exception ex)
                     {
@@ -195,7 +193,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private static void UpdateImageDisplay(Image<Rgba32> image, Action<BitmapSource> imageUpdater)
+    private static void UpdateImageDisplay(BitmapSource image, Action<BitmapSource> imageUpdater)
     {
         try
         {
@@ -215,8 +213,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     // 计算缩放比例
                     if (width > maxDisplayWidth || height > maxDisplayHeight)
                     {
-                        var scaleX = (double)maxDisplayWidth / width;
-                        var scaleY = (double)maxDisplayHeight / height;
+                        var scaleX = maxDisplayWidth / width;
+                        var scaleY = maxDisplayHeight / height;
                         var scale = Math.Min(scaleX, scaleY);
 
                         width = (int)(width * scale);
@@ -224,56 +222,27 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         needsResize = true;
                     }
 
-                    var stride = width * 4; // RGBA每像素4字节
-                    var pixelData = new byte[stride * height];
+                    var stride = (int)(width * 4); // RGBA每像素4字节
+                    var pixelData = new byte[stride * (int)height];
 
                     // 直接复制像素数据
                     if (needsResize)
                     {
                         // 使用SixLabors.ImageSharp进行缩放
-                        using var resizedImage = image.Clone();
-                        resizedImage.Mutate(x => x.Resize(width, height));
-                        resizedImage.ProcessPixelRows(accessor =>
-                        {
-                            for (var y = 0; y < height; y++)
-                            {
-                                var row = accessor.GetRowSpan(y);
-                                for (var x = 0; x < width; x++)
-                                {
-                                    var pixel = row[x];
-                                    var offset = y * stride + x * 4;
-                                    pixelData[offset] = pixel.B; // B
-                                    pixelData[offset + 1] = pixel.G; // G
-                                    pixelData[offset + 2] = pixel.R; // R
-                                    pixelData[offset + 3] = pixel.A; // A
-                                }
-                            }
-                        });
+                        var resizedImage = new TransformedBitmap(image, new ScaleTransform(
+                            width / image.Width,
+                            height / image.Height));
+                        resizedImage.CopyPixels(new Int32Rect(0, 0, (int)width, (int)height), pixelData, stride, 0);
                     }
                     else
                     {
                         // 不需要缩放，直接复制
-                        image.ProcessPixelRows(accessor =>
-                        {
-                            for (var y = 0; y < height; y++)
-                            {
-                                var row = accessor.GetRowSpan(y);
-                                for (var x = 0; x < width; x++)
-                                {
-                                    var pixel = row[x];
-                                    var offset = y * stride + x * 4;
-                                    pixelData[offset] = pixel.B; // B
-                                    pixelData[offset + 1] = pixel.G; // G
-                                    pixelData[offset + 2] = pixel.R; // R
-                                    pixelData[offset + 3] = pixel.A; // A
-                                }
-                            }
-                        });
+                        image.CopyPixels(new Int32Rect(0, 0, (int)width, (int)height), pixelData, stride, 0);
                     }
 
                     // 在UI线程创建WriteableBitmap
-                    var bitmap = new WriteableBitmap(width, height, 96, 96, PixelFormats.Bgra32, null);
-                    bitmap.WritePixels(new Int32Rect(0, 0, width, height), pixelData, stride, 0);
+                    var bitmap = new WriteableBitmap((int)width, (int)height, 96, 96, PixelFormats.Bgra32, null);
+                    bitmap.WritePixels(new Int32Rect(0, 0, (int)width, (int)height), pixelData, stride, 0);
                     bitmap.Freeze(); // 使图像可以跨线程访问
 
                     imageUpdater(bitmap);
@@ -402,13 +371,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
             Log.Information("收到扫码信息：{Barcode}", barcode);
 
             // 创建新的包裹对象
-            _currentPackage = new PackageInfo
-            {
-                Index = _packageIndex++,
-                Barcode = barcode,
-                CreateTime = DateTime.Now,
-                Status = PackageStatus.Created
-            };
+            _currentPackage = PackageInfo.Create();
+            _currentPackage.SetBarcode(barcode);
+            _currentPackage.SetSegmentCode(string.Empty);
+            _currentPackage.SetTriggerTimestamp(DateTime.Now);
+            _currentPackage.SetStatus(PackageStatus.Measuring);
 
             // 并行执行相机拍照、体积测量和重量获取，添加超时处理
             var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10)); // 10秒超时
@@ -437,7 +404,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                     lock (imageLock)
                                     {
                                         if (imageCaptured) return;
-                                        capturedImage = imageData.image.Clone();
+                                        // 由于类型不兼容，我们不能直接将 BitmapSource 赋值给 Image<Rgba32>
+                                        capturedImage = null; // 不存储图像，因为类型不兼容
+                                        CurrentImage = imageData; // 但可以直接更新UI显示
                                         imageCaptured = true;
                                         Log.Information("已从图像流获取一帧图像");
                                     }
@@ -480,7 +449,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                             var actualWeight = weight.Value / 1000;
                             if (SelectedPallet != null && SelectedPallet.Name != "noPallet")
                                 actualWeight = Math.Max(0, actualWeight - SelectedPallet.Weight);
-                            _currentPackage.Weight = (float)actualWeight;
+                            _currentPackage.SetWeight(actualWeight);
 
                             Application.Current.Dispatcher.Invoke(() =>
                             {
@@ -506,10 +475,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 // 等待所有任务完成
                 await Task.WhenAll(photoTask, volumeTask, weightTask);
                 // 更新体积（使用cm³作为单位）
-                _currentPackage.Volume = _currentPackage.Length * _currentPackage.Width * _currentPackage.Height;
+                _currentPackage.SetDimensions(_currentPackage.Length ?? 0, _currentPackage.Width ?? 0, _currentPackage.Height ?? 0);
                 // 播放成功音效
                 _ = _audioService.PlayPresetAsync(AudioType.Success);
-
 
                 Application.Current.Dispatcher.Invoke(() =>
                 {
@@ -623,11 +591,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 Log.Warning("处理包裹超时：{Barcode}", barcode);
                 UpdatePackageStatus("Timeout");
             }
-            finally
-            {
-                // 手动释放CancellationTokenSource
-                cts.Dispose();
-            }
         }
         catch (Exception ex)
         {
@@ -663,26 +626,22 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
             try
             {
-                _currentPackage.Status = PackageStatus.Measuring;
+                _currentPackage.SetStatus(PackageStatus.Measuring, "Measuring");
 
                 // 触发测量
                 var result = await Task.Run(_volumeCamera.TriggerMeasure, cancellationToken);
                 if (!result.IsSuccess)
                 {
                     Log.Error("体积测量失败：{Error}", result.ErrorMessage);
-                    _currentPackage.Status = PackageStatus.MeasureFailed;
-                    _currentPackage.StatusDisplay = "Measurement Failed";
-                    _currentPackage.ErrorMessage = result.ErrorMessage;
+                    _currentPackage.SetDimensions(0, 0, 0);
+                    _currentPackage.SetStatus(PackageStatus.MeasureFailed, result.ErrorMessage);
                     PlayErrorSound();
                     return;
                 }
 
                 // 更新测量结果（将毫米转换为厘米）
-                _currentPackage.Length = result.Length / 10.0;
-                _currentPackage.Width = result.Width / 10.0;
-                _currentPackage.Height = result.Height / 10.0;
-                _currentPackage.Volume = result.Length * result.Width * result.Height;
-                _currentPackage.Status = PackageStatus.MeasureSuccess;
+                _currentPackage.SetDimensions(result.Length / 10.0, result.Width / 10.0, result.Height / 10.0);
+                _currentPackage.SetStatus(PackageStatus.MeasureSuccess, "Success");
             }
             finally
             {
@@ -694,8 +653,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             Log.Error(ex, "体积测量过程发生错误");
             if (_currentPackage != null)
             {
-                _currentPackage.Status = PackageStatus.MeasureFailed;
-                _currentPackage.ErrorMessage = ex.Message;
+                _currentPackage.SetStatus(PackageStatus.Error, ex.Message);
                 PlayErrorSound();
             }
         }
@@ -849,7 +807,20 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // 更新当前包裹的状态显示
             if (_currentPackage != null)
             {
-                _currentPackage.StatusDisplay = displayText;
+                var packageStatus = status.ToLower() switch
+                {
+                    "success" or "complete" => PackageStatus.MeasureSuccess,
+                    "failed" or "error" => PackageStatus.MeasureFailed,
+                    "timeout" => PackageStatus.Error,
+                    "upload failed" => PackageStatus.Error,
+                    "database error" => PackageStatus.Error,
+                    _ => _currentPackage.Status // 保持原状态
+                };
+                
+                if (packageStatus != _currentPackage.Status)
+                {
+                    _currentPackage.SetStatus(packageStatus, displayText);
+                }
             }
 
             PackageInfoItems = [.. items];
@@ -1038,7 +1009,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             // 设置托盘高度给人加相机SDK
-            var palletHeightMm = (int)(pallet.Height);
+            var palletHeightMm = (int)(pallet.Height * 10);
             var result = _volumeCamera.SetPalletHeight(palletHeightMm);
             if (result != 0)
             {

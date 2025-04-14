@@ -56,10 +56,7 @@ internal partial class App
         containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
         containerRegistry.RegisterForNavigation<WangDianTongSettingsView, WangDianTongSettingsViewModel>();
 
-        containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
-        containerRegistry.Register<SettingsDialogViewModel>();
-        containerRegistry.Register<Window, HistoryWindow>("HistoryDialog");
-        containerRegistry.Register<HistoryWindowViewModel>();
+        containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>("SettingsDialog");
 
         // 获取设置服务
         var settingsService = Container.Resolve<ISettingsService>();

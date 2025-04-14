@@ -2,10 +2,10 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Windows.Threading;
-using Presentation_SeedingWall.Models;
+using SeedingWall.Models;
 using Serilog;
 
-namespace Presentation_SeedingWall.Services;
+namespace SeedingWall.Services;
 
 /// <summary>
 ///     PLC通信服务实现

@@ -1,4 +1,4 @@
-﻿<ui:FluentWindow x:Class="FuzhouPolicyForce.Views.SettingsDialog"
+﻿<UserControl x:Class="FuzhouPolicyForce.Views.SettingsDialog"
                  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -13,24 +13,16 @@
                  prism:ViewModelLocator.AutoWireViewModel="True"
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}"
-                 Title="系统设置"
                  Height="720"
-                 Width="1280"
-
-                 WindowStartupLocation="CenterOwner"
-                 ExtendsContentIntoTitleBar="True"
-                 WindowBackdropType="Mica"
-                 WindowCornerPreference="Round"
-                 WindowStyle="SingleBorderWindow"
-                 ShowInTaskbar="True">
-    <ui:FluentWindow.Resources>
+                 Width="1280">
+    <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary
                     Source="pack://application:,,,/SharedUI;component/Resources/Styles/ColorStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
-    </ui:FluentWindow.Resources>
+    </UserControl.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
@@ -87,14 +79,7 @@
                 </TextBlock.Effect>
             </TextBlock>
 
-            <!-- TitleBar -->
-            <ui:TitleBar Grid.Column="2"
-                         Title=""
-                         ButtonsForeground="#FF008891"
-                         ShowMaximize="True"
-                         ShowMinimize="True"
-                         ShowClose="True" />
-
+            <!-- 标题栏按钮移除，因为UserControl不需要窗口控制按钮 -->
             <Border Grid.Column="0"
                     Grid.ColumnSpan="3"
                     Height="1"
@@ -193,4 +178,4 @@
                     Margin="0,10,10,0"
                     Panel.ZIndex="1000" />
     </Grid>
-</ui:FluentWindow>
+</UserControl>

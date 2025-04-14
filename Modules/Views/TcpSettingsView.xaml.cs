@@ -3,9 +3,9 @@ namespace Modules.Views;
 /// <summary>
 ///     TCP设置页面
 /// </summary>
-internal partial class TcpSettingsView
+public partial class TcpSettingsView
 {
-    internal TcpSettingsView()
+    public TcpSettingsView()
     {
         InitializeComponent();
     }

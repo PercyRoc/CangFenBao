@@ -49,11 +49,6 @@
             <XamlRuntime>Wpf</XamlRuntime>
             <SubType>Designer</SubType>
         </Page>
-        <Page Update="Views\Windows\HistoryWindow.xaml">
-            <Generator>MSBuild:Compile</Generator>
-            <XamlRuntime>Wpf</XamlRuntime>
-            <SubType>Designer</SubType>
-        </Page>
     </ItemGroup>
 
     <ItemGroup>
@@ -61,5 +56,4 @@
             <Link>logo.ico</Link>
         </Resource>
     </ItemGroup>
-
 </Project>

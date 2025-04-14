@@ -1,11 +1,11 @@
 using Common.Services.Settings;
 using Common.Services.Ui;
-using Presentation_SeedingWall.Models;
 using Prism.Commands;
 using Prism.Mvvm;
+using SeedingWall.Models;
 using Serilog;
 
-namespace Presentation_SeedingWall.ViewModels.Settings;
+namespace SeedingWall.ViewModels.Settings;
 
 /// <summary>
 ///     聚水潭设置页面ViewModel

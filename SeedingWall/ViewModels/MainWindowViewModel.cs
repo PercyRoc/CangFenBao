@@ -6,16 +6,16 @@ using System.Windows.Threading;
 using Common.Models.Package;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
-using DeviceService.DataSourceDevices.Camera.DaHua;
+using DeviceService.DataSourceDevices.Camera.HuaRay;
 using DeviceService.DataSourceDevices.Services;
-using Presentation_SeedingWall.Services;
 using Prism.Commands;
 using Prism.Mvvm;
+using SeedingWall.Services;
 using Serilog;
 using SharedUI.Models;
 using SixLabors.ImageSharp;
 
-namespace Presentation_SeedingWall.ViewModels;
+namespace SeedingWall.ViewModels;
 
 internal class MainWindowViewModel : BindableBase, IDisposable
 {
@@ -69,28 +69,28 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         // 订阅PLC连接状态事件
         _plcService.ConnectionStatusChanged += OnPlcConnectionChanged;
 
-        // 订阅图像流
-        if (_cameraService is DahuaCameraService dahuaCamera)
-            _subscriptions.Add(dahuaCamera.ImageStream
-                .Subscribe(imageData =>
-                {
-                    try
-                    {
-                        Log.Debug("收到大华相机图像流数据，尺寸：{Width}x{Height}",
-                            imageData.image.Width,
-                            imageData.image.Height);
+        // // 订阅图像流
+        // if (_cameraService is HuaRayCameraService dahuaCamera)
+        //     _subscriptions.Add(dahuaCamera.ImageStream
+        //         .Subscribe(imageData =>
+        //         {
+        //             try
+        //             {
+        //                 Log.Debug("收到大华相机图像流数据，尺寸：{Width}x{Height}",
+        //                     imageData.image.Width,
+        //                     imageData.image.Height);
 
-                        UpdateImageDisplay(imageData.image, bitmap =>
-                        {
-                            Log.Debug("从图像流更新CurrentImage");
-                            CurrentImage = bitmap;
-                        });
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex, "处理大华相机图像流数据时发生错误");
-                    }
-                }));
+        //                 UpdateImageDisplay(imageData.image, bitmap =>
+        //                 {
+        //                     Log.Debug("从图像流更新CurrentImage");
+        //                     CurrentImage = bitmap;
+        //                 });
+        //             }
+        //             catch (Exception ex)
+        //             {
+        //                 Log.Error(ex, "处理大华相机图像流数据时发生错误");
+        //             }
+        //         }));
 
         // 订阅包裹流
         _subscriptions.Add(packageTransferService.PackageStream
@@ -253,7 +253,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         });
     }
 
-    private void OnCameraConnectionChanged(string deviceId, bool isConnected)
+    private void OnCameraConnectionChanged(string? deviceId, bool isConnected)
     {
         try
         {

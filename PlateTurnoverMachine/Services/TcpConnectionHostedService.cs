@@ -15,6 +15,7 @@ internal class TcpConnectionHostedService(
 {
     private readonly PeriodicTimer _timer = new(TimeSpan.FromSeconds(5));
     private PlateTurnoverSettings? _settings;
+    private bool _isStopping;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -44,6 +45,12 @@ internal class TcpConnectionHostedService(
 
     private async Task ConnectDevicesAsync()
     {
+        if (_isStopping)
+        {
+            Log.Debug("ConnectDevicesAsync: Service is stopping, skipping connection attempts.");
+            return;
+        }
+
         try
         {
             if (_settings == null)
@@ -84,10 +91,42 @@ internal class TcpConnectionHostedService(
         }
     }
 
-    public override Task StopAsync(CancellationToken cancellationToken)
+    public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        Log.Information("TCP连接托管服务正在停止");
+        _isStopping = true;
+        Log.Information("TCP连接托管服务正在停止... (停止标志已设置)");
+        
+        // 1. 停止定时器，阻止新的连接尝试
         _timer.Dispose();
-        return base.StopAsync(cancellationToken);
+        Log.Debug("连接检查定时器已释放");
+
+        // 2. 调用基类的StopAsync，它会负责取消ExecuteAsync中的CancellationToken
+        //    并等待ExecuteAsync方法结束（或超时）
+        try
+        {
+            await base.StopAsync(cancellationToken);
+            Log.Information("后台服务ExecuteAsync已停止");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "等待后台服务ExecuteAsync停止时发生错误");
+        }
+        
+        // 3. 在ExecuteAsync完全停止后，再安全地释放TCP连接服务
+        try
+        {
+            if (tcpConnectionService is IDisposable disposable)
+            {
+                Log.Information("正在释放TCP连接服务资源...");
+                disposable.Dispose(); // 这将关闭所有连接并清理资源
+                Log.Information("TCP连接服务资源已释放");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "释放TCP连接服务时发生错误");
+        }
+        
+        Log.Information("TCP连接托管服务已完全停止");
     }
 }

@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Presentation_SeedingWall.Models;
+namespace SeedingWall.Models;
 
 /// <summary>
 ///     聚水潭播种验货请求模型

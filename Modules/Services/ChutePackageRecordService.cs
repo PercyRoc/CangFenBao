@@ -13,7 +13,7 @@ namespace Modules.Services;
 /// <summary>
 ///     格口包裹记录服务，用于记录每个格口分配的包裹，并在格口锁定时将数据上传到指定接口并清空
 /// </summary>
-public class ChutePackageRecordService
+public class ChutePackageRecordService(HttpClient httpClient, ISettingsService settingsService)
 {
     private const string ApiUrl = "http://123.56.22.107:8080/api/DWSInfo2";
 
@@ -22,17 +22,7 @@ public class ChutePackageRecordService
 
     // 使用线程安全的字典来存储每个格口的包裹记录
     private readonly ConcurrentDictionary<int, List<PackageInfo>> _chutePackages = new();
-    private readonly ModuleConfig _config;
-    private readonly HttpClient _httpClient;
-
-    public ChutePackageRecordService(HttpClient httpClient, ISettingsService settingsService)
-    {
-        _httpClient = httpClient;
-        _config = settingsService.LoadSettings<ModuleConfig>();
-
-        // 设置默认请求头
-        _httpClient.DefaultRequestHeaders.Add("equickToken", _config.Token);
-    }
+    private readonly ModuleConfig _config = settingsService.LoadSettings<ModuleConfig>();
 
     /// <summary>
     ///     添加包裹记录
@@ -43,7 +33,7 @@ public class ChutePackageRecordService
         try
         {
             // 获取格口号
-            var chuteNumber = package.ChuteName;
+            var chuteNumber = package.ChuteNumber;
 
             // 如果格口已锁定，不记录
             if (IsChuteLocked(chuteNumber))
@@ -166,7 +156,12 @@ public class ChutePackageRecordService
             Log.Information("正在上传格口 {ChuteNumber} 的包裹记录到API: {PackageCodes}",
                 chuteNumber, packageCodes);
 
-            var response = await _httpClient.PostAsync(ApiUrl, content, cts.Token);
+            // 设置请求头
+            using var request = new HttpRequestMessage(HttpMethod.Post, ApiUrl);
+            request.Headers.Add("equickToken", _config.Token);
+            request.Content = content;
+            
+            var response = await httpClient.SendAsync(request, cts.Token);
 
             // 检查响应状态
             if (!response.IsSuccessStatusCode)

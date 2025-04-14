@@ -1,6 +1,5 @@
 ﻿using System.Collections.ObjectModel;
 using System.Globalization;
-using System.IO;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Windows;
@@ -12,15 +11,14 @@ using Common.Models.Package;
 using Common.Models.Settings.ChuteRules;
 using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
-using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Scanner;
 using DeviceService.DataSourceDevices.Services;
 using Prism.Commands;
 using Prism.Mvvm;
+using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.Models;
-using SixLabors.ImageSharp;
 using SortingServices.Pendulum;
 
 namespace ChongqingJushuitan.ViewModels;
@@ -40,7 +38,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private BitmapSource? _currentImage;
 
-    private int _currentPackageIndex;
     private bool _disposed;
 
     private SystemStatus _systemStatus = new();
@@ -94,54 +91,25 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
         // 订阅图像流
         _subscriptions.Add(_cameraService.ImageStream
-            .ObserveOn(TaskPoolScheduler.Default) // 使用任务池调度器
-            .Subscribe(imageData =>
+            .ObserveOn(Scheduler.CurrentThread) // 直接在 UI 线程观察
+            .Subscribe(imageData => // imageData is a tuple (BitmapSource image, IReadOnlyList<BarcodeLocation> barcodes)
             {
                 try
                 {
-                    var image = imageData.image;
-
-                    // 使用 TaskPool 进行图像编码
-                    Task.Run(() =>
+                    // 确保 BitmapSource 可以在 UI 线程之外访问（如果需要跨线程访问）
+                    if (imageData is { CanFreeze: true, IsFrozen: false })
                     {
-                        try
-                        {
-                            using var memoryStream = new MemoryStream();
-                            image.SaveAsPng(memoryStream);
-                            memoryStream.Position = 0;
-                            var imageBytes = memoryStream.ToArray();
-
-                            Application.Current.Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
-                            {
-                                try
-                                {
-                                    var bitmap = new BitmapImage();
-                                    bitmap.BeginInit();
-                                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                                    bitmap.StreamSource = new MemoryStream(imageBytes);
-                                    bitmap.EndInit();
-                                    bitmap.Freeze(); // 使图像可以跨线程访问
-
-                                    // 更新UI
-                                    CurrentImage = bitmap;
-                                }
-                                catch (Exception ex)
-                                {
-                                    Log.Error(ex, "创建BitmapImage时发生错误");
-                                }
-                            });
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Error(ex, "编码图像数据时发生错误");
-                        }
-                    });
+                        imageData.Freeze();
+                    }
+                    // 更新UI
+                    CurrentImage = imageData;
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "处理图像数据时发生错误");
+                    Log.Error(ex, "处理 BitmapSource 或更新 UI 时发生错误");
                 }
-            }));
+            },
+            ex => Log.Error(ex, "处理图像流时发生未处理的异常"))); // 添加错误处理
     }
 
     public DelegateCommand OpenSettingsCommand { get; }
@@ -364,7 +332,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         });
     }
 
-    private void OnCameraConnectionChanged(string cameraId, bool isConnected)
+    private void OnCameraConnectionChanged(string? cameraId, bool isConnected)
     {
         Application.Current.Dispatcher.Invoke(() =>
         {
@@ -380,20 +348,15 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            // 设置包裹序号
-            package.Index = Interlocked.Increment(ref _currentPackageIndex);
-            Log.Information("收到包裹信息：{Barcode}, 序号：{Index}", package.Barcode, package.Index);
-
             // 获取格口规则配置
             var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
-
             // 判断条码是否为空或noread
             if (string.IsNullOrEmpty(package.Barcode) ||
                 string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase))
             {
                 // 使用异常口
-                package.ChuteName = chuteSettings.ErrorChuteNumber;
-                package.Information = "条码为空或noread";
+                package.SetChute(chuteSettings.ErrorChuteNumber);
+                package.SetStatus(PackageStatus.SortFailed, "条码为空或noread");
                 Log.Warning("包裹条码为空或noread，使用异常口：{ErrorChute}", chuteSettings.ErrorChuteNumber);
             }
             else
@@ -403,22 +366,23 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
                 if (matchedChute.HasValue)
                 {
-                    package.ChuteName = matchedChute.Value;
+                    package.SetChute(matchedChute.Value);
+                    package.SetStatus(PackageStatus.WaitingForChute);
                     Log.Information("包裹 {Barcode} 匹配到格口 {Chute}", package.Barcode, matchedChute.Value);
                 }
                 else
                 {
                     // 没有匹配到规则，使用异常口
-                    package.ChuteName = chuteSettings.ErrorChuteNumber;
-                    package.Information = "未匹配到格口规则";
+                    package.SetChute(chuteSettings.ErrorChuteNumber);
+                    package.SetStatus(PackageStatus.SortFailed, "未匹配到格口规则");
                     Log.Warning("包裹 {Barcode} 未匹配到任何规则，使用异常口：{ErrorChute}",
                         package.Barcode, chuteSettings.ErrorChuteNumber);
                 }
             }
-
+            // 设置为正在分拣状态
+            package.SetStatus(PackageStatus.Sorting);
             // 确定格口后再处理包裹
             _sortService.ProcessPackage(package);
-
             // 上传包裹数据到聚水潭
             try
             {
@@ -446,20 +410,21 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     Log.Information("包裹 {Barcode} 数据已成功上传到聚水潭", package.Barcode);
 
                     // 检查返回的数据
-                    if (response.Data?.Items?.Count > 0)
+                    if (response.Data.Items.Count > 0)
                     {
                         var data = response.Data.Items[0];
                         if (data.Code != 0)
                         {
                             Log.Warning("包裹 {Barcode} 数据上传到聚水潭返回错误: {ErrorMessage}",
                                 package.Barcode, data.Message);
-                            package.Information = $"聚水潭返回错误: {data.Message}";
-                            package.ChuteName = _settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber;
+                            package.SetError($"聚水潭返回错误: {data.Message}");
+                            package.SetChute(_settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber);
                         }
                         else
                         {
                             Log.Debug("包裹 {Barcode} 上传成功，物流公司：{Company}，运单号：{TrackingNumber}",
                                 package.Barcode, data.LogisticsCompany, data.LogisticsId);
+                            package.SetStatus(PackageStatus.SortSuccess);
                         }
                     }
                 }
@@ -467,15 +432,15 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 {
                     Log.Warning("包裹 {Barcode} 数据上传到聚水潭失败: {ErrorCode} - {ErrorMessage}",
                         package.Barcode, response.Code, response.Message);
-                    package.Information = $"聚水潭API错误: {response.Message}";
-                    package.ChuteName = _settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber;
+                    package.SetError($"聚水潭API错误: {response.Message}");
+                    package.SetChute(_settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber);
                 }
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "上传包裹 {Barcode} 数据到聚水潭时发生错误", package.Barcode);
-                package.Information = $"聚水潭服务异常: {ex.Message}";
-                package.ChuteName = _settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber;
+                package.SetError($"聚水潭服务异常: {ex.Message}");
+                package.SetChute(_settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber);
             }
 
             Application.Current.Dispatcher.Invoke(() =>
@@ -539,8 +504,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         var chuteItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "分拣口");
         if (chuteItem != null)
         {
-            chuteItem.Value = package.ChuteName.ToString();
-            chuteItem.Description = string.IsNullOrEmpty(package.ChuteName.ToString()) ? "等待分配..." : "目标分拣位置";
+            chuteItem.Value = package.ChuteNumber.ToString();
+            chuteItem.Description = package.ChuteNumber == 0 ? "等待分配..." : "目标分拣位置";
         }
 
         var timeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "时间");

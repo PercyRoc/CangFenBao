@@ -4,12 +4,12 @@ using Common.Extensions;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
-using Presentation_SeedingWall.Services;
-using Presentation_SeedingWall.ViewModels;
-using Presentation_SeedingWall.ViewModels.Settings;
 using Presentation_SeedingWall.Views;
 using Presentation_SeedingWall.Views.Settings;
 using Prism.Ioc;
+using SeedingWall.Services;
+using SeedingWall.ViewModels;
+using SeedingWall.ViewModels.Settings;
 using Serilog;
 using SharedUI.Extensions;
 

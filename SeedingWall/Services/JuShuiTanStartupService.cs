@@ -1,32 +1,26 @@
 using Common.Services.Settings;
 using Microsoft.Extensions.Hosting;
-using Presentation_SeedingWall.Models;
+using SeedingWall.Models;
 using Serilog;
 
-namespace Presentation_SeedingWall.Services;
+namespace SeedingWall.Services;
 
 /// <summary>
 ///     聚水潭启动服务，用于在程序启动时自动启动聚水潭服务
 /// </summary>
-internal class JuShuiTanStartupService : IHostedService
+/// <remarks>
+///     构造函数
+/// </remarks>
+/// <param name="juShuiTanService">聚水潭服务</param>
+/// <param name="settingsService">设置服务</param>
+internal class JuShuiTanStartupService(
+    IJuShuiTanService juShuiTanService,
+    ISettingsService settingsService) : IHostedService
 {
-    private readonly IJuShuiTanService _juShuiTanService;
-    private readonly ISettingsService _settingsService;
+    private readonly IJuShuiTanService _juShuiTanService = juShuiTanService;
+    private readonly ISettingsService _settingsService = settingsService;
     private bool _isStarted;
     private JuShuiTanSettings? _settings;
-
-    /// <summary>
-    ///     构造函数
-    /// </summary>
-    /// <param name="juShuiTanService">聚水潭服务</param>
-    /// <param name="settingsService">设置服务</param>
-    public JuShuiTanStartupService(
-        IJuShuiTanService juShuiTanService,
-        ISettingsService settingsService)
-    {
-        _juShuiTanService = juShuiTanService;
-        _settingsService = settingsService;
-    }
 
     /// <summary>
     ///     启动服务

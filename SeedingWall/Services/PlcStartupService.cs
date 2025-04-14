@@ -1,30 +1,23 @@
 using Common.Services.Settings;
 using Microsoft.Extensions.Hosting;
-using Presentation_SeedingWall.Models;
+using SeedingWall.Models;
 using Serilog;
 
-namespace Presentation_SeedingWall.Services;
+namespace SeedingWall.Services;
 
 /// <summary>
 ///     PLC启动服务
 /// </summary>
-internal class PlcStartupService : IHostedService
+/// <remarks>
+///     构造函数
+/// </remarks>
+/// <param name="plcService">PLC服务</param>
+/// <param name="settingsService">设置服务</param>
+internal class PlcStartupService(IPlcService plcService, ISettingsService settingsService) : IHostedService
 {
-    private readonly IPlcService _plcService;
-    private readonly ISettingsService _settingsService;
-    private PlcSettings _settings;
-
-    /// <summary>
-    ///     构造函数
-    /// </summary>
-    /// <param name="plcService">PLC服务</param>
-    /// <param name="settingsService">设置服务</param>
-    public PlcStartupService(IPlcService plcService, ISettingsService settingsService)
-    {
-        _plcService = plcService;
-        _settingsService = settingsService;
-        _settings = new PlcSettings();
-    }
+    private readonly IPlcService _plcService = plcService;
+    private readonly ISettingsService _settingsService = settingsService;
+    private PlcSettings _settings = new();
 
     /// <summary>
     ///     启动服务

@@ -1,9 +1,9 @@
 ﻿using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
-using ChongqingJushuitan.ViewModels;
 using Common.Services.Ui;
 using Serilog;
+using MessageBox = HandyControl.Controls.MessageBox;
 
 namespace ChongqingJushuitan.Views;
 
@@ -12,11 +12,8 @@ namespace ChongqingJushuitan.Views;
 /// </summary>
 internal partial class MainWindow
 {
-    private readonly IDialogService _dialogService;
-
-    public MainWindow(IDialogService dialogService, INotificationService notificationService)
+    public MainWindow(INotificationService notificationService)
     {
-        _dialogService = dialogService;
         InitializeComponent();
 
         // 注册Growl容器
@@ -24,6 +21,17 @@ internal partial class MainWindow
 
         // 添加标题栏鼠标事件处理
         MouseDown += OnWindowMouseDown;
+        Closing += MainWindow_Closing;
+        // Loaded 事件已在 XAML 中关联
+    }
+    
+    private void MainWindow_Loaded(object? sender, CancelEventArgs cancelEventArgs)
+    {
+        // 根据当前屏幕的工作区自动计算并设置窗口位置和大小
+        Left = SystemParameters.WorkArea.Left;
+        Top = SystemParameters.WorkArea.Top;
+        Width = SystemParameters.WorkArea.Width;
+        Height = SystemParameters.WorkArea.Height;
     }
 
     private void OnWindowMouseDown(object sender, MouseButtonEventArgs e)
@@ -39,42 +47,27 @@ internal partial class MainWindow
         }
     }
 
-    private async void MetroWindow_Closing(object sender, CancelEventArgs e)
+    private void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
-        try
+        // 阻止默认关闭，我们将通过对话框决定
+        e.Cancel = true;
+
+        // 使用 HandyControl 的 MessageBox 进行确认 (使用简洁重载)
+        var result = MessageBox.Show(
+            "确定要关闭程序吗？", 
+            "关闭确认", 
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Question // 使用 System.Windows 的图标枚举
+        );
+
+        if (result == MessageBoxResult.OK)
         {
-            e.Cancel = true;
-            var result = await _dialogService.ShowIconConfirmAsync(
-                "确定要关闭程序吗？",
-                "关闭确认",
-                MessageBoxImage.Question);
-
-            if (result != MessageBoxResult.Yes) return;
-
-            // 释放MainWindowViewModel
-            if (DataContext is MainWindowViewModel viewModel)
-                // 在后台线程中执行Dispose操作，避免UI线程阻塞
-                await Task.Run(() =>
-                {
-                    try
-                    {
-                        viewModel.Dispose();
-                        Log.Information("主窗口ViewModel已释放");
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex, "释放ViewModel时发生错误");
-                    }
-                });
-
-            e.Cancel = false;
-            Application.Current.Shutdown();
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "关闭程序时发生错误");
-            e.Cancel = true;
-            await _dialogService.ShowErrorAsync("关闭程序时发生错误，请重试", "错误");
+            // 用户确认退出，允许关闭并关闭应用程序
+            Dispatcher.Invoke(() =>
+            {
+                Closing -= MainWindow_Closing; // 取消订阅以避免再次触发
+                Application.Current.Shutdown();
+            });
         }
     }
 }

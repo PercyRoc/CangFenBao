@@ -1,6 +1,6 @@
-using Presentation_SeedingWall.Models;
+using SeedingWall.Models;
 
-namespace Presentation_SeedingWall.Services;
+namespace SeedingWall.Services;
 
 /// <summary>
 ///     聚水潭服务接口
