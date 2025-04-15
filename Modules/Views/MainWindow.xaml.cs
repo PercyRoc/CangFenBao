@@ -5,7 +5,7 @@ using Common.Services.Ui;
 using Serilog;
 using MessageBox = HandyControl.Controls.MessageBox;
 
-namespace Modules.Views;
+namespace ShanghaiModuleBelt.Views;
 
 /// <summary>
 ///     Interaction logic for MainWindow.xaml

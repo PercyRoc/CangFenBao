@@ -1,4 +1,4 @@
-﻿<UserControl x:Class="Modules.Views.SettingsDialog"
+﻿<UserControl x:Class="ShanghaiModuleBelt.Views.SettingsDialog"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -7,9 +7,9 @@
              xmlns:prism="http://prismlibrary.com/"
              xmlns:hc="https://handyorg.github.io/handycontrol"
              xmlns:settings1="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
-             xmlns:views="clr-namespace:Modules.Views"
-             xmlns:viewModels="clr-namespace:Modules.ViewModels"
-             xmlns:settings="clr-namespace:Modules.Views.Settings"
+             xmlns:viewModels="clr-namespace:ShanghaiModuleBelt.ViewModels"
+             xmlns:settings="clr-namespace:ShanghaiModuleBelt.Views.Settings"
+             xmlns:views1="clr-namespace:ShanghaiModuleBelt.Views"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}"
@@ -62,7 +62,7 @@
                                                Tag="TcpSettingsView"
                                                Icon="{ui:SymbolIcon LockClosed24}">
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="views:TcpSettingsView" />
+                                <x:Type Type="views1:TcpSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>

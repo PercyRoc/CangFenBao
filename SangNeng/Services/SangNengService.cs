@@ -1,11 +1,11 @@
-using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Text;
-using System.Text.Json;
 using Common.Services.Settings;
 using Serilog;
 using Sunnen.Models;
 using Sunnen.Models.Settings;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
 
 namespace Sunnen.Services;
 
@@ -25,7 +25,7 @@ internal class SangNengService : ISangNengService
         // 配置基本认证
         var settings = settingsService.LoadSettings<SangNengSettings>();
         Log.Information("加载桑能配置: Username={Username}, Password={Password}", settings.Username, settings.Password);
-        
+
         var authToken = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{settings.Username}:{settings.Password}"));
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authToken);
     }

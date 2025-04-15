@@ -9,9 +9,7 @@
              xmlns:viewModels="clr-namespace:SharedUI.ViewModels"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
-             d:DataContext="{d:DesignInstance Type=viewModels:HistoryDialogViewModel}"
-             Height="720"
-             Width="1280" >
+             d:DataContext="{d:DesignInstance Type=viewModels:HistoryDialogViewModel}" >
 
     <UserControl.Resources>
         <ResourceDictionary>
@@ -19,6 +17,21 @@
                 <ResourceDictionary
                     Source="pack://application:,,,/SharedUI;component/Resources/Styles/ColorStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
+
+            <Style x:Key="ImageButtonStyle" TargetType="Button">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="Visibility" Value="Visible" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding ImagePath}" Value="{x:Null}">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding ImagePath}" Value="">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
         </ResourceDictionary>
     </UserControl.Resources>
 
@@ -147,6 +160,18 @@
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="编号" Binding="{Binding Id}" Width="80" />
                             <DataGridTextColumn Header="条码" Binding="{Binding Barcode}" Width="250" />
+                            <DataGridTemplateColumn Header="图片" Width="60">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Button Style="{StaticResource ImageButtonStyle}"
+                                                Command="{Binding DataContext.OpenImageCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                CommandParameter="{Binding ImagePath}"
+                                                ToolTip="打开图片">
+                                            <ui:SymbolIcon Symbol="Image24" FontSize="18" />
+                                        </Button>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                             <DataGridTextColumn Header="格口" Binding="{Binding ChuteNumber}" Width="80" />
                             <DataGridTextColumn Header="重量(kg)" Binding="{Binding Weight}" Width="100" />
                             <DataGridTextColumn Header="长度(cm)" Binding="{Binding Length, StringFormat={}{0:F1}}"

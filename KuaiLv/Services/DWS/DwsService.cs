@@ -185,7 +185,7 @@ internal class DwsService : IDwsService, IDisposable
                 Log.Information("包裹上报成功：{Barcode}, Message: {Message}", package.Barcode, successMessage);
                 _notificationService.ShowSuccess("包裹上报成功");
                 await _warningLightService.ShowGreenLightAsync();
-                package.SetStatus(PackageStatus.SortSuccess, successMessage);
+                package.SetStatus(PackageStatus.Success, successMessage);
                 return result;
             }
 

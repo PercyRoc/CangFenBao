@@ -694,17 +694,15 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             if (!benNiaoSuccess)
             {
                 Log.Warning("笨鸟系统处理包裹失败：{Barcode}, 错误：{Error}", package.Barcode, errorMessage);
-                package.SetError($"笨鸟系统上传失败: {errorMessage}");
+                package.SetStatus(PackageStatus.Error,$"{errorMessage}");
                 // 设置为异常格口（使用-1表示异常格口）
                 package.SetChute(-1);
-                // 设置状态为异常
-                package.SetStatus(PackageStatus.Error, "异常");
                 Log.Information("包裹 {Barcode} 因笨鸟系统处理失败，分配到异常格口", package.Barcode);
             }
             else
             {
                 // 处理成功，设置状态为分拣成功
-                package.SetStatus(PackageStatus.SortSuccess, "正常");
+                package.SetStatus(PackageStatus.Success);
                 Log.Information("包裹 {Barcode} 笨鸟系统处理成功", package.Barcode);
             }
 
@@ -737,7 +735,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             {
                 Log.Error(ex, "获取格口号时发生错误：{Barcode}, {SegmentCode}",
                     package.Barcode, package.SegmentCode);
-                package.SetError($"获取格口号失败：{ex.Message}");
+                package.SetStatus(PackageStatus.Error,$"{ex.Message}");
                 // 异常时也分配到异常格口，使用-1表示
                 package.SetChute(-1);
                 Log.Information("包裹 {Barcode} 因获取格口号失败，分配到异常格口", package.Barcode);
@@ -766,7 +764,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "处理包裹信息时发生错误：{Barcode}", package.Barcode);
-            package.SetError($"处理失败：{ex.Message}");
+            package.SetStatus(PackageStatus.Error,$"{ex.Message}");
         }
     }
 

@@ -38,6 +38,11 @@ public class PackageDbContext(DbContextOptions<PackageDbContext> options, DateTi
             entity.Property(static e => e.Volume);
             entity.Property(static e => e.ErrorMessage);
             entity.Property(static e => e.ImagePath);
+            entity.Property(static e => e.PalletName);
+            entity.Property(static e => e.PalletWeight);
+            entity.Property(static e => e.PalletLength);
+            entity.Property(static e => e.PalletWidth);
+            entity.Property(static e => e.PalletHeight);
         });
 
         modelBuilder.Entity<PackageRecord>()

@@ -111,20 +111,22 @@ internal class PackageDataService : IPackageDataService
                 // 这里选择添加新记录而不是更新，因为可能表示新的扫描
             }
 
-            // 构建插入SQL - 根据 PackageRecord 实际字段调整列名
+            // 构建插入SQL - 加入托盘信息字段
             var insertSql = $@"
                 INSERT INTO {tableName} (
                     Id, PackageIndex, Barcode, SegmentCode, Weight, ChuteNumber, Status, StatusDisplay,
-                    CreateTime, Length, Width, Height, Volume, ErrorMessage, ImagePath
+                    CreateTime, Length, Width, Height, Volume, ErrorMessage, ImagePath,
+                    PalletName, PalletWeight, PalletLength, PalletWidth, PalletHeight
                 ) VALUES (
                     NULL, @PackageIndex, @Barcode, @SegmentCode, @Weight, @ChuteNumber, @Status, @StatusDisplay,
-                    @CreateTime, @Length, @Width, @Height, @Volume, @ErrorMessage, @ImagePath
+                    @CreateTime, @Length, @Width, @Height, @Volume, @ErrorMessage, @ImagePath,
+                    @PalletName, @PalletWeight, @PalletLength, @PalletWidth, @PalletHeight
                 )";
 
             await using var insertCommand = connection.CreateCommand();
             insertCommand.CommandText = insertSql;
 
-            // 添加参数 - 移除不存在的字段并修正字段类型
+            // 添加参数 - 移除不存在的字段并修正字段类型，加入托盘信息参数
             insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@PackageIndex", record.Index));
             insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@Barcode", record.Barcode));
             insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@SegmentCode",
@@ -149,6 +151,16 @@ internal class PackageDataService : IPackageDataService
                 record.ErrorMessage as object ?? DBNull.Value));
             insertCommand.Parameters.Add(
                 new Microsoft.Data.Sqlite.SqliteParameter("@ImagePath", record.ImagePath as object ?? DBNull.Value));
+            insertCommand.Parameters.Add(
+                new Microsoft.Data.Sqlite.SqliteParameter("@PalletName", record.PalletName as object ?? DBNull.Value));
+            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@PalletWeight",
+                 record.PalletWeight.HasValue ? record.PalletWeight.Value : DBNull.Value));
+            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@PalletLength",
+                 record.PalletLength.HasValue ? record.PalletLength.Value : DBNull.Value));
+            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@PalletWidth",
+                 record.PalletWidth.HasValue ? record.PalletWidth.Value : DBNull.Value));
+            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@PalletHeight",
+                 record.PalletHeight.HasValue ? record.PalletHeight.Value : DBNull.Value));
 
             await insertCommand.ExecuteNonQueryAsync();
 
@@ -619,6 +631,9 @@ internal class PackageDataService : IPackageDataService
             await EnsureMonthlyTableExists(currentMonth);
             await EnsureMonthlyTableExists(nextMonth);
 
+            // 检查并修复所有现有表的结构
+            await FixAllTablesStructureAsync();
+
             // 清理过期的表（保留近6个月的数据）
             await CleanupOldTables(6);
 
@@ -628,6 +643,33 @@ internal class PackageDataService : IPackageDataService
         {
             Log.Error(ex, "初始化包裹数据库时发生错误");
             throw;
+        }
+    }
+
+    /// <summary>
+    ///     检查并修复所有现有表的结构
+    /// </summary>
+    private async Task FixAllTablesStructureAsync()
+    {
+        try
+        {
+            Log.Information("正在检查所有表结构...");
+            var tableNames = await GetAllPackageTableNamesAsync();
+            
+            foreach (var tableName in tableNames)
+            {
+                if (TryParseDateFromTableName(tableName, out var tableDate))
+                {
+                    Log.Information("正在检查表 {TableName} 的结构", tableName);
+                    await FixTableStructureAsync(tableDate);
+                }
+            }
+            
+            Log.Information("所有表结构检查完成");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "检查所有表结构时发生错误");
         }
     }
 
@@ -721,7 +763,12 @@ internal class PackageDataService : IPackageDataService
                                                       Volume REAL,
                                                       Information TEXT(500),
                                                       ErrorMessage TEXT(500),
-                                                      ImagePath TEXT(255)
+                                                      ImagePath TEXT(255),
+                                                      PalletName TEXT(50),
+                                                      PalletWeight REAL,
+                                                      PalletLength REAL,
+                                                      PalletWidth REAL,
+                                                      PalletHeight REAL
                                                   )
                                   """;
 
@@ -829,10 +876,15 @@ internal class PackageDataService : IPackageDataService
             var checkTableSql = $"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='{tableName}'";
             var connection = dbContext.Database.GetDbConnection();
             await connection.OpenAsync();
-            await using var command = connection.CreateCommand();
-            command.CommandText = checkTableSql;
-            var result = await command.ExecuteScalarAsync();
-            var tableExists = Convert.ToInt32(result) > 0;
+            
+            bool tableExists;
+            // 使用单独的命令检查表是否存在
+            await using (var checkTableCommand = connection.CreateCommand())
+            {
+                checkTableCommand.CommandText = checkTableSql;
+                var result = await checkTableCommand.ExecuteScalarAsync();
+                tableExists = Convert.ToInt32(result) > 0;
+            }
 
             if (!tableExists)
             {
@@ -842,14 +894,19 @@ internal class PackageDataService : IPackageDataService
                 return;
             }
 
-            // 检查表结构
-            var checkColumnSql = $"PRAGMA table_info({tableName})";
-            command.CommandText = checkColumnSql;
+            // 获取表的列信息
             var columns = new List<string>();
-            await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
+            var checkColumnSql = $"PRAGMA table_info({tableName})";
+            
+            // 使用单独的命令获取列信息
+            await using (var checkColumnCommand = connection.CreateCommand())
             {
-                columns.Add(reader.GetString(1)); // 列名在第二列
+                checkColumnCommand.CommandText = checkColumnSql;
+                await using var reader = await checkColumnCommand.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    columns.Add(reader.GetString(1)); // 列名在第二列
+                }
             }
 
             // 定义所有必需的列
@@ -870,10 +927,16 @@ internal class PackageDataService : IPackageDataService
                 { "Volume", "REAL" },
                 { "Information", "TEXT(500)" },
                 { "ErrorMessage", "TEXT(500)" },
-                { "ImagePath", "TEXT(255)" }
+                { "ImagePath", "TEXT(255)" },
+                { "PalletName", "TEXT(50)" },
+                { "PalletWeight", "REAL" },
+                { "PalletLength", "REAL" },
+                { "PalletWidth", "REAL" },
+                { "PalletHeight", "REAL" }
             };
 
             // 检查并添加缺失的列
+            bool hasColumnChanges = false;
             foreach (var column in requiredColumns)
             {
                 if (!columns.Contains(column.Key))
@@ -881,12 +944,16 @@ internal class PackageDataService : IPackageDataService
                     var addColumnSql = $"ALTER TABLE {tableName} ADD COLUMN {column.Key} {column.Value}";
                     await dbContext.Database.ExecuteSqlRawAsync(addColumnSql);
                     Log.Information("已添加列 {Column} 到表：{TableName}", column.Key, tableName);
+                    hasColumnChanges = true;
                 }
             }
 
             // 检查是否需要删除ChuteName列
             if (columns.Contains("ChuteName"))
             {
+                Log.Information("表 {TableName} 包含已废弃的ChuteName列，将进行结构重建", tableName);
+                hasColumnChanges = true;
+                
                 // 由于SQLite不支持直接删除列，我们需要创建一个新表并迁移数据
                 var tempTableName = $"{tableName}_temp";
 
@@ -908,22 +975,22 @@ internal class PackageDataService : IPackageDataService
                                                   Volume REAL,
                                                   Information TEXT(500),
                                                   ErrorMessage TEXT(500),
-                                                  ImagePath TEXT(255)
+                                                  ImagePath TEXT(255),
+                                                  PalletName TEXT(50),
+                                                  PalletWeight REAL,
+                                                  PalletLength REAL,
+                                                  PalletWidth REAL,
+                                                  PalletHeight REAL
                                               )
                                           """;
                 await dbContext.Database.ExecuteSqlRawAsync(createTempTableSql);
 
+                // 构建列名列表（排除ChuteName）
+                var validColumns = columns.Where(c => c != "ChuteName").ToList();
+                var columnList = string.Join(", ", validColumns);
+
                 // 迁移数据
-                var migrateDataSql = $"""
-                                          INSERT INTO {tempTableName} (
-                                              Id, PackageIndex, Barcode, SegmentCode, Weight, Status, StatusDisplay,
-                                              CreateTime, Length, Width, Height, Volume, Information, ErrorMessage, ImagePath
-                                          )
-                                          SELECT 
-                                              Id, PackageIndex, Barcode, SegmentCode, Weight, Status, StatusDisplay,
-                                              CreateTime, Length, Width, Height, Volume, Information, ErrorMessage, ImagePath
-                                          FROM {tableName}
-                                      """;
+                var migrateDataSql = $"INSERT INTO {tempTableName} ({columnList}) SELECT {columnList} FROM {tableName}";
                 await dbContext.Database.ExecuteSqlRawAsync(migrateDataSql);
 
                 // 删除旧表
@@ -938,20 +1005,43 @@ internal class PackageDataService : IPackageDataService
             }
 
             // 创建索引（如果不存在）
-            var checkIndexSql =
-                $"SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='IX_{tableName}_CreateTime_Barcode'";
-            command.CommandText = checkIndexSql;
-            result = await command.ExecuteScalarAsync();
-            var indexExists = Convert.ToInt32(result) > 0;
-
-            if (!indexExists)
+            bool indexExists;
+            var checkIndexSql = $"SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='IX_{tableName}_CreateTime_Barcode'";
+            
+            // 使用单独的命令检查索引是否存在
+            await using (var checkIndexCommand = connection.CreateCommand())
             {
+                checkIndexCommand.CommandText = checkIndexSql;
+                var result = await checkIndexCommand.ExecuteScalarAsync();
+                indexExists = Convert.ToInt32(result) > 0;
+            }
+
+            if (!indexExists || hasColumnChanges)
+            {
+                // 如果索引不存在或者表结构有变化
+                if (indexExists)
+                {
+                    // 先删除旧索引
+                    var dropIndexSql = $"DROP INDEX IF EXISTS IX_{tableName}_CreateTime_Barcode";
+                    await dbContext.Database.ExecuteSqlRawAsync(dropIndexSql);
+                }
+
+                // 创建新索引
                 var createIndexSql = $"""
                                           CREATE INDEX IX_{tableName}_CreateTime_Barcode 
                                           ON {tableName}(CreateTime, Barcode)
                                       """;
                 await dbContext.Database.ExecuteSqlRawAsync(createIndexSql);
-                Log.Information("已创建索引：IX_{tableName}_CreateTime_Barcode", tableName);
+                Log.Information("已创建索引：IX_{TableName}_CreateTime_Barcode", tableName);
+            }
+            
+            if (hasColumnChanges)
+            {
+                Log.Information("表 {TableName} 的结构更新完成", tableName);
+            }
+            else
+            {
+                Log.Debug("表 {TableName} 的结构已是最新", tableName);
             }
         }
         catch (Exception ex)

@@ -383,7 +383,7 @@
                                Source="{Binding CurrentImage}"
                                RenderOptions.BitmapScalingMode="HighQuality"
                                RenderOptions.EdgeMode="Aliased"
-                               Stretch="Uniform"
+                               Stretch="Fill"
                                StretchDirection="Both"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center" />

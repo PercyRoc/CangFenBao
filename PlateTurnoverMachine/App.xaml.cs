@@ -9,14 +9,14 @@ using DongtaiFlippingBoardMachine.Models;
 using DongtaiFlippingBoardMachine.Services;
 using DongtaiFlippingBoardMachine.ViewModels;
 using DongtaiFlippingBoardMachine.ViewModels.Settings;
+using DongtaiFlippingBoardMachine.Views;
+using DongtaiFlippingBoardMachine.Views.Settings;
 using Microsoft.Extensions.Hosting;
-using PlateTurnoverMachine.Views;
-using PlateTurnoverMachine.Views.Settings;
 using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 
-namespace PlateTurnoverMachine;
+namespace DongtaiFlippingBoardMachine;
 
 /// <summary>
 ///     Interaction logic for App.xaml

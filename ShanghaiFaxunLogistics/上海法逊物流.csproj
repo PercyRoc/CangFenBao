@@ -1,0 +1,51 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>仓分宝-上海法逊物流</AssemblyName>
+    <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
+    <RootNamespace>ShanghaiFaxunLogistics</RootNamespace>
+  </PropertyGroup>
+
+
+  <ItemGroup>
+    <ProjectReference Include="..\Common\Common.csproj" />
+    <ProjectReference Include="..\DeviceService\DeviceService.csproj" />
+    <ProjectReference Include="..\SharedUI\SharedUI.csproj" />
+    <ProjectReference Include="..\SortingServices\SortingServices.csproj" />
+</ItemGroup>
+
+<ItemGroup>
+    <!-- Prism -->
+    <PackageReference Include="Prism.DryIoc" />
+    <PackageReference Include="Prism.Wpf" />
+
+    <!-- Serilog -->
+    <PackageReference Include="Serilog" />
+    <PackageReference Include="Serilog.Sinks.Console" />
+    <PackageReference Include="Serilog.Sinks.File" />
+    <PackageReference Include="Serilog.Sinks.Debug" />
+    <PackageReference Include="Serilog.Extensions.Logging" />
+
+    <!-- UI Framework -->
+    <PackageReference Include="MahApps.Metro.IconPacks.Material" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="FluentFTP" />
+    <PackageReference Include="WPF-UI" />
+    <PackageReference Include="HandyControl" />
+    <PackageReference Include="EPPlus" />
+
+    <!-- WebSocket -->
+    <PackageReference Include="WebSocketSharp-netstandard" />
+</ItemGroup>
+
+<ItemGroup>
+    <Resource Include="..\SharedUI\Resources\Icon\logo.ico">
+        <Link>logo.ico</Link>
+    </Resource>
+</ItemGroup>
+</Project>

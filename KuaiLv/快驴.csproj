@@ -39,14 +39,6 @@
     </ItemGroup>
 
     <ItemGroup>
-        <Page Update="Views\MainWindow.xaml">
-            <Generator>MSBuild:Compile</Generator>
-            <XamlRuntime>Wpf</XamlRuntime>
-            <SubType>Designer</SubType>
-        </Page>
-    </ItemGroup>
-
-    <ItemGroup>
         <Resource Include="..\SharedUI\Resources\Icon\logo.ico">
             <Link>logo.ico</Link>
         </Resource>

@@ -99,7 +99,7 @@ public class SortingService : IDisposable
             }
             package.PackageCount = initialCount; // 使用计算出的初始值
 
-            package.SetStatus(PackageStatus.SortSuccess);
+            package.SetStatus(PackageStatus.Success);
             _packageQueue.Enqueue(package);
             Log.Information("包裹 {Barcode} 已添加到分拣队列，目标格口：{ChuteNumber}, 初始计数: {InitialCount}", package.Barcode, package.ChuteNumber, package.PackageCount);
         }

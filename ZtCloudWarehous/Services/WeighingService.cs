@@ -8,20 +8,23 @@ using Serilog;
 using ZtCloudWarehous.Models;
 using ZtCloudWarehous.Utils;
 using ZtCloudWarehous.ViewModels.Settings;
+using System.Diagnostics;
 
 namespace ZtCloudWarehous.Services;
 
 /// <summary>
 ///     称重服务实现
 /// </summary>
-internal class WeighingService(HttpClient httpClient, ISettingsService settingsService) : IWeighingService
+internal class WeighingService(ISettingsService settingsService) : IWeighingService, IDisposable
 {
+    private readonly HttpClient _httpClient = new();
     private const string UatBaseUrl = "https://scm-gateway-uat.ztocwst.com/edi/service/inbound/bz";
     private const string ProdBaseUrl = "https://scm-openapi.ztocwst.com/edi/service/inbound/bz";
 
     /// <inheritdoc />
     public async Task<WeighingResponse> SendWeightDataAsync(WeighingRequest request)
     {
+        var stopwatch = new Stopwatch();
         try
         {
             var settings = settingsService.LoadSettings<WeighingSettings>();
@@ -100,8 +103,15 @@ internal class WeighingService(HttpClient httpClient, ISettingsService settingsS
             var requestBody = new StringContent(businessParamsJsonForBody, Encoding.UTF8, System.Net.Mime.MediaTypeNames.Application.Json); // 使用 MediaTypeNames 修正类型
             // 记录请求 URL 和 Body
             Log.Debug("发送称重请求 URL: {RequestUrl}", requestUrl);
+            Log.Debug("发送称重请求 Body: {RequestBody}", businessParamsJsonForBody);
+
             // 发送请求 (包含 Body)
-            var response = await httpClient.PostAsync(requestUrl, requestBody);
+            stopwatch.Start();
+            var response = await _httpClient.PostAsync(requestUrl, requestBody);
+            stopwatch.Stop();
+            Log.Information("称重请求 HttpClient.PostAsync 耗时: {ElapsedMilliseconds}ms for {Barcode}",
+                stopwatch.ElapsedMilliseconds, request.WaybillCode);
+
             // 读取响应内容
             var responseContent = await response.Content.ReadAsStringAsync();
             Log.Debug("收到服务器响应: {Response}", responseContent);
@@ -143,8 +153,14 @@ internal class WeighingService(HttpClient httpClient, ISettingsService settingsS
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "发送称重数据时发生错误");
+            Log.Error(ex, "发送称重数据时发生错误，耗时: {ElapsedMilliseconds}ms", stopwatch.ElapsedMilliseconds);
             throw;
         }
+    }
+
+    public void Dispose()
+    {
+        _httpClient.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

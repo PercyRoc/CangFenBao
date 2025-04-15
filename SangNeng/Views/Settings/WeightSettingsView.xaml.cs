@@ -1,4 +1,4 @@
-namespace SangNeng.Views.Settings;
+namespace Sunnen.Views.Settings;
 
 internal partial class WeightSettingsView
 {

@@ -79,13 +79,40 @@ public class PackageRecord
     /// <summary>
     ///     状态显示文本
     /// </summary>
+    [MaxLength(500)]
     public string StatusDisplay { get; set; } = string.Empty;
 
     /// <summary>
     ///     图片路径
     /// </summary>
-    [MaxLength(255)]
+    [StringLength(255)]
     public string? ImagePath { get; set; }
+
+    /// <summary>
+    ///     托盘名称 (Sunnen项目专用)
+    /// </summary>
+    [StringLength(50)]
+    public string? PalletName { get; set; }
+
+    /// <summary>
+    ///     托盘重量，单位kg (Sunnen项目专用)
+    /// </summary>
+    public double? PalletWeight { get; set; }
+
+    /// <summary>
+    ///     托盘长度，单位cm (Sunnen项目专用)
+    /// </summary>
+    public double? PalletLength { get; set; }
+
+    /// <summary>
+    ///     托盘宽度，单位cm (Sunnen项目专用)
+    /// </summary>
+    public double? PalletWidth { get; set; }
+
+    /// <summary>
+    ///     托盘高度，单位cm (Sunnen项目专用)
+    /// </summary>
+    public double? PalletHeight { get; set; }
 
     /// <summary>
     ///     从包裹信息创建记录
@@ -107,7 +134,12 @@ public class PackageRecord
             Volume = info.Volume,
             Status = info.Status,
             ImagePath = info.ImagePath,
-            StatusDisplay = info.StatusDisplay
+            StatusDisplay = info.StatusDisplay,
+            PalletName = info.PalletName,
+            PalletWeight = info.PalletWeight,
+            PalletLength = info.PalletLength,
+            PalletWidth = info.PalletWidth,
+            PalletHeight = info.PalletHeight
         };
         return record;
     }

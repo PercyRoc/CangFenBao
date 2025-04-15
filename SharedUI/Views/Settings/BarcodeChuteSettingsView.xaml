@@ -64,6 +64,66 @@
                                       Value="{Binding Configuration.ErrorChuteNumber, UpdateSourceTrigger=PropertyChanged}"
                                       ClearButtonEnabled="False" />
                     </Grid>
+                    
+                    <!-- 超时格口 -->
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Text="超时格口："
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
+
+                        <ui:NumberBox Grid.Column="1"
+                                      Width="120"
+                                      HorizontalAlignment="Left"
+                                      Value="{Binding Configuration.TimeoutChuteNumber, UpdateSourceTrigger=PropertyChanged}"
+                                      ClearButtonEnabled="False" />
+                    </Grid>
+
+                    <!-- NoRead格口 -->
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Text="NoRead格口："
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
+
+                        <ui:NumberBox Grid.Column="1"
+                                      Width="120"
+                                      HorizontalAlignment="Left"
+                                      Value="{Binding Configuration.NoReadChuteNumber, UpdateSourceTrigger=PropertyChanged}"
+                                      ClearButtonEnabled="False" />
+                    </Grid>
+
+                    <!-- 重量不匹配格口 -->
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Text="重量不匹配格口："
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
+
+                        <ui:NumberBox Grid.Column="1"
+                                      Width="120"
+                                      HorizontalAlignment="Left"
+                                      Value="{Binding Configuration.WeightMismatchChuteNumber, UpdateSourceTrigger=PropertyChanged}"
+                                      ClearButtonEnabled="False" />
+                    </Grid>
                 </StackPanel>
             </ui:Card>
 

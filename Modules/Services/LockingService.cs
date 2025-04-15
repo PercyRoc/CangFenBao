@@ -5,7 +5,7 @@ using Serilog;
 using ShanghaiModuleBelt.Models;
 using SortingServices.Common;
 
-namespace Modules.Services;
+namespace ShanghaiModuleBelt.Services;
 
 /// <summary>
 ///     锁格服务，负责与锁格设备通信

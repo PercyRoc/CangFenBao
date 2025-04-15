@@ -1,11 +1,11 @@
-﻿<ui:FluentWindow x:Class="SangNeng.Views.Windows.MainWindow"
+﻿<ui:FluentWindow x:Class="Sunnen.Views.Windows.MainWindow"
                  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
                  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:hc="https://handyorg.github.io/handycontrol"
-                 xmlns:windows1="clr-namespace:SangNeng.ViewModels.Windows"
+                 xmlns:windows1="clr-namespace:Sunnen.ViewModels.Windows"
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=windows1:MainWindowViewModel}"
                  Title="CangFenBao-SangNeng"
@@ -588,22 +588,53 @@
                                   ItemsSource="{Binding PackageHistory}"
                                   CanUserAddRows="False"
                                   CanUserDeleteRows="False"
-                                  GridLinesVisibility="Horizontal">
+                                  GridLinesVisibility="Horizontal"
+                                  AutoGenerateColumns="False">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="No." Binding="{Binding Index}" Width="60" />
-                                <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" Width="160" />
-                                <DataGridTextColumn Header="Weight" Binding="{Binding WeightDisplay}" Width="80" />
-                                <DataGridTextColumn Header="Size" Binding="{Binding VolumeDisplay}" Width="200" />
-                                <DataGridTextColumn Header="Status" Binding="{Binding StatusDisplay}" Width="*">
+                                <DataGridTextColumn Header="No." Binding="{Binding Index}" MinWidth="60" Width="Auto" />
+                                <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" MinWidth="160" Width="Auto" />
+                                <DataGridTextColumn Header="Weight" Binding="{Binding WeightDisplay}" MinWidth="80" Width="Auto" />
+                                <DataGridTextColumn Header="Size" Binding="{Binding VolumeDisplay}" MinWidth="200" Width="Auto" />
+                                <DataGridTextColumn Header="Pallet" Binding="{Binding PalletName}" MinWidth="100" Width="Auto">
                                     <DataGridTextColumn.CellStyle>
                                         <Style TargetType="DataGridCell">
+                                            <Setter Property="ToolTip">
+                                                <Setter.Value>
+                                                    <StackPanel>
+                                                        <TextBlock Text="{Binding PalletName, StringFormat=Pallet: {0}}" FontWeight="Bold" Margin="0,0,0,5"/>
+                                                        <TextBlock Text="{Binding PalletWeight, StringFormat=Weight: {0:F3} kg}"/>
+                                                        <TextBlock>
+                                                            <TextBlock.Text>
+                                                                <MultiBinding StringFormat="Size: {0:F1}×{1:F1}×{2:F1} cm">
+                                                                    <Binding Path="PalletLength"/>
+                                                                    <Binding Path="PalletWidth"/>
+                                                                    <Binding Path="PalletHeight"/>
+                                                                </MultiBinding>
+                                                            </TextBlock.Text>
+                                                        </TextBlock>
+                                                    </StackPanel>
+                                                </Setter.Value>
+                                            </Setter>
                                             <Style.Triggers>
-                                                <DataTrigger Binding="{Binding StatusDisplay}" Value="Success">
-                                                    <Setter Property="Background" Value="#4CAF50"/>
-                                                    <Setter Property="Foreground" Value="White"/>
+                                                <DataTrigger Binding="{Binding PalletName}" Value="">
+                                                    <Setter Property="Foreground" Value="Gray"/>
                                                 </DataTrigger>
-                                                <DataTrigger Binding="{Binding StatusDisplay}" Value="Failed">
-                                                    <Setter Property="Background" Value="#F44336"/>
+                                                <DataTrigger Binding="{Binding PalletName}" Value="noPallet">
+                                                    <Setter Property="Foreground" Value="Gray"/>
+                                                    <Setter Property="Content" Value="None"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGridTextColumn.CellStyle>
+                                </DataGridTextColumn>
+                                <DataGridTextColumn Header="Status" Binding="{Binding StatusDisplay}" MinWidth="100" Width="Auto">
+                                    <DataGridTextColumn.CellStyle>
+                                        <Style TargetType="DataGridCell">
+                                            <Setter Property="Background" Value="#F44336"/>
+                                            <Setter Property="Foreground" Value="White"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Status}" Value="Success">
+                                                    <Setter Property="Background" Value="#4CAF50"/>
                                                     <Setter Property="Foreground" Value="White"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
@@ -612,7 +643,7 @@
                                 </DataGridTextColumn>
                                 <DataGridTextColumn Header="Time"
                                                     Binding="{Binding CreateTime, StringFormat={}{0:HH:mm:ss}}"
-                                                    Width="100" />
+                                                    MinWidth="100" Width="Auto" />
                             </DataGrid.Columns>
                         </DataGrid>
                     </Grid>

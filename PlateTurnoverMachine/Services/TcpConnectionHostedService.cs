@@ -1,7 +1,6 @@
 using Common.Services.Settings;
 using DongtaiFlippingBoardMachine.Models;
 using Microsoft.Extensions.Hosting;
-using PlateTurnoverMachine.Models;
 using Serilog;
 
 namespace DongtaiFlippingBoardMachine.Services;

@@ -1,7 +1,7 @@
 ﻿using System.Windows;
 using SharedUI.Views.Settings;
 
-namespace PlateTurnoverMachine.Views;
+namespace DongtaiFlippingBoardMachine.Views;
 
 public partial class SettingsDialog
 {

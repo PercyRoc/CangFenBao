@@ -1,12 +1,3 @@
-using System.Collections.ObjectModel;
-using System.Drawing;
-using System.Drawing.Drawing2D;
-using System.IO;
-using System.Reactive.Linq;
-using System.Windows;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using Common.Data;
 using Common.Models.Package;
 using Common.Services.Audio;
@@ -22,14 +13,21 @@ using Prism.Commands;
 using Prism.Events;
 using Prism.Mvvm;
 using Prism.Services.Dialogs;
-using SangNeng.Models;
 using Serilog;
 using SharedUI.Models;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
 using Sunnen.Events;
+using Sunnen.Models;
 using Sunnen.Services;
 using Sunnen.ViewModels.Settings;
+using System.Collections.ObjectModel;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.IO;
+using System.Reactive.Linq;
+using System.Windows;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Color = System.Drawing.Color;
 using Timer = System.Timers.Timer;
 
@@ -66,7 +64,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private ImageSource? _volumeImage;
     private string _lastProcessedBarcode = string.Empty;
     private DateTime _lastProcessedTime = DateTime.MinValue;
-    private const int DuplicateBarcodeIntervalMs = 500; // Define the interval in milliseconds
+    private const int DuplicateBarcodeIntervalMs = 500;
 
     /// <summary>
     ///     构造函数
@@ -272,11 +270,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
             items[0].Value = PackageHistory.Count.ToString();
 
             // 更新成功数
-            var successCount = PackageHistory.Count(p => p.Status == PackageStatus.MeasureSuccess);
+            var successCount = PackageHistory.Count(p => p.Status == PackageStatus.Success);
             items[1].Value = successCount.ToString();
 
             // 更新失败数
-            var failedCount = PackageHistory.Count(p => p.Status == PackageStatus.MeasureFailed);
+            var failedCount = PackageHistory.Count(p => p.Status == PackageStatus.Failed);
             items[2].Value = failedCount.ToString();
 
             // 计算处理速率（每小时）
@@ -294,23 +292,21 @@ public class MainWindowViewModel : BindableBase, IDisposable
     public void OnBarcodeScanned(object? sender, string barcode)
     {
         // 直接在事件处理程序中调用异步方法，并添加异常处理
-        ProcessBarcodeAsync(barcode).ContinueWith(task => 
+        ProcessBarcodeAsync(barcode).ContinueWith(task =>
         {
-            if (task is { IsFaulted: true, Exception: not null })
+            if (task is not { IsFaulted: true, Exception: not null }) return;
+            // 记录任何未处理的异常
+            Log.Error(task.Exception, "处理条码时发生未捕获的异常: {Barcode}", barcode);
+
+            // 确保在UI线程更新界面和播放错误音效
+            Application.Current.Dispatcher.Invoke(() =>
             {
-                // 记录任何未处理的异常
-                Log.Error(task.Exception, "处理条码时发生未捕获的异常: {Barcode}", barcode);
-                
-                // 确保在UI线程更新界面和播放错误音效
-                Application.Current.Dispatcher.Invoke(() => 
-                {
-                    PlayErrorSound();
-                    UpdatePackageStatus("Error");
-                });
-            }
+                PlayErrorSound();
+                UpdatePackageStatusWithEnum(PackageStatus.Error, "System Error");
+            });
         }, TaskScheduler.Current);
     }
-    
+
     // 将原有的实现移到这个私有异步方法中
     private async Task ProcessBarcodeAsync(string barcode)
     {
@@ -322,39 +318,37 @@ public class MainWindowViewModel : BindableBase, IDisposable
         await Task.Delay(volumeSettings.TimeoutMs);
 
         Log.Information("开始处理包裹: {Barcode}", barcode);
-        
+
         try
         {
             // 防止短时间内重复处理相同或相似条码
             var now = DateTime.Now;
-            bool isDuplicate = barcode == _lastProcessedBarcode &&
-                               (now - _lastProcessedTime).TotalMilliseconds < DuplicateBarcodeIntervalMs;
-            
-            // 检查完全相同的条码
-            
+            var isDuplicate = barcode == _lastProcessedBarcode &&
+                              (now - _lastProcessedTime).TotalMilliseconds < DuplicateBarcodeIntervalMs;
+
             // 检查包含关系的条码（处理条码前缀或后缀问题）
-            if (!isDuplicate && !string.IsNullOrEmpty(_lastProcessedBarcode) && 
+            if (!isDuplicate && !string.IsNullOrEmpty(_lastProcessedBarcode) &&
                 (now - _lastProcessedTime).TotalMilliseconds < DuplicateBarcodeIntervalMs)
             {
                 // 较长的条码包含较短的条码
-                if (_lastProcessedBarcode.Contains(barcode) && barcode.Length > 5 || 
+                if (_lastProcessedBarcode.Contains(barcode) && barcode.Length > 5 ||
                     barcode.Contains(_lastProcessedBarcode) && _lastProcessedBarcode.Length > 5)
                 {
                     isDuplicate = true;
                 }
             }
-            
+
             if (isDuplicate)
             {
-                Log.Warning("忽略相似条码：{Barcode}，上一条码：{LastBarcode}，间隔仅 {Interval} 毫秒", 
+                Log.Warning("忽略相似条码：{Barcode}，上一条码：{LastBarcode}，间隔仅 {Interval} 毫秒",
                     barcode, _lastProcessedBarcode, (now - _lastProcessedTime).TotalMilliseconds);
                 return;
             }
-            
+
             // 更新最后处理的条码和时间
             _lastProcessedBarcode = barcode;
             _lastProcessedTime = now;
-            
+
             // 重置错误音效播放标志
             _hasPlayedErrorSound = false;
 
@@ -373,9 +367,22 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // 创建新的包裹对象
             _currentPackage = PackageInfo.Create();
             _currentPackage.SetBarcode(barcode);
-            _currentPackage.SetSegmentCode(string.Empty);
-            _currentPackage.SetTriggerTimestamp(DateTime.Now);
-            _currentPackage.SetStatus(PackageStatus.Measuring);
+            _currentPackage.SetStatus(PackageStatus.Created);
+
+            // 设置当前选中的托盘信息到包裹实例
+            if (SelectedPallet != null)
+            {
+                _currentPackage.SetPallet(
+                    SelectedPallet.Name,
+                    SelectedPallet.Weight,
+                    SelectedPallet.Length,
+                    SelectedPallet.Width,
+                    SelectedPallet.Height);
+
+                Log.Information("设置包裹托盘信息：{PalletName}, 重量: {Weight}kg, 尺寸: {Length}×{Width}×{Height}cm",
+                    SelectedPallet.Name, SelectedPallet.Weight,
+                    SelectedPallet.Length, SelectedPallet.Width, SelectedPallet.Height);
+            }
 
             // 并行执行相机拍照、体积测量和重量获取，添加超时处理
             var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10)); // 10秒超时
@@ -383,7 +390,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 // 创建三个并行任务
                 Task<bool> photoTask;
-                Image<Rgba32>? capturedImage = null;
+                BitmapSource? capturedImage = null;
                 var imageCaptured = false;
                 var imageLock = new object();
 
@@ -404,9 +411,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                     lock (imageLock)
                                     {
                                         if (imageCaptured) return;
-                                        // 由于类型不兼容，我们不能直接将 BitmapSource 赋值给 Image<Rgba32>
-                                        capturedImage = null; // 不存储图像，因为类型不兼容
-                                        CurrentImage = imageData; // 但可以直接更新UI显示
+                                        capturedImage = imageData.Clone(); // 保存图像副本
+                                        CurrentImage = imageData; // 更新UI显示
                                         imageCaptured = true;
                                         Log.Information("已从图像流获取一帧图像");
                                     }
@@ -475,10 +481,49 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 // 等待所有任务完成
                 await Task.WhenAll(photoTask, volumeTask, weightTask);
                 // 更新体积（使用cm³作为单位）
-                _currentPackage.SetDimensions(_currentPackage.Length ?? 0, _currentPackage.Width ?? 0, _currentPackage.Height ?? 0);
-                // 播放成功音效
-                _ = _audioService.PlayPresetAsync(AudioType.Success);
+                _currentPackage.SetDimensions(_currentPackage.Length ?? 0, _currentPackage.Width ?? 0,
+                    _currentPackage.Height ?? 0);
 
+                // 检查三个必要条件是否都满足：条码、重量和体积
+                var isBarcodeMissing = string.IsNullOrEmpty(_currentPackage.Barcode);
+                var isWeightMissing = _currentPackage.Weight <= 0;
+                var isVolumeMissing = (_currentPackage.Length ?? 0) <= 0 ||
+                                      (_currentPackage.Width ?? 0) <= 0 ||
+                                      (_currentPackage.Height ?? 0) <= 0;
+
+                var isComplete = !isBarcodeMissing && !isWeightMissing && !isVolumeMissing;
+                var completionMessage = "Complete"; // 成功时的默认消息
+
+                if (!isComplete)
+                {
+                    Log.Warning("包裹信息不完整。条码缺失: {BarcodeMissing}, 重量缺失: {WeightMissing}, 体积缺失: {VolumeMissing}",
+                        isBarcodeMissing, isWeightMissing, isVolumeMissing);
+
+                    // 确定具体的错误消息
+                    if (isBarcodeMissing) completionMessage = "Missing Barcode";
+                    else if (isWeightMissing) completionMessage = "Missing Weight";
+                    else if (isVolumeMissing) completionMessage = "Missing Volume";
+                    else completionMessage = "Data Incomplete"; // 后备，理论上不会发生
+
+                    _currentPackage.SetStatus(PackageStatus.Failed, completionMessage);
+                    PlayErrorSound();
+                    // 立即更新失败状态的UI
+                    Application.Current.Dispatcher.Invoke(() =>
+                        UpdatePackageStatusWithEnum(PackageStatus.Failed, completionMessage));
+                }
+                else
+                {
+                    // 仅在信息完整时播放成功音效
+                    _ = _audioService.PlayPresetAsync(AudioType.Success);
+                    _currentPackage.SetStatus(PackageStatus.Success, completionMessage); // 使用默认的 "Complete" 消息
+                    // 立即更新成功状态的UI
+                    Application.Current.Dispatcher.Invoke(() =>
+                        UpdatePackageStatusWithEnum(PackageStatus.Success, completionMessage));
+                }
+
+                // ---- 公共步骤 ----
+
+                // 更新UI尺寸显示（总是执行）
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     var items = PackageInfoItems.ToList();
@@ -488,19 +533,16 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     PackageInfoItems = [.. items];
                 });
 
-                UpdatePackageStatus("Complete");
-
-                // 添加到历史记录
+                // 添加到历史记录（总是执行）
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     PackageHistory.Insert(0, _currentPackage);
-
                     // 更新统计信息
                     UpdateStatistics();
                 });
 
-                // 在体积测量完成后保存捕获的图像
-                Image<Rgba32>? imageToProcess = null;
+                // 保存捕获的图像（总是执行，如果已捕获，即使包裹不完整也可能保存）
+                BitmapSource? imageToProcess = null;
                 string? base64Image = null;
                 string? imageName = null;
 
@@ -510,9 +552,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     {
                         if (capturedImage != null)
                         {
+                            // 对于BitmapSource，复制操作可通过.Clone()或创建一个冻结副本
                             imageToProcess = capturedImage.Clone();
-                            capturedImage.Dispose(); // 释放原始图像
-                            capturedImage = null;
+                            capturedImage = null; // 释放原始引用
                         }
                     }
 
@@ -529,67 +571,83 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         catch (Exception ex)
                         {
                             Log.Error(ex, "保存图像到文件时发生错误");
+                            // 不在此处更新包状态，因为它可能已经是Failed或Error
                         }
                     else
                         Log.Warning("未能捕获到图像");
                 }
-                finally
-                {
-                    imageToProcess?.Dispose();
-                }
-
-                // 调用桑能接口上传数据
-                try
-                {
-                    var request = new SangNengWeightRequest
-                    {
-                        Barcode = _currentPackage.Barcode,
-                        Weight = _currentPackage.Weight,
-                        Length = _currentPackage.Length ?? 0,
-                        Width = _currentPackage.Width ?? 0,
-                        Height = _currentPackage.Height ?? 0,
-                        Volume = _currentPackage.Volume ?? 0,
-                        Timestamp = _currentPackage.CreateTime.ToString("yyyy-MM-dd HH:mm:ss"),
-                        Image = base64Image ?? string.Empty,
-                        ImageName = imageName ?? string.Empty
-                    };
-
-                    var response = await _sangNengService.SendWeightDataAsync(request);
-                    if (response.Code != 1) // 修改为判断 Code == 1 表示成功
-                    {
-                        Log.Warning("上传数据到桑能服务器失败: {Message}", response.Message);
-                        Application.Current.Dispatcher.Invoke(() => UpdatePackageStatus("Upload Failed"));
-                    }
-                    else
-                    {
-                        Log.Information("成功上传数据到桑能服务器");
-                    }
-                }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "上传数据到桑能服务器时发生错误");
-                    Application.Current.Dispatcher.Invoke(() => UpdatePackageStatus("Upload Error"));
+                    Log.Error(ex, "处理图像时发生错误: {Error}", ex.Message);
+                    // 不在此处更新包状态
                 }
 
-                // 在后台保存到数据库，不等待完成
+                // 调用桑能接口上传数据 (仅当信息完整时)
+                if (isComplete) // 检查完整性标志
+                {
+                    try
+                    {
+                        var request = new SangNengWeightRequest
+                        {
+                            Barcode = _currentPackage.Barcode,
+                            Weight = _currentPackage.Weight,
+                            Length = _currentPackage.Length ?? 0,
+                            Width = _currentPackage.Width ?? 0,
+                            Height = _currentPackage.Height ?? 0,
+                            Volume = _currentPackage.Volume ?? 0,
+                            Timestamp = _currentPackage.CreateTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                            Image = base64Image ?? string.Empty,
+                            ImageName = imageName ?? string.Empty
+                        };
+
+                        var response = await _sangNengService.SendWeightDataAsync(request);
+                        if (response.Code != 1) // 修改为判断 Code == 1 表示成功
+                        {
+                            Log.Warning("上传数据到桑能服务器失败: {Message}", response.Message);
+                            // 如果上传失败，保持状态为 Success 但记录错误
+                            // Application.Current.Dispatcher.Invoke(() => UpdatePackageStatusWithEnum(PackageStatus.Error, "Upload Failed"));
+                        }
+                        else
+                        {
+                            Log.Information("成功上传数据到桑能服务器");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "上传数据到桑能服务器时发生错误");
+                        // 记录错误，但不改变 Success 状态
+                        // Application.Current.Dispatcher.Invoke(() => UpdatePackageStatusWithEnum(PackageStatus.Error, "Upload Error"));
+                    }
+                }
+                else
+                {
+                    Log.Information("包裹信息不完整，跳过上传到桑能服务器");
+                }
+
+
+                // 在后台保存到数据库（总是执行）
                 _ = Task.Run(async () =>
                 {
                     try
                     {
+                        // 移除此处的完整性检查
                         await _packageDataService.AddPackageAsync(_currentPackage);
-                        Log.Information("包裹数据已保存到数据库：{Barcode}", _currentPackage.Barcode);
+                        Log.Information("包裹数据已保存到数据库：{Barcode}, 状态: {Status}, 消息: {StatusDisplay}",
+                            _currentPackage.Barcode, _currentPackage.Status, _currentPackage.StatusDisplay);
                     }
                     catch (Exception ex)
                     {
                         Log.Error(ex, "保存包裹数据到数据库时发生错误：{Barcode}", _currentPackage.Barcode);
-                        Application.Current.Dispatcher.Invoke(() => UpdatePackageStatus("Database Error"));
+                        // 如果数据库保存失败，只记录日志
+                        // Application.Current.Dispatcher.Invoke(() => UpdatePackageStatusWithEnum(PackageStatus.Error, "Database Error"));
                     }
-                }, cts.Token);
+                    // 使用 CancellationToken.None 以确保即使主操作超时也尝试保存
+                }, CancellationToken.None);
             }
             catch (OperationCanceledException)
             {
                 Log.Warning("处理包裹超时：{Barcode}", barcode);
-                UpdatePackageStatus("Timeout");
+                UpdatePackageStatusWithEnum(PackageStatus.Error, "Timeout");
             }
         }
         catch (Exception ex)
@@ -626,7 +684,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
             try
             {
-                _currentPackage.SetStatus(PackageStatus.Measuring, "Measuring");
+                _currentPackage.SetStatus(PackageStatus.Created, "Measuring");
 
                 // 触发测量
                 var result = await Task.Run(_volumeCamera.TriggerMeasure, cancellationToken);
@@ -634,14 +692,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 {
                     Log.Error("体积测量失败：{Error}", result.ErrorMessage);
                     _currentPackage.SetDimensions(0, 0, 0);
-                    _currentPackage.SetStatus(PackageStatus.MeasureFailed, result.ErrorMessage);
+                    _currentPackage.SetStatus(PackageStatus.Failed, result.ErrorMessage);
                     PlayErrorSound();
                     return;
                 }
 
                 // 更新测量结果（将毫米转换为厘米）
                 _currentPackage.SetDimensions(result.Length / 10.0, result.Width / 10.0, result.Height / 10.0);
-                _currentPackage.SetStatus(PackageStatus.MeasureSuccess, "Success");
+                _currentPackage.SetStatus(PackageStatus.Success, "Success");
             }
             finally
             {
@@ -659,7 +717,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    private static async Task<(string base64Image, string imageName)?> SaveImageAsync(Image<Rgba32> image,
+    /// <summary>
+    /// 保存图像到文件，添加水印，并返回Base64编码的图像和名称
+    /// </summary>
+    private static async Task<(string base64Image, string imageName)?> SaveImageAsync(BitmapSource image,
         CameraSettings settings, PackageInfo package,
         CancellationToken cancellationToken)
     {
@@ -669,7 +730,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             string? base64Image = null;
             var imageName = string.Empty;
 
-            await Task.Run(async () =>
+            await Task.Run(() =>
             {
                 try
                 {
@@ -682,27 +743,38 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     var extension = settings.ImageFormat switch
                     {
                         ImageFormat.Jpeg => ".jpg",
-                        ImageFormat.Png => ".png", 
+                        ImageFormat.Png => ".png",
                         ImageFormat.Bmp => ".bmp",
                         ImageFormat.Tiff => ".tiff",
                         _ => ".jpg"
                     };
                     var filePath = Path.Combine(settings.ImageSavePath, imageName + extension);
 
-                    // 先保存原始图像到临时文件
+                    // 先保存BitmapSource到临时文件
                     tempFilePath = Path.Combine(settings.ImageSavePath, $"temp_{imageName}{extension}");
-                    await using (var fileStream =
-                                 new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
+
+                    // 使用BitmapEncoder保存BitmapSource
+                    BitmapEncoder encoder = settings.ImageFormat switch
                     {
-                        try
-                        {
-                            await image.SaveAsJpegAsync(fileStream, cancellationToken);
-                        }
-                        catch (OperationCanceledException)
-                        {
-                            Log.Warning("保存图像操作被取消");
-                            throw; // 重新抛出异常，让上层处理
-                        }
+                        ImageFormat.Jpeg => new JpegBitmapEncoder { QualityLevel = 90 },
+                        ImageFormat.Png => new PngBitmapEncoder(),
+                        ImageFormat.Bmp => new BmpBitmapEncoder(),
+                        ImageFormat.Tiff => new TiffBitmapEncoder(),
+                        _ => new JpegBitmapEncoder { QualityLevel = 90 }
+                    };
+
+                    encoder.Frames.Add(BitmapFrame.Create(image));
+
+                    using (var fileStream =
+                           new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
+                    {
+                        encoder.Save(fileStream);
+                    }
+
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        Log.Warning("保存图像操作被取消");
+                        return Task.CompletedTask;
                     }
 
                     // 使用 System.Drawing 添加水印
@@ -723,6 +795,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
                             $"Volume: {package.Volume / 1000.0:N0}cm³",
                             $"Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}"
                         };
+
+                        // 如果有使用托盘，添加托盘信息到水印
+                        if (!string.IsNullOrEmpty(package.PalletName) && package.PalletName != "noPallet")
+                        {
+                            var palletLines = new List<string>(watermarkLines);
+                            palletLines.Insert(1, $"Pallet: {package.PalletName} ({package.PalletWeight:F3}kg)");
+                            watermarkLines = palletLines.ToArray();
+                        }
 
                         const int padding = 20;
                         const int lineSpacing = 50;
@@ -753,6 +833,13 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     Log.Warning("图像处理操作被取消");
                     throw; // 重新抛出异常，让上层处理
                 }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "图像处理过程中发生错误: {Error}", ex.Message);
+                    throw;
+                }
+
+                return Task.CompletedTask;
             }, cancellationToken);
 
             return (base64Image!, imageName);
@@ -782,49 +869,55 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    private void UpdatePackageStatus(string status)
+    /// <summary>
+    /// 使用PackageStatus枚举直接更新包裹状态和UI
+    /// </summary>
+    private void UpdatePackageStatusWithEnum(PackageStatus status, string customDisplay)
     {
-        Application.Current.Dispatcher.Invoke(UpdateAction);
-        return;
+        var items = PackageInfoItems.ToList();
+        var statusItem = items[3]; // 状态项
+        items[2].Value = DateTime.Now.ToString("HH:mm:ss"); // 更新时间项
 
-        void UpdateAction()
+        // 根据枚举设置显示文字和颜色
+        string displayText;
+        string color;
+
+        switch (status)
         {
-            var items = PackageInfoItems.ToList();
-            var statusItem = items[3]; // 状态项
-            items[2].Value = DateTime.Now.ToString("HH:mm:ss"); // 更新时间项
+            case PackageStatus.Success:
+                displayText = "Success";
+                color = "#4CAF50"; // 绿色
+                break;
 
-            // 根据状态设置文字和颜色
-            var (displayText, color) = status.ToLower() switch
-            {
-                "success" or "complete" => ("Success", "#4CAF50"), // 绿色
-                "failed" or "error" or "timeout" or "upload failed" or "database error" => ("Failed", "#FF0000"), // 红色
-                _ => ("Waiting", "#808080") // 灰色（默认）
-            };
+            case PackageStatus.Failed:
+                displayText = "Failed";
+                color = "#FF0000"; // 红色
+                break;
 
-            statusItem.Value = displayText;
-            statusItem.StatusColor = color;
+            case PackageStatus.Error:
+                // 如果有自定义显示文字，优先使用
+                displayText = !string.IsNullOrEmpty(customDisplay) ? customDisplay : "Error";
+                color = "#FF0000"; // 红色
+                break;
 
-            // 更新当前包裹的状态显示
-            if (_currentPackage != null)
-            {
-                var packageStatus = status.ToLower() switch
-                {
-                    "success" or "complete" => PackageStatus.MeasureSuccess,
-                    "failed" or "error" => PackageStatus.MeasureFailed,
-                    "timeout" => PackageStatus.Error,
-                    "upload failed" => PackageStatus.Error,
-                    "database error" => PackageStatus.Error,
-                    _ => _currentPackage.Status // 保持原状态
-                };
-                
-                if (packageStatus != _currentPackage.Status)
-                {
-                    _currentPackage.SetStatus(packageStatus, displayText);
-                }
-            }
-
-            PackageInfoItems = [.. items];
+            default:
+                // 等待或其他状态
+                displayText = "Waiting";
+                color = "#808080"; // 灰色
+                break;
         }
+
+        // 更新状态项显示
+        statusItem.Value = displayText;
+        statusItem.StatusColor = color;
+
+        // 更新包裹状态
+        if (_currentPackage != null && status != _currentPackage.Status)
+        {
+            _currentPackage.SetStatus(status, displayText);
+        }
+
+        PackageInfoItems = [.. items];
     }
 
     private void OnVolumeCameraConnectionChanged(string deviceId, bool isConnected)

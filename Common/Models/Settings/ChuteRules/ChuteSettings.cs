@@ -12,6 +12,9 @@ public class ChuteSettings : BindableBase
     private int _chuteCount = 1;
     private Dictionary<int, BarcodeMatchRule> _chuteRules = [];
     private int _errorChuteNumber;
+    private int _timeoutChuteNumber;
+    private int _noReadChuteNumber;
+    private int _weightMismatchChuteNumber;
 
     [Range(1, 100, ErrorMessage = "格口数量必须在1-100之间")]
     public int ChuteCount
@@ -25,6 +28,27 @@ public class ChuteSettings : BindableBase
     {
         get => _errorChuteNumber;
         set => SetProperty(ref _errorChuteNumber, value);
+    }
+
+    [Range(0, 100, ErrorMessage = "超时格口必须在0-100之间")]
+    public int TimeoutChuteNumber
+    {
+        get => _timeoutChuteNumber;
+        set => SetProperty(ref _timeoutChuteNumber, value);
+    }
+
+    [Range(0, 100, ErrorMessage = "NoRead格口必须在0-100之间")]
+    public int NoReadChuteNumber
+    {
+        get => _noReadChuteNumber;
+        set => SetProperty(ref _noReadChuteNumber, value);
+    }
+
+    [Range(0, 100, ErrorMessage = "重量不匹配格口必须在0-100之间")]
+    public int WeightMismatchChuteNumber
+    {
+        get => _weightMismatchChuteNumber;
+        set => SetProperty(ref _weightMismatchChuteNumber, value);
     }
 
     public Dictionary<int, BarcodeMatchRule> ChuteRules

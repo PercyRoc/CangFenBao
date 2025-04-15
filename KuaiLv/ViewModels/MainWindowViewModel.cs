@@ -63,7 +63,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
         // 初始化使用场景列表
         InitializeScenarios();
-        
+
         // 加载应用设置
         LoadAppSettings();
 
@@ -456,9 +456,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         // 根据状态设置颜色
         statusItem.StatusColor = package.Status switch
         {
-            PackageStatus.SortSuccess or PackageStatus.LoadingSuccess or PackageStatus.MeasureSuccess or PackageStatus.WeighSuccess 
+            PackageStatus.Success
                 => "#4CAF50", // 绿色表示成功
-            PackageStatus.Error or PackageStatus.Timeout or PackageStatus.MeasureFailed or PackageStatus.WeighFailed or PackageStatus.SortFailed or PackageStatus.LoadingRejected 
+            PackageStatus.Error or PackageStatus.Timeout
                 => "#F44336", // 红色表示错误、超时或失败
             _ => "#2196F3" // 其他状态（如进行中、等待中）使用蓝色或其他中性色
         };
@@ -480,10 +480,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     // 更新实时包裹数据
                     UpdatePackageInfoItems(package);
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    Log.Error(ex, "更新UI时发生错误");
-                    package.SetError($"更新UI失败：{ex.Message}");
                     UpdatePackageInfoItems(package);
                 }
             });
@@ -504,7 +502,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 else
                 {
                     // 其他失败情况，设置错误信息
-                    package.SetError($"DWS上报失败：{dwsResponse.Message}");
+                    package.SetStatus(PackageStatus.Error, $"DWS上报失败：{dwsResponse.Message}");
                 }
 
                 await _audioService.PlayPresetAsync(AudioType.SystemError);
@@ -513,7 +511,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             {
                 await _audioService.PlayPresetAsync(AudioType.Success);
                 // DWS 上报成功后，设置包裹状态为成功并显示服务器返回信息
-                package.SetStatus(PackageStatus.SortSuccess, $"成功：{dwsResponse.Message}");
+                package.SetStatus(PackageStatus.Success, $"成功：{dwsResponse.Message}");
             }
 
             Application.Current.Dispatcher.Invoke(() => UpdatePackageInfoItems(package));
@@ -552,7 +550,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 catch (Exception ex)
                 {
                     Log.Error(ex, "更新历史记录和统计信息时发生错误");
-                    package.SetError($"更新统计失败：{ex.Message}");
                     UpdatePackageInfoItems(package);
                 }
             });
@@ -560,8 +557,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "处理包裹信息时发生错误：{Barcode}", package.Barcode);
-            package.SetError($"处理失败：{ex.Message}");
-            // 确保在发生错误时更新UI显示
             Application.Current.Dispatcher.Invoke(() => UpdatePackageInfoItems(package));
         }
         finally

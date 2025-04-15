@@ -2,7 +2,7 @@ using System.Windows;
 using Common.Services.Ui;
 using SharedUI.Views.Settings;
 
-namespace SangNeng.Views.Dialogs;
+namespace Sunnen.Views.Dialogs;
 
 public partial class SettingsControl
 {
@@ -21,4 +21,4 @@ public partial class SettingsControl
         // 导航到相机设置页面
         RootNavigation?.Navigate(typeof(CameraSettingsView));
     }
-} 
+}

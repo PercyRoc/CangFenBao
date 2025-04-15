@@ -2,6 +2,7 @@
 using System.Globalization;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -22,6 +23,29 @@ using XinBeiYang.Models.Communication;
 using XinBeiYang.Services;
 
 namespace XinBeiYang.ViewModels;
+
+#region 条码模式枚举
+/// <summary>
+/// 条码模式枚举
+/// </summary>
+public enum BarcodeMode
+{
+    /// <summary>
+    /// 多条码模式（合并处理）
+    /// </summary>
+    MultiBarcode,
+    
+    /// <summary>
+    /// 仅处理母条码（符合正则表达式的条码）
+    /// </summary>
+    ParentBarcode,
+    
+    /// <summary>
+    /// 仅处理子条码（不符合正则表达式的条码）
+    /// </summary>
+    ChildBarcode
+}
+#endregion
 
 #region 设备状态信息类
 /// <summary>
@@ -178,6 +202,17 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     private bool _isPlcRejectWarningVisible; // PLC拒绝警告可见性标志
     private bool _isPlcAbnormalWarningVisible; // PLC异常警告可见性标志
     private CancellationTokenSource? _rejectionWarningCts;
+    private BarcodeMode _barcodeMode = BarcodeMode.MultiBarcode; // 默认为多条码模式
+    private int _selectedBarcodeModeIndex; // 新增：用于绑定 ComboBox 的 SelectedIndex
+    
+    // 母条码正则表达式
+    private static readonly Regex ParentBarcodeRegex = new(
+        @"^(JD[0-9A-GI-MO-RT-Z]{12}\d)([-,N])([1-9][0-9]{0,5})([-,S])([0-9A-GI-MO-RT-Z]{1,6})([-,H]\w{0,8})?$|" +
+        @"^(\w{1,5}\d{1,20})([-,N])([1-9][0-9]{0,5})([-,S])([0-9A-GI-MO-RT-Z]{1,6})([-,H]\w{0,8})?$|" + 
+        @"^([Zz][Yy])[A-Za-z0-9]{13}[-][1-9][0-9]*[-][1-9][0-9]*[-]?$|" +
+        @"^([A-Z0-9]{8,})(-|N)([1-9]d{0,2})(-|S)([1-9]d{0,2})([-|H][A-Za-z0-9]*)$|" +
+        @"^AK.*$|^BX.*$|^BC.*$|^AD.*$",
+        RegexOptions.Compiled);
 
     // Define new Brush constants (or create them inline)
     private static readonly Brush BackgroundWaiting = new SolidColorBrush(Color.FromArgb(0xAA, 0x21, 0x96, 0xF3)); // 蓝色 (增加透明度) - Changed from purple
@@ -207,6 +242,11 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         // 初始化命令
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
 
+        // 加载保存的条码模式配置
+        LoadBarcodeModeFromSettings();
+        // 初始化 SelectedIndex
+        _selectedBarcodeModeIndex = (int)_barcodeMode;
+
         // 初始化系统状态更新定时器
         _timer = new DispatcherTimer
         {
@@ -235,18 +275,65 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
 
         // 订阅包裹流
         _subscriptions.Add(packageTransferService.PackageStream
-            .ObserveOn(Scheduler.CurrentThread)
-            .Subscribe(package =>
+            .ObserveOn(Scheduler.Default) // GroupBy and Buffer can run on a background thread
+            .Where(FilterBarcodeByMode) // 根据当前条码模式过滤包裹
+            .GroupBy(p => GetBarcodePrefix(p.Barcode))
+            .SelectMany(group => group
+                // Buffer for a short time (e.g., 1 second) or until 2 items arrive
+                .Buffer(TimeSpan.FromSeconds(1), 2)
+                // If Buffer emits an empty list, filter it out.
+                .Where(buffer => buffer.Count > 0)
+            )
+            .ObserveOn(Scheduler.CurrentThread) // Switch back to UI thread for OnPackageInfo and UI updates
+            .Subscribe(buffer =>
             {
+                PackageInfo packageToProcess;
+                
+                // 多条码模式下才尝试合并
+                if (buffer.Count == 2 && BarcodeMode == BarcodeMode.MultiBarcode)
+                {
+                    // Ensure consistent order if needed (e.g., non-suffix first)
+                    var p1 = buffer.FirstOrDefault(p => !p.Barcode.EndsWith("-1-1-")) ?? buffer[0];
+                    var p2 = buffer.FirstOrDefault(p => p.Barcode.EndsWith("-1-1-")) ?? buffer[1];
+                    var prefix = GetBarcodePrefix(p1.Barcode);
+                    Log.Information("收到成对包裹，前缀 {Prefix}。准备合并: Index1={Index1}, Index2={Index2}", prefix, p1.Index, p2.Index);
+                    packageToProcess = MergePackageInfo(p1, p2);
+                    // Release images from original packages after merging
+                    p1.ReleaseImage();
+                    p2.ReleaseImage();
+                    Log.Information("包裹合并完成: Index={MergedIndex}, Barcode='{MergedBarcode}'", packageToProcess.Index, packageToProcess.Barcode);
+                }
+                else // buffer.Count == 1 或非多条码模式
+                {
+                    packageToProcess = buffer[0];
+                    if (buffer.Count == 2)
+                    {
+                        // 非多条码模式处理第一个包裹，释放第二个
+                        buffer[1].ReleaseImage();
+                        Log.Information("非多条码模式下收到两个包裹，只处理第一个，条码: {Barcode} (序号: {Index})", packageToProcess.Barcode, packageToProcess.Index);
+                    }
+                    else if (BarcodeMode == BarcodeMode.MultiBarcode)
+                    {
+                        Log.Warning("等待包裹 {Barcode} (序号: {Index}) 的配对超时。将单独处理。", packageToProcess.Barcode, packageToProcess.Index);
+                    }
+                    else
+                    {
+                        Log.Information("单条码模式下处理包裹: {Barcode} (序号: {Index})", packageToProcess.Barcode, packageToProcess.Index);
+                    }
+                }
+
                 try
                 {
-                    _ = OnPackageInfo(package);
+                    _ = OnPackageInfo(packageToProcess); // Process the merged or single package
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "处理包裹时发生错误");
+                    Log.Error(ex, "处理合并后/单个包裹时发生错误: {Barcode}", packageToProcess?.Barcode ?? "N/A");
+                    // Clean up the package if processing failed early
+                    packageToProcess?.ReleaseImage();
                 }
-            }));
+            }, ex => Log.Error(ex, "包裹合并流处理中发生未处理异常")) // Add overall error handling for the stream
+        );
 
         // 订阅图像流
         _subscriptions.Add(_cameraService.ImageStream
@@ -522,6 +609,82 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     {
         get => _isPlcAbnormalWarningVisible;
         private set => SetProperty(ref _isPlcAbnormalWarningVisible, value);
+    }
+
+    /// <summary>
+    /// 条码模式
+    /// </summary>
+    public BarcodeMode BarcodeMode
+    {
+        get => _barcodeMode;
+        set
+        {
+            if (SetProperty(ref _barcodeMode, value))
+            {
+                Log.Information("条码模式已更改为: {Mode}", GetBarcodeModeDisplayText(value));
+                
+                // 保存条码模式到配置
+                SaveBarcodeModeToSettings(value);
+                // 更新 SelectedIndex 属性以同步 UI
+                // 注意：这里不需要再次调用 SetProperty，因为它会在 SelectedBarcodeModeIndex 的 setter 中被调用
+                _selectedBarcodeModeIndex = (int)value;
+                RaisePropertyChanged(nameof(SelectedBarcodeModeIndex)); // 手动通知 SelectedIndex 更改
+            }
+        }
+    }
+
+    /// <summary>
+    /// 用于绑定 ComboBox.SelectedIndex 的属性
+    /// </summary>
+    public int SelectedBarcodeModeIndex
+    {
+        get => _selectedBarcodeModeIndex;
+        set
+        {
+            // 使用 SetProperty 检查值是否真的改变
+            if (SetProperty(ref _selectedBarcodeModeIndex, value))
+            {
+                // 当 Index 改变时，更新 BarcodeMode 枚举属性
+                // BarcodeMode 的 setter 会处理日志记录和保存设置
+                BarcodeMode = (BarcodeMode)value;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 获取条码模式的显示文本
+    /// </summary>
+    private static string GetBarcodeModeDisplayText(BarcodeMode mode)
+    {
+        return mode switch
+        {
+            BarcodeMode.MultiBarcode => "多条码",
+            BarcodeMode.ParentBarcode => "母条码",
+            BarcodeMode.ChildBarcode => "子条码",
+            _ => "未知模式"
+        };
+    }
+    
+    /// <summary>
+    /// 根据当前设置的条码模式过滤包裹
+    /// </summary>
+    private bool FilterBarcodeByMode(PackageInfo package)
+    {
+        // 检查是否有效条码
+        if (string.IsNullOrEmpty(package.Barcode) || string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+        
+        bool isParentBarcode = ParentBarcodeRegex.IsMatch(package.Barcode);
+        
+        return BarcodeMode switch
+        {
+            BarcodeMode.MultiBarcode => true, // 多条码模式不过滤
+            BarcodeMode.ParentBarcode => isParentBarcode, // 母条码模式只处理符合正则的条码
+            BarcodeMode.ChildBarcode => !isParentBarcode, // 子条码模式只处理不符合正则的条码
+            _ => true
+        };
     }
 
     /// <summary>
@@ -902,14 +1065,18 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             // 在收到条码时播放等待上包音效
             _ = _audioService.PlayPresetAsync(AudioType.WaitingForLoading);
 
-            // 向PLC发送上传请求
+            // 向PLC发送上传请求 - 使用条码前缀
             var plcRequestTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            string plcBarcode = GetBarcodePrefix(package.Barcode); // Use the prefix for PLC communication
+            Log.Information("向PLC发送上传请求: Barcode={PlcBarcode}, Weight={Weight}, Length={L}, Width={W}, Height={H}",
+                plcBarcode, package.Weight, package.Length, package.Width, package.Height);
+
             var (isSuccess, isTimeout, commandId, packageId) = await _plcCommunicationService.SendUploadRequestAsync(
                 (float)package.Weight,
                 (float)(package.Length ?? 0),
                 (float)(package.Width ?? 0),
                 (float)(package.Height ?? 0),
-                package.Barcode,
+                plcBarcode, // Send prefix barcode
                 string.Empty,
                 (ulong)plcRequestTimestamp);
 
@@ -919,21 +1086,21 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                 if (isTimeout) // 4. 上包结果为1时（超时）
                 {
                     Log.Warning("包裹 {Barcode}(序号:{Index}) 上包超时，CommandId={CommandId}", package.Barcode, package.Index, commandId);
-                    package.SetError($"上包超时 (序号: {package.Index})"); // UpdateUiFromPackage使用的错误消息
+                    package.SetStatus(PackageStatus.Error,$"上包超时 (序号: {package.Index})"); // UpdateUiFromPackage使用的错误消息
                     // 播放上包超时音效
                     _ = _audioService.PlayPresetAsync(AudioType.LoadingTimeout);
                 }
                 else // 3. ACK结果反馈为1驳回请求时
                 {
                     Log.Warning("包裹 {Barcode}(序号:{Index}) 上包请求被拒绝，CommandId={CommandId}", package.Barcode, package.Index, commandId);
-                    package.SetError($"上包拒绝 (序号: {package.Index})"); // UpdateUiFromPackage使用的错误消息
+                    package.SetStatus(PackageStatus.Error,$"上包拒绝 (序号: {package.Index})"); // UpdateUiFromPackage使用的错误消息
                     // 播放拒绝上包音效
                     _ = _audioService.PlayPresetAsync(AudioType.LoadingRejected);
                 }
             }
             else // PLC上传请求成功（ACK = 0）
             {
-                package.SetStatus(PackageStatus.SortSuccess, "上包完成");
+                package.SetStatus(PackageStatus.Success, "上包完成");
                 Log.Information("包裹 {Barcode}(序号:{Index}) 上包成功，CommandId={CommandId}, 包裹流水号={PackageId}", package.Barcode, package.Index, commandId, packageId);
                 // 播放上包成功音效
                 _ = _audioService.PlayPresetAsync(AudioType.LoadingSuccess);
@@ -1029,7 +1196,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "处理包裹 {Barcode}(序号:{Index}) 时发生错误", package.Barcode, package.Index);
-            package.SetError($"处理失败：{ex.Message} (序号: {package.Index})");
+            package.SetStatus(PackageStatus.Error,$"处理失败：{ex.Message} (序号: {package.Index})");
             UpdateUiFromPackage(package); // 即使出错也更新UI
             // 对于一般错误，继续使用系统错误音效
             _ = _audioService.PlayPresetAsync(AudioType.SystemError);
@@ -1037,6 +1204,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         finally
         {
            package.ReleaseImage();
+           Log.Debug("包裹处理完成，图像资源已释放: Index={Index}", package.Index);
            // Consider if _rejectionWarningCts needs cancellation here in case of exceptions
         }
     }
@@ -1294,6 +1462,130 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             Log.Error(ex, "处理PLC拒绝警告超时时出错");
             // 发生意外错误时，也尝试隐藏警告以防卡住
              Application.Current.Dispatcher.Invoke(() => IsPlcRejectWarningVisible = false);
+        }
+    }
+
+    /// <summary>
+    /// 获取条码的前缀（移除 "-1-1-" 后缀）
+    /// </summary>
+    private string GetBarcodePrefix(string? barcode)
+    {
+        const string suffix = "-1-1-";
+        if (barcode != null && barcode.EndsWith(suffix))
+        {
+            return barcode.Substring(0, barcode.Length - suffix.Length);
+        }
+        return barcode ?? string.Empty;
+    }
+
+    /// <summary>
+    /// 合并两个相关的 PackageInfo 对象
+    /// </summary>
+    private PackageInfo MergePackageInfo(PackageInfo p1, PackageInfo p2)
+    {
+        // 确定哪个是基础包（无后缀），哪个是后缀包
+        PackageInfo basePackage = p1.Barcode != null && p1.Barcode.EndsWith("-1-1-") ? p2 : p1;
+        PackageInfo suffixPackage = p1.Barcode != null && p1.Barcode.EndsWith("-1-1-") ? p1 : p2;
+
+        var mergedPackage = PackageInfo.Create(); // 获取新的序号和初始状态
+
+        // 使用较早的创建时间
+        mergedPackage.SetTriggerTimestamp(basePackage.CreateTime < suffixPackage.CreateTime ? basePackage.CreateTime : suffixPackage.CreateTime);
+
+        // 合并条码: prefix;suffix-barcode
+        string prefix = GetBarcodePrefix(basePackage.Barcode);
+        string combinedBarcode = $"{prefix};{(suffixPackage.Barcode ?? string.Empty)}";
+        mergedPackage.SetBarcode(combinedBarcode);
+
+        // 优先使用 basePackage 的数据，如果缺失则用 suffixPackage 的
+        mergedPackage.SetSegmentCode(basePackage.SegmentCode ?? suffixPackage.SegmentCode);
+        mergedPackage.SetWeight(basePackage.Weight > 0 ? basePackage.Weight : suffixPackage.Weight);
+
+        // 优先使用 basePackage 的尺寸
+        if (basePackage.Length.HasValue && basePackage.Width.HasValue && basePackage.Height.HasValue && basePackage.Length > 0)
+        {
+            mergedPackage.SetDimensions(basePackage.Length.Value, basePackage.Width.Value, basePackage.Height.Value);
+        }
+        else if (suffixPackage.Length.HasValue && suffixPackage.Width.HasValue && suffixPackage.Height.HasValue && suffixPackage.Length > 0)
+        {
+             mergedPackage.SetDimensions(suffixPackage.Length.Value, suffixPackage.Width.Value, suffixPackage.Height.Value);
+        }
+
+        // 图像处理：优先使用 basePackage 的图像，并克隆/冻结
+        BitmapSource? imageToUse = null;
+        string? imagePathToUse = null; // 保留图像路径（如果可用）
+
+        BitmapSource? sourceImage = basePackage.Image ?? suffixPackage.Image;
+        string? sourceImagePath = basePackage.ImagePath ?? suffixPackage.ImagePath; // 获取可能的路径
+
+        if (sourceImage != null)
+        {
+            try
+            {
+                 imageToUse = sourceImage.Clone(); // 克隆图像
+                 if (imageToUse.CanFreeze)
+                 {
+                     imageToUse.Freeze(); // 冻结以确保线程安全
+                     Log.Debug("为合并后的包裹克隆并冻结了图像: OriginalBarcode={BaseBarcode}", basePackage.Barcode);
+                 }
+                 else
+                 {
+                     Log.Warning("为合并后的包裹克隆的图像无法冻结: OriginalBarcode={BaseBarcode}", basePackage.Barcode);
+                 }
+                 imagePathToUse = sourceImagePath; // 使用关联的路径
+            }
+            catch (Exception imgEx)
+            {
+                Log.Error(imgEx, "为合并后的包裹克隆或冻结图像时出错: OriginalBarcode={BaseBarcode}", basePackage.Barcode);
+                imageToUse = null; // 出错则不设置图像
+                imagePathToUse = null;
+            }
+        }
+
+        mergedPackage.SetImage(imageToUse, imagePathToUse); // 设置克隆/冻结的图像和路径
+
+        // 初始状态为 Created
+        Log.Debug("合并后的包裹信息: Index={Index}, Barcode='{Barcode}', Weight={Weight}, Dimensions='{Dims}', ImageSet={HasImage}, ImagePath='{Path}'",
+            mergedPackage.Index, mergedPackage.Barcode, mergedPackage.Weight, mergedPackage.VolumeDisplay, mergedPackage.Image != null, mergedPackage.ImagePath ?? "N/A");
+
+
+        return mergedPackage;
+    }
+
+    /// <summary>
+    /// 从配置中加载条码模式设置
+    /// </summary>
+    private void LoadBarcodeModeFromSettings()
+    {
+        try
+        {
+            var config = _settingsService.LoadSettings<HostConfiguration>();
+            // 设置模式，但不触发保存 (避免循环)
+            _barcodeMode = config.BarcodeMode;
+            Log.Information("从配置加载条码模式: {Mode}", GetBarcodeModeDisplayText(_barcodeMode));
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "加载条码模式配置时出错，使用默认模式");
+            _barcodeMode = BarcodeMode.MultiBarcode;
+        }
+    }
+
+    /// <summary>
+    /// 保存条码模式到配置
+    /// </summary>
+    private void SaveBarcodeModeToSettings(BarcodeMode mode)
+    {
+        try
+        {
+            var config = _settingsService.LoadSettings<HostConfiguration>();
+            config.BarcodeMode = mode;
+            _settingsService.SaveSettings(config);
+            Log.Information("条码模式已保存到配置: {Mode}", GetBarcodeModeDisplayText(mode));
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "保存条码模式配置时出错");
         }
     }
 

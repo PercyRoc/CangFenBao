@@ -1,6 +1,6 @@
 using Common.Services.Ui;
 
-namespace SangNeng.Views.Windows;
+namespace Sunnen.Views.Dialogs;
 
 public partial class HistoryControl
 {

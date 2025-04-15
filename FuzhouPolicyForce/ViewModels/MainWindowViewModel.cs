@@ -380,7 +380,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 {
                     // 使用异常口
                     package.SetChute(chuteSettings.ErrorChuteNumber);
-                    package.SetStatus(PackageStatus.SortFailed, "条码为空或无法识别");
+                    package.SetStatus(PackageStatus.Failed, "条码为空或无法识别");
                     Log.Warning("包裹条码为空或noread，使用异常口：{ErrorChute}", chuteSettings.ErrorChuteNumber);
                 }
                 else
@@ -391,14 +391,13 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     if (matchedChute.HasValue)
                     {
                         package.SetChute(matchedChute.Value);
-                        package.SetStatus(PackageStatus.WaitingForChute);
                         Log.Information("包裹 {Barcode} 匹配到格口 {Chute}", package.Barcode, matchedChute.Value);
                     }
                     else
                     {
                         // 没有匹配到规则，使用异常口
                         package.SetChute(chuteSettings.ErrorChuteNumber);
-                        package.SetStatus(PackageStatus.SortFailed, "未匹配到格口规则");
+                        package.SetStatus(PackageStatus.Failed, "未匹配到格口规则");
                         Log.Warning("包裹 {Barcode} 未匹配到任何规则，使用异常口：{ErrorChute}",
                             package.Barcode, chuteSettings.ErrorChuteNumber);
                     }
@@ -407,7 +406,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             catch (Exception ex)
             {
                 Log.Error(ex, "获取格口号时发生错误：{Barcode}", package.Barcode);
-                package.SetError($"获取格口号失败：{ex.Message}");
+                package.SetStatus(PackageStatus.Error, $"{ex.Message}");
             }
 
             // 调用网店通API并处理响应
@@ -416,30 +415,25 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 var response = await _wangDianTongApiService.PushWeightAsync(package.Barcode, (decimal)package.Weight);
                 if (!response.IsSuccess)
                 {
-                    var errorMessage = $"{response.Message}";
-                    Log.Warning("网店通重量回传失败：{Barcode}, 错误码={Code}, 错误信息={Message}",
-                        package.Barcode, response.Code, response.Message);
-                    package.SetError(errorMessage);
-                    // 使用异常口
                     package.SetChute(_settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber);
-                    package.SetStatus(PackageStatus.Error, "网店通API错误");
+                    package.SetStatus(PackageStatus.Error, response.Message);
                 }
                 else
                 {
-                    Log.Information("{Barcode}, 物流名称={LogisticsName}",
-                        package.Barcode, response.LogisticsName);
-                    // API成功，更新包裹状态
-                    package.SetStatus(PackageStatus.SortSuccess, response.Message);
+                    package.SetStatus(PackageStatus.Success, response.Message);
                 }
             }
             catch (Exception ex)
             {
                 var errorMessage = $"{ex.Message}";
                 Log.Error(ex, "网店通重量回传时发生错误：{Barcode}", package.Barcode);
-                package.SetError(errorMessage);
-                // 使用异常口
                 package.SetChute(_settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber);
-                package.SetStatus(PackageStatus.Error, "网店通API异常");
+                package.SetStatus(PackageStatus.Error, errorMessage);
+            }
+
+            if (package.Status != PackageStatus.Error)
+            {
+                package.SetStatus(PackageStatus.Success);
             }
 
             _sortService.ProcessPackage(package);
@@ -460,7 +454,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
                     // 递增包裹计数器
                     Interlocked.Increment(ref _currentPackageIndex);
-                    
+
                     // 更新统计数据
                     UpdateStatistics();
                 }
@@ -484,7 +478,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "处理包裹信息时发生错误：{Barcode}", package.Barcode);
-            package.SetError($"处理失败：{ex.Message}");
+            package.SetStatus(PackageStatus.Error, $"{ex.Message}");
         }
         finally
         {

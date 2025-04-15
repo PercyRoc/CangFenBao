@@ -113,7 +113,7 @@ public class OfflinePackageService(IPackageDataService packageDataService)
 
             // 调用更新状态的方法，传递包裹时间以辅助查找
             var success = await packageDataService.UpdatePackageStatusAsync(barcode, 
-                PackageStatus.SortSuccess, 
+                PackageStatus.Success, 
                 "离线重试成功",
                 packageTime);
 

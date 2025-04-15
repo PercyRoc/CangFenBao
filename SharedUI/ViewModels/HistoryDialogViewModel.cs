@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Windows.Input;
@@ -73,6 +74,7 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
         QueryCommand = new DelegateCommand(QueryAsync);
         ExportToExcelCommand = new DelegateCommand(ExecuteExportToExcel, CanExportToExcel)
             .ObservesProperty(() => PackageRecords.Count);
+        OpenImageCommand = new DelegateCommand<string>(OpenImageExecute, CanOpenImage);
     }
 
     /// <summary>
@@ -138,6 +140,11 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
         get => _isLoading;
         set => SetProperty(ref _isLoading, value);
     }
+
+    /// <summary>
+    ///     打开图片命令
+    /// </summary>
+    public ICommand OpenImageCommand { get; }
 
     public string Title => "包裹历史记录";
 
@@ -323,6 +330,49 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
     }
 
     /// <summary>
+    ///     判断是否可以打开图片
+    /// </summary>
+    private bool CanOpenImage(string? imagePath)
+    {
+        return !string.IsNullOrEmpty(imagePath);
+    }
+
+    /// <summary>
+    ///     执行打开图片的操作
+    /// </summary>
+    private void OpenImageExecute(string? imagePath)
+    {
+        if (!CanOpenImage(imagePath))
+        {
+            Log.Warning("Attempted to open image with invalid path: {ImagePath}", imagePath);
+            return;
+        }
+
+        try
+        {
+            if (File.Exists(imagePath)) // Check if file exists
+            {
+                var processStartInfo = new ProcessStartInfo(imagePath) // Use '!' as path is checked by CanOpenImage
+                {
+                    UseShellExecute = true // Required to use system default app
+                };
+                Process.Start(processStartInfo);
+                Log.Information("Opened image file: {ImagePath}", imagePath);
+            }
+            else
+            {
+                Log.Error("Image file not found at path: {ImagePath}", imagePath);
+                _notificationService.ShowErrorWithToken($"图片文件未找到: {imagePath}", "HistoryWindowGrowl");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to open image file: {ImagePath}", imagePath);
+            _notificationService.ShowErrorWithToken($"无法打开图片: {ex.Message}", "HistoryWindowGrowl");
+        }
+    }
+
+    /// <summary>
     ///     获取状态的中文显示
     /// </summary>
     private static string GetStatusDisplay(PackageStatus status)
@@ -330,16 +380,8 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
         return status switch
         {
             PackageStatus.Created => "已创建",
-            PackageStatus.Measuring => "正在测量",
-            PackageStatus.MeasureSuccess => "测量成功",
-            PackageStatus.MeasureFailed => "测量失败",
-            PackageStatus.Weighing => "正在称重",
-            PackageStatus.WeighSuccess => "称重成功",
-            PackageStatus.WeighFailed => "称重失败",
-            PackageStatus.WaitingForChute => "等待分配",
-            PackageStatus.Sorting => "正在分拣",
-            PackageStatus.SortSuccess => "分拣成功",
-            PackageStatus.SortFailed => "分拣失败",
+            PackageStatus.Success => "分拣成功",
+            PackageStatus.Failed => "分拣失败",
             PackageStatus.WaitingForLoading => "等待上传",
             PackageStatus.LoadingRejected => "上传拒绝",
             PackageStatus.LoadingSuccess => "上传成功",

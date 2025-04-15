@@ -10,6 +10,7 @@ using ZtCloudWarehous.Models;
 using ZtCloudWarehous.Utils;
 using ZtCloudWarehous.ViewModels.Settings;
 using System.Windows.Media.Imaging;
+using System.Threading.Tasks;
 
 namespace ZtCloudWarehous.Services;
 
@@ -54,7 +55,7 @@ public class WaybillUploadService : IWaybillUploadService
     }
 
     /// <summary>
-    ///     添加包裹到上传队列
+    ///     添加包裹到后台上传队列（不等待完成）
     /// </summary>
     /// <param name="package">包裹信息</param>
     public void EnqueuePackage(PackageInfo package)
@@ -66,15 +67,15 @@ public class WaybillUploadService : IWaybillUploadService
             _uploadQueue.Enqueue(package);
         }
 
-        // 如果没有正在上传，则开始上传
+        // 如果后台队列没有正在上传，则开始后台上传
         if (!_isUploading)
         {
-            _ = ProcessUploadQueueAsync();
+            _ = ProcessUploadQueueAsync(); // 触发后台处理，不等待
         }
     }
 
     /// <summary>
-    ///     处理上传队列
+    ///     处理后台上传队列
     /// </summary>
     private async Task ProcessUploadQueueAsync()
     {
@@ -89,17 +90,18 @@ public class WaybillUploadService : IWaybillUploadService
                 PackageInfo? package;
                 lock (_queueLock)
                 {
-                    if (_uploadQueue.Count == 0) break;
+                    if (_uploadQueue.Count == 0) break; // 队列为空则退出
 
                     package = _uploadQueue.Dequeue();
                 }
 
-                await UploadPackageAsync(package);
+                // 调用内部上传逻辑处理队列中的包裹
+                await UploadPackageInternalAsync(package);
             }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "处理上传队列时发生错误");
+            Log.Error(ex, "处理后台上传队列时发生错误");
         }
         finally
         {
@@ -108,11 +110,33 @@ public class WaybillUploadService : IWaybillUploadService
     }
 
     /// <summary>
-    ///     上传包裹
+    ///     上传指定包裹并等待其完成。
+    /// </summary>
+    /// <param name="package">要上传的包裹信息。</param>
+    /// <returns>一个表示异步上传操作的任务。</returns>
+    public Task UploadPackageAndWaitAsync(PackageInfo package)
+    {
+        // 直接调用内部上传逻辑，并返回 Task 以供等待
+        return UploadPackageInternalAsync(package);
+    }
+
+    /// <summary>
+    ///     内部上传包裹逻辑 (供后台队列和直接等待调用)
     /// </summary>
     /// <param name="package">包裹信息</param>
-    private async Task UploadPackageAsync(PackageInfo package)
+    private async Task UploadPackageInternalAsync(PackageInfo? package)
     {
+        if (package == null)
+        {
+            Log.Warning("尝试上传 null 包裹信息，已跳过。");
+            return;
+        }
+        if (string.IsNullOrEmpty(_apiSettings.MachineMx))
+        {
+            Log.Warning("MachineMx 未配置，无法上传包裹: {Barcode}", package.Barcode);
+            return;
+        }
+
         try
         {
             // 转换为运单记录
@@ -144,6 +168,7 @@ public class WaybillUploadService : IWaybillUploadService
         catch (Exception ex)
         {
             Log.Error(ex, "上传包裹时发生错误，运单号: {WaybillNumber}", package.Barcode);
+            // 即使上传失败，Task 也正常完成，错误已记录
         }
     }
 

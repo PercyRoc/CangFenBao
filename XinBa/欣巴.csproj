@@ -9,19 +9,7 @@
         <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
 		<RootNamespace>XinBa</RootNamespace>
     </PropertyGroup>
-
-    <ItemGroup>
-        <Page Update="Views\MainWindow.xaml">
-            <Generator>MSBuild:Compile</Generator>
-            <XamlRuntime>Wpf</XamlRuntime>
-            <SubType>Designer</SubType>
-        </Page>
-        <Page Update="Views\SettingsDialog.xaml">
-            <Generator>MSBuild:Compile</Generator>
-            <XamlRuntime>Wpf</XamlRuntime>
-            <SubType>Designer</SubType>
-        </Page>
-    </ItemGroup>
+    
     <ItemGroup>
         <ProjectReference Include="..\Common\Common.csproj"/>
         <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>
@@ -50,14 +38,6 @@
 
         <!-- WebSocket -->
         <PackageReference Include="WebSocketSharp-netstandard"/>
-    </ItemGroup>
-
-    <ItemGroup>
-        <Page Update="Views\MainWindow.xaml">
-            <Generator>MSBuild:Compile</Generator>
-            <XamlRuntime>Wpf</XamlRuntime>
-            <SubType>Designer</SubType>
-        </Page>
     </ItemGroup>
 
     <ItemGroup>

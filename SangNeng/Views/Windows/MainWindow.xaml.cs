@@ -6,7 +6,7 @@ using Serilog;
 using Sunnen.ViewModels.Windows;
 using MessageBoxResult = System.Windows.MessageBoxResult;
 
-namespace SangNeng.Views.Windows;
+namespace Sunnen.Views.Windows;
 
 /// <summary>
 ///     Interaction logic for MainWindow.xaml

@@ -26,7 +26,7 @@ namespace ZtCloudWarehous;
 /// <summary>
 ///     Interaction logic for App.xaml
 /// </summary>
-internal partial class App
+public partial class App
 {
     private static Mutex? _mutex;
     private const string MutexName = "Global\\ZtCloudWarehous_App_Mutex"; // 改为全局Mutex

@@ -44,6 +44,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
@@ -81,9 +82,51 @@
                     <TextBlock Text="系统设置" VerticalAlignment="Center" />
                 </StackPanel>
             </ui:Button>
+            
+            <!-- 条码模式选择区 -->
+            <Border Grid.Column="2" 
+                    Margin="0,0,8,0" 
+                    CornerRadius="4" 
+                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" 
+                    BorderThickness="1"
+                    Background="{DynamicResource ControlFillColorDefaultBrush}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    
+                    <!-- 条码模式标签 -->
+                    <StackPanel Grid.Column="0" 
+                                Orientation="Horizontal" 
+                                Margin="8,0,4,0"
+                                VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="BarcodeScanner24" 
+                                       FontSize="16" 
+                                       Margin="0,0,4,0" 
+                                       VerticalAlignment="Center" />
+                        <TextBlock Text="条码模式:" 
+                                   VerticalAlignment="Center" 
+                                   FontSize="12" />
+                    </StackPanel>
+                    
+                    <!-- 条码模式下拉菜单 - 改用ComboBox -->
+                    <ComboBox Grid.Column="1"
+                              Margin="0,2,4,2"
+                              Padding="8,4"
+                              MinWidth="80"
+                              FontSize="12"
+                              SelectedIndex="{Binding SelectedBarcodeModeIndex, Mode=TwoWay}"
+                              VerticalAlignment="Center">
+                        <ComboBoxItem Content="多条码" />
+                        <ComboBoxItem Content="母条码" />
+                        <ComboBoxItem Content="子条码" />
+                    </ComboBox>
+                </Grid>
+            </Border>
 
             <!-- 标题 -->
-            <TextBlock Grid.Column="2"
+            <TextBlock Grid.Column="3"
                        Text="仓分宝-新北洋"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
@@ -103,7 +146,7 @@
             </TextBlock>
 
             <!-- TitleBar -->
-            <ui:TitleBar Grid.Column="3"
+            <ui:TitleBar Grid.Column="4"
                          Title=""
                          ButtonsForeground="#FF008891"
                          ShowMaximize="True"
@@ -111,7 +154,7 @@
                          ShowClose="True" />
 
             <Border Grid.Column="0"
-                    Grid.ColumnSpan="4"
+                    Grid.ColumnSpan="5"
                     Height="1"
                     VerticalAlignment="Bottom"
                     Background="#20008080"

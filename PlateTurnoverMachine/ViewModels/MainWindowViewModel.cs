@@ -228,7 +228,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 {
                     Log.Warning("包裹条码 {Barcode} 不符合中通面单规则，分配到异常口", package.Barcode);
                     package.SetChute(errorChuteNumber);
-                    package.SetError("不符合中通面单规则");
+                    package.SetStatus(PackageStatus.Error,"不符合中通面单规则");
                 }
             }
             // 先调用中通接口获取分拣格口信息
@@ -249,21 +249,20 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     if (int.TryParse(sortingInfo.SortPortCode[0], out var chuteNumber))
                     {
                         package.SetChute(chuteNumber);
-                        package.SetStatus(PackageStatus.Sorting); // 设置状态为 Sorting
                         Log.Information("从中通服务器获取到格口号：{ChuteNumber}，状态设置为 Sorting，包裹：{Barcode}", chuteNumber, package.Barcode);
                     }
                     else
                     {
                         Log.Warning("无法解析从中通获取的格口号 '{PortCode}'，分配到异常口 {ErrorChute}，包裹：{Barcode}", sortingInfo.SortPortCode[0], errorChuteNumber, package.Barcode);
                         package.SetChute(errorChuteNumber);
-                        package.SetError($"从中通获取的格口号无效: {sortingInfo.SortPortCode[0]}");
+                        package.SetStatus(PackageStatus.Error,$"从中通获取的格口号无效: {sortingInfo.SortPortCode[0]}");
                     }
                 }
                 else
                 {
                     Log.Warning("中通未返回格口信息，分配到异常口 {ErrorChute}，包裹：{Barcode}", errorChuteNumber, package.Barcode);
                     package.SetChute(errorChuteNumber);
-                    package.SetError("中通未返回格口信息");
+                    package.SetStatus(PackageStatus.Error,"中通未返回格口信息");
                 }
             }
             else if (string.IsNullOrEmpty(package.Barcode))
@@ -271,7 +270,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 // 处理无条码情况（如果需要，但前面已有 noread 处理）
                 Log.Warning("包裹无有效条码，分配到异常口 {ErrorChute}", errorChuteNumber);
                 package.SetChute(errorChuteNumber);
-                package.SetError("无有效条码");
+                package.SetStatus(PackageStatus.Error,"无有效条码");
             }
             // 如果未调用中通接口（例如未配置 PipelineCode），则可能需要默认逻辑或保持原状
             // 此处可以添加 else if (!string.IsNullOrEmpty(Settings.ZtoPipelineCode)) 来区分是否调用了中通
@@ -304,7 +303,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "处理包裹信息时发生错误：{Barcode}", package.Barcode);
-            package.SetError($"处理失败：{ex.Message}");
+            package.SetStatus(PackageStatus.Error,$"处理失败：{ex.Message}");
         }
     }
 

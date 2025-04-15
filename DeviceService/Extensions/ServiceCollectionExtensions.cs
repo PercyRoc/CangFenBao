@@ -1,6 +1,7 @@
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Camera.RenJia;
 using DeviceService.DataSourceDevices.Scanner;
+using DeviceService.DataSourceDevices.Services;
 using DeviceService.DataSourceDevices.Weight;
 using Prism.Ioc;
 
@@ -18,7 +19,8 @@ public static class ContainerRegistryExtensions
     {
         // 注册相机工厂
         containerRegistry.RegisterSingleton<CameraFactory>();
-
+        containerRegistry.RegisterSingleton<PackageTransferService>();
+        containerRegistry.RegisterSingleton<IImageSavingService, ImageSavingService>();
         // 注册相机启动服务
         containerRegistry.RegisterSingleton<CameraStartupService>();
 

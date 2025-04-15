@@ -1,4 +1,4 @@
-namespace SangNeng.Views.Settings;
+namespace Sunnen.Views.Settings;
 
 public partial class PalletSettingsView
 {

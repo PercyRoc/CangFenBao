@@ -1,5 +1,6 @@
 using Common.Services.Settings;
 using Prism.Mvvm;
+using XinBeiYang.ViewModels;
 
 namespace XinBeiYang.Models;
 
@@ -20,6 +21,9 @@ public class HostConfiguration : BindableBase
     private string _jdIpAddress = "127.0.0.1";
     private int _jdPort = 8088;
     private string _jdLocalHttpUrlPrefix = "http://localhost:8080/images/"; // 默认本地图片URL前缀
+    
+    // 条码模式配置
+    private BarcodeMode _barcodeMode = BarcodeMode.MultiBarcode; // 默认多条码模式
 
     // 设备基本配置属性
     public string DeviceId
@@ -64,6 +68,13 @@ public class HostConfiguration : BindableBase
     {
         get => _jdLocalHttpUrlPrefix;
         set => SetProperty(ref _jdLocalHttpUrlPrefix, value);
+    }
+    
+    // 条码模式配置属性
+    public BarcodeMode BarcodeMode
+    {
+        get => _barcodeMode;
+        set => SetProperty(ref _barcodeMode, value);
     }
 
     // 京东协议相关固定配置

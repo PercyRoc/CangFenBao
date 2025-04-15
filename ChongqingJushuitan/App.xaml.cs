@@ -1,10 +1,10 @@
 ﻿using System.Net.Http;
 using System.Windows;
-using ChongqingJushuitan.Views;
-using ChongqingJushuitan.Views.Settings;
 using ChongqingYekelai.Services;
 using ChongqingYekelai.ViewModels;
 using ChongqingYekelai.ViewModels.Settings;
+using ChongqingYekelai.Views;
+using ChongqingYekelai.Views.Settings;
 using Common.Extensions;
 using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.License;
@@ -21,7 +21,7 @@ using SharedUI.Views.Settings;
 using SortingServices.Pendulum;
 using SortingServices.Pendulum.Extensions;
 
-namespace ChongqingJushuitan;
+namespace ChongqingYekelai;
 
 /// <summary>
 ///     Interaction logic for App.xaml

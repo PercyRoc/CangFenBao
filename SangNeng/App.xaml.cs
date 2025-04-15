@@ -1,4 +1,5 @@
-﻿using System.Windows;
+﻿using System.Diagnostics;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Common.Extensions;
@@ -8,19 +9,18 @@ using DeviceService.DataSourceDevices.Weight;
 using DeviceService.Extensions;
 using HandyControl.Controls;
 using Prism.Ioc;
-using SangNeng.Views.Settings;
 using Serilog;
 using SharedUI.Extensions;
-using Window = System.Windows.Window;
-using System.Diagnostics;
-using SangNeng.Views.Dialogs;
-using SangNeng.Views.Windows;
 using Sunnen.Services;
-using Sunnen.ViewModels.Settings;
 using Sunnen.ViewModels.Dialogs;
+using Sunnen.ViewModels.Settings;
 using Sunnen.ViewModels.Windows;
+using Sunnen.Views.Dialogs;
+using Sunnen.Views.Settings;
+using Sunnen.Views.Windows;
+using Window = System.Windows.Window;
 
-namespace SangNeng;
+namespace Sunnen;
 
 /// <summary>
 ///     应用程序入口
@@ -227,7 +227,7 @@ internal partial class App
                     volumeCameraStartupService = Container.Resolve<VolumeCameraStartupService>();
                     scannerStartupService = Container.Resolve<ScannerStartupService>();
                     weightStartupService = Container.Resolve<WeightStartupService>();
-                }); 
+                });
 
                 // 修复：分步启动服务并添加延迟
                 UpdateProgress("Initializing camera service...", 20);
@@ -240,7 +240,7 @@ internal partial class App
 
                 // 重点修复：扫码枪服务需要同步初始化
                 UpdateProgress("Initializing scanner...", 60);
-                try 
+                try
                 {
                     await Current.Dispatcher.InvokeAsync(async () =>
                     {

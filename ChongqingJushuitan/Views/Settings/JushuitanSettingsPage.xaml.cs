@@ -1,4 +1,4 @@
-namespace ChongqingJushuitan.Views.Settings;
+namespace ChongqingYekelai.Views.Settings;
 
 internal partial class JushuitanSettingsPage
 {

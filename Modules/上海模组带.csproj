@@ -10,20 +10,7 @@
         <AssemblyName>仓分宝-模组带</AssemblyName>
 		<RootNamespace>ShanghaiModuleBelt</RootNamespace>
     </PropertyGroup>
-
-    <ItemGroup>
-        <Page Update="Views\MainWindow.xaml">
-            <Generator>MSBuild:Compile</Generator>
-            <XamlRuntime>Wpf</XamlRuntime>
-            <SubType>Designer</SubType>
-        </Page>
-    </ItemGroup>
-
-    <ItemGroup>
-        <Folder Include="Models\"/>
-        <Folder Include="Services\"/>
-    </ItemGroup>
-
+    
     <ItemGroup>
         <ProjectReference Include="..\Common\Common.csproj"/>
         <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>

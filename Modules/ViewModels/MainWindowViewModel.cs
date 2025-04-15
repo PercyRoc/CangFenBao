@@ -13,13 +13,12 @@ using Serilog;
 using ShanghaiModuleBelt.Models;
 using ShanghaiModuleBelt.Services;
 using SharedUI.Models;
-using LockingService = Modules.Services.LockingService;
+using LockingService = ShanghaiModuleBelt.Services.LockingService;
 
 namespace ShanghaiModuleBelt.ViewModels;
 
 internal class MainWindowViewModel : BindableBase, IDisposable
 {
-    private static int _lastPackageIndex; // 用于记录上一次分配的包裹序号
     private readonly ICameraService _cameraService;
 
     // 格口锁定状态字典
@@ -35,6 +34,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private string _currentBarcode = string.Empty;
     private bool _disposed;
     private SystemStatus _systemStatus = new();
+    private BitmapSource? _currentImage;
 
     public MainWindowViewModel(IDialogService dialogService,
         ICameraService cameraService,
@@ -88,16 +88,15 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         // 初始检查锁格设备状态
         UpdateLockingDeviceStatus(_lockingService.IsConnected());
     }
-
+    
     public DelegateCommand OpenSettingsCommand { get; }
-
     public string CurrentBarcode
     {
         get => _currentBarcode;
         private set => SetProperty(ref _currentBarcode, value);
     }
 
-    public BitmapSource? CurrentImage { get; }
+    public BitmapSource? CurrentImage => _currentImage;
 
     public SystemStatus SystemStatus
     {
@@ -283,19 +282,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            // 使用模组带的序号更新包裹序号
-            if (package.Index <= 0)
-            {
-                package.Index = Interlocked.Increment(ref _lastPackageIndex);
-            }
-
             Log.Information("收到包裹信息: {Barcode}, 序号={Index}", package.Barcode, package.Index);
-
-            // 设置初始状态
-            package.SetStatus(PackageStatus.Created, "初始化");
-
-            // 从服务器获取格口号
-            package.SetStatus(PackageStatus.WaitingForChute, "等待分配格口");
 
             var config = _settingsService.LoadSettings<ModuleConfig>();
             var chuteNumber = await _chuteMappingService.GetChuteNumberAsync(package);
@@ -319,12 +306,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
                     // 设置为错误状态
                     package.SetStatus(PackageStatus.Error, "格口已锁定，使用异常格口");
-                    package.SetError($"原格口 {originalChuteNumber} 已锁定");
+                    package.SetStatus(PackageStatus.Error,$"原格口 {originalChuteNumber} 已锁定");
                 }
             }
-
-            // 设置等待模组带处理状态
-            package.SetStatus(PackageStatus.Sorting, "等待模组带处理");
 
             // 通知模组带服务处理包裹
             _moduleConnectionService.OnPackageReceived(package);
@@ -332,7 +316,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             // 如果没有错误，设置为正常状态
             if (string.IsNullOrEmpty(package.ErrorMessage))
             {
-                package.SetStatus(PackageStatus.SortSuccess, "正常");
+                package.SetStatus(PackageStatus.Success, "正常");
             }
 
             // 更新UI
@@ -370,7 +354,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "处理包裹信息时发生错误：{Barcode}", package.Barcode);
-            package.SetError($"处理失败：{ex.Message}");
+            package.SetStatus(PackageStatus.Error,$"处理失败：{ex.Message}");
         }
     }
 

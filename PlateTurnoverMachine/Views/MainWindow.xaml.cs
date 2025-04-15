@@ -4,7 +4,7 @@ using System.Windows.Input;
 using Common.Services.Ui;
 using Serilog;
 
-namespace PlateTurnoverMachine.Views;
+namespace DongtaiFlippingBoardMachine.Views;
 
 /// <summary>
 ///     Interaction logic for MainWindow.xaml

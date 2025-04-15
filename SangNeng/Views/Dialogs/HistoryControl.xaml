@@ -1,4 +1,4 @@
-<UserControl x:Class="SangNeng.Views.Windows.HistoryControl"
+<UserControl x:Class="Sunnen.Views.Dialogs.HistoryControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -133,26 +133,60 @@
                       CellStyle="{DynamicResource DefaultDataGridCellStyle}"
                       RowStyle="{DynamicResource DefaultDataGridRowStyle}">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="No." Binding="{Binding Id}" Width="80" />
-                    <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" Width="150" />
-                    <DataGridTextColumn Header="Weight(kg)" Binding="{Binding Weight}" Width="100" />
+                    <DataGridTextColumn Header="No." Binding="{Binding Id}" MinWidth="60" Width="Auto" />
+                    <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" MinWidth="150" Width="Auto" />
+                    <DataGridTextColumn Header="Weight(kg)" Binding="{Binding Weight}" MinWidth="100" Width="Auto" />
                     <DataGridTextColumn Header="Length(cm)" Binding="{Binding Length, StringFormat={}{0:F1}}"
-                                        Width="100" />
+                                        MinWidth="100" Width="Auto" />
                     <DataGridTextColumn Header="Width(cm)" Binding="{Binding Width, StringFormat={}{0:F1}}"
-                                        Width="100" />
+                                        MinWidth="100" Width="Auto" />
                     <DataGridTextColumn Header="Height(cm)" Binding="{Binding Height, StringFormat={}{0:F1}}"
-                                        Width="100" />
-                    <DataGridTextColumn Header="Volume(cm³)" Binding="{Binding Volume}" Width="180" />
-                    <DataGridTextColumn Header="Status" Binding="{Binding StatusDisplay}" Width="100">
+                                        MinWidth="100" Width="Auto" />
+                    <DataGridTextColumn Header="Volume(cm³)" Binding="{Binding Volume}" MinWidth="120" Width="Auto" />
+                    <DataGridTextColumn Header="Pallet" Binding="{Binding PalletName}" MinWidth="100" Width="Auto">
                         <DataGridTextColumn.CellStyle>
                             <Style TargetType="DataGridCell">
+                                <Setter Property="ToolTip">
+                                    <Setter.Value>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding PalletName, StringFormat=Pallet: {0}}" FontWeight="Bold" Margin="0,0,0,5"/>
+                                            <TextBlock Text="{Binding PalletWeight, StringFormat=Weight: {0:F3} kg}"/>
+                                            <TextBlock>
+                                                <TextBlock.Text>
+                                                    <MultiBinding StringFormat="Size: {0:F1}×{1:F1}×{2:F1} cm">
+                                                        <Binding Path="PalletLength"/>
+                                                        <Binding Path="PalletWidth"/>
+                                                        <Binding Path="PalletHeight"/>
+                                                    </MultiBinding>
+                                                </TextBlock.Text>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Setter.Value>
+                                </Setter>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding PalletName}" Value="">
+                                        <Setter Property="Foreground" Value="Gray"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding PalletName}" Value="noPallet">
+                                        <Setter Property="Foreground" Value="Gray"/>
+                                        <Setter Property="Content" Value="None"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGridTextColumn.CellStyle>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Header="Status" Binding="{Binding StatusDisplay}" MinWidth="100" Width="Auto">
+                        <DataGridTextColumn.CellStyle>
+                            <Style TargetType="DataGridCell">
+                                <Setter Property="Background" Value="#F44336" />
+                                <Setter Property="Foreground" Value="White" />
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding StatusDisplay}" Value="Success">
                                         <Setter Property="Background" Value="#4CAF50" />
                                         <Setter Property="Foreground" Value="White" />
                                     </DataTrigger>
-                                    <DataTrigger Binding="{Binding StatusDisplay}" Value="Failed">
-                                        <Setter Property="Background" Value="#F44336" />
+                                    <DataTrigger Binding="{Binding StatusDisplay}" Value="Created">
+                                        <Setter Property="Background" Value="#808080" />
                                         <Setter Property="Foreground" Value="White" />
                                     </DataTrigger>
                                 </Style.Triggers>
@@ -161,8 +195,8 @@
                     </DataGridTextColumn>
                     <DataGridTextColumn Header="Create Time"
                                         Binding="{Binding CreateTime, StringFormat=yyyy-MM-dd HH:mm:ss}"
-                                        Width="*" />
-                    <DataGridTemplateColumn Header="Image" Width="100">
+                                        MinWidth="150" Width="Auto" />
+                    <DataGridTemplateColumn Header="Image" MinWidth="100" Width="Auto">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <ui:Button Appearance="Secondary"

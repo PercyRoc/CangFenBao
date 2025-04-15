@@ -1,4 +1,4 @@
-namespace PlateTurnoverMachine.Views.Settings;
+namespace DongtaiFlippingBoardMachine.Views.Settings;
 
 public partial class PlateTurnoverSettingsView
 {

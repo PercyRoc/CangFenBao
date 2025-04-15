@@ -1,4 +1,6 @@
 using System.Windows.Media.Imaging;
+using System.Text.Json.Serialization;
+using System.Drawing;
 
 namespace Common.Models.Package;
 
@@ -13,16 +15,8 @@ public class PackageInfo : IDisposable
     private static readonly Dictionary<PackageStatus, string> DefaultStatusDisplays = new()
     {
         { PackageStatus.Created, "已创建" },
-        { PackageStatus.Measuring, "正在测量" },
-        { PackageStatus.MeasureSuccess, "测量成功" },
-        { PackageStatus.MeasureFailed, "测量失败" },
-        { PackageStatus.Weighing, "正在称重" },
-        { PackageStatus.WeighSuccess, "称重成功" },
-        { PackageStatus.WeighFailed, "称重失败" },
-        { PackageStatus.WaitingForChute, "等待分配" },
-        { PackageStatus.Sorting, "正在分拣" },
-        { PackageStatus.SortSuccess, "分拣成功" },
-        { PackageStatus.SortFailed, "分拣失败" },
+        { PackageStatus.Success, "分拣成功" },
+        { PackageStatus.Failed, "分拣失败" },
         { PackageStatus.Timeout, "处理超时" },
         { PackageStatus.Offline, "设备离线" },
         { PackageStatus.Error, "异常" },
@@ -37,9 +31,7 @@ public class PackageInfo : IDisposable
     /// </summary>
     private PackageInfo()
     {
-        // 设置创建时间为当前时间
         CreateTime = DateTime.Now;
-        // Initial status is now set in the Create() factory method
     }
 
     /// <summary>
@@ -48,12 +40,12 @@ public class PackageInfo : IDisposable
     /// <returns>新的 PackageInfo 实例。</returns>
     public static PackageInfo Create()
     {
-        var newIndex = Interlocked.Increment(ref _currentIndex); // 使用 Interlocked 保证线程安全
+        var newIndex = Interlocked.Increment(ref _currentIndex);
         var package = new PackageInfo
         {
             Index = newIndex
         };
-        package.SetStatus(PackageStatus.Created); // Set initial status after creation
+        package.SetStatus(PackageStatus.Created);
         return package;
     }
 
@@ -95,11 +87,6 @@ public class PackageInfo : IDisposable
     public int ChuteNumber { get; private set; }
 
     /// <summary>
-    ///     原始格口号（当格口被锁定时，记录原始分配的格口）
-    /// </summary>
-    public int OriginalChuteNumber { get; private set; }
-
-    /// <summary>
     ///     状态显示
     /// </summary>
     public string StatusDisplay { get; private set; } = string.Empty;
@@ -122,7 +109,7 @@ public class PackageInfo : IDisposable
     /// <summary>
     ///     触发时间戳
     /// </summary>
-    public DateTime TriggerTimestamp { get; set; }
+    public DateTime TriggerTimestamp { get; private set; }
 
     /// <summary>
     ///     长度（厘米）
@@ -163,6 +150,31 @@ public class PackageInfo : IDisposable
     ///     包裹计数
     /// </summary>
     public int PackageCount { get; set; }
+
+    /// <summary>
+    ///     托盘名称 (Sunnen项目专用)
+    /// </summary>
+    public string? PalletName { get; set; }
+
+    /// <summary>
+    ///     托盘重量，单位kg (Sunnen项目专用)
+    /// </summary>
+    public double PalletWeight { get; set; }
+
+    /// <summary>
+    ///     托盘长度，单位cm (Sunnen项目专用)
+    /// </summary>
+    public double PalletLength { get; set; }
+
+    /// <summary>
+    ///     托盘宽度，单位cm (Sunnen项目专用)
+    /// </summary>
+    public double PalletWidth { get; set; }
+
+    /// <summary>
+    ///     托盘高度，单位cm (Sunnen项目专用)
+    /// </summary>
+    public double PalletHeight { get; private set; }
 
     /// <summary>
     ///     释放资源
@@ -237,7 +249,6 @@ public class PackageInfo : IDisposable
     public void SetChute(int chuteNumber, int? originalChuteNumber = null)
     {
         ChuteNumber = chuteNumber;
-        OriginalChuteNumber = originalChuteNumber ?? chuteNumber;
     }
 
     /// <summary>
@@ -277,21 +288,28 @@ public class PackageInfo : IDisposable
     }
 
     /// <summary>
-    ///     设置错误信息, 并将状态设置为 Error。
-    /// </summary>
-    public void SetError(string error)
-    {
-        ErrorMessage = error;
-        // 将错误信息同时设置为StatusDisplay，这样在历史记录中能看到详细的错误描述
-        SetStatus(PackageStatus.Error, error);
-    }
-
-    /// <summary>
     ///     设置体积。
     /// </summary>
     /// <param name="volume">体积（立方厘米）</param>
     public void SetVolume(double volume)
     {
         Volume = volume;
+    }
+
+    /// <summary>
+    ///     设置托盘信息 (Sunnen项目专用)
+    /// </summary>
+    /// <param name="palletName">托盘名称</param>
+    /// <param name="palletWeight">托盘重量(kg)</param>
+    /// <param name="palletLength">托盘长度(cm)</param>
+    /// <param name="palletWidth">托盘宽度(cm)</param>
+    /// <param name="palletHeight">托盘高度(cm)</param>
+    public void SetPallet(string? palletName, double palletWeight, double palletLength = 0, double palletWidth = 0, double palletHeight = 0)
+    {
+        PalletName = palletName;
+        PalletWeight = palletWeight;
+        PalletLength = palletLength;
+        PalletWidth = palletWidth;
+        PalletHeight = palletHeight;
     }
 }

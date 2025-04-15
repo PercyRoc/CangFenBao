@@ -5,7 +5,7 @@ using Common.Services.Ui;
 using Serilog;
 using MessageBox = HandyControl.Controls.MessageBox;
 
-namespace ChongqingJushuitan.Views;
+namespace ChongqingYekelai.Views;
 
 /// <summary>
 ///     Interaction logic for MainWindow.xaml

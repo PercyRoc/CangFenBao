@@ -6,29 +6,10 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
+        <RootNamespace>HuiXin</RootNamespace>
+        <AssemblyName>仓分宝-汇鑫</AssemblyName>
         <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
-        <AssemblyName>仓分宝-播种墙</AssemblyName>
-        <LangVersion>default</LangVersion>
     </PropertyGroup>
-
-    <ItemGroup>
-        <Page Update="Views\MainWindow.xaml">
-            <Generator>MSBuild:Compile</Generator>
-            <XamlRuntime>Wpf</XamlRuntime>
-            <SubType>Designer</SubType>
-        </Page>
-        <Page Update="Views\SettingsDialog.xaml">
-            <Generator>MSBuild:Compile</Generator>
-            <XamlRuntime>Wpf</XamlRuntime>
-            <SubType>Designer</SubType>
-        </Page>
-    </ItemGroup>
-    <ItemGroup>
-        <ProjectReference Include="..\Common\Common.csproj"/>
-        <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>
-        <ProjectReference Include="..\SharedUI\SharedUI.csproj"/>
-    </ItemGroup>
-
     <ItemGroup>
         <!-- Prism -->
         <PackageReference Include="Prism.DryIoc"/>
@@ -45,20 +26,17 @@
         <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
         <PackageReference Include="Microsoft.Extensions.Http"/>
         <PackageReference Include="FluentFTP"/>
+        <PackageReference Include="SSH.NET"/>
         <PackageReference Include="WPF-UI"/>
         <PackageReference Include="HandyControl"/>
         <PackageReference Include="EPPlus"/>
-
-        <!-- WebSocket -->
-        <PackageReference Include="WebSocketSharp-netstandard"/>
     </ItemGroup>
 
     <ItemGroup>
-        <Page Update="Views\MainWindow.xaml">
-            <Generator>MSBuild:Compile</Generator>
-            <XamlRuntime>Wpf</XamlRuntime>
-            <SubType>Designer</SubType>
-        </Page>
+        <ProjectReference Include="..\Common\Common.csproj"/>
+        <ProjectReference Include="..\SharedUI\SharedUI.csproj"/>
+        <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>
+        <ProjectReference Include="..\SortingServices\SortingServices.csproj"/>
     </ItemGroup>
 
     <ItemGroup>

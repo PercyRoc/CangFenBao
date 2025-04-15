@@ -38,22 +38,16 @@
     </ItemGroup>
 
     <ItemGroup>
-        <Folder Include="ViewModels\"/>
-        <Folder Include="Views\Dialogs\"/>
-        <Folder Include="Views\Settings\"/>
-    </ItemGroup>
-
-    <ItemGroup>
-        <Page Update="Views\Windows\MainWindow.xaml">
-            <Generator>MSBuild:Compile</Generator>
-            <XamlRuntime>Wpf</XamlRuntime>
-            <SubType>Designer</SubType>
-        </Page>
-    </ItemGroup>
-
-    <ItemGroup>
         <Resource Include="..\SharedUI\Resources\Icon\logo.ico">
             <Link>logo.ico</Link>
         </Resource>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Page Update="Views\Dialogs\HistoryControl.xaml">
+        <Generator>MSBuild:Compile</Generator>
+        <XamlRuntime>Wpf</XamlRuntime>
+        <SubType>Designer</SubType>
+      </Page>
     </ItemGroup>
 </Project>

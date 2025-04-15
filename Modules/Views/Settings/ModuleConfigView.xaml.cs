@@ -1,4 +1,4 @@
-namespace Modules.Views.Settings;
+namespace ShanghaiModuleBelt.Views.Settings;
 
 internal partial class ModuleConfigView
 {

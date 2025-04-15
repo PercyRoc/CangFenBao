@@ -10,14 +10,6 @@
         <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
 		<RootNamespace>XinBeiYang</RootNamespace>
     </PropertyGroup>
-
-    <ItemGroup>
-        <Page Update="Views\MainWindow.xaml">
-            <Generator>MSBuild:Compile</Generator>
-            <XamlRuntime>Wpf</XamlRuntime>
-            <SubType>Designer</SubType>
-        </Page>
-    </ItemGroup>
     <ItemGroup>
         <!-- Prism -->
         <PackageReference Include="Prism.DryIoc"/>

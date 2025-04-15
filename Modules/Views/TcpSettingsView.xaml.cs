@@ -1,4 +1,4 @@
-namespace Modules.Views;
+namespace ShanghaiModuleBelt.Views;
 
 /// <summary>
 ///     TCP设置页面

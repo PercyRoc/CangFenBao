@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 
-<Page x:Class="Modules.Views.TcpSettingsView"
+<Page x:Class="ShanghaiModuleBelt.Views.TcpSettingsView"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:prism="http://prismlibrary.com/"

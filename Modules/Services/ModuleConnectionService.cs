@@ -181,7 +181,7 @@ internal class ModuleConnectionService(ISettingsService settingsService, ChutePa
 
                 // 设置包裹序号为模组带序号
                 package.Index = packageNumber;
-                package.SetStatus(PackageStatus.Sorting, "正在分拣");
+                package.SetStatus(PackageStatus.Success, "正在分拣");
 
                 Log.Information("找到匹配的等待包裹: 序号={PackageNumber}, 等待时间={TimeDiff}ms, 分配格口={ChuteNumber}",
                     packageNumber, timeDiff, package.ChuteNumber);

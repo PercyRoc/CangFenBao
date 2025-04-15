@@ -8,89 +8,50 @@ public enum PackageStatus
     /// <summary>
     ///     包裹创建
     /// </summary>
-    Created = 0,
+    Created,
 
     /// <summary>
-    ///     正在测量
+    ///     成功
     /// </summary>
-    Measuring = 1,
+    Success,
 
     /// <summary>
-    ///     测量成功
+    ///     失败
     /// </summary>
-    MeasureSuccess = 2,
+    Failed,
 
     /// <summary>
-    ///     测量失败
+    ///     异常
     /// </summary>
-    MeasureFailed = 3,
-
-    /// <summary>
-    ///     正在称重
-    /// </summary>
-    Weighing = 4,
-
-    /// <summary>
-    ///     称重成功
-    /// </summary>
-    WeighSuccess = 5,
-
-    /// <summary>
-    ///     称重失败
-    /// </summary>
-    WeighFailed = 6,
-
-    /// <summary>
-    ///     等待分配格口
-    /// </summary>
-    WaitingForChute = 7,
-    /// <summary>
-    ///     正在分拣
-    /// </summary>
-    Sorting = 8,
-
-    /// <summary>
-    ///     分拣成功
-    /// </summary>
-    SortSuccess = 9,
-
-    /// <summary>
-    ///     分拣失败
-    /// </summary>
-    SortFailed = 10,
-
-    /// <summary>
-    ///     处理异常
-    /// </summary>
-    Error = 11,
+    Error,
 
     /// <summary>
     ///     超时
     /// </summary>
-    Timeout = 12,
+    Timeout,
 
     /// <summary>
     ///     离线状态
     /// </summary>
-    Offline = 13,
+    Offline,
 
     /// <summary>
     ///     等待上包
     /// </summary>
-    WaitingForLoading = 14,
+    WaitingForLoading,
 
     /// <summary>
     ///     拒绝上包
     /// </summary>
-    LoadingRejected = 15,
+    LoadingRejected,
 
     /// <summary>
     ///     上包成功
     /// </summary>
-    LoadingSuccess = 16,
+    LoadingSuccess,
 
     /// <summary>
     ///     上包超时
     /// </summary>
-    LoadingTimeout = 17,
+    LoadingTimeout,
 }

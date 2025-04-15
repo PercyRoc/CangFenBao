@@ -1,8 +1,3 @@
-using System.Collections.ObjectModel;
-using System.Diagnostics;
-using System.Drawing;
-using System.IO;
-using System.Windows.Input;
 using Common.Data;
 using Common.Models.Package;
 using Common.Services.Ui;
@@ -13,6 +8,11 @@ using Prism.Commands;
 using Prism.Mvvm;
 using Prism.Services.Dialogs;
 using Serilog;
+using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Drawing;
+using System.IO;
+using System.Windows.Input;
 using static Common.Models.Package.PackageStatus;
 
 namespace Sunnen.ViewModels.Windows;
@@ -69,7 +69,7 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
     /// <summary>
     ///     状态列表
     /// </summary>
-    public List<string> StatusList { get; } = ["All", "Success", "Failed", "Waiting"];
+    public List<string> StatusList { get; } = ["All", "Success", "Failed"];
 
     /// <summary>
     ///     选中的状态
@@ -222,16 +222,15 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
             // 根据状态进行过滤
             if (SelectedStatus != "All")
             {
-                records = records.Where(r => 
+                records = [.. records.Where(r =>
                 {
                     return SelectedStatus switch
                     {
-                        "Success" => r.Status == MeasureSuccess || r.Status == SortSuccess,
-                        "Failed" => r.Status == MeasureFailed || r.Status == Error,
-                        "Waiting" => r.Status == Measuring || r.Status == Created,
+                        "Success" => r.Status == Success,
+                        "Failed" => r.Status is Failed or Error,
                         _ => true
                     };
-                }).ToList();
+                })];
             }
 
             PackageRecords = [.. records];
@@ -358,13 +357,9 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
         return status switch
         {
             Created => "Created",
-            Measuring => "Measuring",
-            MeasureSuccess => "Success",
-            MeasureFailed => "Failed",
-            Weighing => "Weighing",
-            WeighSuccess => "Weigh Success",
-            WeighFailed => "Weigh Failed",
-            WaitingForChute => "Waiting For Chute",
+            Success => "Success",
+            Failed => "Failed",
+            Error => "Error",
             _ => status.ToString()
         };
     }

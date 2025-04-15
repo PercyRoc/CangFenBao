@@ -5,7 +5,7 @@ using System.Reactive.Linq;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
-using ChongqingJushuitan.Models.JuShuiTan;
+using ChongqingYekelai.Models.JuShuiTan;
 using ChongqingYekelai.Services;
 using Common.Models.Package;
 using Common.Models.Settings.ChuteRules;
@@ -356,7 +356,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             {
                 // 使用异常口
                 package.SetChute(chuteSettings.ErrorChuteNumber);
-                package.SetStatus(PackageStatus.SortFailed, "条码为空或noread");
+                package.SetStatus(PackageStatus.Failed, "条码为空或noread");
                 Log.Warning("包裹条码为空或noread，使用异常口：{ErrorChute}", chuteSettings.ErrorChuteNumber);
             }
             else
@@ -367,21 +367,18 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 if (matchedChute.HasValue)
                 {
                     package.SetChute(matchedChute.Value);
-                    package.SetStatus(PackageStatus.WaitingForChute);
                     Log.Information("包裹 {Barcode} 匹配到格口 {Chute}", package.Barcode, matchedChute.Value);
                 }
                 else
                 {
                     // 没有匹配到规则，使用异常口
                     package.SetChute(chuteSettings.ErrorChuteNumber);
-                    package.SetStatus(PackageStatus.SortFailed, "未匹配到格口规则");
+                    package.SetStatus(PackageStatus.Failed, "未匹配到格口规则");
                     Log.Warning("包裹 {Barcode} 未匹配到任何规则，使用异常口：{ErrorChute}",
                         package.Barcode, chuteSettings.ErrorChuteNumber);
                 }
             }
-            // 设置为正在分拣状态
-            package.SetStatus(PackageStatus.Sorting);
-            // 确定格口后再处理包裹
+            
             _sortService.ProcessPackage(package);
             // 上传包裹数据到聚水潭
             try
@@ -417,14 +414,14 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                         {
                             Log.Warning("包裹 {Barcode} 数据上传到聚水潭返回错误: {ErrorMessage}",
                                 package.Barcode, data.Message);
-                            package.SetError($"聚水潭返回错误: {data.Message}");
+                            package.SetStatus(PackageStatus.Error,$"{data.Message}");
                             package.SetChute(_settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber);
                         }
                         else
                         {
                             Log.Debug("包裹 {Barcode} 上传成功，物流公司：{Company}，运单号：{TrackingNumber}",
                                 package.Barcode, data.LogisticsCompany, data.LogisticsId);
-                            package.SetStatus(PackageStatus.SortSuccess);
+                            package.SetStatus(PackageStatus.Success);
                         }
                     }
                 }
@@ -432,14 +429,14 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 {
                     Log.Warning("包裹 {Barcode} 数据上传到聚水潭失败: {ErrorCode} - {ErrorMessage}",
                         package.Barcode, response.Code, response.Message);
-                    package.SetError($"聚水潭API错误: {response.Message}");
+                    package.SetStatus(PackageStatus.Error,$"{response.Message}");
                     package.SetChute(_settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber);
                 }
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "上传包裹 {Barcode} 数据到聚水潭时发生错误", package.Barcode);
-                package.SetError($"聚水潭服务异常: {ex.Message}");
+                package.SetStatus(PackageStatus.Error,$"{ex.Message}");
                 package.SetChute(_settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber);
             }
 
@@ -466,7 +463,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "处理包裹信息时发生错误：{Barcode}", package.Barcode);
-            package.SetError($"处理失败：{ex.Message}");
+            package.SetStatus(PackageStatus.Error,$"{ex.Message}");
         }
     }
 

@@ -1,9 +1,9 @@
-using System.Collections.ObjectModel;
 using Common.Services.Settings;
 using Prism.Commands;
 using Prism.Events;
 using Prism.Mvvm;
 using Sunnen.Events;
+using System.Collections.ObjectModel;
 
 namespace Sunnen.ViewModels.Settings;
 

@@ -3,7 +3,7 @@ using Common.Services.Ui;
 using Serilog;
 using SharedUI.Views.Settings;
 
-namespace ChongqingJushuitan.Views;
+namespace ChongqingYekelai.Views;
 
 public partial class SettingsDialog
 {

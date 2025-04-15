@@ -1,21 +1,21 @@
-﻿using System.Net.Http;
+﻿using System.Diagnostics;
+using System.Net.Http;
 using System.Windows;
 using Common.Extensions;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
-using Modules.Views;
-using Modules.Views.Settings;
 using Prism.Ioc;
 using Serilog;
-using SharedUI.Extensions;
-using LockingService = Modules.Services.LockingService;
-using System.Diagnostics;
 using ShanghaiModuleBelt.Services;
-using ShanghaiModuleBelt.ViewModels.Settings;
 using ShanghaiModuleBelt.ViewModels;
+using ShanghaiModuleBelt.ViewModels.Settings;
+using ShanghaiModuleBelt.Views;
+using ShanghaiModuleBelt.Views.Settings;
+using SharedUI.Extensions;
+using LockingService = ShanghaiModuleBelt.Services.LockingService;
 
-namespace Modules;
+namespace ShanghaiModuleBelt;
 
 /// <summary>
 ///     Interaction logic for App.xaml

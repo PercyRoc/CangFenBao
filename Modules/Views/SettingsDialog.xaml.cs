@@ -3,7 +3,7 @@ using Common.Services.Ui;
 using Serilog;
 using SharedUI.Views.Settings;
 
-namespace Modules.Views;
+namespace ShanghaiModuleBelt.Views;
 
 /// <summary>
 /// SettingsDialog 的交互逻辑
