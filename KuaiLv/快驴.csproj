@@ -12,30 +12,30 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Common\Common.csproj"/>
-        <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>
-        <ProjectReference Include="..\SharedUI\SharedUI.csproj"/>
+        <ProjectReference Include="..\Common\基础服务.csproj" />
+        <ProjectReference Include="..\DeviceService\设备服务.csproj" />
+        <ProjectReference Include="..\SharedUI\公共UI.csproj" />
     </ItemGroup>
 
     <ItemGroup>
         <!-- Prism -->
-        <PackageReference Include="Prism.DryIoc"/>
-        <PackageReference Include="Prism.Wpf"/>
+        <PackageReference Include="Prism.DryIoc" />
+        <PackageReference Include="Prism.Wpf" />
 
         <!-- Serilog -->
-        <PackageReference Include="Serilog"/>
-        <PackageReference Include="Serilog.Sinks.Console"/>
-        <PackageReference Include="Serilog.Sinks.File"/>
-        <PackageReference Include="Serilog.Sinks.Debug"/>
-        <PackageReference Include="Serilog.Extensions.Logging"/>
+        <PackageReference Include="Serilog" />
+        <PackageReference Include="Serilog.Sinks.Console" />
+        <PackageReference Include="Serilog.Sinks.File" />
+        <PackageReference Include="Serilog.Sinks.Debug" />
+        <PackageReference Include="Serilog.Extensions.Logging" />
 
         <!-- UI Framework -->
-        <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
-        <PackageReference Include="Microsoft.Extensions.Http"/>
-        <PackageReference Include="FluentFTP"/>
-        <PackageReference Include="WPF-UI"/>
-        <PackageReference Include="HandyControl"/>
-        <PackageReference Include="EPPlus"/>
+        <PackageReference Include="MahApps.Metro.IconPacks.Material" />
+        <PackageReference Include="Microsoft.Extensions.Http" />
+        <PackageReference Include="FluentFTP" />
+        <PackageReference Include="WPF-UI" />
+        <PackageReference Include="HandyControl" />
+        <PackageReference Include="EPPlus" />
     </ItemGroup>
 
     <ItemGroup>

@@ -49,18 +49,16 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
         // 确保SDK只初始化一次
         lock (_lockObj)
         {
-            if (!_sdkInitialized)
+            if (_sdkInitialized) return;
+            var nRet = MyCamera.MV_CC_Initialize_NET();
+            if (nRet != 0)
             {
-                var nRet = MyCamera.MV_CC_Initialize_NET();
-                if (nRet != 0)
-                {
-                    Log.Error("初始化海康工业相机 SDK 失败: {ErrorCode}", nRet);
-                }
-                else
-                {
-                    _sdkInitialized = true;
-                    Log.Information("海康工业相机 SDK 初始化成功");
-                }
+                Log.Error("初始化海康工业相机 SDK 失败: {ErrorCode}", nRet);
+            }
+            else
+            {
+                _sdkInitialized = true;
+                Log.Information("海康工业相机 SDK 初始化成功");
             }
         }
     }

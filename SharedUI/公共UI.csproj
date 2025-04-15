@@ -8,11 +8,12 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <PackageId>SharedUI</PackageId>
 		<RootNamespace>SharedUI</RootNamespace>
+		<AssemblyName>SharedUI</AssemblyName>
     </PropertyGroup>
 
     <ItemGroup>
-        <Resource Include="Resources\Icon\*.png"/>
-        <Resource Include="Resources\Icon\*.ico"/>
+        <Resource Include="Resources\Icon\*.png" />
+        <Resource Include="Resources\Icon\*.ico" />
         <Resource Include="Resources\Styles\**\*.xaml">
             <SubType>Designer</SubType>
             <Generator>MSBuild:Compile</Generator>
@@ -20,21 +21,21 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="FluentFTP"/>
-        <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
-        <PackageReference Include="Prism.Wpf"/>
-        <PackageReference Include="WPF-UI"/>
-        <PackageReference Include="HandyControl"/>
-        <PackageReference Include="EPPlus"/>
+        <PackageReference Include="FluentFTP" />
+        <PackageReference Include="MahApps.Metro.IconPacks.Material" />
+        <PackageReference Include="Prism.Wpf" />
+        <PackageReference Include="WPF-UI" />
+        <PackageReference Include="HandyControl" />
+        <PackageReference Include="EPPlus" />
     </ItemGroup>
 
     <ItemGroup>
-        <Folder Include="Resources\Styles\"/>
+        <Folder Include="Resources\Styles\" />
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Common\Common.csproj"/>
-        <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>
+        <ProjectReference Include="..\Common\基础服务.csproj" />
+        <ProjectReference Include="..\DeviceService\设备服务.csproj" />
     </ItemGroup>
 
     <ItemGroup>

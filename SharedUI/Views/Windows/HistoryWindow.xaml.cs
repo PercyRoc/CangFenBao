@@ -17,28 +17,26 @@ namespace SharedUI.Views.Windows
             Closed += HistoryWindow_Closed;
         }
 
-        private void HistoryWindow_Closed(object sender, System.EventArgs e)
+        private void HistoryWindow_Closed(object? sender, System.EventArgs e)
         {
             // 确保清理资源，防止内存泄漏
-            if (DialogContent.Content is FrameworkElement element)
+            if (DialogContent.Content is FrameworkElement { DataContext: IDialogAware dialogAware })
             {
-                if (element.DataContext is IDialogAware dialogAware)
-                {
-                    dialogAware.OnDialogClosed();
-                }
+                dialogAware.OnDialogClosed();
             }
+
             DialogContent.Content = null;
         }
 
-        public IDialogResult Result { get; set; }
+        public IDialogResult? Result { get; set; }
 
         // 实现IDialogWindow接口的方法
-        public void Show()
+        public new void Show()
         {
             Owner = Application.Current.MainWindow;
             ShowDialog();
         }
-        
+
         // 设置对话框内容
         // 当Prism的DialogService创建并打开窗口时，会调用此方法设置内容
         object IDialogWindow.Content
@@ -47,4 +45,4 @@ namespace SharedUI.Views.Windows
             set => DialogContent.Content = value;
         }
     }
-} 
+}

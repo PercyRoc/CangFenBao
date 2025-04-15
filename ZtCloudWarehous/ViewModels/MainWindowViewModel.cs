@@ -46,6 +46,13 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private long _totalPackageCount;
     private long _successPackageCount;
     private long _failedPackageCount;
+    // 添加详细异常计数
+    private long _timeoutCount;
+    private long _noReadCount;
+    private long _weightErrorCount;
+    private long _otherErrorCount;
+    // 添加峰值效率记录
+    private long _peakRate;
 
     public MainWindowViewModel(IDialogService dialogService,
         ICameraService cameraService,
@@ -235,11 +242,38 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
         StatisticsItems.Add(new StatisticsItem
         {
-            Label = "失败数",
+            Label = "超时响应",
             Value = "0",
             Unit = "个",
-            Description = "处理失败的包裹数量",
-            Icon = "ErrorCircle24"
+            Description = "数据上传超时的包裹数量",
+            Icon = "Timer24",
+        });
+
+        StatisticsItems.Add(new StatisticsItem
+        {
+            Label = "未读包裹",
+            Value = "0",
+            Unit = "个",
+            Description = "条码无法识别的包裹数量",
+            Icon = "ErrorCircle24",
+        });
+
+        StatisticsItems.Add(new StatisticsItem
+        {
+            Label = "重量异常",
+            Value = "0",
+            Unit = "个",
+            Description = "重量不匹配的包裹数量",
+            Icon = "Scales24",
+        });
+
+        StatisticsItems.Add(new StatisticsItem
+        {
+            Label = "其他异常",
+            Value = "0",
+            Unit = "个",
+            Description = "其他异常包裹数量",
+            Icon = "Alert24",
         });
 
         StatisticsItems.Add(new StatisticsItem
@@ -249,6 +283,16 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             Unit = "个/小时",
             Description = "每小时处理包裹数量",
             Icon = "ArrowTrendingLines24"
+        });
+
+        // 添加峰值效率统计
+        StatisticsItems.Add(new StatisticsItem
+        {
+            Label = "峰值效率",
+            Value = "0",
+            Unit = "个/小时",
+            Description = "最高处理速率",
+            Icon = "Trophy24"
         });
     }
 
@@ -353,6 +397,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             {
                 package.SetChute(chuteSettings.NoReadChuteNumber > 0 ? chuteSettings.NoReadChuteNumber : chuteSettings.ErrorChuteNumber);
                 package.SetStatus(Error, "未识别条码");
+                Interlocked.Increment(ref _noReadCount);
                 Log.Warning("包裹条码为空或noread，使用NoRead口(或异常口): {NoReadChute}",
                     chuteSettings.NoReadChuteNumber > 0 ? chuteSettings.NoReadChuteNumber : chuteSettings.ErrorChuteNumber);
             }
@@ -380,6 +425,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                         _notificationService.ShowWarning($"上传称重数据超时: {package.Barcode}");
                         package.SetChute(chuteSettings.TimeoutChuteNumber > 0 ? chuteSettings.TimeoutChuteNumber : chuteSettings.ErrorChuteNumber);
                         package.SetStatus(PackageStatus.Timeout, "上传超时");
+                        Interlocked.Increment(ref _timeoutCount);
                         Log.Warning("包裹 {Barcode} 上传超时，使用超时口(或异常口)：{TimeoutChute}", package.Barcode,
                             chuteSettings.TimeoutChuteNumber > 0 ? chuteSettings.TimeoutChuteNumber : chuteSettings.ErrorChuteNumber);
                     }
@@ -393,9 +439,19 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                             Log.Warning("上传称重数据失败: Code={Code}, Message={Message}", response.Code, response.Message);
                             _notificationService.ShowWarning($"上传称重数据失败: {response.Message}");
                             if (response.Message.Contains("重量"))
+                            {
                                 package.SetChute(chuteSettings.WeightMismatchChuteNumber > 0 ? chuteSettings.WeightMismatchChuteNumber : chuteSettings.ErrorChuteNumber);
+                                Interlocked.Increment(ref _weightErrorCount);
+                            }
+                            else if (response.Message.Contains("拦截"))
+                            {
+                                package.SetChute(chuteSettings.WeightMismatchChuteNumber > 0 ? chuteSettings.WeightMismatchChuteNumber : chuteSettings.ErrorChuteNumber);
+                            }
                             else
+                            {
                                 package.SetChute(chuteSettings.ErrorChuteNumber);
+                                Interlocked.Increment(ref _otherErrorCount);
+                            }
                             package.SetStatus(Error, $"上传失败: {response.Message}");
                             Log.Warning("包裹 {Barcode} 上传失败，使用异常口：{ErrorChute}", package.Barcode,
                                 chuteSettings.ErrorChuteNumber);
@@ -420,6 +476,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                                 // No Rule Match
                                 package.SetChute(chuteSettings.ErrorChuteNumber);
                                 package.SetStatus(Error, "未匹配规则");
+                                Interlocked.Increment(ref _otherErrorCount);
                                 Log.Warning("包裹 {Barcode} 未匹配规则，使用异常口：{ErrorChute}",
                                     package.Barcode, chuteSettings.ErrorChuteNumber);
                             }
@@ -433,6 +490,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     _notificationService.ShowError($"上传称重数据异常: {ex.Message}");
                     package.SetChute(chuteSettings.ErrorChuteNumber);
                     package.SetStatus(Error, $"上传异常: {ex.Message}");
+                    Interlocked.Increment(ref _otherErrorCount);
                     Log.Warning("包裹 {Barcode} 上传异常，使用异常口：{ErrorChute}", package.Barcode, chuteSettings.ErrorChuteNumber);
                 }
             }
@@ -516,8 +574,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         catch (Exception ex)
         {
             // General Exception during processing
-            Log.Error(ex, "处理包裹信息时发生未预料的错误：{Barcode}", package?.Barcode ?? "未知条码");
-            if (package != null)
+            Log.Error(ex, "处理包裹信息时发生未预料的错误：{Barcode}", package.Barcode);
             {
                 // Try to assign to error chute if possible
                 var chuteSettings = _settingsService.LoadSettings<ChuteSettings>(); // Reload in case it wasn't loaded
@@ -589,12 +646,33 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             successItem.Description = $"成功处理 {_successPackageCount} 个包裹";
         }
 
-        var failedItem = StatisticsItems.FirstOrDefault(static x => x.Label == "失败数");
-        if (failedItem != null)
+        // 更新详细异常统计
+        var timeoutItem = StatisticsItems.FirstOrDefault(static x => x.Label == "超时响应");
+        if (timeoutItem != null)
         {
-            // Use the persistent counter
-            failedItem.Value = _failedPackageCount.ToString();
-            failedItem.Description = $"失败处理 {_failedPackageCount} 个包裹";
+            timeoutItem.Value = _timeoutCount.ToString();
+            timeoutItem.Description = $"共 {_timeoutCount} 个包裹上传超时";
+        }
+
+        var noReadItem = StatisticsItems.FirstOrDefault(static x => x.Label == "未读包裹");
+        if (noReadItem != null)
+        {
+            noReadItem.Value = _noReadCount.ToString();
+            noReadItem.Description = $"共 {_noReadCount} 个包裹条码无法识别";
+        }
+
+        var weightErrorItem = StatisticsItems.FirstOrDefault(static x => x.Label == "重量异常");
+        if (weightErrorItem != null)
+        {
+            weightErrorItem.Value = _weightErrorCount.ToString();
+            weightErrorItem.Description = $"共 {_weightErrorCount} 个包裹重量异常";
+        }
+
+        var otherErrorItem = StatisticsItems.FirstOrDefault(static x => x.Label == "其他异常");
+        if (otherErrorItem != null)
+        {
+            otherErrorItem.Value = _otherErrorCount.ToString();
+            otherErrorItem.Description = $"共 {_otherErrorCount} 个其他异常";
         }
 
         var rateItem = StatisticsItems.FirstOrDefault(static x => x.Label == "处理速率");
@@ -606,6 +684,18 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             var hourlyRate = lastMinuteCount * 60; // 将每分钟的处理量转换为每小时，并转为整数
             rateItem.Value = hourlyRate.ToString();
             rateItem.Description = $"预计每小时处理 {hourlyRate} 个";
+            
+            // 更新峰值效率
+            if (hourlyRate > _peakRate)
+            {
+                _peakRate = hourlyRate;
+                var peakRateItem = StatisticsItems.FirstOrDefault(static x => x.Label == "峰值效率");
+                if (peakRateItem != null)
+                {
+                    peakRateItem.Value = _peakRate.ToString();
+                    peakRateItem.Description = $"历史最高速率: {_peakRate} 个/小时";
+                }
+            }
         }
     }
 

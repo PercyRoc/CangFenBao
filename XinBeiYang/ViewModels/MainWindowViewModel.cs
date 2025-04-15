@@ -12,7 +12,6 @@ using Common.Services.Audio;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Camera.HuaRay;
-using DeviceService.DataSourceDevices.Services;
 using Prism.Commands;
 using Prism.Mvvm;
 using Prism.Services.Dialogs;
@@ -206,13 +205,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     private int _selectedBarcodeModeIndex; // 新增：用于绑定 ComboBox 的 SelectedIndex
     
     // 母条码正则表达式
-    private static readonly Regex ParentBarcodeRegex = new(
-        @"^(JD[0-9A-GI-MO-RT-Z]{12}\d)([-,N])([1-9][0-9]{0,5})([-,S])([0-9A-GI-MO-RT-Z]{1,6})([-,H]\w{0,8})?$|" +
-        @"^(\w{1,5}\d{1,20})([-,N])([1-9][0-9]{0,5})([-,S])([0-9A-GI-MO-RT-Z]{1,6})([-,H]\w{0,8})?$|" + 
-        @"^([Zz][Yy])[A-Za-z0-9]{13}[-][1-9][0-9]*[-][1-9][0-9]*[-]?$|" +
-        @"^([A-Z0-9]{8,})(-|N)([1-9]d{0,2})(-|S)([1-9]d{0,2})([-|H][A-Za-z0-9]*)$|" +
-        @"^AK.*$|^BX.*$|^BC.*$|^AD.*$",
-        RegexOptions.Compiled);
+    private static readonly Regex ParentBarcodeRegex = MyRegex();
 
     // Define new Brush constants (or create them inline)
     private static readonly Brush BackgroundWaiting = new SolidColorBrush(Color.FromArgb(0xAA, 0x21, 0x96, 0xF3)); // 蓝色 (增加透明度) - Changed from purple
@@ -225,7 +218,6 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         IDialogService dialogService,
         ICameraService cameraService,
         IAudioService audioService,
-        PackageTransferService packageTransferService,
         IPlcCommunicationService plcCommunicationService,
         IJdWcsCommunicationService jdWcsCommunicationService,
         IImageStorageService imageStorageService,
@@ -274,7 +266,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         _jdWcsCommunicationService.ConnectionChanged += OnJdWcsConnectionChanged;
 
         // 订阅包裹流
-        _subscriptions.Add(packageTransferService.PackageStream
+        _subscriptions.Add(_cameraService.PackageStream
             .ObserveOn(Scheduler.Default) // GroupBy and Buffer can run on a background thread
             .Where(FilterBarcodeByMode) // 根据当前条码模式过滤包裹
             .GroupBy(p => GetBarcodePrefix(p.Barcode))
@@ -284,7 +276,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                 // If Buffer emits an empty list, filter it out.
                 .Where(buffer => buffer.Count > 0)
             )
-            .ObserveOn(Scheduler.CurrentThread) // Switch back to UI thread for OnPackageInfo and UI updates
+            .ObserveOn(Scheduler.CurrentThread)
             .Subscribe(buffer =>
             {
                 PackageInfo packageToProcess;
@@ -328,9 +320,9 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "处理合并后/单个包裹时发生错误: {Barcode}", packageToProcess?.Barcode ?? "N/A");
+                    Log.Error(ex, "处理合并后/单个包裹时发生错误: {Barcode}", packageToProcess.Barcode);
                     // Clean up the package if processing failed early
-                    packageToProcess?.ReleaseImage();
+                    packageToProcess.ReleaseImage();
                 }
             }, ex => Log.Error(ex, "包裹合并流处理中发生未处理异常")) // Add overall error handling for the stream
         );
@@ -619,17 +611,15 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         get => _barcodeMode;
         set
         {
-            if (SetProperty(ref _barcodeMode, value))
-            {
-                Log.Information("条码模式已更改为: {Mode}", GetBarcodeModeDisplayText(value));
+            if (!SetProperty(ref _barcodeMode, value)) return;
+            Log.Information("条码模式已更改为: {Mode}", GetBarcodeModeDisplayText(value));
                 
-                // 保存条码模式到配置
-                SaveBarcodeModeToSettings(value);
-                // 更新 SelectedIndex 属性以同步 UI
-                // 注意：这里不需要再次调用 SetProperty，因为它会在 SelectedBarcodeModeIndex 的 setter 中被调用
-                _selectedBarcodeModeIndex = (int)value;
-                RaisePropertyChanged(nameof(SelectedBarcodeModeIndex)); // 手动通知 SelectedIndex 更改
-            }
+            // 保存条码模式到配置
+            SaveBarcodeModeToSettings(value);
+            // 更新 SelectedIndex 属性以同步 UI
+            // 注意：这里不需要再次调用 SetProperty，因为它会在 SelectedBarcodeModeIndex 的 setter 中被调用
+            _selectedBarcodeModeIndex = (int)value;
+            RaisePropertyChanged(nameof(SelectedBarcodeModeIndex)); // 手动通知 SelectedIndex 更改
         }
     }
 
@@ -676,7 +666,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             return false;
         }
         
-        bool isParentBarcode = ParentBarcodeRegex.IsMatch(package.Barcode);
+        var isParentBarcode = ParentBarcodeRegex.IsMatch(package.Barcode);
         
         return BarcodeMode switch
         {
@@ -1067,7 +1057,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
 
             // 向PLC发送上传请求 - 使用条码前缀
             var plcRequestTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            string plcBarcode = GetBarcodePrefix(package.Barcode); // Use the prefix for PLC communication
+            var plcBarcode = GetBarcodePrefix(package.Barcode); // Use the prefix for PLC communication
             Log.Information("向PLC发送上传请求: Barcode={PlcBarcode}, Weight={Weight}, Length={L}, Width={W}, Height={H}",
                 plcBarcode, package.Weight, package.Length, package.Width, package.Height);
 
@@ -1369,8 +1359,8 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     /// <summary>
     /// 从状态显示文本中提取PackageId
     /// </summary>
-    [System.Text.RegularExpressions.GeneratedRegex(@"包裹流水号:\s*(\d+)")]
-    private static partial System.Text.RegularExpressions.Regex PackageIdRegex();
+    [GeneratedRegex(@"包裹流水号:\s*(\d+)")]
+    private static partial Regex PackageIdRegex();
 
     /// <summary>
     /// 提取PackageId的辅助方法
@@ -1484,8 +1474,8 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     private PackageInfo MergePackageInfo(PackageInfo p1, PackageInfo p2)
     {
         // 确定哪个是基础包（无后缀），哪个是后缀包
-        PackageInfo basePackage = p1.Barcode != null && p1.Barcode.EndsWith("-1-1-") ? p2 : p1;
-        PackageInfo suffixPackage = p1.Barcode != null && p1.Barcode.EndsWith("-1-1-") ? p1 : p2;
+        var basePackage = p1.Barcode.EndsWith("-1-1-") ? p2 : p1;
+        var suffixPackage = p1.Barcode.EndsWith("-1-1-") ? p1 : p2;
 
         var mergedPackage = PackageInfo.Create(); // 获取新的序号和初始状态
 
@@ -1493,20 +1483,20 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         mergedPackage.SetTriggerTimestamp(basePackage.CreateTime < suffixPackage.CreateTime ? basePackage.CreateTime : suffixPackage.CreateTime);
 
         // 合并条码: prefix;suffix-barcode
-        string prefix = GetBarcodePrefix(basePackage.Barcode);
-        string combinedBarcode = $"{prefix};{(suffixPackage.Barcode ?? string.Empty)}";
+        var prefix = GetBarcodePrefix(basePackage.Barcode);
+        var combinedBarcode = $"{prefix};{(suffixPackage.Barcode)}";
         mergedPackage.SetBarcode(combinedBarcode);
 
         // 优先使用 basePackage 的数据，如果缺失则用 suffixPackage 的
-        mergedPackage.SetSegmentCode(basePackage.SegmentCode ?? suffixPackage.SegmentCode);
+        mergedPackage.SetSegmentCode(basePackage.SegmentCode);
         mergedPackage.SetWeight(basePackage.Weight > 0 ? basePackage.Weight : suffixPackage.Weight);
 
         // 优先使用 basePackage 的尺寸
-        if (basePackage.Length.HasValue && basePackage.Width.HasValue && basePackage.Height.HasValue && basePackage.Length > 0)
+        if (basePackage is { Length: > 0, Width: not null, Height: not null })
         {
             mergedPackage.SetDimensions(basePackage.Length.Value, basePackage.Width.Value, basePackage.Height.Value);
         }
-        else if (suffixPackage.Length.HasValue && suffixPackage.Width.HasValue && suffixPackage.Height.HasValue && suffixPackage.Length > 0)
+        else if (suffixPackage is { Length: > 0, Width: not null, Height: not null })
         {
              mergedPackage.SetDimensions(suffixPackage.Length.Value, suffixPackage.Width.Value, suffixPackage.Height.Value);
         }
@@ -1625,4 +1615,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
 
         _disposed = true;
     }
+
+    [GeneratedRegex(@"^(JD[0-9A-GI-MO-RT-Z]{12}\d)([-,N])([1-9][0-9]{0,5})([-,S])([0-9A-GI-MO-RT-Z]{1,6})([-,H]\w{0,8})?$|^(\w{1,5}\d{1,20})([-,N])([1-9][0-9]{0,5})([-,S])([0-9A-GI-MO-RT-Z]{1,6})([-,H]\w{0,8})?$|^([Zz][Yy])[A-Za-z0-9]{13}[-][1-9][0-9]*[-][1-9][0-9]*[-]?$|^([A-Z0-9]{8,})(-|N)([1-9]d{0,2})(-|S)([1-9]d{0,2})([-|H][A-Za-z0-9]*)$|^AK.*$|^BX.*$|^BC.*$|^AD.*$", RegexOptions.Compiled)]
+    private static partial Regex MyRegex();
 }

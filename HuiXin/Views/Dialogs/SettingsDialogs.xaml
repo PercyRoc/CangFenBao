@@ -76,7 +76,6 @@
                 </TextBlock.Effect>
             </TextBlock>
 
-            <!-- 标题栏按钮移除，因为UserControl不需要窗口控制按钮 -->
             <Border Grid.Column="0"
                     Grid.ColumnSpan="3"
                     Height="1"

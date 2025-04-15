@@ -148,7 +148,9 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
 
     public string Title => "包裹历史记录";
 
+#pragma warning disable CS0067 // 禁用"从不使用事件"的警告
     public event Action<IDialogResult>? RequestClose;
+#pragma warning restore CS0067
 
     public bool CanCloseDialog()
     {

@@ -35,10 +35,10 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Common\Common.csproj" />
-        <ProjectReference Include="..\SharedUI\SharedUI.csproj" />
-        <ProjectReference Include="..\DeviceService\DeviceService.csproj" />
-        <ProjectReference Include="..\SortingServices\SortingServices.csproj" />
+        <ProjectReference Include="..\Common\基础服务.csproj" />
+        <ProjectReference Include="..\SharedUI\公共UI.csproj" />
+        <ProjectReference Include="..\DeviceService\设备服务.csproj" />
+        <ProjectReference Include="..\SortingServices\分拣服务.csproj" />
     </ItemGroup>
 
     <ItemGroup>
