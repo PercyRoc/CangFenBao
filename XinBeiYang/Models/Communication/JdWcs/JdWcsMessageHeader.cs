@@ -1,5 +1,3 @@
-using System.IO;
-using System.Text;
 using System.Buffers.Binary; // Added for BigEndian support
 
 namespace XinBeiYang.Models.Communication.JdWcs;
@@ -42,7 +40,7 @@ public class JdWcsMessageHeader
     /// <summary>
     /// 厂商序号
     /// </summary>
-    public short VendorId { get; set; } = 0; // 由WCS分配
+    public short VendorId { get; set; } // 由WCS分配
     
     /// <summary>
     /// 设备类型，如1：交叉带分拣机（环形），2：窄带分拣机等

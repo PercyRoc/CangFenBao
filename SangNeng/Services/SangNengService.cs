@@ -3,11 +3,11 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Common.Services.Settings;
-using SangNeng.Models;
-using SangNeng.Models.Settings;
 using Serilog;
+using Sunnen.Models;
+using Sunnen.Models.Settings;
 
-namespace SangNeng.Services;
+namespace Sunnen.Services;
 
 internal class SangNengService : ISangNengService
 {

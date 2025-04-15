@@ -8,7 +8,6 @@
                  xmlns:viewModels="clr-namespace:FuzhouPolicyForce.ViewModels"
                  xmlns:hc="https://handyorg.github.io/handycontrol"
                  xmlns:settings="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
-                 xmlns:local1="clr-namespace:FuzhouPolicyForce.Views.Settings;assembly=SharedUI"
                  xmlns:settings1="clr-namespace:FuzhouPolicyForce.Views.Settings"
                  prism:ViewModelLocator.AutoWireViewModel="True"
                  mc:Ignorable="d"

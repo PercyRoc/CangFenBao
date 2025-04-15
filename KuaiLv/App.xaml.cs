@@ -18,8 +18,8 @@ using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 using SharedUI.ViewModels;
-using SharedUI.Views;
 using System.Diagnostics;
+using SharedUI.Views.Dialogs;
 using Timer = System.Timers.Timer;
 
 namespace KuaiLv;
@@ -33,7 +33,7 @@ internal partial class App
     private const string MutexName = "Global\\KuaiLv_App_Mutex";
     private bool _ownsMutex;
     private Timer? _cleanupTimer;
-    internal bool _isShuttingDown = false;
+    internal bool IsShuttingDown;
 
     /// <summary>
     ///     创建主窗口
@@ -349,11 +349,11 @@ internal partial class App
 
     internal async Task ShutdownServicesAsync(IContainerProvider containerProvider)
     {
-         if (_isShuttingDown)
+         if (IsShuttingDown)
          {
             return;
          }
-        _isShuttingDown = true;
+        IsShuttingDown = true;
 
         Log.Information("开始关闭服务...");
 

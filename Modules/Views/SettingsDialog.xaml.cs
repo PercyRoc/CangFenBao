@@ -1,5 +1,4 @@
 ﻿using System.Windows;
-using System.Windows.Controls;
 using Common.Services.Ui;
 using Serilog;
 using SharedUI.Views.Settings;

@@ -45,7 +45,8 @@ public interface IPackageDataService
     /// <summary>
     ///     更新指定包裹的状态
     /// </summary>
-    Task<bool> UpdatePackageStatusAsync(string barcode, PackageStatus status, string statusDisplay, DateTime? recordTime = null);
+    Task<bool> UpdatePackageStatusAsync(string barcode, PackageStatus status, string statusDisplay,
+        DateTime? recordTime = null);
 }
 
 /// <summary>
@@ -75,11 +76,11 @@ internal class PackageDataService : IPackageDataService
         try
         {
             var record = PackageRecord.FromPackageInfo(package);
-            
+
             // 记录操作，便于调试
-            Log.Debug("添加包裹记录：Barcode={Barcode}, CreateTime={CreateTime}, Status={Status}", 
+            Log.Debug("添加包裹记录：Barcode={Barcode}, CreateTime={CreateTime}, Status={Status}",
                 record.Barcode, record.CreateTime.ToString("yyyy-MM-dd HH:mm:ss"), record.Status);
-                
+
             // 验证创建时间，防止未来日期导致数据错误
             if (record.CreateTime > DateTime.Now.AddHours(1)) // 允许1小时的时钟误差
             {
@@ -90,10 +91,10 @@ internal class PackageDataService : IPackageDataService
             // 确保表存在
             await EnsureMonthlyTableExists(record.CreateTime);
             var tableName = GetTableName(record.CreateTime);
-            
+
             // 使用原始SQL插入记录而不是EF Core的AddAsync，避免模型缓存问题
             await using var dbContext = CreateDbContext(record.CreateTime);
-            
+
             // 检查是否已存在相同条码的记录
             var checkSql = $"SELECT COUNT(*) FROM {tableName} WHERE Barcode = @barcode";
             var connection = dbContext.Database.GetDbConnection();
@@ -102,14 +103,14 @@ internal class PackageDataService : IPackageDataService
             checkCommand.CommandText = checkSql;
             checkCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@barcode", record.Barcode));
             var existingCount = Convert.ToInt32(await checkCommand.ExecuteScalarAsync());
-            
+
             if (existingCount > 0)
             {
                 // 如果条码已存在，可以考虑更新
                 Log.Debug("表 {TableName} 中已存在条码 {Barcode} 的记录，将添加新记录", tableName, record.Barcode);
                 // 这里选择添加新记录而不是更新，因为可能表示新的扫描
             }
-            
+
             // 构建插入SQL - 根据 PackageRecord 实际字段调整列名
             var insertSql = $@"
                 INSERT INTO {tableName} (
@@ -119,28 +120,38 @@ internal class PackageDataService : IPackageDataService
                     NULL, @PackageIndex, @Barcode, @SegmentCode, @Weight, @ChuteNumber, @Status, @StatusDisplay,
                     @CreateTime, @Length, @Width, @Height, @Volume, @ErrorMessage, @ImagePath
                 )";
-                
+
             await using var insertCommand = connection.CreateCommand();
             insertCommand.CommandText = insertSql;
-            
+
             // 添加参数 - 移除不存在的字段并修正字段类型
             insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@PackageIndex", record.Index));
             insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@Barcode", record.Barcode));
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@SegmentCode", record.SegmentCode as object ?? DBNull.Value));
+            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@SegmentCode",
+                record.SegmentCode as object ?? DBNull.Value));
             insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@Weight", record.Weight));
-            _ = insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@ChuteNumber", record.ChuteNumber.HasValue ? record.ChuteNumber.Value : DBNull.Value));
+            _ = insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@ChuteNumber",
+                record.ChuteNumber.HasValue ? record.ChuteNumber.Value : DBNull.Value));
             insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@Status", (int)record.Status));
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@StatusDisplay", record.StatusDisplay));
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@CreateTime", record.CreateTime.ToString("yyyy-MM-dd HH:mm:ss")));
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@Length", record.Length.HasValue ? record.Length.Value : DBNull.Value));
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@Width", record.Width.HasValue ? record.Width.Value : DBNull.Value));
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@Height", record.Height.HasValue ? record.Height.Value : DBNull.Value));
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@Volume", record.Volume.HasValue ? record.Volume.Value : DBNull.Value));
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@ErrorMessage", record.ErrorMessage as object ?? DBNull.Value));
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@ImagePath", record.ImagePath as object ?? DBNull.Value));
-            
+            insertCommand.Parameters.Add(
+                new Microsoft.Data.Sqlite.SqliteParameter("@StatusDisplay", record.StatusDisplay));
+            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@CreateTime",
+                record.CreateTime.ToString("yyyy-MM-dd HH:mm:ss")));
+            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@Length",
+                record.Length.HasValue ? record.Length.Value : DBNull.Value));
+            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@Width",
+                record.Width.HasValue ? record.Width.Value : DBNull.Value));
+            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@Height",
+                record.Height.HasValue ? record.Height.Value : DBNull.Value));
+            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@Volume",
+                record.Volume.HasValue ? record.Volume.Value : DBNull.Value));
+            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@ErrorMessage",
+                record.ErrorMessage as object ?? DBNull.Value));
+            insertCommand.Parameters.Add(
+                new Microsoft.Data.Sqlite.SqliteParameter("@ImagePath", record.ImagePath as object ?? DBNull.Value));
+
             await insertCommand.ExecuteNonQueryAsync();
-            
+
             Log.Debug("添加包裹记录成功：{Barcode}，已存入表 {TableName}", record.Barcode, tableName);
         }
         catch (Exception ex)
@@ -156,10 +167,10 @@ internal class PackageDataService : IPackageDataService
         try
         {
             Log.Debug("查询条码 {Barcode} 的包裹记录，指定日期：{Date}", barcode, date?.ToString("yyyy-MM-dd") ?? "null");
-            
+
             date ??= DateTime.Today;
             var tableName = GetTableName(date.Value);
-            
+
             // 尝试在指定表中查找
             var record = await GetPackageRecordFromTableAsync(tableName, barcode);
             if (record != null)
@@ -167,21 +178,21 @@ internal class PackageDataService : IPackageDataService
                 Log.Debug("在表 {TableName} 中找到条码 {Barcode} 的记录", tableName, barcode);
                 return record;
             }
-            
+
             // 如果未找到，且调用方未明确指定日期，则尝试在所有表中查找
             if (date.Value.Date == DateTime.Today.Date)
             {
                 Log.Debug("在当前月份表中未找到条码 {Barcode}，将在所有表中查找", barcode);
-                
+
                 var tableNames = await GetAllPackageTableNamesAsync();
                 // 按日期从新到旧排序
                 tableNames = [.. tableNames.OrderByDescending(static t => t)];
-                
+
                 foreach (var tblName in tableNames)
                 {
                     // 跳过刚才已查询过的当月表
                     if (tblName == tableName) continue;
-                    
+
                     record = await GetPackageRecordFromTableAsync(tblName, barcode);
                     if (record != null)
                     {
@@ -189,14 +200,14 @@ internal class PackageDataService : IPackageDataService
                         return record;
                     }
                 }
-                
+
                 Log.Debug("在所有表中都未找到条码 {Barcode} 的记录", barcode);
             }
             else
             {
                 Log.Debug("在指定月份表 {TableName} 中未找到条码 {Barcode} 的记录", tableName, barcode);
             }
-            
+
             return null;
         }
         catch (Exception ex)
@@ -218,9 +229,9 @@ internal class PackageDataService : IPackageDataService
             {
                 return null;
             }
-            
+
             await using var dbContext = CreateDbContext();
-            
+
             // 使用原始SQL查询
             var sql = $"SELECT * FROM {tableName} WHERE Barcode = @barcode";
             try
@@ -305,7 +316,7 @@ internal class PackageDataService : IPackageDataService
             date ??= DateTime.Today;
             await using var dbContext = CreateDbContext(date);
             await EnsureMonthlyTableExists(date.Value);
-            
+
             try
             {
                 return await dbContext.Set<PackageRecord>().Where(p => p.Status == status).ToListAsync();
@@ -360,7 +371,7 @@ internal class PackageDataService : IPackageDataService
                     Log.Warning("无法从表名 {TableName} 解析日期，跳过查询", tableName);
                     continue;
                 }
-                
+
                 Log.Debug("正在查询表 {TableName} 中的离线包裹...", tableName);
                 await using var dbContext = CreateDbContext(tableDate);
 
@@ -386,7 +397,7 @@ internal class PackageDataService : IPackageDataService
                         var offlineInTable = await dbContext.Set<PackageRecord>()
                             .Where(p => p.Status == PackageStatus.Offline)
                             .ToListAsync();
-                         if (offlineInTable.Count != 0)
+                        if (offlineInTable.Count != 0)
                         {
                             Log.Debug("修复后，在表 {TableName} 中找到 {Count} 个离线包裹", tableName, offlineInTable.Count);
                             allOfflinePackages.AddRange(offlineInTable);
@@ -394,7 +405,7 @@ internal class PackageDataService : IPackageDataService
                     }
                     catch (Exception fixEx)
                     {
-                         Log.Error(fixEx, "修复表 {TableName} 结构失败，无法查询此表的离线包裹", tableName);
+                        Log.Error(fixEx, "修复表 {TableName} 结构失败，无法查询此表的离线包裹", tableName);
                     }
                 }
                 catch (Exception ex)
@@ -403,7 +414,7 @@ internal class PackageDataService : IPackageDataService
                     // 选择继续查询其他表，而不是让整个操作失败
                 }
             }
-            
+
             Log.Information("共查询到 {Count} 个离线包裹", allOfflinePackages.Count);
             // 可以选择按时间排序
             return [.. allOfflinePackages.OrderByDescending(p => p.CreateTime)];
@@ -416,56 +427,58 @@ internal class PackageDataService : IPackageDataService
     }
 
     /// <inheritdoc />
-    public async Task<bool> UpdatePackageStatusAsync(string barcode, PackageStatus status, string statusDisplay, DateTime? recordTime = null)
+    public async Task<bool> UpdatePackageStatusAsync(string barcode, PackageStatus status, string statusDisplay,
+        DateTime? recordTime = null)
     {
         try
         {
             // 记录原始的调用参数，便于调试
-            Log.Debug("尝试更新包裹状态：Barcode={Barcode}, Status={Status}, StatusDisplay={StatusDisplay}, RecordTime={RecordTime}",
+            Log.Debug(
+                "尝试更新包裹状态：Barcode={Barcode}, Status={Status}, StatusDisplay={StatusDisplay}, RecordTime={RecordTime}",
                 barcode, status, statusDisplay, recordTime?.ToString("yyyy-MM-dd") ?? "null");
 
             // 第一个尝试：使用提供的 recordTime (或当天) 查找记录
             recordTime ??= DateTime.Today; // 如果未提供时间，默认使用今天
-            
+
             // 尝试当前月份表
             var success = await TryUpdatePackageStatusInTableAsync(barcode, status, statusDisplay, recordTime.Value);
             if (success)
             {
                 return true; // 更新成功
             }
-            
+
             // 如果未找到，尝试跨表查询：先尝试前一个月
             var previousMonth = recordTime.Value.AddMonths(-1);
-            Log.Debug("在 {Month} 表中未找到包裹 {Barcode}，尝试前一个月 {PreviousMonth}", 
+            Log.Debug("在 {Month} 表中未找到包裹 {Barcode}，尝试前一个月 {PreviousMonth}",
                 recordTime.Value.ToString("yyyy-MM"), barcode, previousMonth.ToString("yyyy-MM"));
-            
+
             success = await TryUpdatePackageStatusInTableAsync(barcode, status, statusDisplay, previousMonth);
             if (success)
             {
                 return true; // 在前一个月表中找到并更新
             }
-            
+
             // 最后，尝试所有表 (从最新的开始)
             Log.Debug("在当前月和前一个月都未找到包裹 {Barcode}，尝试在所有表中查找", barcode);
-            
+
             var tableNames = await GetAllPackageTableNamesAsync();
             // 按日期从新到旧排序表名（假设Packages_yyyyMM格式）
             tableNames = [.. tableNames.OrderByDescending(t => t)];
-            
+
             foreach (var tableName in tableNames)
             {
                 if (!TryParseDateFromTableName(tableName, out var tableDate))
                 {
                     continue; // 跳过不符合格式的表名
                 }
-                
+
                 // 跳过之前已尝试过的月份
                 if (tableDate.Year == recordTime.Value.Year && tableDate.Month == recordTime.Value.Month ||
                     tableDate.Year == previousMonth.Year && tableDate.Month == previousMonth.Month)
                 {
                     continue;
                 }
-                
+
                 success = await TryUpdatePackageStatusInTableAsync(barcode, status, statusDisplay, tableDate);
                 if (success)
                 {
@@ -473,7 +486,7 @@ internal class PackageDataService : IPackageDataService
                     return true;
                 }
             }
-            
+
             // 所有表中都未找到记录
             Log.Warning("在所有表中都未找到包裹记录：{Barcode}", barcode);
             return false;
@@ -484,56 +497,57 @@ internal class PackageDataService : IPackageDataService
             return false; // 更新失败
         }
     }
-    
+
     /// <summary>
     ///     尝试在指定月份表中更新包裹状态
     /// </summary>
-    private async Task<bool> TryUpdatePackageStatusInTableAsync(string barcode, PackageStatus status, string statusDisplay, DateTime tableDate)
+    private async Task<bool> TryUpdatePackageStatusInTableAsync(string barcode, PackageStatus status,
+        string statusDisplay, DateTime tableDate)
     {
         try
         {
             var tableName = GetTableName(tableDate);
-            
+
             // 检查表是否存在
             if (!await TableExistsAsync(tableName))
             {
                 Log.Debug("表 {TableName} 不存在，无法更新包裹 {Barcode}", tableName, barcode);
                 return false;
             }
-            
+
             await using var dbContext = CreateDbContext(tableDate);
-            
+
             // 使用原始SQL查询，确保查询正确的表
             var sql = $"SELECT * FROM {tableName} WHERE Barcode = @barcode";
             var record = await dbContext.Set<PackageRecord>()
                 .FromSqlRaw(sql, new Microsoft.Data.Sqlite.SqliteParameter("@barcode", barcode))
                 .FirstOrDefaultAsync();
-            
+
             if (record == null)
             {
                 Log.Debug("在表 {TableName} 中未找到包裹 {Barcode}", tableName, barcode);
                 return false;
             }
-            
+
             // 记录更新前的状态，便于调试
-            Log.Debug("在表 {TableName} 中找到包裹 {Barcode}，原状态={OldStatus}，新状态={NewStatus}", 
+            Log.Debug("在表 {TableName} 中找到包裹 {Barcode}，原状态={OldStatus}，新状态={NewStatus}",
                 tableName, barcode, record.Status, status);
-            
+
             // 更新状态
             record.Status = status;
             record.StatusDisplay = statusDisplay;
-            
+
             // 使用原始SQL执行更新，确保更新正确的表
             var updateSql = $@"
                 UPDATE {tableName}
                 SET Status = @status, StatusDisplay = @statusDisplay
                 WHERE Barcode = @barcode";
-                
+
             await dbContext.Database.ExecuteSqlRawAsync(updateSql,
                 new Microsoft.Data.Sqlite.SqliteParameter("@status", (int)status),
                 new Microsoft.Data.Sqlite.SqliteParameter("@statusDisplay", statusDisplay),
                 new Microsoft.Data.Sqlite.SqliteParameter("@barcode", barcode));
-            
+
             Log.Information("成功更新表 {TableName} 中包裹 {Barcode} 的状态为 {Status}", tableName, barcode, status);
             return true;
         }
@@ -543,7 +557,7 @@ internal class PackageDataService : IPackageDataService
             return false;
         }
     }
-    
+
     /// <summary>
     ///     检查表是否存在
     /// </summary>
@@ -554,24 +568,24 @@ internal class PackageDataService : IPackageDataService
         {
             return true;
         }
-        
+
         try
         {
             await using var dbContext = CreateDbContext();
             var connection = dbContext.Database.GetDbConnection();
             await connection.OpenAsync();
-            
+
             await using var command = connection.CreateCommand();
             command.CommandText = $"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='{tableName}'";
             var result = await command.ExecuteScalarAsync();
-            
+
             exists = Convert.ToInt32(result) > 0;
-            
+
             if (exists)
             {
                 _tableExistsCache.TryAdd(tableName, true);
             }
-            
+
             return exists;
         }
         catch (Exception ex)
@@ -715,7 +729,7 @@ internal class PackageDataService : IPackageDataService
 
             // 创建联合索引
             var createIndexSql = $"""
-
+                                  
                                                   CREATE INDEX IX_{tableName}_CreateTime_Barcode 
                                                   ON {tableName}(CreateTime, Barcode)
                                   """;
@@ -875,41 +889,41 @@ internal class PackageDataService : IPackageDataService
             {
                 // 由于SQLite不支持直接删除列，我们需要创建一个新表并迁移数据
                 var tempTableName = $"{tableName}_temp";
-                
+
                 // 创建临时表
                 var createTempTableSql = $"""
-                    CREATE TABLE {tempTableName} (
-                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        PackageIndex INTEGER NOT NULL,
-                        Barcode TEXT(50) NOT NULL,
-                        SegmentCode TEXT(50),
-                        Weight REAL,
-                        ChuteNumber INTEGER,
-                        Status INTEGER,
-                        StatusDisplay TEXT(50),
-                        CreateTime TEXT,
-                        Length REAL,
-                        Width REAL,
-                        Height REAL,
-                        Volume REAL,
-                        Information TEXT(500),
-                        ErrorMessage TEXT(500),
-                        ImagePath TEXT(255)
-                    )
-                """;
+                                              CREATE TABLE {tempTableName} (
+                                                  Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                                  PackageIndex INTEGER NOT NULL,
+                                                  Barcode TEXT(50) NOT NULL,
+                                                  SegmentCode TEXT(50),
+                                                  Weight REAL,
+                                                  ChuteNumber INTEGER,
+                                                  Status INTEGER,
+                                                  StatusDisplay TEXT(50),
+                                                  CreateTime TEXT,
+                                                  Length REAL,
+                                                  Width REAL,
+                                                  Height REAL,
+                                                  Volume REAL,
+                                                  Information TEXT(500),
+                                                  ErrorMessage TEXT(500),
+                                                  ImagePath TEXT(255)
+                                              )
+                                          """;
                 await dbContext.Database.ExecuteSqlRawAsync(createTempTableSql);
 
                 // 迁移数据
                 var migrateDataSql = $"""
-                    INSERT INTO {tempTableName} (
-                        Id, PackageIndex, Barcode, SegmentCode, Weight, Status, StatusDisplay,
-                        CreateTime, Length, Width, Height, Volume, Information, ErrorMessage, ImagePath
-                    )
-                    SELECT 
-                        Id, PackageIndex, Barcode, SegmentCode, Weight, Status, StatusDisplay,
-                        CreateTime, Length, Width, Height, Volume, Information, ErrorMessage, ImagePath
-                    FROM {tableName}
-                """;
+                                          INSERT INTO {tempTableName} (
+                                              Id, PackageIndex, Barcode, SegmentCode, Weight, Status, StatusDisplay,
+                                              CreateTime, Length, Width, Height, Volume, Information, ErrorMessage, ImagePath
+                                          )
+                                          SELECT 
+                                              Id, PackageIndex, Barcode, SegmentCode, Weight, Status, StatusDisplay,
+                                              CreateTime, Length, Width, Height, Volume, Information, ErrorMessage, ImagePath
+                                          FROM {tableName}
+                                      """;
                 await dbContext.Database.ExecuteSqlRawAsync(migrateDataSql);
 
                 // 删除旧表
@@ -924,7 +938,8 @@ internal class PackageDataService : IPackageDataService
             }
 
             // 创建索引（如果不存在）
-            var checkIndexSql = $"SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='IX_{tableName}_CreateTime_Barcode'";
+            var checkIndexSql =
+                $"SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='IX_{tableName}_CreateTime_Barcode'";
             command.CommandText = checkIndexSql;
             result = await command.ExecuteScalarAsync();
             var indexExists = Convert.ToInt32(result) > 0;
@@ -932,9 +947,9 @@ internal class PackageDataService : IPackageDataService
             if (!indexExists)
             {
                 var createIndexSql = $"""
-                    CREATE INDEX IX_{tableName}_CreateTime_Barcode 
-                    ON {tableName}(CreateTime, Barcode)
-                """;
+                                          CREATE INDEX IX_{tableName}_CreateTime_Barcode 
+                                          ON {tableName}(CreateTime, Barcode)
+                                      """;
                 await dbContext.Database.ExecuteSqlRawAsync(createIndexSql);
                 Log.Information("已创建索引：IX_{tableName}_CreateTime_Barcode", tableName);
             }
@@ -962,22 +977,23 @@ internal class PackageDataService : IPackageDataService
         var tableNames = new List<string>();
         try
         {
-             await using var dbContext = CreateDbContext(); // 使用默认上下文获取连接
-             var connection = dbContext.Database.GetDbConnection();
-             await connection.OpenAsync();
-             await using var command = connection.CreateCommand();
-             command.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'Packages_%'";
-             
-             await using var reader = await command.ExecuteReaderAsync();
-             while (await reader.ReadAsync())
-             {
-                 tableNames.Add(reader.GetString(0));
-             }
+            await using var dbContext = CreateDbContext(); // 使用默认上下文获取连接
+            var connection = dbContext.Database.GetDbConnection();
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'Packages_%'";
+
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                tableNames.Add(reader.GetString(0));
+            }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "获取所有包裹表名时出错");
         }
+
         return tableNames;
     }
 
@@ -989,6 +1005,6 @@ internal class PackageDataService : IPackageDataService
         date = default;
         if (tableName.Length <= 9 || !tableName.StartsWith("Packages_")) return false;
         return DateTime.TryParseExact(tableName[9..], "yyyyMM", CultureInfo.InvariantCulture,
-                                    DateTimeStyles.None, out date);
+            DateTimeStyles.None, out date);
     }
 }

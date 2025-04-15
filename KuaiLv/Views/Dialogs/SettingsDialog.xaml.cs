@@ -1,7 +1,5 @@
 using System.Windows;
-using System.Windows.Input;
 using Common.Services.Ui;
-using Serilog;
 using SharedUI.Views.Settings;
 
 namespace KuaiLv.Views.Dialogs;

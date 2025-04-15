@@ -2,7 +2,7 @@ using System.Collections.ObjectModel;
 using Common.Services.Settings;
 using Prism.Mvvm;
 
-namespace PlateTurnoverMachine.Models;
+namespace DongtaiFlippingBoardMachine.Models;
 
 /// <summary>
 ///     翻板机配置

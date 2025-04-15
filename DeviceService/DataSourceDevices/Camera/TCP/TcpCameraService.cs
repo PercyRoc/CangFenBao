@@ -47,7 +47,7 @@ internal class TcpCameraService(string host = "127.0.0.1", int port = 20011) : I
             Log.Debug("正在 Dispose TCP相机服务..."); // 添加日志
             if (!_cancellationTokenSource.IsCancellationRequested)
             {
-                 _cancellationTokenSource.Cancel();
+                _cancellationTokenSource.Cancel();
             }
 
             // 移除 Wait
@@ -71,18 +71,54 @@ internal class TcpCameraService(string host = "127.0.0.1", int port = 20011) : I
         }
         finally
         {
-             // 确保资源总是被尝试释放
-             try { _client?.Close(); } catch (Exception ex) { Log.Warning(ex, "Dispose 中关闭 Client 时出错"); }
-             try { _client?.Dispose(); } catch (Exception ex) { Log.Warning(ex, "Dispose 中 Dispose Client 时出错"); }
-             try { _stream?.Dispose(); } catch (Exception ex) { Log.Warning(ex, "Dispose 中 Dispose Stream 时出错"); }
-             try { _cancellationTokenSource.Dispose(); } catch (Exception ex) { Log.Warning(ex, "Dispose 中 Dispose CancellationTokenSource 时出错"); }
+            // 确保资源总是被尝试释放
+            try
+            {
+                _client?.Close();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Dispose 中关闭 Client 时出错");
+            }
 
-             // 短暂等待，允许后台任务完成一些清理
-             try
-             {
-                 _connectionTask?.Wait(TimeSpan.FromMilliseconds(100));
-             } catch {} // 忽略异常
-             Log.Debug("TCP相机 Dispose() 方法 finally 执行完毕"); // 添加日志
+            try
+            {
+                _client?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Dispose 中 Dispose Client 时出错");
+            }
+
+            try
+            {
+                _stream?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Dispose 中 Dispose Stream 时出错");
+            }
+
+            try
+            {
+                _cancellationTokenSource.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Dispose 中 Dispose CancellationTokenSource 时出错");
+            }
+
+            // 短暂等待，允许后台任务完成一些清理
+            try
+            {
+                _connectionTask?.Wait(TimeSpan.FromMilliseconds(100));
+            }
+            catch
+            {
+                // ignored
+            } // 忽略异常
+
+            Log.Debug("TCP相机 Dispose() 方法 finally 执行完毕"); // 添加日志
         }
     }
 
@@ -176,18 +212,23 @@ internal class TcpCameraService(string host = "127.0.0.1", int port = 20011) : I
             Log.Error(ex, "停止TCP相机时发生错误");
             return false;
         }
-         finally
-         {
-             // Dispose 应该在 finally 中进行，确保总是执行
-             _client?.Dispose();
-             _stream?.Dispose();
-             // 可以在这里尝试等待一小段时间，但不阻塞关键路径
-             try
-             {
-                 _connectionTask?.Wait(TimeSpan.FromMilliseconds(100)); // 短暂等待，非阻塞
-             } catch {} // 忽略异常
-             Log.Information("TCP相机 Stop() 方法执行完毕"); // 添加日志
-         }
+        finally
+        {
+            // Dispose 应该在 finally 中进行，确保总是执行
+            _client?.Dispose();
+            _stream?.Dispose();
+            // 可以在这里尝试等待一小段时间，但不阻塞关键路径
+            try
+            {
+                _connectionTask?.Wait(TimeSpan.FromMilliseconds(100)); // 短暂等待，非阻塞
+            }
+            catch
+            {
+                // ignored
+            } // 忽略异常
+
+            Log.Information("TCP相机 Stop() 方法执行完毕"); // 添加日志
+        }
     }
 
     private async Task MaintenanceConnectionAsync()
@@ -211,14 +252,15 @@ internal class TcpCameraService(string host = "127.0.0.1", int port = 20011) : I
             // 使用 Try/Catch 避免 Task.Delay 在取消时抛出异常导致循环意外终止
             try
             {
-               await Task.Delay(ReconnectInterval, _cancellationTokenSource.Token);
+                await Task.Delay(ReconnectInterval, _cancellationTokenSource.Token);
             }
             catch (OperationCanceledException)
             {
-               Log.Debug("MaintenanceConnectionAsync 的 Task.Delay 被取消。");
-               break; // 退出循环
+                Log.Debug("MaintenanceConnectionAsync 的 Task.Delay 被取消。");
+                break; // 退出循环
             }
         }
+
         Log.Information("MaintenanceConnectionAsync 循环结束。"); // 添加日志
     }
 
@@ -247,6 +289,7 @@ internal class TcpCameraService(string host = "127.0.0.1", int port = 20011) : I
             {
                 await _stream.DisposeAsync();
             }
+
             _stream = null;
             throw;
         }
@@ -285,11 +328,11 @@ internal class TcpCameraService(string host = "127.0.0.1", int port = 20011) : I
         }
         catch (ObjectDisposedException ode) // 捕获因 Stop/Dispose 中关闭 Stream 导致的异常
         {
-             Log.Debug(ode, "ReceiveDataAsync 尝试在已释放的对象上操作 (可能是 Stream 或 Client)");
+            Log.Debug(ode, "ReceiveDataAsync 尝试在已释放的对象上操作 (可能是 Stream 或 Client)");
         }
         catch (IOException ioex) // 捕获其他 IO 错误，例如连接被强制关闭
         {
-             Log.Warning(ioex, "ReceiveDataAsync 中发生 IO 错误");
+            Log.Warning(ioex, "ReceiveDataAsync 中发生 IO 错误");
         }
         catch (Exception ex)
         {
@@ -319,7 +362,7 @@ internal class TcpCameraService(string host = "127.0.0.1", int port = 20011) : I
         }
 
         // 检查数据是否包含逗号，如果不包含，可能不是有效的数据包
-        if (!content.Contains(',')) 
+        if (!content.Contains(','))
         {
             Log.Debug("数据包不包含逗号，丢弃: {Data}", content);
             data.Clear();
@@ -404,6 +447,7 @@ internal class TcpCameraService(string host = "127.0.0.1", int port = 20011) : I
                 {
                     Log.Warning("无效的数据包格式，丢弃: {Packet}", string.Join(",", currentPacket));
                 }
+
                 currentPacket.Clear();
                 fieldCount = 0;
             }
@@ -547,7 +591,7 @@ internal class TcpCameraService(string host = "127.0.0.1", int port = 20011) : I
             else
             {
                 Log.Warning("包裹 {Barcode} 尺寸信息不完整或无效 (L:{L}, W:{W}, H:{H})",
-                            package.Barcode, parts[^5], parts[^4], parts[^3]);
+                    package.Barcode, parts[^5], parts[^4], parts[^3]);
             }
 
             _packageSubject.OnNext(package);
@@ -558,7 +602,8 @@ internal class TcpCameraService(string host = "127.0.0.1", int port = 20011) : I
                 var additionalBarcodes = string.Join(",", parts[1..^6].Select(b => b.Trim()));
                 Log.Information(
                     "收到包裹: 条码={Barcode}, 时间={Time}, 重量={Weight:F2}kg, 长={Length:F2}cm, 宽={Width:F2}cm, 高={Height:F2}cm, 额外条码={AdditionalBarcodes}",
-                    package.Barcode, timestamp, package.Weight, package.Length, package.Width, package.Height, additionalBarcodes);
+                    package.Barcode, timestamp, package.Weight, package.Length, package.Width, package.Height,
+                    additionalBarcodes);
             }
             else
             {

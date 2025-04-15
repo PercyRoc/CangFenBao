@@ -7,7 +7,7 @@ using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
 
-namespace SangNeng.ViewModels.Settings;
+namespace Sunnen.ViewModels.Settings;
 
 public class WeightSettingsViewModel : BindableBase
 {

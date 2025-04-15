@@ -1,4 +1,4 @@
-namespace PlateTurnoverMachine.Models;
+namespace DongtaiFlippingBoardMachine.Models;
 
 /// <summary>
 ///     TCP数据接收事件参数

@@ -1,7 +1,7 @@
 using Common.Services.Settings;
 using Prism.Mvvm;
 
-namespace Modules.Models;
+namespace ShanghaiModuleBelt.Models;
 
 [Configuration("TcpSettings")]
 internal class TcpSettings : BindableBase

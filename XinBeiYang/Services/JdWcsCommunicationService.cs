@@ -5,8 +5,6 @@ using Serilog;
 using XinBeiYang.Models;
 using XinBeiYang.Models.Communication.JdWcs;
 using System.IO;
-using System;
-using System.Linq;
 using System.Text.Json;
 using System.Text;
 
@@ -756,7 +754,6 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
                 catch (IOException ioEx)
                 {
                     Log.Error(ioEx, "发送消息IO错误 (重试 {RetryCount}), 类型: {Type}, 序号: {Sequence}", retryCount, messageType, sequence);
-                    messageSentSuccessfully = false;
                     await DisconnectAsync();
                     _pendingCommands.TryRemove(commandKey, out _);
                     return null;

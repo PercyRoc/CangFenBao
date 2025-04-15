@@ -1,6 +1,6 @@
-using SangNeng.Models;
+using Sunnen.Models;
 
-namespace SangNeng.Services;
+namespace Sunnen.Services;
 
 public interface ISangNengService
 {

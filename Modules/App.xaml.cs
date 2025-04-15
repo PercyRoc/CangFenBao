@@ -4,9 +4,6 @@ using Common.Extensions;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
-using Modules.Services;
-using Modules.ViewModels;
-using Modules.ViewModels.Settings;
 using Modules.Views;
 using Modules.Views.Settings;
 using Prism.Ioc;
@@ -14,6 +11,9 @@ using Serilog;
 using SharedUI.Extensions;
 using LockingService = Modules.Services.LockingService;
 using System.Diagnostics;
+using ShanghaiModuleBelt.Services;
+using ShanghaiModuleBelt.ViewModels.Settings;
+using ShanghaiModuleBelt.ViewModels;
 
 namespace Modules;
 

@@ -10,17 +10,18 @@
 
 
     <ItemGroup>
-        <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite"/>
-        <PackageReference Include="Microsoft.Extensions.Configuration"/>
-        <PackageReference Include="Microsoft.Extensions.Configuration.Json"/>
-        <PackageReference Include="Microsoft.Extensions.Hosting"/>
-        <PackageReference Include="Microsoft.Extensions.Options"/>
-        <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions"/>
-        <PackageReference Include="Prism.Wpf"/>
-        <PackageReference Include="Serilog"/>
-        <PackageReference Include="SixLabors.ImageSharp"/>
-        <PackageReference Include="System.IO.Ports"/>
-        <PackageReference Include="HandyControl"/>
+        <PackageReference Include="MahApps.Metro.IconPacks.Material" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+        <PackageReference Include="Microsoft.Extensions.Configuration" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" />
+        <PackageReference Include="Microsoft.Extensions.Options" />
+        <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+        <PackageReference Include="Prism.Wpf" />
+        <PackageReference Include="Serilog" />
+        <PackageReference Include="SixLabors.ImageSharp" />
+        <PackageReference Include="System.IO.Ports" />
+        <PackageReference Include="HandyControl" />
+        <PackageReference Include="WPF-UI" />
     </ItemGroup>
 </Project>

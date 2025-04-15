@@ -3,11 +3,11 @@ using Prism.Commands;
 using Prism.Ioc;
 using Prism.Mvvm;
 using Prism.Services.Dialogs;
-using SangNeng.ViewModels.Settings;
 using Serilog;
 using SharedUI.ViewModels.Settings;
+using Sunnen.ViewModels.Settings;
 
-namespace SangNeng.ViewModels.Dialogs;
+namespace Sunnen.ViewModels.Dialogs;
 
 public class SettingsDialogViewModel : BindableBase, IDialogAware
 {

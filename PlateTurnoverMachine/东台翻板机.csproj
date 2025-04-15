@@ -6,9 +6,19 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
-        <AssemblyName>Sunnen</AssemblyName>
+        <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
         <LangVersion>default</LangVersion>
+        <AssemblyName>仓分宝-翻版机</AssemblyName>
+		<RootNamespace>DongtaiFlippingBoardMachine</RootNamespace>
     </PropertyGroup>
+
+    <ItemGroup>
+        <Page Update="Views\MainWindow.xaml">
+            <Generator>MSBuild:Compile</Generator>
+            <XamlRuntime>Wpf</XamlRuntime>
+            <SubType>Designer</SubType>
+        </Page>
+    </ItemGroup>
 
     <ItemGroup>
         <!-- Prism -->
@@ -23,12 +33,13 @@
         <PackageReference Include="Serilog.Extensions.Logging"/>
 
         <!-- UI Framework -->
+        <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
+        <PackageReference Include="Microsoft.Extensions.Http"/>
         <PackageReference Include="WPF-UI"/>
         <PackageReference Include="HandyControl"/>
-        <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
 
-        <!-- Serial Port -->
-        <PackageReference Include="System.IO.Ports"/>
+        <!-- Excel -->
+        <PackageReference Include="EPPlus"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -37,19 +48,11 @@
         <ProjectReference Include="..\SharedUI\SharedUI.csproj"/>
     </ItemGroup>
 
-    <ItemGroup>
-        <Folder Include="ViewModels\"/>
-        <Folder Include="Views\Dialogs\"/>
-        <Folder Include="Views\Settings\"/>
-    </ItemGroup>
 
     <ItemGroup>
-        <Page Update="Views\Windows\MainWindow.xaml">
-            <Generator>MSBuild:Compile</Generator>
-            <XamlRuntime>Wpf</XamlRuntime>
-            <SubType>Designer</SubType>
-        </Page>
+        <Folder Include="Services\"/>
     </ItemGroup>
+
 
     <ItemGroup>
         <Resource Include="..\SharedUI\Resources\Icon\logo.ico">

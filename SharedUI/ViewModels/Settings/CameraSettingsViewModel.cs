@@ -7,7 +7,6 @@ using Prism.Mvvm;
 using Serilog;
 using Prism.Services.Dialogs;
 using System.Diagnostics;
-using System.Windows;
 using System.Windows.Forms;
 
 namespace SharedUI.ViewModels.Settings;

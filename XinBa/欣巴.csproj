@@ -6,9 +6,8 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
-        <ApplicationIcon>Resources\favicon.ico</ApplicationIcon>
-        <AssemblyName>泉州市策力自动化科技有限公司</AssemblyName>
-        <LangVersion>default</LangVersion>
+        <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
+		<RootNamespace>XinBa</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>
@@ -17,13 +16,16 @@
             <XamlRuntime>Wpf</XamlRuntime>
             <SubType>Designer</SubType>
         </Page>
+        <Page Update="Views\SettingsDialog.xaml">
+            <Generator>MSBuild:Compile</Generator>
+            <XamlRuntime>Wpf</XamlRuntime>
+            <SubType>Designer</SubType>
+        </Page>
     </ItemGroup>
-
     <ItemGroup>
         <ProjectReference Include="..\Common\Common.csproj"/>
         <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>
         <ProjectReference Include="..\SharedUI\SharedUI.csproj"/>
-        <ProjectReference Include="..\SortingServices\SortingServices.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -45,12 +47,22 @@
         <PackageReference Include="WPF-UI"/>
         <PackageReference Include="HandyControl"/>
         <PackageReference Include="EPPlus"/>
+
+        <!-- WebSocket -->
+        <PackageReference Include="WebSocketSharp-netstandard"/>
     </ItemGroup>
 
     <ItemGroup>
-        <Resource Include="Resources\favicon.ico">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </Resource>
+        <Page Update="Views\MainWindow.xaml">
+            <Generator>MSBuild:Compile</Generator>
+            <XamlRuntime>Wpf</XamlRuntime>
+            <SubType>Designer</SubType>
+        </Page>
     </ItemGroup>
 
+    <ItemGroup>
+        <Resource Include="..\SharedUI\Resources\Icon\logo.ico">
+            <Link>logo.ico</Link>
+        </Resource>
+    </ItemGroup>
 </Project>

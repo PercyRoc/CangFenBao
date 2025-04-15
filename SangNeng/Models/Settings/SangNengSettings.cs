@@ -1,7 +1,7 @@
 using Common.Services.Settings;
 using Prism.Mvvm;
 
-namespace SangNeng.Models.Settings;
+namespace Sunnen.Models.Settings;
 
 [Configuration("sangNengSettings")]
 public class SangNengSettings : BindableBase

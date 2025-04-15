@@ -1,9 +1,9 @@
 using System.IO;
 using System.Net.Sockets;
-using PlateTurnoverMachine.Models;
+using DongtaiFlippingBoardMachine.Models;
 using Serilog;
 
-namespace PlateTurnoverMachine.Services;
+namespace DongtaiFlippingBoardMachine.Services;
 
 /// <summary>
 ///     TCP连接服务实现
@@ -239,11 +239,10 @@ internal class TcpConnectionService : ITcpConnectionService
         {
             Log.Information("启动触发光电监听任务");
             var buffer = new byte[1024]; // 独立缓冲区
-            NetworkStream? stream = null;
 
             try
             {
-                stream = localClient.GetStream();
+                var stream = localClient.GetStream();
                 while (!localCts.Token.IsCancellationRequested && localClient.Connected)
                 {
                     try
@@ -386,11 +385,10 @@ internal class TcpConnectionService : ITcpConnectionService
         {
             Log.Information("启动TCP模块监听任务: {Config}", localConfig.IpAddress);
             var buffer = new byte[1024]; // 独立缓冲区
-            NetworkStream? stream = null;
 
             try
             {
-                stream = localClient.GetStream();
+                var stream = localClient.GetStream();
                 while (!cts.Token.IsCancellationRequested && localClient.Connected)
                 {
                     try
@@ -480,7 +478,7 @@ internal class TcpConnectionService : ITcpConnectionService
 
             if (_tcpModuleListeningTasks.TryGetValue(config, out var task))
             {
-                if (task?.IsCompleted == false)
+                if (task.IsCompleted == false)
                 {
                     Log.Debug("等待TCP模块监听任务结束: {Config}", config.IpAddress);
                     try
@@ -519,66 +517,6 @@ internal class TcpConnectionService : ITcpConnectionService
         finally
         {
             _sendLock.Release();
-        }
-    }
-
-    private async Task<byte[]> ReceiveDataAsync(TcpClient client)
-    {
-        var stream = client.GetStream();
-
-        // 检查是否有可用数据
-        if (!stream.DataAvailable)
-        {
-            // 等待数据可用
-            var buffer = new byte[1];
-            var bytesRead = await stream.ReadAsync(buffer.AsMemory(0, 1));
-
-            // 如果没有读取到数据，返回空数组
-            if (bytesRead == 0) return [];
-
-            // 创建结果数组，包含已读取的第一个字节
-            var totalAvailable = client.Available + 1;
-            var result = new byte[totalAvailable];
-            result[0] = buffer[0];
-
-            // 读取剩余数据
-            if (client.Available <= 0) return [buffer[0]];
-
-            var remainingBuffer = new byte[client.Available];
-            var totalBytesRead = 0;
-
-            while (totalBytesRead < remainingBuffer.Length)
-            {
-                var read = await stream.ReadAsync(remainingBuffer.AsMemory(totalBytesRead,
-                    remainingBuffer.Length - totalBytesRead));
-                if (read == 0)
-                    // 连接已关闭
-                    throw new IOException("连接已关闭，无法读取完整数据");
-
-                totalBytesRead += read;
-            }
-
-            Array.Copy(remainingBuffer, 0, result, 1, totalBytesRead);
-            return result.Take(totalBytesRead + 1).ToArray();
-        }
-        else
-        {
-            // 有可用数据，直接读取
-            var available = client.Available;
-            var buffer = new byte[available];
-            var totalBytesRead = 0;
-
-            while (totalBytesRead < available)
-            {
-                var read = await stream.ReadAsync(buffer.AsMemory(totalBytesRead, available - totalBytesRead));
-                if (read == 0)
-                    // 连接已关闭
-                    throw new IOException("连接已关闭，无法读取完整数据");
-
-                totalBytesRead += read;
-            }
-
-            return buffer.Take(totalBytesRead).ToArray();
         }
     }
 
@@ -628,7 +566,7 @@ internal class TcpConnectionService : ITcpConnectionService
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning(ex, "关闭TCP模块客户端时出错: {IpAddress}", client.Client?.RemoteEndPoint);
+                    Log.Warning(ex, "关闭TCP模块客户端时出错: {IpAddress}", client.Client.RemoteEndPoint);
                 }
             }
 

@@ -7,21 +7,10 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
         <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
-        <LangVersion>default</LangVersion>
+        <AssemblyName>仓分宝-快驴</AssemblyName>
+		<RootNamespace>KuaiLv</RootNamespace>
     </PropertyGroup>
 
-    <ItemGroup>
-        <Page Update="Views\MainWindow.xaml">
-            <Generator>MSBuild:Compile</Generator>
-            <XamlRuntime>Wpf</XamlRuntime>
-            <SubType>Designer</SubType>
-        </Page>
-        <Page Update="Views\SettingsDialog.xaml">
-            <Generator>MSBuild:Compile</Generator>
-            <XamlRuntime>Wpf</XamlRuntime>
-            <SubType>Designer</SubType>
-        </Page>
-    </ItemGroup>
     <ItemGroup>
         <ProjectReference Include="..\Common\Common.csproj"/>
         <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>
@@ -47,9 +36,6 @@
         <PackageReference Include="WPF-UI"/>
         <PackageReference Include="HandyControl"/>
         <PackageReference Include="EPPlus"/>
-
-        <!-- WebSocket -->
-        <PackageReference Include="WebSocketSharp-netstandard"/>
     </ItemGroup>
 
     <ItemGroup>

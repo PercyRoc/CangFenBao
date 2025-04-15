@@ -4,12 +4,12 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Net.Http.Headers;
-using ChongqingJushuitan.Models.JuShuiTan;
-using ChongqingJushuitan.ViewModels.Settings;
 using Common.Services.Settings;
 using Serilog;
+using ChongqingYekelai.ViewModels.Settings;
+using ChongqingYekelai.Models.JuShuiTan;
 
-namespace ChongqingJushuitan.Services;
+namespace ChongqingYekelai.Services;
 
 /// <summary>
 ///     聚水潭服务实现

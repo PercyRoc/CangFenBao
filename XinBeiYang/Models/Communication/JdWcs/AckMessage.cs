@@ -9,7 +9,7 @@ namespace XinBeiYang.Models.Communication.JdWcs;
 public class AckMessage
 {
     // 共享的序列化选项
-    private static readonly JsonSerializerOptions _jsonOptions = new()
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
@@ -29,7 +29,7 @@ public class AckMessage
     /// </summary>
     public byte[] ToBytes()
     {
-        var json = JsonSerializer.Serialize(this, _jsonOptions);
+        var json = JsonSerializer.Serialize(this, JsonOptions);
         return Encoding.UTF8.GetBytes(json);
     }
     
@@ -39,6 +39,6 @@ public class AckMessage
     public static AckMessage FromBytes(byte[] bytes)
     {
         var json = Encoding.UTF8.GetString(bytes);
-        return JsonSerializer.Deserialize<AckMessage>(json, _jsonOptions) ?? new AckMessage();
+        return JsonSerializer.Deserialize<AckMessage>(json, JsonOptions) ?? new AckMessage();
     }
 } 

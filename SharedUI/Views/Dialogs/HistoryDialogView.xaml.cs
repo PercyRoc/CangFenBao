@@ -1,6 +1,6 @@
 using Common.Services.Ui;
 
-namespace SharedUI.Views;
+namespace SharedUI.Views.Dialogs;
 
 /// <summary>
 ///     历史记录查询用户控件

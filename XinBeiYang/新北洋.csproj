@@ -6,10 +6,9 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
+        <AssemblyName>仓分宝-新北洋</AssemblyName>
         <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
-        <UseWPF>true</UseWPF>
-        <AssemblyName>仓分宝-重庆夜客来</AssemblyName>
-        <LangVersion>default</LangVersion>
+		<RootNamespace>XinBeiYang</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>
@@ -19,14 +18,6 @@
             <SubType>Designer</SubType>
         </Page>
     </ItemGroup>
-
-    <ItemGroup>
-        <ProjectReference Include="..\Common\Common.csproj"/>
-        <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>
-        <ProjectReference Include="..\SharedUI\SharedUI.csproj"/>
-        <ProjectReference Include="..\SortingServices\SortingServices.csproj"/>
-    </ItemGroup>
-
     <ItemGroup>
         <!-- Prism -->
         <PackageReference Include="Prism.DryIoc"/>
@@ -42,13 +33,17 @@
         <!-- UI Framework -->
         <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
         <PackageReference Include="Microsoft.Extensions.Http"/>
-        <PackageReference Include="FluentFTP"/>
         <PackageReference Include="WPF-UI"/>
         <PackageReference Include="HandyControl"/>
-        <PackageReference Include="EPPlus"/>
 
-        <!-- WebSocket -->
-        <PackageReference Include="WebSocketSharp-netstandard"/>
+        <!-- Excel -->
+        <PackageReference Include="EPPlus"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Common\Common.csproj"/>
+        <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>
+        <ProjectReference Include="..\SharedUI\SharedUI.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -56,10 +51,4 @@
             <Link>logo.ico</Link>
         </Resource>
     </ItemGroup>
-
-    <ItemGroup>
-        <Folder Include="ViewModels\Settings\"/>
-        <Folder Include="Views\Settings\"/>
-    </ItemGroup>
-
 </Project>

@@ -1,26 +1,21 @@
 ﻿using System.Collections.ObjectModel;
-using System.IO;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Common.Models.Package;
 using Common.Services.Settings;
-using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
-using DeviceService.DataSourceDevices.Camera.HuaRay;
 using DeviceService.DataSourceDevices.Services;
-using Modules.Models;
-using Modules.Services;
 using Prism.Commands;
 using Prism.Mvvm;
 using Prism.Services.Dialogs;
 using Serilog;
+using ShanghaiModuleBelt.Models;
+using ShanghaiModuleBelt.Services;
 using SharedUI.Models;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
 using LockingService = Modules.Services.LockingService;
 
-namespace Modules.ViewModels;
+namespace ShanghaiModuleBelt.ViewModels;
 
 internal class MainWindowViewModel : BindableBase, IDisposable
 {
@@ -38,7 +33,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
     private string _currentBarcode = string.Empty;
-    private BitmapSource? _currentImage;
     private bool _disposed;
     private SystemStatus _systemStatus = new();
 
@@ -87,33 +81,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
         // 订阅锁格设备连接状态变更事件
         _lockingService.ConnectionStatusChanged += OnLockingDeviceConnectionChanged;
-
-        switch (_cameraService)
-        {
-            // // 订阅图像流
-            // case HuaRayCameraService dahuaCamera:
-            //     _subscriptions.Add(dahuaCamera.ImageStream
-            //         .Subscribe(imageData =>
-            //         {
-            //             try
-            //             {
-            //                 Log.Debug("收到大华相机图像流数据，尺寸：{Width}x{Height}",
-            //                     imageData.image.Width,
-            //                     imageData.image.Height);
-
-            //                 UpdateImageDisplay(imageData.image, bitmap =>
-            //                 {
-            //                     Log.Debug("从图像流更新CurrentImage");
-            //                     CurrentImage = bitmap;
-            //                 });
-            //             }
-            //             catch (Exception ex)
-            //             {
-            //                 Log.Error(ex, "处理大华相机图像流数据时发生错误");
-            //             }
-            //         }));
-            //     break;
-        }
         // 订阅包裹流
         _subscriptions.Add(packageTransferService.PackageStream
             .Subscribe(package => { Application.Current.Dispatcher.BeginInvoke(() => OnPackageInfo(package)); }));
@@ -130,11 +97,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         private set => SetProperty(ref _currentBarcode, value);
     }
 
-    public BitmapSource? CurrentImage
-    {
-        get => _currentImage;
-        private set => SetProperty(ref _currentImage, value);
-    }
+    public BitmapSource? CurrentImage { get; }
 
     public SystemStatus SystemStatus
     {
@@ -316,39 +279,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    private static void UpdateImageDisplay(Image<Rgba32> image, Action<BitmapSource> imageUpdater)
-    {
-        try
-        {
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                try
-                {
-                    using var memoryStream = new MemoryStream();
-                    image.SaveAsJpeg(memoryStream);
-                    memoryStream.Position = 0;
-
-                    var bitmap = new BitmapImage();
-                    bitmap.BeginInit();
-                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                    bitmap.StreamSource = memoryStream;
-                    bitmap.EndInit();
-                    bitmap.Freeze(); // 使图像可以跨线程访问
-
-                    imageUpdater(bitmap);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "在UI线程更新图像显示时发生错误");
-                }
-            });
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "更新图像显示时发生错误");
-        }
-    }
-
     private async void OnPackageInfo(PackageInfo package)
     {
         try
@@ -373,7 +303,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             if (chuteNumber == null)
             {
                 Log.Warning("无法获取格口号，使用异常格口: {Barcode}", package.Barcode);
-                chuteNumber = config.ExceptionChute;
                 package.SetStatus(PackageStatus.Error, "格口分配失败");
             }
             else
@@ -392,12 +321,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     package.SetStatus(PackageStatus.Error, "格口已锁定，使用异常格口");
                     package.SetError($"原格口 {originalChuteNumber} 已锁定");
                 }
-            }
-
-            // 更新包裹的格口号
-            if (package.OriginalChuteNumber == null)
-            {
-                package.SetChute(chuteNumber.Value);
             }
 
             // 设置等待模组带处理状态

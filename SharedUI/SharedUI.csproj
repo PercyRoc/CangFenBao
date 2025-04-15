@@ -7,7 +7,7 @@
         <UseWPF>true</UseWPF>
         <ImplicitUsings>enable</ImplicitUsings>
         <PackageId>SharedUI</PackageId>
-        <LangVersion>default</LangVersion>
+		<RootNamespace>SharedUI</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>

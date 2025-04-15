@@ -1,13 +1,13 @@
 ﻿using Common.Services.Ui;
-using Modules.ViewModels.Settings;
 using Prism.Commands;
 using Prism.Ioc;
 using Prism.Mvvm;
 using Prism.Services.Dialogs;
 using Serilog;
+using ShanghaiModuleBelt.ViewModels.Settings;
 using SharedUI.ViewModels.Settings;
 
-namespace Modules.ViewModels;
+namespace ShanghaiModuleBelt.ViewModels;
 
 public class SettingsDialogViewModel : BindableBase, IDialogAware
 {

@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Input;
 using Common.Services.Ui;
 using Serilog;
-using System.Threading.Tasks;
 
 namespace PlateTurnoverMachine.Views;
 

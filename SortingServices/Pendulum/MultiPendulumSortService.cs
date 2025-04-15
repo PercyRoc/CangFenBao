@@ -345,7 +345,7 @@ internal class MultiPendulumSortService(ISettingsService settingsService) : Base
             Log.Information("收到分拣光电 {Name} 数据: {Message}", photoelectricName, message);
             
             // 更新分拣光电信号状态
-            if (!message.Contains("OCCH2:1")) return;
+            if (!message.Contains("OCCH1:1")) return;
             // 高电平
             UpdatePhotoelectricSignalState(photoelectricName, true);
             Log.Information("分拣光电 {Name} 收到上升沿信号，开始匹配包裹并执行分拣", photoelectricName);

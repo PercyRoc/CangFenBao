@@ -95,4 +95,5 @@
   &lt;Assembly Path="D:\RiderProjects\CangFenBao\DeviceService\DataSourceDevices\Camera\HuaRay\LogisticsBaseCSharp.dll" /&gt;&#xD;
 &lt;/AssemblyExplorer&gt;</s:String>
 	<s:Boolean x:Key="/Default/UserDictionary/Words/=huaray/@EntryIndexedValue">True</s:Boolean>
-	<s:Boolean x:Key="/Default/UserDictionary/Words/=noread/@EntryIndexedValue">True</s:Boolean></wpf:ResourceDictionary>
+	<s:Boolean x:Key="/Default/UserDictionary/Words/=noread/@EntryIndexedValue">True</s:Boolean>
+	<s:Boolean x:Key="/Default/UserDictionary/Words/=Yekelai/@EntryIndexedValue">True</s:Boolean></wpf:ResourceDictionary>

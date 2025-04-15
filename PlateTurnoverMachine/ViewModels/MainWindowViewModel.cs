@@ -10,15 +10,15 @@ using Common.Models.Package;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
-using PlateTurnoverMachine.Models;
-using PlateTurnoverMachine.Services;
+using DongtaiFlippingBoardMachine.Models;
+using DongtaiFlippingBoardMachine.Services;
 using Prism.Commands;
 using Prism.Mvvm;
 using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.Models;
 
-namespace PlateTurnoverMachine.ViewModels;
+namespace DongtaiFlippingBoardMachine.ViewModels;
 
 internal class MainWindowViewModel : BindableBase, IDisposable
 {
@@ -34,7 +34,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private SystemStatus _systemStatus = new();
     private readonly ISettingsService _settingsService;
     private readonly IZtoSortingService _ztoSortingService;
-    private int _historyIndexCounter = 0;
+    private int _historyIndexCounter;
 
     public MainWindowViewModel(
         IDialogService dialogService,

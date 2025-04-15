@@ -2,7 +2,7 @@ using Prism.Ioc;
 using SharedUI.ViewModels;
 using SharedUI.ViewModels.Settings;
 using SharedUI.Views.Settings;
-using SharedUI.Views;
+using SharedUI.Views.Dialogs;
 
 namespace SharedUI.Extensions;
 

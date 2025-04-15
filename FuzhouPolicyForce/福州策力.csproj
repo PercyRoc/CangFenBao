@@ -6,9 +6,9 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
-        <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
-        <LangVersion>default</LangVersion>
-        <AssemblyName>仓分宝-翻版机</AssemblyName>
+        <ApplicationIcon>Resources\favicon.ico</ApplicationIcon>
+        <AssemblyName>泉州市策力自动化科技有限公司</AssemblyName>
+		<RootNamespace>FuzhouPolicyForce</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>
@@ -17,6 +17,13 @@
             <XamlRuntime>Wpf</XamlRuntime>
             <SubType>Designer</SubType>
         </Page>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Common\Common.csproj"/>
+        <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>
+        <ProjectReference Include="..\SharedUI\SharedUI.csproj"/>
+        <ProjectReference Include="..\SortingServices\SortingServices.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -34,28 +41,16 @@
         <!-- UI Framework -->
         <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
         <PackageReference Include="Microsoft.Extensions.Http"/>
+        <PackageReference Include="FluentFTP"/>
         <PackageReference Include="WPF-UI"/>
         <PackageReference Include="HandyControl"/>
-
-        <!-- Excel -->
         <PackageReference Include="EPPlus"/>
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Common\Common.csproj"/>
-        <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>
-        <ProjectReference Include="..\SharedUI\SharedUI.csproj"/>
-    </ItemGroup>
-
-
-    <ItemGroup>
-        <Folder Include="Services\"/>
-    </ItemGroup>
-
-
-    <ItemGroup>
-        <Resource Include="..\SharedUI\Resources\Icon\logo.ico">
-            <Link>logo.ico</Link>
+        <Resource Include="Resources\favicon.ico">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Resource>
     </ItemGroup>
+
 </Project>

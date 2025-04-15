@@ -2,7 +2,6 @@
 using System.Windows;
 using System.Windows.Input;
 using Common.Services.Ui;
-using FuzhouPolicyForce.ViewModels;
 using Serilog;
 
 namespace FuzhouPolicyForce.Views;

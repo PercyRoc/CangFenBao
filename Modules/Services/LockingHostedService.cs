@@ -1,8 +1,8 @@
 using Common.Services.Settings;
-using Modules.Models;
 using Serilog;
+using ShanghaiModuleBelt.Models;
 
-namespace Modules.Services;
+namespace ShanghaiModuleBelt.Services;
 
 /// <summary>
 ///     锁格服务托管服务，负责管理锁格服务的生命周期

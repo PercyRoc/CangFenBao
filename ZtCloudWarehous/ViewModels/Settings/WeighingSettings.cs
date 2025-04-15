@@ -28,7 +28,7 @@ internal class WeighingSettings : BindableBase
 
     private string _packagingMaterialCode = string.Empty;
     private string _userId = string.Empty;
-    private decimal _defaultWeight = 0.0m;
+    private decimal _defaultWeight;
 
     public bool IsProduction
     {

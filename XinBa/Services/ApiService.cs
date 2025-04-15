@@ -295,15 +295,13 @@ public class ApiService : IApiService
         {
             Log.Information("尝试提交商品尺寸: GoodsSticker={GoodsSticker}", goodsSticker);
 
-            using var formData = new MultipartFormDataContent
-            {
-                // 添加基本数据
-                { new StringContent(goodsSticker), "goods_sticker" },
-                { new StringContent(height), "height" },
-                { new StringContent(length), "length" },
-                { new StringContent(width), "width" },
-                { new StringContent(weight), "weight" }
-            };
+            using var formData = new MultipartFormDataContent();
+            // 添加基本数据
+            formData.Add(new StringContent(goodsSticker), "goods_sticker");
+            formData.Add(new StringContent(height), "height");
+            formData.Add(new StringContent(length), "length");
+            formData.Add(new StringContent(width), "width");
+            formData.Add(new StringContent(weight), "weight");
 
             // 添加图片数据
             if (photoData != null)

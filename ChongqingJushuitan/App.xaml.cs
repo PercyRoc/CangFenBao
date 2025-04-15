@@ -1,10 +1,10 @@
 ﻿using System.Net.Http;
 using System.Windows;
-using ChongqingJushuitan.Services;
-using ChongqingJushuitan.ViewModels;
-using ChongqingJushuitan.ViewModels.Settings;
 using ChongqingJushuitan.Views;
 using ChongqingJushuitan.Views.Settings;
+using ChongqingYekelai.Services;
+using ChongqingYekelai.ViewModels;
+using ChongqingYekelai.ViewModels.Settings;
 using Common.Extensions;
 using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.License;

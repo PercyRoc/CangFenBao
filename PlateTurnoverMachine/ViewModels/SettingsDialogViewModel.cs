@@ -1,5 +1,5 @@
 ﻿using Common.Services.Ui;
-using PlateTurnoverMachine.ViewModels.Settings;
+using DongtaiFlippingBoardMachine.ViewModels.Settings;
 using Prism.Commands;
 using Prism.Ioc;
 using Prism.Mvvm;
@@ -7,7 +7,7 @@ using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.ViewModels.Settings;
 
-namespace PlateTurnoverMachine.ViewModels;
+namespace DongtaiFlippingBoardMachine.ViewModels;
 
 internal class SettingsDialogViewModel : BindableBase, IDialogAware
 {

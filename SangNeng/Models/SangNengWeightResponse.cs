@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace SangNeng.Models;
+namespace Sunnen.Models;
 
 public class SangNengWeightResponse
 {

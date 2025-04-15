@@ -8,7 +8,7 @@
         <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
         <UseWPF>true</UseWPF>
         <AssemblyName>仓分宝-模组带</AssemblyName>
-        <LangVersion>default</LangVersion>
+		<RootNamespace>ShanghaiModuleBelt</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>

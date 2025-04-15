@@ -5,10 +5,10 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Common.Models.Package;
 using Common.Services.Settings;
-using Modules.Models;
 using Serilog;
+using ShanghaiModuleBelt.Models;
 
-namespace Modules.Services;
+namespace ShanghaiModuleBelt.Services;
 
 /// <summary>
 ///     格口包裹记录服务，用于记录每个格口分配的包裹，并在格口锁定时将数据上传到指定接口并清空

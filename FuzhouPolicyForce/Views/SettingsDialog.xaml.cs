@@ -1,12 +1,10 @@
 ﻿using System.Windows;
-using System.Windows.Controls;
 using Common.Services.Ui;
-using Serilog;
 using SharedUI.Views.Settings;
 
 namespace FuzhouPolicyForce.Views;
 
-public partial class SettingsDialog : UserControl
+public partial class SettingsDialog
 {
     public SettingsDialog(INotificationService notificationService)
     {

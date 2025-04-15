@@ -1,9 +1,10 @@
 using Common.Services.Settings;
+using DongtaiFlippingBoardMachine.Models;
 using Microsoft.Extensions.Hosting;
 using PlateTurnoverMachine.Models;
 using Serilog;
 
-namespace PlateTurnoverMachine.Services;
+namespace DongtaiFlippingBoardMachine.Services;
 
 /// <summary>
 ///     TCP连接托管服务

@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Drawing;
 
 namespace DeviceService.DataSourceDevices.Camera.HuaRay;
 

@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Input;
 using Common.Services.Ui;
 using Serilog;
+using MessageBox = HandyControl.Controls.MessageBox;
 
 namespace Modules.Views;
 
@@ -11,11 +12,8 @@ namespace Modules.Views;
 /// </summary>
 internal partial class MainWindow
 {
-    private readonly IDialogService _dialogService;
-
-    public MainWindow(IDialogService dialogService, INotificationService notificationService)
+    public MainWindow(INotificationService notificationService)
     {
-        _dialogService = dialogService;
         InitializeComponent();
 
         // 注册Growl容器
@@ -38,14 +36,15 @@ internal partial class MainWindow
         }
     }
 
-    private async void MetroWindow_Closing(object sender, CancelEventArgs e)
+    private void MetroWindow_Closing(object sender, CancelEventArgs e)
     {
         try
         {
             e.Cancel = true;
-            var result = await _dialogService.ShowIconConfirmAsync(
+            var result = MessageBox.Show(
                 "确定要关闭程序吗？",
                 "关闭确认",
+                MessageBoxButton.YesNo,
                 MessageBoxImage.Question);
 
             if (result != MessageBoxResult.Yes) return;
@@ -57,7 +56,7 @@ internal partial class MainWindow
         {
             Log.Error(ex, "关闭程序时发生错误");
             e.Cancel = true;
-            await _dialogService.ShowErrorAsync("关闭程序时发生错误，请重试", "错误");
+            MessageBox.Show("关闭程序时发生错误，请重试", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 }

@@ -1,8 +1,8 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using Common.Services.Settings;
-using Modules.Models;
 using Serilog;
+using ShanghaiModuleBelt.Models;
 using SortingServices.Common;
 
 namespace Modules.Services;

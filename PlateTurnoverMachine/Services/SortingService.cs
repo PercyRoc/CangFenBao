@@ -2,17 +2,16 @@ using System.Collections.Concurrent;
 using System.Text;
 using Common.Models.Package;
 using Common.Services.Settings;
-using PlateTurnoverMachine.Models;
+using DongtaiFlippingBoardMachine.Models;
 using Serilog;
 
-namespace PlateTurnoverMachine.Services;
+namespace DongtaiFlippingBoardMachine.Services;
 
 /// <summary>
 ///     分拣服务
 /// </summary>
 public class SortingService : IDisposable
 {
-    private readonly object _countLock = new();
     private readonly ConcurrentQueue<PackageInfo> _packageQueue = new();
     private readonly ISettingsService _settingsService;
     private readonly Dictionary<string, TcpConnectionConfig> _tcpConfigs = [];
@@ -116,7 +115,7 @@ public class SortingService : IDisposable
         // 添加详细日志，显示收到的原始数据
         try
         {
-            var rawData = e.Data.Length > 0 
+            var rawData = e.Data is { Length: > 0 } 
                 ? Encoding.ASCII.GetString(e.Data) 
                 : "<空数据>";
             Log.Information("收到触发光电原始数据: {RawData}", rawData);
@@ -158,7 +157,7 @@ public class SortingService : IDisposable
                 Log.Debug("高电平信号时间间隔：{Interval:F2}毫秒 (Raw)", intervalMs);
 
                 // 只有当间隔看起来合理时才更新 (避免初始启动或长时间无信号导致异常间隔)
-                if (intervalMs > 0 && intervalMs < (Settings.DefaultInterval * 5)) // 设定一个合理上限，例如默认间隔的5倍
+                if (intervalMs > 0 && intervalMs < Settings.DefaultInterval * 5) // 设定一个合理上限，例如默认间隔的5倍
                 {
                     _lastIntervalMs = intervalMs;
                     Log.Debug("使用高电平信号更新 LastIntervalMs: {Interval:F2}ms", _lastIntervalMs);
@@ -185,7 +184,7 @@ public class SortingService : IDisposable
                     Log.Debug("两次低电平信号时间间隔：{Interval:F2}毫秒", intervalMs);
 
                     // 更新 LastIntervalMs (使用两次低电平的间隔)
-                     if (intervalMs > 0 && intervalMs < (Settings.DefaultInterval * 5)) // 设定一个合理上限
+                     if (intervalMs > 0 && intervalMs < Settings.DefaultInterval * 5) // 设定一个合理上限
                      {
                          _lastIntervalMs = intervalMs;
                          Log.Debug("使用补偿逻辑更新 LastIntervalMs: {Interval:F2}ms", _lastIntervalMs);

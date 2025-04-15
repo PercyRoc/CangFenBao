@@ -6,7 +6,7 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:prism="http://prismlibrary.com/"
              xmlns:hc="https://handyorg.github.io/handycontrol"
-             xmlns:windows="clr-namespace:SangNeng.ViewModels.Windows"
+             xmlns:windows="clr-namespace:Sunnen.ViewModels.Windows"
              xmlns:converters="clr-namespace:SharedUI.Converters;assembly=SharedUI"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"

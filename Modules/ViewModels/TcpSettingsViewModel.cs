@@ -1,11 +1,11 @@
 using Common.Services.Settings;
 using Common.Services.Ui;
-using Modules.Models;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
+using ShanghaiModuleBelt.Models;
 
-namespace Modules.ViewModels;
+namespace ShanghaiModuleBelt.ViewModels;
 
 /// <summary>
 ///     TCP设置视图模型

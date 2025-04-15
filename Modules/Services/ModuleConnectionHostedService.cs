@@ -1,9 +1,9 @@
 using Common.Services.Settings;
 using Microsoft.Extensions.Hosting;
-using Modules.Models;
 using Serilog;
+using ShanghaiModuleBelt.Models;
 
-namespace Modules.Services;
+namespace ShanghaiModuleBelt.Services;
 
 internal class ModuleConnectionHostedService(
     IModuleConnectionService moduleConnectionService,

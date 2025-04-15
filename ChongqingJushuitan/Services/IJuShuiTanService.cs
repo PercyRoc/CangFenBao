@@ -1,6 +1,6 @@
-using ChongqingJushuitan.Models.JuShuiTan;
+using ChongqingYekelai.Models.JuShuiTan;
 
-namespace ChongqingJushuitan.Services;
+namespace ChongqingYekelai.Services;
 
 /// <summary>
 ///     聚水潭服务接口

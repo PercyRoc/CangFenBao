@@ -1,7 +1,7 @@
 using Common.Services.Settings;
 using Prism.Mvvm;
 
-namespace ChongqingJushuitan.ViewModels.Settings;
+namespace ChongqingYekelai.ViewModels.Settings;
 
 [Configuration("jushuitanSettings")]
 public class JushuitanSettings : BindableBase

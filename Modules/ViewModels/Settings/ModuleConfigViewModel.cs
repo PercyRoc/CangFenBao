@@ -1,12 +1,12 @@
 using System.Collections.ObjectModel;
 using Common.Services.Settings;
 using Common.Services.Ui;
-using Modules.Models;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
+using ShanghaiModuleBelt.Models;
 
-namespace Modules.ViewModels.Settings;
+namespace ShanghaiModuleBelt.ViewModels.Settings;
 
 internal class ModuleConfigViewModel : BindableBase
 {

@@ -6,7 +6,7 @@ using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using ChongqingJushuitan.Models.JuShuiTan;
-using ChongqingJushuitan.Services;
+using ChongqingYekelai.Services;
 using Common.Models.Package;
 using Common.Models.Settings.ChuteRules;
 using Common.Models.Settings.Sort.PendulumSort;
@@ -21,7 +21,7 @@ using Serilog;
 using SharedUI.Models;
 using SortingServices.Pendulum;
 
-namespace ChongqingJushuitan.ViewModels;
+namespace ChongqingYekelai.ViewModels;
 
 internal class MainWindowViewModel : BindableBase, IDisposable
 {

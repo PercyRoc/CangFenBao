@@ -1,7 +1,8 @@
 using System.IO;
 using System.Windows.Media.Imaging;
 using Serilog;
-using System.Windows; // 添加对 System.Windows 的引用
+
+// 添加对 System.Windows 的引用
 
 namespace XinBeiYang.Services;
 

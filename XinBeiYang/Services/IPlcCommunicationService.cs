@@ -1,6 +1,6 @@
 namespace XinBeiYang.Services;
 
-using XinBeiYang.Models.Communication;
+using Models.Communication;
 
 /// <summary>
 ///     PLC通讯服务接口

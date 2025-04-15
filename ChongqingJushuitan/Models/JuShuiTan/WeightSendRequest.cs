@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace ChongqingJushuitan.Models.JuShuiTan;
+namespace ChongqingYekelai.Models.JuShuiTan;
 
 /// <summary>
 ///     聚水潭称重发货请求模型

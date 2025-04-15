@@ -4,7 +4,7 @@ using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
 
-namespace ChongqingJushuitan.ViewModels.Settings;
+namespace ChongqingYekelai.ViewModels.Settings;
 
 internal class JushuitanSettingsViewModel : BindableBase
 {

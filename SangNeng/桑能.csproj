@@ -5,26 +5,10 @@
         <TargetFramework>net8.0-windows</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
-        <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
         <UseWPF>true</UseWPF>
-        <AssemblyName>仓分宝-中通云仓</AssemblyName>
-        <LangVersion>default</LangVersion>
+        <AssemblyName>Sunnen</AssemblyName>
+		<RootNamespace>Sunnen</RootNamespace>
     </PropertyGroup>
-
-    <ItemGroup>
-        <Page Update="Views\MainWindow.xaml">
-            <Generator>MSBuild:Compile</Generator>
-            <XamlRuntime>Wpf</XamlRuntime>
-            <SubType>Designer</SubType>
-        </Page>
-    </ItemGroup>
-
-    <ItemGroup>
-        <ProjectReference Include="..\Common\Common.csproj"/>
-        <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>
-        <ProjectReference Include="..\SharedUI\SharedUI.csproj"/>
-        <ProjectReference Include="..\SortingServices\SortingServices.csproj"/>
-    </ItemGroup>
 
     <ItemGroup>
         <!-- Prism -->
@@ -39,15 +23,32 @@
         <PackageReference Include="Serilog.Extensions.Logging"/>
 
         <!-- UI Framework -->
-        <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
-        <PackageReference Include="Microsoft.Extensions.Http"/>
-        <PackageReference Include="FluentFTP"/>
         <PackageReference Include="WPF-UI"/>
         <PackageReference Include="HandyControl"/>
-        <PackageReference Include="EPPlus"/>
+        <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
 
-        <!-- WebSocket -->
-        <PackageReference Include="WebSocketSharp-netstandard"/>
+        <!-- Serial Port -->
+        <PackageReference Include="System.IO.Ports"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Common\Common.csproj"/>
+        <ProjectReference Include="..\DeviceService\DeviceService.csproj"/>
+        <ProjectReference Include="..\SharedUI\SharedUI.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Folder Include="ViewModels\"/>
+        <Folder Include="Views\Dialogs\"/>
+        <Folder Include="Views\Settings\"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Page Update="Views\Windows\MainWindow.xaml">
+            <Generator>MSBuild:Compile</Generator>
+            <XamlRuntime>Wpf</XamlRuntime>
+            <SubType>Designer</SubType>
+        </Page>
     </ItemGroup>
 
     <ItemGroup>
@@ -55,5 +56,4 @@
             <Link>logo.ico</Link>
         </Resource>
     </ItemGroup>
-
 </Project>

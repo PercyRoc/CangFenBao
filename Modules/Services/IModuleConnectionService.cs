@@ -1,6 +1,6 @@
 using Common.Models.Package;
 
-namespace Modules.Services;
+namespace ShanghaiModuleBelt.Services;
 
 public interface IModuleConnectionService
 {

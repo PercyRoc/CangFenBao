@@ -5,7 +5,6 @@
                  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:hc="https://handyorg.github.io/handycontrol"
-                 xmlns:viewModels1="clr-namespace:XinBa.ViewModels"
                  mc:Ignorable="d"
                  Title="XinBa"
                  Height="900"

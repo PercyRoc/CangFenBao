@@ -1,12 +1,10 @@
 using System.Windows;
-using System.Windows.Controls;
 using Common.Services.Ui;
-using Serilog;
 using SharedUI.Views.Settings;
 
 namespace SangNeng.Views.Dialogs;
 
-public partial class SettingsControl : UserControl
+public partial class SettingsControl
 {
     public SettingsControl(INotificationService notificationService)
     {

@@ -185,7 +185,6 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     private static readonly Brush BackgroundTimeout = new SolidColorBrush(Color.FromArgb(0xAA, 0xFF, 0xC1, 0x07)); // 黄色 (增加透明度)
     private static readonly Brush BackgroundRejected = new SolidColorBrush(Color.FromArgb(0xAA, 0xF4, 0x43, 0x36)); // 红色 (增加透明度)
     private static readonly Brush BackgroundError = new SolidColorBrush(Color.FromArgb(0xAA, 0xF4, 0x43, 0x36)); // 红色 (增加透明度)
-    private static readonly Brush BackgroundDefault = new SolidColorBrush(Colors.White); // 默认背景色
 
     public MainWindowViewModel(
         IDialogService dialogService,

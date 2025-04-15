@@ -22,18 +22,18 @@ using Prism.Commands;
 using Prism.Events;
 using Prism.Mvvm;
 using Prism.Services.Dialogs;
-using SangNeng.Events;
 using SangNeng.Models;
-using SangNeng.Services;
-using SangNeng.ViewModels.Settings;
 using Serilog;
 using SharedUI.Models;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
+using Sunnen.Events;
+using Sunnen.Services;
+using Sunnen.ViewModels.Settings;
 using Color = System.Drawing.Color;
 using Timer = System.Timers.Timer;
 
-namespace SangNeng.ViewModels.Windows;
+namespace Sunnen.ViewModels.Windows;
 
 /// <summary>
 ///     主窗口视图模型
@@ -337,8 +337,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 (now - _lastProcessedTime).TotalMilliseconds < DuplicateBarcodeIntervalMs)
             {
                 // 较长的条码包含较短的条码
-                if ((_lastProcessedBarcode.Contains(barcode) && barcode.Length > 5) || 
-                    (barcode.Contains(_lastProcessedBarcode) && _lastProcessedBarcode.Length > 5))
+                if (_lastProcessedBarcode.Contains(barcode) && barcode.Length > 5 || 
+                    barcode.Contains(_lastProcessedBarcode) && _lastProcessedBarcode.Length > 5)
                 {
                     isDuplicate = true;
                 }

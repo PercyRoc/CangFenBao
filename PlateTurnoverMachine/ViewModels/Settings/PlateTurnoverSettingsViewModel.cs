@@ -5,12 +5,12 @@ using Common.Services.Settings;
 using Common.Services.Ui;
 using Microsoft.Win32;
 using OfficeOpenXml;
-using PlateTurnoverMachine.Models;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
+using DongtaiFlippingBoardMachine.Models;
 
-namespace PlateTurnoverMachine.ViewModels.Settings;
+namespace DongtaiFlippingBoardMachine.ViewModels.Settings;
 
 internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
 {

@@ -47,7 +47,7 @@ public partial class MainWindow
 
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
-        var alreadyShuttingDown = Application.Current is App { _isShuttingDown: true };
+        var alreadyShuttingDown = Application.Current is App { IsShuttingDown: true };
 
         if (_isClosing || alreadyShuttingDown)
         {

@@ -4,10 +4,10 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Common.Models.Package;
 using Common.Services.Settings;
-using Modules.Models;
 using Serilog;
+using ShanghaiModuleBelt.Models;
 
-namespace Modules.Services;
+namespace ShanghaiModuleBelt.Services;
 
 /// <summary>
 ///     格口映射服务，负责与服务器通信获取格口号

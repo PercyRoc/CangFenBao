@@ -64,7 +64,7 @@ internal class BeltSerialService : IBeltSerialService
                     Log.Error(ex, "无法访问串口 {PortName}，可能是权限不足或串口被占用", settings.PortName);
                     
                     // 检查串口是否被其他程序占用
-                    var processes = System.Diagnostics.Process.GetProcesses()
+                    var processes = Process.GetProcesses()
                         .Where(_ => 
                         {
                             try

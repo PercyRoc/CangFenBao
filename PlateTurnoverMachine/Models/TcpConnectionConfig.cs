@@ -1,6 +1,6 @@
 using System.Net;
 
-namespace PlateTurnoverMachine.Models;
+namespace DongtaiFlippingBoardMachine.Models;
 
 /// <summary>
 ///     TCP连接配置

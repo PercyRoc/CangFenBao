@@ -1,7 +1,7 @@
 using System.Net.Sockets;
-using PlateTurnoverMachine.Models;
+using DongtaiFlippingBoardMachine.Models;
 
-namespace PlateTurnoverMachine.Services;
+namespace DongtaiFlippingBoardMachine.Services;
 
 /// <summary>
 ///     TCP连接服务接口

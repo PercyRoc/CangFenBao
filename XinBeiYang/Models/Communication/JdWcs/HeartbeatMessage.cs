@@ -9,7 +9,7 @@ namespace XinBeiYang.Models.Communication.JdWcs;
 public class HeartbeatMessage
 {
     // 共享的序列化选项
-    private static readonly JsonSerializerOptions _jsonOptions = new()
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
@@ -33,7 +33,7 @@ public class HeartbeatMessage
         {
             deviceNo = DeviceNo,
             deviceStatus = (int)DeviceStatus
-        }, _jsonOptions);
+        }, JsonOptions);
         return Encoding.UTF8.GetBytes(json);
     }
     

@@ -1,6 +1,6 @@
 using Common.Models.Package;
 
-namespace SangNeng.Models;
+namespace Sunnen.Models;
 
 /// <summary>
 ///     状态选项

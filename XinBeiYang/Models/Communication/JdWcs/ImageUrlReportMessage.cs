@@ -9,7 +9,7 @@ namespace XinBeiYang.Models.Communication.JdWcs;
 public class ImageUrlReportMessage
 {
     // 共享的序列化选项
-    private static readonly JsonSerializerOptions _jsonOptions = new()
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
@@ -64,7 +64,7 @@ public class ImageUrlReportMessage
     /// </summary>
     public byte[] ToBytes()
     {
-        var json = JsonSerializer.Serialize(this, _jsonOptions);
+        var json = JsonSerializer.Serialize(this, JsonOptions);
         return Encoding.UTF8.GetBytes(json);
     }
     
@@ -74,6 +74,6 @@ public class ImageUrlReportMessage
     public static ImageUrlReportMessage FromBytes(byte[] bytes)
     {
         var json = Encoding.UTF8.GetString(bytes);
-        return JsonSerializer.Deserialize<ImageUrlReportMessage>(json, _jsonOptions) ?? new ImageUrlReportMessage();
+        return JsonSerializer.Deserialize<ImageUrlReportMessage>(json, JsonOptions) ?? new ImageUrlReportMessage();
     }
 } 

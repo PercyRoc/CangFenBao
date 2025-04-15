@@ -1,9 +1,7 @@
 using Common.Models.Package;
-using PlateTurnoverMachine.Models;
-using System.Collections.Generic;
-using System.Threading.Tasks;
+using DongtaiFlippingBoardMachine.Models;
 
-namespace PlateTurnoverMachine.Services;
+namespace DongtaiFlippingBoardMachine.Services;
 
 /// <summary>
 /// 中通分拣服务接口

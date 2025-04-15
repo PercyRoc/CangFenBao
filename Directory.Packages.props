@@ -30,7 +30,7 @@
     <PackageVersion Include="TurboJpegWrapper" Version="1.5.2" />
     <PackageVersion Include="FluentFTP" Version="52.0.0" />
     <!-- WPF-UI -->
-    <PackageVersion Include="WPF-UI" Version="4.0.0" />
+    <PackageVersion Include="WPF-UI" Version="4.0.2" />
     <!-- MahApps.Metro.IconPacks.Material -->
     <PackageVersion Include="MahApps.Metro.IconPacks.Material" Version="5.1.0" />
     <!-- HandyControl -->

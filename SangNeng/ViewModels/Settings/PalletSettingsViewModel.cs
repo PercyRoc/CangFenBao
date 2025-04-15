@@ -3,9 +3,9 @@ using Common.Services.Settings;
 using Prism.Commands;
 using Prism.Events;
 using Prism.Mvvm;
-using SangNeng.Events;
+using Sunnen.Events;
 
-namespace SangNeng.ViewModels.Settings;
+namespace Sunnen.ViewModels.Settings;
 
 public class PalletModel : BindableBase
 {

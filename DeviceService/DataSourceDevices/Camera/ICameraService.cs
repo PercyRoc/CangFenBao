@@ -1,5 +1,4 @@
 using Common.Models.Package;
-using DeviceService.DataSourceDevices.Camera.Models;
 using System.Windows.Media.Imaging;
 
 namespace DeviceService.DataSourceDevices.Camera;

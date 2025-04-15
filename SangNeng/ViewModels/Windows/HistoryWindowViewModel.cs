@@ -12,11 +12,10 @@ using OfficeOpenXml.Style;
 using Prism.Commands;
 using Prism.Mvvm;
 using Prism.Services.Dialogs;
-using SangNeng.Models;
 using Serilog;
 using static Common.Models.Package.PackageStatus;
 
-namespace SangNeng.ViewModels.Windows;
+namespace Sunnen.ViewModels.Windows;
 
 /// <summary>
 ///     历史记录查询窗口视图模型

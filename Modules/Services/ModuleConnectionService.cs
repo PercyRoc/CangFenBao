@@ -3,10 +3,10 @@ using System.Net;
 using System.Net.Sockets;
 using Common.Models.Package;
 using Common.Services.Settings;
-using Modules.Models;
 using Serilog;
+using ShanghaiModuleBelt.Models;
 
-namespace Modules.Services;
+namespace ShanghaiModuleBelt.Services;
 
 internal class ModuleConnectionService(ISettingsService settingsService, ChutePackageRecordService chutePackageRecordService) : IModuleConnectionService
 {
@@ -379,7 +379,7 @@ internal class ModuleConnectionService(ISettingsService settingsService, ChutePa
         try
         {
             // 解析包裹序号
-            var packageNumber = (ushort)((data[2] << 8) | data[3]);
+            var packageNumber = (ushort)(data[2] << 8 | data[3]);
             Log.Information("收到包裹触发信号: 序号={PackageNumber}", packageNumber);
 
             // 检查是否正在处理中
@@ -393,7 +393,6 @@ internal class ModuleConnectionService(ISettingsService settingsService, ChutePa
             var waitInfo = new PackageWaitInfo
             {
                 ReceiveTime = DateTime.Now,
-                PackageNumber = packageNumber,
                 TimeoutCts = new CancellationTokenSource()
             };
 
@@ -474,7 +473,7 @@ internal class ModuleConnectionService(ISettingsService settingsService, ChutePa
             Log.Error(ex, "处理包裹序号数据包异常: {Data}", BitConverter.ToString(data));
             if (data.Length >= 4)
             {
-                var packageNumber = (ushort)((data[2] << 8) | data[3]);
+                var packageNumber = (ushort)(data[2] << 8 | data[3]);
                 _processingPackages.TryRemove(packageNumber, out _);
                 _packageBindings.TryRemove(packageNumber, out _);
             }
@@ -569,7 +568,7 @@ internal class ModuleConnectionService(ISettingsService settingsService, ChutePa
             var command = new byte[PackageLength];
             command[0] = StartCode; // 起始码
             command[1] = FunctionCodeSend; // 功能码
-            command[2] = (byte)((packageNumber >> 8) & 0xFF); // 包裹序号高字节
+            command[2] = (byte)(packageNumber >> 8 & 0xFF); // 包裹序号高字节
             command[3] = (byte)(packageNumber & 0xFF); // 包裹序号低字节
             command[4] = 0x00; // 预留
             command[5] = 0x00; // 预留
@@ -596,7 +595,6 @@ internal class ModuleConnectionService(ISettingsService settingsService, ChutePa
     private class PackageWaitInfo
     {
         public DateTime ReceiveTime { get; init; }
-        public ushort PackageNumber { get; init; }
         public TaskCompletionSource<bool> ProcessCompleted { get; } = new();
         public TaskCompletionSource<bool>? FeedbackTask { get; set; }
         public CancellationTokenSource? TimeoutCts { get; init; }

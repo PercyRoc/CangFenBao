@@ -2,10 +2,10 @@ using Common.Services.Settings;
 using Common.Services.Ui;
 using Prism.Commands;
 using Prism.Mvvm;
-using SangNeng.Models.Settings;
 using Serilog;
+using Sunnen.Models.Settings;
 
-namespace SangNeng.ViewModels.Settings;
+namespace Sunnen.ViewModels.Settings;
 
 public class SangNengSettingsViewModel : BindableBase
 {

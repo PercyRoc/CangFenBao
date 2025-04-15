@@ -702,7 +702,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
                         {
                             // 检查下一个包裹的目标格口是否与当前相同
                             skipReset = targetSlot == nextPackage.ChuteNumber;
-                            var nextIsLeft = ShouldSwingLeft(nextPackage.ChuteNumber);
+                            ShouldSwingLeft(nextPackage.ChuteNumber);
 
                             Log.Debug(
                                 "延迟结束后找到下一个序号包裹 {NextBarcode} (序号: {NextIndex})，当前格口: {CurrentSlot}，下一个格口: {NextSlot}{Action}",

@@ -8,17 +8,17 @@ using DeviceService.DataSourceDevices.Weight;
 using DeviceService.Extensions;
 using HandyControl.Controls;
 using Prism.Ioc;
-using SangNeng.Services;
-using SangNeng.ViewModels.Settings;
-using SangNeng.ViewModels.Windows;
 using SangNeng.Views.Settings;
 using Serilog;
 using SharedUI.Extensions;
 using Window = System.Windows.Window;
 using System.Diagnostics;
-using SangNeng.ViewModels.Dialogs;
 using SangNeng.Views.Dialogs;
 using SangNeng.Views.Windows;
+using Sunnen.Services;
+using Sunnen.ViewModels.Settings;
+using Sunnen.ViewModels.Dialogs;
+using Sunnen.ViewModels.Windows;
 
 namespace SangNeng;
 

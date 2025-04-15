@@ -5,9 +5,9 @@ using Prism.Mvvm;
 using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.ViewModels.Settings;
-using ChongqingJushuitan.ViewModels.Settings;
+using ChongqingYekelai.ViewModels.Settings;
 
-namespace ChongqingJushuitan.ViewModels;
+namespace ChongqingYekelai.ViewModels;
 
 internal class SettingsDialogViewModel : BindableBase, IDialogAware
 {

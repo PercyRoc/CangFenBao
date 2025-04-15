@@ -4,10 +4,10 @@ using System.Text;
 using System.Text.Json;
 using Common.Models.Package;
 using Common.Services.Settings;
-using PlateTurnoverMachine.Models;
+using DongtaiFlippingBoardMachine.Models;
 using Serilog;
 
-namespace PlateTurnoverMachine.Services;
+namespace DongtaiFlippingBoardMachine.Services;
 
 /// <summary>
 /// 中通分拣服务实现
@@ -238,7 +238,7 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
             var requestBodyStr = $"data={requestData}&data_digest={dataDigest}&msg_type={msgType}&company_id={companyId}";
             
             // 使用@符号标记原始字符串，避免Serilog错误解析大括号
-            Log.Debug("发送中通请求(不使用URL编码): {@RequestBody}", requestBodyStr);
+            Log.Debug("发送中通请求 -> URL: {ApiUrl}, MsgType: {MsgType}, Body: {@RequestBody}", apiUrl, msgType, requestBodyStr);
 
             // 创建表单内容
             var content = new StringContent(requestBodyStr, Encoding.UTF8, "application/x-www-form-urlencoded");

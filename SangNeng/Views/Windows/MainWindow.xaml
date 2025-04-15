@@ -594,7 +594,7 @@
                                 <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" Width="160" />
                                 <DataGridTextColumn Header="Weight" Binding="{Binding WeightDisplay}" Width="80" />
                                 <DataGridTextColumn Header="Size" Binding="{Binding VolumeDisplay}" Width="200" />
-                                <DataGridTextColumn Header="Status" Binding="{Binding StatusDisplay}" Width="80">
+                                <DataGridTextColumn Header="Status" Binding="{Binding StatusDisplay}" Width="*">
                                     <DataGridTextColumn.CellStyle>
                                         <Style TargetType="DataGridCell">
                                             <Style.Triggers>
@@ -613,7 +613,6 @@
                                 <DataGridTextColumn Header="Time"
                                                     Binding="{Binding CreateTime, StringFormat={}{0:HH:mm:ss}}"
                                                     Width="100" />
-                                <DataGridTextColumn Header="Note" Binding="{Binding Information}" Width="*" />
                             </DataGrid.Columns>
                         </DataGrid>
                     </Grid>

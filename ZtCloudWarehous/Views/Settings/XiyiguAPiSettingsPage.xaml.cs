@@ -1,8 +1,6 @@
-﻿using System.Windows.Controls;
+﻿namespace ZtCloudWarehous.Views.Settings;
 
-namespace ZtCloudWarehous.Views.Settings;
-
-public partial class XiyiguAPiSettingsPage : Page
+public partial class XiyiguAPiSettingsPage
 {
     public XiyiguAPiSettingsPage()
     {

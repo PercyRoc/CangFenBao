@@ -1,7 +1,6 @@
-using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace PlateTurnoverMachine.Models;
+namespace DongtaiFlippingBoardMachine.Models;
 
 /// <summary>
 /// 中通分拣请求基础模型

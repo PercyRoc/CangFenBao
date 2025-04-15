@@ -429,7 +429,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     Log.Information("{Barcode}, 物流名称={LogisticsName}",
                         package.Barcode, response.LogisticsName);
                     // API成功，更新包裹状态
-                    package.SetStatus(PackageStatus.SortSuccess);
+                    package.SetStatus(PackageStatus.SortSuccess, response.Message);
                 }
             }
             catch (Exception ex)
@@ -442,8 +442,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 package.SetStatus(PackageStatus.Error, "网店通API异常");
             }
 
-            // 设置为正在分拣状态，然后交给分拣服务处理
-            package.SetStatus(PackageStatus.Sorting);
             _sortService.ProcessPackage(package);
 
             Application.Current.Dispatcher.Invoke(() =>
