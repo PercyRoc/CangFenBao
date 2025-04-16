@@ -1,12 +1,13 @@
-﻿using Common.Services.Ui;
+﻿using System.Windows;
+using System.Windows.Controls;
+using Common.Services.Ui;
 using SharedUI.Views.Settings;
-using System.Windows;
 
-namespace HuiXin.Views.Dialogs;
+namespace ShanghaiFaxunLogistics.Views;
 
-public partial class SettingsDialogs
+public partial class SettingsDialog : UserControl
 {
-    public SettingsDialogs(INotificationService notificationService)
+    public SettingsDialog(INotificationService notificationService)
     {
         InitializeComponent();
 
@@ -15,7 +16,6 @@ public partial class SettingsDialogs
         // 在控件加载完成后导航
         Loaded += OnLoaded;
     }
-
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         // 导航到相机设置页面

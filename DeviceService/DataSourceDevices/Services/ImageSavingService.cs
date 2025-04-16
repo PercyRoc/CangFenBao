@@ -1,6 +1,3 @@
-using System;
-using System.IO;
-using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera.Models.Camera;
@@ -10,22 +7,21 @@ using Serilog;
 namespace DeviceService.DataSourceDevices.Services;
 
 /// <summary>
-/// Service responsible for saving images to the local disk based on configuration.
+/// 负责根据配置将图像保存到本地磁盘的服务。
 /// </summary>
 public class ImageSavingService(ISettingsService settingsService) : IImageSavingService
 {
-    private readonly ISettingsService _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+    private readonly ISettingsService _settingsService =
+        settingsService ?? throw new ArgumentNullException(nameof(settingsService));
 
     /// <inheritdoc />
     public string? GenerateImagePath(string? barcode, DateTime timestamp)
     {
         var cameraSettings = _settingsService.LoadSettings<CameraSettings>();
-        if (cameraSettings == null || !cameraSettings.EnableImageSaving)
-        {
-            return null; // 保存已禁用
-        }
-
-        return BuildImagePath(cameraSettings, barcode, timestamp);
+        return !cameraSettings.EnableImageSaving
+            ? null
+            : // 保存已禁用
+            BuildImagePath(cameraSettings, barcode, timestamp);
     }
 
     /// <inheritdoc />
@@ -33,7 +29,7 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
     {
         var cameraSettings = _settingsService.LoadSettings<CameraSettings>();
 
-        if (cameraSettings == null || !cameraSettings.EnableImageSaving || image == null)
+        if (!cameraSettings.EnableImageSaving || image == null)
         {
             return null; // 保存已禁用或未提供图像
         }
@@ -73,8 +69,8 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
 
             await Task.Run(() => // 在此后台线程执行所有WPF对象交互和保存
             {
-                BitmapEncoder encoder = GetEncoder(imageFormat); // 在这里创建编码器
-                BitmapFrame frame = BitmapFrame.Create(image); // 在这里创建帧 (使用已冻结的图像)
+                var encoder = GetEncoder(imageFormat); // 在这里创建编码器
+                var frame = BitmapFrame.Create(image); // 在这里创建帧 (使用已冻结的图像)
                 encoder.Frames.Add(frame);
 
                 using var fileStream = new FileStream(fullPath, FileMode.Create);
@@ -102,7 +98,7 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
         };
     }
 
-    private string GetFileExtension(ImageFormat format)
+    private static string GetFileExtension(ImageFormat format)
     {
         return format switch
         {
@@ -113,7 +109,7 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
         };
     }
 
-    private string? BuildImagePath(CameraSettings cameraSettings, string? barcode, DateTime timestamp)
+    private static string? BuildImagePath(CameraSettings cameraSettings, string? barcode, DateTime timestamp)
     {
         if (string.IsNullOrEmpty(cameraSettings.ImageSavePath))
         {
@@ -121,7 +117,10 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
             return null;
         }
 
-        var effectiveBarcode = string.IsNullOrWhiteSpace(barcode) || barcode.Equals("NOREAD", StringComparison.OrdinalIgnoreCase) ? "NOREAD" : barcode;
+        var effectiveBarcode =
+            string.IsNullOrWhiteSpace(barcode) || barcode.Equals("NOREAD", StringComparison.OrdinalIgnoreCase)
+                ? "NOREAD"
+                : barcode;
         var isNoRead = effectiveBarcode == "NOREAD";
 
         var basePath = cameraSettings.ImageSavePath;
@@ -136,4 +135,4 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
 
         return Path.Combine(directoryPath, fileName);
     }
-} 
+}

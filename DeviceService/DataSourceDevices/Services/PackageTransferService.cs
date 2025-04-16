@@ -6,7 +6,6 @@ using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Camera.Models.Camera;
 using Serilog;
 using System.Reactive.Concurrency; // Add for ObserveOn
-using System.Windows.Media.Imaging;
 
 namespace DeviceService.DataSourceDevices.Services;
 
@@ -17,8 +16,8 @@ public class PackageTransferService : IDisposable
 {
     private readonly ICameraService _cameraService;
     private readonly CameraSettings _cameraSettings;
-    private readonly IImageSavingService _imageSavingService; // Inject image saving service
-    private readonly ConcurrentDictionary<string, DateTime> _processedBarcodes = new(); // Simplified dictionary value
+    private readonly IImageSavingService _imageSavingService; // 注入图像保存服务
+    private readonly ConcurrentDictionary<string, DateTime> _processedBarcodes = new(); // 简化的字典值
     private readonly ISettingsService _settingsService;
     private bool _isDisposed;
     private readonly IDisposable _cleanupSubscription;
@@ -29,14 +28,14 @@ public class PackageTransferService : IDisposable
     public PackageTransferService(
         ICameraService cameraService,
         ISettingsService settingsService,
-        IImageSavingService imageSavingService) // Add dependency
+        IImageSavingService imageSavingService)
     {
         _cameraService = cameraService;
         _settingsService = settingsService;
-        _imageSavingService = imageSavingService; // Store dependency
+        _imageSavingService = imageSavingService;
         _cameraSettings = LoadCameraSettings();
 
-        // Setup periodic cleanup instead of on every package
+        // 设置定期清理
         _cleanupSubscription = Observable.Timer(TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1), Scheduler.Default)
                                       .Subscribe(_ => CleanupExpiredBarcodes());
     }
@@ -45,8 +44,8 @@ public class PackageTransferService : IDisposable
     ///     包裹信息流 (公开给外部订阅，包含过滤和图像保存逻辑)
     /// </summary>
     public IObservable<PackageInfo> PackageStream => _cameraService.PackageStream
-        .Where(static package => !string.IsNullOrWhiteSpace(package.Barcode)) // Filter out packages without barcode
-        .Where(package => // Apply barcode repeat filter if enabled
+        .Where(static package => !string.IsNullOrWhiteSpace(package.Barcode)) // 过滤掉没有条码的包裹
+        .Where(package => // 应用条形码重复过滤器（如果已启用）
         {
             if (!_cameraSettings.BarcodeRepeatFilterEnabled || package.Barcode == "NOREAD") return true;
             return IsBarcodeProcessable(package.Barcode);
@@ -88,7 +87,7 @@ public class PackageTransferService : IDisposable
                     _ = Task.Run(async () =>
                     {
                         // 将克隆副本传递给保存服务
-                        string? actualSavedPath = await _imageSavingService.SaveImageAsync(cloneForSave, package.Barcode, triggerTime);
+                        var actualSavedPath = await _imageSavingService.SaveImageAsync(cloneForSave, package.Barcode, triggerTime);
                         if (actualSavedPath != null)
                         {
                             Log.Information("包裹 {Index} 的后台图像保存完成, 路径: {ImagePath}", package.Index, actualSavedPath);
@@ -118,7 +117,6 @@ public class PackageTransferService : IDisposable
             }
             return package; // 立即返回包裹 (Select 需要返回 T)
         });
-    // Removed ProcessPackage method call
 
     /// <summary>
     ///     释放资源
@@ -135,7 +133,7 @@ public class PackageTransferService : IDisposable
 
         if (disposing)
         {
-            _cleanupSubscription?.Dispose(); // 释放定时器订阅
+            _cleanupSubscription.Dispose(); // 释放定时器订阅
             _processedBarcodes.Clear();
             // 如果有其他托管资源也在此处释放
         }
@@ -175,13 +173,10 @@ public class PackageTransferService : IDisposable
         var timeSinceLastProcess = DateTime.Now - lastProcessedTime;
         var timeWindow = TimeSpan.FromMilliseconds(_cameraSettings.RepeatTimeMs);
 
-        if (timeSinceLastProcess <= timeWindow)
-        {
-            // 过滤掉在 {TimeWindow} 毫秒内重复的条码 {Barcode}
-            Log.Debug("过滤掉在 {TimeWindow} 毫秒内重复的条码 {Barcode}.", barcode, _cameraSettings.RepeatTimeMs);
-            return false;
-        }
-        return true;
+        if (timeSinceLastProcess > timeWindow) return true;
+        // 过滤掉在 {TimeWindow} 毫秒内重复的条码 {Barcode}
+        Log.Debug("过滤掉在 {TimeWindow} 毫秒内重复的条码 {Barcode}.", barcode, _cameraSettings.RepeatTimeMs);
+        return false;
     }
     /// <summary>
     ///     定期清理过期的条码记录
@@ -199,13 +194,11 @@ public class PackageTransferService : IDisposable
             .Select(kvp => kvp.Key)
             .ToList();
 
-        if (expiredBarcodes.Count > 0)
+        if (expiredBarcodes.Count <= 0) return;
+        Log.Debug("清理 {Count} 条过期的条码记录.", expiredBarcodes.Count);
+        foreach (var barcode in expiredBarcodes)
         {
-            Log.Debug("清理 {Count} 条过期的条码记录.", expiredBarcodes.Count);
-            foreach (var barcode in expiredBarcodes)
-            {
-                _processedBarcodes.TryRemove(barcode, out _);
-            }
+            _processedBarcodes.TryRemove(barcode, out _);
         }
     }
 }

@@ -21,7 +21,6 @@ namespace BenFly.Services;
 /// </summary>
 internal class BenNiaoPackageService : IDisposable
 {
-    private const string SettingsKey = "UploadSettings";
     private readonly IHttpClientFactory _httpClientFactory;
 
     // 创建JSON序列化选项，避免中文转义
@@ -32,33 +31,27 @@ internal class BenNiaoPackageService : IDisposable
     };
 
     private readonly BenNiaoPreReportService _preReportService;
-    private readonly ISettingsService _settingsService;
     private readonly SemaphoreSlim _sftpSemaphore = new(1, 1);
-    private UploadConfiguration _config;
-    private HttpClient _httpClient;
+    private readonly HttpClient _httpClient;
     private bool _isDisposed;
 
     // SFTP客户端实例，用于连接复用
     private SftpClient? _sftpClient;
+    private readonly ISettingsService _settingsService;
 
     /// <summary>
     ///     构造函数
     /// </summary>
     public BenNiaoPackageService(
         IHttpClientFactory httpClientFactory,
-        ISettingsService settingsService,
-        BenNiaoPreReportService preReportService)
+        BenNiaoPreReportService preReportService, ISettingsService settingsService)
     {
         _httpClientFactory = httpClientFactory;
-        _settingsService = settingsService;
-        _config = settingsService.LoadSettings<UploadConfiguration>(SettingsKey);
         _preReportService = preReportService;
+        _settingsService = settingsService;
 
         // 初始化 HttpClient
         _httpClient = CreateHttpClient();
-
-        // 订阅配置变更
-        _settingsService.OnSettingsChanged<UploadConfiguration>(HandleConfigurationChanged);
 
         // 异步初始化SFTP连接，不阻塞构造函数
         Task.Run(InitializeSftpConnectionAsync);
@@ -72,9 +65,6 @@ internal class BenNiaoPackageService : IDisposable
             DisconnectSftpAsync().Wait();
             _sftpSemaphore.Dispose();
 
-            // 取消配置变更订阅
-            _settingsService.OnSettingsChanged<UploadConfiguration>(null);
-
             _isDisposed = true;
         }
 
@@ -83,7 +73,7 @@ internal class BenNiaoPackageService : IDisposable
 
     private HttpClient CreateHttpClient()
     {
-        var baseUrl = _config.BenNiaoEnvironment == BenNiaoEnvironment.Production
+        var baseUrl = _settingsService.LoadSettings<UploadConfiguration>().BenNiaoEnvironment == BenNiaoEnvironment.Production
             ? "http://bnsy.benniaosuyun.com"
             : "https://sit.bnsy.rhb56.cn";
 
@@ -94,45 +84,6 @@ internal class BenNiaoPackageService : IDisposable
     }
 
     /// <summary>
-    ///     处理配置变更
-    /// </summary>
-    private async void HandleConfigurationChanged(UploadConfiguration newConfig)
-    {
-        try
-        {
-            Log.Information("笨鸟包裹回传服务配置已变更");
-
-            var needReconnectSftp = _config.BenNiaoFtpHost != newConfig.BenNiaoFtpHost ||
-                                    _config.BenNiaoFtpPort != newConfig.BenNiaoFtpPort ||
-                                    _config.BenNiaoFtpUsername != newConfig.BenNiaoFtpUsername ||
-                                    _config.BenNiaoFtpPassword != newConfig.BenNiaoFtpPassword;
-
-            var needRecreateHttpClient = _config.BenNiaoEnvironment != newConfig.BenNiaoEnvironment;
-
-            // 更新配置
-            _config = newConfig;
-
-            // 如果环境变更，重新创建 HttpClient
-            if (needRecreateHttpClient)
-            {
-                Log.Information("笨鸟环境已变更，重新创建 HttpClient");
-                _httpClient = CreateHttpClient();
-            }
-
-            // 如果SFTP配置变更，重新连接
-            if (!needReconnectSftp) return;
-
-            Log.Information("SFTP连接配置已变更，准备重新连接");
-            await DisconnectSftpAsync();
-            await InitializeSftpConnectionAsync();
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "处理配置变更时发生错误");
-        }
-    }
-
-    /// <summary>
     ///     异步初始化SFTP连接
     /// </summary>
     private async Task InitializeSftpConnectionAsync()
@@ -140,9 +91,9 @@ internal class BenNiaoPackageService : IDisposable
         try
         {
             // 检查SFTP配置
-            if (string.IsNullOrWhiteSpace(_config.BenNiaoFtpHost) ||
-                string.IsNullOrWhiteSpace(_config.BenNiaoFtpUsername) ||
-                string.IsNullOrWhiteSpace(_config.BenNiaoFtpPassword))
+            if (string.IsNullOrWhiteSpace(_settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpHost) ||
+                string.IsNullOrWhiteSpace(_settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpUsername) ||
+                string.IsNullOrWhiteSpace(_settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpPassword))
             {
                 Log.Warning("SFTP配置不完整，跳过初始化SFTP连接");
                 return;
@@ -182,15 +133,15 @@ internal class BenNiaoPackageService : IDisposable
                 }
 
             // 创建新客户端
-            _sftpClient = new SftpClient(_config.BenNiaoFtpHost, _config.BenNiaoFtpPort,
-                _config.BenNiaoFtpUsername, _config.BenNiaoFtpPassword)
+            _sftpClient = new SftpClient(_settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpHost, _settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpPort,
+                _settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpUsername, _settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpPassword)
             {
                 // 配置SFTP客户端超时设置
                 OperationTimeout = TimeSpan.FromSeconds(30)
             };
             _sftpClient.ConnectionInfo.Timeout = TimeSpan.FromSeconds(15);
 
-            Log.Debug("正在连接到SFTP服务器 {Host}:{Port}...", _config.BenNiaoFtpHost, _config.BenNiaoFtpPort);
+            Log.Debug("正在连接到SFTP服务器 {Host}:{Port}...", _settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpHost, _settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpPort);
             _sftpClient.Connect();
             Log.Debug("已成功连接到SFTP服务器");
 
@@ -340,12 +291,12 @@ internal class BenNiaoPackageService : IDisposable
             Log.Information("开始实时查询运单 {WaybillNum} 的三段码", waybillNum);
 
             // 记录请求参数
-            var requestParams = new { waybillNum, deviceId = _config.DeviceId };
+            var requestParams = new { waybillNum, deviceId = _settingsService.LoadSettings<UploadConfiguration>().DeviceId };
 
             const string url = "/api/openApi/realTimeQuery";
             var request = BenNiaoSignHelper.CreateRequest(
-                _config.BenNiaoAppId,
-                _config.BenNiaoAppSecret,
+                _settingsService.LoadSettings<UploadConfiguration>().BenNiaoAppId,
+                _settingsService.LoadSettings<UploadConfiguration>().BenNiaoAppSecret,
                 requestParams);
 
             // 序列化请求并记录日志
@@ -385,19 +336,19 @@ internal class BenNiaoPackageService : IDisposable
             const string url = "/api/openApi/dataUpload";
             var uploadItem = new DataUploadItem
             {
-                NetworkName = _config.BenNiaoDistributionCenterName,
+                NetworkName = _settingsService.LoadSettings<UploadConfiguration>().BenNiaoDistributionCenterName,
                 WaybillNum = package.Barcode,
                 ScanTime = uploadTime.ToString("yyyy-MM-dd HH:mm:ss"),
                 Weight = (decimal)package.Weight,
                 GoodsLength = package.Length.HasValue ? (int)Math.Round(package.Length.Value) : 0, // 已经是厘米，空值时为0
                 GoodsWidth = package.Width.HasValue ? (int)Math.Round(package.Width.Value) : 0, // 已经是厘米，空值时为0
                 GoodsHeight = package.Height.HasValue ? (int)Math.Round(package.Height.Value) : 0, // 已经是厘米，空值时为0
-                DeviceId = _config.DeviceId // 添加设备号
+                DeviceId = _settingsService.LoadSettings<UploadConfiguration>().DeviceId // 添加设备号
             };
 
             var request = BenNiaoSignHelper.CreateRequest(
-                _config.BenNiaoAppId,
-                _config.BenNiaoAppSecret,
+                _settingsService.LoadSettings<UploadConfiguration>().BenNiaoAppId,
+                _settingsService.LoadSettings<UploadConfiguration>().BenNiaoAppSecret,
                 new[] { uploadItem });
 
 
@@ -442,9 +393,9 @@ internal class BenNiaoPackageService : IDisposable
             Log.Information("本地图片文件大小：{FileSize:N0} 字节", fileInfo.Length);
 
             // 检查SFTP配置
-            if (string.IsNullOrWhiteSpace(_config.BenNiaoFtpHost) ||
-                string.IsNullOrWhiteSpace(_config.BenNiaoFtpUsername) ||
-                string.IsNullOrWhiteSpace(_config.BenNiaoFtpPassword))
+            if (string.IsNullOrWhiteSpace(_settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpHost) ||
+                string.IsNullOrWhiteSpace(_settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpUsername) ||
+                string.IsNullOrWhiteSpace(_settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpPassword))
             {
                 Log.Warning("SFTP配置不完整，无法上传图片");
                 return;
@@ -700,8 +651,8 @@ internal class BenNiaoPackageService : IDisposable
 
             var uploadItem = new
             {
-                netWorkName = _config.BenNiaoDistributionCenterName,
-                deviceId = _config.DeviceId,
+                netWorkName = _settingsService.LoadSettings<UploadConfiguration>().BenNiaoDistributionCenterName,
+                deviceId = _settingsService.LoadSettings<UploadConfiguration>().DeviceId,
                 waybillNum = package.Barcode, // 可以为空
                 scanTime = uploadTime.ToString("yyyy-MM-dd HH:mm:ss"),
                 weight = (decimal)package.Weight, // 单位为kg
@@ -712,8 +663,8 @@ internal class BenNiaoPackageService : IDisposable
             };
 
             var request = BenNiaoSignHelper.CreateRequest(
-                _config.BenNiaoAppId,
-                _config.BenNiaoAppSecret,
+                _settingsService.LoadSettings<UploadConfiguration>().BenNiaoAppId,
+                _settingsService.LoadSettings<UploadConfiguration>().BenNiaoAppSecret,
                 new[] { uploadItem });
 
             // 使用 JsonContent 替代 PostAsJsonAsync，以便使用自定义序列化选项

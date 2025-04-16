@@ -49,10 +49,3 @@ public enum CameraType
     [Description("TCP相机")]
     Tcp
 }
-
-public enum CameraStatus
-{
-    [Description("离线")] Offline,
-
-    [Description("在线")] Online
-}

@@ -1,20 +1,20 @@
 using System.Text;
 using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
+using DeviceService.DataSourceDevices.TCP;
 using Serilog;
-using SortingServices.Common;
 
 namespace SortingServices.Pendulum;
 
 /// <summary>
 ///     单光电单摆轮分拣服务实现
 /// </summary>
-internal class SinglePendulumSortService(ISettingsService settingsService) : BasePendulumSortService(settingsService)
+public class SinglePendulumSortService(ISettingsService settingsService) : BasePendulumSortService(settingsService)
 {
+    private readonly ISettingsService _settingsService = settingsService;
+
     public override Task InitializeAsync(PendulumSortConfig configuration)
     {
-        Configuration = configuration;
-
         // 初始化触发光电连接
         TriggerClient = new TcpClientService(
             "触发光电",
@@ -125,7 +125,7 @@ internal class SinglePendulumSortService(ISettingsService settingsService) : Bas
                     var stopCommand = GetCommandBytes(PendulumCommands.Module2.Stop);
                     TriggerClient.Send(stopCommand);
                     Log.Information("已发送停止命令到触发光电");
-                    
+
                     // 然后发送回正指令
                     var resetLeftCommand = GetCommandBytes(PendulumCommands.Module2.ResetLeft);
                     var resetRightCommand = GetCommandBytes(PendulumCommands.Module2.ResetRight);
@@ -172,35 +172,6 @@ internal class SinglePendulumSortService(ISettingsService settingsService) : Bas
         }
     }
 
-    public override async Task<bool> UpdateConfigurationAsync(PendulumSortConfig configuration)
-    {
-        try
-        {
-            var wasRunning = IsRunningFlag;
-
-            // 如果服务正在运行，先停止
-            if (wasRunning) await StopAsync();
-
-            // 更新配置
-            Configuration = configuration;
-
-            // 如果之前在运行，重新启动
-            if (wasRunning)
-            {
-                await InitializeAsync(configuration);
-                await StartAsync();
-            }
-
-            Log.Information("单光电单摆轮分拣服务配置已更新");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "更新单光电单摆轮分拣服务配置失败");
-            return false;
-        }
-    }
-
     private void ProcessTriggerData(byte[] data)
     {
         try
@@ -235,8 +206,9 @@ internal class SinglePendulumSortService(ISettingsService settingsService) : Bas
         try
         {
             // 检查触发光电配置是否有效
-            if (string.IsNullOrEmpty(Configuration.TriggerPhotoelectric.IpAddress) || 
-                Configuration.TriggerPhotoelectric.Port == 0)
+            if (string.IsNullOrEmpty(_settingsService.LoadSettings<PendulumSortConfig>().TriggerPhotoelectric
+                    .IpAddress) ||
+                _settingsService.LoadSettings<PendulumSortConfig>().TriggerPhotoelectric.Port == 0)
             {
                 Log.Warning("触发光电未配置，跳过重连");
                 return;
@@ -245,8 +217,8 @@ internal class SinglePendulumSortService(ISettingsService settingsService) : Bas
             // 重新创建触发光电客户端
             TriggerClient = new TcpClientService(
                 "触发光电",
-                Configuration.TriggerPhotoelectric.IpAddress,
-                Configuration.TriggerPhotoelectric.Port,
+                _settingsService.LoadSettings<PendulumSortConfig>().TriggerPhotoelectric.IpAddress,
+                _settingsService.LoadSettings<PendulumSortConfig>().TriggerPhotoelectric.Port,
                 ProcessTriggerData,
                 connected => UpdateDeviceConnectionState("触发光电", connected)
             );
@@ -275,7 +247,7 @@ internal class SinglePendulumSortService(ISettingsService settingsService) : Bas
     protected override TriggerPhotoelectric GetPhotoelectricConfig(string photoelectricName)
     {
         // 单摆轮使用触发光电的配置
-        return Configuration.TriggerPhotoelectric;
+        return _settingsService.LoadSettings<PendulumSortConfig>().TriggerPhotoelectric;
     }
 
     protected override TcpClientService? GetSortingClient(string photoelectricName)

@@ -168,7 +168,8 @@
                                        Foreground="{DynamicResource AccentBrush}" />
 
                             <ui:TextBox Icon="Barcode24"
-                                        Text="{Binding CurrentBarcode, UpdateSourceTrigger=PropertyChanged}"
+                                        x:Name="BarcodeTextBox"
+                                        Text="{Binding CurrentBarcode, Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"
                                         IsReadOnly="False"
                                         FontSize="20"
                                         FontWeight="Bold"
@@ -494,8 +495,8 @@
                                     </Border>
 
                                     <Border Grid.Row="1"
-                                           Margin="8"
-                                           Background="Black">
+                                            Margin="8"
+                                            Background="Black">
                                         <Image Source="{Binding CurrentImage}"
                                                RenderOptions.BitmapScalingMode="HighQuality"
                                                RenderOptions.EdgeMode="Aliased"
@@ -538,8 +539,8 @@
                                     </Border>
 
                                     <Border Grid.Row="1"
-                                           Margin="8"
-                                           Background="Black">
+                                            Margin="8"
+                                            Background="Black">
                                         <Image Source="{Binding VolumeImage}"
                                                RenderOptions.BitmapScalingMode="HighQuality"
                                                RenderOptions.EdgeMode="Aliased"
@@ -591,23 +592,31 @@
                                   GridLinesVisibility="Horizontal">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="No." Binding="{Binding Index}" MinWidth="60" Width="Auto" />
-                                <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" MinWidth="160" Width="Auto" />
-                                <DataGridTextColumn Header="Weight" Binding="{Binding WeightDisplay}" MinWidth="80" Width="Auto" />
-                                <DataGridTextColumn Header="Size" Binding="{Binding VolumeDisplay}" MinWidth="200" Width="Auto" />
-                                <DataGridTextColumn Header="Pallet" Binding="{Binding PalletName}" MinWidth="100" Width="Auto">
+                                <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" MinWidth="160"
+                                                    Width="Auto" />
+                                <DataGridTextColumn Header="Weight" Binding="{Binding WeightDisplay}" MinWidth="80"
+                                                    Width="Auto" />
+                                <DataGridTextColumn Header="Size" Binding="{Binding VolumeDisplay}" MinWidth="200"
+                                                    Width="Auto" />
+                                <DataGridTextColumn Header="Pallet" Binding="{Binding PalletName}" MinWidth="100"
+                                                    Width="Auto">
                                     <DataGridTextColumn.CellStyle>
                                         <Style TargetType="DataGridCell">
                                             <Setter Property="ToolTip">
                                                 <Setter.Value>
                                                     <StackPanel>
-                                                        <TextBlock Text="{Binding PalletName, StringFormat=Pallet: {0}}" FontWeight="Bold" Margin="0,0,0,5"/>
-                                                        <TextBlock Text="{Binding PalletWeight, StringFormat=Weight: {0:F3} kg}"/>
+                                                        <TextBlock
+                                                            Text="{Binding PalletName, StringFormat=Pallet: {0}}"
+                                                            FontWeight="Bold" Margin="0,0,0,5" />
+                                                        <TextBlock
+                                                            Text="{Binding PalletWeight, StringFormat=Weight: {0:F3} kg}" />
                                                         <TextBlock>
                                                             <TextBlock.Text>
-                                                                <MultiBinding StringFormat="Size: {0:F1}×{1:F1}×{2:F1} cm">
-                                                                    <Binding Path="PalletLength"/>
-                                                                    <Binding Path="PalletWidth"/>
-                                                                    <Binding Path="PalletHeight"/>
+                                                                <MultiBinding
+                                                                    StringFormat="Size: {0:F1}×{1:F1}×{2:F1} cm">
+                                                                    <Binding Path="PalletLength" />
+                                                                    <Binding Path="PalletWidth" />
+                                                                    <Binding Path="PalletHeight" />
                                                                 </MultiBinding>
                                                             </TextBlock.Text>
                                                         </TextBlock>
@@ -616,25 +625,26 @@
                                             </Setter>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding PalletName}" Value="">
-                                                    <Setter Property="Foreground" Value="Gray"/>
+                                                    <Setter Property="Foreground" Value="Gray" />
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding PalletName}" Value="noPallet">
-                                                    <Setter Property="Foreground" Value="Gray"/>
-                                                    <Setter Property="Content" Value="None"/>
+                                                    <Setter Property="Foreground" Value="Gray" />
+                                                    <Setter Property="Content" Value="None" />
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
                                     </DataGridTextColumn.CellStyle>
                                 </DataGridTextColumn>
-                                <DataGridTextColumn Header="Status" Binding="{Binding StatusDisplay}" MinWidth="100" Width="Auto">
+                                <DataGridTextColumn Header="Status" Binding="{Binding StatusDisplay}" MinWidth="100"
+                                                    Width="Auto">
                                     <DataGridTextColumn.CellStyle>
                                         <Style TargetType="DataGridCell">
-                                            <Setter Property="Background" Value="#F44336"/>
-                                            <Setter Property="Foreground" Value="White"/>
+                                            <Setter Property="Background" Value="#F44336" />
+                                            <Setter Property="Foreground" Value="White" />
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Status}" Value="Success">
-                                                    <Setter Property="Background" Value="#4CAF50"/>
-                                                    <Setter Property="Foreground" Value="White"/>
+                                                    <Setter Property="Background" Value="#4CAF50" />
+                                                    <Setter Property="Foreground" Value="White" />
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>

@@ -8,7 +8,6 @@ using ChongqingYekelai.Views.Settings;
 using Common.Extensions;
 using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.License;
-using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
@@ -74,11 +73,8 @@ internal partial class App
         // 注册聚水潭设置页面
         containerRegistry.RegisterForNavigation<JushuitanSettingsPage, JushuitanSettingsViewModel>();
 
-        // 获取设置服务
-        var settingsService = Container.Resolve<ISettingsService>();
-
         // 注册多摆轮分拣服务
-        containerRegistry.RegisterPendulumSortService(settingsService, PendulumServiceType.Multi);
+        containerRegistry.RegisterPendulumSortService(PendulumServiceType.Multi);
         containerRegistry.RegisterSingleton<IHostedService, PendulumSortHostedService>();
     }
 

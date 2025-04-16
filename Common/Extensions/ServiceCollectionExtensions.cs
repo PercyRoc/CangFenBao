@@ -41,6 +41,7 @@ public static class ServiceCollectionExtensions
         {
             context.Database.EnsureCreated();
         }
+
         // 注册数据库上下文选项
         services.RegisterInstance(options);
         // 注册数据服务
@@ -49,19 +50,17 @@ public static class ServiceCollectionExtensions
         services.RegisterSingleton<IAudioService, AudioService>();
         // 注册通知服务
         services.RegisterSingleton<INotificationService, NotificationService>();
-        
+        services.RegisterSingleton<ISettingsService, SettingsService>();
         // 注册授权服务
         services.RegisterSingleton<ILicenseService, LicenseService>();
     }
-    
+
     /// <summary>
     ///     添加授权验证服务
     /// </summary>
-    public static IContainerRegistry AddLicenseService(this IContainerRegistry containerRegistry)
+    public static void AddLicenseService(this IContainerRegistry containerRegistry)
     {
         // 注册授权服务
         containerRegistry.RegisterSingleton<ILicenseService, LicenseService>();
-        
-        return containerRegistry;
     }
 }

@@ -2,7 +2,7 @@ using System.IO.Ports;
 using Common.Services.Settings;
 using Prism.Mvvm;
 
-namespace BenFly.Models.Settings;
+namespace DeviceService.DataSourceDevices.Belt;
 
 [Configuration("BeltSettings")]
 internal class BeltSettings : BindableBase

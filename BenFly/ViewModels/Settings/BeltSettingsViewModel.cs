@@ -2,7 +2,8 @@ using System.Collections.ObjectModel;
 using System.IO.Ports;
 using Common.Services.Settings;
 using Common.Services.Ui;
-using BenFly.Models.Settings;
+using DeviceService.DataSourceDevices.Belt;
+using DeviceService.DataSourceDevices.Weight;
 using Prism.Commands;
 using Prism.Mvvm;
 using Serilog;
@@ -43,7 +44,7 @@ internal class BeltSettingsViewModel : BindableBase
         Log.Debug("停止位列表初始化完成: {@StopBits}", AvailableStopBits);
 
         // 加载配置
-        Settings = _settingsService.LoadSettings<BeltSettings>();
+        Settings = _settingsService.LoadSettings<BeltSerialParams>();
         Log.Debug("加载的设置: {@Settings}", Settings);
 
         // 如果串口为空，设置默认值
@@ -56,7 +57,7 @@ internal class BeltSettingsViewModel : BindableBase
         SaveConfigurationCommand = new DelegateCommand(ExecuteSaveConfiguration);
     }
 
-    public BeltSettings Settings { get; }
+    public SerialPortParams Settings { get; }
 
     public ObservableCollection<string> AvailablePortNames { get; }
     public ObservableCollection<int> AvailableBaudRates { get; }

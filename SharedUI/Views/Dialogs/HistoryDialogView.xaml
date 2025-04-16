@@ -24,9 +24,11 @@
                 <Setter Property="Cursor" Value="Hand" />
                 <Setter Property="Visibility" Value="Visible" />
                 <Style.Triggers>
+                    <!-- ReSharper disable once Xaml.BindingWithContextNotResolved -->
                     <DataTrigger Binding="{Binding ImagePath}" Value="{x:Null}">
                         <Setter Property="Visibility" Value="Collapsed" />
                     </DataTrigger>
+                    <!-- ReSharper disable once Xaml.BindingWithContextNotResolved -->
                     <DataTrigger Binding="{Binding ImagePath}" Value="">
                         <Setter Property="Visibility" Value="Collapsed" />
                     </DataTrigger>

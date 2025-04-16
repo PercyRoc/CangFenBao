@@ -91,58 +91,6 @@ public static class HuaRayApiStruct
         /// </summary>
         public float volume;
     }
-    
-    /// <summary>
-    /// 时间信息
-    /// </summary>
-    [StructLayout(LayoutKind.Sequential)]
-    public struct TimeInfo
-    {
-        /// <summary>
-        /// 上升时间
-        /// </summary>
-        public long TimeUp;
-        
-        /// <summary>
-        /// 下降时间
-        /// </summary>
-        public long TimeDown;
-        
-        /// <summary>
-        /// 采集时间
-        /// </summary>
-        public long TimeCollect;
-        
-        /// <summary>
-        /// 获取帧时间
-        /// </summary>
-        public long TimeFrameGet;
-        
-        /// <summary>
-        /// 发送帧时间
-        /// </summary>
-        public long TimeFrameSend;
-        
-        /// <summary>
-        /// 重量时间
-        /// </summary>
-        public long TimWeight;
-        
-        /// <summary>
-        /// 体积时间
-        /// </summary>
-        public long TimVol;
-        
-        /// <summary>
-        /// 条码解析时间
-        /// </summary>
-        public long TimeCodeParse;
-        
-        /// <summary>
-        /// 回调时间
-        /// </summary>
-        public long TimeCallback;
-    }
 
     /// <summary>
     /// 相机信息

@@ -4,7 +4,6 @@ using System.Windows.Threading;
 using Common.Extensions;
 using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.License;
-using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.Extensions;
@@ -56,11 +55,8 @@ internal partial class App
 
         containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>("SettingsDialog");
 
-        // 获取设置服务
-        var settingsService = Container.Resolve<ISettingsService>();
-
         // 注册多摆轮分拣服务
-        containerRegistry.RegisterPendulumSortService(settingsService, PendulumServiceType.Multi);
+        containerRegistry.RegisterPendulumSortService(PendulumServiceType.Multi);
         containerRegistry.RegisterSingleton<IHostedService, PendulumSortHostedService>();
         containerRegistry.RegisterSingleton<IWangDianTongApiService, WangDianTongApiService>();
     }

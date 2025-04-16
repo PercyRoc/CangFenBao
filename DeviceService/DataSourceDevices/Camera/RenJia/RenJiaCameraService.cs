@@ -4,7 +4,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Common.Models.Package;
 using Common.Services.Settings;
-using DeviceService.DataSourceDevices.Camera.Models;
 using DeviceService.DataSourceDevices.Camera.Models.Camera;
 using Serilog;
 using System.Windows.Media.Imaging;
@@ -26,7 +25,7 @@ public record MeasureResult(
 /// </summary>
 public class RenJiaCameraService(ISettingsService settingsService) : ICameraService
 {
-    private readonly Subject<(BitmapSource image, IReadOnlyList<BarcodeLocation> barcodes)> _imageSubject = new();
+    private readonly Subject<BitmapSource> _imageSubject = new();
     private readonly Subject<PackageInfo> _packageSubject = new();
     private readonly CancellationTokenSource _processingCancellation = new();
     private bool _disposed;
@@ -48,7 +47,7 @@ public class RenJiaCameraService(ISettingsService settingsService) : ICameraServ
 
     public IObservable<PackageInfo> PackageStream => _packageSubject.AsObservable();
 
-    public IObservable<BitmapSource> ImageStream => _imageSubject.Select(static t => t.image).AsObservable();
+    public IObservable<BitmapSource> ImageStream => _imageSubject.AsObservable();
 
     public bool Start()
     {
@@ -257,7 +256,7 @@ public class RenJiaCameraService(ISettingsService settingsService) : ICameraServ
                         bitmapImage.EndInit();
                         bitmapImage.Freeze(); // 确保可以跨线程访问
 
-                        _imageSubject.OnNext((bitmapImage, new List<BarcodeLocation>()));
+                        _imageSubject.OnNext(bitmapImage);
                     }
                     catch (Exception ex)
                     {

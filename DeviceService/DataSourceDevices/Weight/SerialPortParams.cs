@@ -1,10 +1,12 @@
 using System.IO.Ports;
+using Common.Services.Settings;
 
 namespace DeviceService.DataSourceDevices.Weight;
 
 /// <summary>
 ///     串口参数
 /// </summary>
+[Configuration("SerialPortParams")]
 public class SerialPortParams
 {
     /// <summary>

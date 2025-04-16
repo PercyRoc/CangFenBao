@@ -1,13 +1,11 @@
 ﻿using System.Net.Http;
 using System.Windows;
 using Common.Extensions;
-using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using BenFly.Services;
-using BenFly.Services.Belt;
 using BenFly.ViewModels.Dialogs;
 using BenFly.ViewModels.Settings;
 using BenFly.ViewModels.Windows;
@@ -24,6 +22,7 @@ using SortingServices.Pendulum;
 using SortingServices.Pendulum.Extensions;
 using System.IO;
 using System.Diagnostics;
+using DeviceService.DataSourceDevices.Belt;
 using Timer = System.Timers.Timer;
 
 namespace BenFly;
@@ -31,7 +30,7 @@ namespace BenFly;
 /// <summary>
 ///     Interaction logic for App.xaml
 /// </summary>
-internal partial class App
+public partial class App
 {
     private static Mutex? _mutex;
     private const string MutexName = "Global\\BenFly_App_Mutex";
@@ -58,8 +57,7 @@ internal partial class App
         containerRegistry.RegisterDialog<SettingsDialogs, SettingsDialogViewModel>("SettingsDialog");
 
         // 注册串口服务
-        containerRegistry.RegisterSingleton<IBeltSerialService, BeltSerialService>();
-        containerRegistry.RegisterSingleton<IHostedService, BeltSerialHostedService>("BeltSerialHostedService");
+        containerRegistry.RegisterSingleton<BeltSerialService>();
 
         // 注册 HttpClient
         var services = new ServiceCollection();
@@ -72,12 +70,8 @@ internal partial class App
 
         // 注册包裹回传服务
         containerRegistry.RegisterSingleton<BenNiaoPackageService>();
-
-        // 获取设置服务
-        var settingsService = Container.Resolve<ISettingsService>();
-
         // 注册单摆轮分拣服务
-        containerRegistry.RegisterPendulumSortService(settingsService, PendulumServiceType.Single);
+        containerRegistry.RegisterPendulumSortService(PendulumServiceType.Single);
         containerRegistry.RegisterSingleton<IHostedService, PendulumSortHostedService>();
     }
 
@@ -174,8 +168,8 @@ internal partial class App
             Log.Information("摆轮分拣托管服务启动成功");
 
             // 启动串口托管服务
-            var beltSerialHostedService = Container.Resolve<BeltSerialHostedService>();
-            await beltSerialHostedService.StartAsync(CancellationToken.None);
+            var beltSerialHostedService = Container.Resolve<BeltSerialService>();
+            beltSerialHostedService.StartBelt();
             Log.Information("串口托管服务启动成功");
         }
         catch (Exception ex)
@@ -265,8 +259,8 @@ internal partial class App
             _cleanupTimer?.Dispose();
 
             // 停止串口托管服务
-            var beltSerialHostedService = Container.Resolve<BeltSerialHostedService>();
-            await beltSerialHostedService.StopAsync(CancellationToken.None);
+            var beltSerialHostedService = Container.Resolve<BeltSerialService>();
+             beltSerialHostedService.StopBelt();
             Log.Information("串口托管服务已停止");
 
             // 停止摆轮分拣托管服务
@@ -290,7 +284,7 @@ internal partial class App
             Log.Information("相机服务已释放");
 
             // 释放串口服务
-            var beltSerialService = Container.Resolve<IBeltSerialService>();
+            var beltSerialService = Container.Resolve<BeltSerialService>();
             beltSerialService.Dispose();
             Log.Information("串口服务已释放");
 

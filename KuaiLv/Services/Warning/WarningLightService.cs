@@ -10,25 +10,15 @@ namespace KuaiLv.Services.Warning;
 /// <summary>
 ///     警示灯服务实现
 /// </summary>
-internal class WarningLightService : IWarningLightService, IDisposable
+internal class WarningLightService(
+    ISettingsService settingsService,
+    INotificationService notificationService)
+    : IWarningLightService, IDisposable
 {
-    private readonly INotificationService _notificationService;
-    private WarningLightConfiguration _currentConfig;
     private bool _disposed;
     private bool _isConnected;
     private NetworkStream? _networkStream;
     private TcpClient? _tcpClient;
-
-    public WarningLightService(
-        ISettingsService settingsService,
-        INotificationService notificationService)
-    {
-        _notificationService = notificationService;
-        _currentConfig = settingsService.LoadSettings<WarningLightConfiguration>();
-
-        // 订阅配置变更事件
-        settingsService.OnSettingsChanged<WarningLightConfiguration>(OnConfigurationChanged);
-    }
 
     public void Dispose()
     {
@@ -68,8 +58,9 @@ internal class WarningLightService : IWarningLightService, IDisposable
         try
         {
             Log.Information("开始连接警示灯...");
+            var currentConfig = settingsService.LoadSettings<WarningLightConfiguration>();
             Log.Information("当前配置 - IP地址: {IpAddress}, 端口: {Port}, 是否启用: {IsEnabled}",
-                _currentConfig.IpAddress, _currentConfig.Port, _currentConfig.IsEnabled);
+                currentConfig.IpAddress, currentConfig.Port, currentConfig.IsEnabled);
 
             if (IsConnected)
             {
@@ -77,7 +68,7 @@ internal class WarningLightService : IWarningLightService, IDisposable
                 await DisconnectAsync();
             }
 
-            if (!_currentConfig.IsEnabled)
+            if (!currentConfig.IsEnabled)
             {
                 Log.Information("警示灯未启用，跳过连接");
                 IsConnected = false;
@@ -89,16 +80,16 @@ internal class WarningLightService : IWarningLightService, IDisposable
 
             try
             {
-                var connectTask = _tcpClient.ConnectAsync(_currentConfig.IpAddress, _currentConfig.Port);
-                if (await Task.WhenAny(connectTask, Task.Delay(_currentConfig.ConnectionTimeout)) != connectTask)
-                    throw new TimeoutException($"连接超时（{_currentConfig.ConnectionTimeout}ms）");
+                var connectTask = _tcpClient.ConnectAsync(currentConfig.IpAddress, currentConfig.Port);
+                if (await Task.WhenAny(connectTask, Task.Delay(currentConfig.ConnectionTimeout)) != connectTask)
+                    throw new TimeoutException($"连接超时（{currentConfig.ConnectionTimeout}ms）");
 
                 await connectTask;
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "TCP连接失败 - IP: {IpAddress}, 端口: {Port}",
-                    _currentConfig.IpAddress, _currentConfig.Port);
+                    currentConfig.IpAddress, currentConfig.Port);
                 throw;
             }
 
@@ -107,12 +98,12 @@ internal class WarningLightService : IWarningLightService, IDisposable
 
             IsConnected = true;
             Log.Information("警示灯连接成功");
-            _notificationService.ShowSuccess("警示灯连接成功");
+            notificationService.ShowSuccess("警示灯连接成功");
         }
         catch (Exception ex)
         {
             Log.Error(ex, "警示灯连接失败");
-            _notificationService.ShowError($"警示灯连接失败: {ex.Message}");
+            notificationService.ShowError($"警示灯连接失败: {ex.Message}");
             await DisconnectAsync();
             throw; // 重新抛出异常，让调用者知道发生了错误
         }
@@ -240,31 +231,6 @@ internal class WarningLightService : IWarningLightService, IDisposable
         return SendCommandAsync(command);
     }
 
-    /// <summary>
-    ///     处理配置变更事件
-    /// </summary>
-    private void OnConfigurationChanged(WarningLightConfiguration newConfig)
-    {
-        Log.Information("警示灯配置已更新");
-        _currentConfig = newConfig;
-
-        // 如果配置发生变化，重新连接服务
-        if (!IsConnected) return;
-
-        Log.Information("正在重新连接警示灯服务...");
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await ConnectAsync();
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "重新连接警示灯服务失败");
-            }
-        });
-    }
-
     private async Task SendCommandAsync(byte[] command)
     {
         if (command.Length == 0) return;
@@ -294,7 +260,7 @@ internal class WarningLightService : IWarningLightService, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "发送警示灯指令失败: {Command}", commandText);
-            _notificationService.ShowError("警示灯控制失败");
+            notificationService.ShowError("警示灯控制失败");
             await DisconnectAsync();
             throw; // 重新抛出异常，让调用者知道发生了错误
         }

@@ -42,7 +42,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private readonly IWangDianTongApiService _wangDianTongApiService;
 
-    private int _currentPackageIndex;
+    private long _totalPackageCount;
+    private long _errorPackageCount;
 
     private SystemStatus _systemStatus = new();
 
@@ -366,6 +367,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private async void OnPackageInfo(PackageInfo package)
     {
+        Interlocked.Increment(ref _totalPackageCount);
         try
         {
             Application.Current.Dispatcher.Invoke(() => { CurrentBarcode = package.Barcode; });
@@ -382,6 +384,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     package.SetChute(chuteSettings.ErrorChuteNumber);
                     package.SetStatus(PackageStatus.Failed, "条码为空或无法识别");
                     Log.Warning("包裹条码为空或noread，使用异常口：{ErrorChute}", chuteSettings.ErrorChuteNumber);
+                    Interlocked.Increment(ref _errorPackageCount);
                 }
                 else
                 {
@@ -400,6 +403,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                         package.SetStatus(PackageStatus.Failed, "未匹配到格口规则");
                         Log.Warning("包裹 {Barcode} 未匹配到任何规则，使用异常口：{ErrorChute}",
                             package.Barcode, chuteSettings.ErrorChuteNumber);
+                        Interlocked.Increment(ref _errorPackageCount);
                     }
                 }
             }
@@ -407,6 +411,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             {
                 Log.Error(ex, "获取格口号时发生错误：{Barcode}", package.Barcode);
                 package.SetStatus(PackageStatus.Error, $"{ex.Message}");
+                Interlocked.Increment(ref _errorPackageCount);
             }
 
             // 调用网店通API并处理响应
@@ -417,6 +422,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 {
                     package.SetChute(_settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber);
                     package.SetStatus(PackageStatus.Error, response.Message);
+                    Interlocked.Increment(ref _errorPackageCount);
                 }
                 else
                 {
@@ -429,11 +435,19 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 Log.Error(ex, "网店通重量回传时发生错误：{Barcode}", package.Barcode);
                 package.SetChute(_settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber);
                 package.SetStatus(PackageStatus.Error, errorMessage);
+                Interlocked.Increment(ref _errorPackageCount);
             }
 
-            if (package.Status != PackageStatus.Error)
+            if (package.Status != PackageStatus.Error && package.Status != PackageStatus.Failed)
             {
                 package.SetStatus(PackageStatus.Success);
+            }
+            else if (package.Status is PackageStatus.Error or PackageStatus.Failed)
+            {
+                // 可以在这里再确认一次，如果已经是Error或Failed状态，也增加异常计数，防止遗漏
+                // 注意：上面已经在可能导致Error/Failed的地方增加了计数，这里可能重复，需要根据具体逻辑判断是否需要
+                // 如果前面已经确保所有Error/Failed情况都计数了，这行可以不要。
+                // Interlocked.Increment(ref _errorPackageCount);
             }
 
             _sortService.ProcessPackage(package);
@@ -451,9 +465,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                         PackageHistory.RemoveAt(PackageHistory.Count - 1);
                         removedPackage.Dispose(); // 释放被移除的包裹
                     }
-
-                    // 递增包裹计数器
-                    Interlocked.Increment(ref _currentPackageIndex);
 
                     // 更新统计数据
                     UpdateStatistics();
@@ -473,12 +484,16 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             catch (Exception ex)
             {
                 Log.Error(ex, "保存包裹记录到数据库时发生错误：{Barcode}", package.Barcode);
+                 // 考虑：数据库保存失败是否算作异常？如果算，也需要在这里增加异常计数
+                 // Interlocked.Increment(ref _errorPackageCount);
             }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "处理包裹信息时发生错误：{Barcode}", package.Barcode);
             package.SetStatus(PackageStatus.Error, $"{ex.Message}");
+             // 新增：在顶层catch中也增加异常计数
+            Interlocked.Increment(ref _errorPackageCount);
         }
         finally
         {
@@ -543,14 +558,17 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         var totalItem = StatisticsItems.FirstOrDefault(static x => x.Label == "总包裹数");
         if (totalItem != null)
         {
-            totalItem.Value = _currentPackageIndex.ToString();
-            totalItem.Description = $"累计处理 {_currentPackageIndex} 个包裹";
+            // 使用新的总数计数器
+            totalItem.Value = _totalPackageCount.ToString();
+            totalItem.Description = $"累计处理 {_totalPackageCount} 个包裹";
         }
 
         var errorItem = StatisticsItems.FirstOrDefault(static x => x.Label == "异常数");
         if (errorItem != null)
         {
-            var errorCount = PackageHistory.Count(static p => !string.IsNullOrEmpty(p.ErrorMessage));
+            // 使用新的异常数计数器
+            // var errorCount = PackageHistory.Count(static p => !string.IsNullOrEmpty(p.ErrorMessage)); // 移除旧逻辑
+            var errorCount = _errorPackageCount; // 使用新计数器
             errorItem.Value = errorCount.ToString();
             errorItem.Description = $"共有 {errorCount} 个异常包裹";
         }

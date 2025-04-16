@@ -85,7 +85,7 @@ public sealed class HuaRayWrapper
                 volume = (float)e.VolumeInfo.volume
             };
 
-            // Set TriggerTimeTicks from Bag_TimeInfo.timeUp
+            // 从 Bag_TimeInfo.timeUp 设置 TriggerTimeTicks
             args.TriggerTimeTicks = e.Bag_TimeInfo.timeUp;
             
             if (e.OriginalImage.ImageData != IntPtr.Zero)
@@ -302,11 +302,8 @@ public sealed class HuaRayWrapper
             var camerasInfo = _logisticsWrapper.GetWorkCameraInfo();
             if (camerasInfo == null)
                 return [];
-            
-            var result = new List<HuaRayApiStruct.CameraInfo>();
-            foreach (var ci in camerasInfo)
-            {
-                result.Add(new HuaRayApiStruct.CameraInfo
+
+            return camerasInfo.Select(ci => new HuaRayApiStruct.CameraInfo
                 {
                     camDevID = ci.camDevID,
                     camDevModelName = ci.camDevModelName,
@@ -314,64 +311,13 @@ public sealed class HuaRayWrapper
                     camDevVendor = ci.camDevVendor,
                     camDevFirewareVersion = ci.camDevFirewareVersion,
                     camDevExtraInfo = ci.camDevExtraInfo
-                });
-            }
-            
-            return result;
+                })
+                .ToList();
         }
         catch (Exception ex)
         {
             Log.Error(ex, "获取工作相机信息失败");
             return [];
-        }
-    }
-    
-    /// <summary>
-    /// 获取相机状态
-    /// </summary>
-    /// <returns>相机状态信息列表</returns>
-    public List<HuaRayApiStruct.CameraStatusInfo> GetCamerasStatus()
-    {
-        try
-        {
-            var statuses = _logisticsWrapper.GetCamerasStatus();
-            if (statuses == null)
-                return [];
-            
-            var result = new List<HuaRayApiStruct.CameraStatusInfo>();
-            foreach (var s in statuses)
-            {
-                result.Add(new HuaRayApiStruct.CameraStatusInfo
-                {
-                    key = s.key,
-                    deviceUserID = s.deviceUserID,
-                    isOnline = s.isOnline
-                });
-            }
-            
-            return result;
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "获取相机状态失败");
-            return [];
-        }
-    }
-    
-    /// <summary>
-    /// 相机软触发
-    /// </summary>
-    /// <returns>操作结果</returns>
-    public int CameraSoftTrigger()
-    {
-        try
-        {
-            return _logisticsWrapper.CameraSoftTrigger();
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "相机软触发失败");
-            return -1;
         }
     }
 

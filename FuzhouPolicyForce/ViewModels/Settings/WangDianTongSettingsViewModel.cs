@@ -17,9 +17,6 @@ public class WangDianTongSettingsViewModel : BindableBase
 
         // 加载配置
         LoadSettings();
-
-        // 注册配置变更事件
-        _settingsService.OnSettingsChanged<WangDianTongSettings>(OnSettingsChanged);
     }
 
     public DelegateCommand SaveConfigurationCommand { get; }
@@ -46,10 +43,5 @@ public class WangDianTongSettingsViewModel : BindableBase
     private void ExecuteSaveConfiguration()
     {
         _settingsService.SaveSettings(Configuration, true);
-    }
-
-    private void OnSettingsChanged(WangDianTongSettings settings)
-    {
-        Configuration = settings;
     }
 } 

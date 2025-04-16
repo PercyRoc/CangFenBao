@@ -1,7 +1,7 @@
 using System.Net.Sockets;
 using Serilog;
 
-namespace SortingServices.Common;
+namespace DeviceService.DataSourceDevices.TCP;
 
 /// <summary>
 ///     TCP客户端服务类，提供TCP连接、数据发送和接收功能
@@ -215,7 +215,7 @@ public class TcpClientService : IDisposable
     /// <summary>
     ///     发送数据到设备
     /// </summary>
-    internal void Send(byte[] data)
+    public void Send(byte[] data)
     {
         if (!_isConnected || _stream == null)
         {
@@ -240,11 +240,9 @@ public class TcpClientService : IDisposable
             Log.Error(ex, "向设备 {DeviceName} 发送数据失败", _deviceName);
 
             // 启动自动重连
-            if (_autoReconnect && !_disposed)
-            {
-                Log.Debug("设备 {DeviceName} 发送失败后启动自动重连", _deviceName);
-                StartReconnectThread();
-            }
+            if (!_autoReconnect || _disposed) throw;
+            Log.Debug("设备 {DeviceName} 发送失败后启动自动重连", _deviceName);
+            StartReconnectThread();
 
             throw;
         }
@@ -256,9 +254,6 @@ public class TcpClientService : IDisposable
     private void ReceiveData()
     {
         Log.Debug("设备 {DeviceName} 的接收线程开始运行", _deviceName);
-
-        // 使用局部变量确保在循环中引用的是同一个流和客户端对象
-
         while (!_disposed)
         {
             try
@@ -276,15 +271,47 @@ public class TcpClientService : IDisposable
                 // 如果在 dispose 过程中或断开连接后 stream/client 被置为 null，则等待
                 if (currentClient == null || currentStream == null || !currentClient.Connected) // 保留 Connected 检查，作为快速失败路径，但主要依赖 Read 操作
                 {
-                    if (!_disposed && _autoReconnect) // 只有在允许自动重连且未 Dispose 时才认为需要重连
+                    string reason = "未知原因"; // 默认原因
+                    if (currentClient == null)
                     {
-                         Log.Warning("设备 {DeviceName} 连接似乎已断开或未就绪，等待重连或状态更新...", _deviceName);
-                        _isConnected = false; // 标记为断开
-                        _connectionStatusCallback(false);
-                    } else if (!_disposed) {
-                         Log.Debug("设备 {DeviceName} 连接已断开或未就绪，且不自动重连，接收线程暂停。", _deviceName);
+                        reason = "TcpClient 实例为 null";
                     }
-                    Thread.Sleep(1000); // 等待1秒后重试检查状态
+                    else if (currentStream == null)
+                    {
+                        reason = "NetworkStream 实例为 null";
+                    }
+                    else if (!currentClient.Connected)
+                    {
+                        // Socket 属性可能会抛出 ObjectDisposedException，需要处理
+                        try
+                        {
+                           reason = $"TcpClient.Connected 为 false (Socket Connected: {currentClient.Client?.Connected})"; // 添加底层 Socket 连接状态
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                            reason = "TcpClient.Connected 为 false (底层 Socket 已释放)";
+                        }
+                        catch (Exception ex) // 捕获其他可能的异常
+                        {
+                             reason = $"TcpClient.Connected 为 false (检查底层 Socket 状态时出错: {ex.GetType().Name})";
+                             Log.Warning(ex, "设备 {DeviceName} 检查底层 Socket 连接状态时发生异常", _deviceName);
+                        }
+                    }
+                    Log.Warning("设备 {DeviceName} 连接似乎已断开或未就绪 ({Reason})，等待重连或状态更新...", _deviceName, reason);
+
+                    switch (_disposed)
+                    {
+                        // 只有在允许自动重连且未 Dispose 时才认为需要重连
+                        case false when _autoReconnect:
+                            // Log.Warning("设备 {DeviceName} 连接似乎已断开或未就绪，等待重连或状态更新...", _deviceName); // 已在上面记录更详细的日志
+                            _isConnected = false; // 标记为断开
+                            _connectionStatusCallback(false);
+                            break;
+                        case false:
+                            Log.Debug("设备 {DeviceName} 连接已断开或未就绪，且不自动重连，接收线程暂停。", _deviceName);
+                            break;
+                    }
+                    Thread.Sleep(1000);
                     continue;
                 }
 
@@ -456,7 +483,7 @@ public class TcpClientService : IDisposable
     /// <summary>
     ///     获取连接状态
     /// </summary>
-    internal bool IsConnected()
+    public bool IsConnected()
     {
         return _isConnected;
     }

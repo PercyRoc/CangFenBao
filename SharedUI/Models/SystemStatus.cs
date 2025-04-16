@@ -5,7 +5,7 @@ namespace SharedUI.Models;
 
 public class DiskStatus
 {
-    public string Name { get; internal set; } = string.Empty;
+    public string Name { get; init; } = string.Empty;
     public double UsagePercentage { get; internal set; }
     public bool IsReady { get; set; }
 }
@@ -24,8 +24,7 @@ public class SystemStatus
 
     public double CpuUsage { get; private set; }
     public double MemoryUsage { get; private set; }
-    public List<DiskStatus> Disks { get; set; } = [];
-    public DateTime CurrentTime { get; private set; } = DateTime.Now;
+    public List<DiskStatus> Disks { get; } = [];
 
     public TimeSpan RunningTime { get; private set; }
 
@@ -33,7 +32,6 @@ public class SystemStatus
     {
         var status = new SystemStatus
         {
-            CurrentTime = DateTime.Now,
             RunningTime = DateTime.Now - StartTime
         };
 

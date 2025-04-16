@@ -43,6 +43,7 @@
 
     <ItemGroup>
         <Folder Include="Models\" />
+        <Folder Include="Services\Belt\" />
     </ItemGroup>
 
     <ItemGroup>

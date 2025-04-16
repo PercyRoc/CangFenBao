@@ -37,9 +37,6 @@ internal class TcpSettingsViewModel : BindableBase
 
         // 初始化命令
         SaveConfigurationCommand = new DelegateCommand(ExecuteSaveCommand);
-
-        // 注册设置变更回调
-        _settingsService.OnSettingsChanged<TcpSettings>(OnSettingsChanged);
     }
 
     /// <summary>
@@ -94,15 +91,5 @@ internal class TcpSettingsViewModel : BindableBase
             _notificationService.ShowError($"保存设置时发生错误: {ex.Message}");
             Log.Error(ex, "保存TCP设置时发生错误");
         }
-    }
-
-    /// <summary>
-    ///     处理设置变更
-    /// </summary>
-    /// <param name="settings">新的设置</param>
-    private void OnSettingsChanged(TcpSettings settings)
-    {
-        Address = settings.Address;
-        Port = settings.Port;
     }
 }

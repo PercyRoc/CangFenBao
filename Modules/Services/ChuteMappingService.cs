@@ -15,37 +15,19 @@ namespace ShanghaiModuleBelt.Services;
 public class ChuteMappingService : IDisposable
 {
     private const string ApiUrl = "http://123.56.22.107:28081/api/DWSInfo";
-    private readonly ModuleConfig _config;
     private readonly HttpClient _httpClient;
     private readonly ISettingsService _settingsService;
-    private string _siteCode;
 
     public ChuteMappingService(HttpClient httpClient, ISettingsService settingsService)
     {
         _httpClient = httpClient;
         _settingsService = settingsService;
-        _config = settingsService.LoadSettings<ModuleConfig>();
-        _siteCode = _config.SiteCode;
-
-        // 订阅配置更改事件
-        _settingsService.OnSettingsChanged<ModuleConfig>(OnConfigChanged);
-
-        Log.Information("格口映射服务已初始化，站点代码: {SiteCode}", _siteCode);
+        // Log.Information("格口映射服务已初始化"); // 可以在这里保留一个通用的初始化日志
     }
 
     public void Dispose()
     {
-        _settingsService.OnSettingsChanged<ModuleConfig>(null);
         GC.SuppressFinalize(this);
-    }
-
-    /// <summary>
-    ///     处理配置更改事件
-    /// </summary>
-    private void OnConfigChanged(ModuleConfig newConfig)
-    {
-        _siteCode = newConfig.SiteCode;
-        Log.Information("格口映射服务配置已更新，站点代码: {SiteCode}", _siteCode);
     }
 
     /// <summary>
@@ -55,17 +37,20 @@ public class ChuteMappingService : IDisposable
     /// <returns>格口号，如果获取失败则返回null</returns>
     internal async Task<int?> GetChuteNumberAsync(PackageInfo package)
     {
+        // 每次请求时加载最新配置
+        var config = _settingsService.LoadSettings<ModuleConfig>();
+
         if (string.IsNullOrEmpty(package.Barcode) ||
             package.Barcode.Equals("NoRead", StringComparison.OrdinalIgnoreCase))
         {
             Log.Warning("包裹条码为空或为NoRead: {Barcode}", package.Barcode);
-            return _config.ExceptionChute;
+            return config.ExceptionChute;
         }
 
         try
         {
             // 根据站点代码确定handlers
-            var handlers = _siteCode == "1002" ? "深圳收货组03" : "上海收货组03";
+            var handlers = config.SiteCode == "1002" ? "深圳收货组03" : "上海收货组03";
 
             // 构建请求数据
             var requestData = new
@@ -74,7 +59,7 @@ public class ChuteMappingService : IDisposable
                 scanTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
                 handlers,
                 weight = package.Weight.ToString("0.000"),
-                siteCode = _siteCode
+                siteCode = config.SiteCode
             };
 
             // 序列化为JSON
@@ -84,14 +69,14 @@ public class ChuteMappingService : IDisposable
                 "application/json");
 
             // 设置超时时间
-            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_config.ServerTimeout));
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(config.ServerTimeout));
 
             // 发送请求
             Log.Information("正在请求格口号: {Barcode}", package.Barcode);
             
             // 设置请求头
             using var request = new HttpRequestMessage(HttpMethod.Post, ApiUrl);
-            request.Headers.Add("equickToken", _config.Token);
+            request.Headers.Add("equickToken", config.Token);
             request.Content = content;
             
             var response = await _httpClient.SendAsync(request, cts.Token);
@@ -135,7 +120,7 @@ public class ChuteMappingService : IDisposable
         catch (TaskCanceledException)
         {
             Log.Warning("获取格口号超时: {Barcode}, 超时时间: {Timeout}ms",
-                package.Barcode, _config.ServerTimeout);
+                package.Barcode, config.ServerTimeout);
             return null;
         }
         catch (Exception ex)
@@ -143,19 +128,6 @@ public class ChuteMappingService : IDisposable
             Log.Error(ex, "获取格口号时发生异常: {Barcode}", package.Barcode);
             return null;
         }
-    }
-
-    /// <summary>
-    ///     设置站点代码
-    /// </summary>
-    /// <param name="siteCode">站点代码，1001-上海，1002-深圳</param>
-    public void SetSiteCode(string siteCode)
-    {
-        if (siteCode != "1001" && siteCode != "1002")
-            throw new ArgumentException("站点代码无效，只能是1001(上海)或1002(深圳)", nameof(siteCode));
-
-        _siteCode = siteCode;
-        Log.Information("已设置站点代码: {SiteCode}", siteCode);
     }
 
     /// <summary>

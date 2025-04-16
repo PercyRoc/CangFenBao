@@ -3,7 +3,6 @@ using System.Net.Http;
 using System.Windows;
 using Common.Extensions;
 using Common.Models.Settings.Sort.PendulumSort;
-using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
@@ -136,11 +135,8 @@ public partial class App
         containerRegistry.RegisterForNavigation<BalanceSortSettingsView, BalanceSortSettingsViewModel>();
         containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
         containerRegistry.RegisterForNavigation<XiyiguAPiSettingsPage, XiyiguAPiSettingsViewModel>();
-        // 获取设置服务
-        var settingsService = Container.Resolve<ISettingsService>();
-
         // 注册多摆轮分拣服务
-        containerRegistry.RegisterPendulumSortService(settingsService, PendulumServiceType.Multi);
+        containerRegistry.RegisterPendulumSortService( PendulumServiceType.Multi);
         containerRegistry.RegisterSingleton<IHostedService, PendulumSortHostedService>();
     }
 

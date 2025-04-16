@@ -21,8 +21,32 @@
                     Source="pack://application:,,,/SharedUI;component/Resources/Styles/ColorStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
-            <!-- Converters -->
-            <converters:StringNullOrEmptyToBooleanConverter x:Key="NullOrEmptyToBooleanConverter" IsInverted="True" />
+            <!-- Converters: Use this one, IsInverted is false (or default) -->
+            <converters:StringNullOrEmptyToBooleanConverter x:Key="NullOrEmptyToBooleanConverter" />
+            
+            <!-- Style for the Image Button -->
+            <Style x:Key="ImageButtonStyle" TargetType="ui:Button">
+                 <Setter Property="IsEnabled" Value="False" /> <!-- Default to disabled -->
+                 <Setter Property="Cursor" Value="Arrow" />
+                 <Style.Triggers>
+                     <!-- Enable button if ImagePath is NOT null or empty -->
+                     <!-- Use the existing converter -->
+                     <DataTrigger Binding="{Binding ImagePath, Converter={StaticResource NullOrEmptyToBooleanConverter}}" Value="True">
+                           <Setter Property="IsEnabled" Value="True" />
+                           <Setter Property="Cursor" Value="Hand" />
+                     </DataTrigger>
+                     <!-- Optional: Keep triggers for explicit null/empty to ensure disabled state if needed -->
+                     <DataTrigger Binding="{Binding ImagePath}" Value="{x:Null}">
+                         <Setter Property="IsEnabled" Value="False" />
+                         <Setter Property="Cursor" Value="Arrow" />
+                     </DataTrigger>
+                     <DataTrigger Binding="{Binding ImagePath}" Value="">
+                         <Setter Property="IsEnabled" Value="False" />
+                         <Setter Property="Cursor" Value="Arrow" />
+                     </DataTrigger>
+                 </Style.Triggers>
+            </Style>
+
         </ResourceDictionary>
     </UserControl.Resources>
 
@@ -189,6 +213,10 @@
                                         <Setter Property="Background" Value="#808080" />
                                         <Setter Property="Foreground" Value="White" />
                                     </DataTrigger>
+                                    <DataTrigger Binding="{Binding StatusDisplay}" Value="Complete">
+                                        <Setter Property="Background" Value="#2196F3" />
+                                        <Setter Property="Foreground" Value="White" />
+                                    </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </DataGridTextColumn.CellStyle>
@@ -199,10 +227,10 @@
                     <DataGridTemplateColumn Header="Image" MinWidth="100" Width="Auto">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
+                                <!-- Apply the style and update CommandParameter -->
                                 <ui:Button Appearance="Secondary"
                                            Command="{Binding DataContext.ViewImageCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                                           CommandParameter="{Binding}"
-                                           IsEnabled="{Binding ImagePath, Converter={StaticResource NullOrEmptyToBooleanConverter}}">
+                                           CommandParameter="{Binding ImagePath}"> <!-- Pass ImagePath string -->
                                     <ui:SymbolIcon Symbol="Image24" />
                                 </ui:Button>
                             </DataTemplate>

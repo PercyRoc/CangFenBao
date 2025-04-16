@@ -13,7 +13,6 @@ public class WeightStartupService : IHostedService
     private readonly SemaphoreSlim _initLock = new(1, 1);
     private readonly INotificationService _notificationService;
     private readonly ISettingsService _settingsService;
-    private WeightSettings? _currentSettings;
     private SerialPortWeightService? _weightService;
 
     /// <summary>
@@ -25,9 +24,6 @@ public class WeightStartupService : IHostedService
     {
         _notificationService = notificationService;
         _settingsService = settingsService;
-
-        // 订阅配置变更事件
-        _settingsService.OnSettingsChanged<WeightSettings>(OnWeightSettingsChanged);
     }
 
     /// <summary>
@@ -37,19 +33,7 @@ public class WeightStartupService : IHostedService
     {
         try
         {
-            Log.Information("Starting weight scale service...");
             var weight = GetWeightService();
-
-            // Load configuration
-            Log.Debug("Loading weight scale configuration...");
-            var config = _settingsService.LoadSettings<WeightSettings>();
-            _currentSettings = config;
-
-            // Update configuration
-            Log.Debug("Updating weight scale configuration...");
-            weight.UpdateConfiguration(config);
-
-            // Start service
             if (!weight.Start())
             {
                 const string message = "Failed to start weight scale service";
@@ -126,71 +110,11 @@ public class WeightStartupService : IHostedService
         _initLock.Wait();
         try
         {
-            return _weightService ??= new SerialPortWeightService();
+            return _weightService ??= new SerialPortWeightService(_settingsService);
         }
         finally
         {
             _initLock.Release();
         }
-    }
-
-    /// <summary>
-    ///     处理配置变更
-    /// </summary>
-    private void OnWeightSettingsChanged(WeightSettings settings)
-    {
-        try
-        {
-            Log.Information("检测到重量称配置变更，准备更新配置...");
-
-            var weight = GetWeightService();
-
-            // 检查串口参数是否发生变化
-            var needRestart = _currentSettings == null ||
-                              !AreSerialPortParamsEqual(_currentSettings.SerialPortParams, settings.SerialPortParams);
-
-            _currentSettings = settings;
-
-            if (needRestart)
-            {
-                Log.Information("串口参数发生变化，需要重启串口...");
-                _notificationService.ShowSuccess("串口参数发生变化，正在重启串口...");
-                weight.Stop();
-                weight.UpdateConfiguration(settings);
-                if (!weight.Start())
-                {
-                    Log.Warning("重启串口失败");
-                    _notificationService.ShowError("重启串口失败");
-                }
-                else
-                {
-                    Log.Information("串口重启成功");
-                }
-            }
-            else
-            {
-                Log.Information("仅更新配置参数...");
-                weight.UpdateConfiguration(settings);
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "更新重量称配置时发生错误");
-            _notificationService.ShowError("更新重量称配置失败：" + ex.Message);
-        }
-    }
-
-    /// <summary>
-    ///     比较两个串口参数是否相同
-    /// </summary>
-    private static bool AreSerialPortParamsEqual(SerialPortParams? oldParams, SerialPortParams? newParams)
-    {
-        if (oldParams == null || newParams == null) return false;
-
-        return oldParams.PortName == newParams.PortName &&
-               oldParams.BaudRate == newParams.BaudRate &&
-               oldParams.DataBits == newParams.DataBits &&
-               oldParams.StopBits == newParams.StopBits &&
-               oldParams.Parity == newParams.Parity;
     }
 }

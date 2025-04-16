@@ -8,13 +8,6 @@ namespace Common.Services.Settings;
 public interface ISettingsService : IDisposable
 {
     /// <summary>
-    ///     订阅配置变更事件
-    /// </summary>
-    /// <typeparam name="T">配置类型</typeparam>
-    /// <param name="handler">事件处理方法</param>
-    void OnSettingsChanged<T>(Action<T>? handler) where T : class, new();
-
-    /// <summary>
     ///     加载设置
     /// </summary>
     /// <typeparam name="T">设置类型</typeparam>
@@ -33,12 +26,4 @@ public interface ISettingsService : IDisposable
     /// <returns>验证结果，如果没有错误或未验证则为空数组</returns>
     ValidationResult[] SaveSettings<T>(T configuration, bool validate = false, bool throwOnError = false)
         where T : class;
-
-    /// <summary>
-    ///     校验配置
-    /// </summary>
-    /// <typeparam name="T">配置类型</typeparam>
-    /// <param name="settings">配置实例</param>
-    /// <returns>校验结果，如果有错误则包含错误信息</returns>
-    ValidationResult[] ValidateSettings<T>(T settings) where T : class;
 }

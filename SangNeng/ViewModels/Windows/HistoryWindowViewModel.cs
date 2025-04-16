@@ -1,5 +1,4 @@
 using Common.Data;
-using Common.Models.Package;
 using Common.Services.Ui;
 using Microsoft.Win32;
 using OfficeOpenXml;
@@ -43,7 +42,8 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
         _packageDataService = packageDataService;
         _notificationService = notificationService;
         QueryCommand = new DelegateCommand(QueryAsync);
-        ViewImageCommand = new DelegateCommand<PackageRecord>(ViewImage);
+        ViewImageCommand = new DelegateCommand<string?>(ViewImage, CanViewImage)
+            .ObservesProperty(() => PackageRecords.Count);
         ExportToExcelCommand = new DelegateCommand(ExecuteExportToExcel, CanExportToExcel)
             .ObservesProperty(() => PackageRecords.Count);
     }
@@ -110,37 +110,7 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
     public ObservableCollection<PackageRecord> PackageRecords
     {
         get => _packageRecords;
-        private set
-        {
-            // 将毫米转换为厘米
-            foreach (var record in value)
-            {
-                if (record.Length.HasValue)
-                {
-                    record.Length = record.Length.Value / 10.0;
-                }
-
-                if (record.Width.HasValue)
-                {
-                    record.Width = record.Width.Value / 10.0;
-                }
-
-                if (record.Height.HasValue)
-                {
-                    record.Height = record.Height.Value / 10.0;
-                }
-
-                if (record.Volume.HasValue)
-                {
-                    record.Volume = record.Volume.Value / 1000.0; // 将立方毫米转换为立方厘米
-                }
-
-                // 设置状态显示
-                record.StatusDisplay = GetStatusDisplay(record.Status);
-            }
-
-            SetProperty(ref _packageRecords, value);
-        }
+        private set => SetProperty(ref _packageRecords, value);
     }
 
     /// <summary>
@@ -151,7 +121,7 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
     /// <summary>
     ///     查看图片命令
     /// </summary>
-    public ICommand ViewImageCommand { get; }
+    public DelegateCommand<string?> ViewImageCommand { get; }
 
     /// <summary>
     ///     导出Excel命令
@@ -169,7 +139,9 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
 
     public string Title => "Package History";
 
+#pragma warning disable CS0067 // Event is required by IDialogAware but may not be used in this specific ViewModel
     public event Action<IDialogResult>? RequestClose;
+#pragma warning restore CS0067
 
     public bool CanCloseDialog()
     {
@@ -254,10 +226,36 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
         }
     }
 
-    private void ViewImage(PackageRecord? record)
+    private bool CanViewImage(string? imagePath)
     {
-        if (record?.ImagePath == null || !File.Exists(record.ImagePath)) return;
-        Process.Start(new ProcessStartInfo(record.ImagePath) { UseShellExecute = true });
+        return !string.IsNullOrEmpty(imagePath);
+    }
+
+    private void ViewImage(string? imagePath)
+    {
+        if (!CanViewImage(imagePath))
+        {
+            Log.Warning("ViewImage executed with invalid path: {ImagePath}", imagePath);
+            return;
+        }
+
+        try
+        {
+            if (imagePath != null && File.Exists(imagePath))
+            {
+                Process.Start(new ProcessStartInfo(imagePath) { UseShellExecute = true });
+            }
+            else
+            {
+                Log.Error("Image file not found or path is null: {ImagePath}", imagePath);
+                _notificationService.ShowErrorWithToken($"图片文件未找到: {imagePath}", "HistoryWindowGrowl");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to open image file: {ImagePath}", imagePath);
+            _notificationService.ShowErrorWithToken($"无法打开图片: {ex.Message}", "HistoryWindowGrowl");
+        }
     }
 
     /// <summary>
@@ -347,20 +345,5 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
             Log.Error(ex, "Failed to export Excel");
             _notificationService.ShowError($"Export failed: {ex.Message}");
         }
-    }
-
-    /// <summary>
-    ///     获取状态的英文显示
-    /// </summary>
-    private static string GetStatusDisplay(PackageStatus status)
-    {
-        return status switch
-        {
-            Created => "Created",
-            Success => "Success",
-            Failed => "Failed",
-            Error => "Error",
-            _ => status.ToString()
-        };
     }
 }

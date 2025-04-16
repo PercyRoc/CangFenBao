@@ -26,8 +26,6 @@ internal class DwsService : IDwsService, IDisposable
     private readonly OfflinePackageService _offlinePackageService;
     private readonly ISettingsService _settingsService;
     private readonly IWarningLightService _warningLightService;
-    private UploadConfiguration _currentConfig;
-
     private bool _disposed;
     private bool _isNetworkAvailable = true;
 
@@ -43,12 +41,6 @@ internal class DwsService : IDwsService, IDisposable
         _notificationService = notificationService;
         _warningLightService = warningLightService;
         _offlinePackageService = offlinePackageService;
-
-        // 从设置服务加载配置
-        _currentConfig = settingsService.LoadSettings<UploadConfiguration>();
-
-        // 订阅配置变更事件
-        settingsService.OnSettingsChanged<UploadConfiguration>(OnConfigurationChanged);
 
         // 初始化网络检测定时器（每30秒检查一次）
         _networkCheckTimer = new Timer(CheckNetworkStatus, null, TimeSpan.Zero, TimeSpan.FromSeconds(30));
@@ -79,11 +71,11 @@ internal class DwsService : IDwsService, IDisposable
                 return new DwsResponse { Success = false, Code = "NETWORK_OFFLINE", Message = "网络未连接，包裹已保存到离线存储" };
             }
 
-            // 使用当前配置
-            var config = _currentConfig;
+            // 每次都加载最新的配置
+            var uploadConfig = _settingsService.LoadSettings<UploadConfiguration>();
+            var appSettings = _settingsService.LoadSettings<AppSettings>();
 
             // 获取当前操作模式
-            var appSettings = _settingsService.LoadSettings<AppSettings>();
             var operationMode = appSettings.OperationMode + 1; // 加1是因为UI从0开始，接口从1开始
             Log.Debug("当前操作场景：{OperateScene}", operationMode);
 
@@ -115,12 +107,12 @@ internal class DwsService : IDwsService, IDisposable
             var stringToSign = $"POST\n{contentMd5}\n{path}";
 
             // 计算签名
-            var secret = config.Secret;
+            var secret = uploadConfig.Secret;
             var signature = Convert.ToBase64String(new HMACSHA256(Encoding.UTF8.GetBytes(secret))
                 .ComputeHash(Encoding.UTF8.GetBytes(stringToSign)));
 
-            // 设置基地址 - 保持不变
-            var baseAddress = config.Environment == UploadEnvironment.Production
+            // 设置基地址 - 每次都从最新配置读取
+            var baseAddress = uploadConfig.Environment == UploadEnvironment.Production
                 ? "https://klwms.meituan.com"
                 : "https://klvwms.meituan.com";
 
@@ -294,20 +286,13 @@ internal class DwsService : IDwsService, IDisposable
         }
     }
 
-    /// <summary>
-    ///     处理配置变更事件
-    /// </summary>
-    private void OnConfigurationChanged(UploadConfiguration newConfig)
-    {
-        Log.Information("DWS服务配置已更新");
-        _currentConfig = newConfig;
-    }
-
     private async Task CheckNetworkStatusAsync()
     {
         try
         {
-            var baseAddress = _currentConfig.Environment == UploadEnvironment.Production
+            // 每次检查都加载最新的配置
+            var uploadConfig = _settingsService.LoadSettings<UploadConfiguration>();
+            var baseAddress = uploadConfig.Environment == UploadEnvironment.Production
                 ? "klwms.meituan.com"
                 : "klvwms.meituan.com";
 

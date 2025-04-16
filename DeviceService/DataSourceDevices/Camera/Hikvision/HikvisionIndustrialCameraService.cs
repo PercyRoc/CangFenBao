@@ -342,11 +342,9 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
                 }
             }
 
-            if (_convertDstBuf != IntPtr.Zero)
-            {
-                Marshal.FreeHGlobal(_convertDstBuf);
-                _convertDstBuf = IntPtr.Zero;
-            }
+            if (_convertDstBuf == IntPtr.Zero) return;
+            Marshal.FreeHGlobal(_convertDstBuf);
+            _convertDstBuf = IntPtr.Zero;
         }
         catch (Exception ex)
         {
@@ -449,7 +447,7 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
             var height = frameInfo.stFrameInfo.nHeight;
             
             // 分配转换缓冲区
-            uint rgbSize = (uint)(width * height * 3); // RGB每像素3字节
+            var rgbSize = (uint)(width * height * 3); // RGB每像素3字节
             var rgbBuffer = Marshal.AllocHGlobal((int)rgbSize);
             
             try
@@ -565,12 +563,10 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
         // 最后一个实例释放时，执行SDK反初始化
         lock (_lockObj)
         {
-            if (_sdkInitialized)
-            {
-                MyCamera.MV_CC_Finalize_NET();
-                _sdkInitialized = false;
-                Log.Information("海康工业相机 SDK 已反初始化");
-            }
+            if (!_sdkInitialized) return;
+            MyCamera.MV_CC_Finalize_NET();
+            _sdkInitialized = false;
+            Log.Information("海康工业相机 SDK 已反初始化");
         }
     }
 

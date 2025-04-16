@@ -1,5 +1,4 @@
 using Common.Models.Settings.Sort.PendulumSort;
-using Common.Services.Settings;
 using Prism.Ioc;
 
 namespace SortingServices.Pendulum.Extensions;
@@ -13,24 +12,11 @@ public static class PendulumServiceExtensions
     ///     注册指定类型的摆轮分拣服务
     /// </summary>
     /// <param name="containerRegistry">容器注册器</param>
-    /// <param name="settingsService">设置服务</param>
     /// <param name="serviceType">服务类型</param>
     public static void RegisterPendulumSortService(
         this IContainerRegistry containerRegistry,
-        ISettingsService settingsService,
         PendulumServiceType serviceType)
     {
-        // 加载配置
-        var pendulumConfig = settingsService.LoadSettings<PendulumSortConfig>();
-        containerRegistry.RegisterInstance(pendulumConfig);
-
-        // 注册配置变更处理
-        settingsService.OnSettingsChanged<PendulumSortConfig>(config =>
-        {
-            // 更新容器中的配置实例
-            containerRegistry.RegisterInstance(config);
-        });
-
         // 根据指定类型注册服务
         switch (serviceType)
         {

@@ -1,3 +1,5 @@
+using System;
+
 namespace DeviceService.DataSourceDevices.Scanner;
 
 /// <summary>
@@ -6,9 +8,9 @@ namespace DeviceService.DataSourceDevices.Scanner;
 public interface IScannerService : IDisposable
 {
     /// <summary>
-    ///     扫码完成事件
+    ///  获取扫码结果的流
     /// </summary>
-    event EventHandler<string> BarcodeScanned;
+    IObservable<string> BarcodeStream { get; }
 
     /// <summary>
     ///     启动扫码服务

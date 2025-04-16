@@ -1,5 +1,4 @@
 using System.Windows;
-using System.Windows.Controls;
 using Prism.Services.Dialogs;
 
 namespace SharedUI.Views.Windows
@@ -7,7 +6,7 @@ namespace SharedUI.Views.Windows
     /// <summary>
     /// HistoryWindow.xaml 的交互逻辑
     /// </summary>
-    public partial class HistoryWindow : Window, IDialogWindow
+    public partial class HistoryWindow : IDialogWindow
     {
         public HistoryWindow()
         {
@@ -17,7 +16,7 @@ namespace SharedUI.Views.Windows
             Closed += HistoryWindow_Closed;
         }
 
-        private void HistoryWindow_Closed(object? sender, System.EventArgs e)
+        private void HistoryWindow_Closed(object? sender, EventArgs e)
         {
             // 确保清理资源，防止内存泄漏
             if (DialogContent.Content is FrameworkElement { DataContext: IDialogAware dialogAware })

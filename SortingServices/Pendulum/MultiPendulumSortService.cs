@@ -2,31 +2,39 @@ using System.Collections.Concurrent;
 using System.Text;
 using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
+using DeviceService.DataSourceDevices.TCP;
 using Serilog;
-using SortingServices.Common;
 
 namespace SortingServices.Pendulum;
 
 /// <summary>
 ///     多光电多摆轮分拣服务实现
 /// </summary>
-internal class MultiPendulumSortService(ISettingsService settingsService) : BasePendulumSortService(settingsService)
+public class MultiPendulumSortService : BasePendulumSortService
 {
     private readonly ConcurrentDictionary<string, TcpClientService> _sortingClients = new();
     private readonly SemaphoreSlim _initializationLock = new(1, 1);
     private bool _isInitialized;
-    
+    private readonly ISettingsService _settingsService;
+
     // 记录光电信号状态的字典，true 表示高电平，false 表示低电平
     private readonly ConcurrentDictionary<string, bool> _photoelectricSignalStates = new();
+
     // 记录上一次信号状态的字典
     private readonly ConcurrentDictionary<string, bool> _previousPhotoelectricSignalStates = new();
+
+    public MultiPendulumSortService(ISettingsService settingsService) 
+        : base(settingsService)
+    {
+        _settingsService = settingsService;
+    }
 
     public override async Task InitializeAsync(PendulumSortConfig configuration)
     {
         try
         {
             await _initializationLock.WaitAsync();
-            
+
             if (_isInitialized)
             {
                 Log.Debug("多光电多摆轮分拣服务已经初始化，跳过初始化操作");
@@ -34,7 +42,6 @@ internal class MultiPendulumSortService(ISettingsService settingsService) : Base
             }
 
             Log.Information("开始初始化多光电多摆轮分拣服务...");
-            Configuration = configuration;
 
             // 初始化触发光电连接
             TriggerClient = new TcpClientService(
@@ -74,7 +81,7 @@ internal class MultiPendulumSortService(ISettingsService settingsService) : Base
 
                 _sortingClients[photoelectric.Name] = client;
                 PendulumStates[photoelectric.Name] = new PendulumState();
-                
+
                 // 初始化分拣光电信号状态
                 _photoelectricSignalStates[photoelectric.Name] = false;
                 _previousPhotoelectricSignalStates[photoelectric.Name] = false;
@@ -116,7 +123,7 @@ internal class MultiPendulumSortService(ISettingsService settingsService) : Base
             if (!_isInitialized)
             {
                 Log.Warning("多光电多摆轮分拣服务未初始化，尝试初始化");
-                await InitializeAsync(Configuration);
+                await InitializeAsync(_settingsService.LoadSettings<PendulumSortConfig>());
             }
 
             // 在启动服务前直接发送启动命令到所有连接的分拣光电
@@ -230,13 +237,13 @@ internal class MultiPendulumSortService(ISettingsService settingsService) : Base
                     // 先发送停止命令
                     var stopCommand = GetCommandBytes(PendulumCommands.Module2.Stop);
                     client.Value.Send(stopCommand);
-                    
+
                     // 然后发送回正指令
                     var resetLeftCommand = GetCommandBytes(PendulumCommands.Module2.ResetLeft);
                     var resetRightCommand = GetCommandBytes(PendulumCommands.Module2.ResetRight);
                     client.Value.Send(resetLeftCommand);
                     client.Value.Send(resetRightCommand);
-                    
+
                     Log.Information("已发送停止和回正命令到分拣光电 {Name}", client.Key);
                 }
                 catch (Exception ex)
@@ -251,7 +258,7 @@ internal class MultiPendulumSortService(ISettingsService settingsService) : Base
                 await CancellationTokenSource.CancelAsync();
                 Log.Debug("已发送取消信号到主循环");
             }
-            
+
             IsRunningFlag = false;
 
             // 停止超时检查定时器
@@ -280,42 +287,13 @@ internal class MultiPendulumSortService(ISettingsService settingsService) : Base
         }
     }
 
-    public override async Task<bool> UpdateConfigurationAsync(PendulumSortConfig configuration)
-    {
-        try
-        {
-            var wasRunning = IsRunningFlag;
-
-            // 如果服务正在运行，先停止
-            if (wasRunning) await StopAsync();
-
-            // 更新配置
-            Configuration = configuration;
-
-            // 如果之前在运行，重新启动
-            if (wasRunning)
-            {
-                await InitializeAsync(configuration);
-                await StartAsync();
-            }
-
-            Log.Information("多光电多摆轮分拣服务配置已更新");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "更新多光电多摆轮分拣服务配置失败");
-            return false;
-        }
-    }
-
     private void ProcessTriggerData(byte[] data)
     {
         try
         {
             var message = Encoding.ASCII.GetString(data);
             Log.Debug("收到触发光电数据: {Message}", message);
-            
+
             // 更新触发光电信号状态
             if (message.Contains("OCCH2:1"))
             {
@@ -343,9 +321,9 @@ internal class MultiPendulumSortService(ISettingsService settingsService) : Base
         {
             var message = Encoding.ASCII.GetString(data);
             Log.Information("收到分拣光电 {Name} 数据: {Message}", photoelectricName, message);
-            
+
             // 更新分拣光电信号状态
-            if (!message.Contains("OCCH2:1")) return;
+            if (!message.Contains("OCCH1:1")) return;
             // 高电平
             UpdatePhotoelectricSignalState(photoelectricName, true);
             Log.Information("分拣光电 {Name} 收到上升沿信号，开始匹配包裹并执行分拣", photoelectricName);
@@ -366,7 +344,7 @@ internal class MultiPendulumSortService(ISettingsService settingsService) : Base
             Log.Error(ex, "处理分拣光电 {Name} 数据时发生错误", photoelectricName);
         }
     }
-    
+
     /// <summary>
     /// 更新光电信号状态并检测异常情况
     /// </summary>
@@ -376,16 +354,16 @@ internal class MultiPendulumSortService(ISettingsService settingsService) : Base
     {
         // 获取上一次的信号状态
         _previousPhotoelectricSignalStates.TryGetValue(photoelectricName, out var previousState);
-        
+
         // 如果当前是低电平，且上一次也是低电平，记录警告
         if (!isHighLevel && !previousState)
         {
             Log.Warning("光电 {Name} 出现连续两次低电平信号，可能存在异常", photoelectricName);
         }
-        
+
         // 记录当前信号状态
         Log.Debug("光电 {Name} 信号状态: {State}", photoelectricName, isHighLevel ? "高电平" : "低电平");
-        
+
         // 更新状态记录
         _previousPhotoelectricSignalStates[photoelectricName] = _photoelectricSignalStates[photoelectricName];
         _photoelectricSignalStates[photoelectricName] = isHighLevel;
@@ -412,8 +390,8 @@ internal class MultiPendulumSortService(ISettingsService settingsService) : Base
                 TriggerClient.Dispose();
                 TriggerClient = new TcpClientService(
                     "触发光电",
-                    Configuration.TriggerPhotoelectric.IpAddress,
-                    Configuration.TriggerPhotoelectric.Port,
+                    _settingsService.LoadSettings<PendulumSortConfig>().TriggerPhotoelectric.IpAddress,
+                    _settingsService.LoadSettings<PendulumSortConfig>().TriggerPhotoelectric.Port,
                     ProcessTriggerData,
                     connected => UpdateDeviceConnectionState("触发光电", connected)
                 );
@@ -421,7 +399,7 @@ internal class MultiPendulumSortService(ISettingsService settingsService) : Base
             }
 
             // 重连分拣光电
-            foreach (var photoelectric in Configuration.SortingPhotoelectrics)
+            foreach (var photoelectric in _settingsService.LoadSettings<PendulumSortConfig>().SortingPhotoelectrics)
             {
                 if (!_sortingClients.TryGetValue(photoelectric.Name, out var client) || client.IsConnected()) continue;
 
@@ -459,11 +437,11 @@ internal class MultiPendulumSortService(ISettingsService settingsService) : Base
     protected override bool SlotBelongsToPhotoelectric(int targetSlot, string photoelectricName)
     {
         // 获取分拣光电的配置
-        var photoelectric = Configuration.SortingPhotoelectrics.FirstOrDefault(p => p.Name == photoelectricName);
+        var photoelectric = _settingsService.LoadSettings<PendulumSortConfig>().SortingPhotoelectrics.FirstOrDefault(p => p.Name == photoelectricName);
         if (photoelectric == null) return false;
 
         // 获取分拣光电的索引（从0开始）
-        var index = Configuration.SortingPhotoelectrics.IndexOf(photoelectric);
+        var index = _settingsService.LoadSettings<PendulumSortConfig>().SortingPhotoelectrics.IndexOf(photoelectric);
         if (index < 0) return false;
 
         // 每个分拣光电处理两个格口
@@ -505,7 +483,7 @@ internal class MultiPendulumSortService(ISettingsService settingsService) : Base
         var index = (slot - 1) / 2;
 
         // 获取对应索引的光电配置
-        var photoelectric = Configuration.SortingPhotoelectrics.ElementAtOrDefault(index);
+        var photoelectric = _settingsService.LoadSettings<PendulumSortConfig>().SortingPhotoelectrics.ElementAtOrDefault(index);
         return photoelectric?.Name;
     }
 }

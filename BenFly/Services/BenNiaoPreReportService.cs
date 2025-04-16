@@ -26,7 +26,6 @@ internal class BenNiaoPreReportService : IDisposable
         WriteIndented = true
     };
 
-    private readonly ISettingsService _settingsService;
     private readonly Timer _updateTimer;
     private UploadConfiguration _config;
     private bool _disposed;
@@ -38,14 +37,10 @@ internal class BenNiaoPreReportService : IDisposable
         ISettingsService settingsService)
     {
         _httpClientFactory = httpClientFactory;
-        _settingsService = settingsService;
-        _config = _settingsService.LoadSettings<UploadConfiguration>(SettingsKey);
+        _config = settingsService.LoadSettings<UploadConfiguration>(SettingsKey);
 
         // 初始化 HttpClient
         _httpClient = CreateHttpClient();
-
-        // 订阅配置变更
-        _settingsService.OnSettingsChanged<UploadConfiguration>(HandleConfigurationChanged);
 
         // 初始化定时器
         _updateTimer = new Timer();
@@ -75,10 +70,6 @@ internal class BenNiaoPreReportService : IDisposable
 
         _updateTimer.Stop();
         _updateTimer.Dispose();
-
-        // 取消配置变更订阅
-        _settingsService.OnSettingsChanged<UploadConfiguration>(null);
-
         _disposed = true;
 
         GC.SuppressFinalize(this);
@@ -94,50 +85,6 @@ internal class BenNiaoPreReportService : IDisposable
         client.BaseAddress = new Uri(baseUrl);
         Log.Information("已创建 HttpClient，BaseUrl: {BaseUrl}", baseUrl);
         return client;
-    }
-
-    /// <summary>
-    ///     处理配置变更
-    /// </summary>
-    private void HandleConfigurationChanged(UploadConfiguration newConfig)
-    {
-        try
-        {
-            Log.Information("笨鸟预报数据服务配置已变更");
-
-            // 检查环境是否变更
-            if (_config.BenNiaoEnvironment != newConfig.BenNiaoEnvironment)
-            {
-                Log.Information("笨鸟环境已变更，重新创建 HttpClient");
-                _config = newConfig;
-                _httpClient = CreateHttpClient();
-            }
-            else
-            {
-                _config = newConfig;
-            }
-
-            // 更新定时器间隔
-            _updateTimer.Interval = TimeSpan.FromSeconds(newConfig.PreReportUpdateIntervalSeconds).TotalMilliseconds;
-            Log.Information("已更新预报数据更新间隔为 {Interval} 秒", newConfig.PreReportUpdateIntervalSeconds);
-
-            // 立即执行一次数据更新
-            Task.Run(async () =>
-            {
-                try
-                {
-                    await UpdatePreReportDataAsync();
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "配置变更后更新预报数据失败");
-                }
-            });
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "处理配置变更时发生错误");
-        }
     }
 
     /// <summary>

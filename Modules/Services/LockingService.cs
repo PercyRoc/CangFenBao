@@ -1,9 +1,9 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using Common.Services.Settings;
+using DeviceService.DataSourceDevices.TCP;
 using Serilog;
 using ShanghaiModuleBelt.Models;
-using SortingServices.Common;
 
 namespace ShanghaiModuleBelt.Services;
 
@@ -27,10 +27,6 @@ public partial class LockingService : IDisposable
 
         // 加载TCP设置
         var settings = settingsService1.LoadSettings<TcpSettings>();
-
-        // 注册设置变更回调
-        settingsService1.OnSettingsChanged<TcpSettings>(OnTcpSettingsChanged);
-
         // 初始化TCP客户端
         InitializeTcpClient(settings.Address, settings.Port);
     }
@@ -148,16 +144,6 @@ public partial class LockingService : IDisposable
             // 触发连接状态变更事件
             ConnectionStatusChanged?.Invoke(isConnected);
         }
-    }
-
-    /// <summary>
-    ///     处理TCP设置变更
-    /// </summary>
-    /// <param name="settings">新的TCP设置</param>
-    private void OnTcpSettingsChanged(TcpSettings settings)
-    {
-        Log.Information("TCP设置已变更，重新初始化锁格设备连接: {Address}:{Port}", settings.Address, settings.Port);
-        InitializeTcpClient(settings.Address, settings.Port);
     }
 
     /// <summary>

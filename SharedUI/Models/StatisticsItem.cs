@@ -6,8 +6,8 @@ public class StatisticsItem : BindableBase
 {
     private string _description = string.Empty;
     private string _icon = string.Empty;
-    private string _label = string.Empty;
-    private string _unit = string.Empty;
+    private readonly string _label = string.Empty;
+    private readonly string _unit = string.Empty;
     private string _value = string.Empty;
 
     public StatisticsItem()
@@ -26,7 +26,7 @@ public class StatisticsItem : BindableBase
     public string Label
     {
         get => _label;
-        set => SetProperty(ref _label, value);
+        init => SetProperty(ref _label, value);
     }
 
     public string Value
@@ -38,7 +38,7 @@ public class StatisticsItem : BindableBase
     public string Unit
     {
         get => _unit;
-        set => SetProperty(ref _unit, value);
+        init => SetProperty(ref _unit, value);
     }
 
     public string Description

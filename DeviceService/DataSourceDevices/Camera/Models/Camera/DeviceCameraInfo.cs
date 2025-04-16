@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-using DeviceService.DataSourceDevices.Camera.Models.Camera.Enums;
 using Prism.Mvvm;
 
 namespace DeviceService.DataSourceDevices.Camera.Models.Camera;
@@ -12,15 +11,14 @@ public class DeviceCameraInfo : BindableBase
     private string _macAddress = string.Empty;
     private string _model = string.Empty;
     private string _serialNumber = string.Empty;
-    private CameraStatus _status;
 
-    // Default constructor for serialization
+    // 序列化的默认构造函数
     [JsonConstructor]
     public DeviceCameraInfo()
     {
     }
 
-    // Copy constructor
+    // 复制构造函数
     public DeviceCameraInfo(DeviceCameraInfo other)
     {
         _isSelected = other._isSelected;
@@ -29,7 +27,6 @@ public class DeviceCameraInfo : BindableBase
         _macAddress = other._macAddress;
         _serialNumber = other._serialNumber;
         _model = other._model;
-        _status = other._status;
     }
 
     [JsonPropertyName("IsSelected")]
@@ -72,12 +69,5 @@ public class DeviceCameraInfo : BindableBase
     {
         get => _model;
         set => SetProperty(ref _model, value);
-    }
-
-    [JsonPropertyName("Status")]
-    public CameraStatus Status
-    {
-        get => _status;
-        set => SetProperty(ref _status, value);
     }
 }

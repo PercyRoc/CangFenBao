@@ -23,9 +23,6 @@ public class BarcodeChuteSettingsViewModel : BindableBase
         // 加载配置
         LoadSettings();
 
-        // 注册配置变更事件
-        _settingsService.OnSettingsChanged<ChuteSettings>(OnSettingsChanged);
-
         // 监听格口数量变化
         Configuration.PropertyChanged += (_, args) =>
         {
@@ -115,26 +112,5 @@ public class BarcodeChuteSettingsViewModel : BindableBase
 
         // 保存配置
         _settingsService.SaveSettings(Configuration, true);
-    }
-
-    private void OnSettingsChanged(ChuteSettings settings)
-    {
-        if (!Application.Current.Dispatcher.CheckAccess())
-        {
-            Application.Current.Dispatcher.Invoke(() => OnSettingsChanged(settings));
-            return;
-        }
-
-        Configuration = settings;
-
-        if (settings.ChuteRules.TryGetValue(SelectedChuteNumber, out var rule))
-        {
-            CurrentRule = rule;
-        }
-        else
-        {
-            CurrentRule = new BarcodeMatchRule();
-            Configuration.ChuteRules[SelectedChuteNumber] = CurrentRule;
-        }
     }
 }

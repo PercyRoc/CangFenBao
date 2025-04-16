@@ -16,7 +16,6 @@ using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Scanner;
 using DeviceService.DataSourceDevices.Services;
 using BenFly.Services;
-using BenFly.Services.Belt;
 using Common.Models.Settings.Sort.PendulumSort;
 using Prism.Commands;
 using Prism.Mvvm;
@@ -24,22 +23,22 @@ using Serilog;
 using SharedUI.Models;
 using SortingServices.Pendulum;
 using Common.Services.Audio;
+using DeviceService.DataSourceDevices.Belt;
 using Prism.Services.Dialogs;
 
 namespace BenFly.ViewModels.Windows;
 
 internal class MainWindowViewModel : BindableBase, IDisposable
 {
-    private readonly IBeltSerialService _beltSerialService;
     private readonly BenNiaoPackageService _benNiaoService;
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
-    private readonly IScannerService _scannerService;
     private readonly ISettingsService _settingsService;
     private readonly IPendulumSortService _sortService;
     private readonly INotificationService _notificationService;
     private readonly IAudioService _audioService;
     private readonly List<IDisposable> _subscriptions = [];
+    private readonly IDisposable? _barcodeSubscription; // Subscription for the barcode stream
 
     private readonly DispatcherTimer _timer;
     private TaskCompletionSource<string>? _barcodeScanCompletionSource;
@@ -52,6 +51,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private SystemStatus _systemStatus = new();
 
+    private readonly BeltSerialService _beltSerialService;
+
     public MainWindowViewModel(
         IDialogService dialogService,
         ICameraService cameraService,
@@ -60,22 +61,31 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         PackageTransferService packageTransferService,
         BenNiaoPackageService benNiaoService,
         ScannerStartupService scannerStartupService,
-        IBeltSerialService beltSerialService,
         INotificationService notificationService,
-        IAudioService audioService)
+        IAudioService audioService, BeltSerialService beltSerialService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
         _settingsService = settingsService;
         _sortService = sortService;
         _benNiaoService = benNiaoService;
-        _scannerService = scannerStartupService.GetScannerService();
-        _beltSerialService = beltSerialService;
+        var scannerService = scannerStartupService.GetScannerService();
         _notificationService = notificationService;
         _audioService = audioService;
+        _beltSerialService = beltSerialService;
+        // 订阅扫码枪事件 - REMOVED
+        // _scannerService.BarcodeScanned += OnBarcodeScannerScanned;
 
-        // 订阅扫码枪事件
-        _scannerService.BarcodeScanned += OnBarcodeScannerScanned;
+        // 订阅扫码流
+        _barcodeSubscription = scannerService.BarcodeStream
+            .ObserveOn(Scheduler.CurrentThread) // Ensure UI updates are on the correct thread
+            .Subscribe(
+                HandleBarcodeFromStream, // Call the handler method
+                ex => Log.Error(ex, "扫码流发生错误") // Handle errors in the stream
+            );
+
+        // 订阅皮带连接状态事件
+        _beltSerialService.ConnectionStatusChanged += OnBeltConnectionStatusChanged;
 
         // 初始化命令
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
@@ -102,9 +112,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
         // 订阅相机连接状态事件
         _cameraService.ConnectionChanged += OnCameraConnectionChanged;
-
-        // 订阅串口连接状态事件
-        _beltSerialService.ConnectionStatusChanged += OnBeltConnectionStatusChanged;
 
         // 订阅包裹流
         _subscriptions.Add(packageTransferService.PackageStream
@@ -259,7 +266,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    private void OnBeltConnectionStatusChanged(object? sender, bool isConnected)
+    private void OnBeltConnectionStatusChanged(bool isConnected)
     {
         UpdateBeltStatus(isConnected);
     }
@@ -400,7 +407,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         });
     }
 
-    private void OnBarcodeScannerScanned(object? sender, string barcode)
+    // Handles barcodes received from the IObservable stream
+    private void HandleBarcodeFromStream(string barcode)
     {
         if (_barcodeScanCompletionSource is null || _barcodeScanCompletionSource.Task.IsCompleted) return;
 
@@ -514,6 +522,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             {
                 _ = _audioService.PlayPresetAsync(AudioType.Success);
             }
+
             Log.Information("收到包裹信息：{Barcode}, 序号：{Index}", package.Barcode, package.Index);
 
             // 检查条码是否为 noread
@@ -527,14 +536,14 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     Log.Information("检测到 noread 条码，停止皮带并等待条码输入");
                     try
                     {
-                        _beltSerialService.SendData("STOP_LB\r\n"u8.ToArray());
+                        _beltSerialService.StopBelt();
                         Log.Information("已发送停止皮带命令");
                     }
                     catch (Exception ex)
                     {
                         Log.Error(ex, "发送停止皮带命令时发生错误");
                     }
-                    
+
                     // 将noread包裹添加到历史记录
                     await Application.Current.Dispatcher.InvokeAsync(() =>
                     {
@@ -552,7 +561,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                         {
                             Log.Error(ex, "将noread包裹添加到历史记录时发生错误");
                         }
-                        
+
                         // 清空条码输入框
                         CurrentBarcode = string.Empty;
                         // 显示警告通知
@@ -585,13 +594,13 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     });
 
                     Log.Information("等待用户输入条码或按回车键跳过...");
-                    
+
                     // 同时等待巴枪扫码和回车键
                     var barcodeScanTask = WaitForBarcodeScanAsync();
                     var completedTask = await Task.WhenAny(barcodeScanTask, enterKeyTcs.Task);
 
                     string? newBarcode = null;
-                    
+
                     // 如果是回车键先完成，并且没有输入条码
                     if (completedTask == enterKeyTcs.Task && string.IsNullOrWhiteSpace(CurrentBarcode))
                     {
@@ -607,13 +616,14 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                             // 通过WaitForBarcodeScanAsync获取条码
                             newBarcode = await barcodeScanTask;
                             Log.Information("通过扫码方式获取新条码: {NewBarcode}", newBarcode);
-                            
+
                             // 等待用户按回车键确认
                             if (!enterKeyTcs.Task.IsCompleted)
                             {
                                 Log.Information("等待用户按回车键确认条码...");
                                 await enterKeyTcs.Task;
                             }
+
                             Log.Information("用户已确认条码: {Barcode}", newBarcode);
                         }
                         else
@@ -626,7 +636,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                             }
                         }
                     }
-                    
+
                     // 如果获取到了新条码，创建新的包裹记录
                     if (!string.IsNullOrWhiteSpace(newBarcode))
                     {
@@ -653,7 +663,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     // 发送启动皮带命令
                     try
                     {
-                        _beltSerialService.SendData("START_LB\r\n"u8.ToArray());
+                        _beltSerialService.StartBelt();
                         Log.Information("已发送启动皮带命令");
                     }
                     catch (Exception ex)
@@ -673,7 +683,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
                     try
                     {
-                        _beltSerialService.SendData("START_LB\r\n"u8.ToArray());
+                        _beltSerialService.StartBelt();
                         Log.Information("输入错误，已发送启动皮带命令");
                     }
                     catch (Exception startEx)
@@ -694,7 +704,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             if (!benNiaoSuccess)
             {
                 Log.Warning("笨鸟系统处理包裹失败：{Barcode}, 错误：{Error}", package.Barcode, errorMessage);
-                package.SetStatus(PackageStatus.Error,$"{errorMessage}");
+                package.SetStatus(PackageStatus.Error, $"{errorMessage}");
                 // 设置为异常格口（使用-1表示异常格口）
                 package.SetChute(-1);
                 Log.Information("包裹 {Barcode} 因笨鸟系统处理失败，分配到异常格口", package.Barcode);
@@ -735,7 +745,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             {
                 Log.Error(ex, "获取格口号时发生错误：{Barcode}, {SegmentCode}",
                     package.Barcode, package.SegmentCode);
-                package.SetStatus(PackageStatus.Error,$"{ex.Message}");
+                package.SetStatus(PackageStatus.Error, $"{ex.Message}");
                 // 异常时也分配到异常格口，使用-1表示
                 package.SetChute(-1);
                 Log.Information("包裹 {Barcode} 因获取格口号失败，分配到异常格口", package.Barcode);
@@ -764,7 +774,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "处理包裹信息时发生错误：{Barcode}", package.Barcode);
-            package.SetStatus(PackageStatus.Error,$"{ex.Message}");
+            package.SetStatus(PackageStatus.Error, $"{ex.Message}");
         }
     }
 
@@ -817,7 +827,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         if (totalItem != null)
         {
             // 计算非noread包裹的数量
-            var validPackageCount = PackageHistory.Count(p => !string.Equals(p.Barcode, "noread", StringComparison.OrdinalIgnoreCase));
+            var validPackageCount =
+                PackageHistory.Count(p => !string.Equals(p.Barcode, "noread", StringComparison.OrdinalIgnoreCase));
             totalItem.Value = validPackageCount.ToString();
             totalItem.Description = $"累计处理 {validPackageCount} 个有效包裹";
         }
@@ -909,7 +920,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
                 // 取消订阅事件
                 _sortService.DeviceConnectionStatusChanged -= OnDeviceConnectionStatusChanged;
-                _scannerService.BarcodeScanned -= OnBarcodeScannerScanned;
                 _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
                 _beltSerialService.ConnectionStatusChanged -= OnBeltConnectionStatusChanged;
 
@@ -921,10 +931,19 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     }
                     catch (Exception ex)
                     {
-                        Log.Error(ex, "释放订阅时发生错误");
+                        Log.Error(ex, "释放常规订阅时发生错误");
                     }
-
                 _subscriptions.Clear();
+
+                // 释放扫码流订阅
+                try
+                {
+                    _barcodeSubscription?.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "释放扫码流订阅时发生错误");
+                }
             }
             catch (Exception ex)
             {

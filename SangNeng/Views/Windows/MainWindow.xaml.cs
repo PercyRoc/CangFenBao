@@ -13,6 +13,8 @@ namespace Sunnen.Views.Windows;
 /// </summary>
 public partial class MainWindow
 {
+    private MainWindowViewModel? _viewModel;
+
     public MainWindow(INotificationService notificationService)
     {
         InitializeComponent();
@@ -29,12 +31,25 @@ public partial class MainWindow
         this.Top = SystemParameters.WorkArea.Top;
         this.Width = SystemParameters.WorkArea.Width;
         this.Height = SystemParameters.WorkArea.Height;
+
+        // 获取ViewModel并订阅事件
+        _viewModel = DataContext as MainWindowViewModel;
+        if (_viewModel != null)
+        {
+            _viewModel.RequestBarcodeFocus += ViewModel_RequestBarcodeFocus;
+        }
     }
 
     private void MetroWindow_Closing(object sender, CancelEventArgs e)
     {
         try
         {
+            // 取消订阅事件
+            if (_viewModel != null)
+            {
+                _viewModel.RequestBarcodeFocus -= ViewModel_RequestBarcodeFocus;
+            }
+            
             e.Cancel = true;
             var result = HandyControl.Controls.MessageBox.Show(
                 "Are you sure you want to close the program?",
@@ -77,11 +92,20 @@ public partial class MainWindow
         {
             if (sender is System.Windows.Controls.TextBox textBox && !string.IsNullOrWhiteSpace(textBox.Text))
             {
-                // 触发条码扫描事件
-                viewModel.OnBarcodeScanned(null, textBox.Text);
+                // 直接调用处理逻辑
+                _ = viewModel.ProcessBarcodeAsync(textBox.Text); // Fire-and-forget the async call
                 // 清空输入框
                 textBox.Text = string.Empty;
             }
         }
+    }
+
+    private void ViewModel_RequestBarcodeFocus(object? sender, EventArgs e)
+    {
+        // 确保在UI线程执行
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            BarcodeTextBox.Focus();
+        });
     }
 }

@@ -140,13 +140,14 @@ internal partial class App
     {
         // 配置Serilog
         Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Debug()
+            .MinimumLevel.Information()
             .WriteTo.Console()
             .WriteTo.Debug()
             .WriteTo.File("logs/app-.log",
                 rollingInterval: RollingInterval.Day,
                 rollOnFileSizeLimit: true,
-                retainedFileCountLimit: 30)
+                retainedFileCountLimit: 30,
+                encoding: System.Text.Encoding.UTF8)
             .CreateLogger();
 
         Log.Information("应用程序启动");

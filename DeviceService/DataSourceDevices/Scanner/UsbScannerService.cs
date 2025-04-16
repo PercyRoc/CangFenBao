@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Reactive.Linq;
+using System.Reactive.Subjects;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
@@ -12,12 +14,13 @@ namespace DeviceService.DataSourceDevices.Scanner;
 /// </summary>
 internal class UsbScannerService : IScannerService
 {
-    private const int ScannerTimeout = 100; // 扫码枪输入超时时间 (增加到 500ms)
+    private const int ScannerTimeout = 200;
     private readonly StringBuilder _barcodeBuilder = new();
     private readonly LowLevelKeyboardProc _proc;
     private readonly Queue<string> _barcodeQueue = new();
     private readonly object _lock = new();
     private readonly Timer _processTimer;
+    private readonly Subject<string> _barcodeSubject = new();
     private IntPtr _hookId = IntPtr.Zero;
     private bool _isRunning;
     private DateTime _lastKeyTime = DateTime.MinValue;
@@ -34,10 +37,9 @@ internal class UsbScannerService : IScannerService
         // 初始化处理定时器
         _processTimer = new Timer(100); // 每100ms处理一次
         _processTimer.Elapsed += ProcessBarcodeQueue;
-        _processTimer.Start();
     }
 
-    public event EventHandler<string>? BarcodeScanned;
+    public IObservable<string> BarcodeStream => _barcodeSubject.AsObservable();
 
     public bool Start()
     {
@@ -52,6 +54,7 @@ internal class UsbScannerService : IScannerService
                 return false;
             }
 
+            _processTimer.Start();
             _isRunning = true;
             Log.Information("USB扫码枪服务已启动");
             return true;
@@ -69,6 +72,7 @@ internal class UsbScannerService : IScannerService
 
         try
         {
+            _processTimer.Stop();
             if (_hookId != IntPtr.Zero)
             {
                 UnhookWindowsHookEx(_hookId);
@@ -90,6 +94,7 @@ internal class UsbScannerService : IScannerService
     {
         Stop();
         _processTimer.Dispose();
+        _barcodeSubject.Dispose();
         GC.SuppressFinalize(this);
     }
 
@@ -133,10 +138,14 @@ internal class UsbScannerService : IScannerService
                     _barcodeQueue.Enqueue(barcode);
                 }
                 Log.Debug("收到有效条码：{Barcode}", barcode);
+                // 阻止 Enter 键传递给其他控件/窗口
+                return (IntPtr)1;
             }
             else
             {
                 Log.Warning("收到无效条码：{Barcode}", barcode);
+                // 即使条码无效，也可能需要阻止 Enter 键继续传递，以避免不可预期的行为
+                return (IntPtr)1;
             }
         }
         else
@@ -171,7 +180,7 @@ internal class UsbScannerService : IScannerService
                     _lastBarcode = barcode;
                     _lastBarcodeTime = now;
                     
-                    BarcodeScanned?.Invoke(this, barcode);
+                    _barcodeSubject.OnNext(barcode);
                 }
                 catch (Exception ex)
                 {
@@ -184,11 +193,7 @@ internal class UsbScannerService : IScannerService
     private static bool ValidateBarcode(string barcode)
     {
         // 添加条码格式验证
-        if (string.IsNullOrEmpty(barcode) || barcode.Length < 5)
-        {
-            return false;
-        }
-        return true;
+        return !string.IsNullOrEmpty(barcode) && barcode.Length >= 5;
     }
 
     private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);

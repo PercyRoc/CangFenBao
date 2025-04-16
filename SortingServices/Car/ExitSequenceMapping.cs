@@ -7,7 +7,7 @@ namespace SortingServices.Car;
 /// </summary>
 public class ExitSequenceMapping : BindableBase
 {
-    private List<SortingSequence> _sequences = new();
+    private List<SortingSequence> _sequences = [];
 
     /// <summary>
     ///     格口号
