@@ -588,8 +588,7 @@
                                   ItemsSource="{Binding PackageHistory}"
                                   CanUserAddRows="False"
                                   CanUserDeleteRows="False"
-                                  GridLinesVisibility="Horizontal"
-                                  AutoGenerateColumns="False">
+                                  GridLinesVisibility="Horizontal">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="No." Binding="{Binding Index}" MinWidth="60" Width="Auto" />
                                 <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" MinWidth="160" Width="Auto" />

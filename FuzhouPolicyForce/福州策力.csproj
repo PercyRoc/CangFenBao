@@ -38,11 +38,9 @@
         <PackageReference Include="HandyControl" />
         <PackageReference Include="EPPlus" />
     </ItemGroup>
-
     <ItemGroup>
         <Resource Include="Resources\favicon.ico">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Resource>
     </ItemGroup>
-
 </Project>

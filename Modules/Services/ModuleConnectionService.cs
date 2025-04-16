@@ -596,7 +596,7 @@ internal class ModuleConnectionService(ISettingsService settingsService, ChutePa
     {
         public DateTime ReceiveTime { get; init; }
         public TaskCompletionSource<bool> ProcessCompleted { get; } = new();
-        public TaskCompletionSource<bool>? FeedbackTask { get; set; }
+        public TaskCompletionSource<bool>? FeedbackTask { get; } = new();
         public CancellationTokenSource? TimeoutCts { get; init; }
     }
 }

@@ -10,7 +10,6 @@ using ZtCloudWarehous.Models;
 using ZtCloudWarehous.Utils;
 using ZtCloudWarehous.ViewModels.Settings;
 using System.Windows.Media.Imaging;
-using System.Threading.Tasks;
 
 namespace ZtCloudWarehous.Services;
 

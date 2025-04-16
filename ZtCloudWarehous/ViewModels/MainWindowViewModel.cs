@@ -585,7 +585,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         }
         finally
         {
-            package?.ReleaseImage();
+            package.ReleaseImage();
         }
     }
 

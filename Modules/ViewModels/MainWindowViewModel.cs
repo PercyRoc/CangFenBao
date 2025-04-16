@@ -34,7 +34,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private string _currentBarcode = string.Empty;
     private bool _disposed;
     private SystemStatus _systemStatus = new();
-    private BitmapSource? _currentImage;
 
     public MainWindowViewModel(IDialogService dialogService,
         ICameraService cameraService,
@@ -96,7 +95,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         private set => SetProperty(ref _currentBarcode, value);
     }
 
-    public BitmapSource? CurrentImage => _currentImage;
+    public BitmapSource? CurrentImage { get; }
 
     public SystemStatus SystemStatus
     {
