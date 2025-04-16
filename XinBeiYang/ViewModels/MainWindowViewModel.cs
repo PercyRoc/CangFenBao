@@ -20,6 +20,7 @@ using SharedUI.Models;
 using XinBeiYang.Models;
 using XinBeiYang.Models.Communication;
 using XinBeiYang.Services;
+using System.Collections.Concurrent;
 
 namespace XinBeiYang.ViewModels;
 
@@ -204,6 +205,14 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     private BarcodeMode _barcodeMode = BarcodeMode.MultiBarcode; // 默认为多条码模式
     private int _selectedBarcodeModeIndex; // 新增：用于绑定 ComboBox 的 SelectedIndex
     
+    // *** 新增: ViewModel 内部的包裹序号计数器 ***
+    private int _viewModelPackageIndex;
+
+    // *** 新增: 用于存储最近超时的条码前缀 ***
+    private readonly ConcurrentDictionary<string, DateTime> _timedOutPrefixes = new();
+    // 超时条目在缓存中的最大保留时间
+    private static readonly TimeSpan TimedOutPrefixMaxAge = TimeSpan.FromSeconds(15);
+
     // 母条码正则表达式
     private static readonly Regex ParentBarcodeRegex = MyRegex();
 
@@ -268,52 +277,133 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         // 订阅包裹流
         _subscriptions.Add(_cameraService.PackageStream
             .ObserveOn(Scheduler.Default) // GroupBy and Buffer can run on a background thread
+            .Do(pkg => Log.Debug("[Stream] 包裹通过过滤器: Barcode={Barcode}, Index={Index}, Timestamp={Timestamp}", pkg.Barcode, pkg.Index, DateTime.Now.ToString("O"))) // <-- 日志点 1: 过滤后
             .Where(FilterBarcodeByMode) // 根据当前条码模式过滤包裹
-            .GroupBy(p => GetBarcodePrefix(p.Barcode))
+            .GroupBy(p => 
+            {
+                var prefix = GetBarcodePrefix(p.Barcode);
+                Log.Debug("[Stream] 创建或加入分组: Prefix={Prefix}, Barcode={Barcode}, Index={Index}", prefix, p.Barcode, p.Index); // <-- 日志点 2: 分组时
+                return prefix;
+            })
             .SelectMany(group => group
-                // Buffer for a short time (e.g., 1 second) or until 2 items arrive
-                .Buffer(TimeSpan.FromSeconds(1), 2)
+                // Buffer for a short time (e.g., 2 seconds) or until 2 items arrive
+                .Buffer(TimeSpan.FromMilliseconds(500), 2)
                 // If Buffer emits an empty list, filter it out.
                 .Where(buffer => buffer.Count > 0)
             )
             .ObserveOn(Scheduler.CurrentThread)
             .Subscribe(buffer =>
             {
-                PackageInfo packageToProcess;
-                
-                // 多条码模式下才尝试合并
-                if (buffer.Count == 2 && BarcodeMode == BarcodeMode.MultiBarcode)
+                var currentTimestamp = DateTime.Now.ToString("O"); // 获取当前时间戳
+                var firstPackage = buffer[0]; // Get the first package to check its prefix
+                var currentPrefix = GetBarcodePrefix(firstPackage.Barcode);
+
+                // *** 1. 检查此前是否已记录该前缀超时 ***
+                if (_timedOutPrefixes.TryGetValue(currentPrefix, out var timeoutTime))
                 {
-                    // Ensure consistent order if needed (e.g., non-suffix first)
-                    var p1 = buffer.FirstOrDefault(p => !p.Barcode.EndsWith("-1-1-")) ?? buffer[0];
-                    var p2 = buffer.FirstOrDefault(p => p.Barcode.EndsWith("-1-1-")) ?? buffer[1];
-                    var prefix = GetBarcodePrefix(p1.Barcode);
-                    Log.Information("收到成对包裹，前缀 {Prefix}。准备合并: Index1={Index1}, Index2={Index2}", prefix, p1.Index, p2.Index);
-                    packageToProcess = MergePackageInfo(p1, p2);
-                    // Release images from original packages after merging
-                    p1.ReleaseImage();
-                    p2.ReleaseImage();
-                    Log.Information("包裹合并完成: Index={MergedIndex}, Barcode='{MergedBarcode}'", packageToProcess.Index, packageToProcess.Barcode);
-                }
-                else // buffer.Count == 1 或非多条码模式
-                {
-                    packageToProcess = buffer[0];
-                    if (buffer.Count == 2)
+                    // 检查超时记录是否在有效期内
+                    if ((DateTime.UtcNow - timeoutTime) < TimedOutPrefixMaxAge)
                     {
-                        // 非多条码模式处理第一个包裹，释放第二个
-                        buffer[1].ReleaseImage();
-                        Log.Information("非多条码模式下收到两个包裹，只处理第一个，条码: {Barcode} (序号: {Index})", packageToProcess.Barcode, packageToProcess.Index);
-                    }
-                    else if (BarcodeMode == BarcodeMode.MultiBarcode)
-                    {
-                        Log.Warning("等待包裹 {Barcode} (序号: {Index}) 的配对超时。将单独处理。", packageToProcess.Barcode, packageToProcess.Index);
+                        // 如果当前只收到一个包裹，这很可能就是那个"迟到"的配对包裹
+                        if (buffer.Count == 1)
+                        {
+                            Log.Warning("[Stream] 丢弃迟到的包裹 (配对已超时): Prefix={Prefix}, Barcode={Barcode}, Index={Index}",
+                                        currentPrefix, firstPackage.Barcode, firstPackage.Index);
+                            firstPackage.ReleaseImage();
+                            // 既然迟到的包裹已收到并丢弃，移除超时记录
+                            _timedOutPrefixes.TryRemove(currentPrefix, out _);
+                            return; // 不再处理此包裹
+                        }
+                        // 如果收到了两个包裹，但此前记录了超时？这不太可能发生，但作为健壮性处理
+                        // 我们假设配对最终成功了，移除超时标记并继续处理
+                        Log.Warning("[Stream] 收到配对包裹，但此前记录了前缀超时。继续处理并移除超时标记: Prefix={Prefix}", currentPrefix);
+                        _timedOutPrefixes.TryRemove(currentPrefix, out _);
                     }
                     else
                     {
-                        Log.Information("单条码模式下处理包裹: {Barcode} (序号: {Index})", packageToProcess.Barcode, packageToProcess.Index);
+                        // 超时记录已过期，移除它
+                        _timedOutPrefixes.TryRemove(currentPrefix, out _);
+                        Log.Debug("[State] 清理过期的超时前缀记录: {Prefix}", currentPrefix);
                     }
                 }
 
+                // *** 2. 正常处理逻辑 ***
+                PackageInfo packageToProcess;
+
+                switch (buffer.Count)
+                {
+                    // 多条码模式下才尝试合并
+                    case 2 when BarcodeMode == BarcodeMode.MultiBarcode:
+                    {
+                        // Ensure consistent order if needed (e.g., non-suffix first)
+                        var p1 = buffer.FirstOrDefault(p => !p.Barcode.EndsWith("-1-1-")) ?? buffer[0];
+                        var p2 = buffer.FirstOrDefault(p => p.Barcode.EndsWith("-1-1-")) ?? buffer[1];
+                        var prefix = GetBarcodePrefix(p1.Barcode);
+                        // <-- 日志点 4: 成功配对
+                        Log.Information("[Stream] 成功配对 (Timestamp: {Timestamp}): Prefix={Prefix}, Pkg1='{Barcode1}' (Index:{Index1}), Pkg2='{Barcode2}' (Index:{Index2})", 
+                            currentTimestamp, prefix, p1.Barcode, p1.Index, p2.Barcode, p2.Index);
+                        Log.Information("收到成对包裹，前缀 {Prefix}。准备合并: Index1={Index1}, Index2={Index2}", prefix, p1.Index, p2.Index);
+                        packageToProcess = MergePackageInfo(p1, p2);
+                        // Release images from original packages after merging
+                        p1.ReleaseImage();
+                        p2.ReleaseImage();
+                        Log.Information("包裹合并完成: Index={MergedIndex}, Barcode='{MergedBarcode}'", packageToProcess.Index, packageToProcess.Barcode);
+                        // 清除可能存在的超时标记
+                        _timedOutPrefixes.TryRemove(prefix, out _);
+                        break;
+                    }
+                    // 收到两个包裹，但模式不是 MultiBarcode
+                    case 2:
+                    {
+                        // 根据当前 ParentBarcode 或 ChildBarcode 模式选择正确的包裹
+                        PackageInfo packageToKeep;
+                        PackageInfo packageToDiscard;
+                        var p1IsParent = ParentBarcodeRegex.IsMatch(buffer[0].Barcode);
+
+                        if (BarcodeMode == BarcodeMode.ParentBarcode)
+                        {
+                            packageToKeep = p1IsParent ? buffer[0] : buffer[1];
+                            packageToDiscard = p1IsParent ? buffer[1] : buffer[0];
+                            Log.Information("非多条码模式(母条码): 收到两个包裹，选择符合规则的母条码: {Barcode} (序号: {Index})，丢弃: {DiscardedBarcode}",
+                                packageToKeep.Barcode, packageToKeep.Index, packageToDiscard.Barcode);
+                        }
+                        else // BarcodeMode == BarcodeMode.ChildBarcode
+                        {
+                            packageToKeep = !p1IsParent ? buffer[0] : buffer[1];
+                            packageToDiscard = !p1IsParent ? buffer[1] : buffer[0];
+                            Log.Information("非多条码模式(子条码): 收到两个包裹，选择符合规则的子条码: {Barcode} (序号: {Index})，丢弃: {DiscardedBarcode}",
+                                packageToKeep.Barcode, packageToKeep.Index, packageToDiscard.Barcode);
+                        }
+
+                        packageToProcess = packageToKeep;
+                        packageToDiscard.ReleaseImage(); // 释放被丢弃包裹的图像
+                        break;
+                    }
+                    // buffer.Count == 1 (包括 MultiBarcode 超时 或 Parent/Child 正常单个包裹)
+                    default:
+                    {
+                        packageToProcess = firstPackage; // 就是我们开始检查的那个
+                        if (BarcodeMode == BarcodeMode.MultiBarcode) // MultiBarcode 模式下的超时
+                        {
+                            // var expectedPrefix = GetBarcodePrefix(packageToProcess.Barcode); // currentPrefix 已获取
+                            Log.Warning("[Stream] 配对超时 (Timestamp: {Timestamp}): Prefix={Prefix}, ArrivedBarcode=\'{Barcode}\' (Index:{Index}). 将单独处理.",
+                                currentTimestamp, currentPrefix, packageToProcess.Barcode, packageToProcess.Index);
+
+                            // *** 记录此次超时 ***
+                            Log.Information("[State] 记录配对超时前缀: {Prefix}", currentPrefix);
+                            _timedOutPrefixes[currentPrefix] = DateTime.UtcNow; // 记录或更新超时时间
+                            CleanupTimedOutPrefixes(TimedOutPrefixMaxAge); // 清理过期条目
+                        }
+                        else // Parent/Child 模式下的单个包裹 (已经被 Where 操作符正确过滤)
+                        {
+                            Log.Information("{Mode}模式下处理单个包裹: {Barcode} (序号: {Index})", GetBarcodeModeDisplayText(BarcodeMode), packageToProcess.Barcode, packageToProcess.Index);
+                        }
+
+                        break;
+                    }
+                }
+
+                // *** 3. 调用后续处理 ***
                 try
                 {
                     _ = OnPackageInfo(packageToProcess); // Process the merged or single package
@@ -324,8 +414,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                     // Clean up the package if processing failed early
                     packageToProcess.ReleaseImage();
                 }
-            }, ex => Log.Error(ex, "包裹合并流处理中发生未处理异常")) // Add overall error handling for the stream
-        );
+            }, ex => Log.Error(ex, "包裹流处理中发生未处理异常"))); // Add overall error handling for the stream
 
         // 订阅图像流
         _subscriptions.Add(_cameraService.ImageStream
@@ -606,7 +695,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     /// <summary>
     /// 条码模式
     /// </summary>
-    public BarcodeMode BarcodeMode
+    private BarcodeMode BarcodeMode
     {
         get => _barcodeMode;
         set
@@ -1009,6 +1098,12 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
 
     private async Task OnPackageInfo(PackageInfo package)
     {
+        // *** 新增: 使用 ViewModel 计数器覆盖包裹序号 ***
+        var assignedIndex = Interlocked.Increment(ref _viewModelPackageIndex);
+        package.Index = assignedIndex;
+        Log.Information("包裹进入处理流程，分配 ViewModel 序号: {ViewModelIndex} (原始创建序号: {OriginalIndex})", assignedIndex, package.Index /* 这里实际已被覆盖，记录原始值可能需要修改Create或传入 */);
+        // 如果需要记录原始 Create() 生成的 Index，PackageInfo.Create 需要调整或在流中传递
+
         try
         {
             // 1. 检查PLC状态是否异常
@@ -1055,18 +1150,18 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             // 在收到条码时播放等待上包音效
             _ = _audioService.PlayPresetAsync(AudioType.WaitingForLoading);
 
-            // 向PLC发送上传请求 - 使用条码前缀
+            // 向PLC发送上传请求 - 直接使用 PackageInfo 的条码 (可能是合并后的)
             var plcRequestTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            var plcBarcode = GetBarcodePrefix(package.Barcode); // Use the prefix for PLC communication
             Log.Information("向PLC发送上传请求: Barcode={PlcBarcode}, Weight={Weight}, Length={L}, Width={W}, Height={H}",
-                plcBarcode, package.Weight, package.Length, package.Width, package.Height);
+                package.Barcode, 
+                package.Weight, package.Length, package.Width, package.Height);
 
             var (isSuccess, isTimeout, commandId, packageId) = await _plcCommunicationService.SendUploadRequestAsync(
                 (float)package.Weight,
                 (float)(package.Length ?? 0),
                 (float)(package.Width ?? 0),
                 (float)(package.Height ?? 0),
-                plcBarcode, // Send prefix barcode
+                package.Barcode,
                 string.Empty,
                 (ulong)plcRequestTimestamp);
 
@@ -1318,11 +1413,9 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         }
 
         var timeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "时间");
-        if (timeItem != null)
-        {
-            timeItem.Value = package.CreateTime.ToString("HH:mm:ss");
-            timeItem.Description = $"处理于 {package.CreateTime:yyyy-MM-dd}";
-        }
+        if (timeItem == null) return;
+        timeItem.Value = package.CreateTime.ToString("HH:mm:ss");
+        timeItem.Description = $"处理于 {package.CreateTime:yyyy-MM-dd}";
     }
 
     /// <summary>
@@ -1435,11 +1528,9 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             // 如果没有被取消，则隐藏警告
             Application.Current.Dispatcher.Invoke(() =>
             {
-                if (!token.IsCancellationRequested) // 再次检查，以防在Invoke排队时被取消
-                {
-                    IsPlcRejectWarningVisible = false;
-                    Log.Information("PLC拒绝警告已超时自动隐藏");
-                }
+                if (token.IsCancellationRequested) return; // 再次检查，以防在Invoke排队时被取消
+                IsPlcRejectWarningVisible = false;
+                Log.Information("PLC拒绝警告已超时自动隐藏");
             });
         }
         catch (OperationCanceledException)
@@ -1458,12 +1549,12 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     /// <summary>
     /// 获取条码的前缀（移除 "-1-1-" 后缀）
     /// </summary>
-    private string GetBarcodePrefix(string? barcode)
+    private static string GetBarcodePrefix(string? barcode)
     {
         const string suffix = "-1-1-";
         if (barcode != null && barcode.EndsWith(suffix))
         {
-            return barcode.Substring(0, barcode.Length - suffix.Length);
+            return barcode[..^suffix.Length];
         }
         return barcode ?? string.Empty;
     }
@@ -1471,7 +1562,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     /// <summary>
     /// 合并两个相关的 PackageInfo 对象
     /// </summary>
-    private PackageInfo MergePackageInfo(PackageInfo p1, PackageInfo p2)
+    private static PackageInfo MergePackageInfo(PackageInfo p1, PackageInfo p2)
     {
         // 确定哪个是基础包（无后缀），哪个是后缀包
         var basePackage = p1.Barcode.EndsWith("-1-1-") ? p2 : p1;
@@ -1484,7 +1575,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
 
         // 合并条码: prefix;suffix-barcode
         var prefix = GetBarcodePrefix(basePackage.Barcode);
-        var combinedBarcode = $"{prefix};{(suffixPackage.Barcode)}";
+        var combinedBarcode = $"{prefix},{(suffixPackage.Barcode)}";
         mergedPackage.SetBarcode(combinedBarcode);
 
         // 优先使用 basePackage 的数据，如果缺失则用 suffixPackage 的
@@ -1505,8 +1596,8 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         BitmapSource? imageToUse = null;
         string? imagePathToUse = null; // 保留图像路径（如果可用）
 
-        BitmapSource? sourceImage = basePackage.Image ?? suffixPackage.Image;
-        string? sourceImagePath = basePackage.ImagePath ?? suffixPackage.ImagePath; // 获取可能的路径
+        var sourceImage = basePackage.Image ?? suffixPackage.Image;
+        var sourceImagePath = basePackage.ImagePath ?? suffixPackage.ImagePath; // 获取可能的路径
 
         if (sourceImage != null)
         {
@@ -1616,6 +1707,20 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         _disposed = true;
     }
 
-    [GeneratedRegex(@"^(JD[0-9A-GI-MO-RT-Z]{12}\d)([-,N])([1-9][0-9]{0,5})([-,S])([0-9A-GI-MO-RT-Z]{1,6})([-,H]\w{0,8})?$|^(\w{1,5}\d{1,20})([-,N])([1-9][0-9]{0,5})([-,S])([0-9A-GI-MO-RT-Z]{1,6})([-,H]\w{0,8})?$|^([Zz][Yy])[A-Za-z0-9]{13}[-][1-9][0-9]*[-][1-9][0-9]*[-]?$|^([A-Z0-9]{8,})(-|N)([1-9]d{0,2})(-|S)([1-9]d{0,2})([-|H][A-Za-z0-9]*)$|^AK.*$|^BX.*$|^BC.*$|^AD.*$", RegexOptions.Compiled)]
+    [GeneratedRegex(@"^(JD[0-9A-GI-MO-RT-Z]{12}\d)([-,N])([1-9][0-9]{0,5})([-,S])([0-9A-GI-MO-RT-Z]{1,6})([-,H]\w{0,8})?|^(\w{1,5}\d{1,20})([-,N])([1-9][0-9]{0,5})([-,S])([0-9A-GI-MO-RT-Z]{1,6})([-,H]\w{0,8})?|^([Zz][Yy])[A-Za-z0-9]{13}[-][1-9][0-9]*[-][1-9][0-9]*[-]?$|^([A-Z0-9]{8,})(-|N)([1-9]d{0,2})(-|S)([1-9]d{0,2})([-|H][A-Za-z0-9]*)$|^AK.*$|^BX.*$|^BC.*$|^AD.*$", RegexOptions.Compiled)]
     private static partial Regex MyRegex();
+
+    // *** 新增: 清理过期的超时前缀记录 ***
+    private void CleanupTimedOutPrefixes(TimeSpan maxAge)
+    {
+        var cutoff = DateTime.UtcNow - maxAge;
+        var keysToRemove = _timedOutPrefixes.Where(kvp => kvp.Value < cutoff).Select(kvp => kvp.Key).ToList();
+        foreach (var key in keysToRemove)
+        {
+            if (_timedOutPrefixes.TryRemove(key, out _))
+            {
+                Log.Debug("[State] 清理了过期的超时前缀: {Prefix}", key);
+            }
+        }
+    }
 }
