@@ -70,11 +70,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly SemaphoreSlim _barcodeProcessingLock = new(1, 1);
 
     /// <summary>
-    /// 请求视图层聚焦条码输入框
-    /// </summary>
-    public event EventHandler? RequestBarcodeFocus;
-
-    /// <summary>
     ///     构造函数
     /// </summary>
     public MainWindowViewModel(
@@ -319,10 +314,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
             var items = PackageInfoItems.ToList();
             items[2].Value = DateTime.Now.ToString("HH:mm:ss"); // Update time immediately
             PackageInfoItems = [.. items];
-            CurrentBarcode = string.Empty;
             CurrentBarcode = barcode; // Update property (binding updates UI)
-            RequestBarcodeFocus?.Invoke(this, EventArgs.Empty); // Request focus
-            Log.Information("UI已更新条码并请求焦点: {Barcode}", barcode);
+            Log.Information("UI已更新条码: {Barcode}", barcode);
         });
 
         try // 单个 Try 块，管理信号量释放
@@ -356,9 +349,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 {
                     Log.Warning("忽略相似条码：{Barcode}，上一条码：{LastBarcode}，间隔仅 {Interval} 毫秒",
                         barcode, _lastProcessedBarcode, (now - _lastProcessedTime).TotalMilliseconds);
-                    // Need to potentially clear the UI if we bail out here?
-                    // Or maybe just leave the duplicate barcode displayed briefly.
-                    // Let's leave it as is for now.
                     return; // 注意：这里直接返回，会执行外层 finally 释放锁
                 }
 
@@ -584,6 +574,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         PackageHistory.Insert(0, _currentPackage);
                         // 更新统计信息
                         UpdateStatistics();
+                        // 清空实时信息区域和条码框
+                        InitializePackageInfoItems(); 
+                        CurrentBarcode = string.Empty;
                     });
 
                     // 保存捕获的图像（总是执行，如果已捕获，即使包裹不完整也可能保存）

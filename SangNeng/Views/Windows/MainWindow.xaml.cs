@@ -27,29 +27,16 @@ public partial class MainWindow
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         // 根据当前屏幕的工作区自动计算并设置窗口位置和大小
-        this.Left = SystemParameters.WorkArea.Left;
-        this.Top = SystemParameters.WorkArea.Top;
-        this.Width = SystemParameters.WorkArea.Width;
-        this.Height = SystemParameters.WorkArea.Height;
-
-        // 获取ViewModel并订阅事件
-        _viewModel = DataContext as MainWindowViewModel;
-        if (_viewModel != null)
-        {
-            _viewModel.RequestBarcodeFocus += ViewModel_RequestBarcodeFocus;
-        }
+        Left = SystemParameters.WorkArea.Left;
+        Top = SystemParameters.WorkArea.Top;
+        Height = SystemParameters.WorkArea.Height;
+        Width = SystemParameters.WorkArea.Width;
     }
 
     private void MetroWindow_Closing(object sender, CancelEventArgs e)
     {
         try
         {
-            // 取消订阅事件
-            if (_viewModel != null)
-            {
-                _viewModel.RequestBarcodeFocus -= ViewModel_RequestBarcodeFocus;
-            }
-            
             e.Cancel = true;
             var result = HandyControl.Controls.MessageBox.Show(
                 "Are you sure you want to close the program?",
@@ -93,19 +80,8 @@ public partial class MainWindow
             if (sender is System.Windows.Controls.TextBox textBox && !string.IsNullOrWhiteSpace(textBox.Text))
             {
                 // 直接调用处理逻辑
-                _ = viewModel.ProcessBarcodeAsync(textBox.Text); // Fire-and-forget the async call
-                // 清空输入框
-                textBox.Text = string.Empty;
+                _ = viewModel.ProcessBarcodeAsync(textBox.Text);
             }
         }
-    }
-
-    private void ViewModel_RequestBarcodeFocus(object? sender, EventArgs e)
-    {
-        // 确保在UI线程执行
-        Application.Current.Dispatcher.Invoke(() =>
-        {
-            BarcodeTextBox.Focus();
-        });
     }
 }
