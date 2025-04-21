@@ -16,6 +16,7 @@ public class SettingsDialogViewModel: BindableBase, IDialogAware
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
     private readonly INotificationService _notificationService;
     private readonly BalanceSortSettingsViewModel _sortSettingsViewModel;
+    private readonly AsnHttpSettingsViewModel _asnHttpSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
@@ -28,6 +29,7 @@ public class SettingsDialogViewModel: BindableBase, IDialogAware
         _cameraSettingsViewModel = containerProvider.Resolve<CameraSettingsViewModel>();
         _sortSettingsViewModel = containerProvider.Resolve<BalanceSortSettingsViewModel>();
         _barcodeChuteSettingsViewModel = containerProvider.Resolve<BarcodeChuteSettingsViewModel>();
+        _asnHttpSettingsViewModel = containerProvider.Resolve<AsnHttpSettingsViewModel>();
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
     }
@@ -60,6 +62,7 @@ public class SettingsDialogViewModel: BindableBase, IDialogAware
             _cameraSettingsViewModel.SaveConfigurationCommand.Execute();
             _sortSettingsViewModel.SaveConfigurationCommand.Execute();
             _barcodeChuteSettingsViewModel.SaveConfigurationCommand.Execute();
+            _asnHttpSettingsViewModel.SaveConfigurationCommand.Execute();
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");
             RequestClose?.Invoke(new DialogResult(ButtonResult.OK));

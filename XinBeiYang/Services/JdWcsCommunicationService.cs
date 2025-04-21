@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Net.Sockets;
 using Common.Services.Settings;
 using Serilog;
 using XinBeiYang.Models;
@@ -7,6 +6,7 @@ using XinBeiYang.Models.Communication.JdWcs;
 using System.IO;
 using System.Text.Json;
 using System.Text;
+using DeviceService.DataSourceDevices.TCP; // 添加 TcpClientService 命名空间
 
 namespace XinBeiYang.Services;
 
@@ -62,11 +62,13 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
     private HostConfiguration _config = settingsService.LoadSettings<HostConfiguration>();
     private readonly JsonSerializerOptions _jsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
     
-    private TcpClient? _client;
-    private NetworkStream? _stream;
+    // 替换 TcpClient 和 NetworkStream 为 TcpClientService
+    private TcpClientService? _tcpClientService;
+    private readonly List<byte> _receivedBuffer = new(); // 用于接收数据的缓冲区
+    private readonly object _receivedBufferLock = new(); // 保护缓冲区的锁
+    
     private CancellationTokenSource? _cancellationTokenSource;
     private Task? _heartbeatTask;
-    private Task? _receiveTask;
     private bool _disposed;
     private bool _isConnected;
     private int _messageSequence;
@@ -78,7 +80,7 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
     /// <inheritdoc />
     public bool IsConnected
     {
-        get => _isConnected;
+        get => _tcpClientService?.IsConnected() ?? false;
         private set
         {
             if (_isConnected == value) return;
@@ -161,7 +163,27 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
         if (_disposed) return;
         if (disposing)
         {
-            _ = StopAsync();
+            Log.Information("正在释放京东WCS通信服务资源...");
+            
+            // 取消所有任务
+            _cancellationTokenSource?.Cancel();
+            
+            // 同步清理待处理请求
+            foreach (var command in _pendingCommands.Values)
+            {
+                command.TrySetCanceled();
+            }
+            _pendingCommands.Clear();
+            
+            // 立即释放TcpClientService
+            _tcpClientService?.Dispose();
+            _tcpClientService = null;
+            
+            // 释放取消令牌
+            _cancellationTokenSource?.Dispose();
+            _cancellationTokenSource = null;
+            
+            Log.Information("京东WCS通信服务资源已释放");
         }
         _disposed = true;
     }
@@ -179,26 +201,34 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
             
             Log.Information("连接京东WCS服务器 {IpAddress}:{Port}", ipAddress, port);
             
-            // 创建TCP客户端并连接
-            _client = new TcpClient();
-            var connectTask = _client.ConnectAsync(ipAddress, port);
-            
-            if (await Task.WhenAny(connectTask, Task.Delay(JdWcsConstants.ConnectionTimeout)) != connectTask)
+            // 释放现有连接（如果有）
+            if (_tcpClientService != null)
             {
-                throw new TimeoutException("连接京东WCS服务器超时");
+                _tcpClientService.Dispose();
+                _tcpClientService = null;
             }
             
-            await connectTask; // 确保连接任务完成
+            // 创建TCP客户端并连接
+            _tcpClientService = new TcpClientService(
+                "JdWCS", // 设备名称
+                ipAddress,
+                port,
+                OnDataReceived, // 数据接收回调
+                OnConnectionStatusChanged // 启用自动重连
+            );
             
-            // 获取网络流
-            _stream = _client.GetStream();
-            IsConnected = true;
+            // TcpClientService.Connect是同步方法，设置超时
+            await Task.Run(() => {
+                try {
+                    _tcpClientService.Connect(JdWcsConstants.ConnectionTimeout);
+                }
+                catch (Exception ex) {
+                    Log.Error(ex, "连接京东WCS服务器失败");
+                    throw;
+                }
+            });
             
-            // 启动心跳任务
-            _heartbeatTask = StartHeartbeatTaskAsync(_cancellationTokenSource!.Token);
-            
-            // 启动接收任务
-            _receiveTask = StartReceiveTaskAsync(_cancellationTokenSource!.Token);
+            // 连接成功，心跳任务会在OnConnectionStatusChanged回调中启动
         }
         catch (Exception ex)
         {
@@ -207,168 +237,90 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
         }
     }
     
-    /// <summary>
-    /// 断开与京东WCS服务器的连接
-    /// </summary>
-    private async Task DisconnectAsync()
+    // 处理连接状态变更的回调
+    private void OnConnectionStatusChanged(bool isConnected)
     {
-        try
+        if (_disposed) return;
+        
+        IsConnected = isConnected;
+        
+        if (isConnected)
         {
-            // 清除所有待处理的命令
+            // 启动心跳任务
+            if (_heartbeatTask == null || _heartbeatTask.IsCompleted)
+            {
+                _heartbeatTask = StartHeartbeatTaskAsync(_cancellationTokenSource!.Token);
+                Log.Debug("京东WCS心跳任务已启动");
+            }
+        }
+        else
+        {
+            // 清理所有等待的请求
             foreach (var command in _pendingCommands.Values)
             {
                 command.TrySetCanceled();
             }
             _pendingCommands.Clear();
-            
-            // 关闭网络流和客户端
-            _stream?.Close();
-            _client?.Close();
+        }
+    }
+    
+    // 处理接收到数据的回调
+    private void OnDataReceived(byte[] data)
+    {
+        if (_disposed) return;
+        
+        lock (_receivedBufferLock)
+        {
+            _receivedBuffer.AddRange(data);
+            ProcessReceivedBuffer(_cancellationTokenSource!.Token);
+        }
+    }
+    
+    // 处理接收缓冲区中的数据
+    private void ProcessReceivedBuffer(CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (_receivedBuffer.Count >= JdWcsMessageHeader.Size)
+            {
+                // 尝试解析消息头
+                var headerData = _receivedBuffer.Take(JdWcsMessageHeader.Size).ToArray();
+                var header = JdWcsMessageHeader.FromBytes(headerData);
+                
+                // 验证魔数
+                if (header.MagicNumber != JdWcsConstants.MagicNumber)
+                {
+                    Log.Warning("接收到的消息魔数不正确: {MagicNumber}", header.MagicNumber);
+                    _receivedBuffer.RemoveAt(0); // 移除第一个字节并继续
+                    continue;
+                }
+                
+                // 检查缓冲区是否包含完整消息（头部+数据部分）
+                int totalLength = JdWcsMessageHeader.Size + header.DataLength;
+                if (_receivedBuffer.Count < totalLength)
+                {
+                    // 消息不完整，等待更多数据
+                    break;
+                }
+                
+                // 提取消息体
+                byte[] bodyBuffer = new byte[0];
+                if (header.DataLength > 0)
+                {
+                    bodyBuffer = _receivedBuffer.Skip(JdWcsMessageHeader.Size).Take(header.DataLength).ToArray();
+                }
+                
+                // 从缓冲区移除已处理的数据
+                _receivedBuffer.RemoveRange(0, totalLength);
+                
+                // 在单独的任务中处理消息，避免阻塞接收线程
+                _ = Task.Run(() => ProcessMessageAsync(header, bodyBuffer, cancellationToken), cancellationToken);
+            }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "断开京东WCS服务器连接时发生错误");
+            Log.Error(ex, "处理接收缓冲区时发生错误");
         }
-        finally
-        {
-            _stream = null;
-            _client = null;
-            _isConnected = false;
-            
-            // 等待任务完成
-            if (_heartbeatTask != null)
-            {
-                try
-                {
-                    await _heartbeatTask;
-                }
-                catch (Exception)
-                {
-                    // 忽略任务取消异常
-                }
-                _heartbeatTask = null;
-            }
-            
-            if (_receiveTask != null)
-            {
-                try
-                {
-                    await _receiveTask;
-                }
-                catch (Exception)
-                {
-                    // 忽略任务取消异常
-                }
-                _receiveTask = null;
-            }
-        }
-    }
-    
-    /// <summary>
-    /// 启动心跳任务
-    /// </summary>
-    private Task StartHeartbeatTaskAsync(CancellationToken cancellationToken)
-    {
-        return Task.Run(async () =>
-        {
-            try
-            {
-                while (!cancellationToken.IsCancellationRequested && IsConnected)
-                {
-                    try
-                    {
-                        await SendHeartbeatAsync(cancellationToken);
-                        await Task.Delay(JdWcsConstants.HeartbeatInterval, cancellationToken);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        break;
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex, "发送心跳包时发生错误");
-                        await DisconnectAsync();
-                        break;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "心跳任务异常");
-            }
-        }, cancellationToken);
-    }
-    
-    /// <summary>
-    /// 启动接收任务
-    /// </summary>
-    private Task StartReceiveTaskAsync(CancellationToken cancellationToken)
-    {
-        return Task.Run(async () =>
-        {
-            try
-            {
-                var headerBuffer = new byte[JdWcsMessageHeader.Size];
-                
-                while (!cancellationToken.IsCancellationRequested && IsConnected)
-                {
-                    try
-                    {
-                        if (_stream == null) break;
-                        
-                        // 读取消息头
-                        int bytesRead = await _stream.ReadAsync(headerBuffer.AsMemory(), cancellationToken);
-                        if (bytesRead != headerBuffer.Length)
-                        {
-                            Log.Warning("接收到的消息头长度不正确: {Length}", bytesRead);
-                            await DisconnectAsync();
-                            break;
-                        }
-                        
-                        // 解析消息头
-                        var header = JdWcsMessageHeader.FromBytes(headerBuffer);
-                        
-                        // 验证魔数
-                        if (header.MagicNumber != JdWcsConstants.MagicNumber)
-                        {
-                            Log.Warning("接收到的消息魔数不正确: {MagicNumber}", header.MagicNumber);
-                            await DisconnectAsync();
-                            break;
-                        }
-                        
-                        // 读取消息体
-                        var bodyBuffer = new byte[header.DataLength];
-                        if (header.DataLength > 0)
-                        {
-                            bytesRead = await _stream.ReadAsync(bodyBuffer.AsMemory(), cancellationToken);
-                            if (bytesRead != bodyBuffer.Length)
-                            {
-                                Log.Warning("接收到的消息体长度不正确: {Length}, 期望: {Expected}", bytesRead, bodyBuffer.Length);
-                                await DisconnectAsync();
-                                break;
-                            }
-                        }
-                        
-                        // 处理消息
-                        _ = Task.Run(() => ProcessMessageAsync(header, bodyBuffer, cancellationToken), cancellationToken);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        break;
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex, "接收消息时发生错误");
-                        await DisconnectAsync();
-                        break;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "接收任务异常");
-            }
-        }, cancellationToken);
     }
     
     /// <summary>
@@ -385,8 +337,7 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
             return (JdWcsMessageType)baseAckType;
         }
         
-        // 如果没有找到精确匹配，可以返回一个通用或默认的ACK类型，或者记录错误
-        // 这里我们记录一个警告并返回 HeartbeatAck 作为备用，但这可能不完全符合协议
+        // 如果没有找到精确匹配，返回HeartbeatAck作为备用
         Log.Warning("无法找到请求类型 {RequestType} 对应的特定ACK类型，将使用 HeartbeatAck", requestType);
         return JdWcsMessageType.HeartbeatAck; 
     }
@@ -397,7 +348,7 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
     private async Task ProcessMessageAsync(JdWcsMessageHeader header, byte[] bodyBuffer, CancellationToken cancellationToken)
     {
         bool ackSent = false; // 标记是否已发送ACK
-        JdWcsMessageType ackType = JdWcsMessageType.HeartbeatAck; // 默认ACK类型，以防万一
+        JdWcsMessageType ackType = JdWcsMessageType.HeartbeatAck; // 默认ACK类型
         bool needsSpecificAck = header.NeedAck == 1 && (short)header.MessageType < 1000;
         
         if (needsSpecificAck)
@@ -407,7 +358,7 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
         
         try
         {
-            // Check data format (though we expect JSON)
+            // 检查数据格式（我们期望JSON）
             if (header.DataFormat != 1)
             {
                 Log.Warning("接收到非JSON格式的消息体, 格式: {Format}, 类型: {Type}", header.DataFormat, header.MessageType);
@@ -578,6 +529,71 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
     }
     
     /// <summary>
+    /// 发送ACK确认消息
+    /// </summary>
+    /// <param name="ackType">要发送的ACK消息类型</param>
+    /// <param name="messageSequence">要确认的原始消息序号</param>
+    /// <param name="isSuccess">确认结果</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    private async Task SendAckAsync(JdWcsMessageType ackType, int messageSequence, bool isSuccess, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // 使用配置中的主设备号
+            var ack = new AckMessage
+            {
+                DeviceNo = _config.DeviceId, 
+                Code = isSuccess ? JdWcsConstants.AckSuccess : JdWcsConstants.AckFailure
+            };
+
+            var json = JsonSerializer.Serialize(ack, _jsonOptions);
+            var bodyBytes = Encoding.UTF8.GetBytes(json);
+            
+            // 使用传入的ackType发送ACK消息
+            await SendMessageAsync(ackType, messageSequence, bodyBytes, false, cancellationToken); 
+        }
+        catch (Exception ex)
+        { 
+            Log.Error(ex, "发送ACK确认消息时发生错误, 类型: {AckType}, 序号: {Sequence}", ackType, messageSequence);
+        }
+    }
+    
+    /// <summary>
+    /// 启动心跳任务
+    /// </summary>
+    private Task StartHeartbeatTaskAsync(CancellationToken cancellationToken)
+    {
+        return Task.Run(async () =>
+        {
+            try
+            {
+                while (!cancellationToken.IsCancellationRequested && IsConnected)
+                {
+                    try
+                    {
+                        await SendHeartbeatAsync(cancellationToken);
+                        await Task.Delay(JdWcsConstants.HeartbeatInterval, cancellationToken);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "发送心跳包时发生错误");
+                        await DisconnectAsync();
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "心跳任务异常");
+            }
+        }, cancellationToken);
+    }
+    
+    /// <summary>
     /// 发送心跳包
     /// </summary>
     private async Task SendHeartbeatAsync(CancellationToken cancellationToken)
@@ -613,33 +629,44 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
     }
     
     /// <summary>
-    /// 发送ACK确认消息
+    /// 断开与京东WCS服务器的连接
     /// </summary>
-    /// <param name="ackType">要发送的ACK消息类型</param>
-    /// <param name="messageSequence">要确认的原始消息序号</param>
-    /// <param name="isSuccess">确认结果</param>
-    /// <param name="cancellationToken">取消令牌</param>
-    private async Task SendAckAsync(JdWcsMessageType ackType, int messageSequence, bool isSuccess, CancellationToken cancellationToken)
+    private async Task DisconnectAsync()
     {
         try
         {
-            // 使用配置中的主设备号
-            var ack = new AckMessage
+            // 清除所有待处理的命令
+            foreach (var command in _pendingCommands.Values)
             {
-                DeviceNo = _config.DeviceId, 
-                Code = isSuccess ? JdWcsConstants.AckSuccess : JdWcsConstants.AckFailure
-            };
-
-            var json = JsonSerializer.Serialize(ack, _jsonOptions);
-            var bodyBytes = Encoding.UTF8.GetBytes(json);
+                command.TrySetCanceled();
+            }
+            _pendingCommands.Clear();
             
-            // 使用传入的ackType发送ACK消息
-            await SendMessageAsync(ackType, messageSequence, bodyBytes, false, cancellationToken); 
+            // 关闭并释放TCP客户端
+            _tcpClientService?.Dispose();
         }
         catch (Exception ex)
-        { 
-            Log.Error(ex, "发送ACK确认消息时发生错误, 类型: {AckType}, 序号: {Sequence}", ackType, messageSequence);
-            Log.Error(ex, "发送ACK确认消息时发生错误, 序号: {Sequence}", messageSequence);
+        {
+            Log.Error(ex, "断开京东WCS服务器连接时发生错误");
+        }
+        finally
+        {
+            _tcpClientService = null;
+            _isConnected = false;
+            
+            // 等待任务完成
+            if (_heartbeatTask != null)
+            {
+                try
+                {
+                    await _heartbeatTask;
+                }
+                catch (Exception)
+                {
+                    // 忽略任务取消异常
+                }
+                _heartbeatTask = null;
+            }
         }
     }
     
@@ -648,7 +675,7 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
     /// </summary>
     private async Task<AckMessage?> SendMessageAsync(JdWcsMessageType messageType, int sequence, byte[] bodyBytes, bool needAck, CancellationToken cancellationToken)
     {
-        if (!IsConnected || _stream == null)
+        if (!IsConnected || _tcpClientService == null)
         {
             Log.Warning("尝试发送消息但未连接, 类型: {Type}, 序号: {Sequence}", messageType, sequence);
             return null;
@@ -689,7 +716,7 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
 
             for (int retryCount = 0; retryCount <= JdWcsConstants.MaxRetryCount && !cancellationToken.IsCancellationRequested; retryCount++)
             {
-                if (!IsConnected || _stream == null)
+                if (!IsConnected || _tcpClientService == null)
                 {
                     Log.Warning("连接断开，无法发送消息 (重试 {RetryCount}), 类型: {Type}, 序号: {Sequence}", retryCount, messageType, sequence);
                     _pendingCommands.TryRemove(commandKey, out _);
@@ -700,8 +727,8 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
                 {
                     lock (_sendLock)
                     {
-                        _stream.Write(fullMessage, 0, fullMessage.Length);
-                        _stream.Flush();
+                        // 使用TcpClientService发送数据
+                        _tcpClientService.Send(fullMessage);
                     }
                     messageSentSuccessfully = true;
                     Log.Debug("消息已发送 (尝试 {RetryCount}), 类型: {Type}, 序号: {Sequence}, 长度: {Length}", retryCount + 1, messageType, sequence, fullMessage.Length);

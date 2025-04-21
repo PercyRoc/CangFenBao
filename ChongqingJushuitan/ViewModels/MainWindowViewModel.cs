@@ -5,8 +5,6 @@ using System.Reactive.Linq;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
-using ChongqingYekelai.Models.JuShuiTan;
-using ChongqingYekelai.Services;
 using Common.Models.Package;
 using Common.Models.Settings.ChuteRules;
 using Common.Models.Settings.Sort.PendulumSort;
@@ -20,6 +18,7 @@ using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.Models;
 using SortingServices.Pendulum;
+using SortingServices.Servers.Services.JuShuiTan;
 
 namespace ChongqingYekelai.ViewModels;
 

@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Input;
 using Prism.Services.Dialogs;
 
 namespace SharedUI.Views.Windows
@@ -14,6 +15,15 @@ namespace SharedUI.Views.Windows
 
             // 订阅对话框关闭事件
             Closed += HistoryWindow_Closed;
+        }
+
+        // Add the event handler implementation
+        private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ButtonState == MouseButtonState.Pressed)
+            {
+                this.DragMove();
+            }
         }
 
         private void HistoryWindow_Closed(object? sender, EventArgs e)

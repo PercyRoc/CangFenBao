@@ -3,8 +3,7 @@ using System.Reactive.Subjects;
 using System.Runtime.InteropServices;
 using System.Text;
 using Common.Models.Package;
-using Common.Services.Settings;
-using DeviceService.DataSourceDevices.Camera.Models.Camera;
+using DeviceService.DataSourceDevices.Camera.Models;
 using Serilog;
 using System.Windows.Media.Imaging;
 
@@ -23,9 +22,9 @@ public record MeasureResult(
 /// <summary>
 ///     人加体积相机服务
 /// </summary>
-public class RenJiaCameraService(ISettingsService settingsService) : ICameraService
+public class RenJiaCameraService : ICameraService
 {
-    private readonly Subject<BitmapSource> _imageSubject = new();
+    private readonly Subject<(BitmapSource Image, string CameraId)> _imageSubject = new();
     private readonly Subject<PackageInfo> _packageSubject = new();
     private readonly CancellationTokenSource _processingCancellation = new();
     private bool _disposed;
@@ -47,7 +46,9 @@ public class RenJiaCameraService(ISettingsService settingsService) : ICameraServ
 
     public IObservable<PackageInfo> PackageStream => _packageSubject.AsObservable();
 
-    public IObservable<BitmapSource> ImageStream => _imageSubject.AsObservable();
+    public IObservable<BitmapSource> ImageStream => _imageSubject.Select(tuple => tuple.Image);
+
+    public IObservable<(BitmapSource Image, string CameraId)> ImageStreamWithId => _imageSubject.AsObservable();
 
     public bool Start()
     {
@@ -196,12 +197,25 @@ public class RenJiaCameraService(ISettingsService settingsService) : ICameraServ
         {
             var startTime = DateTime.Now;
 
-            var timeoutMs = settingsService.LoadSettings<VolumeSettings>().TimeoutMs;
             // 创建测量任务
             var measureTask = Task.Run(() =>
             {
                 try
                 {
+                    // 0. 检查设备状态
+                    var state = new int[1];
+                    var stateResult = NativeMethods.GetSystemState(state);
+                    if (stateResult != 0)
+                    {
+                        Log.Warning("触发测量前获取设备状态失败：{Result}", stateResult);
+                        return new MeasureResult(false, "获取设备状态失败");
+                    }
+                    if (state[0] != 1) // 1 表示就绪
+                    {
+                        Log.Warning("设备状态异常，无法触发测量。当前状态：{State}", state[0]);
+                        return new MeasureResult(false, $"设备状态异常 ({state[0]})");
+                    }
+
                     // 1. 执行测量（非阻塞）
                     var computeResult = NativeMethods.ComputeOnce();
                     if (computeResult != 0)
@@ -210,19 +224,7 @@ public class RenJiaCameraService(ISettingsService settingsService) : ICameraServ
                         return new MeasureResult(false, "触发测量失败");
                     }
 
-                    // 等待设备准备就绪
-                    Thread.Sleep(50);
-
-                    // 检查设备状态
-                    var state = new int[1];
-                    var stateResult = NativeMethods.GetSystemState(state);
-                    if (stateResult != 0)
-                    {
-                        Log.Warning("获取设备状态失败：{Result}", stateResult);
-                        return new MeasureResult(false, "获取设备状态失败");
-                    }
-
-                    // 2. 获取测量结果
+                    // 2. 获取测量结果 (不再需要在此处检查状态)
                     var dimensionData = new float[3];
                     var imageDataBuffer = new byte[10 * 1024 * 1024];
 
@@ -256,7 +258,7 @@ public class RenJiaCameraService(ISettingsService settingsService) : ICameraServ
                         bitmapImage.EndInit();
                         bitmapImage.Freeze(); // 确保可以跨线程访问
 
-                        _imageSubject.OnNext(bitmapImage);
+                        _imageSubject.OnNext((bitmapImage, "RenJia_0"));
                     }
                     catch (Exception ex)
                     {
@@ -287,19 +289,8 @@ public class RenJiaCameraService(ISettingsService settingsService) : ICameraServ
                 }
             });
 
-            // 等待测量任务完成或超时
-            if (measureTask.Wait(timeoutMs)) return measureTask.Result;
-
-            Log.Warning("体积测量操作超时（{Timeout}ms）", timeoutMs);
-
-            // 在后台继续等待测量任务完成，避免资源泄漏
-            _ = measureTask.ContinueWith(static t =>
-            {
-                if (t.IsFaulted)
-                    Log.Error(t.Exception, "超时后的测量任务发生异常");
-            }, TaskScheduler.Default);
-
-            return new MeasureResult(false, "测量操作超时");
+            // 无限期等待测量任务完成
+            return measureTask.Result;
         }
         catch (Exception ex)
         {
@@ -355,6 +346,21 @@ public class RenJiaCameraService(ISettingsService settingsService) : ICameraServ
             Log.Error(ex, "设置托盘高度时发生错误");
             return -1;
         }
+    }
+
+    // Implement the GetAvailableCameras method
+    public IEnumerable<CameraBasicInfo> GetAvailableCameras()
+    {
+        // RenJia typically represents a single volume measurement device.
+        // Return a list containing one entry if connected.
+        if (IsConnected)
+        {
+            return new List<CameraBasicInfo>
+            {
+                new() { Id = "RenJia_0", Name = "人加体积相机" } // Provide default info
+            };
+        }
+        return Enumerable.Empty<CameraBasicInfo>(); // Return empty list if not connected
     }
 }
 

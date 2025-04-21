@@ -104,7 +104,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         // 订阅扫码流
         _barcodeSubscription = scannerService.BarcodeStream
             .Subscribe(
-                barcode => ProcessBarcodeAsync(barcode).ConfigureAwait(false), // 调用异步处理方法，不等待
+                barcode => _ = ProcessBarcodeAsync(barcode), // 使用弃元 `_` 显式忽略 Task，抑制 CS4014 警告
                 ex => Log.Error(ex, "扫码流发生错误") // 处理流中的错误
             );
 
@@ -308,14 +308,23 @@ public class MainWindowViewModel : BindableBase, IDisposable
             return;
         }
 
-        // Ensure UI update happens immediately after lock is acquired and before delay
-        Application.Current.Dispatcher.Invoke(() =>
+        // Use a temporary variable for the barcode to ensure consistency
+        var currentBarcodeToProcess = barcode;
+
+        // Schedule UI update on the UI thread immediately, without internal delays
+        // We don't necessarily need to wait for this UI update to finish before starting the main delay
+        await Application.Current.Dispatcher.InvokeAsync(() =>
         {
+            // Clear previous info display items
+            InitializePackageInfoItems();
+            // Directly set the new barcode for UI display
+            CurrentBarcode = currentBarcodeToProcess;
+            Log.Information("UI已更新条码: {Barcode}", currentBarcodeToProcess);
+            // Update time display immediately within the same dispatch
             var items = PackageInfoItems.ToList();
-            items[2].Value = DateTime.Now.ToString("HH:mm:ss"); // Update time immediately
-            PackageInfoItems = [.. items];
-            CurrentBarcode = barcode; // Update property (binding updates UI)
-            Log.Information("UI已更新条码: {Barcode}", barcode);
+            if (items.Count <= 2) return; // Ensure items are initialized and index is valid
+            items[2].Value = DateTime.Now.ToString("HH:mm:ss"); // Update time display
+            PackageInfoItems = [.. items]; // Update the collection
         });
 
         try // 单个 Try 块，管理信号量释放
@@ -324,11 +333,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // 加载体积相机设置
             var volumeSettings = _settingsService.LoadSettings<VolumeSettings>();
             Log.Information("等待处理包裹，延时: {TimeoutMs}毫秒", volumeSettings.TimeoutMs);
-            
-            // 等待配置的时间
+
+            // 等待配置的时间 - This delay happens *after* the UI update has been scheduled
             await Task.Delay(volumeSettings.TimeoutMs);
 
-            Log.Information("延时结束，开始处理包裹: {Barcode}", barcode);
+            Log.Information("延时结束，开始处理包裹: {Barcode}", currentBarcodeToProcess); // Log with the correct barcode for this instance
 
             try // 内部 Try 块，处理包裹逻辑和捕获具体异常
             {
@@ -338,8 +347,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 if (!string.IsNullOrEmpty(_lastProcessedBarcode) &&
                     (now - _lastProcessedTime).TotalMilliseconds < DuplicateBarcodeIntervalMs)
                 {
-                    if ((_lastProcessedBarcode.Contains(barcode) && barcode.Length > 5) ||
-                        (barcode.Contains(_lastProcessedBarcode) && _lastProcessedBarcode.Length > 5))
+                    if ((_lastProcessedBarcode.Contains(currentBarcodeToProcess) && currentBarcodeToProcess.Length > 5) ||
+                        (currentBarcodeToProcess.Contains(_lastProcessedBarcode) && _lastProcessedBarcode.Length > 5))
                     {
                         isDuplicate = true;
                     }
@@ -348,22 +357,22 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 if (isDuplicate)
                 {
                     Log.Warning("忽略相似条码：{Barcode}，上一条码：{LastBarcode}，间隔仅 {Interval} 毫秒",
-                        barcode, _lastProcessedBarcode, (now - _lastProcessedTime).TotalMilliseconds);
+                        currentBarcodeToProcess, _lastProcessedBarcode, (now - _lastProcessedTime).TotalMilliseconds);
                     return; // 注意：这里直接返回，会执行外层 finally 释放锁
                 }
 
                 // 更新最后处理的条码和时间
-                _lastProcessedBarcode = barcode;
+                _lastProcessedBarcode = currentBarcodeToProcess;
                 _lastProcessedTime = now;
 
                 // 重置错误音效播放标志
                 _hasPlayedErrorSound = false;
 
-                Log.Information("开始创建包裹对象: {Barcode}", barcode);
+                Log.Information("开始创建包裹对象: {Barcode}", currentBarcodeToProcess); // Use consistent barcode
 
                 // 创建新的包裹对象
                 _currentPackage = PackageInfo.Create();
-                _currentPackage.SetBarcode(barcode);
+                _currentPackage.SetBarcode(currentBarcodeToProcess); // Use consistent barcode
                 _currentPackage.SetStatus(PackageStatus.Created);
 
                 // 设置当前选中的托盘信息到包裹实例
@@ -381,9 +390,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         SelectedPallet.Length, SelectedPallet.Width, SelectedPallet.Height);
                 }
 
-                // 并行执行相机拍照、体积测量和重量获取，添加超时处理
-                var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10)); // 10秒超时
-                try // 再嵌套一个 Try 用于处理并行任务的超时
+                // 并行执行相机拍照、体积测量和重量获取
+                // 使用 CancellationToken.None 表示不设置超时
+                var cts = new CancellationTokenSource(); // 不再设置超时时间
+                try // 移除 OperationCanceledException 的捕获
                 {
                     // 创建三个并行任务
                     Task<bool> photoTask;
@@ -392,8 +402,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                     if (_cameraService is HikvisionIndustrialCameraService hikvisionCamera)
                     {
-                        // 在任务开始前复制Token，避免闭包捕获可能被释放的cts
-                        var cancellationToken = cts.Token;
                         // 订阅图像流，等待一帧图像
                         var imageTask = Task.Run(async () =>
                         {
@@ -411,7 +419,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                             try
                             {
                                 // Wait for the image or timeout/cancellation
-                                await using (cancellationToken.Register(() => tcs.TrySetCanceled()))
+                                await using (cts.Token.Register(() => tcs.TrySetCanceled()))
                                 {
                                     var receivedImageData = await tcs.Task; // Wait for image data from subscribe
 
@@ -456,17 +464,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                 Log.Warning("获取图像流超时");
                                 return false;
                             }
-                            catch (OperationCanceledException)
-                            {
-                                Log.Warning("获取图像任务被取消");
-                                return false;
-                            }
                             catch (Exception ex)
                             {
                                 Log.Error(ex, "从图像流获取图像失败");
                                 return false;
                             }
-                        }, cancellationToken); // Pass token to Task.Run
+                        }, cts.Token); // Pass token to Task.Run
 
                         photoTask = imageTask;
                     }
@@ -475,6 +478,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         photoTask = Task.FromResult(false);
                     }
 
+                    // 使用 cts.Token，虽然没有超时，但保留以便将来可能的其他取消逻辑
                     var volumeTask = TriggerVolumeCamera(cts.Token);
 
                     // 同样为重量任务复制Token
@@ -491,13 +495,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                 if (SelectedPallet != null && SelectedPallet.Name != "noPallet")
                                     actualWeight = Math.Max(0, actualWeight - SelectedPallet.Weight);
                                 _currentPackage.SetWeight(actualWeight);
-
-                                Application.Current.Dispatcher.Invoke(() =>
-                                {
-                                    var items = PackageInfoItems.ToList();
-                                    items[0].Value = $"{_currentPackage.Weight:F3}";
-                                    PackageInfoItems = [.. items];
-                                });
                             }
                             else
                             {
@@ -542,42 +539,15 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                         _currentPackage.SetStatus(PackageStatus.Failed, completionMessage);
                         PlayErrorSound();
-                        // 立即更新失败状态的UI
-                        Application.Current.Dispatcher.Invoke(() =>
-                            UpdatePackageStatusWithEnum(PackageStatus.Failed, completionMessage));
+                        // 移除立即更新UI的调用，保留音效播放
                     }
                     else
                     {
                         // 仅在信息完整时播放成功音效
                         _ = _audioService.PlayPresetAsync(AudioType.Success);
                         _currentPackage.SetStatus(PackageStatus.Success, completionMessage); // 使用默认的 "Complete" 消息
-                        // 立即更新成功状态的UI
-                        Application.Current.Dispatcher.Invoke(() =>
-                            UpdatePackageStatusWithEnum(PackageStatus.Success, completionMessage));
+                        // 移除立即更新UI的调用，保留音效播放
                     }
-
-                    // ---- 公共步骤 ----
-
-                    // 更新UI尺寸显示（总是执行）
-                    Application.Current.Dispatcher.Invoke(() =>
-                    {
-                        var items = PackageInfoItems.ToList();
-                        // 更新尺寸项，转换为cm显示
-                        items[1].Value =
-                            $"{_currentPackage.Length:F1}x{_currentPackage.Width:F1}x{_currentPackage.Height:F1}";
-                        PackageInfoItems = [.. items];
-                    });
-
-                    // 添加到历史记录（总是执行）
-                    Application.Current.Dispatcher.Invoke(() =>
-                    {
-                        PackageHistory.Insert(0, _currentPackage);
-                        // 更新统计信息
-                        UpdateStatistics();
-                        // 清空实时信息区域和条码框
-                        InitializePackageInfoItems(); 
-                        CurrentBarcode = string.Empty;
-                    });
 
                     // 保存捕获的图像（总是执行，如果已捕获，即使包裹不完整也可能保存）
                     BitmapSource? imageToProcess = null;
@@ -603,7 +573,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                 // 使用新的CancellationTokenSource，不设置超时
                                 using var imageSaveCts = new CancellationTokenSource();
                                 // Pass the frozen image directly to SaveImageAsync
-                                var result = await SaveImageAsync(imageToProcess, cameraSettings, _currentPackage,
+                                var result = await SaveImageAsync(imageToProcess, cameraSettings, _currentPackage, // Pass _currentPackage which has the correct barcode
                                     imageSaveCts.Token);
                                 if (result.HasValue) (base64Image, imageName) = result.Value;
                             }
@@ -628,7 +598,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         {
                             var request = new SangNengWeightRequest
                             {
-                                Barcode = _currentPackage.Barcode,
+                                Barcode = _currentPackage.Barcode, // Use barcode from the package object
                                 Weight = _currentPackage.Weight,
                                 Length = _currentPackage.Length ?? 0,
                                 Width = _currentPackage.Width ?? 0,
@@ -672,31 +642,53 @@ public class MainWindowViewModel : BindableBase, IDisposable
                             // 移除此处的完整性检查
                             await _packageDataService.AddPackageAsync(_currentPackage);
                             Log.Information("包裹数据已保存到数据库：{Barcode}, 状态: {Status}, 消息: {StatusDisplay}",
-                                _currentPackage.Barcode, _currentPackage.Status, _currentPackage.StatusDisplay);
+                                _currentPackage.Barcode, _currentPackage.Status, _currentPackage.StatusDisplay); // Use barcode from the package object
                         }
                         catch (Exception ex)
                         {
-                            Log.Error(ex, "保存包裹数据到数据库时发生错误：{Barcode}", _currentPackage.Barcode);
+                            Log.Error(ex, "保存包裹数据到数据库时发生错误：{Barcode}", _currentPackage.Barcode); // Use barcode from the package object
                             // 如果数据库保存失败，只记录日志
                             // Application.Current.Dispatcher.Invoke(() => UpdatePackageStatusWithEnum(PackageStatus.Error, "Database Error"));
                         }
                         // 使用 CancellationToken.None 以确保即使主操作超时也尝试保存
                     }, CancellationToken.None);
                 }
-                catch (OperationCanceledException) // 捕获并行任务的超时
+                catch (Exception ex) // 捕获包裹处理过程中的其他通用异常
                 {
-                    Log.Warning("处理包裹超时：{Barcode}", barcode);
-                    Application.Current.Dispatcher.Invoke(() => UpdatePackageStatusWithEnum(PackageStatus.Error, "Timeout"));
-                    PlayErrorSound(); // 超时也播放错误音效
+                    Log.Error(ex, "处理扫码信息时发生未预期的错误: {Barcode}", currentBarcodeToProcess); // Use consistent barcode
+                    if (_currentPackage != null)
+                    {
+                        _currentPackage.SetStatus(PackageStatus.Error, "Processing Error");
+                    }
+                    PlayErrorSound();
                 }
             }
             catch (Exception ex) // 捕获包裹处理过程中的其他通用异常
             {
-                Log.Error(ex, "处理扫码信息时发生未预期的错误: {Barcode}", barcode);
-                Application.Current.Dispatcher.Invoke(() => UpdatePackageStatusWithEnum(PackageStatus.Error, "Processing Error"));
+                Log.Error(ex, "处理扫码信息时发生未预期的错误: {Barcode}", currentBarcodeToProcess); // Use consistent barcode
+                if (_currentPackage != null)
+                {
+                    _currentPackage.SetStatus(PackageStatus.Error, "Processing Error");
+                }
                 PlayErrorSound();
             }
             // --- 原始逻辑结束 ---
+            
+            // 最后一次性更新所有UI：实时区域状态和历史记录（移到方法末尾）
+            if (_currentPackage != null)
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    // 1. 先更新实时区域显示
+                    UpdateCurrentPackageUiDisplay(_currentPackage.Status, _currentPackage.StatusDisplay);
+                    
+                    // 2. 然后更新历史记录
+                    PackageHistory.Insert(0, _currentPackage);
+                    
+                    // 3. 最后更新统计信息
+                    UpdateStatistics();
+                });
+            }
         }
         finally // 关联外层 Try，确保释放信号量
         {
@@ -848,7 +840,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         {
                             var palletLines = new List<string>(watermarkLines);
                             palletLines.Insert(1, $"Pallet: {package.PalletName} ({package.PalletWeight:F3}kg)");
-                            watermarkLines = palletLines.ToArray();
+                            watermarkLines = [.. palletLines];
                         }
 
                         const int padding = 20;
@@ -917,52 +909,47 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 使用PackageStatus枚举直接更新包裹状态和UI
+    /// 更新当前包裹处理结果的UI显示（重量、尺寸、时间、状态）
     /// </summary>
-    private void UpdatePackageStatusWithEnum(PackageStatus status, string customDisplay)
+    private void UpdateCurrentPackageUiDisplay(PackageStatus status, string customDisplay)
     {
-        var items = PackageInfoItems.ToList();
-        var statusItem = items[3]; // 状态项
-        items[2].Value = DateTime.Now.ToString("HH:mm:ss"); // 更新时间项
+        if (_currentPackage == null) return; // Safety check
 
-        // 根据枚举设置显示文字和颜色
+        var items = PackageInfoItems.ToList();
+
+        // Update Weight
+        items[0].Value = $"{_currentPackage.Weight:F3}";
+        // Update Size
+        items[1].Value = $"{_currentPackage.Length:F1}x{_currentPackage.Width:F1}x{_currentPackage.Height:F1}";
+        // Update Time
+        items[2].Value = DateTime.Now.ToString("HH:mm:ss");
+        // Update Status
+        var statusItem = items[3];
         string displayText;
         string color;
 
         switch (status)
         {
             case PackageStatus.Success:
-                displayText = "Success";
-                color = "#4CAF50"; // 绿色
+                displayText = "Success"; // Using standard "Success" for display consistency
+                color = "#4CAF50"; // Green
                 break;
-
             case PackageStatus.Failed:
-                displayText = "Failed";
-                color = "#FF0000"; // 红色
+                // Use custom display if available (e.g., "Missing Weight"), otherwise "Failed"
+                displayText = !string.IsNullOrEmpty(customDisplay) && customDisplay != "Complete" ? customDisplay : "Failed";
+                color = "#FF0000"; // Red
                 break;
-
             case PackageStatus.Error:
-                // 如果有自定义显示文字，优先使用
                 displayText = !string.IsNullOrEmpty(customDisplay) ? customDisplay : "Error";
-                color = "#FF0000"; // 红色
+                color = "#FF0000"; // Red
                 break;
-
-            default:
-                // 等待或其他状态
+            default: // Should not happen here, but handle defensively
                 displayText = "Waiting";
-                color = "#808080"; // 灰色
+                color = "#808080"; // Gray
                 break;
         }
-
-        // 更新状态项显示
         statusItem.Value = displayText;
         statusItem.StatusColor = color;
-
-        // 更新包裹状态
-        if (_currentPackage != null && status != _currentPackage.Status)
-        {
-            _currentPackage.SetStatus(status, displayText);
-        }
 
         PackageInfoItems = [.. items];
     }
@@ -1154,21 +1141,25 @@ public class MainWindowViewModel : BindableBase, IDisposable
             if (result != 0)
             {
                 Log.Warning("设置托盘高度失败：{Result}", result);
-                // 添加设置托盘高度失败的通知 (英文)，提示重试
                 _notificationService.ShowWarning($"Failed to set pallet height for '{pallet.Name}' (Error code: {result}). Please try selecting the pallet again.");
             }
             else
             {
                 Log.Information("成功设置托盘高度：{Height}mm", palletHeightMm);
-                // 添加设置托盘高度成功的通知 (英文)
                 _notificationService.ShowSuccess($"Pallet '{pallet.Name}' with height {pallet.Height:F1}cm selected successfully");
             }
+
+            // 保存选择的托盘名称到配置
+            var mainWindowSettings = _settingsService.LoadSettings<MainWindowSettings>();
+            mainWindowSettings.LastSelectedPalletName = pallet.Name;
+            _settingsService.SaveSettings(mainWindowSettings);
+            Log.Information("已保存用户选择的托盘：{PalletName}", pallet.Name);
+
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "设置托盘高度时发生错误");
-            // 添加设置托盘高度异常的通知 (英文)，提示重试
-            _notificationService.ShowError($"Error setting pallet height: {ex.Message}. Please try selecting the pallet again.");
+            Log.Error(ex, "选择或设置托盘高度时发生错误");
+            _notificationService.ShowError($"Error selecting/setting pallet height: {ex.Message}. Please try selecting the pallet again.");
         }
     }
 
@@ -1177,6 +1168,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             var palletSettings = _settingsService.LoadSettings<PalletSettings>();
+            var mainWindowSettings = _settingsService.LoadSettings<MainWindowSettings>();
+            var lastSelectedPalletName = mainWindowSettings.LastSelectedPalletName ?? "noPallet"; // 确保有默认值
 
             AvailablePallets.Clear();
 
@@ -1192,15 +1185,60 @@ public class MainWindowViewModel : BindableBase, IDisposable
             AvailablePallets.Add(emptyPallet);
 
             // 添加配置的托盘
-            foreach (var pallet in palletSettings.Pallets) AvailablePallets.Add(new SelectablePalletModel(pallet));
+            foreach (var pallet in palletSettings.Pallets)
+            {
+                AvailablePallets.Add(new SelectablePalletModel(pallet));
+            }
 
-            // 默认选择空托盘
-            emptyPallet.IsSelected = true;
-            SelectedPallet = emptyPallet;
+            // 查找并选中上次选择的托盘
+            var palletToSelect = AvailablePallets.FirstOrDefault(p => p.Name == lastSelectedPalletName);
+
+            if (palletToSelect != null)
+            {
+                palletToSelect.IsSelected = true;
+                SelectedPallet = palletToSelect;
+                Log.Information("已加载并选中上次保存的托盘：{PalletName}", palletToSelect.Name);
+                // 重新触发一次相机设置，确保相机使用保存的托盘高度
+                if (palletToSelect.Name != "noPallet")
+                {
+                    try
+                    {
+                        var palletHeightMm = (int)(palletToSelect.Height * 10);
+                        var result = _volumeCamera.SetPalletHeight(palletHeightMm);
+                        if (result != 0)
+                        {
+                            Log.Warning("启动时设置上次托盘高度失败：{Result}", result);
+                             // 这里可以选择是否通知用户，或者只记录日志
+                        }
+                        else
+                        {
+                             Log.Information("启动时成功设置上次托盘高度：{Height}mm", palletHeightMm);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                         Log.Error(ex, "启动时设置上次托盘高度时发生错误");
+                    }
+                }
+            }
+            else
+            {
+                // 如果找不到上次保存的托盘（可能已被删除），则默认选择空托盘
+                emptyPallet.IsSelected = true;
+                SelectedPallet = emptyPallet;
+                Log.Warning("上次保存的托盘 '{LastPalletName}' 未找到，已默认选择空托盘", lastSelectedPalletName);
+            }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "加载托盘配置失败");
+            Log.Error(ex, "加载托盘配置或应用上次选择时失败");
+            // 出现异常时，确保默认选择空托盘
+            var emptyPallet = AvailablePallets.FirstOrDefault(p => p.Name == "noPallet");
+            if (emptyPallet != null)
+            {
+                 emptyPallet.IsSelected = true;
+                 SelectedPallet = emptyPallet;
+            }
         }
     }
 

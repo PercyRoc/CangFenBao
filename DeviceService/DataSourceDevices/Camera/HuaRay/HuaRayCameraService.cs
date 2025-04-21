@@ -1,6 +1,7 @@
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using Common.Models.Package;
+using DeviceService.DataSourceDevices.Camera.Models;
 using Microsoft.Extensions.ObjectPool;
 using Serilog;
 using TurboJpegWrapper;
@@ -9,6 +10,7 @@ using System.Diagnostics;
 using System.Windows.Media.Imaging;
 using System.Windows.Media;
 using System.Threading.Channels;
+using System.Buffers;
 
 namespace DeviceService.DataSourceDevices.Camera.HuaRay;
 
@@ -102,9 +104,7 @@ public class HuaRayCameraService : ICameraService
     /// <summary>
     /// 带相机ID的图像信息流
     /// </summary>
-    public IObservable<(BitmapSource bitmapSource, string cameraId)>
-        ImageStreamWithCameraId =>
-        _imageSubject.AsObservable();
+    public IObservable<(BitmapSource Image, string CameraId)> ImageStreamWithId => _imageSubject.AsObservable();
 
     #endregion
 
@@ -165,6 +165,36 @@ public class HuaRayCameraService : ICameraService
     {
         ObjectDisposedException.ThrowIf(_disposed, nameof(HuaRayCameraService));
         return _huaRayWrapper.GetWorkCameraInfo();
+    }
+
+    /// <summary>
+    /// 获取所有可用的相机基本信息
+    /// </summary>
+    /// <returns>相机基本信息列表</returns>
+    public IEnumerable<CameraBasicInfo> GetAvailableCameras()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, nameof(HuaRayCameraService));
+        var huaRayCameras = _huaRayWrapper.GetWorkCameraInfo();
+
+        return huaRayCameras.Select((camera, index) =>
+        {
+            // 构造与事件/ViewModel中使用的相机ID格式一致的ID
+            var constructedCameraId = (!string.IsNullOrWhiteSpace(camera.camDevVendor) && !string.IsNullOrWhiteSpace(camera.camDevSerialNumber))
+                                       ? $"{camera.camDevVendor}:{camera.camDevSerialNumber}"
+                                       : (!string.IsNullOrEmpty(camera.camDevID) ? camera.camDevID : $"fallback_{index}");
+
+            var cameraName = string.IsNullOrEmpty(camera.camDevSerialNumber)
+                ? $"相机 {index + 1}"
+                : $"{camera.camDevModelName} {camera.camDevSerialNumber}";
+
+            return new CameraBasicInfo
+            {
+                Id = constructedCameraId,
+                Name = cameraName,
+                Model = camera.camDevModelName,
+                SerialNumber = camera.camDevSerialNumber
+            };
+        }).ToList();
     }
 
     #endregion
@@ -469,6 +499,7 @@ public class HuaRayCameraService : ICameraService
                 var packageInfo = PackageInfo.Create();
 
                 // Set trigger timestamp using TimeUp from args
+                Log.Debug("检查相机事件触发时间戳 Ticks: {TriggerTimeTicks}", args.TriggerTimeTicks);
                 try
                 {
                     if (args.TriggerTimeTicks > 0)
@@ -593,17 +624,31 @@ public class HuaRayCameraService : ICameraService
         IntPtr imageDataPtr, int dataSize, int width, int height,
         HuaRayApiStruct.EImageType imageType)
     {
+        // 定义合理的图像尺寸上限 (例如 8192x8192)
+        const int maxImageDimension = 8192;
+
         const double dpiX = 96;
         const double dpiY = 96;
 
+        // 检查传入参数的有效性
+        if (imageDataPtr == IntPtr.Zero || dataSize <= 0)
+        {
+            Log.Warning("ProcessNonJpeg: 无效的图像数据指针或大小. dataSize={DataSize}", dataSize);
+            return null;
+        }
+
+        if (width <= 0 || height <= 0 || width > maxImageDimension || height > maxImageDimension)
+        {
+            Log.Warning("ProcessNonJpeg: 无效或过大的图像尺寸. Width={Width}, Height={Height}", width, height);
+            return null;
+        }
+
+        byte[]? pixelData = null; // 声明在 try 外部，以便 finally 可以访问
+        var bytesPerPixel = 1; // 在 try 外部声明并提供默认值
         try
         {
-            if (imageDataPtr == IntPtr.Zero || dataSize <= 0 || width <= 0 || height <= 0)
-                return null;
-
             PixelFormat pixelFormat;
             BitmapPalette? palette = null;
-            int bytesPerPixel;
 
             switch (imageType)
             {
@@ -612,6 +657,7 @@ public class HuaRayCameraService : ICameraService
                     bytesPerPixel = 3;
                     break;
                 case HuaRayApiStruct.EImageType.EImageTypeNormal:
+                    // EImageTypeJpeg 不应在此处处理，但作为默认情况包含
                 case HuaRayApiStruct.EImageType.EImageTypeJpeg:
                 default:
                     pixelFormat = PixelFormats.Gray8;
@@ -620,33 +666,81 @@ public class HuaRayCameraService : ICameraService
                     break;
             }
 
-            var stride = width * bytesPerPixel;
-            var bufferSize = stride * height;
+            // 计算所需的 stride 和 bufferSize
+            // 使用 long 防止 stride * height 溢出 int
+            var calculatedStride = (long)width * bytesPerPixel;
+            var calculatedBufferSize = calculatedStride * height;
+            
+            var bufferSize = (int)calculatedBufferSize;
+            var stride = (int)calculatedStride;
+
+
+            // 使用 ArrayPool 租用缓冲区
+            pixelData = ArrayPool<byte>.Shared.Rent(bufferSize);
+
+            // 确定实际要拷贝的数据大小
             var copySize = Math.Min(dataSize, bufferSize);
 
-            var pixelData = new byte[copySize];
+            // 从非托管内存拷贝数据到租用的缓冲区
             Marshal.Copy(imageDataPtr, pixelData, 0, copySize);
 
+            // 如果实际拷贝的数据小于缓冲区大小，记录警告并清空剩余部分 (防止潜在的垃圾数据)
             if (copySize < bufferSize)
             {
-                Log.Warning("原始图像数据大小 ({DataSize}) 小于预期 ({BufferSize})，可能导致图像不完整。", dataSize, bufferSize);
-                Array.Resize(ref pixelData, bufferSize);
+                Log.Warning("ProcessNonJpeg: 原始图像数据大小 ({DataSize}) 小于预期 ({BufferSize})，可能导致图像不完整。", dataSize, bufferSize);
+                // 清空数组中未被覆盖的部分
+                pixelData.AsSpan(copySize).Clear();
             }
 
+            // 创建 BitmapSource 对象
+            // 注意：即使使用了 ArrayPool，BitmapSource.Create 内部仍可能分配内存，如果系统极度缺乏内存，这里仍可能抛出 OutOfMemoryException
             var bmpSource = BitmapSource.Create(
                 width, height,
                 dpiX, dpiY,
                 pixelFormat,
                 palette,
-                pixelData,
+                pixelData, // 直接使用租用的数组
                 stride);
 
-            return bmpSource;
+            // Freeze the BitmapSource to make it cross-thread accessible
+            if (bmpSource.CanFreeze)
+            {
+                bmpSource.Freeze();
+            }
+            else
+            {
+                Log.Warning("ProcessNonJpeg: 创建的 BitmapSource 无法冻结. Width={Width}, Height={Height}", width, height);
+                // 根据需要决定是否返回非冻结的 BitmapSource 或 null
+            }
+
+            return bmpSource; // 返回创建的 BitmapSource
+        }
+        catch (ArgumentException argEx)
+        {
+            // BitmapSource.Create 可能因 stride 不匹配等原因抛出 ArgumentException
+            Log.Error(argEx, "ProcessNonJpeg: 创建 BitmapSource 时参数错误. Width={Width}, Height={Height}, ExpectedStride={ExpectedStride}",
+                      width, height, (long)width * bytesPerPixel); // 使用已声明的 bytesPerPixel
+            return null;
+        }
+        catch (OutOfMemoryException oomEx)
+        {
+            // 即使有检查和 ArrayPool，极端情况下仍可能发生 OOM
+            Log.Error(oomEx, "ProcessNonJpeg: 处理图像时内存不足. Width={Width}, Height={Height}, ExpectedBufferSize={ExpectedBufferSize}",
+                      width, height, (long)width * bytesPerPixel * height); // 使用已声明的 bytesPerPixel
+            return null;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "处理非JPEG指针到BitmapSource时出错");
+            Log.Error(ex, "ProcessNonJpeg: 处理非JPEG指针到BitmapSource时发生未知错误. Width={Width}, Height={Height}", width, height);
             return null;
+        }
+        finally
+        {
+            // 确保租用的数组总是被归还给池
+            if (pixelData != null)
+            {
+                ArrayPool<byte>.Shared.Return(pixelData);
+            }
         }
     }
 
@@ -1033,13 +1127,10 @@ public class HuaRayCameraService : ICameraService
             var output = process.StandardOutput.ReadToEnd().Trim();
             process.WaitForExit();
 
-            if (string.IsNullOrEmpty(output))
-            {
-                Log.Warning("无法获取快捷方式 {Path} 的目标路径", shortcutPath);
-                return null;
-            }
+            if (!string.IsNullOrEmpty(output)) return output;
+            Log.Warning("无法获取快捷方式 {Path} 的目标路径", shortcutPath);
+            return null;
 
-            return output;
         }
         catch (Exception ex)
         {

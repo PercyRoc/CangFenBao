@@ -8,7 +8,6 @@
              xmlns:hc="https://handyorg.github.io/handycontrol"
              xmlns:settings="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
              xmlns:viewModels="clr-namespace:ChongqingYekelai.ViewModels"
-             xmlns:local1="clr-namespace:ChongqingYekelai.Views.Settings"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
              Width="1280"
@@ -74,7 +73,7 @@
                                 <ui:SymbolIcon Symbol="NetworkAdapter16" />
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="local1:JushuitanSettingsPage" />
+                                <x:Type Type="settings:JushuitanSettingsPage" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>

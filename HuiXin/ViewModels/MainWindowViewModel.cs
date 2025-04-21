@@ -16,6 +16,8 @@ using Serilog;
 using Common.Models.Settings.ChuteRules;
 using System.Collections.ObjectModel;
 using System.Globalization;
+using SortingServices.Car;
+using SortingServices.Servers.Services.JuShuiTan;
 
 namespace HuiXin.ViewModels;
 
@@ -25,6 +27,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly IDialogService _dialogService;
     private readonly IPackageDataService _packageDataService;
     private readonly ISettingsService _settingsService;
+    private readonly IJuShuiTanService _juShuiTanService;
+    private readonly ICarSortService _carSortService;
     private readonly List<IDisposable> _subscriptions = [];
 
     private readonly DispatcherTimer _timer;
@@ -44,12 +48,16 @@ public class MainWindowViewModel : BindableBase, IDisposable
         ICameraService cameraService,
         ISettingsService settingsService,
         PackageTransferService packageTransferService,
-        IPackageDataService packageDataService)
+        IPackageDataService packageDataService,
+        IJuShuiTanService juShuiTanService,
+        ICarSortService carSortService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
         _settingsService = settingsService;
         _packageDataService = packageDataService;
+        _juShuiTanService = juShuiTanService;
+        _carSortService = carSortService;
 
         // 初始化命令
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
@@ -74,6 +82,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         // 订阅相机连接状态事件
         _cameraService.ConnectionChanged += OnCameraConnectionChanged;
+
+        // 初始化小车分拣服务
+        InitializeCarSortServiceAsync();
 
         // 订阅包裹流
         _subscriptions.Add(packageTransferService.PackageStream
@@ -149,12 +160,42 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     private void ExecuteOpenHistory()
     {
-        _dialogService.ShowDialog("HistoryDialog");
+        _dialogService.ShowDialog("HistoryDialog", null, null, "HistoryWindow");
     }
 
     private void Timer_Tick(object? sender, EventArgs e)
     {
         SystemStatus = SystemStatus.GetCurrentStatus();
+        
+        // 更新小车连接状态
+        UpdateCarStatus(_carSortService.IsConnected, _carSortService.IsRunning);
+    }
+
+    private async void InitializeCarSortServiceAsync()
+    {
+        try
+        {
+            // 初始化小车分拣服务
+            bool initialized = await _carSortService.InitializeAsync();
+            if (initialized)
+            {
+                // 启动服务
+                bool started = await _carSortService.StartAsync();
+                Log.Information("小车分拣服务初始化状态: {Initialized}, 启动状态: {Started}", 
+                    initialized, started);
+                UpdateCarStatus(_carSortService.IsConnected, started);
+            }
+            else
+            {
+                Log.Error("小车分拣服务初始化失败");
+                UpdateCarStatus(false, false);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "初始化小车分拣服务时发生异常");
+            UpdateCarStatus(false, false);
+        }
     }
 
     private void InitializeDeviceStatuses()
@@ -166,6 +207,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 Name = "相机",
                 Status = "未连接",
                 Icon = "Camera24",
+                StatusColor = "#F44336" // 红色表示未连接
+            });
+            
+            DeviceStatuses.Add(new DeviceStatus
+            {
+                Name = "小车",
+                Status = "未连接",
+                Icon = "Vehicle24",
                 StatusColor = "#F44336" // 红色表示未连接
             });
         }
@@ -285,57 +334,95 @@ public class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             Application.Current.Dispatcher.Invoke(() => { CurrentBarcode = package.Barcode; });
-            try
+            
+            // 获取格口规则配置
+            var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
+
+            // 判断条码是否为空或noread
+            bool isNoRead = string.IsNullOrEmpty(package.Barcode) ||
+                         string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase);
+
+            if (isNoRead)
             {
-                // 获取格口规则配置
-                var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
-
-                // 判断条码是否为空或noread
-                if (string.IsNullOrEmpty(package.Barcode) ||
-                    string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase))
+                // 条码无法识别，使用异常口
+                package.SetChute(chuteSettings.ErrorChuteNumber);
+                package.SetStatus(PackageStatus.Failed, "条码为空或无法识别");
+                Log.Warning("包裹条码为空或noread，使用异常口：{ErrorChute}", chuteSettings.ErrorChuteNumber);
+            }
+            else
+            {
+                try
                 {
-                    // 使用异常口
-                    package.SetChute(chuteSettings.ErrorChuteNumber);
-                    package.SetStatus(PackageStatus.Failed, "条码为空或无法识别");
-                    Log.Warning("包裹条码为空或noread，使用异常口：{ErrorChute}", chuteSettings.ErrorChuteNumber);
-                }
-                else
-                {
-                    // 尝试匹配格口规则
-                    var matchedChute = chuteSettings.FindMatchingChute(package.Barcode);
-
-                    if (matchedChute.HasValue)
+                    // 上传到聚水潭
+                    var weightSendRequest = new WeightSendRequest
                     {
-                        package.SetChute(matchedChute.Value);
-                        Log.Information("包裹 {Barcode} 匹配到格口 {Chute}", package.Barcode, matchedChute.Value);
+                        LogisticsId = package.Barcode,
+                        Weight = (decimal)package.Weight,
+                        Type = 5
+                    };
+                    
+                    // 如果有体积数据，也上传
+                    //if (package.Volume > 0)
+                    //{
+                    //    // 立方厘米转换为立方米
+                    //    weightSendRequest.Volume = (decimal)(package.Volume / 1000000);
+                    //}
+                    
+                    Log.Information("上传包裹 {Barcode} 到聚水潭", package.Barcode);
+                    var response = await _juShuiTanService.WeightAndSendAsync(weightSendRequest);
+                    
+                    if (response.Code == 0)
+                    {
+                        Log.Information("聚水潭上传成功: {Barcode}", package.Barcode);
+                        
+                        // 尝试匹配格口规则
+                        var matchedChute = chuteSettings.FindMatchingChute(package.Barcode);
+
+                        if (matchedChute.HasValue)
+                        {
+                            package.SetChute(matchedChute.Value);
+                            Log.Information("包裹 {Barcode} 匹配到格口 {Chute}", package.Barcode, matchedChute.Value);
+                        }
+                        else
+                        {
+                            // 没有匹配到规则，使用异常口
+                            package.SetChute(chuteSettings.ErrorChuteNumber);
+                            package.SetStatus(PackageStatus.Failed, "未匹配到格口规则");
+                            Log.Warning("包裹 {Barcode} 未匹配到任何规则，使用异常口：{ErrorChute}",
+                                package.Barcode, chuteSettings.ErrorChuteNumber);
+                        }
                     }
                     else
                     {
-                        // 没有匹配到规则，使用异常口
+                        // 聚水潭响应异常，使用异常口
                         package.SetChute(chuteSettings.ErrorChuteNumber);
-                        package.SetStatus(PackageStatus.Failed, "未匹配到格口规则");
-                        Log.Warning("包裹 {Barcode} 未匹配到任何规则，使用异常口：{ErrorChute}",
-                            package.Barcode, chuteSettings.ErrorChuteNumber);
+                        package.SetStatus(PackageStatus.Failed, $"聚水潭错误: {response.Message}");
+                        Log.Error("聚水潭上传失败: {Code}, {Message}, 使用异常口: {ErrorChute}", 
+                            response.Code, response.Message, chuteSettings.ErrorChuteNumber);
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "获取格口号时发生错误：{Barcode}", package.Barcode);
-                package.SetStatus(PackageStatus.Error, $"{ex.Message}");
+                catch (Exception ex)
+                {
+                    // 处理异常，使用异常口
+                    package.SetChute(chuteSettings.ErrorChuteNumber);
+                    package.SetStatus(PackageStatus.Error, $"聚水潭异常: {ex.Message}");
+                    Log.Error(ex, "上传到聚水潭时发生错误: {Barcode}", package.Barcode);
+                }
             }
 
-            if (package.Status != PackageStatus.Error)
+            // 如果包裹状态不是错误，设为成功
+            if (package.Status != PackageStatus.Error && package.Status != PackageStatus.Failed)
             {
                 package.SetStatus(PackageStatus.Success);
             }
 
+            // 更新UI
             Application.Current.Dispatcher.Invoke(() =>
             {
                 try
                 {
                     UpdatePackageInfoItems(package);
-                    // 6. 更新统计信息和历史包裹列表
+                    // 更新统计信息和历史包裹列表
                     PackageHistory.Insert(0, package);
                     while (PackageHistory.Count > 1000) // 保持最近1000条记录
                     {
@@ -365,6 +452,29 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 Log.Error(ex, "保存包裹记录到数据库时发生错误：{Barcode}", package.Barcode);
             }
+            
+            // 添加到小车分拣队列
+            if (package.ChuteNumber > 0)
+            {
+                try
+                {
+                    // 添加到分拣队列
+                    bool added = await _carSortService.ProcessPackageSortingAsync(package);
+                    
+                    if (added)
+                    {
+                        Log.Information("包裹 {Barcode} 已成功添加到分拣队列", package.Barcode);
+                    }
+                    else
+                    {
+                        Log.Error("包裹 {Barcode} 添加到分拣队列失败", package.Barcode);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "添加包裹到分拣队列时发生异常: {Barcode}", package.Barcode);
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -375,6 +485,31 @@ public class MainWindowViewModel : BindableBase, IDisposable
         {
             package.ReleaseImage(); // 确保包裹被释放
         }
+    }
+    
+    private void UpdateCarStatus(bool isConnected, bool isRunning)
+    {
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            var carStatus = DeviceStatuses.FirstOrDefault(s => s.Name == "小车");
+            if (carStatus == null) return;
+
+            if (!isConnected)
+            {
+                carStatus.Status = "未连接";
+                carStatus.StatusColor = "#F44336"; // 红色
+            }
+            else if (!isRunning)
+            {
+                carStatus.Status = "已连接(停止)";
+                carStatus.StatusColor = "#FFC107"; // 黄色
+            }
+            else
+            {
+                carStatus.Status = "运行中";
+                carStatus.StatusColor = "#4CAF50"; // 绿色
+            }
+        });
     }
 
     private void UpdatePackageInfoItems(PackageInfo package)
@@ -393,12 +528,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
         {
             weightItem.Value = package.Weight.ToString(CultureInfo.InvariantCulture);
             weightItem.Unit = "kg";
-        }
-
-        var sizeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "尺寸");
-        if (sizeItem != null)
-        {
-            sizeItem.Value = package.VolumeDisplay;
         }
 
         var chuteItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "分拣口");

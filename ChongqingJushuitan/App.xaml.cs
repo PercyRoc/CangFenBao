@@ -1,10 +1,7 @@
 ﻿using System.Net.Http;
 using System.Windows;
-using ChongqingYekelai.Services;
 using ChongqingYekelai.ViewModels;
-using ChongqingYekelai.ViewModels.Settings;
 using ChongqingYekelai.Views;
-using ChongqingYekelai.Views.Settings;
 using Common.Extensions;
 using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.License;
@@ -15,10 +12,12 @@ using Microsoft.Extensions.Hosting;
 using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
+using SharedUI.ViewModels;
 using SharedUI.ViewModels.Settings;
 using SharedUI.Views.Settings;
 using SortingServices.Pendulum;
 using SortingServices.Pendulum.Extensions;
+using SortingServices.Servers.Services.JuShuiTan;
 
 namespace ChongqingYekelai;
 

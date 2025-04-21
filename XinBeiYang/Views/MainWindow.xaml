@@ -173,6 +173,7 @@
             <Grid Grid.Column="0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
@@ -286,8 +287,27 @@
                     </Grid>
                 </Border>
 
+                <!-- New Indicator Border -->
+                <Border Grid.Row="1"
+                        Margin="16,8,16,8"
+                        Background="#E3F2FD"
+                        BorderBrush="#2196F3"
+                        BorderThickness="2"
+                        CornerRadius="4"
+                        Padding="16,8"
+                        Visibility="{Binding IsNextPackageWaiting, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <ui:SymbolIcon Symbol="ArrowCircleRight24" Foreground="#0D47A1" Margin="0,0,8,0" FontSize="20"/>
+                        <TextBlock Text="下一包裹等待处理"
+                                   Foreground="#0D47A1"
+                                   FontWeight="Bold"
+                                   FontSize="16"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+
                 <!-- 统计信息区域 -->
-                <Border Grid.Row="1" Margin="16"
+                <Border Grid.Row="2" Margin="16"
                         Style="{StaticResource CardStyle}">
                     <Grid Margin="16">
                         <Grid.RowDefinitions>
@@ -383,7 +403,7 @@
                 </Border>
 
                 <!-- PLC设备状态卡片 -->
-                <Border Grid.Row="2" Margin="16,0,16,16"
+                <Border Grid.Row="3" Margin="16,0,16,16"
                         Style="{StaticResource CardStyle}">
                     <Grid Margin="16">
                         <Grid.RowDefinitions>

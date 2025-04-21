@@ -11,8 +11,11 @@ using HuiXin.Views.Dialogs;
 using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
+using SharedUI.ViewModels;
 using SharedUI.ViewModels.Settings;
 using SharedUI.Views.Settings;
+using SortingServices.Car;
+using SortingServices.Servers.Services.JuShuiTan;
 using Timer = System.Timers.Timer;
 
 namespace HuiXin;
@@ -26,7 +29,7 @@ public partial class App
     private const string MutexName = "Global\\HuiXin_App_Mutex";
     private Timer? _cleanupTimer;
     private bool _ownsMutex;
-    
+
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
         // 注册主窗口
@@ -35,12 +38,29 @@ public partial class App
         containerRegistry.AddCommonServices();
         containerRegistry.AddShardUi();
         containerRegistry.AddPhotoCamera();
-        // 注册设置页面和ViewModel
+
+        // 注册需要共享的设置为单例
+        containerRegistry.RegisterSingleton<CarConfigViewModel>();
+        containerRegistry.RegisterSingleton<CarSequenceViewModel>();
+        containerRegistry.RegisterSingleton<BarcodeChuteSettingsViewModel>();
+        containerRegistry.RegisterSingleton<SerialPortSettingsViewModel>();
+        containerRegistry.RegisterSingleton<JushuitanSettingsViewModel>();
+
+        // 注册设置页面导航 (这会使用上面定义的单例注册)
         containerRegistry.RegisterForNavigation<CameraSettingsView, CameraSettingsViewModel>();
         containerRegistry.RegisterForNavigation<BalanceSortSettingsView, BalanceSortSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<CarConfigView, CarConfigViewModel>();
+        containerRegistry.RegisterForNavigation<CarSequenceView, CarSequenceViewModel>();
+        containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<SerialPortSettingsView, SerialPortSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<JushuitanSettingsPage, JushuitanSettingsViewModel>();
+
         containerRegistry.RegisterDialog<SettingsDialogs, SettingsDialogViewModel>("SettingsDialog");
+        containerRegistry.RegisterSingleton<IJuShuiTanService, JuShuiTanService>();
+        containerRegistry.RegisterSingleton<ICarSortService, CarSortService>();
+        containerRegistry.RegisterSingleton<ICarSortingService, CarSortingService>();
     }
-    
+
     protected override Window CreateShell()
     {
         // 检查是否已经运行（进程级检查）
@@ -89,7 +109,7 @@ public partial class App
             return null!;
         }
     }
-    
+
     /// <summary>
     /// 检查是否已有相同名称的应用程序实例在运行
     /// </summary>
@@ -101,7 +121,7 @@ public partial class App
         // 当前进程也会被计入，所以如果数量大于1则说明有其他实例
         return processes.Length > 1;
     }
-    
+
     protected override async void OnStartup(StartupEventArgs e)
     {
         // 配置Serilog
@@ -131,7 +151,7 @@ public partial class App
             throw;
         }
     }
-    
+
     /// <summary>
     ///     启动定期清理任务
     /// </summary>
@@ -171,7 +191,7 @@ public partial class App
             Log.Error(ex, "启动清理任务时发生错误");
         }
     }
-    
+
     /// <summary>
     ///     清理DUMP文件
     /// </summary>
@@ -202,7 +222,7 @@ public partial class App
             throw;
         }
     }
-    
+
     protected override async void OnExit(ExitEventArgs e)
     {
         try

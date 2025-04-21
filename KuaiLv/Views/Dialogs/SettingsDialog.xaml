@@ -11,8 +11,8 @@
              xmlns:local1="clr-namespace:KuaiLv.Views.Settings"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
-             Width="720"
-             Height="1280"
+             Width="1280"
+             Height="720"
              d:DataContext="{d:DesignInstance Type=dialogs:SettingsDialogViewModel}">
 
     <UserControl.Resources>

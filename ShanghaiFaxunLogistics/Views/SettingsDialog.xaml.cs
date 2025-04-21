@@ -1,11 +1,10 @@
 ﻿using System.Windows;
-using System.Windows.Controls;
 using Common.Services.Ui;
 using SharedUI.Views.Settings;
 
 namespace ShanghaiFaxunLogistics.Views;
 
-public partial class SettingsDialog : UserControl
+public partial class SettingsDialog
 {
     public SettingsDialog(INotificationService notificationService)
     {

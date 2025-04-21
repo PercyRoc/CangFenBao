@@ -21,6 +21,7 @@ using SharedUI.ViewModels;
 using System.Diagnostics;
 using SharedUI.Views.Dialogs;
 using Timer = System.Timers.Timer;
+using Common.Services.Settings;
 
 namespace KuaiLv;
 
@@ -119,8 +120,8 @@ internal partial class App
         containerRegistry.Register<UploadSettingsViewModel>();
         containerRegistry.Register<WarningLightSettingsView>();
         containerRegistry.Register<WarningLightSettingsViewModel>();
-        containerRegistry.RegisterDialog<SettingsDialog,SettingsDialogViewModel>("SettingsDialog");
-        containerRegistry.RegisterDialog<HistoryDialogView,HistoryDialogViewModel>("HistoryDialog");
+        containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>("SettingsDialog");
+        containerRegistry.RegisterDialog<HistoryDialogView, HistoryDialogViewModel>("HistoryDialog");
     }
 
     /// <summary>
@@ -163,7 +164,7 @@ internal partial class App
                         "启动错误",
                         MessageBoxButton.OK,
                         MessageBoxImage.Error);
-                        
+
                     Current.Shutdown();
                 });
             });
@@ -179,9 +180,20 @@ internal partial class App
             Log.Information("相机托管服务启动成功");
 
             // 启动警示灯托管服务
-            var warningLightStartupService = Container.Resolve<WarningLightStartupService>();
-            await warningLightStartupService.StartAsync();
-            Log.Information("警示灯托管服务启动成功");
+            var settingsService = Container.Resolve<ISettingsService>();
+            var warningLightConfiguration =
+                settingsService.LoadSettings<Models.Settings.Warning.WarningLightConfiguration>();
+
+            if (warningLightConfiguration.IsEnabled)
+            {
+                var warningLightStartupService = Container.Resolve<WarningLightStartupService>();
+                await warningLightStartupService.StartAsync();
+                Log.Information("警示灯托管服务启动成功");
+            }
+            else
+            {
+                Log.Information("警示灯服务未启用，跳过初始化");
+            }
         }
         catch (Exception ex)
         {
@@ -330,11 +342,14 @@ internal partial class App
                     {
                         try
                         {
-                           _mutex.ReleaseMutex();
-                        } catch (ApplicationException) {
+                            _mutex.ReleaseMutex();
+                        }
+                        catch (ApplicationException)
+                        {
                             // 忽略可能不拥有 mutex 的情况
                         }
                     }
+
                     _mutex.Dispose();
                     _mutex = null;
                 }
@@ -343,16 +358,18 @@ internal partial class App
             {
                 Log.Error(ex, "释放Mutex时发生错误");
             }
+
             base.OnExit(e);
         }
     }
 
     internal async Task ShutdownServicesAsync(IContainerProvider containerProvider)
     {
-         if (IsShuttingDown)
-         {
+        if (IsShuttingDown)
+        {
             return;
-         }
+        }
+
         IsShuttingDown = true;
 
         Log.Information("开始关闭服务...");
@@ -365,20 +382,26 @@ internal partial class App
 
             // 停止相机托管服务
             var cameraStopTask = cameraStartupService.StopAsync(CancellationToken.None);
-            if (await Task.WhenAny(cameraStopTask, Task.Delay(TimeSpan.FromSeconds(10))) == cameraStopTask) {
-                 await cameraStopTask;
-                 Log.Information("相机服务已停止");
-            } else {
-                 Log.Warning("相机服务停止超时");
+            if (await Task.WhenAny(cameraStopTask, Task.Delay(TimeSpan.FromSeconds(10))) == cameraStopTask)
+            {
+                await cameraStopTask;
+                Log.Information("相机服务已停止");
+            }
+            else
+            {
+                Log.Warning("相机服务停止超时");
             }
 
             // 停止警示灯托管服务
             var warningStopTask = warningLightStartupService.StopAsync();
-            if (await Task.WhenAny(warningStopTask, Task.Delay(TimeSpan.FromSeconds(10))) == warningStopTask) {
-                 await warningStopTask;
-                 Log.Information("警示灯服务已停止");
-            } else {
-                 Log.Warning("警示灯服务停止超时");
+            if (await Task.WhenAny(warningStopTask, Task.Delay(TimeSpan.FromSeconds(10))) == warningStopTask)
+            {
+                await warningStopTask;
+                Log.Information("警示灯服务已停止");
+            }
+            else
+            {
+                Log.Warning("警示灯服务停止超时");
             }
         }
         catch (Exception ex)

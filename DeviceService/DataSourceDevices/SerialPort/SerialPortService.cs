@@ -604,27 +604,17 @@ public class SerialPortService : IDisposable
             if (receivedDataList.Count > 0)
             {
                 var receivedBytes = receivedDataList.ToArray();
-                // 限制日志大小
-                string dataHex = BitConverter.ToString(receivedBytes.Length > 100 
-                    ? receivedBytes.Take(100).ToArray() 
-                    : receivedBytes);
-                
-                Log.Debug("设备 {DeviceName} 接收到总计 {TotalBytesRead} 字节数据: {DataHex}", 
-                    _deviceName, receivedBytes.Length,
-                    receivedBytes.Length > 100 ? dataHex + "..." : dataHex);
                 
                 // 触发外部事件，使用防御性复制
                 var handler = DataReceived;
-                if (handler != null)
+                if (handler == null) return;
+                try
                 {
-                    try
-                    {
-                        handler(receivedBytes);
-                    }
-                    catch (Exception invokeEx)
-                    {
-                        Log.Error(invokeEx, "设备 {DeviceName} 调用 DataReceived 事件处理程序时发生异常", _deviceName);
-                    }
+                    handler(receivedBytes);
+                }
+                catch (Exception invokeEx)
+                {
+                    Log.Error(invokeEx, "设备 {DeviceName} 调用 DataReceived 事件处理程序时发生异常", _deviceName);
                 }
             }
             else

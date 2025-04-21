@@ -1,4 +1,3 @@
-using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera.RenJia;
 using Microsoft.Extensions.Hosting;
@@ -13,8 +12,7 @@ namespace DeviceService.DataSourceDevices.Camera;
 ///     构造函数
 /// </remarks>
 public class VolumeCameraStartupService(
-    INotificationService notificationService,
-    ISettingsService settingsService) : IHostedService
+    INotificationService notificationService) : IHostedService
 {
     private readonly SemaphoreSlim _initLock = new(1, 1);
     private RenJiaCameraService? _cameraService;
@@ -93,7 +91,7 @@ public class VolumeCameraStartupService(
         _initLock.Wait();
         try
         {
-            return _cameraService ??= new RenJiaCameraService(settingsService);
+            return _cameraService ??= new RenJiaCameraService();
         }
         finally
         {

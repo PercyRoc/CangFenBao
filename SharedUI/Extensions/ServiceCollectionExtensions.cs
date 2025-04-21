@@ -13,6 +13,7 @@ public static class ServiceCollectionExtensions
     {
         services.RegisterForNavigation<CameraSettingsView, CameraSettingsViewModel>();
         services.RegisterForNavigation<BalanceSortSettingsView, BalanceSortSettingsViewModel>();
+        services.RegisterForNavigation<ChineseWeightSettingsView, ChineseWeightSettingsViewModel>();
 
         // 注册自定义历史记录窗口
         services.RegisterDialogWindow<HistoryWindow>("HistoryWindow");

@@ -36,6 +36,7 @@
     <ItemGroup>
         <ProjectReference Include="..\Common\基础服务.csproj" />
         <ProjectReference Include="..\DeviceService\设备服务.csproj" />
+        <ProjectReference Include="..\SortingServices\分拣服务.csproj" />
     </ItemGroup>
 
     <ItemGroup>
@@ -55,6 +56,11 @@
             <SubType>Designer</SubType>
         </Page>
         <Page Update="Views\Dialogs\HistoryDialogView.xaml">
+          <Generator>MSBuild:Compile</Generator>
+          <XamlRuntime>Wpf</XamlRuntime>
+          <SubType>Designer</SubType>
+        </Page>
+        <Page Update="Views\Settings\JushuitanSettingsPage.xaml">
           <Generator>MSBuild:Compile</Generator>
           <XamlRuntime>Wpf</XamlRuntime>
           <SubType>Designer</SubType>

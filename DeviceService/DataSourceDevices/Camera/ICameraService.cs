@@ -1,5 +1,6 @@
 using Common.Models.Package;
 using System.Windows.Media.Imaging;
+using DeviceService.DataSourceDevices.Camera.Models;
 
 namespace DeviceService.DataSourceDevices.Camera;
 
@@ -24,6 +25,11 @@ public interface ICameraService : IDisposable
     IObservable<BitmapSource> ImageStream { get; }
 
     /// <summary>
+    ///     带有相机ID的图像信息流
+    /// </summary>
+    IObservable<(BitmapSource Image, string CameraId)> ImageStreamWithId { get; }
+
+    /// <summary>
     ///     相机连接状态改变事件
     /// </summary>
     event Action<string?, bool>? ConnectionChanged;
@@ -39,4 +45,10 @@ public interface ICameraService : IDisposable
     /// </summary>
     /// <returns>操作是否成功</returns>
     bool Stop();
+
+    /// <summary>
+    ///     获取所有可用的相机基本信息
+    /// </summary>
+    /// <returns>相机基本信息列表</returns>
+    IEnumerable<CameraBasicInfo> GetAvailableCameras();
 }

@@ -27,6 +27,7 @@
 
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
             <converters:ColorToBrushConverter x:Key="ColorToBrushConverter" />
+            <converters:InvertBooleanToVisibilityConverter x:Key="InvertBooleanToVisibilityConverter" />
         </ResourceDictionary>
     </ui:FluentWindow.Resources>
 
@@ -412,15 +413,61 @@
                                        VerticalAlignment="Center" />
                         </StackPanel>
 
-                        <!-- 图片显示区 -->
-                        <Image Grid.Row="1"
-                               Source="{Binding CurrentImage}"
-                               RenderOptions.BitmapScalingMode="HighQuality"
-                               RenderOptions.EdgeMode="Aliased"
-                               Stretch="Fill"
-                               StretchDirection="Both"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center" />
+                        <!-- 相机图像显示区 - 动态布局 -->
+                        <ItemsControl Grid.Row="1" ItemsSource="{Binding Cameras}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <!-- 使用 UniformGrid 并绑定行数和列数 -->
+                                    <UniformGrid Rows="{Binding GridRows}" Columns="{Binding GridColumns}" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="4"
+                                            Margin="4"
+                                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="*" />
+                                            </Grid.RowDefinitions>
+
+                                            <!-- 相机名称 -->
+                                            <TextBlock Grid.Row="0" 
+                                                       Text="{Binding CameraName}"
+                                                       FontWeight="SemiBold"
+                                                       Margin="8,4"
+                                                       HorizontalAlignment="Center" />
+
+                                            <!-- 相机图像 -->
+                                            <Image Grid.Row="1"
+                                                   Source="{Binding CurrentImage}"
+                                                   RenderOptions.BitmapScalingMode="HighQuality"
+                                                   RenderOptions.EdgeMode="Aliased"
+                                                   Stretch="Fill"
+                                                   StretchDirection="Both"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"
+                                                   Margin="8" />
+
+                                            <!-- 等待连接状态覆盖层 -->
+                                            <Border Grid.Row="1"
+                                                    Background="#80000000"
+                                                    Visibility="{Binding IsOnline, Converter={StaticResource InvertBooleanToVisibilityConverter}}">
+                                                <TextBlock Text="等待连接..."
+                                                           Foreground="White"
+                                                           FontSize="18"
+                                                           FontWeight="Bold"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center" />
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </Grid>
                 </Border>
 

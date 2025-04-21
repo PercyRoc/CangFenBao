@@ -3,6 +3,7 @@ using System.Windows;
 using Common.Extensions;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
+using DeviceService.DataSourceDevices.Weight;
 using DeviceService.Extensions;
 using Microsoft.Extensions.Hosting;
 using Prism.Ioc;
@@ -89,6 +90,7 @@ public partial class App
         containerRegistry.AddCommonServices();
         containerRegistry.AddShardUi();
         containerRegistry.AddPhotoCamera();
+        containerRegistry.AddWeightScale();
 
         containerRegistry.RegisterSingleton<HttpClient>();
 
@@ -153,10 +155,14 @@ public partial class App
             await cameraStartupService.StartAsync(CancellationToken.None);
             Log.Information("相机托管服务启动成功");
             
+            var weightStartupService = Container.Resolve<WeightStartupService>();
+            await weightStartupService.StartAsync(CancellationToken.None);
+            Log.Information("重量称服务启动成功");
+            
             var hostedService = Container.Resolve<PlcCommunicationHostedService>();
             await hostedService.StartAsync(CancellationToken.None);
             
-            var jdWcsService = Container.Resolve<IJdWcsCommunicationService>();
+            var jdWcsService = Container.Resolve<JdWcsCommunicationService>();
             jdWcsService.Start();
             Log.Information("京东WCS通信服务启动成功");
         }
@@ -246,34 +252,36 @@ public partial class App
             // 停止清理定时器
             _cleanupTimer?.Stop();
             _cleanupTimer?.Dispose();
-            
-            // 使用同步等待，但避免死锁
-            Task.Run(async () => await ShutdownServicesAsync()).Wait();
+
+            // 异步执行关闭操作，不阻塞主线程
+            // 主线程退出时，DI容器应负责调用单例服务的Dispose
+            _ = ShutdownServicesAsync(); 
+            // 等待日志刷新完成
+            Log.CloseAndFlush();
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "应用程序关闭时发生错误");
-            Task.Run(async () => await Log.CloseAndFlushAsync()).Wait();
+            // 尝试记录最后的错误
+            try { Log.Error(ex, "应用程序关闭时发生错误"); Log.CloseAndFlush(); } catch { /* ignored */ }
         }
         finally
         {
+            // 释放 Mutex 的逻辑保持不变
             try
             {
                 if (_mutex != null)
                 {
                     if (_ownsMutex && _mutex.SafeWaitHandle is { IsClosed: false, IsInvalid: false })
                     {
-                        _mutex.ReleaseMutex();
-                        Log.Information("Mutex已释放");
+                        try { _mutex.ReleaseMutex(); Log.Information("Mutex已释放"); } catch { /* ignored */ }
                     }
-
                     _mutex.Dispose();
                     _mutex = null;
                 }
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "释放Mutex时发生错误");
+                try { Log.Error(ex, "释放Mutex时发生错误"); Log.CloseAndFlush(); } catch { /* ignored */ }
             }
             base.OnExit(e);
         }
@@ -287,43 +295,30 @@ public partial class App
         {
             Log.Information("正在停止托管服务...");
 
+            // 停止相机服务（假设它也是类似托管服务）
             var cameraStartupService = Container.Resolve<CameraStartupService>();
             await cameraStartupService.StopAsync(CancellationToken.None);
             Log.Information("相机托管服务已停止");
+            
+            // 停止重量称服务
+            var weightStartupService = Container.Resolve<WeightStartupService>();
+            await weightStartupService.StopAsync(CancellationToken.None);
+            Log.Information("重量称服务已停止");
 
-            var hostedService = Container.Resolve<IHostedService>();
+            // 停止PLC托管服务
+            var hostedService = Container.Resolve<PlcCommunicationHostedService>();
             await hostedService.StopAsync(CancellationToken.None);
             Log.Information("PLC托管服务已停止");
             
-            var jdWcsService = Container.Resolve<IJdWcsCommunicationService>();
-            await jdWcsService.StopAsync();
-            Log.Information("京东WCS通信服务已停止");
+            // 移除手动停止 JdWcsCommunicationService 的调用
+            // 让 DI 容器在程序退出时调用其 Dispose 方法
+            // var jdWcsService = Container.Resolve<JdWcsCommunicationService>();
+            // await jdWcsService.StopAsync();
+            // Log.Information("京东WCS通信服务已停止");
         }
         catch (Exception ex)
         {
             Log.Error(ex, "停止托管服务时发生错误");
         }
-
-        try
-        {
-            if (Container.Resolve<CameraFactory>() is IDisposable cameraFactory)
-            {
-                cameraFactory.Dispose();
-                Log.Information("相机工厂已释放");
-            }
-
-            if (Container.Resolve<ICameraService>() is IDisposable cameraService)
-            {
-                cameraService.Dispose();
-                Log.Information("相机服务已释放");
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "释放资源时发生错误");
-        }
-
-        Log.Information("应用程序关闭");
-        await Log.CloseAndFlushAsync();
     }
 }

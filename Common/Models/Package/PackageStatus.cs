@@ -54,4 +54,9 @@ public enum PackageStatus
     ///     上包超时
     /// </summary>
     LoadingTimeout,
+
+    /// <summary>
+    ///     无法识别的条码（已处理或上传）
+    /// </summary>
+    NoRead
 }

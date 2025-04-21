@@ -67,7 +67,17 @@ public enum AudioType
     /// <summary>
     ///     上包成功
     /// </summary>
-    LoadingSuccess
+    LoadingSuccess,
+
+    /// <summary>
+    ///     体积异常
+    /// </summary>
+    VolumeAbnormal,
+
+    /// <summary>
+    ///     重量异常
+    /// </summary>
+    WeightAbnormal
 }
 
 /// <summary>
@@ -93,13 +103,15 @@ public class AudioService : IAudioService, IDisposable
         _presetAudios = new Dictionary<AudioType, string>
         {
             { AudioType.SystemError, Path.Combine(audioDirectory, "error.wav") },
-            { AudioType.Success, Path.Combine(audioDirectory, "biu.wav") },
+            { AudioType.Success, Path.Combine(audioDirectory, "success.wav") },
             { AudioType.PlcDisconnected, Path.Combine(audioDirectory, "PLC未连接.wav") },
             { AudioType.WaitingScan, Path.Combine(audioDirectory, "等待扫码.wav") },
             { AudioType.WaitingForLoading, Path.Combine(audioDirectory, "等待上包.wav") },
             { AudioType.LoadingTimeout, Path.Combine(audioDirectory, "超时.wav") },
             { AudioType.LoadingRejected, Path.Combine(audioDirectory, "拒绝上包.wav") },
-            { AudioType.LoadingSuccess, Path.Combine(audioDirectory, "上包成功.wav") }
+            { AudioType.LoadingSuccess, Path.Combine(audioDirectory, "上包成功.wav") },
+            { AudioType.VolumeAbnormal, Path.Combine(audioDirectory, "体积异常.wav") },
+            { AudioType.WeightAbnormal, Path.Combine(audioDirectory, "重量异常.wav") }
         };
 
         // 确保音频目录存在

@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<Page x:Class="SharedUI.Views.Settings.ChineseWeightSettingsView"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:prism="http://prismlibrary.com/"
+      xmlns:converters="clr-namespace:SharedUI.Converters"
+      xmlns:weight="clr-namespace:DeviceService.DataSourceDevices.Weight;assembly=DeviceService"
+      xmlns:settings="clr-namespace:SharedUI.ViewModels.Settings"
+      prism:ViewModelLocator.AutoWireViewModel="True"
+      d:DataContext="{d:DesignInstance Type=settings:ChineseWeightSettingsViewModel}"
+      mc:Ignorable="d"
+      Title="重量设置">
+
+    <Page.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary
+                    Source="pack://application:,,,/SharedUI;component/Resources/Styles/DataGridStyles.xaml" />
+                <ResourceDictionary
+                    Source="pack://application:,,,/SharedUI;component/Resources/Styles/ColorStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <converters:EnumDescriptionConverter x:Key="EnumDescriptionConverter" />
+            <converters:EnumToVisibilityConverter x:Key="EnumToVisibilityConverter" />
+
+            <Style x:Key="InputContainerStyle" TargetType="StackPanel">
+                <Setter Property="Orientation" Value="Horizontal" />
+                <Setter Property="Margin" Value="0,0,0,16" />
+            </Style>
+
+            <Style x:Key="LabelStyle" TargetType="TextBlock">
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="Margin" Value="0,0,8,0" />
+                <Setter Property="MinWidth" Value="80" />
+            </Style>
+        </ResourceDictionary>
+    </Page.Resources>
+
+    <Grid>
+        <StackPanel MaxWidth="800" 
+                    Margin="16" 
+                    HorizontalAlignment="Center">
+            <TextBlock Text="重量设置"
+                       HorizontalAlignment="Center"
+                       FontSize="20"
+                       FontWeight="SemiBold"
+                       Margin="0,0,0,16" />
+
+            <!-- Weight Configuration -->
+            <ui:Card>
+                <StackPanel Margin="16">
+                    <!-- Weight Fusion Settings -->
+                    <TextBlock Text="重量融合设置"
+                               FontSize="16"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,16"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+
+                    <!-- Enable Switch -->
+                    <ui:ToggleSwitch Content="启用重量融合"
+                                     IsChecked="{Binding Configuration.EnableWeightFusion}"
+                                     Margin="0,0,0,16" />
+
+                    <!-- Weight Type -->
+                    <StackPanel Style="{StaticResource InputContainerStyle}">
+                        <TextBlock Text="重量类型:"
+                                   Style="{StaticResource LabelStyle}" />
+                        <ComboBox Width="200"
+                                  ItemsSource="{Binding WeightTypes}"
+                                  SelectedItem="{Binding Configuration.WeightType}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Converter={StaticResource EnumDescriptionConverter}}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+                    
+                    <!-- Minimum Weight -->
+                    <StackPanel Style="{StaticResource InputContainerStyle}">
+                        <TextBlock Text="最小重量:"
+                                   Style="{StaticResource LabelStyle}" />
+                        <ui:NumberBox Width="200"
+                                      ClearButtonEnabled="False"
+                                      Value="{Binding Configuration.MinimumWeight, UpdateSourceTrigger=PropertyChanged}"
+                                      Minimum="0"
+                                      Maximum="1000"
+                                      PlaceholderText="输入最小重量"
+                                      ToolTip="设置重量检测的最小阈值（克）" />
+                        <TextBlock Text="克"
+                                   VerticalAlignment="Center"
+                                   Margin="8,0,0,0"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+
+                    <!-- Sample Count (Static Only) -->
+                    <StackPanel Style="{StaticResource InputContainerStyle}"
+                                Visibility="{Binding Configuration.WeightType, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter={x:Static weight:WeightType.Static}}">
+                        <TextBlock Text="样本数量:"
+                                   Style="{StaticResource LabelStyle}" />
+                        <ui:NumberBox Width="200"
+                                      ClearButtonEnabled="False"
+                                      Value="{Binding Configuration.StableCheckCount, UpdateSourceTrigger=PropertyChanged}"
+                                      Minimum="3"
+                                      Maximum="10"
+                                      PlaceholderText="输入样本数量 (3-10)"
+                                      ToolTip="稳定性检查所需的样本数量，范围 3-10" />
+                    </StackPanel>
+
+                    <!-- Serial Port Settings -->
+                    <TextBlock Text="串口设置"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Margin="0,8,0,16"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+
+                    <StackPanel Style="{StaticResource InputContainerStyle}">
+                        <TextBlock Text="端口名称:"
+                                   Style="{StaticResource LabelStyle}" />
+                        <ComboBox Width="200"
+                                  ItemsSource="{Binding PortNames}"
+                                  SelectedItem="{Binding Configuration.SerialPortParams.PortName}" />
+                        <ui:Button Appearance="Secondary"
+                                   Icon="ArrowClockwise24"
+                                   Content="刷新"
+                                   Command="{Binding RefreshPortsCommand}"
+                                   ToolTip="刷新可用串口"
+                                   Padding="12,4"
+                                   Margin="8,0,0,0" />
+                    </StackPanel>
+
+                    <StackPanel Style="{StaticResource InputContainerStyle}">
+                        <TextBlock Text="波特率:"
+                                   Style="{StaticResource LabelStyle}" />
+                        <ComboBox Width="200"
+                                  ItemsSource="{Binding BaudRates}"
+                                  SelectedItem="{Binding Configuration.SerialPortParams.BaudRate}" />
+                    </StackPanel>
+
+                    <StackPanel Style="{StaticResource InputContainerStyle}">
+                        <TextBlock Text="数据位:"
+                                   Style="{StaticResource LabelStyle}" />
+                        <ComboBox Width="200"
+                                  ItemsSource="{Binding DataBits}"
+                                  SelectedItem="{Binding Configuration.SerialPortParams.DataBits}" />
+                    </StackPanel>
+
+                    <StackPanel Style="{StaticResource InputContainerStyle}">
+                        <TextBlock Text="停止位:"
+                                   Style="{StaticResource LabelStyle}" />
+                        <ComboBox Width="200"
+                                  ItemsSource="{Binding StopBitOptions}"
+                                  SelectedItem="{Binding Configuration.SerialPortParams.StopBits}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Converter={StaticResource EnumDescriptionConverter}}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Style="{StaticResource InputContainerStyle}">
+                        <TextBlock Text="校验位:"
+                                   Style="{StaticResource LabelStyle}" />
+                        <ComboBox Width="200"
+                                  ItemsSource="{Binding ParityOptions}"
+                                  SelectedItem="{Binding Configuration.SerialPortParams.Parity}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Converter={StaticResource EnumDescriptionConverter}}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <!-- Time Range Settings -->
+                    <TextBlock Text="时间范围设置"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Margin="0,8,0,16"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+
+                    <StackPanel Style="{StaticResource InputContainerStyle}">
+                        <TextBlock Text="时间范围:"
+                                   Style="{StaticResource LabelStyle}" />
+                        <StackPanel Orientation="Horizontal">
+                            <ui:TextBox Width="100"
+                                        Text="{Binding Configuration.TimeRangeLower, UpdateSourceTrigger=PropertyChanged}"
+                                        PlaceholderText="最小时间" />
+                            <TextBlock Text=" - "
+                                       VerticalAlignment="Center"
+                                       Margin="8,0"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                            <ui:TextBox Width="100"
+                                        Text="{Binding Configuration.TimeRangeUpper, UpdateSourceTrigger=PropertyChanged}"
+                                        PlaceholderText="最大时间" />
+                            <TextBlock Text="毫秒"
+                                       VerticalAlignment="Center"
+                                       Margin="8,0,0,0"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </ui:Card>
+        </StackPanel>
+    </Grid>
+</Page> 

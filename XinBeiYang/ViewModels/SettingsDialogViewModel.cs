@@ -15,6 +15,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
     private readonly HostSettingsViewModel _hostSettingsViewModel;
     private readonly INotificationService _notificationService;
+    private readonly ChineseWeightSettingsViewModel _chineseWeightSettingsViewModel;
     
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
@@ -25,6 +26,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
         // 创建各个设置页面的ViewModel实例
         _cameraSettingsViewModel = containerProvider.Resolve<CameraSettingsViewModel>();
         _hostSettingsViewModel = containerProvider.Resolve<HostSettingsViewModel>();
+        _chineseWeightSettingsViewModel = containerProvider.Resolve<ChineseWeightSettingsViewModel>();
 
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
@@ -57,7 +59,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
             // 保存所有设置
             _cameraSettingsViewModel.SaveConfigurationCommand.Execute();
             _hostSettingsViewModel.SaveConfigurationCommand.Execute();
-
+            _chineseWeightSettingsViewModel.SaveConfigurationCommand.Execute();
             _notificationService.ShowSuccess("设置已保存");
             RequestClose?.Invoke(new DialogResult(ButtonResult.OK));
         }

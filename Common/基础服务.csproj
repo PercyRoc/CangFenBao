@@ -26,4 +26,9 @@
         <PackageReference Include="HandyControl" />
         <PackageReference Include="WPF-UI" />
     </ItemGroup>
+
+
+    <ItemGroup>
+      <Folder Include="Models\Sortings\" />
+    </ItemGroup>
 </Project>

@@ -7,8 +7,10 @@ using DeviceService.Extensions;
 using Microsoft.Extensions.Hosting;
 using Prism.Ioc;
 using Serilog;
+using ShanghaiFaxunLogistics.Services.ASN;
 using ShanghaiFaxunLogistics.ViewModels;
 using ShanghaiFaxunLogistics.Views;
+using ShanghaiFaxunLogistics.Views.Settings;
 using SharedUI.Extensions;
 using SharedUI.ViewModels.Settings;
 using SharedUI.Views.Settings;
@@ -56,6 +58,11 @@ namespace ShanghaiFaxunLogistics
                 var pendulumHostedService = Container.Resolve<PendulumSortHostedService>();
                 pendulumHostedService.StartAsync(CancellationToken.None).Wait();
                 Log.Information("摆轮分拣托管服务启动成功");
+                
+                // 启动ASN HTTP服务
+                var asnHttpServer = Container.Resolve<AsnHttpServer>();
+                asnHttpServer.StartAsync(CancellationToken.None).Wait();
+                Log.Information("ASN HTTP服务启动成功");
             }
             catch (Exception ex)
             {
@@ -119,6 +126,9 @@ namespace ShanghaiFaxunLogistics
             // 注册视图和ViewModel
             containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
             containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>("SettingsDialog");
+            // 新增对话框注册
+            containerRegistry.RegisterDialog<AsnOrderConfirmDialog, AsnOrderConfirmDialogViewModel>("AsnOrderConfirmDialog");
+            
             // 注册公共服务
             containerRegistry.AddCommonServices();
             containerRegistry.AddShardUi();
@@ -127,6 +137,14 @@ namespace ShanghaiFaxunLogistics
             containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
             containerRegistry.RegisterPendulumSortService(PendulumServiceType.Multi);
             containerRegistry.RegisterSingleton<IHostedService, PendulumSortHostedService>();
+            
+            // 先注册MainWindowViewModel以便ASN服务可以引用
+            containerRegistry.RegisterSingleton<MainWindowViewModel>();
+            
+            // 注册ASN服务和设置视图
+            containerRegistry.RegisterSingleton<IAsnService, AsnService>();
+            containerRegistry.RegisterSingleton<AsnHttpServer>();
+            containerRegistry.RegisterForNavigation<AsnHttpSettingsView, AsnHttpSettingsViewModel>();
         }
 
         protected override void OnExit(ExitEventArgs e)
@@ -139,6 +157,13 @@ namespace ShanghaiFaxunLogistics
                 try
                 {
                     Log.Information("正在停止托管服务...");
+
+                    // 停止ASN HTTP服务
+                    if (Container.Resolve<AsnHttpServer>() is IHostedService asnHttpServer)
+                    {
+                        asnHttpServer.StopAsync(CancellationToken.None).Wait();
+                        Log.Information("ASN HTTP服务已停止");
+                    }
 
                     // 停止摆轮分拣托管服务
                     var pendulumHostedService = Container.Resolve<PendulumSortHostedService>();

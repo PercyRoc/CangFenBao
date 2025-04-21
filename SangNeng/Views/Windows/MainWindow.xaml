@@ -161,23 +161,41 @@
 
                         <!-- Barcode Info -->
                         <StackPanel Grid.Row="1" Margin="0,0,0,16">
-                            <TextBlock Text="Barcode"
-                                       Margin="0,0,0,8"
-                                       FontSize="14"
-                                       FontWeight="SemiBold"
-                                       Foreground="{DynamicResource AccentBrush}" />
+                            <TextBlock Text="Barcode" Margin="0,0,0,8" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" />
 
-                            <ui:TextBox Icon="Barcode24"
-                                        x:Name="BarcodeTextBox"
-                                        Text="{Binding CurrentBarcode, Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"
-                                        IsReadOnly="False"
-                                        FontSize="20"
-                                        FontWeight="Bold"
-                                        Foreground="{StaticResource AccentBrush}"
-                                        BorderBrush="Green"
-                                        BorderThickness="2"
-                                        PlaceholderText="Waiting for scan or input..."
-                                        KeyDown="BarcodeTextBox_KeyDown" />
+                            <!-- Barcode Display Area -->
+                            <Border BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" CornerRadius="2" Height="50" Background="{DynamicResource ControlFillColorDisabledBrush}" Margin="0,0,0,8">
+                                <TextBlock Text="{Binding CurrentBarcode, Mode=OneWay}" 
+                                           VerticalAlignment="Center" 
+                                           Margin="10,0" 
+                                           FontSize="20" 
+                                           FontWeight="Bold" 
+                                           Foreground="{StaticResource AccentBrush}" />
+                            </Border>
+                            
+                            <!-- Manual Barcode Input -->
+                            <TextBlock Text="Manual Input" Margin="0,4,0,4" FontSize="12" FontWeight="Normal" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <hc:TextBox Grid.Column="0" 
+                                            x:Name="ManualBarcodeTextBox"
+                                            hc:InfoElement.Placeholder="Enter barcode manually and press Enter..."
+                                            Height="35"
+                                            FontSize="14"
+                                            FontWeight="Normal"
+                                            KeyDown="ManualBarcodeTextBox_KeyDown" />
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0" VerticalAlignment="Center">
+                                    <CheckBox x:Name="BlockScannerInput" 
+                                              Content="Enable Manual Input" 
+                                              IsChecked="False"
+                                              Checked="BlockScannerInput_CheckedChanged"
+                                              Unchecked="BlockScannerInput_CheckedChanged"
+                                              ToolTip="启用此选项允许手动输入条码，禁用则只接受扫码枪输入" />
+                                </StackPanel>
+                            </Grid>
                         </StackPanel>
 
                         <!-- Info Cards Grid -->

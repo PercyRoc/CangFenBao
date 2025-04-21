@@ -7,7 +7,6 @@
              xmlns:prism="http://prismlibrary.com/"
              xmlns:hc="https://handyorg.github.io/handycontrol"
              xmlns:windows="clr-namespace:Sunnen.ViewModels.Windows"
-             xmlns:converters="clr-namespace:SharedUI.Converters;assembly=SharedUI"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
              Width="1600"
@@ -20,33 +19,6 @@
                 <ResourceDictionary
                     Source="pack://application:,,,/SharedUI;component/Resources/Styles/ColorStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
-
-            <!-- Converters: Use this one, IsInverted is false (or default) -->
-            <converters:StringNullOrEmptyToBooleanConverter x:Key="NullOrEmptyToBooleanConverter" />
-            
-            <!-- Style for the Image Button -->
-            <Style x:Key="ImageButtonStyle" TargetType="ui:Button">
-                 <Setter Property="IsEnabled" Value="False" /> <!-- Default to disabled -->
-                 <Setter Property="Cursor" Value="Arrow" />
-                 <Style.Triggers>
-                     <!-- Enable button if ImagePath is NOT null or empty -->
-                     <!-- Use the existing converter -->
-                     <DataTrigger Binding="{Binding ImagePath, Converter={StaticResource NullOrEmptyToBooleanConverter}}" Value="True">
-                           <Setter Property="IsEnabled" Value="True" />
-                           <Setter Property="Cursor" Value="Hand" />
-                     </DataTrigger>
-                     <!-- Optional: Keep triggers for explicit null/empty to ensure disabled state if needed -->
-                     <DataTrigger Binding="{Binding ImagePath}" Value="{x:Null}">
-                         <Setter Property="IsEnabled" Value="False" />
-                         <Setter Property="Cursor" Value="Arrow" />
-                     </DataTrigger>
-                     <DataTrigger Binding="{Binding ImagePath}" Value="">
-                         <Setter Property="IsEnabled" Value="False" />
-                         <Setter Property="Cursor" Value="Arrow" />
-                     </DataTrigger>
-                 </Style.Triggers>
-            </Style>
-
         </ResourceDictionary>
     </UserControl.Resources>
 

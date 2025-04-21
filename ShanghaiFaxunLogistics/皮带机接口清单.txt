@@ -1,0 +1,87 @@
+﻿无锡新聚力科技有限公司
+
+
+     皮带机软件对接协议
+
+
+         编辑人：石江洋
+
+       日   期：2025/04/09
+1.     接口定义
+
+1.1 系统和库房编码定义
+系统编码：SH_FX
+库房编码：SH_FX
+
+1.2  接口列表
+
+  序号        接口提供                 接口名称                   请求方             响应方                                接口描述
+
+    1         LOOP          ASN 单数据提交接口                 LOOP         皮带机上位机         LOOP  系统讲接收到的         ASN  单信息提交给皮带机上位机
+
+                                                                                    LOOP  接收到皮带机的物料及月台数据后,向皮带机反馈复核
+    2         LOOP             扫码复核接口                皮带机上位机             LOOP
+                                                                                    结果
+
+1.2 接口明细
+１.      ASN   单数据推送
+
+接口使用说明
+LOOP 接收到    WMS 的 ASN 单数据后,向皮带机推送            ASN 数据
+接口定义
+接口提供者         LOOP
+接口地址          http://[ip:port]/[app_name]/send_asn_order_info
+调用方式          POST
+参数说明          输入参数
+              字段名             子字段名                 字段描述                 类型             是否必选         说明
+              systemCode                           系统编码                 String         是
+              houseCode                            仓库编码                 String         是
+              orderCode                            ASN 单编码              String         是
+              orderName                            ASN 单名称              String         否
+              orderType                            ASN 单类型              String         否
+              carCode                              车牌号                  String         是
+              remark                               备注                   String         否
+              items                                货物明细                 Array          是
+                              itemCode             货物条码                 String         是            二维码、条形码
+                              itemName             货物名称                 String         否
+                              description          货物描述                 String         否
+                              quantity             货物数量                 decimal        是
+                              unit                 货物单位                 String         是
+                              weight               单位重量                 decimal        否
+                              skuCode              SKU 代码               String         是
+                              skuName              SKU 名称               String         否
+              extra                                扩展项                  Object         否            拓展性补充信息
+              输出参数
+              字段名             子字段名                 字段描述                 类型             是否必选         说明
+              success                              是否成功                 Boolean        是            true-正常
+                                                                                                    false-异常
+              code                                 请求结果代码               String         是            SUCCESS - 正常
+                                                                                                    其他值    - 参考错误码说明
+              message                              请求结果描述               String         否            描述信息
+              time                                 时间                   String         是            "2022-03-27 15:06:29"
+              object                               扩展项                  Array          否            业务的返回数据
+
+２.      扫码复核接口
+
+接口使用说明
+LOOP 接收到皮带机的物料及月台数据后,向皮带机反馈复核结果
+接口定义
+接口提供者         LOOP
+接口地址          http://[ip:port]/[app_name]/material_review
+调用方式          POST
+参数说明          输入参数
+              字段名             子字段名                 字段描述                 类型             是否必选         说明
+              systemCode                           系统编码                 String         是
+              houseCode                            仓库编码                 String         是
+boxCode                              箱号                   String         是
+exitArea                             月台                   String         是
+extra                                扩展项                  Object         否            拓展性补充信息
+输出参数
+字段名             子字段名                 字段描述                 类型             是否必选         说明
+success                              是否成功                 Boolean        是            true-正常
+                                                                                      false-异常
+code                                 请求结果代码               String         是            SUCCESS - 正常
+                                                                                      其他值    - 参考错误码说明
+message                              请求结果描述               String         否            描述信息
+time                                 时间                   String         是            "2022-03-27 15:06:29"
+object                               扩展项                  Array          否            业务的返回数据

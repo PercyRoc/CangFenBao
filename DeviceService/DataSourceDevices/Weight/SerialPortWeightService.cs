@@ -379,8 +379,6 @@ public class SerialPortWeightService : IDisposable
             return;
         }
 
-        Log.Debug("重量稳定: {Weight:F3}kg ({WeightG:F2}g)", average / 1000, average);
-
         lock (_lock)
         {
             _weightCache.Enqueue((average, timestamp));

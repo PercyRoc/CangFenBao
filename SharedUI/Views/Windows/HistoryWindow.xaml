@@ -20,7 +20,8 @@
         </Grid.RowDefinitions>
         
         <!-- 标题栏 -->
-        <Grid Grid.Row="0" Background="{StaticResource TitleBarGradient}">
+        <Grid Grid.Row="0" Background="{StaticResource TitleBarGradient}"
+              MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />

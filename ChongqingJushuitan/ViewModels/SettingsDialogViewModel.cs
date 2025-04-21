@@ -5,7 +5,7 @@ using Prism.Mvvm;
 using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.ViewModels.Settings;
-using ChongqingYekelai.ViewModels.Settings;
+using SharedUI.ViewModels;
 
 namespace ChongqingYekelai.ViewModels;
 

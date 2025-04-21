@@ -1,7 +1,9 @@
 using Common.Models.Package;
+using DeviceService.DataSourceDevices.Camera.Models;
 using MvCamCtrl.NET;
 using Serilog;
 using System.Reactive.Subjects;
+using System.Reactive.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -14,7 +16,7 @@ namespace DeviceService.DataSourceDevices.Camera.Hikvision;
 public sealed class HikvisionIndustrialCameraService : ICameraService
 {
     private readonly Subject<PackageInfo> _packageSubject = new();
-    private readonly Subject<BitmapSource> _imageSubject = new();
+    private readonly Subject<(BitmapSource Image, string CameraId)> _imageSubject = new();
     private bool _disposedValue;
 
     // 海康工业相机 SDK 相关字段
@@ -39,7 +41,9 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
 
     public IObservable<PackageInfo> PackageStream => _packageSubject;
 
-    public IObservable<BitmapSource> ImageStream => _imageSubject;
+    public IObservable<BitmapSource> ImageStream => _imageSubject.Select(tuple => tuple.Image);
+
+    public IObservable<(BitmapSource Image, string CameraId)> ImageStreamWithId => _imageSubject.AsObservable();
 
     public event Action<string?, bool>? ConnectionChanged;
     
@@ -132,6 +136,49 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
             Log.Error(ex, "停止海康工业相机服务失败");
             return false;
         }
+    }
+
+    public IEnumerable<CameraBasicInfo> GetAvailableCameras()
+    {
+        var availableCameras = new List<CameraBasicInfo>();
+        var deviceList = new MyCamera.MV_CC_DEVICE_INFO_LIST();
+        var nRet = MyCamera.MV_CC_EnumDevices_NET(
+            MyCamera.MV_GIGE_DEVICE | MyCamera.MV_USB_DEVICE, 
+            ref deviceList);
+
+        if (nRet != 0)
+        {
+            Log.Error("枚举海康设备失败: {ErrorCode}", nRet);
+            return availableCameras; // 返回空列表
+        }
+
+        for (var i = 0; i < deviceList.nDeviceNum; i++)
+        {
+            try
+            {
+                var deviceInfo = (MyCamera.MV_CC_DEVICE_INFO)Marshal.PtrToStructure(
+                    deviceList.pDeviceInfo[i], 
+                    typeof(MyCamera.MV_CC_DEVICE_INFO))!;
+
+                var serialNumber = GetDeviceSerialNumber(deviceInfo);
+                var modelName = GetDeviceModelName(deviceInfo);
+                var name = string.IsNullOrEmpty(modelName) ? $"海康相机 {i + 1}" : $"{modelName} ({serialNumber})";
+                
+                availableCameras.Add(new CameraBasicInfo
+                {
+                    Id = serialNumber, // 使用序列号作为唯一ID
+                    Name = name,
+                    Model = modelName,
+                    SerialNumber = serialNumber
+                });
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "处理设备信息时出错，索引: {Index}", i);
+            }
+        }
+
+        return availableCameras;
     }
 
     #region 内部私有方法
@@ -397,8 +444,15 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
                             var bitmapSource = ConvertToBitmapSource(stFrameInfo);
                             if (bitmapSource != null)
                             {
-                                // 发布图像
-                                _imageSubject.OnNext(bitmapSource);
+                                // 发布图像，包含相机ID
+                                if (!string.IsNullOrEmpty(_currentDeviceSerialNumber))
+                                {
+                                    _imageSubject.OnNext((bitmapSource, _currentDeviceSerialNumber));
+                                }
+                                else
+                                {
+                                    Log.Warning("无法发布图像，因为当前设备序列号未知");
+                                }
                             }
                         }
                         catch (Exception ex)
@@ -538,6 +592,32 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
     {
         IsConnected = isConnected;
         ConnectionChanged?.Invoke(identifier, isConnected);
+    }
+
+    // 辅助方法获取设备型号名称
+    private static string GetDeviceModelName(MyCamera.MV_CC_DEVICE_INFO deviceInfo)
+    {
+        string modelName = string.Empty;
+         switch (deviceInfo.nTLayerType)
+        {
+            case MyCamera.MV_GIGE_DEVICE:
+            {
+                var gigeInfo = (MyCamera.MV_GIGE_DEVICE_INFO_EX)MyCamera.ByteToStruct(
+                    deviceInfo.SpecialInfo.stGigEInfo, 
+                    typeof(MyCamera.MV_GIGE_DEVICE_INFO_EX));
+                modelName = new string(gigeInfo.chModelName).TrimEnd('\0');
+                break;
+            }
+            case MyCamera.MV_USB_DEVICE:
+            {
+                var usbInfo = (MyCamera.MV_USB3_DEVICE_INFO_EX)MyCamera.ByteToStruct(
+                    deviceInfo.SpecialInfo.stUsb3VInfo, 
+                    typeof(MyCamera.MV_USB3_DEVICE_INFO_EX));
+                modelName = new string(usbInfo.chModelName).TrimEnd('\0');
+                break;
+            }
+        }
+        return modelName;
     }
 
     #endregion

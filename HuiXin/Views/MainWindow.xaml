@@ -66,18 +66,32 @@
                 </Image>
             </Border>
 
-            <!-- 系统设置按钮 -->
-            <ui:Button Grid.Column="1"
-                       Appearance="Primary"
-                       Command="{Binding OpenSettingsCommand}"
-                       Margin="0,0,8,0"
-                       Padding="8,6"
-                       ToolTip="系统设置">
-                <StackPanel Orientation="Horizontal">
-                    <ui:SymbolIcon Symbol="Settings24" Margin="0,0,8,0" />
-                    <TextBlock Text="系统设置" VerticalAlignment="Center" />
-                </StackPanel>
-            </ui:Button>
+            <!-- 功能按钮区域 -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <!-- 系统设置按钮 -->
+                <ui:Button Appearance="Primary"
+                           Command="{Binding OpenSettingsCommand}"
+                           Margin="0,0,8,0"
+                           Padding="8,6"
+                           ToolTip="系统设置">
+                    <StackPanel Orientation="Horizontal">
+                        <ui:SymbolIcon Symbol="Settings24" Margin="0,0,8,0" />
+                        <TextBlock Text="系统设置" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ui:Button>
+
+                <!-- 历史记录按钮 -->
+                <ui:Button Appearance="Primary"
+                           Command="{Binding OpenHistoryCommand}"
+                           Margin="0,0,8,0"
+                           Padding="8,6"
+                           ToolTip="历史记录">
+                    <StackPanel Orientation="Horizontal">
+                        <ui:SymbolIcon Symbol="History24" Margin="0,0,8,0" />
+                        <TextBlock Text="历史记录" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ui:Button>
+            </StackPanel>
 
             <!-- 标题 -->
             <TextBlock Grid.Column="2"
@@ -171,7 +185,7 @@
                                         FontWeight="Bold"
                                         Foreground="{StaticResource AccentBrush}"
                                         PlaceholderText="等待扫描..."
-                                        Tag="barcode"/>
+                                        Tag="barcode" />
                         </StackPanel>
 
                         <!-- 信息卡片网格 -->
@@ -413,20 +427,23 @@
                                   ItemsSource="{Binding PackageHistory}"
                                   CanUserAddRows="False"
                                   CanUserDeleteRows="False"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
                                   GridLinesVisibility="Horizontal">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="序号" Binding="{Binding Index}" Width="60" />
-                                <DataGridTextColumn Header="条码" Binding="{Binding Barcode}" Width="160" />
-                                <DataGridTextColumn Header="重量" Binding="{Binding WeightDisplay}" Width="80" />
-                                <DataGridTextColumn Header="尺寸" Binding="{Binding VolumeDisplay}" Width="120" />
-                                <DataGridTextColumn Header="格口" Binding="{Binding ChuteNumber}" Width="100" />
-                                <DataGridTextColumn Header="状态" Binding="{Binding StatusDisplay}" Width="*" />
+                                <DataGridTextColumn Header="序号" Binding="{Binding Index}" MinWidth="50" Width="Auto" />
+                                <DataGridTextColumn Header="条码" Binding="{Binding Barcode}" MinWidth="120" Width="Auto" />
+                                <DataGridTextColumn Header="重量" Binding="{Binding WeightDisplay}" MinWidth="60"
+                                                    Width="Auto" />
+                                <DataGridTextColumn Header="格口" Binding="{Binding ChuteNumber}" MinWidth="60"
+                                                    Width="Auto" />
+                                <DataGridTextColumn Header="状态" Binding="{Binding StatusDisplay}" MinWidth="80"
+                                                    Width="Auto" />
                                 <DataGridTextColumn Header="处理时间"
                                                     Binding="{Binding ProcessingTime, StringFormat={}{0:0}ms}"
-                                                    Width="100" />
+                                                    MinWidth="80" Width="Auto" />
                                 <DataGridTextColumn Header="时间"
                                                     Binding="{Binding CreateTime, StringFormat={}{0:HH:mm:ss}}"
-                                                    Width="100" />
+                                                    MinWidth="80" Width="Auto" />
                             </DataGrid.Columns>
                         </DataGrid>
                     </Grid>

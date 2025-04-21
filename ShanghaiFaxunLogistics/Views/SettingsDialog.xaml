@@ -8,6 +8,7 @@
              xmlns:hc="https://handyorg.github.io/handycontrol"
              xmlns:settings="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
              xmlns:viewModels="clr-namespace:ShanghaiFaxunLogistics.ViewModels"
+             xmlns:local="clr-namespace:ShanghaiFaxunLogistics.Views.Settings"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}"
@@ -41,7 +42,7 @@
                     Width="48"
                     Height="32"
                     Effect="{StaticResource IconGlowEffect}">
-                <Image Source="/Resources/favicon.ico"
+                <Image Source="/logo.ico"
                        Width="32"
                        Height="32"
                        Margin="8,0,8,0"
@@ -117,6 +118,26 @@
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
                                 <x:Type Type="settings:BalanceSortSettingsView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
+
+                        <ui:NavigationViewItem Content="格口设置"
+                                               Tag="Chute">
+                            <ui:NavigationViewItem.Icon>
+                                <ui:SymbolIcon Symbol="WebAsset24" />
+                            </ui:NavigationViewItem.Icon>
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="settings:BarcodeChuteSettingsView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
+
+                        <ui:NavigationViewItem Content="ASN HTTP服务"
+                                               Tag="ASN">
+                            <ui:NavigationViewItem.Icon>
+                                <ui:SymbolIcon Symbol="WebAsset24" />
+                            </ui:NavigationViewItem.Icon>
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="local:AsnHttpSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>

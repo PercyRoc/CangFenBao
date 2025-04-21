@@ -2,6 +2,7 @@ using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using System.Text;
 using Common.Models.Package;
+using DeviceService.DataSourceDevices.Camera.Models;
 using DeviceService.DataSourceDevices.Camera.Models.Camera;
 using DeviceService.DataSourceDevices.TCP;
 using Serilog;
@@ -53,6 +54,10 @@ internal class TcpCameraService : ICameraService
 
     public IObservable<BitmapSource> ImageStream =>
         _realtimeImageSubject.AsObservable(); // 保留，但当前未使用
+
+    // 实现 ImageStreamWithId，返回空流
+    public IObservable<(BitmapSource Image, string CameraId)> ImageStreamWithId =>
+        Observable.Empty<(BitmapSource Image, string CameraId)>();
 
     public event Action<string, bool>? ConnectionChanged;
 
@@ -380,5 +385,20 @@ internal class TcpCameraService : ICameraService
         {
             Log.Error(ex, "处理单个包裹数据时发生错误: {Data}", packetData);
         }
+    }
+
+    // 实现 GetAvailableCameras，返回占位符
+    public IEnumerable<CameraBasicInfo> GetAvailableCameras()
+    {
+        // TCP service might not represent a specific camera model
+        // Return a placeholder if connected
+        if (IsConnected)
+        {
+            return new List<CameraBasicInfo>
+            {
+                new() { Id = $"TCP_{_host}_{_port}", Name = "TCP 数据源" }
+            };
+        }
+        return Enumerable.Empty<CameraBasicInfo>();
     }
 }

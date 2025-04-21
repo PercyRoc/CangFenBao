@@ -55,6 +55,15 @@
                             <x:Type Type="local:HostSettingsView" />
                         </ui:NavigationViewItem.TargetPageType>
                     </ui:NavigationViewItem>
+                    <ui:NavigationViewItem Content="重量设置"
+                                           Tag="Weight">
+                        <ui:NavigationViewItem.Icon>
+                            <ui:SymbolIcon Symbol="Scales24" />
+                        </ui:NavigationViewItem.Icon>
+                        <ui:NavigationViewItem.TargetPageType>
+                            <x:Type Type="settings:ChineseWeightSettingsView" />
+                        </ui:NavigationViewItem.TargetPageType>
+                    </ui:NavigationViewItem>
                 </ui:NavigationView.MenuItems>
             </ui:NavigationView>
 

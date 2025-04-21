@@ -71,23 +71,24 @@ public sealed class HuaRayWrapper
         {
             var args = new HuaRayCodeEventArgs
             {
+
                 OutputResult = e.OutputResult,
                 CameraId = e.CameraID ?? string.Empty,
                 CodeList = e.CodeList ?? [],
-                Weight = e.Weight
-            };
-            
-            args.VolumeInfo = new HuaRayApiStruct.VolumeInfo
-            {
-                length = (float)e.VolumeInfo.length,
-                width = (float)e.VolumeInfo.width,
-                height = (float)e.VolumeInfo.height,
-                volume = (float)e.VolumeInfo.volume
+                Weight = e.Weight,
+                VolumeInfo = new HuaRayApiStruct.VolumeInfo
+                {
+                    length = (float)e.VolumeInfo.length,
+                    width = (float)e.VolumeInfo.width,
+                    height = (float)e.VolumeInfo.height,
+                    volume = (float)e.VolumeInfo.volume
+                },
+
+                // 从 Bag_TimeInfo.timeUp 设置 TriggerTimeTicks
+                TriggerTimeTicks = e.Bag_TimeInfo.timeUp
             };
 
-            // 从 Bag_TimeInfo.timeUp 设置 TriggerTimeTicks
-            args.TriggerTimeTicks = e.Bag_TimeInfo.timeUp;
-            
+
             if (e.OriginalImage.ImageData != IntPtr.Zero)
             {
                 try 
@@ -300,10 +301,12 @@ public sealed class HuaRayWrapper
         try
         {
             var camerasInfo = _logisticsWrapper.GetWorkCameraInfo();
+            var propertyValue0 = camerasInfo as CameraInfo[] ?? camerasInfo.ToArray();
+            Log.Information("获取工作相机信息: {CamerasInfo}", propertyValue0);
             if (camerasInfo == null)
                 return [];
 
-            return camerasInfo.Select(ci => new HuaRayApiStruct.CameraInfo
+            return [.. propertyValue0.Select(ci => new HuaRayApiStruct.CameraInfo
                 {
                     camDevID = ci.camDevID,
                     camDevModelName = ci.camDevModelName,
@@ -311,8 +314,7 @@ public sealed class HuaRayWrapper
                     camDevVendor = ci.camDevVendor,
                     camDevFirewareVersion = ci.camDevFirewareVersion,
                     camDevExtraInfo = ci.camDevExtraInfo
-                })
-                .ToList();
+                })];
         }
         catch (Exception ex)
         {

@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Windows.Media.Imaging;
 using BenFly.Models.BenNiao;
 using Common.Models.Package;
 using Common.Services.Settings;
@@ -11,8 +12,6 @@ using BenFly.Models.Upload;
 using Renci.SshNet;
 using Renci.SshNet.Common;
 using Serilog;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
 
 namespace BenFly.Services;
 
@@ -30,7 +29,6 @@ internal class BenNiaoPackageService : IDisposable
         WriteIndented = true
     };
 
-    private readonly BenNiaoPreReportService _preReportService;
     private readonly SemaphoreSlim _sftpSemaphore = new(1, 1);
     private readonly HttpClient _httpClient;
     private bool _isDisposed;
@@ -44,10 +42,9 @@ internal class BenNiaoPackageService : IDisposable
     /// </summary>
     public BenNiaoPackageService(
         IHttpClientFactory httpClientFactory,
-        BenNiaoPreReportService preReportService, ISettingsService settingsService)
+         ISettingsService settingsService)
     {
         _httpClientFactory = httpClientFactory;
-        _preReportService = preReportService;
         _settingsService = settingsService;
 
         // 初始化 HttpClient
@@ -203,88 +200,10 @@ internal class BenNiaoPackageService : IDisposable
     }
 
     /// <summary>
-    ///     处理包裹
-    /// </summary>
-    internal async Task<(bool Success, string ErrorMessage)> ProcessPackageAsync(PackageInfo package)
-    {
-        try
-        {
-            // 检查是否为Noread或空条码
-            if (string.IsNullOrWhiteSpace(package.Barcode) ||
-                package.Barcode.Equals("Noread", StringComparison.OrdinalIgnoreCase))
-            {
-                Log.Warning("包裹条码为空或Noread，将使用异常数据上传接口");
-
-                // 在调用异步上传之前复制图像
-                Image<Rgba32>? noReadImageCopy = null;
-                if (package.Image != null)
-                {
-                    // noReadImageCopy = package.Image.Clone();
-                    Log.Debug("已复制异常包裹 {Barcode} 的图像用于上传", package.Barcode);
-                }
-
-                // 改为等待上传完成并获取结果
-                var noReadResult = await UploadNoReadDataAsync(package, noReadImageCopy);
-                if (noReadResult) return (true, string.Empty);
-                Log.Warning("异常包裹 {Barcode} 上传失败", package.Barcode);
-                return (false, "异常包裹上传失败");
-            }
-
-            // 从预报数据服务中获取预报数据
-            var preReportData = _preReportService.GetPreReportData();
-            var preReportItem = preReportData?.FirstOrDefault(x => x.WaybillNum == package.Barcode);
-
-            if (preReportItem != null && !string.IsNullOrWhiteSpace(preReportItem.SegmentCode))
-            {
-                Log.Information("在预报数据中找到包裹 {Barcode} 的三段码：{SegmentCode}", package.Barcode, preReportItem.SegmentCode);
-                package.SetSegmentCode(preReportItem.SegmentCode);
-            }
-            else
-            {
-                // 如果预报数据中没有，则实时查询
-                var segmentCode = await GetRealTimeSegmentCodeAsync(package.Barcode);
-                if (!string.IsNullOrWhiteSpace(segmentCode))
-                {
-                    Log.Information("通过实时查询获取到包裹 {Barcode} 的三段码：{SegmentCode}", package.Barcode, segmentCode);
-                    package.SetSegmentCode(segmentCode);
-                }
-                else
-                {
-                    Log.Warning("无法获取包裹 {Barcode} 的三段码", package.Barcode);
-                    return (false, "无法获取三段码");
-                }
-            }
-
-            // 在调用异步上传之前复制图像
-            Image<Rgba32>? packageImageCopy = null;
-            if (package.Image != null)
-            {
-                // packageImageCopy = package.Image.Clone();
-                Log.Debug("已复制包裹 {Barcode} 的图像用于上传", package.Barcode);
-            }
-
-            // 改为等待上传完成并获取结果
-            var (uploadSuccess, errorMessage) = await UploadPackageDataAndImageAsync(package, packageImageCopy);
-            if (!uploadSuccess)
-            {
-                Log.Warning("包裹 {Barcode} 数据上传失败: {Error}", package.Barcode, errorMessage);
-                return (false, errorMessage);
-            }
-
-            Log.Information("包裹 {Barcode} 处理完成", package.Barcode);
-            return (true, string.Empty);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "处理包裹 {Barcode} 时发生错误", package.Barcode);
-            return (false, $"处理异常: {ex.Message}");
-        }
-    }
-
-    /// <summary>
     ///     实时查询三段码
     /// </summary>
-    private async Task<string?> GetRealTimeSegmentCodeAsync(string waybillNum)
+    /// <returns>包含段码和错误消息的元组。如果成功，ErrorMessage 为 null。</returns>
+    internal async Task<(string? SegmentCode, string? ErrorMessage)> GetRealTimeSegmentCodeAsync(string waybillNum)
     {
         try
         {
@@ -305,28 +224,39 @@ internal class BenNiaoPackageService : IDisposable
             // 使用 StringContent 发送请求
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
             var response = await _httpClient.PostAsync(url, content);
-            response.EnsureSuccessStatusCode();
+            // 不再 EnsureSuccessStatusCode，手动检查并返回错误
+            // response.EnsureSuccessStatusCode(); 
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                var httpErrorMessage = $"HTTP请求失败: {(int)response.StatusCode} {response.ReasonPhrase}. 内容: {errorContent}";
+                Log.Error("实时查询三段码失败: {ErrorMessage}", httpErrorMessage);
+                return (null, httpErrorMessage);
+            }
 
             var result = await response.Content.ReadFromJsonAsync<BenNiaoResponse<string>>(_jsonOptions);
             if (result is { IsSuccess: true })
             {
-                return result.Result;
+                return (result.Result, null); // 成功，无错误消息
             }
 
-            Log.Error("实时查询三段码失败：{Message}", result?.Message);
-            return null;
+            var apiErrorMessage = result?.Message ?? "API返回未知错误";
+            Log.Error("实时查询三段码失败：{Message}", apiErrorMessage);
+            return (null, $"API错误: {apiErrorMessage}"); // API逻辑失败
         }
         catch (Exception ex)
         {
+            var exceptionMessage = $"查询段码异常: {ex.Message}";
             Log.Error(ex, "实时查询运单 {WaybillNum} 的三段码时发生错误", waybillNum);
-            return null;
+            return (null, exceptionMessage); // 捕获到异常
         }
     }
 
     /// <summary>
     ///     上传包裹数据
     /// </summary>
-    private async Task<(bool Success, DateTime UploadTime, string ErrorMessage)> UploadPackageDataAsync(PackageInfo package)
+    internal async Task<(bool Success, DateTime UploadTime, string ErrorMessage)> UploadPackageDataAsync(PackageInfo package)
     {
         try
         {
@@ -376,8 +306,10 @@ internal class BenNiaoPackageService : IDisposable
     /// <summary>
     ///     上传图片到SFTP服务器
     /// </summary>
-    private async Task UploadImageAsync(string waybillNum, DateTime scanTime, string imagePath)
+    /// <returns>包含成功状态和错误消息的元组。如果成功，ErrorMessage 为 null。</returns>
+    internal async Task<(bool Success, string? ErrorMessage)> UploadImageAsync(string waybillNum, DateTime scanTime, string imagePath)
     {
+        string? currentErrorMessage = null;
         try
         {
             Log.Information("开始上传包裹 {WaybillNum} 的图片，本地路径：{ImagePath}", waybillNum, imagePath);
@@ -386,8 +318,9 @@ internal class BenNiaoPackageService : IDisposable
             var fileInfo = new FileInfo(imagePath);
             if (!fileInfo.Exists)
             {
-                Log.Error("本地图片文件不存在：{ImagePath}", imagePath);
-                return;
+                currentErrorMessage = $"本地图片文件不存在: {imagePath}";
+                Log.Error(currentErrorMessage);
+                return (false, currentErrorMessage);
             }
 
             Log.Information("本地图片文件大小：{FileSize:N0} 字节", fileInfo.Length);
@@ -397,8 +330,9 @@ internal class BenNiaoPackageService : IDisposable
                 string.IsNullOrWhiteSpace(_settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpUsername) ||
                 string.IsNullOrWhiteSpace(_settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpPassword))
             {
-                Log.Warning("SFTP配置不完整，无法上传图片");
-                return;
+                currentErrorMessage = "SFTP配置不完整，无法上传图片";
+                Log.Warning(currentErrorMessage);
+                return (false, currentErrorMessage);
             }
 
             // 构建目标路径
@@ -407,29 +341,30 @@ internal class BenNiaoPackageService : IDisposable
 
             // 重试参数
             const int maxRetries = 3;
-            const int retryDelayMs = 1000; // 重试间隔1秒
+            const int retryDelayMs = 1000;
             var retryCount = 0;
-            var uploadSuccessful = false;
+            bool uploadSuccessful = false;
 
             while (!uploadSuccessful && retryCount < maxRetries)
             {
                 if (retryCount > 0)
                 {
                     Log.Information("开始第 {RetryCount} 次重试上传包裹 {WaybillNum} 的图片", retryCount, waybillNum);
-                    await Task.Delay(retryDelayMs * retryCount); // 递增重试延迟
+                    await Task.Delay(retryDelayMs * retryCount);
                 }
-
-                // 获取复用的SFTP客户端
-                var sftpClient = await GetSftpClientAsync();
 
                 try
                 {
+                    // 获取复用的SFTP客户端
+                    var sftpClient = await GetSftpClientAsync(); // 在循环内声明
+
                     // 确保连接是活跃的
                     if (!await EnsureSftpConnectionAsync(sftpClient))
                     {
                         retryCount++;
+                        currentErrorMessage = $"SFTP连接失败 (尝试 {retryCount}/{maxRetries})";
                         Log.Warning("SFTP连接未建立，尝试重试 {RetryCount}/{MaxRetries}", retryCount, maxRetries);
-                        continue; // 如果连接失败，继续下一次重试
+                        continue;
                     }
 
                     // 输出当前工作目录
@@ -475,70 +410,71 @@ internal class BenNiaoPackageService : IDisposable
                     var remotePath = $"/{dateDir}/{fileName}";
                     await using var fileStream = File.OpenRead(imagePath);
 
-                    // 记录上传开始时间
                     var startTime = DateTime.Now;
                     sftpClient.UploadFile(fileStream, remotePath);
                     var endTime = DateTime.Now;
 
-                    // 验证上传结果
                     if (await sftpClient.ExistsAsync(remotePath))
                     {
                         var uploadedFileInfo = sftpClient.GetAttributes(remotePath);
                         Log.Information("文件上传成功 - 路径：{RemotePath}, 大小：{Size:N0} 字节, 耗时：{Duration:N0}ms",
-                            remotePath,
-                            uploadedFileInfo.Size,
-                            (endTime - startTime).TotalMilliseconds);
+                            remotePath, uploadedFileInfo.Size, (endTime - startTime).TotalMilliseconds);
 
-                        // 验证文件大小
                         if (uploadedFileInfo.Size == fileInfo.Length)
                         {
-                            Log.Information("文件大小验证成功，本地和远程文件大小一致");
+                            Log.Information("文件大小验证成功");
                             uploadSuccessful = true;
+                            currentErrorMessage = null; // 清除之前的错误信息
                         }
                         else
                         {
-                            Log.Warning("文件大小不匹配 - 本地：{LocalSize:N0} 字节, 远程：{RemoteSize:N0} 字节",
-                                fileInfo.Length, uploadedFileInfo.Size);
+                            currentErrorMessage = $"文件大小不匹配 - 本地: {fileInfo.Length}, 远程: {uploadedFileInfo.Size}";
+                            Log.Warning(currentErrorMessage);
+                            // 文件大小不匹配也视为失败，以便重试
+                            retryCount++; 
                         }
                     }
                     else
                     {
-                        Log.Warning("文件上传后未在服务器上找到：{RemotePath}", remotePath);
+                        currentErrorMessage = $"文件上传后未在服务器上找到: {remotePath}";
+                        Log.Warning(currentErrorMessage);
+                        retryCount++; 
                     }
                 }
                 catch (Exception ex)
                 {
                     retryCount++;
+                    currentErrorMessage = $"SFTP上传/检查时异常 (尝试 {retryCount}/{maxRetries}): {ex.Message}";
+                    Log.Error(ex, "上传文件时发生错误 (尝试 {RetryCount}/{MaxRetries})", retryCount, maxRetries);
 
-                    // 连接问题时，重置SFTP客户端以便下次重试创建新连接
                     if (ex is SshConnectionException or IOException)
                     {
-                        Log.Error(ex, "SFTP连接错误，将断开连接并在下次重试时重新连接");
-                        await DisconnectSftpAsync(); // 强制断开当前连接
-                    }
-                    else
-                    {
-                        Log.Error(ex, "上传文件时发生错误");
+                        Log.Warning("SFTP连接错误，将断开连接并在下次重试时重新连接");
+                        await DisconnectSftpAsync();
                     }
 
                     if (retryCount >= maxRetries)
-                        Log.Error("上传包裹 {WaybillNum} 的图片在 {RetryCount} 次尝试后失败", waybillNum, retryCount);
-                    else
-                        Log.Warning("上传包裹 {WaybillNum} 的图片时发生错误，将尝试重试 ({RetryCount}/{MaxRetries})",
-                            waybillNum, retryCount, maxRetries);
+                    {
+                         currentErrorMessage = $"图片上传重试 {maxRetries} 次后失败: {ex.Message}";
+                         Log.Error("上传包裹 {WaybillNum} 的图片在 {RetryCount} 次尝试后失败", waybillNum, retryCount);
+                    }
                 }
-            }
+            } // end while
+
+            return (uploadSuccessful, currentErrorMessage);
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "上传包裹 {WaybillNum} 的图片时发生错误", waybillNum);
+            currentErrorMessage = $"图片上传外部异常: {ex.Message}";
+            Log.Error(ex, "上传包裹 {WaybillNum} 的图片时发生外部错误", waybillNum);
+            return (false, currentErrorMessage);
         }
     }
 
     /// <summary>
     ///     将图片保存到临时文件
     /// </summary>
-    private static async Task<string?> SaveImageToTempFileAsync(Image image, string waybillNum,
+    internal static string? SaveImageToTempFileAsync(BitmapSource image, string waybillNum,
         DateTime scanTime)
     {
         try
@@ -550,8 +486,12 @@ internal class BenNiaoPackageService : IDisposable
             var fileName = $"{waybillNum}_{scanTime:yyyyMMddHHmmss}.jpg";
             var tempPath = Path.Combine(tempDir, fileName);
 
-            // 保存图片
-            await image.SaveAsJpegAsync(tempPath);
+            // 使用 JpegBitmapEncoder 保存图片
+            using var fileStream = new FileStream(tempPath, FileMode.Create);
+            var encoder = new JpegBitmapEncoder { QualityLevel = 90 }; // 设置JPEG质量
+            encoder.Frames.Add(BitmapFrame.Create(image));
+            encoder.Save(fileStream);
+
             Log.Information("已将包裹 {WaybillNum} 的图片保存到临时文件 {TempPath}", waybillNum, tempPath);
 
             return tempPath;
@@ -564,69 +504,10 @@ internal class BenNiaoPackageService : IDisposable
     }
 
     /// <summary>
-    ///     异步上传包裹数据和图片
-    /// </summary>
-    private async Task<(bool Success, string ErrorMessage)> UploadPackageDataAndImageAsync(PackageInfo package, Image? imageCopy)
-    {
-        try
-        {
-            var (success, uploadTime, errorMessage) = await UploadPackageDataAsync(package);
-            if (!success)
-            {
-                Log.Warning("包裹 {Barcode} 数据上传失败: {Error}", package.Barcode, errorMessage);
-                return (false, errorMessage);
-            }
-            
-            if (imageCopy != null)
-                try
-                {
-                    // 使用复制的图像进行上传，但不等待上传完成
-                    var tempImagePath = await SaveImageToTempFileAsync(imageCopy, package.Barcode, uploadTime);
-                    if (!string.IsNullOrWhiteSpace(tempImagePath))
-                    {
-                        // 在后台执行图片上传，不等待返回
-                        _ = Task.Run(async () =>
-                        {
-                            try
-                            {
-                                await UploadImageAsync(package.Barcode, uploadTime, tempImagePath);
-                                try
-                                {
-                                    File.Delete(tempImagePath);
-                                }
-                                catch (Exception ex)
-                                {
-                                    Log.Warning(ex, "删除临时图片文件 {TempImagePath} 失败", tempImagePath);
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                Log.Error(ex, "后台上传包裹 {Barcode} 的图片时发生错误", package.Barcode);
-                            }
-                        });
-                        Log.Information("已启动包裹 {Barcode} 的图片后台上传", package.Barcode);
-                    }
-                }
-                finally
-                {
-                    // 确保复制的图像被释放
-                    imageCopy.Dispose();
-                    Log.Debug("已释放包裹 {Barcode} 的复制图像", package.Barcode);
-                }
-                
-            return (true, string.Empty);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "异步上传包裹 {Barcode} 数据和图片时发生错误", package.Barcode);
-            return (false, $"上传异常: {ex.Message}");
-        }
-    }
-
-    /// <summary>
     ///     上传异常数据（Noread或空条码）
     /// </summary>
-    private async Task<bool> UploadNoReadDataAsync(PackageInfo package, Image? imageCopy)
+    /// <returns>包含成功状态和错误消息的元组。如果成功，ErrorMessage 为 null。</returns>
+    internal async Task<(bool Success, string? ErrorMessage)> UploadNoReadDataAsync(PackageInfo package, BitmapSource? imageCopy)
     {
         try
         {
@@ -637,17 +518,14 @@ internal class BenNiaoPackageService : IDisposable
             // 将图片转换为Base64
             string? base64Image = null;
             if (imageCopy != null)
-                try
-                {
-                    using var memoryStream = new MemoryStream();
-                    await imageCopy.SaveAsJpegAsync(memoryStream);
-                    base64Image = Convert.ToBase64String(memoryStream.ToArray());
-                }
-                finally
-                {
-                    imageCopy.Dispose();
-                    Log.Debug("已释放异常包裹的复制图像");
-                }
+            {
+                using var memoryStream = new MemoryStream();
+                var encoder = new JpegBitmapEncoder { QualityLevel = 90 };
+                encoder.Frames.Add(BitmapFrame.Create(imageCopy));
+                encoder.Save(memoryStream);
+                base64Image = Convert.ToBase64String(memoryStream.ToArray());
+                Log.Debug("已将异常包裹的图像转换为Base64");
+            }
 
             var uploadItem = new
             {
@@ -667,7 +545,6 @@ internal class BenNiaoPackageService : IDisposable
                 _settingsService.LoadSettings<UploadConfiguration>().BenNiaoAppSecret,
                 new[] { uploadItem });
 
-            // 使用 JsonContent 替代 PostAsJsonAsync，以便使用自定义序列化选项
             var jsonContent = JsonSerializer.Serialize(request, _jsonOptions);
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
             var response = await _httpClient.PostAsync(url, content);
@@ -675,22 +552,32 @@ internal class BenNiaoPackageService : IDisposable
             var responseContent = await response.Content.ReadAsStringAsync();
             Log.Information("上传异常包裹数据响应：{@Response}", responseContent);
 
-            response.EnsureSuccessStatusCode();
+            // 不再 EnsureSuccessStatusCode，手动检查并返回错误
+            // response.EnsureSuccessStatusCode(); 
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var httpErrorMessage = $"HTTP请求失败: {(int)response.StatusCode} {response.ReasonPhrase}. 内容: {responseContent}";
+                Log.Error("上传异常包裹数据失败: {ErrorMessage}", httpErrorMessage);
+                return (false, httpErrorMessage);
+            }
 
             var result = await response.Content.ReadFromJsonAsync<BenNiaoResponse<object>>(_jsonOptions);
             if (result is not { IsSuccess: true })
             {
-                Log.Error("上传异常包裹数据失败：{Message}", result?.Message);
-                return false;
+                var apiErrorMessage = result?.Message ?? "API返回未知错误";
+                Log.Error("上传异常包裹数据失败：{Message}", apiErrorMessage);
+                return (false, $"API错误: {apiErrorMessage}"); // API逻辑失败
             }
 
             Log.Information("成功上传异常包裹数据");
-            return true;
+            return (true, null); // 成功，无错误消息
         }
         catch (Exception ex)
         {
+            var exceptionMessage = $"上传NoRead数据异常: {ex.Message}";
             Log.Error(ex, "上传异常包裹数据时发生错误");
-            return false;
+            return (false, exceptionMessage); // 捕获到异常
         }
     }
 }

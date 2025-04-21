@@ -39,6 +39,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
@@ -77,8 +78,21 @@
                 </StackPanel>
             </ui:Button>
 
+            <!-- 历史记录按钮 -->
+            <ui:Button Grid.Column="2"
+                       Appearance="Primary"
+                       Command="{Binding OpenHistoryCommand}"
+                       Margin="0,0,8,0"
+                       Padding="8,6"
+                       ToolTip="历史记录">
+                <StackPanel Orientation="Horizontal">
+                    <ui:SymbolIcon Symbol="History24" Margin="0,0,8,0" />
+                    <TextBlock Text="历史记录" VerticalAlignment="Center" />
+                </StackPanel>
+            </ui:Button>
+
             <!-- 标题 -->
-            <TextBlock Grid.Column="2"
+            <TextBlock Grid.Column="3"
                        Text="仓分宝-笨鸟"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
@@ -98,7 +112,7 @@
             </TextBlock>
 
             <!-- TitleBar -->
-            <ui:TitleBar Grid.Column="3"
+            <ui:TitleBar Grid.Column="4"
                          Title=""
                          ButtonsForeground="#FF008891"
                          ShowMaximize="True"
@@ -106,7 +120,7 @@
                          ShowClose="True" />
 
             <Border Grid.Column="0"
-                    Grid.ColumnSpan="4"
+                    Grid.ColumnSpan="5"
                     Height="1"
                     VerticalAlignment="Bottom"
                     Background="#20008080"
@@ -418,19 +432,19 @@
                                   CanUserDeleteRows="False"
                                   GridLinesVisibility="Horizontal">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="序号" Binding="{Binding Index}" Width="60" />
-                                <DataGridTextColumn Header="条码" Binding="{Binding Barcode}" Width="160" />
-                                <DataGridTextColumn Header="段码" Binding="{Binding SegmentCode}" Width="160" />
-                                <DataGridTextColumn Header="重量" Binding="{Binding WeightDisplay}" Width="80" />
-                                <DataGridTextColumn Header="尺寸" Binding="{Binding VolumeDisplay}" Width="120" />
-                                <DataGridTextColumn Header="格口" Binding="{Binding ChuteNumber}" Width="100" />
-                                <DataGridTextColumn Header="状态" Binding="{Binding StatusDisplay}" Width="80" />
+                                <DataGridTextColumn Header="序号" Binding="{Binding Index}" MinWidth="50" Width="SizeToCells" />
+                                <DataGridTextColumn Header="条码" Binding="{Binding Barcode}" MinWidth="120" Width="SizeToCells" />
+                                <DataGridTextColumn Header="段码" Binding="{Binding SegmentCode}" MinWidth="120" Width="SizeToCells" />
+                                <DataGridTextColumn Header="重量" Binding="{Binding WeightDisplay}" MinWidth="60" Width="SizeToCells" />
+                                <DataGridTextColumn Header="尺寸" Binding="{Binding VolumeDisplay}" MinWidth="100" Width="SizeToCells" />
+                                <DataGridTextColumn Header="格口" Binding="{Binding ChuteNumber}" MinWidth="50" Width="SizeToCells" />
+                                <DataGridTextColumn Header="状态" Binding="{Binding StatusDisplay}" MinWidth="70" Width="SizeToCells" />
                                 <DataGridTextColumn Header="处理时间"
                                                     Binding="{Binding ProcessingTime, StringFormat={}{0:0}ms}"
-                                                    Width="100" />
+                                                    MinWidth="80" Width="SizeToCells" />
                                 <DataGridTextColumn Header="时间"
                                                     Binding="{Binding CreateTime, StringFormat={}{0:HH:mm:ss}}"
-                                                    Width="100" />
+                                                    MinWidth="80" Width="SizeToCells" />
                             </DataGrid.Columns>
                         </DataGrid>
                     </Grid>

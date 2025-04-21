@@ -6,6 +6,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Common.Data;
 using Common.Models.Package;
+using Common.Models.Settings.ChuteRules;
 using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
 using Common.Services.Ui;
@@ -16,6 +17,7 @@ using Prism.Mvvm;
 using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.Models;
+using ShanghaiFaxunLogistics.Models.ASN;
 using SortingServices.Pendulum;
 
 namespace ShanghaiFaxunLogistics.ViewModels;
@@ -36,14 +38,22 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private SystemStatus _systemStatus = new();
     private bool _isRunning;
 
+    // ASN订单相关
+    private List<AsnOrderItem> _asnOrderItems = new();
+    private string _currentAsnOrderCode = string.Empty;
+    private string _currentCarCode = string.Empty;
+    
+    // SKU分配表，Key是SKU代码，Value是分配的格口编号
+    private readonly Dictionary<string, int> _skuChuteMappings = new();
+    
+    // 每个格口分配的SKU数量
+    private readonly Dictionary<int, int> _chuteSkuCount = new();
+    
     // Add persistent counters
     private long _totalPackageCount;
     private long _successPackageCount;
 
     private long _failedPackageCount;
-
-    // 添加峰值效率记录
-    private long _peakRate;
 
     public MainWindowViewModel(IDialogService dialogService,
         ICameraService cameraService,
@@ -138,6 +148,33 @@ public class MainWindowViewModel : BindableBase, IDisposable
         private set => SetProperty(ref _systemStatus, value);
     }
 
+    /// <summary>
+    /// 当前ASN订单编码
+    /// </summary>
+    public string CurrentAsnOrderCode
+    {
+        get => _currentAsnOrderCode;
+        private set => SetProperty(ref _currentAsnOrderCode, value);
+    }
+
+    /// <summary>
+    /// 当前车牌号
+    /// </summary>
+    public string CurrentCarCode
+    {
+        get => _currentCarCode;
+        private set => SetProperty(ref _currentCarCode, value);
+    }
+
+    /// <summary>
+    /// ASN订单项集合
+    /// </summary>
+    public List<AsnOrderItem> AsnOrderItems
+    {
+        get => _asnOrderItems;
+        private set => SetProperty(ref _asnOrderItems, value);
+    }
+
     public ObservableCollection<PackageInfo> PackageHistory { get; } = [];
     public ObservableCollection<StatisticsItem> StatisticsItems { get; } = [];
     public ObservableCollection<DeviceStatus> DeviceStatuses { get; } = [];
@@ -147,6 +184,462 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         get => _isRunning;
         set => SetProperty(ref _isRunning, value);
+    }
+
+    /// <summary>
+    /// 缓存ASN订单数据
+    /// </summary>
+    /// <param name="asnOrderInfo">ASN订单信息</param>
+    public void CacheAsnOrderInfo(AsnOrderInfo asnOrderInfo)
+    {
+        try
+        {
+            if (asnOrderInfo.Items.Count == 0)
+            {
+                Log.Warning("无法缓存ASN订单数据：数据为空或无商品项");
+                return;
+            }
+
+            // 更新属性
+            CurrentAsnOrderCode = asnOrderInfo.OrderCode;
+            CurrentCarCode = asnOrderInfo.CarCode;
+            AsnOrderItems = new List<AsnOrderItem>(asnOrderInfo.Items);
+            
+            Log.Information("已缓存ASN订单数据: {OrderCode}, 车牌: {CarCode}, 商品数量: {ItemsCount}", 
+                asnOrderInfo.OrderCode, asnOrderInfo.CarCode, asnOrderInfo.Items.Count);
+            
+            // 清空之前的SKU-格口映射
+            _skuChuteMappings.Clear();
+            _chuteSkuCount.Clear();
+            
+            // 为每个SKU分配格口
+            AllocateChutesForSkus();
+            
+            // 通知UI更新
+            RaisePropertyChanged(nameof(CurrentAsnOrderCode));
+            RaisePropertyChanged(nameof(CurrentCarCode));
+            RaisePropertyChanged(nameof(AsnOrderItems));
+            
+            _notificationService.ShowSuccess($"已加载ASN单：{asnOrderInfo.OrderCode}，包含{asnOrderInfo.Items.Count}个货品");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "缓存ASN订单数据时发生错误");
+            _notificationService.ShowError("缓存ASN订单数据失败：" + ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// 清除ASN订单缓存
+    /// </summary>
+    public void ClearAsnOrderCache()
+    {
+        CurrentAsnOrderCode = string.Empty;
+        CurrentCarCode = string.Empty;
+        AsnOrderItems = [];
+        
+        // 清空SKU-格口映射
+        _skuChuteMappings.Clear();
+        _chuteSkuCount.Clear();
+        
+        // 通知UI更新
+        RaisePropertyChanged(nameof(CurrentAsnOrderCode));
+        RaisePropertyChanged(nameof(CurrentCarCode));
+        RaisePropertyChanged(nameof(AsnOrderItems));
+        
+        Log.Information("已清除ASN订单缓存");
+    }
+
+    /// <summary>
+    /// 为每个SKU分配格口
+    /// </summary>
+    private void AllocateChutesForSkus()
+    {
+        try
+        {
+            // 按需加载配置
+            var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
+            if (chuteSettings.ChuteCount <= 0 || AsnOrderItems.Count == 0)
+            {
+                Log.Warning("无法分配格口：格口数量为0或没有SKU项");
+                return;
+            }
+
+            // 获取所有不重复的SKU代码
+            var distinctSkus = AsnOrderItems.Select(item => item.SkuCode).Distinct().ToList();
+            Log.Information("发现{Count}个不同的SKU", distinctSkus.Count);
+
+            foreach (var sku in distinctSkus)
+            {
+                // 先检查是否已经分配过
+                if (_skuChuteMappings.ContainsKey(sku))
+                    continue;
+
+                // 查找当前SKU数量少于2的格口
+                var availableChute = FindAvailableChute();
+                if (availableChute > 0)
+                {
+                    _skuChuteMappings[sku] = availableChute;
+                    // 增加该格口的SKU数量
+                    _chuteSkuCount.TryAdd(availableChute, 0);
+                    _chuteSkuCount[availableChute]++;
+
+                    Log.Information("SKU {Sku} 分配到格口 {Chute}", sku, availableChute);
+                }
+                else
+                {
+                    Log.Warning("没有可用格口给SKU {Sku}分配", sku);
+                }
+            }
+
+            Log.Information("SKU格口分配完成，共分配{Count}个SKU", _skuChuteMappings.Count);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "分配SKU格口时发生错误");
+        }
+    }
+
+    /// <summary>
+    /// 查找可用的格口（SKU数量少于2的）
+    /// </summary>
+    /// <returns>可用格口号，如果没有则返回-1</returns>
+    private int FindAvailableChute()
+    {
+        // 按需加载配置
+        var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
+        // 从1开始循环到格口数量
+        for (var i = 1; i <= chuteSettings.ChuteCount; i++)
+        {
+            // 如果格口不存在或者SKU数量小于2，则可用
+            if (!_chuteSkuCount.TryGetValue(i, out var value) || value < 2)
+                return i;
+        }
+        
+        // 没有可用格口
+        return -1;
+    }
+
+    /// <summary>
+    /// 处理接收到的包裹信息
+    /// </summary>
+    private void OnPackageInfo(PackageInfo package)
+    {
+        try
+        {
+            // 在方法开始时加载一次配置，避免重复加载
+            var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
+
+            Log.Information("接收到包裹信息: {Barcode}, 重量: {Weight}kg", package.Barcode, package.Weight);
+            
+            // 更新当前条码
+            CurrentBarcode = package.Barcode;
+            
+            // 更新包裹信息显示
+            UpdatePackageInfoItems(package);
+            
+            // 初始化处理状态
+            if (string.IsNullOrEmpty(package.Barcode))
+            {
+                // 无条码，设置为NoRead异常
+                package.SetStatus(PackageStatus.Error, "无条码");
+                package.ErrorMessage = "无法读取条码";
+                package.SetChute(chuteSettings.NoReadChuteNumber);
+                
+                Log.Warning("包裹条码为空，分配到NoRead格口: {ChuteNumber}", chuteSettings.NoReadChuteNumber);
+                ProcessPackageWithError(package, chuteSettings.NoReadChuteNumber, "无条码");
+                return;
+            }
+            
+            // 如果没有ASN订单缓存，无法匹配SKU
+            if (AsnOrderItems.Count == 0 || string.IsNullOrEmpty(CurrentAsnOrderCode))
+            {
+                Log.Warning("没有缓存的ASN订单数据，无法为包裹 {Barcode} 匹配SKU", package.Barcode);
+                package.SetStatus(PackageStatus.Error, "无ASN单数据");
+                package.ErrorMessage = "无ASN单数据";
+                package.SetChute(chuteSettings.ErrorChuteNumber);
+                
+                // 分拣操作 - 错误格口
+                ProcessPackageWithError(package, chuteSettings.ErrorChuteNumber, "无ASN单数据");
+                // 记录包裹
+                SavePackage(package);
+                return;
+            }
+            
+            // 查找对应的订单项，通常条码会与itemCode匹配
+            var matchedItem = AsnOrderItems.FirstOrDefault(item => 
+                item.ItemCode.Equals(package.Barcode, StringComparison.OrdinalIgnoreCase));
+            
+            if (matchedItem == null)
+            {
+                Log.Warning("包裹 {Barcode} 在ASN订单 {OrderCode} 中找不到匹配的货品", 
+                    package.Barcode, CurrentAsnOrderCode);
+                package.SetStatus(PackageStatus.Error, "ASN单中无匹配");
+                package.ErrorMessage = "ASN单中无匹配";
+                package.SetChute(chuteSettings.ErrorChuteNumber);
+                
+                // 分拣操作 - 错误格口
+                ProcessPackageWithError(package, chuteSettings.ErrorChuteNumber, "ASN单中无匹配");
+                // 记录包裹
+                SavePackage(package);
+                return;
+            }
+            
+            // 获取该SKU对应的格口
+            if (!_skuChuteMappings.TryGetValue(matchedItem.SkuCode, out var chuteNumber))
+            {
+                Log.Warning("SKU {Sku} 未分配格口", matchedItem.SkuCode);
+                package.SetStatus(PackageStatus.Error, "SKU未分配格口");
+                package.ErrorMessage = "SKU未分配格口";
+                package.SetChute(chuteSettings.ErrorChuteNumber);
+                
+                // 分拣操作 - 错误格口
+                ProcessPackageWithError(package, chuteSettings.ErrorChuteNumber, "SKU未分配格口");
+                // 记录包裹
+                SavePackage(package);
+                return;
+            }
+            
+            // 设置分拣格口
+            package.SetSegmentCode(chuteNumber.ToString());
+            package.SetChute(chuteNumber);
+            package.SetStatus(PackageStatus.Success, "分拣成功");
+            package.ErrorMessage = $"SKU: {matchedItem.SkuCode}";
+            
+            Log.Information("包裹 {Barcode} 匹配到SKU {Sku}，分配到格口 {Chute}", 
+                package.Barcode, matchedItem.SkuCode, chuteNumber);
+            
+            // 更新UI显示
+            UpdatePackageInfoItemsWithSku(matchedItem, chuteNumber);
+            
+            // 分拣操作
+            ProcessPackageSuccess(package);
+            
+            // 记录包裹
+            SavePackage(package);
+            
+            // 计数更新
+            _totalPackageCount++;
+            if (package.Status == PackageStatus.Success)
+                _successPackageCount++;
+            else
+                _failedPackageCount++;
+                
+            // 更新统计数据
+            UpdateStatisticsItems();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "处理包裹信息时发生错误: {Barcode}", package.Barcode);
+            
+            try
+            {
+                // 发生异常，分配到异常格口
+                {
+                    // 再次加载配置以确保在异常处理中也使用最新值
+                    var currentChuteSettings = _settingsService.LoadSettings<ChuteSettings>();
+                    package.SetChute(currentChuteSettings.ErrorChuteNumber);
+                    package.SetStatus(PackageStatus.Error, "处理异常");
+                    package.ErrorMessage = $"处理发生异常: {ex.Message}";
+                    
+                    // 分拣操作 - 异常格口
+                    ProcessPackageWithError(package, currentChuteSettings.ErrorChuteNumber, "处理异常");
+                    
+                    // 记录包裹
+                    SavePackage(package);
+                    
+                    // 计数更新
+                    _totalPackageCount++;
+                    _failedPackageCount++;
+                    
+                    // 更新统计数据
+                    UpdateStatisticsItems();
+                }
+            }
+            catch (Exception innerEx)
+            {
+                Log.Error(innerEx, "处理包裹异常时发生二次错误");
+            }
+        }
+    }
+    
+    /// <summary>
+    /// 处理成功的包裹
+    /// </summary>
+    private void ProcessPackageSuccess(PackageInfo package)
+    {
+        try
+        {
+            // 执行分拣，调用分拣服务
+            _sortService.ProcessPackage(package);
+            Log.Debug("执行分拣操作: 包裹 {Barcode} 到格口 {Chute}", package.Barcode, package.ChuteNumber);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "执行分拣操作失败: {Barcode} 到格口 {Chute}", package.Barcode, package.ChuteNumber);
+        }
+    }
+    
+    /// <summary>
+    /// 处理异常包裹
+    /// </summary>
+    private void ProcessPackageWithError(PackageInfo package, int errorChuteNumber, string errorReason)
+    {
+        try
+        {
+            // 设置包裹的错误信息
+            package.SetChute(errorChuteNumber);
+            package.SetStatus(PackageStatus.Error, errorReason);
+            
+            // 更新UI显示
+            UpdatePackageInfoItemsWithError(errorChuteNumber, errorReason);
+            
+            // 执行分拣，调用分拣服务
+            _sortService.ProcessPackage(package);
+            Log.Debug("执行异常分拣操作: 包裹 {Barcode} 到错误格口 {Chute}, 原因: {Reason}", 
+                package.Barcode, errorChuteNumber, errorReason);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "执行异常分拣操作失败: {Barcode} 到错误格口 {Chute}", package.Barcode, errorChuteNumber);
+        }
+    }
+    
+    /// <summary>
+    /// 更新包裹信息显示
+    /// </summary>
+    private void UpdatePackageInfoItems(PackageInfo package)
+    {
+        try
+        {
+            // 更新重量显示
+            var weightItem = PackageInfoItems.FirstOrDefault(x => x.Label == "重量");
+            if (weightItem != null)
+                weightItem.Value = package.Weight.ToString("F2");
+            
+            // 更新时间显示
+            var timeItem = PackageInfoItems.FirstOrDefault(x => x.Label == "时间");
+            if (timeItem != null)
+                timeItem.Value = DateTime.Now.ToString("HH:mm:ss");
+            
+            // 更新状态显示
+            var statusItem = PackageInfoItems.FirstOrDefault(x => x.Label == "状态");
+            if (statusItem != null)
+                statusItem.Value = package.StatusDisplay;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "更新包裹信息显示时发生错误");
+        }
+    }
+    
+    /// <summary>
+    /// 使用SKU信息更新包裹显示
+    /// </summary>
+    private void UpdatePackageInfoItemsWithSku(AsnOrderItem item, int chuteNumber)
+    {
+        try
+        {
+            // 更新格口显示
+            var chuteItem = PackageInfoItems.FirstOrDefault(x => x.Label == "格口");
+            if (chuteItem != null)
+            {
+                chuteItem.Value = chuteNumber.ToString();
+                chuteItem.Description = $"{item.SkuName} ({item.SkuCode})";
+            }
+            
+            // 更新状态显示
+            var statusItem = PackageInfoItems.FirstOrDefault(x => x.Label == "状态");
+            if (statusItem != null)
+                statusItem.Value = "成功";
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "使用SKU信息更新包裹显示时发生错误");
+        }
+    }
+    
+    /// <summary>
+    /// 使用错误信息更新包裹显示
+    /// </summary>
+    private void UpdatePackageInfoItemsWithError(int errorChuteNumber, string errorReason)
+    {
+        try
+        {
+            // 更新格口显示
+            var chuteItem = PackageInfoItems.FirstOrDefault(x => x.Label == "格口");
+            if (chuteItem != null)
+            {
+                chuteItem.Value = errorChuteNumber.ToString();
+                chuteItem.Description = $"错误格口: {errorReason}";
+            }
+            
+            // 更新状态显示
+            var statusItem = PackageInfoItems.FirstOrDefault(x => x.Label == "状态");
+            if (statusItem != null)
+                statusItem.Value = "异常";
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "更新包裹错误显示时发生错误");
+        }
+    }
+    
+    /// <summary>
+    /// 更新统计数据
+    /// </summary>
+    private void UpdateStatisticsItems()
+    {
+        try
+        {
+            // 更新总包裹数
+            var totalItem = StatisticsItems.FirstOrDefault(x => x.Label == "总包裹数");
+            if (totalItem != null)
+                totalItem.Value = _totalPackageCount.ToString();
+            
+            // 更新成功数
+            var successItem = StatisticsItems.FirstOrDefault(x => x.Label == "成功数");
+            if (successItem != null)
+                successItem.Value = _successPackageCount.ToString();
+            
+            // 更新异常数
+            var failedItem = StatisticsItems.FirstOrDefault(x => x.Label == "异常");
+            if (failedItem != null)
+                failedItem.Value = _failedPackageCount.ToString();
+            
+            // 更新处理速率 - 这里可以进一步实现，比如计算每小时处理量
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "更新统计数据时发生错误");
+        }
+    }
+    
+    /// <summary>
+    /// 保存包裹记录
+    /// </summary>
+    private async void SavePackage(PackageInfo package)
+    {
+        try
+        {
+            await _packageDataService.AddPackageAsync(package);
+            Log.Debug("包裹记录已保存: {Barcode}", package.Barcode);
+            
+            // 添加到历史记录列表
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                // 限制历史记录数量
+                if (PackageHistory.Count >= 1000)
+                    PackageHistory.RemoveAt(PackageHistory.Count - 1);
+                
+                // 在开头添加新记录
+                PackageHistory.Insert(0, package);
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "保存包裹记录时发生错误: {Barcode}", package.Barcode);
+        }
     }
 
     public void Dispose()
@@ -303,10 +796,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
             Description = "处理状态",
             Icon = "Alert24"
         });
-    }
-
-    private async void OnPackageInfo(PackageInfo package)
-    {
     }
 
     private void OnCameraConnectionChanged(string? deviceId, bool isConnected)
