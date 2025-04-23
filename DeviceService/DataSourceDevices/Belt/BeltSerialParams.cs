@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Text.Json.Serialization;
 using DeviceService.DataSourceDevices.Weight;
 
@@ -8,6 +9,13 @@ namespace DeviceService.DataSourceDevices.Belt;
 /// </summary>
 public class BeltSerialParams : SerialPortParams // 继承自 Weight 目录下的 SerialPortParams
 {
+    /// <summary>
+    /// 是否启用皮带
+    /// </summary>
+    [JsonPropertyName("isEnabled")]
+    [DefaultValue(true)]
+    public bool IsEnabled { get; set; } = true;
+
     /// <summary>
     /// 启动皮带命令
     /// </summary>
@@ -27,6 +35,7 @@ public class BeltSerialParams : SerialPortParams // 继承自 Weight 目录下�
     {
         return new BeltSerialParams
         {
+            IsEnabled = IsEnabled,
             PortName = PortName,
             BaudRate = BaudRate,
             DataBits = DataBits,

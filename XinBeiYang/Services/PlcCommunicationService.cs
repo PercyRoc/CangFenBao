@@ -251,19 +251,18 @@ internal class PlcCommunicationService(
             // 在每次循环开始时检查取消请求
             cancellationToken.ThrowIfCancellationRequested();
 
+            var tcs = new TaskCompletionSource<PlcPacket>(TaskCreationOptions.RunContinuationsAsynchronously);
+            // 注册外部取消回调以尝试取消 TaskCompletionSource
+            // 这个注册现在也负责处理由调用者（如 SendUploadRequestAsync）设置的整体超时
+            await using var registration = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
+
             try
             {
-                var tcs = new TaskCompletionSource<PlcPacket>();
-                // 注册取消回调以尝试取消 TaskCompletionSource
-                await using var registration = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
-
                 // 在添加请求之前检查取消，避免在取消后添加
                 cancellationToken.ThrowIfCancellationRequested();
                 if (!_pendingRequests.TryAdd(packet.CommandId, tcs))
                 {
-                    // 如果添加失败（可能因为并发或已存在），则记录警告并可能抛出异常或重试
                     Log.Warning("无法添加待处理请求，CommandId={CommandId} 可能已存在", packet.CommandId);
-                    // 根据需要处理这种情况，例如抛出异常
                     throw new InvalidOperationException($"无法添加重复的待处理请求 CommandId={packet.CommandId}");
                 }
 
@@ -279,86 +278,74 @@ internal class PlcCommunicationService(
                 }
 
                 // 使用TcpClientService发送数据
-                // 由于Send是同步方法，将其包装到Task.Run中
                 await Task.Run(() =>
                 {
                     if (_tcpClientService == null || !_tcpClientService.IsConnected())
                         throw new InvalidOperationException("发送时连接已断开");
                     _tcpClientService.Send(data);
-                }, cancellationToken);
+                }, cancellationToken); // 传递取消令牌给 Task.Run
 
-                // 内部超时设置 - 缩短为 1 秒
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
-                // 链接内部超时和外部取消令牌
-                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, cancellationToken);
+                // 直接等待 TaskCompletionSource 完成
+                // 如果外部取消令牌触发 (包括超时)，注册的回调会取消 tcs，导致这里抛出 OperationCanceledException
+                var response = await tcs.Task;
 
-                var completedTask = await Task.WhenAny(tcs.Task, Task.Delay(-1, linkedCts.Token));
-
-                if (completedTask == tcs.Task)
-                {
-                    // 在移除请求之前再次检查取消
-                    cancellationToken.ThrowIfCancellationRequested();
-                    _pendingRequests.TryRemove(packet.CommandId, out _);
-
-                    var response = await tcs.Task; // 如果 tcs.Task 被取消，这里会抛出 OperationCanceledException
-                    // 只记录非心跳包的日志
-                    if (response is not HeartbeatPacket and not HeartbeatAckPacket)
-                    {
-                        Log.Debug("收到响应包：CommandId={CommandId}, Type={Type}",
-                            response.CommandId,
-                            response.GetType().Name);
-                    }
-
-                    if (response is T typedResponse)
-                        return typedResponse;
-
-                    throw new InvalidOperationException($"收到意外的响应类型: {response.GetType().Name}");
-                }
-
-                // 超时或外部取消发生
+                // 成功收到响应
                 _pendingRequests.TryRemove(packet.CommandId, out _);
 
-                // 检查是超时还是外部取消
-                if (cancellationToken.IsCancellationRequested)
+                // 只记录非心跳包的日志
+                if (response is not HeartbeatPacket and not HeartbeatAckPacket)
                 {
-                    Log.Debug("发送操作被取消：CommandId={CommandId}, Type={Type}", packet.CommandId, packet.GetType().Name);
-                    throw new OperationCanceledException(cancellationToken);
+                    Log.Debug("收到响应包：CommandId={CommandId}, Type={Type}",
+                        response.CommandId,
+                        response.GetType().Name);
                 }
 
-                // 否则是内部超时
-                // 只记录非心跳包的日志
-                if (packet is not HeartbeatPacket and not HeartbeatAckPacket)
-                {
-                    Log.Warning("等待响应超时：CommandId={CommandId}, Type={Type}, 重试次数={RetryCount}",
-                        packet.CommandId,
-                        packet.GetType().Name,
-                        retryCount);
-                }
+                if (response is T typedResponse)
+                    return typedResponse;
+
+                // 理论上不应发生，因为 tcs 是 PlcPacket 类型
+                throw new InvalidOperationException($"收到意外的响应类型: {response.GetType().Name}");
+
+            }
+            // 捕获 OperationCanceledException，这可能由外部取消或通过注册回调触发的超时引起
+            catch (OperationCanceledException)
+            {
+                _pendingRequests.TryRemove(packet.CommandId, out _); // 确保移除 TCS
+                Log.Warning("发送/等待响应操作被取消或超时：CommandId={CommandId}, Type={Type}, 重试次数={RetryCount}",
+                    packet.CommandId,
+                    packet.GetType().Name,
+                    retryCount);
 
                 retryCount++;
                 if (retryCount < maxRetries)
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    await Task.Delay(1000, cancellationToken);
-                    continue;
+                    // 检查是否是外部传入的 CancellationToken 被取消
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                         Log.Debug("外部请求已取消，停止重试: CommandId={CommandId}", packet.CommandId);
+                         throw; // 如果是外部取消，直接抛出，不重试
+                    }
+                    // 否则，认为是超时触发的取消，继续重试
+                    Log.Debug("操作超时，尝试重试 (次数: {RetryCount}): CommandId={CommandId}", retryCount, packet.CommandId);
+                    await Task.Delay(1000, CancellationToken.None); // 短暂延迟，避免立即重试
+                    continue; // 继续下一次重试循环
                 }
 
-                if (packet is HeartbeatPacket)
+                // 重试次数耗尽
+                Log.Error("发送/等待响应操作在达到最大重试次数后仍然超时或被取消：CommandId={CommandId}, Type={Type}",
+                    packet.CommandId, packet.GetType().Name);
+
+                if (packet is HeartbeatPacket) // 特殊处理心跳包失败
                 {
-                    DeviceStatusChanged?.Invoke(this, DeviceStatusCode.Disconnected);
+                     DeviceStatusChanged?.Invoke(this, DeviceStatusCode.Disconnected);
                 }
-
-                throw new TimeoutException("等待响应超时");
-            }
-            catch (OperationCanceledException)
-            {
-                _pendingRequests.TryRemove(packet.CommandId, out _);
-                Log.Debug("发送操作捕获到取消请求：CommandId={CommandId}, Type={Type}", packet.CommandId, packet.GetType().Name);
+                // 重新抛出原始的 OperationCanceledException，指示调用者操作未成功
                 throw;
             }
+            // 捕获其他异常
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                _pendingRequests.TryRemove(packet.CommandId, out _);
+                _pendingRequests.TryRemove(packet.CommandId, out _); // 确保移除 TCS
                 if (packet is not HeartbeatPacket and not HeartbeatAckPacket)
                 {
                     Log.Error(ex, "发送数据包失败：CommandId={CommandId}, Type={Type}, 重试次数={RetryCount}",
@@ -370,18 +357,21 @@ internal class PlcCommunicationService(
                 retryCount++;
                 if (retryCount < maxRetries)
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
+                    cancellationToken.ThrowIfCancellationRequested(); // 重试前检查外部取消
                     await Task.Delay(1000, cancellationToken);
+                    continue; // 继续下一次重试循环
                 }
-                else
-                {
-                    if (packet is HeartbeatPacket)
-                    {
-                        DeviceStatusChanged?.Invoke(this, DeviceStatusCode.Disconnected);
-                    }
 
-                    throw;
+                // 重试次数耗尽
+                Log.Error(ex, "发送数据包在达到最大重试次数后仍然失败：CommandId={CommandId}, Type={Type}",
+                    packet.CommandId, packet.GetType().Name);
+                    
+                if (packet is HeartbeatPacket) // 特殊处理心跳包失败
+                {
+                     DeviceStatusChanged?.Invoke(this, DeviceStatusCode.Disconnected);
                 }
+
+                throw; // 重新抛出异常
             }
         }
     }
@@ -458,22 +448,15 @@ internal class PlcCommunicationService(
         {
             _lastReceivedTime = DateTime.Now;
             Log.Information("PLC连接成功。之前的状态为: {PreviousStatus}", CurrentDeviceStatus);
-
-            // Always attempt to update status to Normal upon connection success.
-            // The ViewModel handler should be idempotent.
-            // Update internal state first
             CurrentDeviceStatus = DeviceStatusCode.Normal;
-            // Then trigger the event
             DeviceStatusChanged?.Invoke(this, DeviceStatusCode.Normal);
             Log.Information("触发 DeviceStatusChanged 事件，状态: Normal");
 
 
             // Start heartbeat if not running
-            if (_heartbeatTask == null || _heartbeatTask.IsCompleted)
-            {
-                _heartbeatTask = Task.Run(HeartbeatLoopAsync, _cancellationTokenSource.Token);
-                Log.Debug("PLC心跳任务已启动");
-            }
+            if (_heartbeatTask is { IsCompleted: false }) return;
+            _heartbeatTask = Task.Run(HeartbeatLoopAsync, _cancellationTokenSource.Token);
+            Log.Debug("PLC心跳任务已启动");
         }
         else // isConnected is false
         {

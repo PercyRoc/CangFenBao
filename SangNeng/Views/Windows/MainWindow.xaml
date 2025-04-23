@@ -163,31 +163,25 @@
                         <StackPanel Grid.Row="1" Margin="0,0,0,16">
                             <TextBlock Text="Barcode" Margin="0,0,0,8" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" />
 
-                            <!-- Barcode Display Area -->
-                            <Border BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" CornerRadius="2" Height="50" Background="{DynamicResource ControlFillColorDisabledBrush}" Margin="0,0,0,8">
-                                <TextBlock Text="{Binding CurrentBarcode, Mode=OneWay}" 
-                                           VerticalAlignment="Center" 
-                                           Margin="10,0" 
-                                           FontSize="20" 
-                                           FontWeight="Bold" 
-                                           Foreground="{StaticResource AccentBrush}" />
-                            </Border>
-                            
-                            <!-- Manual Barcode Input -->
-                            <TextBlock Text="Manual Input" Margin="0,4,0,4" FontSize="12" FontWeight="Normal" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <!-- Combined TextBox for Display and Input -->
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <hc:TextBox Grid.Column="0" 
+                                <hc:TextBox Grid.Column="0"
                                             x:Name="ManualBarcodeTextBox"
-                                            hc:InfoElement.Placeholder="Enter barcode manually and press Enter..."
-                                            Height="35"
-                                            FontSize="14"
-                                            FontWeight="Normal"
+                                            Text="{Binding CurrentBarcode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                            hc:InfoElement.Placeholder="Scan barcode or enter manually..."
+                                            Height="50" 
+                                            FontSize="20" 
+                                            FontWeight="Bold" 
+                                            VerticalAlignment="Center"
+                                            Padding="10,0"
                                             KeyDown="ManualBarcodeTextBox_KeyDown" />
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0" VerticalAlignment="Center">
+
+                                <!-- Manual Input Toggle -->
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0" VerticalAlignment="Center">
                                     <CheckBox x:Name="BlockScannerInput" 
                                               Content="Enable Manual Input" 
                                               IsChecked="False"

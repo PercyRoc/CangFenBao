@@ -623,9 +623,13 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         {
             PackageStatus.Success
                 => "#4CAF50", // 绿色表示成功
-            PackageStatus.Error or PackageStatus.Timeout
-                => "#F44336", // 红色表示错误、超时或失败
-            _ => "#2196F3" // 其他状态（如进行中、等待中）使用蓝色或其他中性色
+            PackageStatus.Timeout 
+                => "#FFC107", // 黄色表示超时
+            PackageStatus.Error
+                => "#F44336", // 红色表示错误
+            PackageStatus.Offline
+                => "#FF9800", // 橙色表示离线
+            _ => "#2196F3" // 其他状态（如进行中、等待中）使用蓝色
         };
     }
 

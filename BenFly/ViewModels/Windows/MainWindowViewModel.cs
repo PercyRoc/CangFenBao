@@ -32,6 +32,9 @@ namespace BenFly.ViewModels.Windows;
 
 internal class MainWindowViewModel : BindableBase, IDisposable
 {
+    // 用于为合并后的包裹生成新的、线程安全的序号
+    private static int _nextMergedPackageIndex;
+    
     private readonly BenNiaoPackageService _benNiaoService;
     private readonly BenNiaoPreReportService _preReportService;
     private readonly ICameraService _cameraService;
@@ -125,7 +128,10 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
         // 订阅包裹流
         _subscriptions.Add(packageTransferService.PackageStream
-            .ObserveOn(Scheduler.CurrentThread)
+            .Buffer(TimeSpan.FromMilliseconds(200))
+            .Where(buffer => buffer.Any()) // 确保buffer不为空
+            .Select(MergePackageInfos) // 使用合并函数
+            .ObserveOn(Scheduler.CurrentThread) // 切换回UI线程
             .Subscribe(OnPackageInfo));
 
         // 订阅图像流
@@ -219,13 +225,27 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             Log.Debug("已添加相机状态");
 
             // 添加皮带状态
-            DeviceStatuses.Add(new DeviceStatus
+            var beltSettings = _settingsService.LoadSettings<BeltSerialParams>(); // Load settings
+            var beltStatus = new DeviceStatus
             {
                 Name = "皮带",
-                Status = "未连接",
-                Icon = "AlignStartVertical20",
-                StatusColor = "#F44336"
-            });
+                Icon = "AlignStartVertical20"
+            };
+
+            if (!beltSettings.IsEnabled)
+            {
+                beltStatus.Status = "已禁用";
+                beltStatus.StatusColor = "#9E9E9E"; // Gray color for disabled
+                Log.Debug("皮带串口已禁用，状态设置为 '已禁用'");
+            }
+            else
+            {
+                // If enabled, check the initial connection status
+                beltStatus.Status = _beltSerialService.IsOpen ? "已连接" : "未连接"; // Or "已断开"? Keep consistent
+                beltStatus.StatusColor = _beltSerialService.IsOpen ? "#4CAF50" : "#F44336"; // Green/Red
+                Log.Debug("皮带串口已启用，初始状态: {Status}", beltStatus.Status);
+            }
+            DeviceStatuses.Add(beltStatus); // Add the configured status object
             Log.Debug("已添加皮带状态");
 
             // 获取分拣配置
@@ -273,8 +293,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 Log.Debug("已更新设备初始状态: {Name} -> {Status}", deviceName, deviceStatus.Status);
             }
 
-            // 更新皮带初始状态
-            UpdateBeltStatus(_beltSerialService.IsOpen);
+            // 更新皮带初始状态 - 这行不再需要，已在添加时处理
+            // UpdateBeltStatus(_beltSerialService.IsOpen);
         }
         catch (Exception ex)
         {
@@ -294,8 +314,22 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             var beltStatus = DeviceStatuses.FirstOrDefault(static x => x.Name == "皮带");
             if (beltStatus == null) return;
 
+            // Load the settings *inside* the dispatcher invoke to get the latest state
+            var beltSettings = _settingsService.LoadSettings<BeltSerialParams>();
+
+            if (!beltSettings.IsEnabled)
+            {
+                beltStatus.Status = "已禁用";
+                beltStatus.StatusColor = "#9E9E9E"; // Gray
+                Log.Debug("皮带串口已禁用 (在状态更新时检测到)");
+            }
+            else
+            {
+                // Only update based on isConnected if enabled
             beltStatus.Status = isConnected ? "已连接" : "已断开";
-            beltStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
+                beltStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336"; // Green/Red
+                Log.Debug("皮带串口已启用，状态更新为: {Status}", beltStatus.Status);
+            }
         });
     }
 
@@ -576,172 +610,45 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 // 播放错误音效
                 _ = _audioService.PlayPresetAsync(AudioType.SystemError);
 
-                // 停止皮带
-                try
-                {
-                    _beltSerialService.StopBelt();
-                    Log.Information("已发送停止皮带命令 (原因: {Reason})", isNoReadOrEmpty ? "NoRead/Empty Barcode" : "Invalid Weight/Volume");
-                }
-                catch (Exception ex)
-                {
-                    // 停止皮带失败，记录日志并尝试设置状态
-                    var errorMsg = $"停止皮带失败: {ex.Message}";
-                    Log.Error(ex, errorMsg);
-                    package.SetStatus(PackageStatus.Error, errorMsg);
-                    // 如果停止失败，可能不应该继续NoRead处理，标记跳过？看业务需求
-                    // skipFurtherProcessing = true; 
-                }
+                // 加载格口规则以获取异常口
+                var segmentCodeRules = _settingsService.LoadSettings<SegmentCodeRules>();
+                var exceptionChute = segmentCodeRules.ExceptionChute;
 
-                // 更新UI历史记录和信息项
-                await Application.Current.Dispatcher.InvokeAsync(() =>
-                {
-                    try
-                    {
-                        UpdatePackageInfoItems(package); // 先更新一次显示，即使是无效数据
-                        PackageHistory.Insert(0, package);
-                        while (PackageHistory.Count > 1000)
-                            PackageHistory.RemoveAt(PackageHistory.Count - 1);
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex, "更新UI历史记录时发生错误");
-                    }
-                });
+                // 分配到配置的异常口
+                package.SetChute(exceptionChute);
+                Log.Information("包裹 {Barcode} (Index: {Index}) 因 '{Reason}'，预分配到配置的异常口 {ExceptionChute}", 
+                    package.Barcode, package.Index, isNoReadOrEmpty ? "NoRead/Empty Barcode" : "Invalid Weight/Volume", exceptionChute);
 
-                if (isNoReadOrEmpty)
+                // 加载皮带设置
+                var beltSettings = _settingsService.LoadSettings<BeltSerialParams>();
+
+                // 根据皮带启用状态决定后续操作
+                if (beltSettings.IsEnabled)
                 {
-                    // --- 处理 NoRead/空条码 --- 
-                    try
-                    {
-                        Log.Information("检测到 noread/空 条码，等待条码输入");
+                    // 皮带启用: 尝试停止，显示完整错误信息
+                    // Note: StopBelt was already attempted above if enabled, no need to call again unless the logic changed
+                    // We just need to ensure the notification reflects the stopped state.
+                    Log.Information("皮带已启用，因数据无效停止。", package.Barcode); // Log confirming stop attempt was made
                         await Application.Current.Dispatcher.InvokeAsync(() =>
                         {
-                            CurrentBarcode = string.Empty;
-                            _notificationService.ShowWarning("检测到无法识别的条码，请扫描或手动输入条码后按回车");
-                            if (Application.Current.MainWindow == null) return;
-                            var textBox = FindBarcodeTextBox(Application.Current.MainWindow);
-                            textBox?.Focus();
-                        });
-
-                        var enterKeyTcs = new TaskCompletionSource<bool>();
-                        await Application.Current.Dispatcher.InvokeAsync(() =>
-                        {
-                             if (Application.Current.MainWindow == null) return;
-                            Application.Current.MainWindow.KeyDown += EnterKeyHandler;
-                            return;
-
-                            void EnterKeyHandler(object s, KeyEventArgs e)
-                            {
-                                if (e.Key != Key.Enter) return;
-                                Application.Current.MainWindow!.KeyDown -= EnterKeyHandler;
-                                enterKeyTcs.TrySetResult(true);
-                            }
-                        });
-
-                        Log.Information("等待用户输入条码或按回车键跳过...");
-                        var barcodeScanTask = WaitForBarcodeScanAsync();
-                        var completedTask = await Task.WhenAny(barcodeScanTask, enterKeyTcs.Task);
-
-                        string? newBarcode;
-                        if (completedTask == barcodeScanTask)
-                        {
-                            newBarcode = await barcodeScanTask;
-                            Log.Information("通过扫码方式获取新条码: {NewBarcode}", newBarcode);
-                            if (!enterKeyTcs.Task.IsCompleted) await enterKeyTcs.Task;
-                            Log.Information("用户已确认条码: {Barcode}", newBarcode);
+                        _notificationService.ShowError($"包裹 {package.Barcode} 因数据无效停止。请检查包裹或设备。");
+                        UpdatePackageInfoItems(package); // 再次更新，确保状态和错误信息显示
+                    });
                         }
                         else
                         {
-                            newBarcode = CurrentBarcode;
-                            if (!string.IsNullOrWhiteSpace(newBarcode))
-                            {
-                                Log.Information("用户直接输入新条码: {NewBarcode} 并按回车确认", newBarcode);
-                            }
-                            else
-                            {
-                                Log.Information("用户按下回车键，未输入条码，将作为异常数据上传");
-                                _barcodeScanCompletionSource?.TrySetCanceled();
-                                uploadAsNoRead = true;
-                            }
-                        }
-
-                        if (!string.IsNullOrWhiteSpace(newBarcode) && !uploadAsNoRead)
-                        {
-                            Log.Information("使用新条码更新包裹信息: {Barcode}", newBarcode);
-                            package.SetBarcode(newBarcode);
-                        }
-                        else if (uploadAsNoRead)
-                        {
-                            Log.Information("将作为NoRead数据上传，原始条码: {OriginalBarcode}", package.Barcode);
-                        }
-                        else
-                        {
-                            Log.Warning("未明确获取到新条码且未标记为NoRead上传，将视为NoRead");
-                            uploadAsNoRead = true;
-                        }
-
-                        // 重启皮带 (仅在NoRead处理完成后)
-                        try
-                        {
-                            _beltSerialService.StartBelt();
-                            Log.Information("NoRead处理完成，已发送启动皮带命令");
-                        }
-                        catch (Exception ex)
-                        {
-                            var errorMsg = $"启动皮带失败(NoRead后): {ex.Message}";
-                            Log.Error(ex, errorMsg);
-                            // 启动失败也记录到包裹信息中？可能意义不大，因为包裹信息已基本确定
-                            // package.SetStatus(PackageStatus.Error, errorMsg); 
-                            await Application.Current.Dispatcher.InvokeAsync(() => _notificationService.ShowError(errorMsg));
-                        }
-                    }
-                    catch (TaskCanceledException)
-                    {
-                        Log.Information("条码输入被取消");
-                        uploadAsNoRead = true;
-                        try { _beltSerialService.StartBelt(); Log.Information("条码输入取消，已发送启动皮带命令"); } 
-                        catch (Exception ex) 
-                        { 
-                            var errorMsg = $"启动皮带失败(取消后): {ex.Message}";
-                            Log.Error(ex, errorMsg); 
-                            await Application.Current.Dispatcher.InvokeAsync(() => _notificationService.ShowError(errorMsg));
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex, "等待条码输入时发生错误");
-                        uploadAsNoRead = true;
+                    // 皮带禁用: 仅提示数据无效
+                    Log.Information("皮带已禁用，因数据无效跳过处理流程。", package.Barcode);
                         await Application.Current.Dispatcher.InvokeAsync(() =>
                         {
-                            _notificationService.ShowError("条码输入处理过程中发生错误");
-                        });
-                        try { _beltSerialService.StartBelt(); Log.Information("条码输入错误，已发送启动皮带命令");} 
-                        catch (Exception startEx) 
-                        { 
-                            var errorMsg = $"启动皮带失败(错误后): {startEx.Message}";
-                            Log.Error(startEx, errorMsg); 
-                            await Application.Current.Dispatcher.InvokeAsync(() => _notificationService.ShowError(errorMsg));
-                        }
-                    }
-                }
-                else if (isInvalidData)
-                {
-                    // --- 处理无效数据 (重量/体积) --- 
-                    var errorMsg = "包裹重量或体积数据无效";
-                    Log.Error("包裹数据无效: {Barcode}, 重量: {Weight}, 长度: {Length}, 宽度: {Width}, 高度: {Height}", 
-                            package.Barcode, package.Weight, package.Length, package.Width, package.Height);
-                    package.SetStatus(PackageStatus.Error, errorMsg);
-                    
-                    await Application.Current.Dispatcher.InvokeAsync(() =>
-                    {
-                         _notificationService.ShowError($"{errorMsg}，皮带已停止，请检查包裹或设备。");
+                        _notificationService.ShowError($"包裹 {package.Barcode} 因数据无效跳过处理流程。请检查包裹或设备。 (皮带控制已禁用)");
                          UpdatePackageInfoItems(package); // 再次更新，确保状态和错误信息显示
                     });
+                }
 
-                    // 跳过后续处理步骤，皮带保持停止
+                // 无论启用与否，都跳过后续处理
                     skipFurtherProcessing = true;
                     Log.Information("因数据无效，跳过包裹 {Barcode} 的后续处理流程。", package.Barcode);
-                }
             }
 
              // ****** 开始处理包裹（如果未跳过） ******
@@ -1126,6 +1033,90 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 avgTimeItem.Description = "暂无有效处理数据";
             }
         }
+    }
+
+    private static PackageInfo MergePackageInfos(IList<PackageInfo> buffer)
+    {
+        if (!buffer.Any()) throw new ArgumentException("Buffer cannot be empty.", nameof(buffer));
+
+        var mergedPackage = buffer[0]; // 使用第一个包裹作为基础
+
+        for (var i = 1; i < buffer.Count; i++)
+        {
+            var currentPackage = buffer[i];
+
+            // 合并条码：优先使用非空且不是 "noread" 的条码
+            if (!string.IsNullOrWhiteSpace(currentPackage.Barcode) && 
+                !string.Equals(currentPackage.Barcode, "noread", StringComparison.OrdinalIgnoreCase) &&
+                (string.IsNullOrWhiteSpace(mergedPackage.Barcode) || 
+                 string.Equals(mergedPackage.Barcode, "noread", StringComparison.OrdinalIgnoreCase)))
+            {
+                mergedPackage.SetBarcode(currentPackage.Barcode);
+            }
+
+            // 合并重量：优先使用大于0的重量
+            if (currentPackage.Weight > 0 && mergedPackage.Weight <= 0)
+            {
+                mergedPackage.SetWeight(currentPackage.Weight);
+            }
+
+            // 合并长度：优先使用大于0的长度
+            if (currentPackage.Length is > 0 && 
+                mergedPackage.Length is null or <= 0)
+            {
+                // mergedPackage.SetLength(currentPackage.Length.Value);
+                // 改为直接更新属性，因为 SetLength 不存在，并且 Length 的 setter 是 private
+                // 需要找到合适的方式更新，可能需要修改 PackageInfo 或使用 SetDimensions
+            }
+
+            // 合并宽度：优先使用大于0的宽度
+            if (currentPackage.Width is > 0 && 
+                mergedPackage.Width is null or <= 0)
+            {
+                 // mergedPackage.SetWidth(currentPackage.Width.Value);
+            }
+
+            // 合并高度：优先使用大于0的高度
+            if (currentPackage.Height is > 0 && 
+                mergedPackage.Height is null or <= 0)
+            {
+                 // mergedPackage.SetHeight(currentPackage.Height.Value);
+            }
+
+            // 使用 SetDimensions 一次性设置尺寸
+            var newLength = mergedPackage.Length ?? 0;
+            var newWidth = mergedPackage.Width ?? 0;
+            var newHeight = mergedPackage.Height ?? 0;
+
+            if (currentPackage.Length is > 0 && newLength <= 0)
+            {
+                newLength = currentPackage.Length.Value;
+            }
+            if (currentPackage.Width is > 0 && newWidth <= 0)
+            {
+                newWidth = currentPackage.Width.Value;
+            }
+            if (currentPackage.Height is > 0 && newHeight <= 0)
+            {
+                newHeight = currentPackage.Height.Value;
+            }
+
+            // 只有当所有尺寸都有效时才调用 SetDimensions
+            if (newLength > 0 && newWidth > 0 && newHeight > 0)
+            {
+                mergedPackage.SetDimensions(newLength, newWidth, newHeight);
+            }
+        }
+
+        Log.Debug("Merged {Count} packages into one: {Barcode}, Weight: {Weight}, LWH: {L}x{W}x{H}", 
+            buffer.Count, mergedPackage.Barcode, mergedPackage.Weight, 
+            mergedPackage.Length, mergedPackage.Width, mergedPackage.Height);
+
+        // 为合并后的包裹分配新的、线程安全的序号
+        mergedPackage.Index = Interlocked.Increment(ref _nextMergedPackageIndex);
+        Log.Debug("Assigned new merged index {NewIndex} to package {Barcode}", mergedPackage.Index, mergedPackage.Barcode);
+
+        return mergedPackage;
     }
 
     protected virtual void Dispose(bool disposing)

@@ -167,10 +167,21 @@ public partial class App
             await pendulumHostedService.StartAsync(CancellationToken.None);
             Log.Information("摆轮分拣托管服务启动成功");
 
-            // 启动串口托管服务
+            // 获取皮带设置
+            var settingsService = Container.Resolve<Common.Services.Settings.ISettingsService>();
+            var beltSettings = settingsService.LoadSettings<BeltSerialParams>();
+
+            // 启动串口托管服务（仅当皮带启用时）
             var beltSerialHostedService = Container.Resolve<BeltSerialService>();
-            beltSerialHostedService.StartBelt();
-            Log.Information("串口托管服务启动成功");
+            if (beltSettings.IsEnabled)
+            {
+                beltSerialHostedService.StartBelt();
+                Log.Information("皮带控制已启用，串口托管服务启动成功");
+            }
+            else
+            {
+                Log.Information("皮带控制已禁用，跳过串口启动");
+            }
         }
         catch (Exception ex)
         {
@@ -258,10 +269,21 @@ public partial class App
             _cleanupTimer?.Stop();
             _cleanupTimer?.Dispose();
 
-            // 停止串口托管服务
+            // 获取皮带设置
+            var settingsService = Container.Resolve<Common.Services.Settings.ISettingsService>();
+            var beltSettings = settingsService.LoadSettings<BeltSerialParams>();
+
+            // 停止串口托管服务（仅当皮带启用时）
             var beltSerialHostedService = Container.Resolve<BeltSerialService>();
-             beltSerialHostedService.StopBelt();
-            Log.Information("串口托管服务已停止");
+            if (beltSettings.IsEnabled)
+            {
+                beltSerialHostedService.StopBelt();
+                Log.Information("皮带控制已启用，串口托管服务已停止");
+            }
+            else
+            {
+                Log.Information("皮带控制已禁用，跳过串口停止");
+            }
 
             // 停止摆轮分拣托管服务
             var pendulumHostedService = Container.Resolve<PendulumSortHostedService>();

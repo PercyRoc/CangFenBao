@@ -301,7 +301,7 @@ namespace SortingServices.Car
                 // Byte 1: 地址 + 方向 + S7
                 byte speedVal = (byte)Math.Clamp(car.Speed / 6, 5, 255); // 速度计算
                 byte s7 = (byte)((speedVal >> 7) & 0x01); // 获取速度的最高位
-                byte directionBit = (byte)(isReverse ? 0x80 : 0x00); // 方向位 (0x00=正向, 0x80=反向)
+                byte directionBit = (byte)(isReverse ? 0x40 : 0x00); // 方向位 (0x00=正向, 0x40=反向)
                 cmd[1] = (byte)(directionBit | (s7 << 5) | (addr & 0x1F)); // 注意: 0x95帧地址只用到低5位(1-31)
 
                 // Byte 2: 速度 S6-S0

@@ -10,6 +10,13 @@
         <RootNamespace>Common</RootNamespace>
     </PropertyGroup>
 
+    <ItemGroup>
+      <Compile Remove="Models\Sortings\**" />
+      <EmbeddedResource Remove="Models\Sortings\**" />
+      <None Remove="Models\Sortings\**" />
+      <Page Remove="Models\Sortings\**" />
+    </ItemGroup>
+
 
     <ItemGroup>
         <PackageReference Include="MahApps.Metro.IconPacks.Material" />
@@ -25,10 +32,5 @@
         <PackageReference Include="System.IO.Ports" />
         <PackageReference Include="HandyControl" />
         <PackageReference Include="WPF-UI" />
-    </ItemGroup>
-
-
-    <ItemGroup>
-      <Folder Include="Models\Sortings\" />
     </ItemGroup>
 </Project>

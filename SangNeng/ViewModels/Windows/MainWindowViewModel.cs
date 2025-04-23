@@ -776,9 +776,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     // 确保保存目录存在
                     if (!Directory.Exists(settings.ImageSavePath)) Directory.CreateDirectory(settings.ImageSavePath);
 
-                    // 生成文件名（使用条码和时间戳）
+                    // 清理条码中的非法文件名字符
+                    var sanitizedBarcode = string.Join("_", package.Barcode.Split(Path.GetInvalidFileNameChars()));
+
+                    // 生成文件名（使用清理后的条码和时间戳）
                     var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff");
-                    imageName = $"{package.Barcode}_{timestamp}";
+                    imageName = $"{sanitizedBarcode}_{timestamp}"; // 使用清理后的条码
                     var extension = settings.ImageFormat switch
                     {
                         ImageFormat.Jpeg => ".jpg",
@@ -828,7 +831,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                         var watermarkLines = new[]
                         {
-                            $"Barcode: {package.Barcode}",
+                            $"Barcode: {package.Barcode}", // 水印中仍显示原始条码
                             $"Size: {package.Length:F1}cm × {package.Width:F1}cm × {package.Height:F1}cm",
                             $"Weight: {package.Weight:F3}kg",
                             $"Volume: {package.Volume / 1000.0:N0}cm³",

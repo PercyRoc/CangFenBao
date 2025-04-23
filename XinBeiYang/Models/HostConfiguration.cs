@@ -16,6 +16,7 @@ public class HostConfiguration : BindableBase
     private string _plcIpAddress = "127.0.0.1";
     private int _plcPort = 8080;
     private int _uploadTimeoutSeconds = 60; // 默认60秒超时
+    private int _uploadCountdownSeconds = 5; // 默认5秒倒计时
 
     // 京东服务配置
     private string _jdIpAddress = "127.0.0.1";
@@ -49,6 +50,12 @@ public class HostConfiguration : BindableBase
     {
         get => _uploadTimeoutSeconds;
         set => SetProperty(ref _uploadTimeoutSeconds, value);
+    }
+    
+    public int UploadCountdownSeconds
+    {
+        get => _uploadCountdownSeconds;
+        set => SetProperty(ref _uploadCountdownSeconds, value);
     }
     
     // 京东服务配置属性

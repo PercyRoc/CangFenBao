@@ -133,13 +133,13 @@ public class MainWindowViewModel : BindableBase, IDisposable
     public BitmapSource? CurrentImage
     {
         get => _currentImage;
-        set => SetProperty(ref _currentImage, value);
+        private set => SetProperty(ref _currentImage, value);
     }
 
     public SystemStatus SystemStatus
     {
         get => _systemStatus;
-        set => SetProperty(ref _systemStatus, value);
+        private set => SetProperty(ref _systemStatus, value);
     }
 
     public ObservableCollection<PackageInfo> PackageHistory { get; } = [];
@@ -176,11 +176,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             // 初始化小车分拣服务
-            bool initialized = await _carSortService.InitializeAsync();
+            var initialized = await _carSortService.InitializeAsync();
             if (initialized)
             {
                 // 启动服务
-                bool started = await _carSortService.StartAsync();
+                var started = await _carSortService.StartAsync();
                 Log.Information("小车分拣服务初始化状态: {Initialized}, 启动状态: {Started}", 
                     initialized, started);
                 UpdateCarStatus(_carSortService.IsConnected, started);
@@ -339,8 +339,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
             var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
 
             // 判断条码是否为空或noread
-            bool isNoRead = string.IsNullOrEmpty(package.Barcode) ||
-                         string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase);
+            var isNoRead = string.IsNullOrEmpty(package.Barcode) ||
+                           string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase);
 
             if (isNoRead)
             {
@@ -454,12 +454,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
             }
             
             // 添加到小车分拣队列
-            if (package.ChuteNumber > 0)
+            if (package.ChuteNumber <= 0) return;
             {
                 try
                 {
                     // 添加到分拣队列
-                    bool added = await _carSortService.ProcessPackageSortingAsync(package);
+                    var added = await _carSortService.ProcessPackageSortingAsync(package);
                     
                     if (added)
                     {

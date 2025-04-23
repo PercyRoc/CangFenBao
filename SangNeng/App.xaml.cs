@@ -140,7 +140,7 @@ internal partial class App
     {
         // 配置Serilog
         Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Information()
+            .MinimumLevel.Debug()
             .WriteTo.Console()
             .WriteTo.Debug()
             .WriteTo.File("logs/app-.log",

@@ -709,6 +709,23 @@
                                HorizontalAlignment="Center"/>
                 </StackPanel>
             </Border>
+            
+            <!-- 上包倒计时覆盖层 -->
+            <Border Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
+                    Background="#88000000" 
+                    Visibility="{Binding IsUploadCountdownVisible, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}"
+                    Panel.ZIndex="8"> <!-- Lower ZIndex than warnings -->
+                <Viewbox Stretch="Uniform">
+                    <TextBlock Text="{Binding UploadCountdownValue}" 
+                               Foreground="LimeGreen"
+                               FontWeight="Bold"
+                               Margin="20">
+                        <TextBlock.Effect>
+                            <DropShadowEffect Color="Black" ShadowDepth="3" BlurRadius="5" Opacity="0.8"/>
+                        </TextBlock.Effect>
+                    </TextBlock>
+                </Viewbox>
+            </Border>
         </Grid>
 
         <!-- 状态栏 -->

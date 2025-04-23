@@ -57,7 +57,7 @@ internal class BeltSettingsViewModel : BindableBase
         SaveConfigurationCommand = new DelegateCommand(ExecuteSaveConfiguration);
     }
 
-    public SerialPortParams Settings { get; }
+    public BeltSerialParams Settings { get; }
 
     public ObservableCollection<string> AvailablePortNames { get; }
     public ObservableCollection<int> AvailableBaudRates { get; }

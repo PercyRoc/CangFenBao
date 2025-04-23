@@ -108,7 +108,7 @@ public partial class App
     protected override void OnStartup(StartupEventArgs e)
     {
         Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Debug()
+            .MinimumLevel.Information()
             .WriteTo.Console()
             .WriteTo.Debug()
             .WriteTo.File("logs/app-.log",
@@ -162,7 +162,7 @@ public partial class App
             var hostedService = Container.Resolve<PlcCommunicationHostedService>();
             await hostedService.StartAsync(CancellationToken.None);
             
-            var jdWcsService = Container.Resolve<JdWcsCommunicationService>();
+            var jdWcsService = Container.Resolve<IJdWcsCommunicationService>();
             jdWcsService.Start();
             Log.Information("京东WCS通信服务启动成功");
         }

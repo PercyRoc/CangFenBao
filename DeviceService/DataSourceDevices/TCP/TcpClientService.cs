@@ -132,7 +132,7 @@ public class TcpClientService : IDisposable
                 }
 
                 // 启动接收数据的线程
-                if (_receiveThread == null || !_receiveThread.IsAlive)
+                if (_receiveThread is not { IsAlive: true })
                 {
                     _receiveThread = new Thread(ReceiveData)
                     {

@@ -49,8 +49,9 @@ public partial class MainWindow
             {
                 bool enableManualInput = BlockScannerInput.IsChecked ?? true;
                 
-                // 设置文本框是否可用
-                ManualBarcodeTextBox.IsEnabled = enableManualInput;
+                // 设置文本框为只读（如果禁用手动输入）或可编辑，并确保始终启用
+                ManualBarcodeTextBox.IsEnabled = true;
+                ManualBarcodeTextBox.IsReadOnly = !enableManualInput;
                 
                 // 根据手动输入模式设置扫码枪拦截状态
                 _scannerService.InterceptAllInput = !enableManualInput; // 启用手动输入时不拦截键盘事件，禁用时拦截
@@ -150,8 +151,9 @@ public partial class MainWindow
             
             bool enableManualInput = BlockScannerInput.IsChecked ?? true;
             
-            // 设置文本框是否可用
-            ManualBarcodeTextBox.IsEnabled = enableManualInput;
+            // 设置文本框为只读（如果禁用手动输入）或可编辑，并确保始终启用
+            ManualBarcodeTextBox.IsEnabled = true;
+            ManualBarcodeTextBox.IsReadOnly = !enableManualInput;
             
             // 调整界面提示
             if (ManualBarcodeTextBox != null)

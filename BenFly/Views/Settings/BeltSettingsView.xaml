@@ -20,6 +20,22 @@
 
             <ui:Card>
                 <StackPanel Margin="16">
+                    <!-- 是否启用皮带 -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="启用皮带控制："
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
+                        <ui:ToggleSwitch Grid.Column="1"
+                                         IsChecked="{Binding Settings.IsEnabled}"
+                                         HorizontalAlignment="Left" />
+                    </Grid>
+
                     <TextBlock Text="串口参数配置"
                              Style="{DynamicResource SubtitleTextBlockStyle}"
                              Margin="0,0,0,16" />

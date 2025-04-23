@@ -78,17 +78,7 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
     public event EventHandler<bool>? ConnectionChanged;
     
     /// <inheritdoc />
-    public bool IsConnected
-    {
-        get => _tcpClientService?.IsConnected() ?? false;
-        private set
-        {
-            if (_isConnected == value) return;
-            _isConnected = value;
-            ConnectionChanged?.Invoke(this, value);
-            Log.Information("京东WCS连接状态: {Status}", value ? "已连接" : "已断开");
-        }
-    }
+    public bool IsConnected => _isConnected;
 
     /// <inheritdoc />
     public void Start()
@@ -121,7 +111,12 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
                 catch (Exception ex)
                 {
                     Log.Error(ex, "京东WCS连接任务异常");
-                    IsConnected = false;
+                    if (_isConnected) // 只有当状态从 true 变为 false 时才更新和触发
+                    {
+                        _isConnected = false;
+                        ConnectionChanged?.Invoke(this, false);
+                        Log.Information("京东WCS连接状态（异常捕获）: 已断开");
+                    }
                 }
             }
         }, token);
@@ -227,8 +222,6 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
                     throw;
                 }
             });
-            
-            // 连接成功，心跳任务会在OnConnectionStatusChanged回调中启动
         }
         catch (Exception ex)
         {
@@ -240,17 +233,58 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
     // 处理连接状态变更的回调
     private void OnConnectionStatusChanged(bool isConnected)
     {
-        if (_disposed) return;
+        Log.Debug("[JdWCS] OnConnectionStatusChanged received callback with isConnected = {IsConnected}. Current internal _isConnected = {_CurrentIsConnected}", isConnected, _isConnected);
+        if (_disposed) 
+        {
+            Log.Debug("[JdWCS] Service is disposed, ignoring OnConnectionStatusChanged callback.");
+            return;
+        }
         
-        IsConnected = isConnected;
+        // --- 修改开始：与PLC逻辑对齐 ---
+        // 1. 始终触发事件
+        var handler = ConnectionChanged;
+        if (handler != null)
+        {
+            try
+            {
+                handler.Invoke(this, isConnected);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "[JdWCS] Error invoking ConnectionChanged event handler.");
+            }
+        }
+        else
+        {
+            Log.Warning("[JdWCS] ConnectionChanged event has no subscribers.");
+        }
+
+        // 2. 更新内部状态
+        bool previousState = _isConnected;
+        _isConnected = isConnected; 
+        
+        // 3. 根据新状态执行后续操作
+        Log.Information("京东WCS连接状态: {Status}", _isConnected ? "已连接" : "已断开"); // 记录状态变化
         
         if (isConnected)
         {
             // 启动心跳任务
             if (_heartbeatTask == null || _heartbeatTask.IsCompleted)
             {
-                _heartbeatTask = StartHeartbeatTaskAsync(_cancellationTokenSource!.Token);
-                Log.Debug("京东WCS心跳任务已启动");
+                // 确保 CancellationTokenSource 存在且未被取消
+                if (_cancellationTokenSource != null && !_cancellationTokenSource.IsCancellationRequested)
+                {
+                    _heartbeatTask = StartHeartbeatTaskAsync(_cancellationTokenSource!.Token);
+                    Log.Debug("京东WCS心跳任务已启动");
+                }
+                else
+                {
+                    Log.Warning("无法启动心跳任务，因为 CancellationTokenSource 为 null 或已取消。");
+                }
+            }
+            else
+            {
+                Log.Debug("心跳任务已在运行，无需重新启动。");
             }
         }
         else
@@ -261,7 +295,9 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
                 command.TrySetCanceled();
             }
             _pendingCommands.Clear();
+            Log.Debug("京东WCS连接断开，已清理待处理的命令。");
         }
+        // --- 修改结束 ---
     }
     
     // 处理接收到数据的回调

@@ -13,11 +13,6 @@ public interface IPlcCommunicationService : IDisposable
     bool IsConnected { get; }
 
     /// <summary>
-    ///     连接状态变更事件
-    /// </summary>
-    event EventHandler<bool> ConnectionStatusChanged;
-    
-    /// <summary>
     ///     设备状态变更事件
     /// </summary>
     event EventHandler<DeviceStatusCode> DeviceStatusChanged;

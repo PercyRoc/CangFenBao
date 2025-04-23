@@ -120,6 +120,26 @@
                                       ClearButtonEnabled="False"
                                       Value="{Binding Configuration.UploadTimeoutSeconds,Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         </Grid>
+
+                        <!-- 上包倒计时 -->
+                        <Grid Margin="0,16,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="120" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Text="倒计时(秒)："
+                                       Grid.Column="0"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Right"
+                                       Margin="0,0,8,0" />
+
+                            <ui:NumberBox Grid.Column="1"
+                                          Width="120"
+                                          HorizontalAlignment="Left"
+                                          ClearButtonEnabled="False"
+                                          Value="{Binding Configuration.UploadCountdownSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </Grid>
                     </StackPanel>
                 </ui:Card>
                 
