@@ -6,8 +6,8 @@ public class PackageInfoItem : BindableBase
 {
     private string _description = string.Empty;
     private string _icon = string.Empty;
-    private string _label = string.Empty;
-    private string _statusColor = "#4CAF50"; // 默认绿色
+    private readonly string _label = string.Empty;
+    private string _statusColor = "#4CAF50";
     private string _unit = string.Empty;
     private string _value = string.Empty;
 
@@ -30,7 +30,7 @@ public class PackageInfoItem : BindableBase
     public string Label
     {
         get => _label;
-        set => SetProperty(ref _label, value);
+        init => SetProperty(ref _label, value);
     }
 
     /// <summary>

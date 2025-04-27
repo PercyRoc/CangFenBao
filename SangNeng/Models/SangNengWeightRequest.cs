@@ -21,4 +21,6 @@ public class SangNengWeightRequest
     [JsonPropertyName("image")] public string? Image { get; set; }
 
     [JsonPropertyName("imagename")] public string? ImageName { get; set; }
+
+    [JsonPropertyName("sign")] public string? Sign { get; set; }
 }

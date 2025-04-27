@@ -38,7 +38,7 @@ namespace ShanghaiFaxunLogistics.Services.ASN
                 }
 
                 // 使用UI线程显示确认对话框
-                bool confirmed = false;
+                var confirmed = false;
                 
                 // 必须在UI线程上弹出对话框
                 Application.Current.Dispatcher.Invoke(() =>
@@ -74,14 +74,7 @@ namespace ShanghaiFaxunLogistics.Services.ASN
                     });
                 });
 
-                if (confirmed)
-                {
-                    return Response.CreateSuccess();
-                }
-                else
-                {
-                    return Response.CreateFailed("用户取消了ASN单确认", "USER_CANCELLED");
-                }
+                return confirmed ? Response.CreateSuccess() : Response.CreateFailed("用户取消了ASN单确认", "USER_CANCELLED");
             }
             catch (Exception ex)
             {

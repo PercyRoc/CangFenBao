@@ -433,19 +433,51 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     {
                         // Upload Completed
                         var response = await uploadTask;
-                        if (!response.Success)
+
+                        // **新增逻辑: 即使 Success 为 false，但如果消息包含"出库完成"，也视为成功**
+                        if (!response.Success && response.Message != null && response.Message.Contains("出库完成"))
                         {
-                            // Upload Failed (API Error)
+                            Log.Information("称重响应消息为 '出库完成'，视为成功处理: {Barcode}", package.Barcode);
+                            // 直接进入后续成功处理逻辑 (格口匹配等)
+                            // 可以选择不显示警告通知
+                            // _notificationService.ShowWarning($"称重响应: {response.Message}");
+
+                            // Match chute rule (与原成功流程一致)
+                            var matchedChute = chuteSettings.FindMatchingChute(package.Barcode);
+                            if (matchedChute.HasValue)
+                            {
+                                package.SetChute(matchedChute.Value);
+                                Log.Information("包裹 {Barcode} 匹配到格口 {Chute}", package.Barcode, matchedChute.Value);
+                                package.SetStatus(Success); // 标记为成功
+                            }
+                            else
+                            {
+                                // No Rule Match (即使响应是"出库完成"，但无规则匹配仍算异常)
+                                package.SetChute(chuteSettings.ErrorChuteNumber);
+                                package.SetStatus(Error, "出库完成但未匹配规则");
+                                Interlocked.Increment(ref _otherErrorCount);
+                                Log.Warning("包裹 {Barcode} (出库完成) 未匹配规则，使用异常口：{ErrorChute}",
+                                    package.Barcode, chuteSettings.ErrorChuteNumber);
+                            }
+                        }
+                        // **原失败处理逻辑**
+                        else if (!response.Success)
+                        {
+                            // Upload Failed (API Error, 且非"出库完成")
                             Log.Warning("上传称重数据失败: Code={Code}, Message={Message}", response.Code, response.Message);
                             _notificationService.ShowWarning($"上传称重数据失败: {response.Message}");
-                            if (response.Message.Contains("重量"))
+                            if (response.Message != null && response.Message.Contains("重量")) // 添加 null 检查
                             {
                                 package.SetChute(chuteSettings.WeightMismatchChuteNumber > 0 ? chuteSettings.WeightMismatchChuteNumber : chuteSettings.ErrorChuteNumber);
                                 Interlocked.Increment(ref _weightErrorCount);
                             }
-                            else if (response.Message.Contains("拦截"))
+                            else if (response.Message != null && response.Message.Contains("拦截"))
                             {
-                                package.SetChute(chuteSettings.WeightMismatchChuteNumber > 0 ? chuteSettings.WeightMismatchChuteNumber : chuteSettings.ErrorChuteNumber);
+                                // 如果拦截也要走正常口，则需要修改这里的逻辑
+                                package.SetChute(chuteSettings.ErrorChuteNumber);
+                                Log.Warning("包裹 {Barcode} 被拦截，使用异常口：{ErrorChute}", package.Barcode, 
+                                    chuteSettings.ErrorChuteNumber);
+                                Interlocked.Increment(ref _otherErrorCount);
                             }
                             else
                             {
@@ -453,12 +485,11 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                                 Interlocked.Increment(ref _otherErrorCount);
                             }
                             package.SetStatus(Error, $"上传失败: {response.Message}");
-                            Log.Warning("包裹 {Barcode} 上传失败，使用异常口：{ErrorChute}", package.Barcode,
-                                chuteSettings.ErrorChuteNumber);
+                            Log.Warning("包裹 {Barcode} 上传失败，使用最终格口：{Chute}", package.Barcode, package.ChuteNumber); // 记录最终分配的口
                         }
                         else
                         {
-                            // Upload Success
+                            // Upload Success (原始成功流程)
                             Log.Information("成功上传称重数据: {Barcode}", package.Barcode);
 
                             // Match chute rule

@@ -15,9 +15,8 @@ namespace ZtCloudWarehous.Services;
 /// <summary>
 ///     称重服务实现
 /// </summary>
-internal class WeighingService(ISettingsService settingsService) : IWeighingService, IDisposable
+internal class WeighingService(ISettingsService settingsService, HttpClient httpClient) : IWeighingService
 {
-    private readonly HttpClient _httpClient = new();
     private const string UatBaseUrl = "https://scm-gateway-uat.ztocwst.com/edi/service/inbound/bz";
     private const string ProdBaseUrl = "https://scm-openapi.ztocwst.com/edi/service/inbound/bz";
 
@@ -107,7 +106,7 @@ internal class WeighingService(ISettingsService settingsService) : IWeighingServ
 
             // 发送请求 (包含 Body)
             stopwatch.Start();
-            var response = await _httpClient.PostAsync(requestUrl, requestBody);
+            var response = await httpClient.PostAsync(requestUrl, requestBody);
             stopwatch.Stop();
             Log.Information("称重请求 HttpClient.PostAsync 耗时: {ElapsedMilliseconds}ms for {Barcode}",
                 stopwatch.ElapsedMilliseconds, request.WaybillCode);
@@ -156,11 +155,5 @@ internal class WeighingService(ISettingsService settingsService) : IWeighingServ
             Log.Error(ex, "发送称重数据时发生错误，耗时: {ElapsedMilliseconds}ms", stopwatch.ElapsedMilliseconds);
             throw;
         }
-    }
-
-    public void Dispose()
-    {
-        _httpClient.Dispose();
-        GC.SuppressFinalize(this);
     }
 }

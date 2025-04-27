@@ -8,6 +8,7 @@ public class SangNengSettings : BindableBase
 {
     private string _password = "2025";
     private string _username = "247";
+    private string _sign = string.Empty;
 
     /// <summary>
     ///     Username for SangNeng server
@@ -25,5 +26,14 @@ public class SangNengSettings : BindableBase
     {
         get => _password;
         set => SetProperty(ref _password, value);
+    }
+
+    /// <summary>
+    ///     Sign for SangNeng server
+    /// </summary>
+    public string Sign
+    {
+        get => _sign;
+        set => SetProperty(ref _sign, value);
     }
 }

@@ -120,7 +120,9 @@ public partial class App
         containerRegistry.AddShardUi();
         containerRegistry.AddPhotoCamera();
 
+        // 恢复 HttpClient 的单例注册
         containerRegistry.RegisterSingleton<HttpClient>();
+        
         // 注册包裹中转服务
         containerRegistry.RegisterSingleton<PackageTransferService>();
 
@@ -230,8 +232,7 @@ public partial class App
                 if (Container.IsRegistered<IWaybillUploadService>())
                 {
                     var uploadService = Container.Resolve<IWaybillUploadService>();
-                    uploadService.Dispose();
-                    Log.Information("运单上传服务已释放");
+                    Log.Information("运单上传服务实例已获取 (无需释放)");
                 }
             }
             catch (Exception ex)

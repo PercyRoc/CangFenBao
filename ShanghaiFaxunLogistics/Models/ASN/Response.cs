@@ -86,7 +86,7 @@ namespace ShanghaiFaxunLogistics.Models.ASN
         /// <summary>
         /// 创建失败响应
         /// </summary>
-        public static new Response CreateFailed(string message, string code = "ERROR")
+        public new static Response CreateFailed(string message, string code = "ERROR")
         {
             return new Response
             {

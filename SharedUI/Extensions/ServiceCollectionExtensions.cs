@@ -17,7 +17,6 @@ public static class ServiceCollectionExtensions
 
         // 注册自定义历史记录窗口
         services.RegisterDialogWindow<HistoryWindow>("HistoryWindow");
-
         // 注册通用的确认对话框
         services.RegisterDialog<HistoryDialogView, HistoryDialogViewModel>("HistoryDialog");
     }

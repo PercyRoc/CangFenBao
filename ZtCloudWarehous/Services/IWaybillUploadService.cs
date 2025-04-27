@@ -5,7 +5,7 @@ namespace ZtCloudWarehous.Services;
 /// <summary>
 ///     运单上传服务接口
 /// </summary>
-public interface IWaybillUploadService : IDisposable
+public interface IWaybillUploadService
 {
     /// <summary>
     ///     添加包裹到后台上传队列（不等待完成）

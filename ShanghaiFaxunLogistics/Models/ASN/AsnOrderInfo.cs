@@ -53,7 +53,7 @@ namespace ShanghaiFaxunLogistics.Models.ASN
         /// 货物明细
         /// </summary>
         [JsonPropertyName("items")]
-        public List<AsnOrderItem> Items { get; set; } = new List<AsnOrderItem>();
+        public List<AsnOrderItem> Items { get; set; } = [];
 
         /// <summary>
         /// 扩展项

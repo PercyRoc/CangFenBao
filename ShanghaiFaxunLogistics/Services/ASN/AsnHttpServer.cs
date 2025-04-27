@@ -12,26 +12,18 @@ namespace ShanghaiFaxunLogistics.Services.ASN
     /// <summary>
     /// ASN HTTP服务器，提供接口供WMS调用
     /// </summary>
-    public class AsnHttpServer : IHostedService, IDisposable
+    public class AsnHttpServer(IAsnService asnService, ISettingsService settingsService) : IHostedService, IDisposable
     {
-        private readonly IAsnService _asnService;
-        private readonly ISettingsService _settingsService;
         private HttpListener? _listener;
         private CancellationTokenSource? _cts;
         private bool _isRunning;
-
-        public AsnHttpServer(IAsnService asnService, ISettingsService settingsService)
-        {
-            _asnService = asnService;
-            _settingsService = settingsService;
-        }
 
         /// <summary>
         /// 启动HTTP服务
         /// </summary>
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            var settings = _settingsService.LoadSettings<AsnSettings>();
+            var settings = settingsService.LoadSettings<AsnSettings>();
             if (!settings.IsEnabled)
             {
                 Log.Information("ASN HTTP服务已禁用，不会启动监听");
@@ -217,7 +209,7 @@ namespace ShanghaiFaxunLogistics.Services.ASN
                 }
 
                 // 处理业务逻辑 - 同步调用
-                var result = _asnService.ProcessAsnOrderInfo(asnInfo);
+                var result = asnService.ProcessAsnOrderInfo(asnInfo);
                 
                 // 返回处理结果
                 await SendResponseAsync(response, 200, result);
@@ -272,7 +264,7 @@ namespace ShanghaiFaxunLogistics.Services.ASN
                 }
 
                 // 处理业务逻辑 - 同步调用
-                var result = _asnService.ProcessMaterialReview(reviewRequest);
+                var result = asnService.ProcessMaterialReview(reviewRequest);
                 
                 // 返回处理结果
                 await SendResponseAsync(response, 200, result);

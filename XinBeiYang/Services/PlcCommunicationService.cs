@@ -252,8 +252,6 @@ internal class PlcCommunicationService(
             cancellationToken.ThrowIfCancellationRequested();
 
             var tcs = new TaskCompletionSource<PlcPacket>(TaskCreationOptions.RunContinuationsAsynchronously);
-            // 注册外部取消回调以尝试取消 TaskCompletionSource
-            // 这个注册现在也负责处理由调用者（如 SendUploadRequestAsync）设置的整体超时
             await using var registration = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
 
             try

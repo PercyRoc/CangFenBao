@@ -36,6 +36,12 @@
                         Text="{Binding Settings.Password, UpdateSourceTrigger=PropertyChanged}"
                         Margin="0,0,0,16" />
 
+                    <ui:TextBox
+                        Icon="Signature24"
+                        PlaceholderText="Sign"
+                        Text="{Binding Settings.Sign, UpdateSourceTrigger=PropertyChanged}"
+                        Margin="0,0,0,16" />
+
                     <TextBlock
                         FontSize="12"
                         Foreground="{DynamicResource TextFillColorTertiaryBrush}"

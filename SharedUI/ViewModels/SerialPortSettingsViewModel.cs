@@ -25,7 +25,7 @@ namespace SharedUI.ViewModels
         public SerialPortSettings Settings
         {
             get => _settings;
-            set => SetProperty(ref _settings, value);
+            private set => SetProperty(ref _settings, value);
         }
 
         /// <summary>

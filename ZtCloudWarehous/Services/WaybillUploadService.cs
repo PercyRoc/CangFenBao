@@ -29,10 +29,11 @@ public class WaybillUploadService : IWaybillUploadService
     ///     构造函数
     /// </summary>
     /// <param name="settingsService">设置服务</param>
-    public WaybillUploadService(ISettingsService settingsService)
+    /// <param name="httpClient"></param>
+    public WaybillUploadService(ISettingsService settingsService, HttpClient httpClient)
     {
         _settingsService = settingsService;
-        _httpClient = new HttpClient();
+        _httpClient = httpClient;
         
         // 加载API设置
         LoadApiSettings();
@@ -509,14 +510,5 @@ public class WaybillUploadService : IWaybillUploadService
                 Msg = $"请求异常: {ex.Message}"
             };
         }
-    }
-
-    /// <summary>
-    ///     释放资源
-    /// </summary>
-    public void Dispose()
-    {
-        _httpClient.Dispose();
-        GC.SuppressFinalize(this);
     }
 } 

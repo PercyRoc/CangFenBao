@@ -9,32 +9,27 @@ using System.Text.Json;
 
 namespace Sunnen.Services;
 
-internal class SangNengService : ISangNengService
+internal class SangNengService(ISettingsService settingsService) : ISangNengService
 {
-    private readonly HttpClient _httpClient;
-    private readonly JsonSerializerOptions _jsonOptions;
-
-    public SangNengService(ISettingsService settingsService)
+    private readonly HttpClient _httpClient = new();
+    private readonly JsonSerializerOptions _jsonOptions = new()
     {
-        _httpClient = new HttpClient();
-        _jsonOptions = new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        };
-
-        // 配置基本认证
-        var settings = settingsService.LoadSettings<SangNengSettings>();
-        Log.Information("加载桑能配置: Username={Username}, Password={Password}", settings.Username, settings.Password);
-
-        var authToken = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{settings.Username}:{settings.Password}"));
-        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authToken);
-    }
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
 
     public async Task<SangNengWeightResponse> SendWeightDataAsync(SangNengWeightRequest request)
     {
         try
         {
-            const string url = "http://247tech.xyz:12009/api/DWSController/ProvidedByDWS";
+            // 在每次请求时获取最新的设置
+            var settings = settingsService.LoadSettings<SangNengSettings>();
+            Log.Information("发送前加载桑能配置: Username={Username}, Sign={Sign}", settings.Username, settings.Sign);
+
+            // 更新认证头 (如果需要每次更新的话)
+            var authToken = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{settings.Username}:{settings.Password}"));
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+            const string url = "https://cbeltapi3.247express.vn/api/DWSController/ProvidedByDWS";
 
             // 修改时间戳为本地时间
             if (!string.IsNullOrEmpty(request.Timestamp))
@@ -44,7 +39,11 @@ internal class SangNengService : ISangNengService
                 request.Timestamp = localTime.ToString("yyyy-MM-dd HH:mm:ss");
             }
 
+            // 设置 Sign 字段
+            request.Sign = settings.Sign;
+
             var json = JsonSerializer.Serialize(request, _jsonOptions);
+            Log.Debug("发送到桑能服务器的 JSON 数据: {JsonData}", json); // 记录发送的数据
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             var response = await _httpClient.PostAsync(url, content);

@@ -127,29 +127,38 @@ public class SerialPortWeightService : IDisposable
             Log.Debug("查找重量数据 - 目标时间: {TargetTime}, 下限: {LowerBound}, 上限: {UpperBound}, 缓存数量: {CacheCount}",
                 targetTime, lowerBound, upperBound, _weightCache.Count);
 
+            (double Weight, DateTime Timestamp)? nearestZeroWeight = null;
+
             if (_weightCache.Count > 0)
             {
-                var weightInRange = _weightCache
+                (double Weight, DateTime Timestamp)? initialWeightInRange = _weightCache
                     .Where(w => w.Timestamp >= lowerBound && w.Timestamp <= upperBound)
                     .OrderBy(w => Math.Abs((w.Timestamp - targetTime).TotalMilliseconds))
                     .FirstOrDefault();
 
-                if (weightInRange != default)
+                if (initialWeightInRange != default)
                 {
-                    var timeDiff = (weightInRange.Timestamp - targetTime).TotalMilliseconds;
-                    Log.Debug("找到符合条件的重量数据: {Weight:F3}kg, 时间差: {TimeDiff:F0}ms",
-                        weightInRange.Weight / 1000, timeDiff);
-                    return weightInRange.Weight;
+                    var timeDiff = (initialWeightInRange.Value.Timestamp - targetTime).TotalMilliseconds;
+                    if (initialWeightInRange.Value.Weight != 0)
+                    {
+                        Log.Debug("初始查找找到非零重量数据: {Weight:F3}kg, 时间差: {TimeDiff:F0}ms",
+                            initialWeightInRange.Value.Weight / 1000, timeDiff);
+                        return initialWeightInRange.Value.Weight;
+                    }
+                    // 找到的是 0，记录下来，继续等待
+                    Log.Debug("初始查找找到零重量数据，记录并继续等待: 时间差: {TimeDiff:F0}ms", timeDiff);
+                    nearestZeroWeight = initialWeightInRange;
                 }
                 else
                 {
+                    // Log the nearest out-of-range weight only if no in-range weight was found yet
                     var nearestWeight = _weightCache
                         .OrderBy(w => Math.Abs((w.Timestamp - targetTime).TotalMilliseconds))
                         .FirstOrDefault();
                     if (nearestWeight != default)
                     {
                         var timeDiff = (nearestWeight.Timestamp - targetTime).TotalMilliseconds;
-                        Log.Debug("找到重量数据但超出时间范围: {Weight:F3}kg, 时间差: {TimeDiff:F0}ms, 时间戳: {Timestamp}",
+                        Log.Debug("未找到时间范围内的数据，最近的数据超出范围: {Weight:F3}kg, 时间差: {TimeDiff:F0}ms, 时间戳: {Timestamp}",
                             nearestWeight.Weight / 1000, timeDiff, nearestWeight.Timestamp);
                     }
                 }
@@ -159,22 +168,32 @@ public class SerialPortWeightService : IDisposable
                 Log.Debug("重量缓存为空");
             }
 
+            // 如果初始找到了非零值，上面已经 return 了，能走到这里说明要么没找到，要么找到的是0
+
             if (!IsConnected && DateTime.Now > upperBound)
             {
                 Log.Debug("串口未连接且当前时间已超过上限，不再等待新数据");
-                return null;
+                // 如果之前找到了0，则返回0，否则返回null
+                return nearestZeroWeight?.Weight;
             }
 
             if (DateTime.Now > upperBound)
             {
                 Log.Debug("当前时间已超过上限，不再等待新数据");
-                return null;
+                // 如果之前找到了0，则返回0，否则返回null
+                return nearestZeroWeight?.Weight;
             }
 
             var waitTime = upperBound - DateTime.Now;
-            if (waitTime <= TimeSpan.Zero) return null;
+            if (waitTime <= TimeSpan.Zero)
+            {
+                 // 等待时间已过，如果之前找到了0，则返回0，否则返回null
+                 Log.Debug("等待时间已过，返回找到的零重量（如有）或null");
+                 return nearestZeroWeight?.Weight;
+            }
 
-            Log.Debug("等待新的重量数据，最大等待时间: {WaitTime:F0}ms", waitTime.TotalMilliseconds);
+
+            Log.Debug("继续等待新的重量数据（或非零重量），最大等待时间: {WaitTime:F0}ms", waitTime.TotalMilliseconds);
 
             var remainingTime = waitTime;
             var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -185,27 +204,46 @@ public class SerialPortWeightService : IDisposable
                 if (_weightReceived.WaitOne(currentWaitTimeout))
                 {
                     Log.Debug("收到新的重量数据信号，重新查找");
-                    var weightInRange = _weightCache
+                    var weightInRangeDuringWait = _weightCache
                         .Where(w => w.Timestamp >= lowerBound && w.Timestamp <= upperBound)
-                        .OrderBy(w => Math.Abs((w.Timestamp - targetTime).TotalMilliseconds))
-                        .FirstOrDefault();
+                        // 在等待期间，我们总是希望找到最新的非零值，或者最接近的零值（如果只有零）
+                        .OrderByDescending(w => w.Timestamp) // 优先考虑最新的数据
+                        .ThenBy(w => Math.Abs((w.Timestamp - targetTime).TotalMilliseconds))
+                        .ToList(); // 获取所有符合条件的，以便区分0和非0
 
-                    if (weightInRange != default)
+                    var nonZeroWeight = weightInRangeDuringWait.FirstOrDefault(w => w.Weight != 0);
+
+                    if (nonZeroWeight != default)
                     {
                         sw.Stop();
-                        var timeDiff = (weightInRange.Timestamp - targetTime).TotalMilliseconds;
-                        Log.Debug("等待后找到符合条件的重量数据: {Weight:F3}kg, 时间差: {TimeDiff:F0}ms",
-                            weightInRange.Weight / 1000, timeDiff);
-                        return weightInRange.Weight;
+                        var timeDiff = (nonZeroWeight.Timestamp - targetTime).TotalMilliseconds;
+                        Log.Debug("等待后找到符合条件的非零重量数据: {Weight:F3}kg, 时间差: {TimeDiff:F0}ms",
+                            nonZeroWeight.Weight / 1000, timeDiff);
+                        return nonZeroWeight.Weight;
                     }
 
-                    Log.Debug("收到信号但新数据不符合时间范围，继续等待");
+                    // 检查是否有零重量数据
+                    var zeroWeight = weightInRangeDuringWait.FirstOrDefault(w => w.Weight == 0);
+                    if (zeroWeight != default)
+                    {
+                        // 如果当前找到的零重量比之前记录的更接近目标时间，则更新
+                        if (nearestZeroWeight == null ||
+                            Math.Abs((zeroWeight.Timestamp - targetTime).TotalMilliseconds) <
+                            Math.Abs((nearestZeroWeight.Value.Timestamp - targetTime).TotalMilliseconds))
+                        {
+                             Log.Debug("等待期间找到零重量数据，更新记录并继续等待");
+                             nearestZeroWeight = zeroWeight;
+                        }
+                    }
+
+
+                    Log.Debug("收到信号但新数据不符合时间范围或仍为零，继续等待");
                 }
 
                 if (!IsConnected)
                 {
                     Log.Warning("等待重量数据期间串口连接断开，停止等待");
-                    break;
+                    break; // 退出 while 循环
                 }
 
                 remainingTime = upperBound - DateTime.Now;
@@ -213,8 +251,15 @@ public class SerialPortWeightService : IDisposable
 
             sw.Stop();
 
-            Log.Debug("等待结束 ({Elapsed}ms)，未找到符合条件的重量数据", sw.ElapsedMilliseconds);
-            return null;
+            // 等待结束（超时或断开连接）
+            if (nearestZeroWeight != null)
+            {
+                Log.Debug("等待结束 ({Elapsed}ms)，未找到非零重量，返回找到的最佳零重量", sw.ElapsedMilliseconds);
+                return nearestZeroWeight.Value.Weight; // 返回找到的 0 重量
+            }
+
+            Log.Debug("等待结束 ({Elapsed}ms)，未找到任何符合条件的重量数据", sw.ElapsedMilliseconds);
+            return null; // 在整个过程中（包括等待）都没有找到任何符合条件的重量
         }
     }
 
