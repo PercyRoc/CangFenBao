@@ -11,6 +11,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Media;
 using System.Threading.Channels;
 using System.Buffers;
+using Serilog.Context;
 
 namespace DeviceService.DataSourceDevices.Camera.HuaRay;
 
@@ -492,71 +493,100 @@ public class HuaRayCameraService : ICameraService
                 _imageProcessingSemaphore.Release();
             }
 
-            // 3. 处理 OutputResult == 1 的情况
+            // 2. 处理 OutputResult == 1 的情况
             if (args.OutputResult == 1)
             {
-                // Create PackageInfo only if OutputResult is 1
+                // 创建 PackageInfo 对象
                 var packageInfo = PackageInfo.Create();
 
-                // Set trigger timestamp using TimeUp from args
-                Log.Debug("检查相机事件触发时间戳 Ticks: {TriggerTimeTicks}", args.TriggerTimeTicks);
-                try
-                {
-                    if (args.TriggerTimeTicks > 0)
-                    {
-                        var triggerTime = DateTimeOffset.FromUnixTimeMilliseconds(args.TriggerTimeTicks).LocalDateTime;
-                        packageInfo.SetTriggerTimestamp(triggerTime);
-                    }
-                }
-                catch (ArgumentOutOfRangeException ex)
-                {
-                    Log.Error(ex,
-                        "Failed to convert TriggerTimeTicks ({Ticks}) to DateTimeOffset. Using current time as fallback.",
-                        args.TriggerTimeTicks);
-                }
-
+                // 设置条码
                 packageInfo.SetBarcode(args.CodeList.FirstOrDefault() ?? "noread");
-                if (args.Weight > 0)
-                {
-                    packageInfo.SetWeight(args.Weight / 1000.0);
-                    Log.Information("设置包裹重量: {Weight}", args.Weight);
-                }
 
-                try
+                // --- 开始添加日志上下文 ---
+                var packageContext = $"[包裹{packageInfo.Index}|{packageInfo.Barcode}]";
+                using (LogContext.PushProperty("PackageContext", packageContext))
                 {
-                    if (args.VolumeInfo is { length: > 0, width: > 0, height: > 0 })
+                    Log.Debug("开始处理识别结果"); // 使用 Debug 级别标记开始
+
+                    // 设置触发时间戳
+                    try
                     {
-                        packageInfo.SetDimensions(args.VolumeInfo.length / 10.0, args.VolumeInfo.width / 10.0,
-                            args.VolumeInfo.height / 10.0);
-                        packageInfo.SetVolume(Math.Round(args.VolumeInfo.volume / 1000.0, 2));
+                        if (args.TriggerTimeTicks > 0)
+                        {
+                            var triggerTime = DateTimeOffset.FromUnixTimeMilliseconds(args.TriggerTimeTicks).LocalDateTime;
+                            packageInfo.SetTriggerTimestamp(triggerTime);
+                            Log.Debug("设置触发时间戳: {TriggerTimestamp}", triggerTime);
+                        }
+                        else {
+                             Log.Warning("相机事件触发时间戳 Ticks 为 0 或无效.");
+                        }
                     }
-                }
-                catch (Exception ex)
-                {
-                    Log.Warning(ex, "设置包裹尺寸时发生错误, CameraId: {CameraId}", args.CameraId);
-                }
+                    catch (ArgumentOutOfRangeException ex)
+                    {
+                        Log.Error(ex, "转换 TriggerTimeTicks ({Ticks}) 失败.", args.TriggerTimeTicks);
+                    }
 
-                if (processedBitmapSource != null)
-                {
-                    packageInfo.SetImage(processedBitmapSource, null); // Set the processed image
-                }
-                else
-                {
-                    Log.Warning("未能将图像设置到 PackageInfo，因为图像处理失败, CameraId: {CameraId}", args.CameraId);
-                }
 
-                packageInfo.ProcessingTime = (packageInfo.CreateTime - packageInfo.TriggerTimestamp).TotalMilliseconds;
-                _packageSubject.OnNext(packageInfo);
+                    // 设置重量
+                    if (args.Weight > 0)
+                    {
+                        var weightKg = args.Weight / 1000.0;
+                        packageInfo.SetWeight(weightKg);
+                        // Log.Information("设置包裹重量: {Weight}", args.Weight); // 原有日志，考虑是否保留或改为 Debug
+                        Log.Debug("设置包裹重量: {WeightKg} kg", weightKg); // 使用 Debug 级别记录详细信息
+                    }
+
+                    // 设置尺寸和体积
+                    try
+                    {
+                        if (args.VolumeInfo is { length: > 0, width: > 0, height: > 0 })
+                        {
+                            var lengthCm = args.VolumeInfo.length / 10.0;
+                            var widthCm = args.VolumeInfo.width / 10.0;
+                            var heightCm = args.VolumeInfo.height / 10.0;
+                            var volumeCm3 = Math.Round(args.VolumeInfo.volume / 1000.0, 2); // 假设 volume 是 mm³, 转换为 cm³
+
+                            packageInfo.SetDimensions(lengthCm, widthCm, heightCm);
+                            packageInfo.SetVolume(volumeCm3);
+                            Log.Debug("设置包裹尺寸: L={LengthCm}cm W={WidthCm}cm H={HeightCm}cm, Vol={VolumeCm3}cm³",
+                                         lengthCm, widthCm, heightCm, volumeCm3); // 使用 Debug 级别
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning(ex, "设置包裹尺寸时发生错误"); // 保留 Warning 级别
+                    }
+
+                    // 设置图像
+                    if (processedBitmapSource != null)
+                    {
+                        packageInfo.SetImage(processedBitmapSource, null); // Set the processed image
+                        Log.Debug("已设置包裹图像"); // 使用 Debug 级别
+                    }
+                    else
+                    {
+                        Log.Warning("未能将图像设置到 PackageInfo，因为图像处理失败"); // 保留 Warning 级别
+                    }
+
+                    // 计算并记录处理时间
+                    packageInfo.ProcessingTime = (packageInfo.CreateTime - packageInfo.TriggerTimestamp).TotalMilliseconds;
+                    Log.Information("包裹处理完成, 耗时: {ProcessingTime:F0}ms", packageInfo.ProcessingTime); // 保留 Information 级别标记完成
+
+                    // 推送包裹信息
+                    _packageSubject.OnNext(packageInfo);
+
+                }
             }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "处理华睿相机条码事件时发生错误 (ProcessPackageInfoAsync): {Message}, CameraId: {CameraId}", ex.Message,
+           // 这个 catch 块在 LogContext 之外，不会有 PackageContext
+           Log.Error(ex, "处理华睿相机条码事件时发生未预期的错误 (ProcessPackageInfoAsync): {Message}, CameraId: {CameraId}", ex.Message,
                 args.CameraId);
         }
         finally
         {
-            args.Dispose();
+            args.Dispose(); // 确保资源总是被释放
         }
     }
 

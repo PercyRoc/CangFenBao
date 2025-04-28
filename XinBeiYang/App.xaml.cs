@@ -6,6 +6,7 @@ using DeviceService.DataSourceDevices.Services;
 using DeviceService.DataSourceDevices.Weight;
 using DeviceService.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Configuration;
 using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
@@ -84,6 +85,17 @@ public partial class App
 
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+            .Build();
+        containerRegistry.RegisterInstance<IConfiguration>(configuration);
+
+        Log.Logger = new LoggerConfiguration()
+            .ReadFrom.Configuration(configuration)
+            .CreateLogger();
+        Log.Information("Serilog 已根据 appsettings.json 配置.");
+
         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
         containerRegistry.RegisterForNavigation<HostSettingsView, HostSettingsViewModel>();
         containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>("SettingsDialog");
@@ -107,17 +119,7 @@ public partial class App
 
     protected override void OnStartup(StartupEventArgs e)
     {
-        Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Information()
-            .WriteTo.Console()
-            .WriteTo.Debug()
-            .WriteTo.File("logs/app-.log",
-                rollingInterval: RollingInterval.Day,
-                rollOnFileSizeLimit: true,
-                retainedFileCountLimit: 30)
-            .CreateLogger();
-
-        Log.Information("应用程序启动");
+        Log.Information("应用程序启动 (OnStartup)");
         
         StartCleanupTask();
 

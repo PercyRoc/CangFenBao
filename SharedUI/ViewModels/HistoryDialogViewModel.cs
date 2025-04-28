@@ -253,81 +253,104 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
     /// <summary>
     ///     导出Excel
     /// </summary>
-    private void ExecuteExportToExcel()
+    private async void ExecuteExportToExcel()
     {
+        if (!CanExportToExcel()) return; // 避免在没有数据时导出
+
+        var dialog = new SaveFileDialog
+        {
+            Filter = "Excel文件|*.xlsx",
+            Title = "导出包裹记录",
+            FileName = $"包裹记录_{DateTime.Now:yyyyMMddHHmmss}.xlsx"
+        };
+
+        // 1. 先获取文件路径 (需要在UI线程)
+        if (dialog.ShowDialog() != true) return;
+        var filePath = dialog.FileName;
+
+        IsLoading = true; // 2. 显示加载指示器
+
         try
         {
-            var dialog = new SaveFileDialog
+            // 3. 将耗时操作放到后台线程
+            await Task.Run(() =>
             {
-                Filter = "Excel文件|*.xlsx",
-                Title = "导出包裹记录",
-                FileName = $"包裹记录_{DateTime.Now:yyyyMMddHHmmss}.xlsx"
-            };
+                // 设置EPPlus许可证
+                ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
 
-            if (dialog.ShowDialog() != true) return;
+                using var package = new ExcelPackage();
+                var worksheet = package.Workbook.Worksheets.Add("包裹记录");
 
-            // 设置EPPlus许可证
-            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+                // 设置表头
+                var headers = new[]
+                {
+                    "编号", "条码", "格口", "重量(kg)", "长度(cm)", "宽度(cm)", "高度(cm)",
+                    "体积(cm³)", "状态", "备注", "创建时间" // 注意：这里没有托盘信息，如果需要，也要加上
+                };
 
-            using var package = new ExcelPackage();
-            var worksheet = package.Workbook.Worksheets.Add("包裹记录");
+                for (var i = 0; i < headers.Length; i++)
+                {
+                    worksheet.Cells[1, i + 1].Value = headers[i];
+                }
 
-            // 设置表头
-            var headers = new[]
-            {
-                "编号", "条码", "格口", "重量(kg)", "长度(cm)", "宽度(cm)", "高度(cm)",
-                "体积(cm³)", "状态", "备注", "创建时间"
-            };
+                // 设置表头样式
+                using (var range = worksheet.Cells[1, 1, 1, headers.Length])
+                {
+                    range.Style.Font.Bold = true;
+                    range.Style.Fill.PatternType = ExcelFillStyle.Solid;
+                    range.Style.Fill.BackgroundColor.SetColor(Color.LightGray);
+                    range.Style.Border.BorderAround(ExcelBorderStyle.Thin);
+                    range.Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                }
 
-            for (var i = 0; i < headers.Length; i++)
-            {
-                worksheet.Cells[1, i + 1].Value = headers[i];
-            }
+                // 写入数据 (这是主要耗时部分)
+                var recordsToExport = PackageRecords.ToList(); // 创建副本避免多线程问题
+                for (var i = 0; i < recordsToExport.Count; i++)
+                {
+                    var record = recordsToExport[i];
+                    var row = i + 2;
 
-            // 设置表头样式
-            using (var range = worksheet.Cells[1, 1, 1, headers.Length])
-            {
-                range.Style.Font.Bold = true;
-                range.Style.Fill.PatternType = ExcelFillStyle.Solid;
-                range.Style.Fill.BackgroundColor.SetColor(Color.LightGray);
-                range.Style.Border.BorderAround(ExcelBorderStyle.Thin);
-                range.Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
-            }
+                    worksheet.Cells[row, 1].Value = record.Id;
+                    worksheet.Cells[row, 2].Value = record.Barcode;
+                    worksheet.Cells[row, 3].Value = record.ChuteNumber;
+                    worksheet.Cells[row, 4].Value = record.Weight;
+                    worksheet.Cells[row, 5].Value = record.Length.HasValue ? Math.Round(record.Length.Value, 1) : null;
+                    worksheet.Cells[row, 6].Value = record.Width.HasValue ? Math.Round(record.Width.Value, 1) : null;
+                    worksheet.Cells[row, 7].Value = record.Height.HasValue ? Math.Round(record.Height.Value, 1) : null;
+                    worksheet.Cells[row, 8].Value = record.Volume;
+                    worksheet.Cells[row, 9].Value = record.StatusDisplay;
+                    worksheet.Cells[row, 10].Value = record.ErrorMessage;
+                    worksheet.Cells[row, 11].Value = record.CreateTime;
 
-            // 写入数据
-            for (var i = 0; i < PackageRecords.Count; i++)
-            {
-                var record = PackageRecords[i];
-                var row = i + 2;
+                    // 设置日期格式
+                    worksheet.Cells[row, 11].Style.Numberformat.Format = "yyyy-MM-dd HH:mm:ss";
 
-                worksheet.Cells[row, 1].Value = record.Id;
-                worksheet.Cells[row, 2].Value = record.Barcode;
-                worksheet.Cells[row, 3].Value = record.ChuteNumber;
-                worksheet.Cells[row, 4].Value = record.Weight;
-                worksheet.Cells[row, 5].Value = record.Length.HasValue ? Math.Round(record.Length.Value, 1) : null;
-                worksheet.Cells[row, 6].Value = record.Width.HasValue ? Math.Round(record.Width.Value, 1) : null;
-                worksheet.Cells[row, 7].Value = record.Height.HasValue ? Math.Round(record.Height.Value, 1) : null;
-                worksheet.Cells[row, 8].Value = record.Volume;
-                worksheet.Cells[row, 9].Value = record.StatusDisplay;
-                worksheet.Cells[row, 10].Value = record.ErrorMessage;
-                worksheet.Cells[row, 11].Value = record.CreateTime;
+                    // 如果有托盘信息:
+                    // worksheet.Cells[row, NEW_INDEX].Value = record.PalletName;
+                    // 并调整后续列的索引
+                }
 
-                // 设置日期格式
-                worksheet.Cells[row, 11].Style.Numberformat.Format = "yyyy-MM-dd HH:mm:ss";
-            }
+                // 自动调整列宽
+                worksheet.Cells[worksheet.Dimension.Address].AutoFitColumns();
 
-            // 自动调整列宽
-            worksheet.Cells[worksheet.Dimension.Address].AutoFitColumns();
+                // 保存文件 (也在后台线程)
+                package.SaveAs(new FileInfo(filePath));
+            }); // Task.Run 结束
 
-            // 保存文件
-            package.SaveAs(new FileInfo(dialog.FileName));
+            // 4. 成功通知 (回到UI线程)
+            _notificationService.ShowSuccessWithToken($"已成功导出 {PackageRecords.Count} 条记录到 {Path.GetFileName(filePath)}", "HistoryWindowGrowl");
 
-            _notificationService.ShowSuccessWithToken($"已成功导出 {PackageRecords.Count} 条记录", "HistoryWindowGrowl");
         }
         catch (Exception ex)
         {
             Log.Error(ex, "导出Excel失败");
+            // 5. 失败通知 (回到UI线程)
             _notificationService.ShowErrorWithToken($"导出失败: {ex.Message}", "HistoryWindowGrowl");
+        }
+        finally
+        {
+            // 6. 隐藏加载指示器 (回到UI线程)
+            IsLoading = false;
         }
     }
 

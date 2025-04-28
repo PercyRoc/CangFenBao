@@ -6,6 +6,7 @@ using Common.Models.Settings.Sort.PendulumSort;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Prism.Ioc;
 using Serilog;
@@ -28,7 +29,7 @@ namespace ZtCloudWarehous;
 public partial class App
 {
     private static Mutex? _mutex;
-    private const string MutexName = "Global\\ZtCloudWarehous_App_Mutex"; // 改为全局Mutex
+    private const string MutexName = "Global\\ZtCloudWarehous_App_Mutex";
     private bool _ownsMutex; // 添加标志位
 
     /// <summary>
@@ -112,6 +113,18 @@ public partial class App
     /// </summary>
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
+        // --- 配置 Configuration ---
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+            .Build();
+        containerRegistry.RegisterInstance<IConfiguration>(configuration); // 注册到容器
+        Log.Logger = new LoggerConfiguration()
+            .ReadFrom.Configuration(configuration)
+            .CreateLogger();
+        Log.Information("Serilog 已根据 appsettings.json 配置.");
+        // --- 配置结束 ---
+
         // 注册视图和ViewModel
         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
         containerRegistry.RegisterDialog<SettingsDialog,SettingsDialogViewModel>("SettingsDialog");
@@ -147,17 +160,7 @@ public partial class App
     /// </summary>
     protected override void OnStartup(StartupEventArgs e)
     {
-        // 配置Serilog
-        Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Debug()
-            .WriteTo.Console()
-            .WriteTo.Debug()
-            .WriteTo.File("logs/app-.log",
-                rollingInterval: RollingInterval.Day,
-                rollOnFileSizeLimit: true)
-            .CreateLogger();
-
-        Log.Information("应用程序启动");
+        Log.Information("应用程序启动 (OnStartup)");
         base.OnStartup(e);
 
         try
@@ -175,7 +178,8 @@ public partial class App
         catch (Exception ex)
         {
             Log.Error(ex, "启动托管服务时发生错误");
-            throw;
+            MessageBox.Show($"启动核心服务失败: {ex.Message}", "启动错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            Environment.Exit(2);
         }
     }
 
@@ -226,13 +230,6 @@ public partial class App
                 {
                     pendulumService.Dispose();
                     Log.Information("摆轮分拣服务已释放");
-                }
-
-                // 释放运单上传服务
-                if (Container.IsRegistered<IWaybillUploadService>())
-                {
-                    var uploadService = Container.Resolve<IWaybillUploadService>();
-                    Log.Information("运单上传服务实例已获取 (无需释放)");
                 }
             }
             catch (Exception ex)

@@ -355,10 +355,10 @@ public class MultiPendulumSortService : BasePendulumSortService
         // 获取上一次的信号状态
         _previousPhotoelectricSignalStates.TryGetValue(photoelectricName, out var previousState);
 
-        // 如果当前是低电平，且上一次也是低电平，记录警告
+        // 如果当前是低电平，且上一次也是低电平，记录警告 (改为 Debug)
         if (!isHighLevel && !previousState)
         {
-            Log.Warning("光电 {Name} 出现连续两次低电平信号，可能存在异常", photoelectricName);
+            Log.Debug("光电 {Name} 连续低电平信号.", photoelectricName);
         }
 
         // 记录当前信号状态

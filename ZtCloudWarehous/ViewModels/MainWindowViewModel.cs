@@ -22,6 +22,7 @@ using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using Prism.Services.Dialogs;
 using static Common.Models.Package.PackageStatus;
+using Serilog.Context;
 
 namespace ZtCloudWarehous.ViewModels;
 
@@ -353,271 +354,256 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private async void OnPackageInfo(PackageInfo package)
     {
-        try
+        // --- 开始应用日志上下文 ---
+        var packageContext = $"[包裹{package.Index}|{package.Barcode}]";
+        using (LogContext.PushProperty("PackageContext", packageContext))
         {
-            // Load settings once
-            var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
-            var weighingSettings = _settingsService.LoadSettings<WeighingSettings>();
+            Log.Debug("开始处理包裹信息流.");
+            try
+            {
+                // 加载所需设置
+                var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
+                var weighingSettings = _settingsService.LoadSettings<WeighingSettings>();
+                Log.Debug("已加载 ChuteSettings 和 WeighingSettings.");
 
-            if (package.Weight <= 0)
-            {
-                if (weighingSettings.DefaultWeight > 0)
+                // 步骤 1: 检查并处理重量
+                if (package.Weight <= 0)
                 {
-                    package.SetWeight((double)weighingSettings.DefaultWeight);
-                    Log.Information("包裹 {Barcode} 重量为0或无效，使用预设重量：{DefaultWeight}kg", package.Barcode, weighingSettings.DefaultWeight);
-                }
-                else
-                {
-                    // If weight is invalid and no default is set, treat as an error?
-                    // For now, just log a warning as before. User might want to assign WeightMismatchChute later.
-                    Log.Warning("包裹 {Barcode} 重量为0，且未设置预设重量", package.Barcode);
-                    // Optionally, assign to WeightMismatchChuteNumber here if required:
-                    // package.SetChute(chuteSettings.WeightMismatchChuteNumber);
-                    // package.SetStatus(Error, "无效重量");
-                    // Log.Warning("包裹 {Barcode} 重量无效，使用重量不匹配口：{WeightMismatchChute}", package.Barcode, chuteSettings.WeightMismatchChuteNumber);
-                }
-            }
-
-            // 第二步：更新当前条码
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                try
-                {
-                    CurrentBarcode = package.Barcode;
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "更新当前条码时发生错误");
-                }
-            });
-
-            // 第三步：判断是否为noread包裹
-            if (string.IsNullOrEmpty(package.Barcode) ||
-                string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase))
-            {
-                package.SetChute(chuteSettings.NoReadChuteNumber > 0 ? chuteSettings.NoReadChuteNumber : chuteSettings.ErrorChuteNumber);
-                package.SetStatus(Error, "未识别条码");
-                Interlocked.Increment(ref _noReadCount);
-                Log.Warning("包裹条码为空或noread，使用NoRead口(或异常口): {NoReadChute}",
-                    chuteSettings.NoReadChuteNumber > 0 ? chuteSettings.NoReadChuteNumber : chuteSettings.ErrorChuteNumber);
-            }
-            else
-            {
-                // 第四步：上传包裹并获取返回值
-                try
-                {
-                    var request = new WeighingRequest
+                    Log.Debug("包裹重量为 0 或无效.");
+                    if (weighingSettings.DefaultWeight > 0)
                     {
-                        WaybillCode = package.Barcode,
-                        ActualWeight = Convert.ToDecimal(package.Weight),
-                        ActualVolume = package.Volume.HasValue ? Convert.ToDecimal(package.Volume.Value) : 0
-                    };
-
-                    var uploadTask = _weighingService.SendWeightDataAsync(request);
-                    var timeoutTask = Task.Delay(500); // 500ms timeout
-
-                    var completedTask = await Task.WhenAny(uploadTask, timeoutTask);
-
-                    if (completedTask == timeoutTask)
-                    {
-                        // Upload Timeout
-                        Log.Warning("上传称重数据超时: {Barcode}", package.Barcode);
-                        _notificationService.ShowWarning($"上传称重数据超时: {package.Barcode}");
-                        package.SetChute(chuteSettings.TimeoutChuteNumber > 0 ? chuteSettings.TimeoutChuteNumber : chuteSettings.ErrorChuteNumber);
-                        package.SetStatus(PackageStatus.Timeout, "上传超时");
-                        Interlocked.Increment(ref _timeoutCount);
-                        Log.Warning("包裹 {Barcode} 上传超时，使用超时口(或异常口)：{TimeoutChute}", package.Barcode,
-                            chuteSettings.TimeoutChuteNumber > 0 ? chuteSettings.TimeoutChuteNumber : chuteSettings.ErrorChuteNumber);
+                        package.SetWeight((double)weighingSettings.DefaultWeight);
+                        Log.Information("使用预设重量: {DefaultWeight}kg", weighingSettings.DefaultWeight);
                     }
                     else
                     {
-                        // Upload Completed
-                        var response = await uploadTask;
+                        Log.Warning("未设置预设重量.");
+                        // 注意: 这里可以选择性地标记为重量异常或分配到错误口
+                    }
+                }
 
-                        // **新增逻辑: 即使 Success 为 false，但如果消息包含"出库完成"，也视为成功**
-                        if (!response.Success && response.Message != null && response.Message.Contains("出库完成"))
-                        {
-                            Log.Information("称重响应消息为 '出库完成'，视为成功处理: {Barcode}", package.Barcode);
-                            // 直接进入后续成功处理逻辑 (格口匹配等)
-                            // 可以选择不显示警告通知
-                            // _notificationService.ShowWarning($"称重响应: {response.Message}");
+                // 步骤 2：更新当前条码 (UI)
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    try { CurrentBarcode = package.Barcode; }
+                    catch (Exception ex) { Log.Error(ex, "更新当前条码UI时发生错误"); }
+                });
 
-                            // Match chute rule (与原成功流程一致)
-                            var matchedChute = chuteSettings.FindMatchingChute(package.Barcode);
-                            if (matchedChute.HasValue)
-                            {
-                                package.SetChute(matchedChute.Value);
-                                Log.Information("包裹 {Barcode} 匹配到格口 {Chute}", package.Barcode, matchedChute.Value);
-                                package.SetStatus(Success); // 标记为成功
-                            }
-                            else
-                            {
-                                // No Rule Match (即使响应是"出库完成"，但无规则匹配仍算异常)
-                                package.SetChute(chuteSettings.ErrorChuteNumber);
-                                package.SetStatus(Error, "出库完成但未匹配规则");
-                                Interlocked.Increment(ref _otherErrorCount);
-                                Log.Warning("包裹 {Barcode} (出库完成) 未匹配规则，使用异常口：{ErrorChute}",
-                                    package.Barcode, chuteSettings.ErrorChuteNumber);
-                            }
-                        }
-                        // **原失败处理逻辑**
-                        else if (!response.Success)
+                // 步骤 3：处理 NoRead 包裹
+                if (string.IsNullOrEmpty(package.Barcode) ||
+                    string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase))
+                {
+                    var targetChute = chuteSettings.NoReadChuteNumber > 0 ? chuteSettings.NoReadChuteNumber : chuteSettings.ErrorChuteNumber;
+                    package.SetChute(targetChute);
+                    package.SetStatus(Error, "未识别条码");
+                    Interlocked.Increment(ref _noReadCount);
+                    Log.Warning("条码为空或noread，分配到 NoRead/异常口: {TargetChute}", targetChute);
+                }
+                else // 有有效条码
+                {
+                    Log.Debug("开始上传称重数据.");
+                    // 步骤 4：上传包裹并处理响应
+                    try
+                    {
+                        var request = new WeighingRequest
                         {
-                            // Upload Failed (API Error, 且非"出库完成")
-                            Log.Warning("上传称重数据失败: Code={Code}, Message={Message}", response.Code, response.Message);
-                            _notificationService.ShowWarning($"上传称重数据失败: {response.Message}");
-                            if (response.Message != null && response.Message.Contains("重量")) // 添加 null 检查
-                            {
-                                package.SetChute(chuteSettings.WeightMismatchChuteNumber > 0 ? chuteSettings.WeightMismatchChuteNumber : chuteSettings.ErrorChuteNumber);
-                                Interlocked.Increment(ref _weightErrorCount);
-                            }
-                            else if (response.Message != null && response.Message.Contains("拦截"))
-                            {
-                                // 如果拦截也要走正常口，则需要修改这里的逻辑
-                                package.SetChute(chuteSettings.ErrorChuteNumber);
-                                Log.Warning("包裹 {Barcode} 被拦截，使用异常口：{ErrorChute}", package.Barcode, 
-                                    chuteSettings.ErrorChuteNumber);
-                                Interlocked.Increment(ref _otherErrorCount);
-                            }
-                            else
-                            {
-                                package.SetChute(chuteSettings.ErrorChuteNumber);
-                                Interlocked.Increment(ref _otherErrorCount);
-                            }
-                            package.SetStatus(Error, $"上传失败: {response.Message}");
-                            Log.Warning("包裹 {Barcode} 上传失败，使用最终格口：{Chute}", package.Barcode, package.ChuteNumber); // 记录最终分配的口
+                            WaybillCode = package.Barcode,
+                            ActualWeight = Convert.ToDecimal(package.Weight),
+                            ActualVolume = package.Volume.HasValue ? Convert.ToDecimal(package.Volume.Value) : 0
+                        };
+
+                        var uploadTask = _weighingService.SendWeightDataAsync(request);
+                        var timeoutTask = Task.Delay(500); // 500ms timeout
+
+                        var completedTask = await Task.WhenAny(uploadTask, timeoutTask);
+
+                        if (completedTask == timeoutTask)
+                        {
+                            // 超时处理
+                            var targetChute = chuteSettings.TimeoutChuteNumber > 0 ? chuteSettings.TimeoutChuteNumber : chuteSettings.ErrorChuteNumber;
+                            Log.Warning("上传称重数据超时 (>{Timeout}ms).", 500);
+                            _notificationService.ShowWarning($"上传称重数据超时: {package.Barcode}");
+                            package.SetChute(targetChute);
+                            package.SetStatus(PackageStatus.Timeout, "上传超时");
+                            Interlocked.Increment(ref _timeoutCount);
+                            Log.Warning("分配到 Timeout/异常口: {TargetChute}", targetChute);
                         }
                         else
                         {
-                            // Upload Success (原始成功流程)
-                            Log.Information("成功上传称重数据: {Barcode}", package.Barcode);
+                            // 上传完成 (成功或失败)
+                            var response = await uploadTask;
+                            Log.Debug("收到称重数据上传响应: Success={Success}, Code={Code}, Message={Message}",
+                                response.Success, response.Code, response.Message);
 
-                            // Match chute rule
-                            var matchedChute = chuteSettings.FindMatchingChute(package.Barcode);
+                            bool treatAsSuccess = response.Success || (response.Message != null && response.Message.Contains("出库完成"));
 
-                            if (matchedChute.HasValue)
+                            if (treatAsSuccess)
                             {
-                                package.SetChute(matchedChute.Value);
-                                Log.Information("包裹 {Barcode} 匹配到格口 {Chute}", package.Barcode, matchedChute.Value);
-                                // Set status after successful upload and rule match, indicating data is ready
-                                package.SetStatus(Success); // Use MeasureSuccess as an intermediate success status
+                                if (!response.Success) Log.Information("响应消息为 '出库完成'，视为成功处理.");
+
+                                // 查找匹配规则
+                                var matchedChute = chuteSettings.FindMatchingChute(package.Barcode);
+                                if (matchedChute.HasValue)
+                                {
+                                    package.SetChute(matchedChute.Value);
+                                    package.SetStatus(Success); // 标记成功
+                                    Log.Information("匹配到规则，分配到格口: {MatchedChute}", matchedChute.Value);
+                                }
+                                else
+                                {
+                                    // 无规则匹配
+                                    package.SetChute(chuteSettings.ErrorChuteNumber);
+                                    package.SetStatus(Error, response.Success ? "未匹配规则" : "出库完成但未匹配规则");
+                                    Interlocked.Increment(ref _otherErrorCount);
+                                    Log.Warning("未匹配到规则，分配到异常口: {ErrorChute}", chuteSettings.ErrorChuteNumber);
+                                }
                             }
-                            else
+                            else // API 返回失败且非 "出库完成"
                             {
-                                // No Rule Match
-                                package.SetChute(chuteSettings.ErrorChuteNumber);
-                                package.SetStatus(Error, "未匹配规则");
-                                Interlocked.Increment(ref _otherErrorCount);
-                                Log.Warning("包裹 {Barcode} 未匹配规则，使用异常口：{ErrorChute}",
-                                    package.Barcode, chuteSettings.ErrorChuteNumber);
+                                Log.Warning("上传称重数据API返回失败.");
+                                _notificationService.ShowWarning($"上传称重数据失败: {response.Message}");
+                                int targetChute;
+                                if (response.Message != null && response.Message.Contains("重量"))
+                                {
+                                    targetChute = chuteSettings.WeightMismatchChuteNumber > 0 ? chuteSettings.WeightMismatchChuteNumber : chuteSettings.ErrorChuteNumber;
+                                    Interlocked.Increment(ref _weightErrorCount);
+                                    Log.Warning("失败原因为重量相关，分配到重量异常/异常口: {TargetChute}", targetChute);
+                                }
+                                else if (response.Message != null && response.Message.Contains("拦截"))
+                                {
+                                    targetChute = chuteSettings.ErrorChuteNumber;
+                                    Interlocked.Increment(ref _otherErrorCount);
+                                    Log.Warning("失败原因为拦截，分配到异常口: {TargetChute}", targetChute);
+                                }
+                                else
+                                {
+                                    targetChute = chuteSettings.ErrorChuteNumber;
+                                    Interlocked.Increment(ref _otherErrorCount);
+                                    Log.Warning("失败原因未知或其他，分配到异常口: {TargetChute}", targetChute);
+                                }
+                                package.SetChute(targetChute);
+                                package.SetStatus(Error, $"上传失败: {response.Message}");
                             }
                         }
                     }
+                    catch (Exception ex) // 上传过程中发生异常
+                    {
+                        Log.Error(ex, "上传称重数据时发生异常.");
+                        _notificationService.ShowError($"上传称重数据异常: {ex.Message}");
+                        package.SetChute(chuteSettings.ErrorChuteNumber);
+                        package.SetStatus(Error, $"上传异常: {ex.Message}");
+                        Interlocked.Increment(ref _otherErrorCount);
+                        Log.Warning("分配到异常口: {ErrorChute}", chuteSettings.ErrorChuteNumber);
+                    }
+                } // End of valid barcode processing
+
+                // 步骤 5: 调用分拣服务处理
+                Log.Debug("将包裹送往分拣服务处理.");
+                _sortService.ProcessPackage(package);
+                Interlocked.Increment(ref _totalPackageCount);
+
+                // 步骤 6: 更新统计和最终状态
+                if (package.Status != Error && package.Status != PackageStatus.Timeout)
+                {
+                    Interlocked.Increment(ref _successPackageCount);
+                    // 如果之前是 Success，可以不再设置或设置更具体的成功状态如 SortSuccess
+                    if (package.Status == Success) // 只有原始成功状态才更新为最终成功
+                    {
+                        package.SetStatus(Success, "分拣成功"); // 确保最终状态是 Success
+                    }
+                    Log.Information("处理成功完成, 最终格口: {Chute}", package.ChuteNumber);
+                }
+                else
+                {
+                    Interlocked.Increment(ref _failedPackageCount);
+                    // 使用之前的 Warning 日志级别，记录失败的最终状态和原因
+                    Log.Warning("处理失败结束, 状态: {Status}, 格口: {Chute}, 原因: {ErrorMessage}",
+                                package.StatusDisplay, package.ChuteNumber, package.ErrorMessage ?? "无错误详情");
+                }
+
+                // 步骤 7: 更新 UI (包裹详情)
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    try { UpdatePackageInfoItems(package); }
+                    catch (Exception ex) { Log.Error(ex, "更新包裹详情UI时发生错误"); }
+                });
+
+                // 步骤 8: 更新 UI (历史和统计)
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    try
+                    {
+                        PackageHistory.Insert(0, package);
+                        while (PackageHistory.Count > 1000) PackageHistory.RemoveAt(PackageHistory.Count - 1);
+                        UpdateStatistics();
+                    }
+                    catch (Exception ex) { Log.Error(ex, "更新历史和统计UI时发生错误"); }
+                });
+
+                // 步骤 9: 异步保存到数据库
+                Log.Debug("准备启动后台任务保存到数据库.");
+                var contextForDbTask = packageContext; // 捕获上下文
+                var barcodeForDbTask = package.Barcode; // 捕获条码
+                _ = Task.Run(async () =>
+                {
+                    using (LogContext.PushProperty("PackageContext", contextForDbTask)) // 恢复上下文
+                    {
+                        try
+                        {
+                            await _packageDataService.AddPackageAsync(package);
+                            Log.Debug("后台数据库保存成功."); // 使用 Debug
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error(ex, "后台数据库保存失败.");
+                            // UI Notification should happen on UI thread if needed, consider event aggregation
+                            // _notificationService.ShowError($"保存包裹记录失败：{ex.Message}");
+                        }
+                    }
+                });
+
+                // 步骤 10: 上传到西逸谷服务并等待
+                try
+                {
+                    Log.Debug("开始上传到西逸谷服务并等待.");
+                    await _waybillUploadService.UploadPackageAndWaitAsync(package);
+                    Log.Information("西逸谷上传并等待完成.");
                 }
                 catch (Exception ex)
                 {
-                    // Upload Exception
-                    Log.Error(ex, "上传称重数据时发生错误: {Barcode}{Message}", package.Barcode, ex.Message);
-                    _notificationService.ShowError($"上传称重数据异常: {ex.Message}");
+                    Log.Error(ex, "等待西逸谷上传完成时发生错误.");
+                    _notificationService.ShowWarning($"西逸谷上传等待失败：{ex.Message}"); // 保留警告
+                }
+
+                Log.Information("包裹处理流程完成.");
+
+            }
+            catch (Exception ex) // OnPackageInfo 主流程中的未捕获异常
+            {
+                Log.Error(ex, "处理包裹信息时发生未预料的顶层错误.");
+                try
+                {
+                    // 尝试记录异常状态并分配到错误口
+                    var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
                     package.SetChute(chuteSettings.ErrorChuteNumber);
-                    package.SetStatus(Error, $"上传异常: {ex.Message}");
-                    Interlocked.Increment(ref _otherErrorCount);
-                    Log.Warning("包裹 {Barcode} 上传异常，使用异常口：{ErrorChute}", package.Barcode, chuteSettings.ErrorChuteNumber);
+                    package.SetStatus(Error, $"处理异常: {ex.Message}");
+                    Log.Warning("因顶层处理异常，分配到异常口: {ErrorChute}", chuteSettings.ErrorChuteNumber);
+                    // 可能需要调用 _sortService.ProcessPackage(package) 来确保包裹被送走
+                    _sortService.ProcessPackage(package);
+                    Interlocked.Increment(ref _failedPackageCount); // 计入失败
+                }
+                catch (Exception innerEx)
+                {
+                    Log.Error(innerEx, "在处理顶层异常时再次发生错误.");
                 }
             }
-
-            // Process package through sorting service
-            _sortService.ProcessPackage(package);
-            Interlocked.Increment(ref _totalPackageCount);
-
-            // Update counters and final status
-            // Only consider it a success if the status is not Error or Timeout before sending to sort
-            if (package.Status != Error && package.Status != PackageStatus.Timeout)
+            finally
             {
-                Interlocked.Increment(ref _successPackageCount);
-                // Set final success status (if not already set to an error/timeout)
-                package.SetStatus(Success, "分拣成功"); // Or maybe SortSuccess if applicable
-                Log.Information("包裹 {Barcode} 最终状态为成功，送往格口 {Chute}", package.Barcode, package.ChuteNumber);
+                // 确保图像资源总是被释放
+                package.ReleaseImage();
+                Log.Debug("图像资源已释放.");
             }
-            else
-            {
-                Interlocked.Increment(ref _failedPackageCount);
-                Log.Warning("包裹 {Barcode} 最终状态为 {Status}，送往格口 {Chute}：{ErrorMessage}",
-                            package.Barcode, package.StatusDisplay, package.ChuteNumber, package.ErrorMessage ?? "无错误详情");
-            }
-
-            // Update UI (Package Info Items)
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                try
-                {
-                    UpdatePackageInfoItems(package);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "更新UI时发生错误");
-                }
-            });
-
-            // Update UI (History and Statistics)
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                try
-                {
-                    PackageHistory.Insert(0, package);
-                    while (PackageHistory.Count > 1000)
-                        PackageHistory.RemoveAt(PackageHistory.Count - 1);
-                    UpdateStatistics();
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "更新统计信息时发生错误");
-                }
-            });
-
-            // Async save to database
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await _packageDataService.AddPackageAsync(package);
-                    Log.Debug("包裹记录已保存到数据库：{Barcode}", package.Barcode);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "保存包裹记录到数据库时发生错误：{Barcode}", package.Barcode);
-                    _notificationService.ShowError($"保存包裹记录失败：{ex.Message}");
-                }
-            });
-
-            // Upload to Waybill Service and wait
-            try
-            {
-                await _waybillUploadService.UploadPackageAndWaitAsync(package);
-                Log.Debug("包裹已上传到西逸谷并等待完成：{Barcode}", package.Barcode);
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "等待西逸谷上传完成时发生错误：{Barcode}", package.Barcode);
-                _notificationService.ShowWarning($"西逸谷上传等待失败：{ex.Message}");
-            }
-        }
-        catch (Exception ex)
-        {
-            // General Exception during processing
-            Log.Error(ex, "处理包裹信息时发生未预料的错误：{Barcode}", package.Barcode);
-            {
-                // Try to assign to error chute if possible
-                var chuteSettings = _settingsService.LoadSettings<ChuteSettings>(); // Reload in case it wasn't loaded
-                package.SetChute(chuteSettings.ErrorChuteNumber);
-                package.SetStatus(Error, $"处理异常: {ex.Message}");
-                Log.Warning("包裹 {Barcode} 处理异常，使用异常口：{ErrorChute}", package.Barcode, chuteSettings.ErrorChuteNumber);
-            }
-        }
-        finally
-        {
-            package.ReleaseImage();
-        }
+        } // --- 日志上下文结束 ---
     }
 
     private void UpdatePackageInfoItems(PackageInfo package)
@@ -715,7 +701,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             var hourlyRate = lastMinuteCount * 60; // 将每分钟的处理量转换为每小时，并转为整数
             rateItem.Value = hourlyRate.ToString();
             rateItem.Description = $"预计每小时处理 {hourlyRate} 个";
-            
+
             // 更新峰值效率
             if (hourlyRate > _peakRate)
             {

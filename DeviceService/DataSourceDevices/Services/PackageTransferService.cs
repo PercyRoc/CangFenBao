@@ -6,6 +6,7 @@ using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Camera.Models.Camera;
 using Serilog;
 using System.Reactive.Concurrency; // Add for ObserveOn
+using Serilog.Context; // 添加 Serilog.Context 命名空间
 
 namespace DeviceService.DataSourceDevices.Services;
 
@@ -44,78 +45,124 @@ public class PackageTransferService : IDisposable
     ///     包裹信息流 (公开给外部订阅，包含过滤和图像保存逻辑)
     /// </summary>
     public IObservable<PackageInfo> PackageStream => _cameraService.PackageStream
-        .Where(static package => !string.IsNullOrWhiteSpace(package.Barcode)) // 过滤掉没有条码的包裹
-        .Where(package => // 应用条形码重复过滤器（如果已启用）
-        {
-            if (!_cameraSettings.BarcodeRepeatFilterEnabled || package.Barcode == "NOREAD") return true;
-            return IsBarcodeProcessable(package.Barcode);
+        .Where(package =>
+        { // 第一个过滤: 确保有条码
+            var hasBarcode = !string.IsNullOrWhiteSpace(package.Barcode);
+            if (!hasBarcode) Log.Verbose("包裹 {Index} 因缺少条码被过滤.", package.Index);
+            return hasBarcode;
         })
-        .Do(package => // 在异步操作之前更新已处理条码的时间戳
-        {
-            if (package.Barcode != "NOREAD" && _cameraSettings.BarcodeRepeatFilterEnabled)
+        .Select(package => (Package: package, IsProcessable: IsBarcodeProcessable(package.Barcode))) // 修复: 传递 package.Barcode 而不是 package
+        .Do(tuple =>
+        { // 记录过滤结果
+            if (!tuple.IsProcessable)
             {
-                _processedBarcodes[package.Barcode] = DateTime.Now; // 更新最后处理时间
+                // 在这里记录过滤掉的信息, 因为 LogContext 尚未应用
+                var packageContext = $"[包裹{tuple.Package.Index}|{tuple.Package.Barcode}]";
+                Log.Information("{PackageContext} 因重复 ({RepeatTimeMs}ms 内) 被过滤.",
+                    packageContext, _cameraSettings.RepeatTimeMs);
             }
-            // 记录通过过滤并进入图像保存流程的包裹
-            Log.Verbose("包裹 {Index} ({Barcode}) 已通过过滤器, 准备保存图像.", package.Index, package.Barcode);
         })
-        .Select(package => // 生成路径, 更新包裹, 然后触发异步保存 (同步转换)
+        .Where(tuple => tuple.IsProcessable) // 第二个过滤: 基于重复性检查结果
+        .Select(tuple => tuple.Package) // 只选择通过过滤的包裹
+        .Select(package => // 使用 SelectMany 或类似操作引入异步可能更复杂，暂时用 Select + Task.Run
         {
-            var originalImage = package.Image;
-            string? generatedPath = null;
-
-            try
+            // --- 开始应用日志上下文 ---
+            var packageContext = $"[包裹{package.Index}|{package.Barcode}]";
+            using (LogContext.PushProperty("PackageContext", packageContext))
             {
+                Log.Information("已通过过滤器, 开始处理图像和保存.");
+
+                // 更新已处理条码的时间戳 (移到这里确保只对通过的包裹更新)
+                if (package.Barcode != "NOREAD" && _cameraSettings.BarcodeRepeatFilterEnabled)
+                {
+                    _processedBarcodes[package.Barcode] = DateTime.Now;
+                }
+
+                var originalImage = package.Image; // 获取原始图像引用
+                string? generatedPath = null;
                 var triggerTime = package.TriggerTimestamp;
-                // 1. 首先生成潜在的保存路径
-                generatedPath = _imageSavingService.GenerateImagePath(package.Barcode, triggerTime);
+                bool imageSavingEnabled = _cameraSettings.EnableImageSaving;
 
-                // 记录路径生成结果
-                if (generatedPath != null) Log.Debug("为包裹 {Index} ({Barcode}) 生成潜在图像路径: {Path}", package.Index, package.Barcode, generatedPath);
-                else Log.Warning("无法为包裹 {Index} ({Barcode}) 生成图像路径. 路径将不会被设置.", package.Index, package.Barcode);
-
-                if (originalImage != null)
+                try
                 {
-                    // 2. 克隆一次，专用于后台保存任务
-                    var cloneForSave = originalImage.Clone();
-                    cloneForSave.Freeze(); // 冻结图像使其可以安全地跨线程访问
-
-                    // 3. 使用原始图像和生成的路径更新 PackageInfo
-                    package.SetImage(originalImage, generatedPath);
-
-                    // 4. 异步触发保存操作 (触发即忘)
-                    _ = Task.Run(async () =>
+                    // 1. 生成潜在的保存路径 (即使保存被禁用或无图像也要生成)
+                    if (imageSavingEnabled)
                     {
-                        // 将克隆副本传递给保存服务
-                        var actualSavedPath = await _imageSavingService.SaveImageAsync(cloneForSave, package.Barcode, triggerTime);
-                        if (actualSavedPath != null)
+                        generatedPath = _imageSavingService.GenerateImagePath(package.Barcode, triggerTime);
+                        if (generatedPath != null) Log.Debug("生成潜在图像路径: {Path}", generatedPath);
+                        else Log.Warning("无法生成图像路径 (可能未配置 ImageSavePath?).");
+                    }
+                    else
+                    {
+                        Log.Debug("图像保存功能已禁用, 跳过路径生成和保存.");
+                    }
+
+                    // 2. 更新 PackageInfo 的 Image 和 ImagePath
+                    // 无论后续保存是否成功, 都应将原始图像(如果存在)和生成的路径(如果存在)设置回包裹
+                    package.SetImage(originalImage, generatedPath);
+                    Log.Debug("已更新 PackageInfo 的 ImagePath (可能为 null).");
+
+                    // 3. 如果图像保存已启用且有图像，则触发异步保存
+                    if (imageSavingEnabled && originalImage != null)
+                    {
+                        // 为后台任务克隆并冻结图像
+                        var cloneForSave = originalImage.Clone();
+                        cloneForSave.Freeze();
+
+                        Log.Debug("准备启动后台任务保存图像.");
+                        // 捕获上下文信息用于后台任务
+                        var barcodeForTask = package.Barcode;
+                        var indexForTask = package.Index;
+                        var contextForTask = packageContext; // 捕获上下文
+
+                        _ = Task.Run(async () =>
                         {
-                            Log.Information("包裹 {Index} 的后台图像保存完成, 路径: {ImagePath}", package.Index, actualSavedPath);
-                            // cloneForSave 在此任务完成后超出作用域, 可被 GC 回收.
-                        }
-                        else
-                        {
-                            Log.Warning("包裹 {Index} ({Barcode}) 的后台图像保存失败或被跳过.", package.Index, package.Barcode);
-                            // cloneForSave 在此任务完成后超出作用域, 可被 GC 回收.
-                        }
-                    });
+                            // 在后台任务中恢复日志上下文
+                            using (LogContext.PushProperty("PackageContext", contextForTask))
+                            {
+                                Log.Debug("后台保存任务开始.");
+                                string? actualSavedPath = null;
+                                try
+                                {
+                                    actualSavedPath = await _imageSavingService.SaveImageAsync(cloneForSave, barcodeForTask, triggerTime);
+
+                                    if (actualSavedPath != null)
+                                    {
+                                        Log.Information("后台图像保存成功, 路径: {ImagePath}", actualSavedPath);
+                                    }
+                                    else
+                                    {
+                                        // SaveImageAsync 返回 null 的原因已经在该服务内部记录 (例如禁用, 路径错误等)
+                                        Log.Warning("后台图像保存任务返回 null (可能已禁用或失败).");
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    Log.Error(ex, "后台图像保存任务发生异常.");
+                                }
+                                // cloneForSave 在此任务完成后超出作用域, 可被 GC 回收.
+                                Log.Debug("后台保存任务结束.");
+                            }
+                        });
+                    }
+                    else if (imageSavingEnabled && originalImage == null)
+                    {
+                        Log.Warning("图像保存已启用, 但包裹中无可用图像.");
+                    }
+                    // 如果 imageSavingEnabled == false, 此前已记录日志
+
                 }
-                else
+                catch (Exception ex)
                 {
-                    // 包裹信息中没有可用图像
-                    Log.Warning("包裹 {Index} ({Barcode}) 中无可用图像进行保存.", package.Index, package.Barcode);
-                    // 使用 null 图像但包含生成的路径来更新 PackageInfo
+                    Log.Error(ex, "处理图像路径或触发保存时发生主流程错误.");
+                    // 确保即使出错，图像和路径（如果已生成）仍在 packageInfo 中
                     package.SetImage(originalImage, generatedPath);
                 }
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "在为包裹 {Index} ({Barcode}) 生成图像路径或触发保存时发生错误.", package.Index, package.Barcode);
-                // 发生错误时, 尝试设置原始图像(如果可用)和生成的路径(如果可用)
-                // 这维持了在包裹实例中保留原始图像的原则.
-                package.SetImage(originalImage, generatedPath);
-            }
-            return package; // 立即返回包裹 (Select 需要返回 T)
+
+                Log.Debug("图像处理和保存流程完成 (保存任务可能仍在后台运行).");
+                return package; // 返回更新后的包裹
+
+            } // --- 日志上下文结束 ---
         });
 
     /// <summary>
@@ -164,6 +211,9 @@ public class PackageTransferService : IDisposable
     /// </summary>
     private bool IsBarcodeProcessable(string barcode)
     {
+        // 如果禁用过滤或条码是 NOREAD，则总是可处理
+        if (!_cameraSettings.BarcodeRepeatFilterEnabled || barcode == "NOREAD") return true;
+
         if (!_processedBarcodes.TryGetValue(barcode, out var lastProcessedTime))
         {
             // 最近未见过此条码, 处理它
@@ -173,10 +223,10 @@ public class PackageTransferService : IDisposable
         var timeSinceLastProcess = DateTime.Now - lastProcessedTime;
         var timeWindow = TimeSpan.FromMilliseconds(_cameraSettings.RepeatTimeMs);
 
-        if (timeSinceLastProcess > timeWindow) return true;
-        // 过滤掉在 {TimeWindow} 毫秒内重复的条码 {Barcode}
-        Log.Debug("过滤掉在 {TimeWindow} 毫秒内重复的条码 {Barcode}.", barcode, _cameraSettings.RepeatTimeMs);
-        return false;
+        // 仅当时间窗口内处理过才返回 false (被过滤)
+        return timeSinceLastProcess > timeWindow;
+        // 过滤日志移至 Do 操作符中，以便在上下文中记录
+        // Log.Debug("过滤掉在 {TimeWindow} 毫秒内重复的条码 {Barcode}.", barcode, _cameraSettings.RepeatTimeMs);
     }
     /// <summary>
     ///     定期清理过期的条码记录

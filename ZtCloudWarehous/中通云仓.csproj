@@ -29,6 +29,7 @@
         <PackageReference Include="Serilog.Sinks.File" />
         <PackageReference Include="Serilog.Sinks.Debug" />
         <PackageReference Include="Serilog.Extensions.Logging" />
+        <PackageReference Include="Serilog.Settings.Configuration" />
 
         <!-- UI Framework -->
         <PackageReference Include="MahApps.Metro.IconPacks.Material" />
@@ -46,6 +47,12 @@
         <Resource Include="..\SharedUI\Resources\Icon\logo.ico">
             <Link>logo.ico</Link>
         </Resource>
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Update="appsettings.json">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
     </ItemGroup>
 
 </Project>

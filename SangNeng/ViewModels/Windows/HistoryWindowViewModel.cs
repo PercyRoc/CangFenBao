@@ -292,7 +292,7 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
             var headers = new[]
             {
                 "No.", "Barcode", "Chute", "Weight(kg)", "Length(cm)", "Width(cm)", "Height(cm)",
-                "Volume(cm³)", "Status", "Note", "Create Time"
+                "Volume(cm³)", "Pallet Name", "Status", "Note", "Create Time"
             };
 
             for (var i = 0; i < headers.Length; i++)
@@ -324,12 +324,13 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
                 worksheet.Cells[row, 6].Value = record.Width.HasValue ? Math.Round(record.Width.Value, 1) : null;
                 worksheet.Cells[row, 7].Value = record.Height.HasValue ? Math.Round(record.Height.Value, 1) : null;
                 worksheet.Cells[row, 8].Value = record.Volume;
-                worksheet.Cells[row, 9].Value = record.StatusDisplay;
-                worksheet.Cells[row, 10].Value = record.ErrorMessage;
-                worksheet.Cells[row, 11].Value = record.CreateTime;
+                worksheet.Cells[row, 9].Value = record.PalletName;
+                worksheet.Cells[row, 10].Value = record.StatusDisplay;
+                worksheet.Cells[row, 11].Value = record.ErrorMessage;
+                worksheet.Cells[row, 12].Value = record.CreateTime;
 
                 // 设置日期格式
-                worksheet.Cells[row, 11].Style.Numberformat.Format = "yyyy-MM-dd HH:mm:ss";
+                worksheet.Cells[row, 12].Style.Numberformat.Format = "yyyy-MM-dd HH:mm:ss";
             }
 
             // 自动调整列宽
