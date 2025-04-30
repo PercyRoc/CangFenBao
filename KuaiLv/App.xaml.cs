@@ -14,7 +14,6 @@ using KuaiLv.ViewModels.Settings;
 using KuaiLv.Views;
 using KuaiLv.Views.Dialogs;
 using KuaiLv.Views.Settings;
-using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 using SharedUI.ViewModels;

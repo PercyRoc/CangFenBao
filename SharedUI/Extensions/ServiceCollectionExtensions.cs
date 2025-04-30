@@ -1,4 +1,3 @@
-using Prism.Ioc;
 using SharedUI.ViewModels;
 using SharedUI.ViewModels.Settings;
 using SharedUI.Views.Settings;

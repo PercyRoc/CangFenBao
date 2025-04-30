@@ -1,8 +1,4 @@
 ﻿using Common.Services.Ui;
-using Prism.Commands;
-using Prism.Ioc;
-using Prism.Mvvm;
-using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.ViewModels.Settings;
 
@@ -23,7 +19,7 @@ public class SettingsDialogViewModel: BindableBase, IDialogAware
         INotificationService notificationService)
     {
         _notificationService = notificationService;
-
+        RequestClose = new DialogCloseListener();
 
         // 创建各个设置页面的ViewModel实例
         _cameraSettingsViewModel = containerProvider.Resolve<CameraSettingsViewModel>();
@@ -39,7 +35,7 @@ public class SettingsDialogViewModel: BindableBase, IDialogAware
 
     public string Title => "系统设置";
 
-    public event Action<IDialogResult>? RequestClose;
+    public DialogCloseListener RequestClose { get; }
 
     public bool CanCloseDialog()
     {
@@ -65,7 +61,7 @@ public class SettingsDialogViewModel: BindableBase, IDialogAware
             _asnHttpSettingsViewModel.SaveConfigurationCommand.Execute();
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");
-            RequestClose?.Invoke(new DialogResult(ButtonResult.OK));
+            RequestClose.Invoke(new DialogResult(ButtonResult.OK));
         }
         catch (Exception ex)
         {
@@ -76,6 +72,6 @@ public class SettingsDialogViewModel: BindableBase, IDialogAware
 
     private void ExecuteCancel()
     {
-        RequestClose?.Invoke(new DialogResult(ButtonResult.Cancel));
+        RequestClose.Invoke(new DialogResult(ButtonResult.Cancel));
     }
 }

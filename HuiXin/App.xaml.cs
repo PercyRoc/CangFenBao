@@ -8,7 +8,6 @@ using HuiXin.ViewModels;
 using HuiXin.ViewModels.Dialogs;
 using HuiXin.Views;
 using HuiXin.Views.Dialogs;
-using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 using SharedUI.ViewModels;
@@ -17,6 +16,9 @@ using SharedUI.Views.Settings;
 using SortingServices.Car;
 using SortingServices.Servers.Services.JuShuiTan;
 using Timer = System.Timers.Timer;
+using System.ComponentModel;
+using System.Windows.Threading;
+using SharedUI.Views.Windows;
 
 namespace HuiXin;
 
@@ -29,6 +31,12 @@ public partial class App
     private const string MutexName = "Global\\HuiXin_App_Mutex";
     private Timer? _cleanupTimer;
     private bool _ownsMutex;
+    private bool _isShuttingDown;
+
+    protected override IContainerExtension CreateContainerExtension()
+    {
+        return new DryIocContainerExtension();
+    }
 
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
@@ -68,7 +76,7 @@ public partial class App
         {
             MessageBox.Show("程序已在运行中，请勿重复启动！", "提示", MessageBoxButton.OK,
                 MessageBoxImage.Information);
-            Environment.Exit(0); // 直接退出进程
+            Environment.Exit(0);
             return null!;
         }
 
@@ -122,7 +130,7 @@ public partial class App
         return processes.Length > 1;
     }
 
-    protected override async void OnStartup(StartupEventArgs e)
+    protected override void OnStartup(StartupEventArgs e)
     {
         // 配置Serilog
         Log.Logger = new LoggerConfiguration()
@@ -133,22 +141,74 @@ public partial class App
                 rollingInterval: RollingInterval.Day,
                 rollOnFileSizeLimit: true)
             .CreateLogger();
-        Log.Information("应用程序启动");
+        Log.Information("应用程序启动 (OnStartup)");
 
         // 启动DUMP文件清理任务
         StartCleanupTask();
+        
+        // 调用基类方法初始化容器等
         base.OnStartup(e);
+        
+        // 注册全局异常处理
+        DispatcherUnhandledException += App_DispatcherUnhandledException;
+        Log.Information("DispatcherUnhandledException handler attached.");
+
+        // 手动启动后台服务
+        StartBackgroundServices();
+    }
+
+    /// <summary>
+    /// 全局未处理异常处理程序
+    /// </summary>
+    private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        Log.Fatal(e.Exception, "Unhandled Dispatcher Exception Caught by App.xaml.cs");
+        MessageBox.Show($"发生未处理的严重错误: {e.Exception.Message}\n\n应用程序可能不稳定，建议重启。请联系技术支持并提供日志文件。", "应用程序错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        e.Handled = true; // 尝试阻止应用程序崩溃
+    }
+
+    /// <summary>
+    /// 手动启动后台服务
+    /// </summary>
+    private void StartBackgroundServices()
+    {
+        Log.Information("手动启动后台服务...");
+        ProgressIndicatorWindow? progressWindow = null;
+
         try
         {
+            // 在 UI 线程显示启动进度窗口
+            Current.Dispatcher.Invoke(() =>
+            {
+                Log.Debug("在 UI 线程上创建并显示启动进度窗口...");
+                progressWindow = new ProgressIndicatorWindow("正在启动服务，请稍候...")
+                {
+                    Owner = Current.MainWindow
+                };
+                progressWindow.Show();
+                Log.Debug("启动进度窗口已显示。");
+            });
+
             // 启动相机托管服务
             var cameraStartupService = Container.Resolve<CameraStartupService>();
-            await cameraStartupService.StartAsync(CancellationToken.None);
-            Log.Information("相机托管服务启动成功");
+            _ = Task.Run(() => cameraStartupService.StartAsync(CancellationToken.None))
+                   .ContinueWith(t => Log.Error(t.Exception, "启动 CameraStartupService 时出错"), TaskContinuationOptions.OnlyOnFaulted);
+            
+            Log.Information("后台服务启动已全部发起。");
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "启动托管服务时发生错误");
-            throw;
+            Log.Error(ex, "解析或发起后台服务启动时出错。可能无法启动部分或全部服务。");
+            MessageBox.Show($"启动后台服务时发生错误: {ex.Message}\n请检查配置和设备连接。", "启动错误", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {            
+            // 在 UI 线程关闭启动进度窗口
+            Current.Dispatcher.InvokeAsync(() =>
+            {
+                progressWindow?.Close();
+                Log.Debug("启动进度窗口已关闭 (如果存在)。");
+            });
         }
     }
 
@@ -225,37 +285,23 @@ public partial class App
 
     protected override async void OnExit(ExitEventArgs e)
     {
+        Log.Information("应用程序退出处理程序 (OnExit) 开始... ExitCode: {ExitCode}", e.ApplicationExitCode);
         try
         {
-            // 停止清理定时器
             _cleanupTimer?.Stop();
             _cleanupTimer?.Dispose();
-
-            // 停止相机托管服务
-            var cameraStartupService = Container.Resolve<CameraStartupService>();
-            await cameraStartupService.StopAsync(CancellationToken.None);
-            Log.Information("相机托管服务已停止");
-            // 释放相机工厂
-            var cameraFactory = Container.Resolve<CameraFactory>();
-            cameraFactory.Dispose();
-            Log.Information("相机工厂已释放");
-
-            // 释放相机服务
-            var cameraService = Container.Resolve<ICameraService>();
-            cameraService.Dispose();
-            Log.Information("相机服务已释放");
-
-            // 等待所有日志写入完成
-            Log.Information("应用程序关闭");
-            await Log.CloseAndFlushAsync();
+            Log.Debug("清理定时器已停止。");
+            
+            // 调用基类 OnExit
+            base.OnExit(e);
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "应用程序关闭时发生错误");
-            await Log.CloseAndFlushAsync();
+            Log.Error(ex, "调用 base.OnExit 或停止清理定时器时发生错误");
         }
         finally
         {
+            Log.Information("释放 Mutex 并刷新日志... ");
             try
             {
                 // 安全释放 Mutex
@@ -264,19 +310,170 @@ public partial class App
                     if (_ownsMutex && _mutex.SafeWaitHandle is { IsClosed: false, IsInvalid: false })
                     {
                         _mutex.ReleaseMutex();
-                        Log.Information("Mutex已释放");
+                        Log.Debug("Mutex已释放");
                     }
-
                     _mutex.Dispose();
                     _mutex = null;
                 }
             }
             catch (Exception ex)
+            { Log.Error(ex, "释放Mutex时发生错误"); }
+            
+            // 等待所有日志写入完成
+            await Log.CloseAndFlushAsync();
+        }
+        Log.Information("应用程序退出处理程序 (OnExit) 完成。 ");
+    }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Log.Information("应用程序初始化完成 (OnInitialized)");
+
+        // 附加主窗口关闭事件处理
+        var mainWindow = Current.MainWindow;
+        if (mainWindow != null)
+        {
+            mainWindow.Closing += MainWindow_Closing;
+            Log.Debug("主窗口 Closing 事件处理已附加");
+        }
+        else
+        {
+            Log.Warning("无法获取主窗口实例以附加 Closing 事件处理程序。应用程序可能无法正常关闭。");
+        }
+    }
+
+    /// <summary>
+    /// 主窗口关闭事件处理程序
+    /// </summary>
+    private async void MainWindow_Closing(object? sender, CancelEventArgs e)
+    {
+        Log.Information("MainWindow_Closing 事件触发。 IsShuttingDown: {IsShuttingDown}", _isShuttingDown);
+        if (_isShuttingDown)
+        {
+            Log.Debug("已在关闭过程中，取消本次关闭事件处理。");
+            return; // 防止重入
+        }
+
+        _isShuttingDown = true;
+        e.Cancel = true; // 接管关闭流程
+        Log.Information("取消默认关闭，开始执行清理并显示等待窗口...");
+
+        ProgressIndicatorWindow? progressWindow = null;
+        try
+        {
+            // 在UI线程显示进度窗口
+            await Current.Dispatcher.InvokeAsync(() =>
             {
-                Log.Error(ex, "释放Mutex时发生错误");
+                Log.Debug("在 UI 线程上创建并显示 ProgressIndicatorWindow...");
+                progressWindow = new ProgressIndicatorWindow("正在关闭应用程序，请稍候...")
+                {
+                    Owner = Current.MainWindow
+                };
+                progressWindow.Show();
+                Log.Debug("ProgressIndicatorWindow 已显示。");
+            });
+
+            Log.Information("开始后台清理任务...");
+            // 在后台线程停止服务并执行清理
+            await Task.Run(() => StopBackgroundServices(true));
+            Log.Information("后台清理任务完成。");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "执行后台清理任务时发生错误");
+            // 即使出错，也要尝试关闭
+        }
+        finally
+        {
+            Log.Information("准备关闭等待窗口并真正关闭应用程序...");
+            // 在UI线程关闭进度窗口
+            await Current.Dispatcher.InvokeAsync(() =>
+            {
+                progressWindow?.Close();
+                Log.Debug("ProgressIndicatorWindow 已关闭 (如果存在)。");
+            });
+
+            // 确保在 UI 线程上调用 Shutdown
+            await Current.Dispatcher.InvokeAsync(() =>
+            {
+                Log.Information("调用 Application.Current.Shutdown()...");
+                Current.Shutdown(); // 真正关闭应用程序
+            });
+        }
+    }
+
+    /// <summary>
+    /// 手动停止后台服务
+    /// </summary>
+    /// <param name="waitForCompletion">是否等待服务停止完成。</param>
+    private void StopBackgroundServices(bool waitForCompletion)
+    {
+        Log.Information("手动停止后台服务... Wait for completion: {WaitForCompletion}", waitForCompletion);
+        var tasks = new List<Task>();
+        try
+        {
+            // 停止相机托管服务
+            var cameraStartupService = Container?.Resolve<CameraStartupService>();
+            if (cameraStartupService != null)
+            {
+                tasks.Add(Task.Run(() => cameraStartupService.StopAsync(CancellationToken.None))
+                           .ContinueWith(t => Log.Error(t.Exception, "停止 CameraStartupService 时出错"), TaskContinuationOptions.OnlyOnFaulted));
+            }
+            
+            // 清理相机相关资源
+            try
+            {
+                var cameraFactory = Container?.Resolve<CameraFactory>();
+                cameraFactory?.Dispose();
+                Log.Information("相机工厂已释放");
+
+                var cameraService = Container?.Resolve<ICameraService>();
+                cameraService?.Dispose();
+                Log.Information("相机服务已释放");
+            }
+            catch(Exception ex) 
+            { 
+                Log.Error(ex, "清理相机或服务资源时出错"); 
             }
 
-            base.OnExit(e);
+            if (tasks.Count != 0 && waitForCompletion)
+            {
+                Log.Debug("等待 {Count} 个后台服务停止任务完成...", tasks.Count);
+                try
+                {
+                    // 等待异步服务停止完成，设置超时
+                    if (!Task.WhenAll(tasks).Wait(TimeSpan.FromSeconds(10)))
+                    {
+                        Log.Warning("一个或多个后台服务未在超时时间内正常停止。");
+                    }
+                    else
+                    {
+                        Log.Information("后台服务已停止 (异步部分)。");
+                    }
+                }
+                catch (AggregateException aex)
+                {
+                    Log.Error(aex, "等待后台服务停止时发生聚合错误。");
+                    foreach(var innerEx in aex.InnerExceptions)
+                    {
+                        Log.Error(innerEx, "  内部停止错误:");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "等待后台服务停止时发生错误。");
+                }
+            }
+            else if (!waitForCompletion)
+            {
+                Log.Information("后台服务停止已发起 (不等待完成)。");
+            }
         }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "解析或发起后台服务停止时出错。可能无法完全停止服务。");
+        }
+        Log.Information("StopBackgroundServices 方法执行完毕。 ");
     }
 }

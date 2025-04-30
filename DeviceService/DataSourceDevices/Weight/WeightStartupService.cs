@@ -105,7 +105,7 @@ public class WeightStartupService : IHostedService
     /// <summary>
     ///     获取重量称服务实例
     /// </summary>
-    internal SerialPortWeightService GetWeightService()
+    public SerialPortWeightService GetWeightService()
     {
         _initLock.Wait();
         try

@@ -1,6 +1,4 @@
-﻿using Prism.Mvvm;
-
-namespace SharedUI.Models;
+﻿namespace SharedUI.Models;
 
 public class PackageInfoItem : BindableBase
 {

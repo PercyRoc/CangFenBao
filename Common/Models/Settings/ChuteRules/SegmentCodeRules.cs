@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using Common.Services.Settings;
-using Prism.Mvvm;
 using Serilog;
 
 namespace Common.Models.Settings.ChuteRules;

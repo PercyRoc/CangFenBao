@@ -260,7 +260,6 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
         }
 
         // 2. 更新内部状态
-        bool previousState = _isConnected;
         _isConnected = isConnected; 
         
         // 3. 根据新状态执行后续操作

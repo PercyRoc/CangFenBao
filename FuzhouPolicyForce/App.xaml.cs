@@ -11,7 +11,6 @@ using FuzhouPolicyForce.ViewModels;
 using FuzhouPolicyForce.Views;
 using FuzhouPolicyForce.Views.Settings;
 using Microsoft.Extensions.Hosting;
-using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 using SharedUI.ViewModels.Settings;

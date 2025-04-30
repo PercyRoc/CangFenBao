@@ -5,12 +5,16 @@
                  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:hc="https://handyorg.github.io/handycontrol"
+                 xmlns:viewModels="clr-namespace:XinBa.ViewModels"
+                 xmlns:mvvm="http://prismlibrary.com/"
+                 d:DataContext="{d:DesignInstance Type=viewModels:MainWindowViewModel}"
+                 mvvm:ViewModelLocator.AutoWireViewModel="True"
                  mc:Ignorable="d"
                  Title="XinBa"
                  Height="900"
                  Width="1600"
                  WindowStartupLocation="CenterScreen"
-                 ExtendsContentIntoTitleBar="True" x:ClassModifier="internal">
+                 ExtendsContentIntoTitleBar="True">
 
     <ui:FluentWindow.Resources>
         <ResourceDictionary>
@@ -372,14 +376,14 @@
             <!-- Right Panel -->
             <Grid Grid.Row="0" Grid.Column="1" Margin="16,0,0,0">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="2*" />
-                    <RowDefinition Height="*" />
+                    <RowDefinition Height="2*" /> <!-- Row for Image -->
+                    <RowDefinition Height="*" /> <!-- Row for History -->
                 </Grid.RowDefinitions>
 
                 <!-- Image Display Area -->
                 <Border Grid.Row="0"
                         Style="{StaticResource CardStyle}"
-                        Margin="16">
+                        Margin="16,0,16,16">
                     <Grid Margin="16">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -392,21 +396,21 @@
                                     Margin="0,0,0,8">
                             <ui:SymbolIcon Symbol="Image24"
                                            Margin="0,0,8,0"
-                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           Foreground="{StaticResource AccentBrush}"
                                            VerticalAlignment="Center" />
-                            <TextBlock Text="Real-time Image"
+                            <TextBlock Text="实时图像"
                                        FontSize="16"
                                        FontWeight="SemiBold"
                                        Foreground="{StaticResource AccentBrush}"
                                        VerticalAlignment="Center" />
                         </StackPanel>
 
-                        <!-- Image Display Area -->
+                        <!-- Image Display -->
                         <Image Grid.Row="1"
                                Source="{Binding CurrentImage}"
                                RenderOptions.BitmapScalingMode="HighQuality"
                                RenderOptions.EdgeMode="Aliased"
-                               Stretch="Uniform"
+                               Stretch="Fill"
                                StretchDirection="Both"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center" />
@@ -414,7 +418,7 @@
                 </Border>
 
                 <!-- Historical Package Information -->
-                <Border Grid.Row="1" Margin="16"
+                <Border Grid.Row="1" Margin="16,0,16,16"
                         Style="{StaticResource CardStyle}">
                     <Grid Margin="16">
                         <Grid.RowDefinitions>
@@ -448,20 +452,17 @@
                                   CanUserDeleteRows="False"
                                   GridLinesVisibility="Horizontal">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="No." Binding="{Binding Index}" Width="60" />
-                                <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" Width="160" />
-                                <DataGridTextColumn Header="Segment Code" Binding="{Binding SegmentCode}" Width="160" />
-                                <DataGridTextColumn Header="Weight" Binding="{Binding WeightDisplay}" Width="80" />
-                                <DataGridTextColumn Header="Dimensions" Binding="{Binding VolumeDisplay}" Width="120" />
-                                <DataGridTextColumn Header="Chute" Binding="{Binding ChuteName}" Width="100" />
-                                <DataGridTextColumn Header="Status" Binding="{Binding StatusDisplay}" Width="80" />
+                                <DataGridTextColumn Header="No." Binding="{Binding Index}" MinWidth="60" Width="Auto" />
+                                <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" MinWidth="160" Width="Auto" />
+                                <DataGridTextColumn Header="Weight" Binding="{Binding WeightDisplay}" MinWidth="80" Width="Auto" />
+                                <DataGridTextColumn Header="Dimensions" Binding="{Binding VolumeDisplay}" MinWidth="120" Width="Auto" />
+                                <DataGridTextColumn Header="Status" Binding="{Binding StatusDisplay}" MinWidth="80" Width="Auto" />
                                 <DataGridTextColumn Header="Processing Time"
                                                     Binding="{Binding ProcessingTime, StringFormat={}{0:0}ms}"
-                                                    Width="100" />
+                                                    MinWidth="100" Width="Auto" />
                                 <DataGridTextColumn Header="Time"
                                                     Binding="{Binding CreateTime, StringFormat={}{0:HH:mm:ss}}"
-                                                    Width="100" />
-                                <DataGridTextColumn Header="Notes" Binding="{Binding Information}" Width="*" />
+                                                    MinWidth="100" Width="Auto" />
                             </DataGrid.Columns>
                         </DataGrid>
                     </Grid>

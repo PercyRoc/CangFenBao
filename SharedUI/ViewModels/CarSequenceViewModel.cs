@@ -4,8 +4,6 @@ using System.ComponentModel;
 using System.Windows.Input;
 using Common.Models.Settings.ChuteRules;
 using Common.Services.Settings;
-using Prism.Commands;
-using Prism.Mvvm;
 using SortingServices.Car;
 
 namespace SharedUI.ViewModels

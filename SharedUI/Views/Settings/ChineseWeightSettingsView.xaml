@@ -1,21 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 
-<Page x:Class="SharedUI.Views.Settings.ChineseWeightSettingsView"
-      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-      xmlns:prism="http://prismlibrary.com/"
-      xmlns:converters="clr-namespace:SharedUI.Converters"
-      xmlns:weight="clr-namespace:DeviceService.DataSourceDevices.Weight;assembly=DeviceService"
-      xmlns:settings="clr-namespace:SharedUI.ViewModels.Settings"
-      prism:ViewModelLocator.AutoWireViewModel="True"
-      d:DataContext="{d:DesignInstance Type=settings:ChineseWeightSettingsViewModel}"
-      mc:Ignorable="d"
-      Title="重量设置">
+<UserControl x:Class="SharedUI.Views.Settings.ChineseWeightSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:prism="http://prismlibrary.com/"
+             xmlns:converters="clr-namespace:SharedUI.Converters"
+             xmlns:weight="clr-namespace:DeviceService.DataSourceDevices.Weight;assembly=DeviceService"
+             xmlns:settings="clr-namespace:SharedUI.ViewModels.Settings"
+             prism:ViewModelLocator.AutoWireViewModel="True"
+             d:DataContext="{d:DesignInstance Type=settings:ChineseWeightSettingsViewModel}"
+             mc:Ignorable="d">
 
-    <Page.Resources>
+    <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary
@@ -38,7 +37,7 @@
                 <Setter Property="MinWidth" Value="80" />
             </Style>
         </ResourceDictionary>
-    </Page.Resources>
+    </UserControl.Resources>
 
     <Grid>
         <StackPanel MaxWidth="800" 
@@ -208,4 +207,4 @@
             </ui:Card>
         </StackPanel>
     </Grid>
-</Page> 
+</UserControl> 

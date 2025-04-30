@@ -1,6 +1,4 @@
 ﻿using Common.Services.Settings;
-using Prism.Commands;
-using Prism.Mvvm;
 using Serilog;
 
 namespace ZtCloudWarehous.ViewModels.Settings;

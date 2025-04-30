@@ -1,321 +1,458 @@
-﻿// using System.Windows;
-// using Common.Extensions;
-// using Prism.Ioc;
-// using Serilog;
-// using SharedUI.Extensions;
-// using XinBa.Services;
-// using XinBa.ViewModels;
-// using XinBa.ViewModels.Settings;
-// using XinBa.Views;
-// using XinBa.Views.Settings;
-//
-// namespace XinBa;
-//
-// /// <summary>
-// ///     Interaction logic for App.xaml
-// /// </summary>
-// internal partial class App
-// {
-//     private static Mutex? _mutex;
-//     private const string MutexName = "XinBa_App_Mutex";
-//     private Window? _currentMainWindow;
-//
-//     /// <summary>
-//     ///     创建主窗口
-//     /// </summary>
-//     protected override Window CreateShell()
-//     {
-//         // 检查是否已经运行
-//         _mutex = new Mutex(true, MutexName, out var createdNew);
-//
-//         if (!createdNew)
-//         {
-//             // 关闭当前实例
-//             Current.Shutdown();
-//             return null!;
-//         }
-//
-//         // 始终显示登录窗口
-//         Log.Information("应用程序启动，显示登录窗口");
-//
-//         var window = Container.Resolve<Window>("LoginDialog");
-//
-//         // 设置DataContext
-//         var viewModel = Container.Resolve<LoginViewModel>();
-//         window.DataContext = viewModel;
-//
-//         // 订阅登录成功事件
-//         viewModel.LoginSucceeded += OnLoginSucceeded;
-//
-//         _currentMainWindow = window;
-//         Current.MainWindow = window;
-//         return window;
-//     }
-//
-//     /// <summary>
-//     ///     注册服务
-//     /// </summary>
-//     protected override void RegisterTypes(IContainerRegistry containerRegistry)
-//     {
-//         // 添加通用服务
-//         containerRegistry.AddCommonServices();
-//         containerRegistry.AddShardUi();
-//
-//         // 注册视图和ViewModel
-//         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
-//         containerRegistry.RegisterSingleton<MainWindowViewModel>();
-//         containerRegistry.Register<CameraSettingsView>();
-//         containerRegistry.Register<CameraSettingsViewModel>();
-//
-//         // 注册设置窗口
-//         containerRegistry.Register<Window, SettingsDialog>("SettingsDialog");
-//         containerRegistry.Register<SettingsDialogViewModel>();
-//
-//         // 注册登录窗口
-//         containerRegistry.Register<Window, LoginDialog>("LoginDialog");
-//         containerRegistry.Register<LoginViewModel>();
-//
-//         // 注册API服务
-//         containerRegistry.RegisterSingleton<IApiService, ApiService>();
-//     }
-//
-//     /// <summary>
-//     ///     启动
-//     /// </summary>
-//     protected override void OnStartup(StartupEventArgs e)
-//     {
-//         // 配置Serilog
-//         Log.Logger = new LoggerConfiguration()
-//             .MinimumLevel.Debug()
-//             .WriteTo.Console()
-//             .WriteTo.Debug()
-//             .WriteTo.File("logs/app-.log",
-//                 rollingInterval: RollingInterval.Day,
-//                 rollOnFileSizeLimit: true)
-//             .CreateLogger();
-//
-//         Log.Information("应用程序启动");
-//
-//         // 先调用基类方法初始化容器
-//         base.OnStartup(e);
-//
-//         // 注册全局异常处理
-//         Current.DispatcherUnhandledException += static (_, args) =>
-//         {
-//             Log.Error(args.Exception, "未处理的异常");
-//             args.Handled = true;
-//         };
-//     }
-//
-//     /// <summary>
-//     ///     登录成功事件处理
-//     /// </summary>
-//     private async void OnLoginSucceeded(object? sender, EventArgs e)
-//     {
-//         try
-//         {
-//             Log.Information("登录成功，准备切换到主窗口");
-//
-//             // 使用Dispatcher延迟创建和显示主窗口
-//             await Dispatcher.InvokeAsync(async () =>
-//             {
-//                 try
-//                 {
-//                     // 保存当前窗口引用
-//                     var oldWindow = _currentMainWindow;
-//
-//                     // 创建主窗口和ViewModel
-//                     var mainWindow = Container.Resolve<MainWindow>();
-//                     var viewModel = Container.Resolve<MainWindowViewModel>();
-//
-//                     // 设置DataContext
-//                     mainWindow.DataContext = viewModel;
-//                     Log.Information("已设置MainWindow的DataContext为MainWindowViewModel");
-//
-//                     _currentMainWindow = mainWindow;
-//
-//                     // 订阅登出事件
-//                     viewModel.LogoutRequested += OnLogoutRequested;
-//
-//                     // 显示主窗口并设置为应用程序的主窗口
-//                     mainWindow.Show();
-//                     Current.MainWindow = mainWindow;
-//
-//                     // 启动相机服务
-//                     await StartCameraServiceAsync();
-//
-//                     // 隐藏登录窗口而不是关闭它
-//                     if (oldWindow != null)
-//                     {
-//                         // 如果是LoginDialog，需要手动隐藏，因为我们不再通过RequestClose事件关闭
-//                         oldWindow.Hide();
-//                         Log.Information("登录窗口已隐藏");
-//                     }
-//
-//                     // 显式调用MainWindowViewModel的UpdateCurrentEmployeeInfo方法以更新员工信息
-//                     _ = viewModel.UpdateCurrentEmployeeInfo();
-//                 }
-//                 catch (Exception ex)
-//                 {
-//                     Log.Error(ex, "创建主窗口时发生错误");
-//                     Current.Shutdown();
-//                 }
-//             });
-//         }
-//         catch (Exception ex)
-//         {
-//             Log.Error(ex, "处理登录成功事件时发生错误");
-//         }
-//     }
-//
-//     /// <summary>
-//     ///     登出请求事件处理
-//     /// </summary>
-//     private async void OnLogoutRequested(object? sender, EventArgs e)
-//     {
-//         try
-//         {
-//             Log.Information("收到登出请求，准备切换到登录窗口");
-//
-//             // 使用Dispatcher延迟创建和显示登录窗口
-//             await Dispatcher.InvokeAsync(async () =>
-//             {
-//                 try
-//                 {
-//                     // 保存当前窗口引用
-//                     var oldWindow = _currentMainWindow;
-//
-//                     // 创建登录窗口
-//                     var window = Container.Resolve<Window>("LoginDialog");
-//
-//                     // 设置DataContext
-//                     var viewModel = Container.Resolve<LoginViewModel>();
-//                     window.DataContext = viewModel;
-//                     Log.Information("已设置LoginDialog的DataContext为LoginViewModel");
-//
-//                     _currentMainWindow = window;
-//
-//                     // 订阅登录成功事件
-//                     viewModel.LoginSucceeded += OnLoginSucceeded;
-//
-//                     // 显示登录窗口并设置为应用程序的主窗口
-//                     window.Show();
-//                     Current.MainWindow = window;
-//                     Log.Information("登录窗口已显示");
-//
-//                     // 等待一小段时间，确保登录窗口完全显示
-//                     await Task.Delay(100);
-//
-//                     // 停止相机服务
-//                     var cameraService = Container.Resolve<TcpCameraBackgroundService>();
-//                     await cameraService.StopAsync(CancellationToken.None);
-//                     Log.Information("相机服务已停止");
-//
-//                     // 隐藏主窗口而不是关闭它
-//                     if (oldWindow != null)
-//                     {
-//                         oldWindow.Hide();
-//                         Log.Information("主窗口已隐藏");
-//                     }
-//                 }
-//                 catch (Exception ex)
-//                 {
-//                     Log.Error(ex, "创建登录窗口时发生错误");
-//                     Current.Shutdown();
-//                 }
-//             });
-//         }
-//         catch (Exception ex)
-//         {
-//             Log.Error(ex, "处理登出请求事件时发生错误");
-//         }
-//     }
-//
-//     /// <summary>
-//     ///     启动相机服务
-//     /// </summary>
-//     private async Task StartCameraServiceAsync()
-//     {
-//         try
-//         {
-//             var cameraService = Container.Resolve<TcpCameraBackgroundService>();
-//             await cameraService.StartAsync(CancellationToken.None);
-//             Log.Information("相机服务已启动");
-//         }
-//         catch (Exception ex)
-//         {
-//             Log.Error(ex, "启动相机服务时发生错误");
-//         }
-//     }
-//
-//     /// <summary>
-//     ///     退出
-//     /// </summary>
-//     protected override void OnExit(ExitEventArgs e)
-//     {
-//         try
-//         {
-//             Log.Information("应用程序开始关闭...");
-//             // 关闭所有窗口，无论是否可见
-//             foreach (Window window in Current.Windows)
-//                 try
-//                 {
-//                     if (window == Current.MainWindow) continue;
-//
-//                     window.Close();
-//                     Log.Information($"已关闭窗口: {window.GetType().Name}");
-//                 }
-//                 catch (Exception ex)
-//                 {
-//                     Log.Error(ex, $"关闭窗口时发生错误: {window.GetType().Name}");
-//                 }
-//
-//             // 停止TCP相机后台服务
-//             var cameraService = Container.Resolve<TcpCameraBackgroundService>();
-//             if (cameraService != null)
-//                 try
-//                 {
-//                     cameraService.StopAsync(CancellationToken.None).Wait(TimeSpan.FromSeconds(5));
-//                     Log.Information("TCP相机服务已停止");
-//                 }
-//                 catch (Exception ex)
-//                 {
-//                     Log.Error(ex, "停止TCP相机服务时发生错误");
-//                 }
-//
-//             // 登出当前用户
-//             var apiService = Container.Resolve<IApiService>();
-//             if (apiService == null || !apiService.IsLoggedIn()) return;
-//
-//             {
-//                 try
-//                 {
-//                     Log.Information("正在登出用户...");
-//                     var task = apiService.LogoutAsync();
-//                     if (!task.Wait(TimeSpan.FromSeconds(5)))
-//                         Log.Warning("登出操作超时");
-//                     else
-//                         Log.Information("用户已登出");
-//                 }
-//                 catch (Exception ex)
-//                 {
-//                     Log.Error(ex, "登出用户时发生错误");
-//                 }
-//             }
-//         }
-//         catch (Exception ex)
-//         {
-//             Log.Error(ex, "应用程序关闭时发生错误");
-//         }
-//         finally
-//         {
-//             // 等待所有日志写入完成
-//             Log.Information("应用程序关闭");
-//             Log.CloseAndFlush();
-//             // 释放 Mutex
-//             _mutex?.Dispose();
-//             _mutex = null;
-//             base.OnExit(e);
-//         }
-//     }
-// }
+﻿using System.IO;
+using System.Net.Http;
+using System.Windows;
+using System.Windows.Threading;
+using Common.Extensions;
+using DeviceService.DataSourceDevices.Camera;
+using DeviceService.DataSourceDevices.Weight;
+using DeviceService.Extensions;
+using Microsoft.Extensions.DependencyInjection;
+using Serilog;
+using SharedUI.Extensions;
+using SharedUI.ViewModels.Settings;
+using SharedUI.Views.Settings;
+using XinBa.Services;
+using XinBa.ViewModels;
+using XinBa.ViewModels.Settings;
+using XinBa.Views;
+using XinBa.Views.Settings;
+using System.ComponentModel;
+using SharedUI.Views.Windows;
+
+namespace XinBa;
+
+/// <summary>
+/// Interaction logic for App.xaml
+/// </summary>
+public partial class App
+{
+    private static Mutex? _mutex;
+    private const string MutexName = "Global\\XinBa_App_Mutex";
+    private static bool _isShuttingDown;
+
+    /// <summary>
+    /// 创建容器扩展
+    /// </summary>
+    protected override IContainerExtension CreateContainerExtension()
+    {
+        return new DryIocContainerExtension();
+    }
+
+    /// <summary>
+    /// 创建主窗口 (返回 MainWindow)
+    /// </summary>
+    protected override Window CreateShell()
+    {
+        // 检查是否已经运行 (移到 OnStartup 可能更合适，但这里也可以)
+        _mutex = new Mutex(true, MutexName, out var createdNew);
+
+        if (!createdNew)
+        {
+            Log.Warning("应用程序已在运行，将关闭此实例。");
+            Current.Shutdown(1);
+            return null!;
+        }
+
+        Log.Information("创建应用程序主窗口 (Shell)... ");
+        return Container.Resolve<MainWindow>();
+    }
+
+    /// <summary>
+    /// 注册服务
+    /// </summary>
+    protected override void RegisterTypes(IContainerRegistry containerRegistry)
+    {
+        // 添加通用服务
+        containerRegistry.AddCommonServices();
+        containerRegistry.AddShardUi();
+
+        // 注册 XinBa 需要的设备服务启动配置
+        containerRegistry.AddPhotoCamera(); 
+        containerRegistry.AddWeightScale();
+
+        // 注册 HttpClientFactory
+        var services = new ServiceCollection();
+        services.AddHttpClient();
+        var serviceProvider = services.BuildServiceProvider();
+        containerRegistry.RegisterInstance(serviceProvider.GetRequiredService<IHttpClientFactory>());
+
+        // 注册视图和ViewModel
+        containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
+        containerRegistry.RegisterSingleton<MainWindowViewModel>(); // Ensure singleton for logout/login cycle
+        containerRegistry.RegisterForNavigation<CameraSettingsView, CameraSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<VolumeSettingsView, VolumeSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<WeightSettingsView, WeightSettingsViewModel>();
+
+        // 注册对话框
+        containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>("SettingsDialog");
+        containerRegistry.RegisterDialog<LoginDialog, LoginViewModel>("LoginDialog");
+
+        // 注册其他服务
+        containerRegistry.RegisterSingleton<IApiService, ApiService>();
+        containerRegistry.RegisterSingleton<VolumeDataService>(); // VolumeDataHostedService 会用到
+
+        // 注册后台服务启动器 (需要手动管理生命周期)
+        Log.Debug("Registering background service singletons for manual management...");
+        containerRegistry.RegisterSingleton<CameraStartupService>();
+        containerRegistry.RegisterSingleton<WeightStartupService>();
+        containerRegistry.RegisterSingleton<VolumeDataHostedService>(); // XinBa specific volume service
+
+        Log.Information("Type registration complete.");
+    }
+
+    /// <summary>
+    /// 应用程序初始化完成后，显示登录对话框并启动后台服务
+    /// </summary>
+    protected override void OnInitialized()
+    {
+        base.OnInitialized(); // This might show the shell depending on Prism version/config
+        Log.Information("应用程序初始化完成 (OnInitialized)，准备显示登录对话框。 ");
+
+        // 隐藏主窗口，直到登录成功
+        var mainWindow = Current.MainWindow;
+        if (mainWindow != null)
+        {
+            mainWindow.Hide();
+            mainWindow.Closing += MainWindow_Closing;
+            Log.Debug("主窗口已隐藏并附加 Closing 事件处理 (OnInitialized)");
+        }
+        else
+        {
+            Log.Warning("无法获取主窗口实例以附加 Closing 事件处理程序。 ");
+        }
+
+        var dialogService = Container.Resolve<IDialogService>();
+
+        // 显示登录对话框
+        dialogService.ShowDialog("LoginDialog", null, result =>
+        {
+            Log.Information("登录对话框关闭回调执行，结果: {DialogResult}", result?.Result);
+
+            if (result?.Result == ButtonResult.OK)
+            {
+                Log.Information("登录成功 (回调确认)，显示主窗口并启动后台服务。 ");
+                // 登录成功，显示主窗口
+                mainWindow?.Show();
+                Log.Debug("主窗口已显示");
+
+                // 在这里执行主窗口显示后的操作
+                if (mainWindow?.DataContext is MainWindowViewModel mainVm)
+                {
+                    _ = mainVm.UpdateCurrentEmployeeInfo();
+                    // 订阅登出事件
+                    mainVm.LogoutRequested += OnLogoutRequested;
+                    Log.Debug("MainWindowViewModel 更新并已订阅登出事件。 ");
+                }
+                else
+                {
+                    Log.Warning("无法获取 MainWindowViewModel 实例来更新员工信息或订阅事件。 ");
+                }
+
+                // 手动启动后台服务
+                StartBackgroundServices();
+            }
+            else
+            {
+                Log.Warning("登录失败或取消，应用程序将关闭。 ");
+                Current.Shutdown(2); // 使用适当的退出代码
+            }
+        });
+    }
+
+    /// <summary>
+    ///     启动
+    /// </summary>
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        // 配置Serilog (如果 Program.cs 不存在，这里是合适的位置)
+        Log.Logger = new LoggerConfiguration()
+            .MinimumLevel.Debug()
+            .Enrich.FromLogContext()
+            .WriteTo.Console()
+            .WriteTo.Debug()
+            .WriteTo.File(Path.Combine("logs", "app-.log"),
+                rollingInterval: RollingInterval.Day,
+                rollOnFileSizeLimit: true)
+            .CreateLogger();
+
+        Log.Information("应用程序启动 (OnStartup)");
+
+        // 调用基类方法初始化容器等
+        base.OnStartup(e);
+
+        // 注册全局异常处理
+        DispatcherUnhandledException += App_DispatcherUnhandledException;
+        Log.Information("DispatcherUnhandledException handler attached.");
+    }
+
+    /// <summary>
+    ///     登出请求事件处理
+    /// </summary>
+    private void OnLogoutRequested(object? sender, EventArgs e)
+    {
+        try
+        {
+            Log.Information("收到登出请求，准备切换到登录窗口 ");
+
+            // 停止后台服务
+            StopBackgroundServices(false); // Don't wait indefinitely on logout
+
+            // 关闭主窗口（或隐藏）并显示登录对话框
+            Dispatcher.Invoke(() =>
+            {
+                try
+                {
+                    var currentMainWindow = Current.MainWindow;
+                    var dialogService = Container.Resolve<IDialogService>();
+
+                    // 注销事件
+                    if (sender is MainWindowViewModel mainVm)
+                    {
+                        mainVm.LogoutRequested -= OnLogoutRequested;
+                    }
+
+                    currentMainWindow?.Hide();
+                    Log.Debug("主窗口已隐藏 (Logout)");
+
+                    // 显示登录对话框
+                    dialogService.ShowDialog("LoginDialog", null, loginResult =>
+                    {
+                        if (loginResult.Result == ButtonResult.OK)
+                        {
+                            Log.Information("重新登录成功，显示主窗口并重启后台服务。 ");
+                            // 重新显示主窗口
+                            currentMainWindow?.Show();
+                            if (currentMainWindow?.DataContext is MainWindowViewModel newMainVm)
+                            {
+                                _ = newMainVm.UpdateCurrentEmployeeInfo();
+                                // 重新订阅事件
+                                newMainVm.LogoutRequested += OnLogoutRequested;
+                            }
+                            // 重启后台服务
+                            StartBackgroundServices(); 
+                        }
+                        else
+                        {
+                            Log.Warning("重新登录失败或取消，应用程序将关闭。 ");
+                            Current.Shutdown(2);
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "切换到登录窗口时发生错误 ");
+                    Current.Shutdown(); // 关闭以防出错
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "处理登出请求事件时发生错误 ");
+        }
+    }
+
+    /// <summary>
+    /// 主窗口关闭事件处理程序
+    /// </summary>
+    private async void MainWindow_Closing(object? sender, CancelEventArgs e)
+    {
+        Log.Information("MainWindow_Closing 事件触发。 IsShuttingDown: {IsShuttingDown}", _isShuttingDown);
+        if (_isShuttingDown)
+        {
+            Log.Debug("已在关闭过程中，取消本次关闭事件处理。 ");
+            return;
+        }
+
+        _isShuttingDown = true;
+        e.Cancel = true;
+        Log.Information("取消默认关闭，开始执行清理并显示等待窗口... ");
+
+        ProgressIndicatorWindow? progressWindow = null;
+        try
+        {
+            await Current.Dispatcher.InvokeAsync(() =>
+            {
+                Log.Debug("在 UI 线程上创建并显示 ProgressIndicatorWindow...");
+                progressWindow = new ProgressIndicatorWindow("Closing application, please wait...")
+                {
+                    Owner = Current.MainWindow
+                };
+                progressWindow.Show();
+                Log.Debug("ProgressIndicatorWindow 已显示。 ");
+            });
+
+            Log.Information("开始后台清理任务... ");
+            await Task.Run(async () =>
+            {
+                StopBackgroundServices(true);
+                await LogoutApiUserAsync();
+            });
+            Log.Information("后台清理任务完成。 ");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "执行后台清理任务时发生错误 ");
+        }
+        finally
+        {
+            Log.Information("准备关闭等待窗口并真正关闭应用程序... ");
+            await Current.Dispatcher.InvokeAsync(() => progressWindow?.Close());
+            Log.Debug("ProgressIndicatorWindow 已关闭 (如果存在)。 ");
+
+            await Current.Dispatcher.InvokeAsync(() =>
+            {
+                Log.Information("调用 Application.Current.Shutdown()...");
+                Current.Shutdown();
+            });
+        }
+    }
+
+    /// <summary>
+    /// 尝试登出 API 用户
+    /// </summary>
+    private async Task LogoutApiUserAsync()
+    {
+        try
+        {
+            var apiService = Container?.Resolve<IApiService>();
+            if (apiService != null && apiService.IsLoggedIn())
+            {
+                Log.Information("正在登出 API 用户... ");
+                try
+                {
+                    await apiService.LogoutAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                    Log.Information("API 用户已登出或超时。 ");
+                }
+                catch (TimeoutException)
+                {
+                    Log.Warning("API 登出操作超时 ");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "API 登出时发生错误 ");
+                }
+            }
+            else
+            {
+                Log.Debug("无需登出 API 用户 (未登录或服务不可用) ");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "解析 ApiService 以进行登出时发生错误 ");
+        }
+    }
+
+    /// <summary>
+    ///     退出
+    /// </summary>
+    protected override void OnExit(ExitEventArgs e)
+    {
+        Log.Information("应用程序退出处理程序 (OnExit) 开始... ExitCode: {ExitCode}", e.ApplicationExitCode);
+        try
+        {
+             base.OnExit(e);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "调用 base.OnExit 时发生错误 ");
+        }
+        finally
+        {
+            Log.Information("释放 Mutex 并刷新日志... ");
+            _mutex?.ReleaseMutex();
+            _mutex?.Dispose();
+            _mutex = null;
+            Log.CloseAndFlush();
+        }
+        Log.Information("应用程序退出处理程序 (OnExit) 完成。 ");
+    }
+
+    private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        Log.Fatal(e.Exception, "Unhandled Dispatcher Exception Caught by App.xaml.cs");
+        MessageBox.Show($"发生未处理的错误: {e.Exception.Message}\n\n应用程序可能不稳定。 ", "应用程序错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// 手动启动已注册的后台服务。
+    /// </summary>
+    private void StartBackgroundServices()
+    {
+        try
+        {
+            Log.Information("手动启动后台服务... ");
+            var cameraStarter = Container.Resolve<CameraStartupService>();
+            var weightStarter = Container.Resolve<WeightStartupService>();
+            var volumeStarter = Container.Resolve<VolumeDataHostedService>();
+
+            // 使用 Task.Run 在后台启动，避免阻塞 UI
+            _ = Task.Run(() => { try { cameraStarter.StartAsync(CancellationToken.None).Wait(); } catch (Exception ex) { Log.Error(ex, "启动 CameraStartupService 时出错 "); } });
+            _ = Task.Run(() => { try { weightStarter.StartAsync(CancellationToken.None).Wait(); } catch (Exception ex) { Log.Error(ex, "启动 WeightStartupService 时出错 "); } });
+            _ = Task.Run(() => { try { volumeStarter.StartAsync(CancellationToken.None).Wait(); } catch (Exception ex) { Log.Error(ex, "启动 VolumeDataHostedService 时出错 "); } });
+
+            Log.Information("后台服务启动已发起。 ");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "解析或发起后台服务启动时出错。 ");
+        }
+    }
+
+    /// <summary>
+    /// 手动停止已注册的后台服务。
+    /// </summary>
+    /// <param name="waitForCompletion">是否等待服务停止完成。</param>
+    private void StopBackgroundServices(bool waitForCompletion)
+    {
+        Log.Information("手动停止后台服务... Wait for completion: {WaitForCompletion}", waitForCompletion);
+        try
+        {
+            var cameraStarter = Container?.Resolve<CameraStartupService>();
+            var weightStarter = Container?.Resolve<WeightStartupService>();
+            var volumeStarter = Container?.Resolve<VolumeDataHostedService>();
+
+            var tasks = new List<Task>();
+            if (cameraStarter != null) tasks.Add(Task.Run(() => { try { cameraStarter.StopAsync(CancellationToken.None).Wait(); } catch (Exception ex) { Log.Error(ex, "停止 CameraStartupService 时出错 "); } }));
+            if (weightStarter != null) tasks.Add(Task.Run(() => { try { weightStarter.StopAsync(CancellationToken.None).Wait(); } catch (Exception ex) { Log.Error(ex, "停止 WeightStartupService 时出错 "); } }));
+            if (volumeStarter != null) tasks.Add(Task.Run(() => { try { volumeStarter.StopAsync(CancellationToken.None).Wait(); } catch (Exception ex) { Log.Error(ex, "停止 VolumeDataHostedService 时出错 "); } }));
+
+            if (tasks.Count != 0 && waitForCompletion)
+            {
+                try
+                {
+                    // 等待所有停止任务完成，最多等待 5 秒
+                    if (!Task.WhenAll(tasks).Wait(TimeSpan.FromSeconds(5)))
+                    {
+                        Log.Warning("一个或多个后台服务未在超时时间内正常停止。 ");
+                    }
+                    else
+                    {
+                        Log.Information("后台服务已停止。 ");
+                    }
+                }
+                catch (AggregateException aex)
+                {
+                    Log.Error(aex, "等待后台服务停止时发生聚合错误。 ");
+                    foreach(var innerEx in aex.InnerExceptions)
+                    {
+                        Log.Error(innerEx, "  内部停止错误: ");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "等待后台服务停止时发生错误。 ");
+                }
+            }
+            else if (!waitForCompletion)
+            {
+                Log.Information("后台服务停止已发起 (不等待完成)。 ");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "解析或发起后台服务停止时出错。 ");
+        }
+    }
+}

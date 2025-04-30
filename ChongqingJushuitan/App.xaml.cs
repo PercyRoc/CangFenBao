@@ -9,7 +9,6 @@ using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
 using Microsoft.Extensions.Hosting;
-using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 using SharedUI.ViewModels;

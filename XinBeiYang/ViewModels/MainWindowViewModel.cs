@@ -343,13 +343,14 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                     var currentPrefix = GetBarcodePrefix(firstPackage.Barcode);
                     var initialPackageContext = $"[临时|{currentPrefix}]"; // 用于配对/超时阶段的临时上下文
 
-                    using (LogContext.PushProperty("PackageContext", initialPackageContext)) // 应用临时上下文
+                    // *** Keep LogContext for the initial buffering/pairing phase ***
+                    using (LogContext.PushProperty("PackageContext", initialPackageContext))
                     {
                         Log.Debug(
                             "[Stream][Buffer] 处理 Buffer (Count: {Count}). Prefix='{Prefix}', First Idx={Index}, First Barcode='{Barcode}'",
                             buffer.Count, currentPrefix, firstPackage.Index, firstPackage.Barcode);
 
-                        // 1. 检查超时缓存
+                        // ... (existing timeout check logic using initialPackageContext) ...
                         if (_timedOutPrefixes.TryGetValue(currentPrefix, out var timeoutTime))
                         {
                             if ((DateTime.UtcNow - timeoutTime) < TimedOutPrefixMaxAge)
@@ -362,8 +363,6 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                                     _timedOutPrefixes.TryRemove(currentPrefix, out _); // 收到后移除标记
                                     return;
                                 }
-
-                                // buffer.Count == 2 但之前超时了? (不太可能，但处理)
                                 Log.Warning("[Stream] 收到配对，但此前记录了前缀超时，继续处理并移除标记.");
                                 _timedOutPrefixes.TryRemove(currentPrefix, out _);
                             }
@@ -380,6 +379,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                             PackageInfo? packageToProcess;
                             switch (buffer.Count)
                             {
+                                // ... (existing merge/filter logic using initialPackageContext logging) ...
                                 case 2 when BarcodeMode == BarcodeMode.MultiBarcode:
                                     var p1 = buffer.FirstOrDefault(p => !p.Barcode.EndsWith("-1-1-")) ?? buffer[0];
                                     var p2 = buffer.FirstOrDefault(p => p.Barcode.EndsWith("-1-1-")) ?? buffer[1];
@@ -432,7 +432,6 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                                             "[Stream][Single] 模式 {Mode}: 处理单个包裹: Idx={Index}, Barcode='{Barcode}'",
                                             BarcodeMode, packageToProcess.Index, packageToProcess.Barcode);
                                     }
-
                                     break;
                             }
 
@@ -443,23 +442,23 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                                 var finalPackageContext =
                                     $"[包裹{assignedIndex}|{packageToProcess.Barcode}]"; // *** 创建最终上下文 ***
 
-                                // *** 在最终上下文中记录接收 ***
-                                using (LogContext.PushProperty("PackageContext", finalPackageContext))
-                                {
-                                    Log.Information("[接收] 包裹进入处理流程");
-                                    // 调用包含重量获取的新方法
-                                    await FetchWeightAndHandlePackageAsync(packageToProcess, _viewModelCts.Token);
-                                }
+                                // *** Remove LogContext push here ***
+                                // *** Log the reception explicitly ***
+                                Log.Information("{Context} [接收] 包裹进入处理流程", finalPackageContext);
+
+                                // *** Pass the context string explicitly ***
+                                await FetchWeightAndHandlePackageAsync(packageToProcess, finalPackageContext, _viewModelCts.Token);
                             }
                         }
                         catch (Exception ex)
                         {
+                            // Log error using initialPackageContext
                             Log.Error(ex, "[Stream] 处理 Buffer (Prefix='{Prefix}', Count={Count}) 时发生内部错误.",
                                 currentPrefix, buffer.Count);
                             // 尝试释放 buffer 中的图像
                             foreach (var pkg in buffer) pkg.ReleaseImage();
                         }
-                    } // 结束临时上下文 using
+                    } // 结束 initialPackageContext using
                 },
                 ex => Log.Error(ex, "[Stream] 包裹流处理中发生未处理的顶层异常"))); // 流的顶层错误处理
 
@@ -983,21 +982,28 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
     // *** 添加: 处理传入包裹的新入口 ***
-    private void HandleIncomingPackage(PackageInfo package)
+    // *** Add packageContext parameter ***
+    private void HandleIncomingPackage(PackageInfo package, string packageContext)
     {
-        // 使用最终上下文记录
-        Log.Debug("进入 HandleIncomingPackage (调度逻辑)");
+        // *** Use passed context for logging ***
+        Log.Debug("{Context} 进入 HandleIncomingPackage (调度逻辑)", packageContext);
         lock (_processingLock)
         {
             if (_currentlyProcessingPackage == null)
             {
                 _currentlyProcessingPackage = package;
-                Log.Information("[调度] 系统空闲，开始处理");
-                _ = ProcessSinglePackageAsync(_currentlyProcessingPackage, _viewModelCts.Token);
+                Log.Information("{Context} [调度] 系统空闲，开始处理", packageContext);
+                // *** Pass context ***
+                _ = ProcessSinglePackageAsync(_currentlyProcessingPackage, packageContext, _viewModelCts.Token);
             }
             else
             {
-                Log.Warning("[调度] 系统正忙 (处理中: Idx={CurrentIndex}), 将新包裹推入堆栈", _currentlyProcessingPackage.Index);
+                // Create context for the currently processing package for logging
+                var currentProcessingContext = _currentlyProcessingPackage.Index >= 0
+                    ? $"[包裹{_currentlyProcessingPackage.Index}|{_currentlyProcessingPackage.Barcode}]"
+                    : "[未知处理中包裹]";
+                Log.Warning("{NewContext} [调度] 系统正忙 (处理中: {CurrentContext}), 将新包裹推入堆栈",
+                    packageContext, currentProcessingContext);
                 _packageStack.Push(package);
                 IsNextPackageWaiting = true;
                 Application.Current.Dispatcher.Invoke(() =>
@@ -1005,6 +1011,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                     if (MainWindowBackgroundBrush != BackgroundTimeout) // 避免重复设置
                     {
                         MainWindowBackgroundBrush = BackgroundTimeout;
+                        // Log UI change without specific package context here, or pass context if needed
                         Log.Information("[状态][UI] 设置背景为 黄色 (禁止上包) - 系统忙");
                     }
                 });
@@ -1013,10 +1020,11 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
     // *** 添加: 处理单个包裹的方法 ***
-    private async Task ProcessSinglePackageAsync(PackageInfo package, CancellationToken cancellationToken)
+    // *** Add packageContext parameter ***
+    private async Task ProcessSinglePackageAsync(PackageInfo package, string packageContext, CancellationToken cancellationToken)
     {
-        // 上下文应该已由调用者 (FetchWeightAndHandlePackageAsync -> HandleIncomingPackage) 设置
-        Log.Information("开始核心处理流程");
+        // *** Use passed context for logging ***
+        Log.Information("{Context} 开始核心处理流程", packageContext);
 
         // 1. 更新UI状态 (禁止上包, 显示基础信息)
         Application.Current.Dispatcher.Invoke(() =>
@@ -1024,7 +1032,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             if (MainWindowBackgroundBrush != BackgroundTimeout)
             {
                 MainWindowBackgroundBrush = BackgroundTimeout;
-                Log.Information("[状态][UI] 设置背景为 黄色 (禁止上包) - 处理开始");
+                Log.Information("[状态][UI] 设置背景为 黄色 (禁止上包) - 处理开始 ({Context})", packageContext); // Optional: add context here if helpful
             }
 
             CurrentBarcode = package.Barcode;
@@ -1039,32 +1047,32 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         // --- 初始检查 ---
         if (cancellationToken.IsCancellationRequested)
         {
-            Log.Warning("处理在开始时被取消.");
+            Log.Warning("{Context} 处理在开始时被取消.", packageContext);
             package.ReleaseImage();
-            FinalizeProcessing(null); // 取消时不处理下一个
+            FinalizeProcessing(null, packageContext + " (取消)"); // Pass context & reason
             return;
         }
 
         // noread 应该在流处理阶段被过滤掉，这里保险起见
         if (string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase))
         {
-            Log.Warning("收到 'noread' 条码 (理论上应已过滤)，跳过.");
+            Log.Warning("{Context} 收到 'noread' 条码 (理论上应已过滤)，跳过.", packageContext);
             _ = _audioService.PlayPresetAsync(AudioType.WaitingScan);
             package.ReleaseImage();
-            FinalizeProcessing(null);
+            FinalizeProcessing(null, packageContext + " (noread)"); // Pass context & reason
             return;
         }
 
         // 检查PLC状态
         if (DeviceStatusText != "正常") // 直接检查已更新的状态文本
         {
-            Log.Warning("PLC状态异常 ({StatusText})，无法处理.", DeviceStatusText); // 使用已更新的文本
+            Log.Warning("{Context} PLC状态异常 ({StatusText})，无法处理.", packageContext, DeviceStatusText); // 使用已更新的文本
             package.SetStatus(PackageStatus.Error, $"PLC状态异常: {DeviceStatusText}");
             Application.Current.Dispatcher.Invoke(() => UpdateUiFromResult(package));
             _ = _audioService.PlayPresetAsync(AudioType.PlcDisconnected);
             IsPlcAbnormalWarningVisible = !IsPlcRejectWarningVisible;
             package.ReleaseImage();
-            FinalizeProcessing(package); // 传递 package 以更新 UI
+            FinalizeProcessing(package, packageContext); // Pass context
             return;
         }
 
@@ -1080,8 +1088,9 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                 _ = _audioService.PlayPresetAsync(AudioType.WaitingForLoading);
             });
 
-            Log.Information("向PLC发送上传请求: W={Weight:F3}, L={L:F1}, W={W:F1}, H={H:F1}",
-                package.Weight, package.Length ?? 0, package.Width ?? 0, package.Height ?? 0); // 使用更精确的格式
+            // *** Use passed context for logging ***
+            Log.Information("{Context} 向PLC发送上传请求: W={Weight:F3}, L={L:F1}, W={W:F1}, H={H:F1}",
+                 packageContext, package.Weight, package.Length ?? 0, package.Width ?? 0, package.Height ?? 0);
 
             var plcRequestTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
@@ -1092,14 +1101,17 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     var statusItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "状态");
-                    if (statusItem != null)
-                    {
-                        statusItem.Value = $"等待PLC确认 (序号: {package.Index})";
-                        statusItem.Description = "等待PLC确认接受...";
-                        statusItem.StatusColor = "#FFC107"; // Yellow
-                    }
+                    if (statusItem == null) return;
+                    statusItem.Value = $"等待PLC确认 (序号: {package.Index})";
+                    statusItem.Description = "等待PLC确认接受...";
+                    statusItem.StatusColor = "#FFC107"; // Yellow
                 });
-                Log.Debug("等待PLC ACK...");
+                 Log.Debug("{Context} 等待PLC ACK...", packageContext);
+
+                // *** Use passed context for logging ***
+                Log.Information("{Context} 准备调用 SendUploadRequestAsync: Barcode='{Barcode}', W={Weight:F3}, L={L:F1}, W={W:F1}, H={H:F1}, Timestamp={Ts}",
+                    packageContext, package.Barcode, package.Weight, package.Length ?? 0, package.Width ?? 0, package.Height ?? 0, plcRequestTimestamp);
+
                 ackResult = await _plcCommunicationService.SendUploadRequestAsync(
                     (float)package.Weight, (float)(package.Length ?? 0), (float)(package.Width ?? 0),
                     (float)(package.Height ?? 0),
@@ -1107,17 +1119,15 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             }
             catch (OperationCanceledException)
             {
-                Log.Warning("等待PLC ACK时操作被取消.");
+                Log.Warning("{Context} 等待PLC ACK时操作被取消.", packageContext);
                 package.SetStatus(PackageStatus.Error, "操作取消 (等待PLC确认)");
-                // 取消时，允许下一个扫描
                 Application.Current.Dispatcher.Invoke(() => MainWindowBackgroundBrush = BackgroundSuccess);
                 throw; // 抛出以触发 finally 清理
             }
             catch (Exception ackEx)
             {
-                Log.Error(ackEx, "发送PLC请求或等待ACK时出错.");
+                Log.Error(ackEx, "{Context} 发送PLC请求或等待ACK时出错.", packageContext);
                 package.SetStatus(PackageStatus.Error, $"PLC通信错误 (ACK): {ackEx.Message}");
-                // 出错时，允许下一个扫描
                 Application.Current.Dispatcher.Invoke(() => MainWindowBackgroundBrush = BackgroundSuccess);
                 throw; // 抛出以触发 finally 清理
             }
@@ -1125,56 +1135,51 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             // --- 处理ACK结果 ---
             if (!ackResult.IsAccepted)
             {
-                Log.Warning("PLC拒绝上包请求. CommandId={CommandId}", ackResult.CommandId);
+                Log.Warning("{Context} PLC拒绝上包请求. CommandId={CommandId}", packageContext, ackResult.CommandId);
                 package.SetStatus(PackageStatus.LoadingRejected, $"上包拒绝 (序号: {package.Index})"); // 使用专用状态
                 _ = _audioService.PlayPresetAsync(AudioType.LoadingRejected);
                 StopUploadCountdown();
-                // PLC 拒绝，允许下一个扫描
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     MainWindowBackgroundBrush = BackgroundSuccess;
-                    Log.Information("[状态][UI] 设置背景为 绿色 (允许上包) - PLC拒绝");
-                    // HidePlcRejectionWarning(); // 根据需要是否显示拒绝提示
+                    Log.Information("[状态][UI] 设置背景为 绿色 (允许上包) - PLC拒绝 ({Context})", packageContext);
                 });
-                // 不再处理此包裹，将在 finally 中更新 UI
-                return;
+                return; // 不再处理此包裹，将在 finally 中更新 UI
             }
 
             // --- PLC接受 ---
-            Log.Information("PLC接受上包请求. CommandId={CommandId}", ackResult.CommandId);
+            Log.Information("{Context} PLC接受上包请求. CommandId={CommandId}", packageContext, ackResult.CommandId);
             Application.Current.Dispatcher.Invoke(() =>
             {
                 MainWindowBackgroundBrush = BackgroundSuccess; // PLC 接受，允许下一个扫描
-                Log.Information("[状态][UI] 设置背景为 绿色 (允许上包) - PLC接受");
+                Log.Information("[状态][UI] 设置背景为 绿色 (允许上包) - PLC接受 ({Context})", packageContext);
                 StartUploadCountdown(); // 开始倒计时
                 var statusItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "状态");
-                if (statusItem != null)
-                {
-                    statusItem.Value = $"等待处理结果 (序号: {package.Index})";
-                    statusItem.Description = "等待PLC最终结果...";
-                    statusItem.StatusColor = "#4CAF50"; // Green
-                }
+                if (statusItem == null) return;
+                statusItem.Value = $"等待处理结果 (序号: {package.Index})";
+                statusItem.Description = "等待PLC最终结果...";
+                statusItem.StatusColor = "#4CAF50"; // Green
             });
 
             // 2. 等待最终结果
             (bool WasSuccess, bool IsTimeout, int PackageId) finalResult;
             try
             {
-                Log.Debug("等待PLC最终结果...");
+                Log.Debug("{Context} 等待PLC最终结果...", packageContext);
                 finalResult =
                     await _plcCommunicationService.WaitForUploadResultAsync(ackResult.CommandId, cancellationToken);
                 StopUploadCountdown(); // 收到结果，停止倒计时
             }
             catch (OperationCanceledException)
             {
-                Log.Warning("等待PLC最终结果时操作被取消.");
+                Log.Warning("{Context} 等待PLC最终结果时操作被取消.", packageContext);
                 package.SetStatus(PackageStatus.Error, "操作取消 (等待PLC结果)");
                 StopUploadCountdown();
                 throw; // 抛出以触发 finally 清理
             }
             catch (Exception finalEx)
             {
-                Log.Error(finalEx, "等待PLC最终结果时出错.");
+                Log.Error(finalEx, "{Context} 等待PLC最终结果时出错.", packageContext);
                 package.SetStatus(PackageStatus.Error, $"PLC通信错误 (结果): {finalEx.Message}");
                 StopUploadCountdown();
                 throw; // 抛出以触发 finally 清理
@@ -1185,96 +1190,95 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             {
                 if (finalResult.IsTimeout)
                 {
-                    Log.Warning("等待PLC最终结果超时. CommandId={CommandId}", ackResult.CommandId);
+                    Log.Warning("{Context} 等待PLC最终结果超时. CommandId={CommandId}", packageContext, ackResult.CommandId);
                     package.SetStatus(PackageStatus.LoadingTimeout, $"上包结果超时 (序号: {package.Index})"); // 专用状态
                     _ = _audioService.PlayPresetAsync(AudioType.LoadingTimeout);
-                    // 超时后允许扫描
                     Application.Current.Dispatcher.Invoke(() =>
                     {
                         MainWindowBackgroundBrush = BackgroundSuccess;
-                        Log.Information("[状态][UI] 设置背景为 绿色 (允许上包) - 上包超时");
+                        Log.Information("[状态][UI] 设置背景为 绿色 (允许上包) - 上包超时 ({Context})", packageContext);
                     });
+                    // *** 新增: 超时后清空堆栈 ***
+                    Log.Information("{Context} 处理结果超时，清空包裹堆栈.", packageContext);
+                    // *** Pass context to ClearPackageStack ***
+                    ClearPackageStack($"包裹 {package.Index} 处理结果超时", packageContext + " (超时清理)");
                 }
                 else
                 {
                     // PLC 报告失败
-                    Log.Error("PLC报告上包处理失败 (非超时). CommandId={CommandId}", ackResult.CommandId);
+                    Log.Error("{Context} PLC报告上包处理失败 (非超时). CommandId={CommandId}", packageContext, ackResult.CommandId);
                     package.SetStatus(PackageStatus.Error, $"PLC处理失败 (序号: {package.Index})");
                     _ = _audioService.PlayPresetAsync(AudioType.SystemError);
-                    // PLC失败，也允许扫描 (背景保持绿色)
                 }
-
-                // 不再处理此包裹，将在 finally 中更新 UI
-                return;
+                return; // 不再处理此包裹，将在 finally 中更新 UI
             }
 
             // --- PLC 成功 ---
             package.SetStatus(PackageStatus.LoadingSuccess, $"上包完成 (PLC流水号: {finalResult.PackageId})"); // 专用状态
-            Log.Information("PLC报告上包成功. CommandId={CommandId}, PLC流水号={PackageId}", ackResult.CommandId,
+            Log.Information("{Context} PLC报告上包成功. CommandId={CommandId}, PLC流水号={PackageId}", packageContext, ackResult.CommandId,
                 finalResult.PackageId);
             _ = _audioService.PlayPresetAsync(AudioType.LoadingSuccess);
             Application.Current.Dispatcher.Invoke(HidePlcRejectionWarning);
 
             // --- 图像保存和WCS上传 ---
-            await HandleImageSavingAndWcsUpload(package, finalResult.PackageId, cancellationToken);
+            // *** Pass context ***
+            await HandleImageSavingAndWcsUpload(package, packageContext, finalResult.PackageId, cancellationToken);
         } // 结束 try (PLC 通信块)
         catch (OperationCanceledException) // 捕获 await 过程中的取消
         {
-            Log.Warning("PLC通信或后续处理被取消.");
-            // 状态应该已在内部 catch 设置，或保持取消状态
+            Log.Warning("{Context} PLC通信或后续处理被取消.", packageContext);
             StopUploadCountdown();
-            // 背景色应由内部 catch 或默认设置（绿色）
         }
         catch (Exception ex) // 捕获 PLC 通信块中的其他异常
         {
-            Log.Error(ex, "处理PLC通信时发生未预料错误.");
+            Log.Error(ex, "{Context} 处理PLC通信时发生未预料错误.", packageContext);
             if (package.Status == PackageStatus.Created) // 如果状态未被内部设置
             {
                 package.SetStatus(PackageStatus.Error, $"未知PLC通信错误: {ex.Message}");
             }
-
             _ = _audioService.PlayPresetAsync(AudioType.SystemError);
             StopUploadCountdown();
-            // 背景色应由内部 catch 或默认设置（绿色）
         }
         finally
         {
-            Log.Debug("进入 ProcessSinglePackageAsync 的 finally 块");
+            Log.Debug("{Context} 进入 ProcessSinglePackageAsync 的 finally 块", packageContext);
             // --- 最终UI更新 ---
             Application.Current.Dispatcher.Invoke(() => UpdateUiFromResult(package));
             // --- 释放图像 ---
             package.ReleaseImage();
-            Log.Debug("图像资源已释放");
+            Log.Debug("{Context} 图像资源已释放", packageContext);
             // --- 结束处理，可能启动下一个 ---
-            FinalizeProcessing(package);
-            Log.Information("核心处理流程结束");
+            // *** Pass context ***
+            FinalizeProcessing(package, packageContext);
+            Log.Information("{Context} 核心处理流程结束", packageContext);
         }
     }
 
     // *** 新增: 处理图像保存和WCS上传的辅助方法 ***
-    private async Task HandleImageSavingAndWcsUpload(PackageInfo package, int plcPackageId,
+    // *** Add packageContext parameter ***
+    private async Task HandleImageSavingAndWcsUpload(PackageInfo package, string packageContext, int plcPackageId,
         CancellationToken cancellationToken)
     {
-        // 上下文应该已由调用者设置
+        // *** Use passed context for logging ***
         if (package.Image == null)
         {
-            Log.Warning("包裹信息中无图像可保存或上传.");
+            Log.Warning("{Context} 包裹信息中无图像可保存或上传.", packageContext);
             var currentDisplay = package.StatusDisplay;
             package.SetStatus(package.Status, $"{currentDisplay} [无图像]");
             return;
         }
 
-        Log.Debug("开始处理图像保存和WCS上传.");
+        Log.Debug("{Context} 开始处理图像保存和WCS上传.", packageContext);
         BitmapSource? imageToSave;
         try
         {
             imageToSave = package.Image.Clone();
             if (imageToSave.CanFreeze) imageToSave.Freeze();
-            else Log.Warning("克隆的图像无法冻结，仍尝试使用.");
+            else Log.Warning("{Context} 克隆的图像无法冻结，仍尝试使用.", packageContext);
         }
         catch (Exception cloneEx)
         {
-            Log.Error(cloneEx, "克隆或冻结图像时出错.");
+            Log.Error(cloneEx, "{Context} 克隆或冻结图像时出错.", packageContext);
             imageToSave = null; // 出错则不处理
         }
 
@@ -1293,18 +1297,18 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         }
         catch (Exception saveEx)
         {
-            Log.Error(saveEx, "异步保存图像时发生异常.");
+            Log.Error(saveEx, "{Context} 异步保存图像时发生异常.", packageContext);
         }
 
         if (imagePath != null)
         {
             package.ImagePath = imagePath;
-            Log.Information("图像保存成功: Path={ImagePath}", imagePath);
+            Log.Information("{Context} 图像保存成功: Path={ImagePath}", packageContext, imagePath);
 
             // 上传WCS
             if (_jdWcsCommunicationService.IsConnected)
             {
-                Log.Information("开始上传图片地址到京东WCS: PLC流水号={PlcPackageId}", plcPackageId);
+                Log.Information("{Context} 开始上传图片地址到京东WCS: PLC流水号={PlcPackageId}", packageContext, plcPackageId);
                 bool wcsSuccess;
                 try
                 {
@@ -1315,36 +1319,36 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                 }
                 catch (OperationCanceledException)
                 {
-                    Log.Warning("WCS上传被取消.");
+                    Log.Warning("{Context} WCS上传被取消.", packageContext);
                     wcsSuccess = false; // 标记为失败
                 }
                 catch (Exception wcsEx)
                 {
-                    Log.Error(wcsEx, "上传图片地址到WCS时发生异常.");
+                    Log.Error(wcsEx, "{Context} 上传图片地址到WCS时发生异常.", packageContext);
                     wcsSuccess = false;
                 }
 
                 if (wcsSuccess)
                 {
-                    Log.Information("图片地址上传WCS成功: PLC流水号={PlcPackageId}", plcPackageId);
+                    Log.Information("{Context} 图片地址上传WCS成功: PLC流水号={PlcPackageId}", packageContext, plcPackageId);
                 }
                 else
                 {
-                    Log.Warning("图片地址上传WCS失败: PLC流水号={PlcPackageId}", plcPackageId);
+                    Log.Warning("{Context} 图片地址上传WCS失败: PLC流水号={PlcPackageId}", packageContext, plcPackageId);
                     var currentDisplay = package.StatusDisplay;
                     package.SetStatus(package.Status, $"{currentDisplay} [WCS上传失败]");
                 }
             }
             else
             {
-                Log.Warning("京东WCS未连接，无法上传图片地址.");
+                Log.Warning("{Context} 京东WCS未连接，无法上传图片地址.", packageContext);
                 var currentDisplay = package.StatusDisplay;
                 package.SetStatus(package.Status, $"{currentDisplay} [WCS未连接]");
             }
         }
         else
         {
-            Log.Error("包裹图像保存失败.");
+            Log.Error("{Context} 包裹图像保存失败.", packageContext);
             var currentDisplay = package.StatusDisplay;
             package.SetStatus(package.Status, $"{currentDisplay} [图像保存失败]");
         }
@@ -1357,80 +1361,74 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         if (!IsPlcRejectWarningVisible) return; // 已经隐藏
 
         IsPlcRejectWarningVisible = false;
+        // Log UI change without specific context
         Log.Debug("隐藏PLC拒绝警告");
     }
 
 
     // *** 添加: 处理PLC拒绝警告UI的方法 ***
-    private void FinalizeProcessing(PackageInfo? processedPackage)
+    // *** Add processedPackageContext parameter ***
+    private void FinalizeProcessing(PackageInfo? processedPackage, string processedPackageContext)
     {
-        PackageInfo? nextPackageToProcess;
-        var processedPackageContext = processedPackage != null
-            ? $"[包裹{processedPackage.Index}|{processedPackage.Barcode}]"
-            : "[未知包裹]";
+        PackageInfo? nextPackageToProcess; // Initialize here
+        // *** Remove LogContext push ***
+        // *** Use passed context for logging ***
+        Log.Information("{Context} [调度] Finalize: 完成处理", processedPackageContext);
 
-        using (LogContext.PushProperty("PackageContext", processedPackageContext)) // 为完成的包裹设置上下文
+        lock (_processingLock)
         {
-            Log.Information("[调度] Finalize: 完成处理");
-
-            lock (_processingLock)
+            if (_currentlyProcessingPackage != null &&
+                !ReferenceEquals(_currentlyProcessingPackage, processedPackage))
             {
-                if (_currentlyProcessingPackage != null &&
-                    !ReferenceEquals(_currentlyProcessingPackage, processedPackage))
-                {
-                    // 这表示当前处理的包裹和完成的包裹不匹配，可能是一个严重错误
-                    Log.Error("[调度][!!!] Finalize 时发现当前处理的包裹 (Idx:{CurrentIdx}) 与完成的包裹 (Idx:{ProcessedIdx}) 不匹配!",
-                        _currentlyProcessingPackage.Index, processedPackage?.Index ?? -1);
-                    // 在这种情况下，我们应该相信 processedPackage 已经完成，并尝试处理堆栈中的下一个
-                }
-
-                _currentlyProcessingPackage = null; // 标记当前为空闲
-
-                // 检查堆栈
-                if (_packageStack.TryPop(out nextPackageToProcess))
-                {
-                    // 从堆栈获取下一个
-                    var nextPackageContext = $"[包裹{nextPackageToProcess.Index}|{nextPackageToProcess.Barcode}]";
-                    using (LogContext.PushProperty("PackageContext", nextPackageContext)) // 为下一个包裹设置上下文
-                    {
-                        Log.Information("[调度] 从堆栈获取下一个包裹处理");
-                    }
-
-                    _currentlyProcessingPackage = nextPackageToProcess; // 设置为当前处理
-                    IsNextPackageWaiting = !_packageStack.IsEmpty; // 更新等待状态
-
-                    // 清理堆栈中可能剩余的其他包裹（除了刚弹出的那个）
-                    // 注意：这里传递 nextPackageToProcess 作为排除项
-                    ClearPackageStack("[调度] 处理新包裹前清理剩余堆栈", nextPackageToProcess.Index, nextPackageToProcess);
-                }
-                else // 堆栈为空
-                {
-                    _currentlyProcessingPackage = null;
-                    IsNextPackageWaiting = false;
-                    Log.Information("[调度] 堆栈为空，系统转为空闲状态");
-                    // 设置背景为绿色 (允许上包 / 空闲)
-                    Application.Current.Dispatcher.Invoke(() =>
-                    {
-                        if (MainWindowBackgroundBrush != BackgroundSuccess)
-                        {
-                            MainWindowBackgroundBrush = BackgroundSuccess;
-                            Log.Information("[状态][UI] 设置背景为 绿色 (允许上包) - 系统空闲");
-                        }
-                    });
-                }
-            } // 结束 lock
-
-            // 在锁外启动下一个处理（如果需要）
-            if (nextPackageToProcess == null) return;
-            var finalNextPackageContext = $"[包裹{nextPackageToProcess.Index}|{nextPackageToProcess.Barcode}]";
-            using (LogContext.PushProperty("PackageContext", finalNextPackageContext))
-            {
-                Log.Debug("[调度] 准备在UI线程外异步启动下一个包裹处理");
+                // Log the mismatch using the context of the package that *was* being processed
+                 var currentProcessingContext = _currentlyProcessingPackage.Index >= 0
+                    ? $"[包裹{_currentlyProcessingPackage.Index}|{_currentlyProcessingPackage.Barcode}]"
+                    : "[未知处理中包裹]";
+                Log.Error("[调度][!!!] Finalize 时发现当前处理的包裹 ({CurrentContext}) 与完成的包裹 ({ProcessedContext}) 不匹配!",
+                     currentProcessingContext, processedPackageContext);
             }
 
-            // 使用 Task.Run 确保它不在锁内或 UI 线程上阻塞启动
-            _ = Task.Run(() => ProcessSinglePackageAsync(nextPackageToProcess, _viewModelCts.Token));
-        } // 结束 processedPackage 的上下文 using
+            _currentlyProcessingPackage = null; // 标记当前为空闲
+
+            // 检查堆栈
+            if (_packageStack.TryPop(out nextPackageToProcess))
+            {
+                // 从堆栈获取下一个
+                var nextPackageContext = $"[包裹{nextPackageToProcess.Index}|{nextPackageToProcess.Barcode}]";
+                 Log.Information("{ProcessedContext} [调度] 从堆栈获取下一个包裹处理: {NextContext}", processedPackageContext, nextPackageContext);
+
+                _currentlyProcessingPackage = nextPackageToProcess; // 设置为当前处理
+                IsNextPackageWaiting = !_packageStack.IsEmpty; // 更新等待状态
+
+                // 清理堆栈中可能剩余的其他包裹（除了刚弹出的那个）
+                // *** Pass context string and the object to exclude ***
+                ClearPackageStack($"处理新包裹 {nextPackageContext} 前清理剩余堆栈",
+                    processedPackageContext + " (清理堆栈)", // Context for the cleanup action
+                    nextPackageToProcess); // Exclude the next package
+            }
+            else // 堆栈为空
+            {
+                _currentlyProcessingPackage = null;
+                IsNextPackageWaiting = false;
+                Log.Information("{Context} [调度] 堆栈为空，系统转为空闲状态", processedPackageContext);
+                // 设置背景为绿色 (允许上包 / 空闲)
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    if (MainWindowBackgroundBrush == BackgroundSuccess) return;
+                    MainWindowBackgroundBrush = BackgroundSuccess;
+                    Log.Information("[状态][UI] 设置背景为 绿色 (允许上包) - 系统空闲 ({Context})", processedPackageContext);
+                });
+            }
+        } // 结束 lock
+
+        // 在锁外启动下一个处理（如果需要）
+        if (nextPackageToProcess == null) return;
+        var finalNextPackageContext = $"[包裹{nextPackageToProcess.Index}|{nextPackageToProcess.Barcode}]";
+        Log.Debug("{ProcessedContext} [调度] 准备在UI线程外异步启动下一个包裹处理: {NextContext}", processedPackageContext, finalNextPackageContext);
+
+        // 使用 Task.Run 确保它不在锁内或 UI 线程上阻塞启动
+        // *** Pass the new context ***
+        _ = Task.Run(() => ProcessSinglePackageAsync(nextPackageToProcess, finalNextPackageContext, _viewModelCts.Token));
     }
 
 
@@ -1536,6 +1534,8 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         // Ensure runs on UI thread
         Application.Current.Dispatcher.Invoke(() =>
         {
+            // Create context for logging inside the UI thread if needed
+            var context = $"[包裹{package.Index}|{package.Barcode}]";
             try
             {
                 // 限制历史记录数量，保持最新的1000条记录
@@ -1559,14 +1559,13 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                 // 如果超出最大数量，移除多余的记录
                 while (PackageHistory.Count > maxHistoryCount)
                 {
-                    // 可选地释放已移除的项目(如果PackageInfo正确实现IDisposable)
-                    // (当前PackageInfo Dispose似乎不必要用于历史项目, 如果图像已经释放)
                     PackageHistory.RemoveAt(PackageHistory.Count - 1);
                 }
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "更新历史包裹列表时发生错误");
+                // Use context in error log
+                Log.Error(ex, "{Context} 更新历史包裹列表时发生错误", context);
             }
         });
     }
@@ -1816,7 +1815,8 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                 Log.Debug("[Dispose] 定时器已停止.");
 
                 // 清理包裹状态
-                ClearPackageStack("[Dispose] 清理包裹堆栈", -1);
+                // Pass a string context for the reason
+                ClearPackageStack("[Dispose] 清理包裹堆栈", "[DisposeCtx]"); 
                 lock (_processingLock)
                 {
                     _currentlyProcessingPackage?.ReleaseImage();
@@ -2165,60 +2165,57 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     private readonly ConcurrentStack<PackageInfo> _packageStack = new();
 
     // *** 新增: 清理包裹堆栈并释放资源 ***
-    private void ClearPackageStack(string reason, int currentPackageIndex, PackageInfo? excludePackage = null)
+    // *** Update signature to accept context string ***
+    private void ClearPackageStack(string reason, string reasonContext, PackageInfo? excludePackage = null)
     {
-        var context = currentPackageIndex >= 0 ? $"[清理Ctx:{currentPackageIndex}]" : "[清理Ctx:N/A]";
-        using (LogContext.PushProperty("PackageContext", context))
+        Log.Debug("{Context} 开始清理包裹堆栈. 原因: {Reason}", reasonContext, reason);
+        var count = 0;
+        while (_packageStack.TryPop(out var packageToDiscard))
         {
-            Log.Debug("开始清理包裹堆栈. 原因: {Reason}", reason);
-            var count = 0;
-            while (_packageStack.TryPop(out var packageToDiscard))
+            // Create context for the discarded package
+            var discardContext = $"[包裹{packageToDiscard.Index}|{packageToDiscard.Barcode}]";
+            // *** Use discardContext and reasonContext in logs ***
+            if (excludePackage != null && ReferenceEquals(packageToDiscard, excludePackage))
             {
-                var discardContext = $"[包裹{packageToDiscard.Index}|{packageToDiscard.Barcode}]";
-                using (LogContext.PushProperty("PackageContext", discardContext)) // 为被丢弃的包裹设置上下文
-                {
-                    if (excludePackage != null && ReferenceEquals(packageToDiscard, excludePackage))
-                    {
-                        Log.Debug("跳过释放排除的包裹 (通常是下一个要处理的)");
-                        continue;
-                    }
-
-                    Log.Warning("正在丢弃并释放堆栈中的包裹");
-                    packageToDiscard.ReleaseImage();
-                    count++;
-                }
+                Log.Debug("{DiscardContext} ({ReasonContext}) 跳过释放排除的包裹 (通常是下一个要处理的)", discardContext, reasonContext);
+                continue;
             }
 
-            if (count > 0)
-            {
-                Log.Information("共清理了 {Count} 个堆栈中的包裹", count);
-            }
-            else
-            {
-                Log.Debug("包裹堆栈已为空，无需清理.");
-            }
-            // 更新UI状态 (移到调用者处或 Finalize 中)
-            // IsNextPackageWaiting = !_packageStack.IsEmpty;
+            Log.Warning("{DiscardContext} ({ReasonContext}) 正在丢弃并释放堆栈中的包裹", discardContext, reasonContext);
+            packageToDiscard.ReleaseImage();
+            count++;
         }
+
+        if (count > 0)
+        {
+            Log.Information("{Context} 共清理了 {Count} 个堆栈中的包裹", reasonContext, count);
+        }
+        else
+        {
+            Log.Debug("{Context} 包裹堆栈已为空，无需清理.", reasonContext);
+        }
+        // UI update (IsNextPackageWaiting) is handled in FinalizeProcessing
     }
 
+
     // *** 新增: 获取重量并处理包裹的方法 ***
-    private async Task FetchWeightAndHandlePackageAsync(PackageInfo package, CancellationToken cancellationToken)
+    // *** Add packageContext parameter ***
+    private async Task FetchWeightAndHandlePackageAsync(PackageInfo package, string packageContext, CancellationToken cancellationToken)
     {
-        // *** 在调用者处已设置最终上下文 ***
-        Log.Debug("开始获取重量");
+        // *** Use passed context for logging ***
+        Log.Debug("{Context} 开始获取重量", packageContext);
         try
         {
             var weightTask = Task.Run(() => _weightService.FindNearestWeight(DateTime.Now), cancellationToken);
-            Log.Debug("等待重量查询结果...");
+             Log.Debug("{Context} 等待重量查询结果...", packageContext);
             var weightFromScale = await weightTask;
-            Log.Debug("重量查询完成.");
+             Log.Debug("{Context} 重量查询完成.", packageContext);
 
             if (weightFromScale is > 0)
             {
                 var weightInKg = weightFromScale.Value / 1000.0;
                 package.SetWeight(weightInKg);
-                Log.Information("从重量称获取到重量: {WeightKg:F3}kg", weightInKg);
+                 Log.Information("{Context} 从重量称获取到重量: {WeightKg:F3}kg", packageContext, weightInKg);
             }
             else
             {
@@ -2228,29 +2225,28 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                     var weightSettings = _settingsService.LoadSettings<WeightSettings>();
                     var minimumWeight = weightSettings.MinimumWeight / 1000.0;
                     package.SetWeight(minimumWeight);
-                    Log.Warning("未获取到有效重量，使用最小重量: {MinWeight:F3}kg", minimumWeight);
+                     Log.Warning("{Context} 未获取到有效重量，使用最小重量: {MinWeight:F3}kg", packageContext, minimumWeight);
                 }
                 else
                 {
                     package.SetWeight(packageWeightOriginal);
-                    Log.Debug("重量称未返回有效重量，保留原始重量: {WeightKg:F3}kg", packageWeightOriginal);
+                     Log.Debug("{Context} 重量称未返回有效重量，保留原始重量: {WeightKg:F3}kg", packageContext, packageWeightOriginal);
                 }
             }
         }
         catch (OperationCanceledException)
         {
-            Log.Warning("重量查询被取消.");
-            // 继续处理，可能使用默认/0重量
+            Log.Warning("{Context} 重量查询被取消.", packageContext);
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "获取重量时出错.");
+            Log.Error(ex, "{Context} 获取重量时出错.", packageContext);
             _ = _audioService.PlayPresetAsync(AudioType.SystemError);
-            // 继续处理，可能使用默认/0重量
         }
 
-        // 调用调度入口 (继续使用当前 LogContext)
-        HandleIncomingPackage(package);
-        Log.Debug("重量获取完成，已提交到调度 HandleIncomingPackage");
+        // 调用调度入口
+        // *** Pass context ***
+        HandleIncomingPackage(package, packageContext);
+        Log.Debug("{Context} 重量获取完成，已提交到调度 HandleIncomingPackage", packageContext);
     }
 }

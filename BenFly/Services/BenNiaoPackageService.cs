@@ -71,7 +71,7 @@ internal class BenNiaoPackageService : IDisposable
     private HttpClient CreateHttpClient()
     {
         var baseUrl = _settingsService.LoadSettings<UploadConfiguration>().BenNiaoEnvironment == BenNiaoEnvironment.Production
-            ? "http://bnsy.benniaosuyun.com"
+            ? "https://bnsy.benniaosuyun.com"
             : "https://sit.bnsy.rhb56.cn";
 
         var client = _httpClientFactory.CreateClient("BenNiao");

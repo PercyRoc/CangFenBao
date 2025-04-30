@@ -27,9 +27,9 @@ internal class BenNiaoPreReportService : IDisposable
     };
 
     private readonly Timer _updateTimer;
-    private UploadConfiguration _config;
+    private readonly UploadConfiguration _config;
     private bool _disposed;
-    private HttpClient _httpClient;
+    private readonly HttpClient _httpClient;
     private List<PreReportDataResponse>? _preReportData;
 
     public BenNiaoPreReportService(
@@ -78,8 +78,8 @@ internal class BenNiaoPreReportService : IDisposable
     private HttpClient CreateHttpClient()
     {
         var baseUrl = _config.BenNiaoEnvironment == BenNiaoEnvironment.Production
-            ? "http://bnsy.benniaosuyun.com"
-            : "http://sit.bnsy.rhb56.cn";
+            ? "https://bnsy.benniaosuyun.com"
+            : "https://sit.bnsy.rhb56.cn";
 
         var client = _httpClientFactory.CreateClient("BenNiao");
         client.BaseAddress = new Uri(baseUrl);

@@ -1,4 +1,4 @@
-<Page
+<UserControl
     x:Class="SharedUI.Views.Settings.JushuitanSettingsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -10,12 +10,11 @@
     xmlns:converters="clr-namespace:SharedUI.Converters"
     mc:Ignorable="d"
     d:DataContext="{d:DesignInstance Type=viewModels:JushuitanSettingsViewModel}"
-    prism:ViewModelLocator.AutoWireViewModel="True"
-    Title="聚水潭称重接口设置">
+    prism:ViewModelLocator.AutoWireViewModel="True">
 
-    <Page.Resources>
+    <UserControl.Resources>
         <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
-    </Page.Resources>
+    </UserControl.Resources>
 
     <Grid>
         <StackPanel MaxWidth="500" Margin="16" VerticalAlignment="Top">
@@ -45,10 +44,10 @@
 
                         <StackPanel Grid.Column="1" Orientation="Horizontal">
                             <RadioButton Content="正式环境"
-                                       IsChecked="{Binding Settings.IsProduction}"
-                                       Margin="0,0,16,0" />
+                                         IsChecked="{Binding Settings.IsProduction}"
+                                         Margin="0,0,16,0" />
                             <RadioButton Content="测试环境"
-                                       IsChecked="{Binding Settings.IsProduction, Converter={StaticResource InverseBooleanConverter}}" />
+                                         IsChecked="{Binding Settings.IsProduction, Converter={StaticResource InverseBooleanConverter}}" />
                         </StackPanel>
                     </Grid>
 
@@ -109,4 +108,4 @@
             </ui:Card>
         </StackPanel>
     </Grid>
-</Page>
+</UserControl>

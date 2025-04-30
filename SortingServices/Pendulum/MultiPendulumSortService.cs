@@ -456,7 +456,7 @@ public class MultiPendulumSortService : BasePendulumSortService
         return _sortingClients.TryGetValue(photoelectricName, out var client) ? client : null;
     }
 
-    protected override void CheckSortingPhotoelectricChanges(PendulumSortConfig oldConfig, PendulumSortConfig newConfig)
+    protected virtual void CheckSortingPhotoelectricChanges(PendulumSortConfig oldConfig, PendulumSortConfig newConfig)
     {
         // 检查是否有分拣光电的连接参数发生变化
         var hasChanges = newConfig.SortingPhotoelectrics.Any(newPhotoelectric =>

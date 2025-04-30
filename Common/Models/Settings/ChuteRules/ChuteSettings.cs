@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.RegularExpressions;
 using Common.Services.Settings;
-using Prism.Mvvm;
 using Serilog;
 
 namespace Common.Models.Settings.ChuteRules;

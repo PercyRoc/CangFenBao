@@ -1,9 +1,5 @@
 using Common.Services.Ui;
 using BenFly.ViewModels.Settings;
-using Prism.Commands;
-using Prism.Ioc;
-using Prism.Mvvm;
-using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.ViewModels.Settings;
 
@@ -36,6 +32,9 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
 
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
+
+        // Replace the event with the Prism 9.0 property
+        RequestClose = new DialogCloseListener();
     }
 
     public DelegateCommand SaveCommand { get; }
@@ -43,7 +42,8 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
 
     public string Title => "系统设置";
 
-    public event Action<IDialogResult>? RequestClose;
+    // Replace the event with the Prism 9.0 property
+    public DialogCloseListener RequestClose { get; }
 
     public bool CanCloseDialog()
     {
@@ -71,7 +71,8 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
 
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");
-            RequestClose?.Invoke(new DialogResult(ButtonResult.OK));
+            // Update invocation to use the property's Invoke method
+            RequestClose.Invoke(new DialogResult(ButtonResult.OK));
         }
         catch (Exception ex)
         {
@@ -82,6 +83,7 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
 
     private void ExecuteCancel()
     {
-        RequestClose?.Invoke(new DialogResult(ButtonResult.Cancel));
+        // Update invocation to use the property's Invoke method
+        RequestClose.Invoke(new DialogResult(ButtonResult.Cancel));
     }
 }

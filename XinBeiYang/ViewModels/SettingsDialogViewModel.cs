@@ -1,15 +1,11 @@
 ﻿using Common.Services.Ui;
-using Prism.Commands;
-using Prism.Ioc;
-using Prism.Mvvm;
-using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.ViewModels.Settings;
 using XinBeiYang.ViewModels.Settings;
 
 namespace XinBeiYang.ViewModels;
 
-public class SettingsDialogViewModel : BindableBase, IDialogAware
+public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
 {
     // 保存各个设置页面的ViewModel实例
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
@@ -22,6 +18,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
         INotificationService notificationService)
     {
         _notificationService = notificationService;
+        RequestClose = new DialogCloseListener();
 
         // 创建各个设置页面的ViewModel实例
         _cameraSettingsViewModel = containerProvider.Resolve<CameraSettingsViewModel>();
@@ -37,7 +34,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
 
     public string Title => "系统设置";
 
-    public event Action<IDialogResult>? RequestClose;
+    public DialogCloseListener RequestClose { get; }
 
     public bool CanCloseDialog()
     {
@@ -46,6 +43,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
 
     public void OnDialogClosed()
     {
+        Dispose();
     }
 
     public void OnDialogOpened(IDialogParameters parameters)
@@ -61,7 +59,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
             _hostSettingsViewModel.SaveConfigurationCommand.Execute();
             _chineseWeightSettingsViewModel.SaveConfigurationCommand.Execute();
             _notificationService.ShowSuccess("设置已保存");
-            RequestClose?.Invoke(new DialogResult(ButtonResult.OK));
+            RequestClose.Invoke(new DialogResult(ButtonResult.OK));
         }
         catch (Exception ex)
         {
@@ -72,6 +70,12 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
 
     private void ExecuteCancel()
     {
-        RequestClose?.Invoke(new DialogResult(ButtonResult.Cancel));
+        RequestClose.Invoke(new DialogResult(ButtonResult.Cancel));
     }
+
+    public void Dispose()
+    {
+        GC.SuppressFinalize(this);
+    }
+    
 }

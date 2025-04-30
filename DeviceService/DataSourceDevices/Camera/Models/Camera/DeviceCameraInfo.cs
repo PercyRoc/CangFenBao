@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-using Prism.Mvvm;
 
 namespace DeviceService.DataSourceDevices.Camera.Models.Camera;
 

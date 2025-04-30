@@ -1,8 +1,5 @@
 using Common.Services.Settings;
 using Common.Services.Ui;
-using Prism.Commands;
-using Prism.Mvvm;
-using Prism.Services.Dialogs;
 using Serilog;
 using XinBa.Services;
 using XinBa.Services.Models;
@@ -98,7 +95,7 @@ internal class LoginViewModel : BindableBase, IDialogAware
     public string StatusMessage
     {
         get => _statusMessage;
-        set => SetProperty(ref _statusMessage, value);
+        private set => SetProperty(ref _statusMessage, value);
     }
 
     /// <summary>
@@ -117,9 +114,9 @@ internal class LoginViewModel : BindableBase, IDialogAware
     public string Title => "Employee Login";
 
     /// <summary>
-    ///     请求关闭对话框事件
+    ///     请求关闭对话框事件 (Prism 9 style)
     /// </summary>
-    public event Action<IDialogResult>? RequestClose;
+    public DialogCloseListener RequestClose { get; private set; } = default!;
 
     /// <summary>
     ///     是否可以关闭对话框
@@ -211,9 +208,13 @@ internal class LoginViewModel : BindableBase, IDialogAware
                 // 触发登录成功事件
                 LoginSucceeded?.Invoke(this, EventArgs.Empty);
 
-                // 注意：不再在这里关闭对话框，而是由App.xaml.cs中的OnLoginSucceeded方法负责关闭
-                // 这样可以确保主窗口显示后再关闭登录窗口
-                // RequestClose?.Invoke(new DialogResult(ButtonResult.OK));
+                // 先设置 IsLoggingIn 为 false，确保 CanCloseDialog 返回 true
+                IsLoggingIn = false;
+
+                // 关闭对话框并传递成功结果 (Prism 9 style invocation)
+                Log.Debug("准备调用 RequestClose 关闭登录对话框 (结果: OK)");
+                RequestClose.Invoke(new DialogResult(ButtonResult.OK));
+                Log.Debug("RequestClose 已调用 (结果: OK)");
             }
             else
             {
@@ -228,7 +229,11 @@ internal class LoginViewModel : BindableBase, IDialogAware
         }
         finally
         {
-            IsLoggingIn = false;
+            // 仅在未成功登录（例如异常或失败）时才在这里设置
+            if (IsLoggingIn) // 检查标志，避免重复设置
+            {
+                IsLoggingIn = false;
+            }
         }
     }
 
@@ -249,6 +254,7 @@ internal class LoginViewModel : BindableBase, IDialogAware
     private void ExecuteCancel()
     {
         Log.Information("User canceled login");
-        RequestClose?.Invoke(new DialogResult(ButtonResult.Cancel));
+        // Prism 9 style invocation
+        RequestClose.Invoke(new DialogResult(ButtonResult.Cancel));
     }
 }

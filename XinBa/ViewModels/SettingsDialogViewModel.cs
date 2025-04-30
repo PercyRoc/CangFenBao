@@ -1,17 +1,16 @@
 ﻿using Common.Services.Ui;
-using Prism.Commands;
-using Prism.Ioc;
-using Prism.Mvvm;
-using Prism.Services.Dialogs;
 using Serilog;
+using SharedUI.ViewModels.Settings;
 using XinBa.ViewModels.Settings;
 
 namespace XinBa.ViewModels;
 
 public class SettingsDialogViewModel : BindableBase, IDialogAware
 {
-    // Store instances of each settings page ViewModel
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
+    private readonly WeightSettingsViewModel _weightSettingsViewModel;
+
+    private readonly VolumeSettingsViewModel _volumeSettingsViewModel;
     private readonly INotificationService _notificationService;
 
     public SettingsDialogViewModel(
@@ -20,8 +19,9 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
     {
         _notificationService = notificationService;
 
-        // Create instances of each settings page ViewModel
         _cameraSettingsViewModel = containerProvider.Resolve<CameraSettingsViewModel>();
+        _weightSettingsViewModel = containerProvider.Resolve<WeightSettingsViewModel>();
+        _volumeSettingsViewModel = containerProvider.Resolve<VolumeSettingsViewModel>();
 
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
@@ -32,7 +32,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
 
     public string Title => "System Settings";
 
-    public event Action<IDialogResult>? RequestClose;
+    public DialogCloseListener RequestClose { get; private set; } = default!;
 
     public bool CanCloseDialog()
     {
@@ -52,11 +52,12 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
         try
         {
             // Save all settings
-            _cameraSettingsViewModel.SaveConfigurationCommand.Execute(null);
-
+            _cameraSettingsViewModel.SaveConfigurationCommand.Execute();
+            _weightSettingsViewModel.SaveConfigurationCommand.Execute();
+            _volumeSettingsViewModel.SaveConfigurationCommand.Execute();
             Log.Information("All settings have been saved");
             _notificationService.ShowSuccess("Settings saved");
-            RequestClose?.Invoke(new DialogResult(ButtonResult.OK));
+            RequestClose.Invoke(new DialogResult(ButtonResult.OK));
         }
         catch (Exception ex)
         {
@@ -67,6 +68,6 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
 
     private void ExecuteCancel()
     {
-        RequestClose?.Invoke(new DialogResult(ButtonResult.Cancel));
+        RequestClose.Invoke(new DialogResult(ButtonResult.Cancel));
     }
 }

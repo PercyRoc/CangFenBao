@@ -10,9 +10,6 @@ using DeviceService.DataSourceDevices.Services;
 using KuaiLv.Models.Settings.App;
 using KuaiLv.Services.DWS;
 using KuaiLv.Services.Warning;
-using Prism.Commands;
-using Prism.Mvvm;
-using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.Models;
 using System.Reactive.Concurrency;
@@ -32,8 +29,8 @@ public class CameraDisplayInfo : BindableBase
     private readonly string _cameraName = string.Empty;
     private bool _isOnline;
     private BitmapSource? _currentImage;
-    private int _row;
-    private int _column;
+    private readonly int _row;
+    private readonly int _column;
     private int _rowSpan = 1;
     private int _columnSpan = 1;
 
@@ -79,7 +76,7 @@ public class CameraDisplayInfo : BindableBase
     public int Row
     {
         get => _row;
-        set => SetProperty(ref _row, value);
+        init => SetProperty(ref _row, value);
     }
 
     /// <summary>
@@ -88,7 +85,7 @@ public class CameraDisplayInfo : BindableBase
     public int Column
     {
         get => _column;
-        set => SetProperty(ref _column, value);
+        init => SetProperty(ref _column, value);
     }
 
     /// <summary>
@@ -203,7 +200,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 try
                 {
                     var (image, cameraId) = imageData;
-                    // Switch to UI thread to update UI element
                     Application.Current.Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
                     {
                         try
@@ -513,15 +509,13 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                          else
                          {
                             Log.Warning("OnCameraConnectionChanged: Received status for unknown CameraId: {CameraId}", deviceId);
-                            // If ID is unknown, maybe just update based on general connection status? 
-                            // For now, we don't update the overall status if the specific ID is not found.
+                            
                          }
                      }
-                     else // No specific deviceId, update based on general IsConnected flag
+                     else 
                      {
                          cameraStatus.Status = isConnected ? "已连接" : "已断开";
                          cameraStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
-                         // Update all camera views based on the general status
                          foreach(var cam in Cameras)
                          {
                              cam.IsOnline = isConnected;
@@ -556,7 +550,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    protected virtual void Dispose(bool disposing)
+    private void Dispose(bool disposing)
     {
         if (_disposed) return;
 
@@ -898,9 +892,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 GridColumns = 2;
                 break;
             case 3:
-                GridRows = 2;
-                GridColumns = 2;
-                break;
             case 4:
                 GridRows = 2;
                 GridColumns = 2;
@@ -943,13 +934,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 return (0, 0, 1, 2); // 3个相机，第1个占第一行
             case 3 when cameraIndex > 0:
                 return (1, cameraIndex - 1, 1, 1); // 3个相机，第2、3个在第二行
-            // Add special layout for 5 cameras? e.g., 2x3 with first taking 2 columns?
-            // case 5 when cameraIndex == 0:
-            //    return (0, 0, 1, 2); // First takes 2 columns
-            // case 5 when cameraIndex < 3:
-            //    return (0, cameraIndex + 1, 1, 1); // 2nd, 3rd on first row
-            // case 5 when cameraIndex >= 3:
-            //    return (1, cameraIndex - 3, 1, 1); // 4th, 5th on second row
         }
 
         var row = cameraIndex / GridColumns;

@@ -85,8 +85,5 @@
                     BorderBrush="#40FFFFFF"
                     BorderThickness="0,0,0,1" />
         </Grid>
-        
-        <!-- ContentControl 将用于托管对话框内容 -->
-        <ContentControl x:Name="DialogContent" Grid.Row="1" />
     </Grid>
 </ui:FluentWindow> 

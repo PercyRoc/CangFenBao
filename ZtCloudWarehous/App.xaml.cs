@@ -8,7 +8,6 @@ using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
-using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 using SharedUI.ViewModels.Settings;

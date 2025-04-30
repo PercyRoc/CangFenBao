@@ -1,8 +1,6 @@
 using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera.Models.Camera;
-using Prism.Commands;
-using Prism.Mvvm;
 using Serilog;
 
 namespace Sunnen.ViewModels.Settings;

@@ -1,7 +1,5 @@
 using Common.Services.Settings;
 using FuzhouPolicyForce.Models;
-using Prism.Commands;
-using Prism.Mvvm;
 
 namespace FuzhouPolicyForce.ViewModels.Settings;
 

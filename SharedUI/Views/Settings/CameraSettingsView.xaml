@@ -1,4 +1,4 @@
-<Page x:Class="SharedUI.Views.Settings.CameraSettingsView"
+<UserControl x:Class="SharedUI.Views.Settings.CameraSettingsView"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -9,9 +9,8 @@
       xmlns:settings="clr-namespace:SharedUI.ViewModels.Settings"
       prism:ViewModelLocator.AutoWireViewModel="True"
       d:DataContext="{d:DesignInstance Type=settings:CameraSettingsViewModel}"
-      mc:Ignorable="d"
-      Title="相机设置">
-    <Page.Resources>
+      mc:Ignorable="d">
+    <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary
@@ -22,7 +21,7 @@
 
             <converters1:EnumDescriptionConverter x:Key="EnumDescriptionConverter" />
         </ResourceDictionary>
-    </Page.Resources>
+    </UserControl.Resources>
     <Grid>
         <StackPanel Margin="16" VerticalAlignment="Top">
             <TextBlock Text="相机设置"
@@ -174,4 +173,4 @@
             </ui:Card>
         </StackPanel>
     </Grid>
-</Page>
+</UserControl>

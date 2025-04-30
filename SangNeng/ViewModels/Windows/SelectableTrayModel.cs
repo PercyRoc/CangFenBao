@@ -1,4 +1,3 @@
-using Prism.Mvvm;
 using Sunnen.ViewModels.Settings;
 
 namespace Sunnen.ViewModels.Windows;

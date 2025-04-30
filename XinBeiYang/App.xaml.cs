@@ -1,13 +1,14 @@
-﻿using System.Net.Http;
+﻿using System.Diagnostics;
+using System.IO;
+using System.Net.Http;
 using System.Windows;
 using Common.Extensions;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.DataSourceDevices.Weight;
 using DeviceService.Extensions;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
-using Prism.Ioc;
+using Microsoft.Extensions.Hosting;
 using Serilog;
 using SharedUI.Extensions;
 using XinBeiYang.Services;
@@ -15,8 +16,6 @@ using XinBeiYang.ViewModels;
 using XinBeiYang.ViewModels.Settings;
 using XinBeiYang.Views;
 using XinBeiYang.Views.Settings;
-using System.Diagnostics;
-using System.IO;
 using Timer = System.Timers.Timer;
 
 namespace XinBeiYang;

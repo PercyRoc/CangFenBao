@@ -6,7 +6,6 @@ using Common.Services.Settings;
 using Common.Services.Ui;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Prism.Ioc;
 
 namespace Common.Extensions;
 
@@ -50,7 +49,6 @@ public static class ServiceCollectionExtensions
         services.RegisterSingleton<IAudioService, AudioService>();
         // 注册通知服务
         services.RegisterSingleton<INotificationService, NotificationService>();
-        services.RegisterSingleton<ISettingsService, SettingsService>();
         // 注册授权服务
         services.RegisterSingleton<ILicenseService, LicenseService>();
     }

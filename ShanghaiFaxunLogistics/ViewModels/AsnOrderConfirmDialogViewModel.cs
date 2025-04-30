@@ -1,7 +1,5 @@
-using Prism.Commands;
-using Prism.Mvvm;
-using Prism.Services.Dialogs;
 using ShanghaiFaxunLogistics.Models.ASN;
+
 
 namespace ShanghaiFaxunLogistics.ViewModels
 {
@@ -40,7 +38,7 @@ namespace ShanghaiFaxunLogistics.ViewModels
         public string OrderCode
         {
             get => _orderCode;
-            set => SetProperty(ref _orderCode, value);
+            private set => SetProperty(ref _orderCode, value);
         }
 
         /// <summary>
@@ -49,7 +47,7 @@ namespace ShanghaiFaxunLogistics.ViewModels
         public string CarCode
         {
             get => _carCode;
-            set => SetProperty(ref _carCode, value);
+            private set => SetProperty(ref _carCode, value);
         }
 
         /// <summary>
@@ -58,7 +56,7 @@ namespace ShanghaiFaxunLogistics.ViewModels
         public int ItemsCount
         {
             get => _itemsCount;
-            set => SetProperty(ref _itemsCount, value);
+            private set => SetProperty(ref _itemsCount, value);
         }
 
         /// <summary>
@@ -69,7 +67,7 @@ namespace ShanghaiFaxunLogistics.ViewModels
         /// <summary>
         /// 请求关闭事件
         /// </summary>
-        public event Action<IDialogResult>? RequestClose;
+        public DialogCloseListener RequestClose { get; private set; } = default!;
 
         /// <summary>
         /// 是否可以关闭对话框
@@ -103,13 +101,7 @@ namespace ShanghaiFaxunLogistics.ViewModels
         /// </summary>
         private void ExecuteConfirm()
         {
-            var parameters = new DialogParameters
-            {
-                { "Confirmed", true },
-                { "AsnOrderInfo", _asnOrderInfo }
-            };
-            
-            RequestClose?.Invoke(new DialogResult(ButtonResult.OK, parameters));
+            RequestClose.Invoke(new DialogResult(ButtonResult.OK));
         }
 
         /// <summary>
@@ -117,7 +109,7 @@ namespace ShanghaiFaxunLogistics.ViewModels
         /// </summary>
         private void ExecuteCancel()
         {
-            RequestClose?.Invoke(new DialogResult(ButtonResult.Cancel));
+            RequestClose.Invoke(new DialogResult(ButtonResult.Cancel));
         }
     }
 } 

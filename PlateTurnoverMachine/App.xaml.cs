@@ -12,7 +12,6 @@ using DongtaiFlippingBoardMachine.ViewModels.Settings;
 using DongtaiFlippingBoardMachine.Views;
 using DongtaiFlippingBoardMachine.Views.Settings;
 using Microsoft.Extensions.Hosting;
-using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 

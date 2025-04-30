@@ -5,7 +5,6 @@ using Common.Models.Settings.Sort.PendulumSort;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.Extensions;
 using Microsoft.Extensions.Hosting;
-using Prism.Ioc;
 using Serilog;
 using ShanghaiFaxunLogistics.Services.ASN;
 using ShanghaiFaxunLogistics.ViewModels;

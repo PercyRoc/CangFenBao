@@ -1,5 +1,3 @@
-using Prism.Mvvm;
-
 namespace SortingServices.Car;
 
 /// <summary>

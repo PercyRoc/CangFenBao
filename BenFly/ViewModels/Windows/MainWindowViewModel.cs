@@ -4,7 +4,6 @@ using System.IO;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Windows;
-using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Common.Models.Package;
@@ -16,23 +15,16 @@ using DeviceService.DataSourceDevices.Scanner;
 using DeviceService.DataSourceDevices.Services;
 using BenFly.Services;
 using Common.Models.Settings.Sort.PendulumSort;
-using Prism.Commands;
-using Prism.Mvvm;
 using Serilog;
 using SharedUI.Models;
 using SortingServices.Pendulum;
 using Common.Services.Audio;
 using DeviceService.DataSourceDevices.Belt;
-using Prism.Services.Dialogs;
-using Common.Data;
 
 namespace BenFly.ViewModels.Windows;
 
 internal class MainWindowViewModel : BindableBase, IDisposable
 {
-    // 用于为合并后的包裹生成新的、线程安全的序号
-    private static int _nextMergedPackageIndex;
-
     private readonly BenNiaoPackageService _benNiaoService;
     private readonly BenNiaoPreReportService _preReportService;
     private readonly ICameraService _cameraService;
@@ -41,12 +33,10 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private readonly IPendulumSortService _sortService;
     private readonly INotificationService _notificationService;
     private readonly IAudioService _audioService;
-    private readonly IPackageDataService _packageDataService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly IDisposable? _barcodeSubscription; // Subscription for the barcode stream
 
     private readonly DispatcherTimer _timer;
-    private TaskCompletionSource<string>? _barcodeScanCompletionSource;
 
     private string _currentBarcode = string.Empty;
 
@@ -69,8 +59,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         ScannerStartupService scannerStartupService,
         INotificationService notificationService,
         IAudioService audioService,
-        BeltSerialService beltSerialService,
-        IPackageDataService packageDataService)
+        BeltSerialService beltSerialService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
@@ -78,7 +67,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         _sortService = sortService;
         _benNiaoService = benNiaoService;
         _preReportService = preReportService;
-        _packageDataService = packageDataService;
         var scannerService = scannerStartupService.GetScannerService();
         _notificationService = notificationService;
         _audioService = audioService;
@@ -124,11 +112,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         // 订阅相机连接状态事件
         _cameraService.ConnectionChanged += OnCameraConnectionChanged;
 
-        // 订阅包裹流
+        // 订阅包裹流 - 移除 Buffer 和 Select
         _subscriptions.Add(packageTransferService.PackageStream
-            .Buffer(TimeSpan.FromMilliseconds(200))
-            .Where(buffer => buffer.Any()) // 确保buffer不为空
-            .Select(MergePackageInfos) // 使用合并函数
             .ObserveOn(Scheduler.CurrentThread) // 切换回UI线程
             .Subscribe(OnPackageInfo));
 
@@ -185,6 +170,15 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     public ObservableCollection<DeviceStatus> DeviceStatuses { get; } = [];
     public ObservableCollection<PackageInfoItem> PackageInfoItems { get; } = [];
 
+    // 用于存储统计项的引用
+    private StatisticsItem? _totalPackagesItem;
+    private StatisticsItem? _errorCountItem;
+    private StatisticsItem? _efficiencyItem;
+    private StatisticsItem? _avgProcessingTimeItem;
+
+    // 用于计算效率
+    private DateTime? _firstPackageTime;
+
     public void Dispose()
     {
         Dispose(true);
@@ -198,7 +192,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private void ExecuteOpenHistory()
     {
-        _dialogService.ShowDialog("HistoryDialog", null, null, "HistoryWindow");
+        _dialogService.ShowDialog("HistoryDialog", null, (Action<IDialogResult>?)null);
     }
 
     private void Timer_Tick(object? sender, EventArgs e)
@@ -291,9 +285,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 deviceStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
                 Log.Debug("已更新设备初始状态: {Name} -> {Status}", deviceName, deviceStatus.Status);
             }
-
-            // 更新皮带初始状态 - 这行不再需要，已在添加时处理
-            // UpdateBeltStatus(_beltSerialService.IsOpen);
         }
         catch (Exception ex)
         {
@@ -334,41 +325,45 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private void InitializeStatisticsItems()
     {
-        StatisticsItems.Add(new StatisticsItem
+        _totalPackagesItem = new StatisticsItem
         {
             Label = "总包裹数",
             Value = "0",
             Unit = "个",
             Description = "累计处理包裹总数",
             Icon = "CubeMultiple24"
-        });
+        };
+        StatisticsItems.Add(_totalPackagesItem);
 
-        StatisticsItems.Add(new StatisticsItem
+        _errorCountItem = new StatisticsItem
         {
             Label = "异常数",
             Value = "0",
             Unit = "个",
             Description = "处理异常的包裹数量",
             Icon = "AlertOff24"
-        });
+        };
+        StatisticsItems.Add(_errorCountItem);
 
-        StatisticsItems.Add(new StatisticsItem
+        _efficiencyItem = new StatisticsItem
         {
             Label = "预测效率",
             Value = "0",
             Unit = "个/小时",
             Description = "预计每小时处理量",
             Icon = "ArrowTrending24"
-        });
+        };
+        StatisticsItems.Add(_efficiencyItem);
 
-        StatisticsItems.Add(new StatisticsItem
+        _avgProcessingTimeItem = new StatisticsItem
         {
             Label = "平均处理时间",
             Value = "0",
             Unit = "ms",
             Description = "单个包裹平均处理时间",
             Icon = "Timer24"
-        });
+        };
+        StatisticsItems.Add(_avgProcessingTimeItem);
     }
 
     private void InitializePackageInfoItems()
@@ -474,14 +469,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             var barcodeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "条码");
             if (barcodeItem == null) return;
             barcodeItem.Value = barcode;
-            barcodeItem.Description = "请按回车键确认";
+            // 移除提示信息，因为不再依赖 Enter 确认
+            // barcodeItem.Description = "请按回车键确认";
         });
-
-        // 如果存在等待中的条码输入任务，则完成它
-        if (_barcodeScanCompletionSource is not null && !_barcodeScanCompletionSource.Task.IsCompleted)
-        {
-            _barcodeScanCompletionSource.SetResult(barcode);
-        }
     }
 
     /// <summary>
@@ -489,14 +479,42 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     /// </summary>
     public void OnBarcodeInput()
     {
-        if (_barcodeScanCompletionSource is not { Task.IsCompleted: false }) return;
+        // 移除对 _barcodeScanCompletionSource 的检查，因为不再使用
+        // if (_barcodeScanCompletionSource is not { Task.IsCompleted: false }) return;
         var barcode = CurrentBarcode;
         // 移除提示文本
         barcode = barcode.Replace(" (请按回车键确认...)", "").Replace(" (请按回车键继续...)", "");
 
-        if (string.IsNullOrWhiteSpace(barcode)) return;
+        if (string.IsNullOrWhiteSpace(barcode))
+        {
+            Log.Warning("用户尝试确认空条码，不执行任何操作。");
+            return;
+        }
+
         Log.Information("用户通过输入框确认条码：{Barcode}", barcode);
-        _barcodeScanCompletionSource.SetResult(barcode);
+
+        // 检查皮带设置并尝试启动皮带
+        var beltSettings = _settingsService.LoadSettings<BeltSerialParams>();
+        if (beltSettings.IsEnabled)
+        {
+            Log.Information("皮带已启用，尝试发送启动命令...");
+            var startSuccess = _beltSerialService.StartBelt();
+            if (startSuccess)
+            {
+                Log.Information("皮带启动命令发送成功。");
+            }
+            else
+            {
+                Log.Warning("皮带启动命令发送失败或串口未连接。");
+            }
+        }
+        else
+        {
+            Log.Debug("皮带已禁用，不发送启动命令。");
+        }
+
+        // 移除对 _barcodeScanCompletionSource 的调用
+        // _barcodeScanCompletionSource.SetResult(barcode);
     }
 
     private async void OnPackageInfo(PackageInfo package)
@@ -547,6 +565,31 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 Log.Information("包裹 {Barcode} (Index: {Index}) 因 '{Reason}'，预分配到配置的异常口 {ExceptionChute}",
                     package.Barcode, package.Index, reason, exceptionChute);
 
+                // 如果皮带启用，发送停止命令
+                var beltSettings = _settingsService.LoadSettings<BeltSerialParams>();
+                if (beltSettings.IsEnabled)
+                {
+                    Log.Information("检测到无效数据，且皮带已启用，尝试发送停止命令...");
+                    var stopSuccess = _beltSerialService.StopBelt();
+                    if (stopSuccess)
+                    {
+                        Log.Information("皮带停止命令发送成功。");
+                        // 可以考虑添加通知，提示用户按回车继续
+                        await Application.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            _notificationService.ShowWarning($"包裹数据无效 ({reason})，皮带已停止。请处理后按回车键继续。");
+                        });
+                    }
+                    else
+                    {
+                        Log.Warning("皮带停止命令发送失败或串口未连接。");
+                    }
+                }
+                else
+                {
+                    Log.Debug("皮带已禁用，不发送停止命令。");
+                }
+
                 // Mark to skip BenNiao interaction
                 skipBenNiao = true;
 
@@ -563,7 +606,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
             // 将变量声明移到此处
             var benNiaoInteractionSuccess = true;
-            string benNiaoErrorMessage;
             var uploadTime = DateTime.MinValue;
 
             // 1. 分拣服务处理 (Always process, uses chute assigned above if needed)
@@ -577,7 +619,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 Log.Error(ex, "分拣服务处理包裹 {Barcode} 时发生错误", package.Barcode);
                 package.SetStatus(PackageStatus.Error, errorMsg); // Ensure error status
                 benNiaoInteractionSuccess = false; // Mark following steps as potentially problematic
-                benNiaoErrorMessage = errorMsg;
                 if (package.ChuteNumber >= 0) // If not already set to error chute
                 {
                     package.SetChute(-1); // Ensure it goes to exception chute on sort error
@@ -590,6 +631,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             if (!skipBenNiao)
             {
                 // 2.a 获取段码
+                string benNiaoErrorMessage;
                 try
                 {
                     var preReportData = _preReportService.GetPreReportData();
@@ -769,6 +811,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     PackageHistory.Insert(0, package);
                     while (PackageHistory.Count > 1000)
                         PackageHistory.RemoveAt(PackageHistory.Count - 1);
+
+                    // 更新统计信息
+                    UpdateStatistics();
                 }
                 catch (Exception ex)
                 {
@@ -827,176 +872,63 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private void UpdateStatistics()
     {
-        var totalItem = StatisticsItems.FirstOrDefault(static x => x.Label == "总包裹数");
-        if (totalItem != null)
+        if (_totalPackagesItem == null || _errorCountItem == null || _efficiencyItem == null ||
+            _avgProcessingTimeItem == null)
         {
-            // 计算非noread包裹的数量
-            var validPackageCount =
-                PackageHistory.Count(p => !string.Equals(p.Barcode, "noread", StringComparison.OrdinalIgnoreCase));
-            totalItem.Value = validPackageCount.ToString();
-            totalItem.Description = $"累计处理 {validPackageCount} 个有效包裹";
+            Log.Warning("统计项引用未初始化，无法更新统计信息。");
+            return;
         }
 
-        var errorItem = StatisticsItems.FirstOrDefault(static x => x.Label == "异常数");
-        if (errorItem != null)
+        var history = PackageHistory.ToList(); // 创建副本以进行线程安全的迭代
+        var totalCount = history.Count;
+
+        // 更新总包裹数
+        _totalPackagesItem.Value = totalCount.ToString();
+
+        // 更新异常数
+        var errorCount = history.Count(p => p.Status == PackageStatus.Error);
+        _errorCountItem.Value = errorCount.ToString();
+
+        // 更新平均处理时间
+        if (totalCount > 0)
         {
-            // 计算非noread且存在错误的包裹数量
-            var errorCount = PackageHistory.Count(p =>
-                !string.IsNullOrEmpty(p.ErrorMessage) &&
-                !string.Equals(p.Barcode, "noread", StringComparison.OrdinalIgnoreCase));
-            errorItem.Value = errorCount.ToString();
-            errorItem.Description = $"共有 {errorCount} 个异常包裹";
+            var avgProcessingTime = history.Average(p => p.ProcessingTime);
+            _avgProcessingTimeItem.Value = avgProcessingTime.ToString("F0"); // 保留0位小数
+        }
+        else
+        {
+            _avgProcessingTimeItem.Value = "0";
         }
 
-        var efficiencyItem = StatisticsItems.FirstOrDefault(static x => x.Label == "预测效率");
-        if (efficiencyItem != null)
+        // 更新预测效率
+        if (_firstPackageTime == null && totalCount > 0)
         {
-            // 获取最近的非noread包裹记录（最多取最近20个包裹）
-            var recentPackages = PackageHistory
-                .Where(p => !string.Equals(p.Barcode, "noread", StringComparison.OrdinalIgnoreCase))
-                .Take(20)
-                .ToList();
-            if (recentPackages.Count >= 2)
+            // 如果是第一个包裹，记录时间
+            _firstPackageTime = DateTime.Now;
+        }
+
+        if (_firstPackageTime.HasValue && totalCount > 0)
+        {
+            var elapsedTime = DateTime.Now - _firstPackageTime.Value;
+            // 防止过短时间导致除零或效率过高
+            if (elapsedTime.TotalSeconds >= 1)
             {
-                // 计算最早和最新包裹的时间差（分钟）
-                var timeSpan = recentPackages[0].CreateTime - recentPackages[^1].CreateTime;
-                var minutes = timeSpan.TotalMinutes;
-
-                if (minutes > 0)
-                {
-                    // 计算每分钟处理的包裹数
-                    var packagesPerMinute = recentPackages.Count / minutes;
-                    // 预测每小时处理量
-                    var hourlyRate = (int)(packagesPerMinute * 60);
-
-                    efficiencyItem.Value = hourlyRate.ToString();
-                    efficiencyItem.Description = $"基于最近{recentPackages.Count}个包裹预测";
-                }
-                else
-                {
-                    efficiencyItem.Value = "0";
-                    efficiencyItem.Description = "等待更多数据";
-                }
+                var efficiency = totalCount / elapsedTime.TotalHours;
+                _efficiencyItem.Value = efficiency.ToString("F0"); // 保留0位小数
             }
             else
             {
-                efficiencyItem.Value = "0";
-                efficiencyItem.Description = "等待更多数据";
+                // 时间太短，暂时显示为0或其他合适的值
+                _efficiencyItem.Value = "0";
             }
         }
-
-        var avgTimeItem = StatisticsItems.FirstOrDefault(static x => x.Label == "平均处理时间");
-        if (avgTimeItem == null) return;
-
+        else
         {
-            // 获取最近的非noread包裹记录
-            var recentPackages = PackageHistory
-                .Where(p => !string.Equals(p.Barcode, "noread", StringComparison.OrdinalIgnoreCase))
-                .Take(100)
-                .ToList();
-
-            if (recentPackages.Count != 0)
-            {
-                var avgTime = recentPackages.Average(static p => p.ProcessingTime);
-                avgTimeItem.Value = avgTime.ToString("F0");
-                avgTimeItem.Description = $"最近{recentPackages.Count}个有效包裹平均耗时";
-            }
-            else
-            {
-                avgTimeItem.Value = "0";
-                avgTimeItem.Description = "暂无有效处理数据";
-            }
+            _efficiencyItem.Value = "0";
         }
     }
 
-    private static PackageInfo MergePackageInfos(IList<PackageInfo> buffer)
-    {
-        if (!buffer.Any()) throw new ArgumentException("Buffer cannot be empty.", nameof(buffer));
-
-        var mergedPackage = buffer[0]; // 使用第一个包裹作为基础
-
-        for (var i = 1; i < buffer.Count; i++)
-        {
-            var currentPackage = buffer[i];
-
-            // 合并条码：优先使用非空且不是 "noread" 的条码
-            if (!string.IsNullOrWhiteSpace(currentPackage.Barcode) &&
-                !string.Equals(currentPackage.Barcode, "noread", StringComparison.OrdinalIgnoreCase) &&
-                (string.IsNullOrWhiteSpace(mergedPackage.Barcode) ||
-                 string.Equals(mergedPackage.Barcode, "noread", StringComparison.OrdinalIgnoreCase)))
-            {
-                mergedPackage.SetBarcode(currentPackage.Barcode);
-            }
-
-            // 合并重量：优先使用大于0的重量
-            if (currentPackage.Weight > 0 && mergedPackage.Weight <= 0)
-            {
-                mergedPackage.SetWeight(currentPackage.Weight);
-            }
-
-            // 合并长度：优先使用大于0的长度
-            if (currentPackage.Length is > 0 &&
-                mergedPackage.Length is null or <= 0)
-            {
-                // mergedPackage.SetLength(currentPackage.Length.Value);
-                // 改为直接更新属性，因为 SetLength 不存在，并且 Length 的 setter 是 private
-                // 需要找到合适的方式更新，可能需要修改 PackageInfo 或使用 SetDimensions
-            }
-
-            // 合并宽度：优先使用大于0的宽度
-            if (currentPackage.Width is > 0 &&
-                mergedPackage.Width is null or <= 0)
-            {
-                // mergedPackage.SetWidth(currentPackage.Width.Value);
-            }
-
-            // 合并高度：优先使用大于0的高度
-            if (currentPackage.Height is > 0 &&
-                mergedPackage.Height is null or <= 0)
-            {
-                // mergedPackage.SetHeight(currentPackage.Height.Value);
-            }
-
-            // 使用 SetDimensions 一次性设置尺寸
-            var newLength = mergedPackage.Length ?? 0;
-            var newWidth = mergedPackage.Width ?? 0;
-            var newHeight = mergedPackage.Height ?? 0;
-
-            if (currentPackage.Length is > 0 && newLength <= 0)
-            {
-                newLength = currentPackage.Length.Value;
-            }
-
-            if (currentPackage.Width is > 0 && newWidth <= 0)
-            {
-                newWidth = currentPackage.Width.Value;
-            }
-
-            if (currentPackage.Height is > 0 && newHeight <= 0)
-            {
-                newHeight = currentPackage.Height.Value;
-            }
-
-            // 只有当所有尺寸都有效时才调用 SetDimensions
-            if (newLength > 0 && newWidth > 0 && newHeight > 0)
-            {
-                mergedPackage.SetDimensions(newLength, newWidth, newHeight);
-            }
-        }
-
-        Log.Debug("Merged {Count} packages into one: {Barcode}, Weight: {Weight}, LWH: {L}x{W}x{H}",
-            buffer.Count, mergedPackage.Barcode, mergedPackage.Weight,
-            mergedPackage.Length, mergedPackage.Width, mergedPackage.Height);
-
-        // 为合并后的包裹分配新的、线程安全的序号
-        mergedPackage.Index = Interlocked.Increment(ref _nextMergedPackageIndex);
-        Log.Debug("Assigned new merged index {NewIndex} to package {Barcode}", mergedPackage.Index,
-            mergedPackage.Barcode);
-
-        return mergedPackage;
-    }
-
-    protected virtual void Dispose(bool disposing)
+    private void Dispose(bool disposing)
     {
         if (_disposed) return;
 

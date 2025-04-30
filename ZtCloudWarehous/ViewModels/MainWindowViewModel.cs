@@ -10,8 +10,6 @@ using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
-using Prism.Commands;
-using Prism.Mvvm;
 using Serilog;
 using SharedUI.Models;
 using SortingServices.Pendulum;
@@ -20,7 +18,6 @@ using ZtCloudWarehous.Services;
 using ZtCloudWarehous.ViewModels.Settings;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
-using Prism.Services.Dialogs;
 using static Common.Models.Package.PackageStatus;
 using Serilog.Context;
 
@@ -46,12 +43,16 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     // Add persistent counters
     private long _totalPackageCount;
     private long _successPackageCount;
+
     private long _failedPackageCount;
+
     // 添加详细异常计数
     private long _timeoutCount;
     private long _noReadCount;
     private long _weightErrorCount;
+
     private long _otherErrorCount;
+
     // 添加峰值效率记录
     private long _peakRate;
 
@@ -168,7 +169,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private void ExecuteOpenHistory()
     {
-        _dialogService.ShowDialog("HistoryDialog", null, null, "HistoryWindow");
+        _dialogService.ShowDialog("HistoryDialog", null, (Action<IDialogResult>?)null);
     }
 
     private void Timer_Tick(object? sender, EventArgs e)
@@ -385,17 +386,25 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 // 步骤 2：更新当前条码 (UI)
                 Application.Current.Dispatcher.Invoke(() =>
                 {
-                    try { CurrentBarcode = package.Barcode; }
-                    catch (Exception ex) { Log.Error(ex, "更新当前条码UI时发生错误"); }
+                    try
+                    {
+                        CurrentBarcode = package.Barcode;
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "更新当前条码UI时发生错误");
+                    }
                 });
 
                 // 步骤 3：处理 NoRead 包裹
                 if (string.IsNullOrEmpty(package.Barcode) ||
                     string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase))
                 {
-                    var targetChute = chuteSettings.NoReadChuteNumber > 0 ? chuteSettings.NoReadChuteNumber : chuteSettings.ErrorChuteNumber;
+                    var targetChute = chuteSettings.NoReadChuteNumber > 0
+                        ? chuteSettings.NoReadChuteNumber
+                        : chuteSettings.ErrorChuteNumber;
                     package.SetChute(targetChute);
-                    package.SetStatus(Error, "未识别条码");
+                    package.SetStatus(NoRead, "未识别条码");
                     Interlocked.Increment(ref _noReadCount);
                     Log.Warning("条码为空或noread，分配到 NoRead/异常口: {TargetChute}", targetChute);
                 }
@@ -413,15 +422,17 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                         };
 
                         var uploadTask = _weighingService.SendWeightDataAsync(request);
-                        var timeoutTask = Task.Delay(500); // 500ms timeout
+                        var timeoutTask = Task.Delay(800); // 800ms timeout
 
                         var completedTask = await Task.WhenAny(uploadTask, timeoutTask);
 
                         if (completedTask == timeoutTask)
                         {
                             // 超时处理
-                            var targetChute = chuteSettings.TimeoutChuteNumber > 0 ? chuteSettings.TimeoutChuteNumber : chuteSettings.ErrorChuteNumber;
-                            Log.Warning("上传称重数据超时 (>{Timeout}ms).", 500);
+                            var targetChute = chuteSettings.TimeoutChuteNumber > 0
+                                ? chuteSettings.TimeoutChuteNumber
+                                : chuteSettings.ErrorChuteNumber;
+                            Log.Warning("上传称重数据超时 (>{Timeout}ms).", 800);
                             _notificationService.ShowWarning($"上传称重数据超时: {package.Barcode}");
                             package.SetChute(targetChute);
                             package.SetStatus(PackageStatus.Timeout, "上传超时");
@@ -435,7 +446,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                             Log.Debug("收到称重数据上传响应: Success={Success}, Code={Code}, Message={Message}",
                                 response.Success, response.Code, response.Message);
 
-                            bool treatAsSuccess = response.Success || (response.Message != null && response.Message.Contains("出库完成"));
+                            bool treatAsSuccess = response.Success || (response.Message.Contains("出库完成"));
 
                             if (treatAsSuccess)
                             {
@@ -453,7 +464,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                                 {
                                     // 无规则匹配
                                     package.SetChute(chuteSettings.ErrorChuteNumber);
-                                    package.SetStatus(Error, response.Success ? "未匹配规则" : "出库完成但未匹配规则");
+                                    package.SetStatus(PackageStatus.Error, response.Success ? "未匹配规则" : "出库完成但未匹配规则");
                                     Interlocked.Increment(ref _otherErrorCount);
                                     Log.Warning("未匹配到规则，分配到异常口: {ErrorChute}", chuteSettings.ErrorChuteNumber);
                                 }
@@ -463,13 +474,15 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                                 Log.Warning("上传称重数据API返回失败.");
                                 _notificationService.ShowWarning($"上传称重数据失败: {response.Message}");
                                 int targetChute;
-                                if (response.Message != null && response.Message.Contains("重量"))
+                                if (response.Message.Contains("重量"))
                                 {
-                                    targetChute = chuteSettings.WeightMismatchChuteNumber > 0 ? chuteSettings.WeightMismatchChuteNumber : chuteSettings.ErrorChuteNumber;
+                                    targetChute = chuteSettings.WeightMismatchChuteNumber > 0
+                                        ? chuteSettings.WeightMismatchChuteNumber
+                                        : chuteSettings.ErrorChuteNumber;
                                     Interlocked.Increment(ref _weightErrorCount);
                                     Log.Warning("失败原因为重量相关，分配到重量异常/异常口: {TargetChute}", targetChute);
                                 }
-                                else if (response.Message != null && response.Message.Contains("拦截"))
+                                else if (response.Message.Contains("拦截"))
                                 {
                                     targetChute = chuteSettings.ErrorChuteNumber;
                                     Interlocked.Increment(ref _otherErrorCount);
@@ -481,8 +494,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                                     Interlocked.Increment(ref _otherErrorCount);
                                     Log.Warning("失败原因未知或其他，分配到异常口: {TargetChute}", targetChute);
                                 }
+
                                 package.SetChute(targetChute);
-                                package.SetStatus(Error, $"上传失败: {response.Message}");
+                                package.SetStatus(PackageStatus.Error, $"上传失败: {response.Message}");
                             }
                         }
                     }
@@ -491,7 +505,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                         Log.Error(ex, "上传称重数据时发生异常.");
                         _notificationService.ShowError($"上传称重数据异常: {ex.Message}");
                         package.SetChute(chuteSettings.ErrorChuteNumber);
-                        package.SetStatus(Error, $"上传异常: {ex.Message}");
+                        package.SetStatus(PackageStatus.Error, $"上传异常: {ex.Message}");
                         Interlocked.Increment(ref _otherErrorCount);
                         Log.Warning("分配到异常口: {ErrorChute}", chuteSettings.ErrorChuteNumber);
                     }
@@ -503,7 +517,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 Interlocked.Increment(ref _totalPackageCount);
 
                 // 步骤 6: 更新统计和最终状态
-                if (package.Status != Error && package.Status != PackageStatus.Timeout)
+                if (package.Status != PackageStatus.Error && package.Status != PackageStatus.Timeout)
                 {
                     Interlocked.Increment(ref _successPackageCount);
                     // 如果之前是 Success，可以不再设置或设置更具体的成功状态如 SortSuccess
@@ -511,6 +525,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     {
                         package.SetStatus(Success, "分拣成功"); // 确保最终状态是 Success
                     }
+
                     Log.Information("处理成功完成, 最终格口: {Chute}", package.ChuteNumber);
                 }
                 else
@@ -518,14 +533,20 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     Interlocked.Increment(ref _failedPackageCount);
                     // 使用之前的 Warning 日志级别，记录失败的最终状态和原因
                     Log.Warning("处理失败结束, 状态: {Status}, 格口: {Chute}, 原因: {ErrorMessage}",
-                                package.StatusDisplay, package.ChuteNumber, package.ErrorMessage ?? "无错误详情");
+                        package.StatusDisplay, package.ChuteNumber, package.ErrorMessage ?? "无错误详情");
                 }
 
                 // 步骤 7: 更新 UI (包裹详情)
                 Application.Current.Dispatcher.Invoke(() =>
                 {
-                    try { UpdatePackageInfoItems(package); }
-                    catch (Exception ex) { Log.Error(ex, "更新包裹详情UI时发生错误"); }
+                    try
+                    {
+                        UpdatePackageInfoItems(package);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "更新包裹详情UI时发生错误");
+                    }
                 });
 
                 // 步骤 8: 更新 UI (历史和统计)
@@ -537,13 +558,15 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                         while (PackageHistory.Count > 1000) PackageHistory.RemoveAt(PackageHistory.Count - 1);
                         UpdateStatistics();
                     }
-                    catch (Exception ex) { Log.Error(ex, "更新历史和统计UI时发生错误"); }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "更新历史和统计UI时发生错误");
+                    }
                 });
 
                 // 步骤 9: 异步保存到数据库
                 Log.Debug("准备启动后台任务保存到数据库.");
                 var contextForDbTask = packageContext; // 捕获上下文
-                var barcodeForDbTask = package.Barcode; // 捕获条码
                 _ = Task.Run(async () =>
                 {
                     using (LogContext.PushProperty("PackageContext", contextForDbTask)) // 恢复上下文
@@ -576,7 +599,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 }
 
                 Log.Information("包裹处理流程完成.");
-
             }
             catch (Exception ex) // OnPackageInfo 主流程中的未捕获异常
             {
@@ -586,7 +608,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     // 尝试记录异常状态并分配到错误口
                     var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
                     package.SetChute(chuteSettings.ErrorChuteNumber);
-                    package.SetStatus(Error, $"处理异常: {ex.Message}");
+                    package.SetStatus(PackageStatus.Error, $"处理异常: {ex.Message}");
                     Log.Warning("因顶层处理异常，分配到异常口: {ErrorChute}", chuteSettings.ErrorChuteNumber);
                     // 可能需要调用 _sortService.ProcessPackage(package) 来确保包裹被送走
                     _sortService.ProcessPackage(package);
@@ -639,7 +661,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         {
             Success
                 => "#4CAF50", // Green for success
-            Error or PackageStatus.Timeout
+            PackageStatus.Error or PackageStatus.Timeout
                 => "#F44336", // Red for error/timeout/failure
             _ => "#2196F3" // Blue for other states (e.g., processing, waiting)
         };
@@ -735,7 +757,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         });
     }
 
-    protected virtual void Dispose(bool disposing)
+    private void Dispose(bool disposing)
     {
         if (_disposed) return;
 

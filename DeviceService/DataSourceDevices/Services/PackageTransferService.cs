@@ -112,7 +112,6 @@ public class PackageTransferService : IDisposable
                         Log.Debug("准备启动后台任务保存图像.");
                         // 捕获上下文信息用于后台任务
                         var barcodeForTask = package.Barcode;
-                        var indexForTask = package.Index;
                         var contextForTask = packageContext; // 捕获上下文
 
                         _ = Task.Run(async () =>
@@ -121,10 +120,9 @@ public class PackageTransferService : IDisposable
                             using (LogContext.PushProperty("PackageContext", contextForTask))
                             {
                                 Log.Debug("后台保存任务开始.");
-                                string? actualSavedPath = null;
                                 try
                                 {
-                                    actualSavedPath = await _imageSavingService.SaveImageAsync(cloneForSave, barcodeForTask, triggerTime);
+                                    var actualSavedPath = await _imageSavingService.SaveImageAsync(cloneForSave, barcodeForTask, triggerTime);
 
                                     if (actualSavedPath != null)
                                     {

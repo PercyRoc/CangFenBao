@@ -10,10 +10,6 @@ using DeviceService.DataSourceDevices.Camera.Models.Camera.Enums;
 using DeviceService.DataSourceDevices.Camera.RenJia;
 using DeviceService.DataSourceDevices.Scanner;
 using DeviceService.DataSourceDevices.Weight;
-using Prism.Commands;
-using Prism.Events;
-using Prism.Mvvm;
-using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.Models;
 using Sunnen.Events;
@@ -656,20 +652,15 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 catch (Exception ex) // 捕获包裹处理过程中的其他通用异常
                 {
                     Log.Error(ex, "处理扫码信息时发生未预期的错误: {Barcode}", currentBarcodeToProcess); // Use consistent barcode
-                    if (_currentPackage != null)
-                    {
-                        _currentPackage.SetStatus(PackageStatus.Error, "Processing Error");
-                    }
+                    _currentPackage?.SetStatus(PackageStatus.Error, "Processing Error");
                     PlayErrorSound();
                 }
             }
             catch (Exception ex) // 捕获包裹处理过程中的其他通用异常
             {
                 Log.Error(ex, "处理扫码信息时发生未预期的错误: {Barcode}", currentBarcodeToProcess); // Use consistent barcode
-                if (_currentPackage != null)
-                {
-                    _currentPackage.SetStatus(PackageStatus.Error, "Processing Error");
-                }
+                
+                _currentPackage?.SetStatus(PackageStatus.Error, "Processing Error");
                 PlayErrorSound();
             }
             // --- 原始逻辑结束 ---

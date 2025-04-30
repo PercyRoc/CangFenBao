@@ -31,7 +31,7 @@
         <PackageReference Include="SSH.NET" />
         <PackageReference Include="WPF-UI" />
         <PackageReference Include="HandyControl" />
-        <PackageReference Include="EPPlus" />
+        <PackageReference Include="NPOI"/>
     </ItemGroup>
 
     <ItemGroup>

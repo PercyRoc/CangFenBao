@@ -37,5 +37,8 @@
       <Reference Include="MvCameraControl.Net">
         <HintPath>DataSourceDevices\Camera\Hikvision\MvCameraControl.Net.dll</HintPath>
       </Reference>
+      <Reference Include="MvCodeReaderSDK.Net">
+        <HintPath>DataSourceDevices\Camera\Hikvision\MvCodeReaderSDK.Net.dll</HintPath>
+      </Reference>
     </ItemGroup>
 </Project>

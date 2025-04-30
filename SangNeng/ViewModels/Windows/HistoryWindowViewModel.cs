@@ -1,18 +1,15 @@
 using Common.Data;
 using Common.Services.Ui;
 using Microsoft.Win32;
-using OfficeOpenXml;
-using OfficeOpenXml.Style;
-using Prism.Commands;
-using Prism.Mvvm;
-using Prism.Services.Dialogs;
 using Serilog;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.Drawing;
 using System.IO;
 using System.Windows.Input;
+using Common.Models.Package;
 using static Common.Models.Package.PackageStatus;
+using NPOI.SS.UserModel;
+using NPOI.XSSF.UserModel;
 
 namespace Sunnen.ViewModels.Windows;
 
@@ -41,11 +38,15 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
     {
         _packageDataService = packageDataService;
         _notificationService = notificationService;
+        // 初始化 RequestClose 属性
+        RequestClose = new DialogCloseListener();
+
         QueryCommand = new DelegateCommand(QueryAsync);
         ViewImageCommand = new DelegateCommand<string?>(ViewImage, CanViewImage)
             .ObservesProperty(() => PackageRecords.Count);
         ExportToExcelCommand = new DelegateCommand(ExecuteExportToExcel, CanExportToExcel)
-            .ObservesProperty(() => PackageRecords.Count);
+            .ObservesProperty(() => PackageRecords.Count)
+            .ObservesProperty(() => IsLoading);
     }
 
     /// <summary>
@@ -131,17 +132,23 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
     /// <summary>
     ///     是否正在加载
     /// </summary>
-    public bool IsLoading
+    private bool IsLoading
     {
         get => _isLoading;
-        set => SetProperty(ref _isLoading, value);
+        set
+        {
+            if (SetProperty(ref _isLoading, value))
+            {
+                // 当 IsLoading 变化时，更新 ExportToExcelCommand 的状态
+                ExportToExcelCommand.RaiseCanExecuteChanged();
+            }
+        }
     }
 
     public string Title => "Package History";
 
-#pragma warning disable CS0067 // Event is required by IDialogAware but may not be used in this specific ViewModel
-    public event Action<IDialogResult>? RequestClose;
-#pragma warning restore CS0067
+    // Prism 9.0+ 要求
+    public DialogCloseListener RequestClose { get; }
 
     public bool CanCloseDialog()
     {
@@ -169,7 +176,8 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
             var endTime = EndDate.Date.AddDays(1).AddSeconds(-1);
 
             // 打印查询参数用于调试
-            Log.Information("History query parameters - Start: {StartDate}, End: {EndDate}, Barcode: {Barcode}, Chute: {Chute}, Status: {Status}",
+            Log.Information(
+                "History query parameters - Start: {StartDate}, End: {EndDate}, Barcode: {Barcode}, Chute: {Chute}, Status: {Status}",
                 startTime, endTime, SearchBarcode, SearchChute, SelectedStatus);
 
             // 显示加载状态
@@ -181,7 +189,8 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
             // 如果有条码搜索条件，进行过滤
             if (!string.IsNullOrWhiteSpace(SearchBarcode))
             {
-                records = records.Where(r => r.Barcode.Contains(SearchBarcode, StringComparison.OrdinalIgnoreCase))
+                records = records.Where(r =>
+                        r.Barcode.Contains(SearchBarcode, StringComparison.OrdinalIgnoreCase))
                     .ToList();
             }
 
@@ -194,18 +203,18 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
             // 根据状态进行过滤
             if (SelectedStatus != "All")
             {
-                records = [.. records.Where(r =>
+                records = records.Where(r =>
                 {
                     return SelectedStatus switch
                     {
                         "Success" => r.Status == Success,
-                        "Failed" => r.Status is Failed or Error,
-                        _ => true
+                        "Failed" => r.Status is Failed or PackageStatus.Error,
+                        _ => true // "All" or unexpected value
                     };
-                })];
+                }).ToList(); // 确保这里也执行 ToList
             }
 
-            PackageRecords = [.. records];
+            PackageRecords = new ObservableCollection<PackageRecord>(records);
             _notificationService.ShowSuccess("Query successful");
         }
         catch (Exception ex)
@@ -223,6 +232,8 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
         {
             // 无论成功失败，都结束加载状态
             IsLoading = false;
+            // 更新命令状态，因为 PackageRecords 可能已更改
+            ViewImageCommand.RaiseCanExecuteChanged(); // 如果 ViewImageCommand 依赖于选中项等，也应更新
         }
     }
 
@@ -233,28 +244,31 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
 
     private void ViewImage(string? imagePath)
     {
-        if (!CanViewImage(imagePath))
+        if (!CanViewImage(imagePath) || imagePath == null)
         {
-            Log.Warning("ViewImage executed with invalid path: {ImagePath}", imagePath);
+            Log.Warning("ViewImage executed with invalid path: {ImagePath}", imagePath ?? "<null>");
+            _notificationService.ShowWarning("Invalid image path.");
             return;
         }
 
         try
         {
-            if (imagePath != null && File.Exists(imagePath))
+            if (File.Exists(imagePath))
             {
-                Process.Start(new ProcessStartInfo(imagePath) { UseShellExecute = true });
+                // 使用 ShellExecute 打开文件，让操作系统决定如何处理
+                var psi = new ProcessStartInfo(imagePath) { UseShellExecute = true };
+                Process.Start(psi);
             }
             else
             {
-                Log.Error("Image file not found or path is null: {ImagePath}", imagePath);
-                _notificationService.ShowErrorWithToken($"图片文件未找到: {imagePath}", "HistoryWindowGrowl");
+                Log.Error("Image file not found: {ImagePath}", imagePath);
+                _notificationService.ShowErrorWithToken($"Image file not found: {imagePath}", "HistoryWindowGrowl");
             }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to open image file: {ImagePath}", imagePath);
-            _notificationService.ShowErrorWithToken($"无法打开图片: {ex.Message}", "HistoryWindowGrowl");
+            _notificationService.ShowErrorWithToken($"Cannot open image: {ex.Message}", "HistoryWindowGrowl");
         }
     }
 
@@ -263,83 +277,115 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
     /// </summary>
     private bool CanExportToExcel()
     {
-        return PackageRecords.Count > 0;
+        return PackageRecords.Count > 0 && !IsLoading;
     }
 
     /// <summary>
-    ///     导出Excel
+    ///     使用 NPOI 导出 Excel
     /// </summary>
     private void ExecuteExportToExcel()
     {
+        var dialog = new SaveFileDialog
+        {
+            Filter = "Excel Files|*.xlsx",
+            Title = "Export Package Records",
+            FileName = $"PackageRecords_{DateTime.Now:yyyyMMddHHmmss}.xlsx"
+        };
+
+        if (dialog.ShowDialog() != true) return;
+
         try
         {
-            var dialog = new SaveFileDialog
-            {
-                Filter = "Excel Files|*.xlsx",
-                Title = "Export Package Records",
-                FileName = $"PackageRecords_{DateTime.Now:yyyyMMddHHmmss}.xlsx"
-            };
+            var workbook = new XSSFWorkbook();
+            var sheet = workbook.CreateSheet("Package Records");
 
-            if (dialog.ShowDialog() != true) return;
-
-            // 设置EPPlus许可证
-            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-
-            using var package = new ExcelPackage();
-            var worksheet = package.Workbook.Worksheets.Add("Package Records");
-
-            // 设置表头
+            // --- 创建表头 --- 
+            var headerRow = sheet.CreateRow(0);
             var headers = new[]
             {
                 "No.", "Barcode", "Chute", "Weight(kg)", "Length(cm)", "Width(cm)", "Height(cm)",
                 "Volume(cm³)", "Pallet Name", "Status", "Note", "Create Time"
             };
 
+            // --- 设置表头样式 --- 
+            var headerCellStyle = workbook.CreateCellStyle();
+            var headerFont = workbook.CreateFont();
+            headerFont.IsBold = true;
+            headerCellStyle.SetFont(headerFont);
+            headerCellStyle.Alignment = HorizontalAlignment.Center;
+            headerCellStyle.VerticalAlignment = VerticalAlignment.Center;
+            // 设置边框
+            headerCellStyle.BorderBottom = BorderStyle.Thin;
+            headerCellStyle.BorderLeft = BorderStyle.Thin;
+            headerCellStyle.BorderRight = BorderStyle.Thin;
+            headerCellStyle.BorderTop = BorderStyle.Thin;
+            // 设置背景色 (NPOI 使用 IndexedColors)
+            // headerCellStyle.FillForegroundColor = IndexedColors.Grey25Percent.Index; 
+            // headerCellStyle.FillPattern = FillPattern.SolidForeground;
+
             for (var i = 0; i < headers.Length; i++)
             {
-                worksheet.Cells[1, i + 1].Value = headers[i];
+                var cell = headerRow.CreateCell(i);
+                cell.SetCellValue(headers[i]);
+                cell.CellStyle = headerCellStyle;
             }
 
-            // 设置表头样式
-            using (var range = worksheet.Cells[1, 1, 1, headers.Length])
-            {
-                range.Style.Font.Bold = true;
-                range.Style.Fill.PatternType = ExcelFillStyle.Solid;
-                range.Style.Fill.BackgroundColor.SetColor(Color.LightGray);
-                range.Style.Border.BorderAround(ExcelBorderStyle.Thin);
-                range.Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
-            }
+            // --- 创建日期单元格样式 --- 
+            var dateCellStyle = workbook.CreateCellStyle();
+            var dataFormat = workbook.CreateDataFormat();
+            dateCellStyle.DataFormat = dataFormat.GetFormat("yyyy-MM-dd HH:mm:ss");
 
-            // 写入数据
+            // --- 写入数据 --- 
             for (var i = 0; i < PackageRecords.Count; i++)
             {
                 var record = PackageRecords[i];
-                var row = i + 2;
+                var dataRow = sheet.CreateRow(i + 1); // 数据从第二行开始 (索引为1)
 
-                worksheet.Cells[row, 1].Value = record.Id;
-                worksheet.Cells[row, 2].Value = record.Barcode;
-                worksheet.Cells[row, 3].Value = record.ChuteNumber;
-                worksheet.Cells[row, 4].Value = record.Weight;
-                worksheet.Cells[row, 5].Value = record.Length.HasValue ? Math.Round(record.Length.Value, 1) : null;
-                worksheet.Cells[row, 6].Value = record.Width.HasValue ? Math.Round(record.Width.Value, 1) : null;
-                worksheet.Cells[row, 7].Value = record.Height.HasValue ? Math.Round(record.Height.Value, 1) : null;
-                worksheet.Cells[row, 8].Value = record.Volume;
-                worksheet.Cells[row, 9].Value = record.PalletName;
-                worksheet.Cells[row, 10].Value = record.StatusDisplay;
-                worksheet.Cells[row, 11].Value = record.ErrorMessage;
-                worksheet.Cells[row, 12].Value = record.CreateTime;
+                dataRow.CreateCell(0).SetCellValue(record.Id); // No.
+                dataRow.CreateCell(1).SetCellValue(record.Barcode);
+                dataRow.CreateCell(2).SetCellValue(record.ChuteNumber ?? 0); // Chute (处理可能的 null)
+                dataRow.CreateCell(3).SetCellValue(record.Weight); // Weight
+                dataRow.CreateCell(4)
+                    .SetCellValue(record.Length.HasValue
+                        ? Math.Round(record.Length.Value, 1)
+                        : double.NaN); // Length (使用 NaN 表示空值)
+                dataRow.CreateCell(5)
+                    .SetCellValue(record.Width.HasValue ? Math.Round(record.Width.Value, 1) : double.NaN); // Width
+                dataRow.CreateCell(6)
+                    .SetCellValue(record.Height.HasValue ? Math.Round(record.Height.Value, 1) : double.NaN); // Height
+                dataRow.CreateCell(7)
+                    .SetCellValue(record.Volume.HasValue ? Math.Round(record.Volume.Value, 1) : double.NaN); // Volume
+                dataRow.CreateCell(8).SetCellValue(record.PalletName);
+                dataRow.CreateCell(9).SetCellValue(record.StatusDisplay);
+                dataRow.CreateCell(10).SetCellValue(record.ErrorMessage);
 
-                // 设置日期格式
-                worksheet.Cells[row, 12].Style.Numberformat.Format = "yyyy-MM-dd HH:mm:ss";
+                var dateCell = dataRow.CreateCell(11);
+
+                dateCell.SetCellValue(record.CreateTime);
+                dateCell.CellStyle = dateCellStyle; // 应用日期格式
             }
 
-            // 自动调整列宽
-            worksheet.Cells[worksheet.Dimension.Address].AutoFitColumns();
+            // --- 自动调整列宽 --- (在填充数据后执行)
+            for (int i = 0; i < headers.Length; i++)
+            {
+                sheet.AutoSizeColumn(i);
+            }
 
-            // 保存文件
-            package.SaveAs(new FileInfo(dialog.FileName));
+            // --- 保存文件 --- 
+            using (var stream = new FileStream(dialog.FileName, FileMode.Create, FileAccess.Write))
+            {
+                workbook.Write(stream);
+            }
 
             _notificationService.ShowSuccess($"Successfully exported {PackageRecords.Count} records");
+            Log.Information("Successfully exported {Count} records to {FilePath}", PackageRecords.Count,
+                dialog.FileName);
+        }
+        catch (IOException ioEx)
+        {
+            Log.Error(ioEx, "Failed to export Excel - file access issue");
+            _notificationService.ShowError(
+                $"Export failed: Could not access file. Is it open in another program? ({ioEx.Message})");
         }
         catch (Exception ex)
         {

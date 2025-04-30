@@ -1,5 +1,4 @@
 using Common.Services.Ui;
-using Prism.Services.Dialogs;
 using Serilog;
 using ShanghaiFaxunLogistics.Models.ASN;
 using ShanghaiFaxunLogistics.ViewModels;

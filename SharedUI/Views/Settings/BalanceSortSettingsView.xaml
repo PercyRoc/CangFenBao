@@ -1,4 +1,4 @@
-﻿<Page x:Class="SharedUI.Views.Settings.BalanceSortSettingsView"
+﻿<UserControl x:Class="SharedUI.Views.Settings.BalanceSortSettingsView"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -8,8 +8,7 @@
       xmlns:settings="clr-namespace:SharedUI.ViewModels.Settings"
       prism:ViewModelLocator.AutoWireViewModel="True"
       d:DataContext="{d:DesignInstance Type=settings:BalanceSortSettingsViewModel}"
-      mc:Ignorable="d"
-      Title="分拣设置">
+      mc:Ignorable="d">
 
     <Grid>
         <StackPanel MaxWidth="500" Margin="16" VerticalAlignment="Top">
@@ -377,7 +376,7 @@
                                                    Grid.RowSpan="4"
                                                    Margin="16,0,0,0"
                                                    Appearance="Danger"
-                                                   Command="{Binding DataContext.RemovePhotoelectricCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                   Command="{Binding DataContext.RemovePhotoelectricCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                    CommandParameter="{Binding}"
                                                    Padding="8,6"
                                                    ToolTip="删除光电">
@@ -395,4 +394,4 @@
             </ui:Card>
         </StackPanel>
     </Grid>
-</Page>
+</UserControl>

@@ -1,7 +1,5 @@
 using Common.Services.Settings;
 using KuaiLv.Models.Settings.Upload;
-using Prism.Commands;
-using Prism.Mvvm;
 using Serilog;
 
 namespace KuaiLv.ViewModels.Settings;

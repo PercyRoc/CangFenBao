@@ -36,7 +36,6 @@
         <PackageReference Include="FluentFTP" />
         <PackageReference Include="WPF-UI" />
         <PackageReference Include="HandyControl" />
-        <PackageReference Include="EPPlus" />
     </ItemGroup>
 
     <ItemGroup>

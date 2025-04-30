@@ -1,15 +1,15 @@
 using System.ComponentModel.DataAnnotations;
-using System.Drawing;
 using System.IO;
 using System.Windows.Input;
 using Common.Models.Settings.ChuteRules;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using Microsoft.Win32;
-using OfficeOpenXml;
-using OfficeOpenXml.Style;
-using Prism.Commands;
-using Prism.Mvvm;
+using NPOI.SS.UserModel; // NPOI Core Interface
+using NPOI.XSSF.UserModel; // NPOI implementation for .xlsx
+// For CellRangeAddress if needed, though not explicitly used here for styling range
+
+// For LINQ validation message access
 
 namespace BenFly.ViewModels.Settings;
 
@@ -69,39 +69,49 @@ internal class ChuteSettingsViewModel : BindableBase
 
         try
         {
-            // 设置EPPlus许可证
-#pragma warning disable CS0618
-            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-#pragma warning restore CS0618
-            using var package = new ExcelPackage(new FileInfo(dialog.FileName));
-            var worksheet = package.Workbook.Worksheets[0];
+            using var fileStream = new FileStream(dialog.FileName, FileMode.Open, FileAccess.Read);
+            var workbook = new XSSFWorkbook(fileStream); // Use XSSFWorkbook for .xlsx
+            var worksheet = workbook.GetSheetAt(0); // Get the first sheet
 
-            if (worksheet.Dimension?.End == null)
+            if (worksheet.LastRowNum < 1) // Check if there's at least a header row and one data row
             {
-                _notificationService.ShowWarningWithToken("Excel文件为空", NotificationToken);
+                _notificationService.ShowWarningWithToken("Excel文件为空或只有表头", NotificationToken);
                 return;
             }
 
             var rules = new List<SegmentMatchRule>();
-            for (var row = 2; row <= worksheet.Dimension.End.Row; row++)
+            // Start from the second row (index 1) assuming the first row (index 0) is the header
+            for (var rowIndex = 1; rowIndex <= worksheet.LastRowNum; rowIndex++)
             {
-                var chute = worksheet.Cells[row, 1].Text;
-                var firstSegment = worksheet.Cells[row, 2].Text;
-                var secondSegment = worksheet.Cells[row, 3].Text;
-                var thirdSegment = worksheet.Cells[row, 4].Text;
+                var row = worksheet.GetRow(rowIndex);
+                if (row == null) continue; // Skip empty rows
 
-                if (string.IsNullOrWhiteSpace(chute) &&
+                // Use GetCell(index)?.ToString() to safely get cell values as string
+                var chuteStr = row.GetCell(0)?.ToString()?.Trim();
+                var firstSegment = row.GetCell(1)?.ToString()?.Trim();
+                var secondSegment = row.GetCell(2)?.ToString()?.Trim();
+                var thirdSegment = row.GetCell(3)?.ToString()?.Trim();
+
+                // Skip rows where all relevant cells are empty
+                if (string.IsNullOrWhiteSpace(chuteStr) &&
                     string.IsNullOrWhiteSpace(firstSegment) &&
                     string.IsNullOrWhiteSpace(secondSegment) &&
                     string.IsNullOrWhiteSpace(thirdSegment))
                     continue;
 
+                if (!int.TryParse(chuteStr, out int chuteValue))
+                {
+                    _notificationService.ShowWarningWithToken($"第{rowIndex + 1}行: 格口号 '{chuteStr}' 必须是有效的数字。", NotificationToken);
+                    return;
+                }
+
+
                 var rule = new SegmentMatchRule
                 {
-                    Chute = Convert.ToInt32(chute),
-                    FirstSegment = firstSegment,
-                    SecondSegment = secondSegment,
-                    ThirdSegment = thirdSegment
+                    Chute = chuteValue,
+                    FirstSegment = firstSegment ?? string.Empty, // Ensure non-null strings
+                    SecondSegment = secondSegment ?? string.Empty,
+                    ThirdSegment = thirdSegment ?? string.Empty
                 };
 
                 // 验证规则
@@ -109,7 +119,8 @@ internal class ChuteSettingsViewModel : BindableBase
                 var validationResults = new List<ValidationResult>();
                 if (!Validator.TryValidateObject(rule, validationContext, validationResults, true))
                 {
-                    _notificationService.ShowWarningWithToken($"第{row}行: {validationResults[0].ErrorMessage}",
+                    // Use validationResults.FirstOrDefault() for safer access
+                    _notificationService.ShowWarningWithToken($"第{rowIndex + 1}行: {validationResults.FirstOrDefault()?.ErrorMessage ?? "验证错误"}",
                         NotificationToken);
                     return;
                 }
@@ -124,11 +135,12 @@ internal class ChuteSettingsViewModel : BindableBase
         }
         catch (Exception ex)
         {
-            _notificationService.ShowWarningWithToken($"Excel导入失败: {ex.Message}", NotificationToken);
+             _notificationService.ShowWarningWithToken($"Excel导入失败: {ex.GetType().Name} - {ex.Message}", NotificationToken);
+            // Consider logging the full exception ex here for debugging
         }
     }
 
-    private void ExecuteExportExcel()
+     private void ExecuteExportExcel()
     {
         var dialog = new SaveFileDialog
         {
@@ -141,57 +153,69 @@ internal class ChuteSettingsViewModel : BindableBase
 
         try
         {
-            // 设置EPPlus许可证
-#pragma warning disable CS0618
-            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-#pragma warning restore CS0618
+            var workbook = new XSSFWorkbook(); // Create a new workbook for .xlsx
+            var worksheet = workbook.CreateSheet("格口规则");
 
-            using var package = new ExcelPackage();
-            var worksheet = package.Workbook.Worksheets.Add("格口规则");
+            // --- Create Styles ---
+            // Header Style
+            var headerFont = workbook.CreateFont();
+            headerFont.IsBold = true;
+            var headerStyle = workbook.CreateCellStyle();
+            headerStyle.SetFont(headerFont);
+            headerStyle.FillForegroundColor = IndexedColors.Grey25Percent.Index; // Light Gray
+            headerStyle.FillPattern = FillPattern.SolidForeground;
+            headerStyle.BorderBottom = BorderStyle.Thin;
+            headerStyle.BorderLeft = BorderStyle.Thin;
+            headerStyle.BorderRight = BorderStyle.Thin;
+            headerStyle.BorderTop = BorderStyle.Thin;
 
-            // 设置表头
-            worksheet.Cells[1, 1].Value = "格口号";
-            worksheet.Cells[1, 2].Value = "一段码";
-            worksheet.Cells[1, 3].Value = "二段码";
-            worksheet.Cells[1, 4].Value = "三段码";
+            // Data Style (basic border)
+            var dataStyle = workbook.CreateCellStyle();
+            dataStyle.BorderBottom = BorderStyle.Thin;
+            dataStyle.BorderLeft = BorderStyle.Thin;
+            dataStyle.BorderRight = BorderStyle.Thin;
+            dataStyle.BorderTop = BorderStyle.Thin;
 
-            // 设置表头样式
-            using (var range = worksheet.Cells[1, 1, 1, 4])
+            // --- Create Header Row ---
+            var headerRow = worksheet.CreateRow(0); // First row (index 0)
+            string[] headers = ["格口号", "一段码", "二段码", "三段码"];
+            for (var i = 0; i < headers.Length; i++)
             {
-                range.Style.Font.Bold = true;
-                range.Style.Fill.PatternType = ExcelFillStyle.Solid;
-                range.Style.Fill.BackgroundColor.SetColor(Color.LightGray);
-                range.Style.Border.BorderAround(ExcelBorderStyle.Thin);
+                var cell = headerRow.CreateCell(i);
+                cell.SetCellValue(headers[i]);
+                cell.CellStyle = headerStyle;
             }
 
-            // 写入数据
+            // --- Write Data Rows ---
             for (var i = 0; i < Configuration.Rules.Count; i++)
             {
                 var rule = Configuration.Rules[i];
-                var row = i + 2;
+                var dataRow = worksheet.CreateRow(i + 1); // Start data from second row (index 1)
 
-                worksheet.Cells[row, 1].Value = rule.Chute;
-                worksheet.Cells[row, 2].Value = rule.FirstSegment;
-                worksheet.Cells[row, 3].Value = rule.SecondSegment;
-                worksheet.Cells[row, 4].Value = rule.ThirdSegment;
-
-                // 设置数据单元格样式
-                using var range = worksheet.Cells[row, 1, row, 4];
-                range.Style.Border.BorderAround(ExcelBorderStyle.Thin);
+                var cell0 = dataRow.CreateCell(0); cell0.SetCellValue(rule.Chute); cell0.CellStyle = dataStyle;
+                var cell1 = dataRow.CreateCell(1); cell1.SetCellValue(rule.FirstSegment); cell1.CellStyle = dataStyle;
+                var cell2 = dataRow.CreateCell(2); cell2.SetCellValue(rule.SecondSegment); cell2.CellStyle = dataStyle;
+                var cell3 = dataRow.CreateCell(3); cell3.SetCellValue(rule.ThirdSegment); cell3.CellStyle = dataStyle;
             }
 
-            // 自动调整列宽
-            worksheet.Cells[worksheet.Dimension.Address].AutoFitColumns();
+            // --- Auto Adjust Column Widths ---
+            for (var i = 0; i < headers.Length; i++)
+            {
+                worksheet.AutoSizeColumn(i);
+            }
 
-            // 保存文件
-            package.SaveAs(new FileInfo(dialog.FileName));
+            // --- Save File ---
+            using var fileStream = new FileStream(dialog.FileName, FileMode.Create, FileAccess.Write);
+            workbook.Write(fileStream);
+
             _notificationService.ShowSuccessWithToken("Excel导出成功", NotificationToken);
         }
         catch (Exception ex)
         {
-            _notificationService.ShowWarningWithToken($"Excel导出失败: {ex.Message}", NotificationToken);
+            _notificationService.ShowWarningWithToken($"Excel导出失败: {ex.GetType().Name} - {ex.Message}", NotificationToken);
         }
     }
+
 
     private void ExecuteSave()
     {
@@ -200,7 +224,7 @@ internal class ChuteSettingsViewModel : BindableBase
         var validationResults = new List<ValidationResult>();
         if (!Validator.TryValidateObject(Configuration, validationContext, validationResults, true))
         {
-            _notificationService.ShowWarningWithToken(validationResults[0].ErrorMessage, NotificationToken);
+             _notificationService.ShowWarningWithToken(validationResults.FirstOrDefault()?.ErrorMessage ?? "配置验证失败", NotificationToken);
             return;
         }
 
@@ -208,14 +232,15 @@ internal class ChuteSettingsViewModel : BindableBase
         foreach (var rule in Configuration.Rules)
         {
             validationContext = new ValidationContext(rule);
-            validationResults = [];
+            validationResults = []; // Reset for each rule
             if (Validator.TryValidateObject(rule, validationContext, validationResults, true)) continue;
 
-            _notificationService.ShowWarningWithToken(validationResults[0].ErrorMessage, NotificationToken);
+            _notificationService.ShowWarningWithToken(validationResults.FirstOrDefault()?.ErrorMessage ?? $"规则 '{rule.Chute}' 验证失败", NotificationToken);
             return;
         }
 
         _settingsService.SaveSettings(Configuration);
+         _notificationService.ShowSuccessWithToken("格口规则已保存", NotificationToken); // Add save confirmation
     }
 
     private void LoadSettings()

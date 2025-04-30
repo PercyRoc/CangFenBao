@@ -5,7 +5,6 @@ using Common.Extensions;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
-using Prism.Ioc;
 using Serilog;
 using ShanghaiModuleBelt.Services;
 using ShanghaiModuleBelt.ViewModels;

@@ -1,15 +1,14 @@
-﻿<Page x:Class="SharedUI.Views.Settings.BarcodeChuteSettingsView"
-      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-      xmlns:prism="http://prismlibrary.com/"
-      xmlns:settings="clr-namespace:SharedUI.ViewModels.Settings"
-      prism:ViewModelLocator.AutoWireViewModel="True"
-      d:DataContext="{d:DesignInstance Type=settings:BarcodeChuteSettingsViewModel}"
-      mc:Ignorable="d"
-      Title="格口规则设置">
+﻿<UserControl x:Class="SharedUI.Views.Settings.BarcodeChuteSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:prism="http://prismlibrary.com/"
+             xmlns:settings="clr-namespace:SharedUI.ViewModels.Settings"
+             prism:ViewModelLocator.AutoWireViewModel="True"
+             d:DataContext="{d:DesignInstance Type=settings:BarcodeChuteSettingsViewModel}"
+             mc:Ignorable="d">
 
     <Grid>
         <StackPanel MaxWidth="500" Margin="16" VerticalAlignment="Top">
@@ -64,7 +63,7 @@
                                       Value="{Binding Configuration.ErrorChuteNumber, UpdateSourceTrigger=PropertyChanged}"
                                       ClearButtonEnabled="False" />
                     </Grid>
-                    
+
                     <!-- 超时格口 -->
                     <Grid Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
@@ -315,4 +314,4 @@
             </ui:Card>
         </StackPanel>
     </Grid>
-</Page>
+</UserControl>

@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using Common.Services.Settings;
-using Prism.Mvvm;
 
 namespace DongtaiFlippingBoardMachine.Models;
 

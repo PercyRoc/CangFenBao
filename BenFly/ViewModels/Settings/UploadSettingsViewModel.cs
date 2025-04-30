@@ -1,7 +1,5 @@
 using Common.Services.Settings;
 using BenFly.Models.Upload;
-using Prism.Commands;
-using Prism.Mvvm;
 
 namespace BenFly.ViewModels.Settings;
 

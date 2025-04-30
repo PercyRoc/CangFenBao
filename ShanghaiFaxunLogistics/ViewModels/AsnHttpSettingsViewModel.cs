@@ -1,7 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using Common.Services.Settings;
-using Prism.Commands;
-using Prism.Mvvm;
 using Serilog;
 using ShanghaiFaxunLogistics.Models.ASN;
 

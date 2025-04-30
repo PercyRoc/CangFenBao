@@ -14,9 +14,6 @@ using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Scanner;
 using DeviceService.DataSourceDevices.Services;
 using FuzhouPolicyForce.WangDianTong;
-using Prism.Commands;
-using Prism.Mvvm;
-using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.Models;
 using SortingServices.Pendulum;
@@ -615,7 +612,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    protected virtual void Dispose(bool disposing)
+    private void Dispose(bool disposing)
     {
         if (_disposed) return;
 

@@ -8,7 +8,6 @@ using DeviceService.DataSourceDevices.Scanner;
 using DeviceService.DataSourceDevices.Weight;
 using DeviceService.Extensions;
 using HandyControl.Controls;
-using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 using Sunnen.Services;

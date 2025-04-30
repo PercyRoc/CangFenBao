@@ -12,9 +12,6 @@ using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DongtaiFlippingBoardMachine.Models;
 using DongtaiFlippingBoardMachine.Services;
-using Prism.Commands;
-using Prism.Mvvm;
-using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.Models;
 

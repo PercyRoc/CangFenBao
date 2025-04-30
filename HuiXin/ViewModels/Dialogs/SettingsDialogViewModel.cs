@@ -1,8 +1,4 @@
 ﻿using Common.Services.Ui;
-using Prism.Commands;
-using Prism.Ioc;
-using Prism.Mvvm;
-using Prism.Services.Dialogs;
 using Serilog;
 using SharedUI.ViewModels;
 using SharedUI.ViewModels.Settings;
@@ -44,7 +40,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
 
     public string Title => "系统设置";
 
-    public event Action<IDialogResult>? RequestClose;
+    public DialogCloseListener RequestClose { get; private set; } = default!;
 
     public bool CanCloseDialog()
     {
@@ -72,7 +68,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
 
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");
-            RequestClose?.Invoke(new DialogResult(ButtonResult.OK));
+            RequestClose.Invoke(new DialogResult(ButtonResult.OK));
         }
         catch (Exception ex)
         {
@@ -83,6 +79,6 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
 
     private void ExecuteCancel()
     {
-        RequestClose?.Invoke(new DialogResult(ButtonResult.Cancel));
+        RequestClose.Invoke(new DialogResult(ButtonResult.Cancel));
     }
 }

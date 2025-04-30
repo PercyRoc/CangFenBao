@@ -1,8 +1,6 @@
 using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Weight;
-using Prism.Commands;
-using Prism.Mvvm;
 using Serilog;
 using System.Collections.ObjectModel;
 using System.IO.Ports;

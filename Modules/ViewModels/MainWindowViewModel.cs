@@ -1,14 +1,10 @@
 ﻿using System.Collections.ObjectModel;
 using System.Windows;
-using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Common.Models.Package;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
-using Prism.Commands;
-using Prism.Mvvm;
-using Prism.Services.Dialogs;
 using Serilog;
 using ShanghaiModuleBelt.Models;
 using ShanghaiModuleBelt.Services;
@@ -94,8 +90,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         get => _currentBarcode;
         private set => SetProperty(ref _currentBarcode, value);
     }
-
-    public BitmapSource? CurrentImage { get; }
 
     public SystemStatus SystemStatus
     {

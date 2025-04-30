@@ -1,7 +1,6 @@
 ﻿using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using Common.Services.Settings;
-using Prism.Mvvm;
 
 namespace Common.Models.Settings.Sort.PendulumSort;
 

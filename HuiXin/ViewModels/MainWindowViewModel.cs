@@ -3,9 +3,6 @@ using Common.Models.Package;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
-using Prism.Commands;
-using Prism.Mvvm;
-using Prism.Services.Dialogs;
 using SharedUI.Models;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
@@ -160,7 +157,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     private void ExecuteOpenHistory()
     {
-        _dialogService.ShowDialog("HistoryDialog", null, null, "HistoryWindow");
+        _dialogService.ShowDialog("HistoryDialog", null, (Action<IDialogResult>?)null);
     }
 
     private void Timer_Tick(object? sender, EventArgs e)
@@ -360,13 +357,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         Weight = (decimal)package.Weight,
                         Type = 5
                     };
-                    
-                    // 如果有体积数据，也上传
-                    //if (package.Volume > 0)
-                    //{
-                    //    // 立方厘米转换为立方米
-                    //    weightSendRequest.Volume = (decimal)(package.Volume / 1000000);
-                    //}
                     
                     Log.Information("上传包裹 {Barcode} 到聚水潭", package.Barcode);
                     var response = await _juShuiTanService.WeightAndSendAsync(weightSendRequest);
@@ -610,7 +600,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    protected virtual void Dispose(bool disposing)
+    private void Dispose(bool disposing)
     {
         if (_disposed) return;
 

@@ -4,7 +4,6 @@ using System.Windows.Input;
 using Common.Services.Ui;
 using KuaiLv.Services.DWS;
 using Serilog;
-using Prism.Ioc;
 using MessageBox = HandyControl.Controls.MessageBox;
 
 namespace KuaiLv.Views;
