@@ -117,21 +117,15 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _timer = new Timer(1000);
         _timer.Elapsed += (_, _) => { SystemStatus = SystemStatus.GetCurrentStatus(); };
         _timer.Start();
-
+ 
         // 订阅体积相机图像流
         _volumeCamera.ImageStream
-            .Sample(TimeSpan.FromMilliseconds(100)) // 限制刷新率，每秒最多10帧
             .Subscribe(imageData =>
             {
                 try
                 {
-                    Log.Debug("收到体积相机图像流数据，尺寸：{Width}x{Height}",
-                        imageData.Width,
-                        imageData.Height);
-
                     UpdateImageDisplay(imageData, bitmap =>
                     {
-                        Log.Debug("从图像流更新VolumeImage");
                         VolumeImage = bitmap;
                     });
                 }
@@ -140,21 +134,21 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     Log.Error(ex, "处理体积相机图像流数据时发生错误");
                 }
             });
-
-        // 订阅海康相机图像流
-        if (_cameraService is HikvisionIndustrialCameraService hikvisionCamera)
-            hikvisionCamera.ImageStream
-                .Subscribe(imageData =>
+        _cameraService.ImageStream
+            .Subscribe(imageData =>
+            {
+                try
                 {
-                    try
+                    UpdateImageDisplay(imageData, bitmap =>
                     {
-                        UpdateImageDisplay(imageData, bitmap => { CurrentImage = bitmap; });
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex, "处理海康相机图像流数据时发生错误");
-                    }
-                });
+                        CurrentImage = bitmap;
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "处理海康相机图像流数据时发生错误");
+                }
+            });
 
         _availablePallets = [];
 
@@ -165,6 +159,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         // Load available pallets
         LoadAvailablePallets();
+        UpdateInitialDeviceStatuses();
     }
 
     public void Dispose()
@@ -205,45 +200,18 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 try
                 {
-                    // 对于大的图像进行缩小处理，提高显示性能
-                    const int maxDisplayWidth = 1024; // 最大显示宽度
-                    const int maxDisplayHeight = 768; // 最大显示高度
-
+                    // 移除图像缩放逻辑
                     var width = image.Width;
                     var height = image.Height;
-                    var needsResize = false;
 
-                    // 计算缩放比例
-                    if (width > maxDisplayWidth || height > maxDisplayHeight)
-                    {
-                        var scaleX = maxDisplayWidth / width;
-                        var scaleY = maxDisplayHeight / height;
-                        var scale = Math.Min(scaleX, scaleY);
-
-                        width = (int)(width * scale);
-                        height = (int)(height * scale);
-                        needsResize = true;
-                    }
-
-                    var stride = (int)(width * 4); // RGBA每像素4字节
+                    var stride = (int)(width * 4); // 假设为 Bgra32
                     var pixelData = new byte[stride * (int)height];
+                    
+                    // 不需要缩放，直接复制
+                    image.CopyPixels(new Int32Rect(0, 0, (int)width, (int)height), pixelData, stride, 0);
+                    
 
-                    // 直接复制像素数据
-                    if (needsResize)
-                    {
-                        // 使用SixLabors.ImageSharp进行缩放
-                        var resizedImage = new TransformedBitmap(image, new ScaleTransform(
-                            width / image.Width,
-                            height / image.Height));
-                        resizedImage.CopyPixels(new Int32Rect(0, 0, (int)width, (int)height), pixelData, stride, 0);
-                    }
-                    else
-                    {
-                        // 不需要缩放，直接复制
-                        image.CopyPixels(new Int32Rect(0, 0, (int)width, (int)height), pixelData, stride, 0);
-                    }
-
-                    // 在UI线程创建WriteableBitmap
+                    // 在UI线程创建WriteableBitmap (使用原始尺寸)
                     var bitmap = new WriteableBitmap((int)width, (int)height, 96, 96, PixelFormats.Bgra32, null);
                     bitmap.WritePixels(new Int32Rect(0, 0, (int)width, (int)height), pixelData, stride, 0);
                     bitmap.Freeze(); // 使图像可以跨线程访问
@@ -385,11 +353,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         SelectedPallet.Name, SelectedPallet.Weight,
                         SelectedPallet.Length, SelectedPallet.Width, SelectedPallet.Height);
                 }
-
-                // 并行执行相机拍照、体积测量和重量获取
-                // 使用 CancellationToken.None 表示不设置超时
-                var cts = new CancellationTokenSource(); // 不再设置超时时间
-                try // 移除 OperationCanceledException 的捕获
+                var cts = new CancellationTokenSource();
+                try
                 {
                     // 创建三个并行任务
                     Task<bool> photoTask;
@@ -508,8 +473,63 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                     // 等待所有任务完成
                     await Task.WhenAll(photoTask, volumeTask, weightTask);
+
+                    // --- BEGIN: Save Dimension Images Logic ---
+                    try
+                    {
+                        if (_currentPackage != null && volumeSettings.ImageSaveMode != DimensionImageSaveMode.None && _currentPackage.Length > 0)
+                        {
+                            Log.Information("根据配置获取尺寸刻度图，模式: {Mode}", volumeSettings.ImageSaveMode);
+                            var dimensionImagesResult = await _volumeCamera.GetDimensionImagesAsync();
+
+                            if (dimensionImagesResult.IsSuccess)
+                            {
+                                var savePath = volumeSettings.ImageSavePath;
+                                var dateFolder = DateTime.Now.ToString("yyyy-MM-dd");
+                                var fullDirectoryPath = Path.Combine(savePath, dateFolder);
+                                Directory.CreateDirectory(fullDirectoryPath); // Ensure directory exists
+
+                                var sanitizedBarcode = string.Join("_", _currentPackage.Barcode.Split(Path.GetInvalidFileNameChars()));
+                                var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff");
+                                ImageFormat saveFormat = ImageFormat.Jpeg; // Or read from settings if needed
+
+                                // Save Vertical View
+                                if ((volumeSettings.ImageSaveMode == DimensionImageSaveMode.Vertical || volumeSettings.ImageSaveMode == DimensionImageSaveMode.Both) && dimensionImagesResult.VerticalViewImage != null)
+                                {
+                                    var fileName = $"{sanitizedBarcode}_{timestamp}_Vertical.jpg"; // Assuming Jpeg
+                                    var filePath = Path.Combine(fullDirectoryPath, fileName);
+                                    await SaveDimensionImageAsync(dimensionImagesResult.VerticalViewImage, filePath, saveFormat);
+                                    Log.Information("已保存俯视图: {FilePath}", filePath);
+                                }
+
+                                // Save Side View
+                                if ((volumeSettings.ImageSaveMode == DimensionImageSaveMode.Side || volumeSettings.ImageSaveMode == DimensionImageSaveMode.Both) && dimensionImagesResult.SideViewImage != null)
+                                {
+                                    var fileName = $"{sanitizedBarcode}_{timestamp}_Side.jpg"; // Assuming Jpeg
+                                    var filePath = Path.Combine(fullDirectoryPath, fileName);
+                                    await SaveDimensionImageAsync(dimensionImagesResult.SideViewImage, filePath, saveFormat);
+                                     Log.Information("已保存侧视图: {FilePath}", filePath);
+                                }
+                                Log.Debug("已释放尺寸刻度图 BitmapSource 引用");
+                            }
+                            else
+                            {
+                                Log.Warning("获取尺寸刻度图失败: {Error}", dimensionImagesResult.ErrorMessage);
+                            }
+                        }
+                        else if (_currentPackage?.Length <= 0)
+                        {
+                             Log.Debug("体积测量未成功，跳过获取尺寸刻度图");
+                        }
+                    }
+                    catch(Exception imgEx)
+                    {
+                        Log.Error(imgEx, "获取或保存尺寸刻度图时发生错误");
+                    }
+                    // --- END: Save Dimension Images Logic ---
+
                     // 更新体积（使用cm³作为单位）
-                    _currentPackage.SetDimensions(_currentPackage.Length ?? 0, _currentPackage.Width ?? 0,
+                    _currentPackage!.SetDimensions(_currentPackage.Length ?? 0, _currentPackage.Width ?? 0,
                         _currentPackage.Height ?? 0);
 
                     // 检查三个必要条件是否都满足：条码、重量和体积
@@ -659,12 +679,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
             catch (Exception ex) // 捕获包裹处理过程中的其他通用异常
             {
                 Log.Error(ex, "处理扫码信息时发生未预期的错误: {Barcode}", currentBarcodeToProcess); // Use consistent barcode
-                
+
                 _currentPackage?.SetStatus(PackageStatus.Error, "Processing Error");
                 PlayErrorSound();
             }
             // --- 原始逻辑结束 ---
-            
+
             // 最后一次性更新所有UI：实时区域状态和历史记录（移到方法末尾）
             if (_currentPackage != null)
             {
@@ -672,10 +692,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 {
                     // 1. 先更新实时区域显示
                     UpdateCurrentPackageUiDisplay(_currentPackage.Status, _currentPackage.StatusDisplay);
-                    
+
                     // 2. 然后更新历史记录
                     PackageHistory.Insert(0, _currentPackage);
-                    
+
                     // 3. 最后更新统计信息
                     UpdateStatistics();
                 });
@@ -1202,16 +1222,16 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         if (result != 0)
                         {
                             Log.Warning("启动时设置上次托盘高度失败：{Result}", result);
-                             // 这里可以选择是否通知用户，或者只记录日志
+                            // 这里可以选择是否通知用户，或者只记录日志
                         }
                         else
                         {
-                             Log.Information("启动时成功设置上次托盘高度：{Height}mm", palletHeightMm);
+                            Log.Information("启动时成功设置上次托盘高度：{Height}mm", palletHeightMm);
                         }
                     }
                     catch (Exception ex)
                     {
-                         Log.Error(ex, "启动时设置上次托盘高度时发生错误");
+                        Log.Error(ex, "启动时设置上次托盘高度时发生错误");
                     }
                 }
             }
@@ -1230,9 +1250,81 @@ public class MainWindowViewModel : BindableBase, IDisposable
             var emptyPallet = AvailablePallets.FirstOrDefault(p => p.Name == "noPallet");
             if (emptyPallet != null)
             {
-                 emptyPallet.IsSelected = true;
-                 SelectedPallet = emptyPallet;
+                emptyPallet.IsSelected = true;
+                SelectedPallet = emptyPallet;
             }
+        }
+    }
+
+    // --- 新增：检查并更新初始设备状态的方法 ---
+    private void UpdateInitialDeviceStatuses()
+    {
+        Log.Debug("检查并更新初始设备状态...");
+        try
+        {
+            // 更新拍照相机状态
+            OnCameraConnectionChanged(_cameraService.GetType().Name, _cameraService.IsConnected);
+
+            // 更新体积相机状态
+            OnVolumeCameraConnectionChanged(_volumeCamera.GetType().Name, _volumeCamera.IsConnected);
+
+            // 更新重量称状态 (IsConnected 现在是 public)
+            OnWeightScaleConnectionChanged(_weightService.GetType().Name, _weightService.IsConnected);
+
+            Log.Debug("初始设备状态更新完成。");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "更新初始设备状态时发生错误");
+        }
+    }
+    // --- 新增结束 ---
+
+    /// <summary>
+    /// Asynchronously saves a BitmapSource to a file.
+    /// </summary>
+    /// <param name="image">The BitmapSource to save.</param>
+    /// <param name="filePath">The full path where the image will be saved.</param>
+    /// <param name="format">The desired image format (default is Jpeg).</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    private static async Task SaveDimensionImageAsync(BitmapSource image, string filePath, ImageFormat format = ImageFormat.Jpeg)
+    {
+        try
+        {
+            await Task.Run(() =>
+            {
+                BitmapEncoder encoder = format switch
+                {
+                    ImageFormat.Jpeg => new JpegBitmapEncoder { QualityLevel = 90 },
+                    ImageFormat.Png => new PngBitmapEncoder(),
+                    ImageFormat.Bmp => new BmpBitmapEncoder(),
+                    ImageFormat.Tiff => new TiffBitmapEncoder(),
+                    _ => new JpegBitmapEncoder { QualityLevel = 90 }
+                };
+
+                encoder.Frames.Add(BitmapFrame.Create(image));
+
+                try
+                {
+                    using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None);
+                    encoder.Save(fileStream);
+                }
+                catch (IOException ioEx)
+                {
+                    // Log IO specific errors more granularly
+                    Log.Error(ioEx, "保存尺寸图像到文件时发生IO错误: {FilePath}", filePath);
+                    // Re-throw or handle as needed, here we just log
+                }
+                 catch (UnauthorizedAccessException uaEx)
+                {
+                     Log.Error(uaEx, "保存尺寸图像到文件时权限不足: {FilePath}", filePath);
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            // Catch exceptions from Task.Run or encoder creation
+            Log.Error(ex, "保存尺寸图像时发生未预期的错误: {FilePath}", filePath);
         }
     }
 

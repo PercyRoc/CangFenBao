@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+
 using Common.Services.Settings;
-using SortingServices.Car;
+
+using SortingServices.Car.Models;
 
 namespace SharedUI.ViewModels
 {

@@ -149,7 +149,7 @@ public partial class MainWindow
         {
             if (BlockScannerInput == null) return;
             
-            bool enableManualInput = BlockScannerInput.IsChecked ?? true;
+            var enableManualInput = BlockScannerInput.IsChecked ?? true;
             
             // 设置文本框为只读（如果禁用手动输入）或可编辑，并确保始终启用
             ManualBarcodeTextBox.IsEnabled = true;

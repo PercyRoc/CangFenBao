@@ -20,10 +20,10 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
     private bool _disposedValue;
 
     // 海康工业相机 SDK 相关字段
-    private MyCamera? _device;  // 当前连接的相机设备
-    private MyCamera.MV_CC_DEVICE_INFO_LIST _deviceList;  // 枚举的设备列表
-    private string? _currentDeviceSerialNumber;  // 当前连接设备的序列号
-    private Thread? _grabThread;  // 图像采集的线程
+    private MyCamera? _device; // 当前连接的相机设备
+    private MyCamera.MV_CC_DEVICE_INFO_LIST _deviceList; // 枚举的设备列表
+    private string? _currentDeviceSerialNumber; // 当前连接设备的序列号
+    private Thread? _grabThread; // 图像采集的线程
     private bool _grabbing; // 是否正在采集图像
     private readonly object _lockObj = new(); // 线程同步锁
 
@@ -46,7 +46,7 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
     public IObservable<(BitmapSource Image, string CameraId)> ImageStreamWithId => _imageSubject.AsObservable();
 
     public event Action<string?, bool>? ConnectionChanged;
-    
+
     // 构造函数中初始化SDK
     public HikvisionIndustrialCameraService()
     {
@@ -71,7 +71,7 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
     {
         if (IsConnected)
         {
-            return true;  // 已经连接，直接返回成功
+            return true; // 已经连接，直接返回成功
         }
 
         try
@@ -96,12 +96,13 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
             }
 
             // 设置连续采集模式
-            _device?.MV_CC_SetEnumValue_NET("AcquisitionMode", (uint)MyCamera.MV_CAM_ACQUISITION_MODE.MV_ACQ_MODE_CONTINUOUS);
+            _device?.MV_CC_SetEnumValue_NET("AcquisitionMode",
+                (uint)MyCamera.MV_CAM_ACQUISITION_MODE.MV_ACQ_MODE_CONTINUOUS);
             _device?.MV_CC_SetEnumValue_NET("TriggerMode", (uint)MyCamera.MV_CAM_TRIGGER_MODE.MV_TRIGGER_MODE_OFF);
 
             // 开始图像采集
             if (StartGrabbing()) return true;
-                
+
             // 如果启动采集失败，断开设备连接
             DisconnectFromDevice();
             return false;
@@ -109,7 +110,7 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
         catch (Exception ex)
         {
             Log.Error(ex, "启动海康工业相机服务失败");
-            Stop();  // 确保清理资源
+            Stop(); // 确保清理资源
             return false;
         }
     }
@@ -118,17 +119,17 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
     {
         if (!IsConnected)
         {
-            return true;  // 已经断开连接，直接返回成功
+            return true; // 已经断开连接，直接返回成功
         }
 
         try
         {
             // 停止图像采集
             StopGrabbing();
-            
+
             // 断开设备连接
             DisconnectFromDevice();
-            
+
             return true;
         }
         catch (Exception ex)
@@ -143,7 +144,7 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
         var availableCameras = new List<CameraBasicInfo>();
         var deviceList = new MyCamera.MV_CC_DEVICE_INFO_LIST();
         var nRet = MyCamera.MV_CC_EnumDevices_NET(
-            MyCamera.MV_GIGE_DEVICE | MyCamera.MV_USB_DEVICE, 
+            MyCamera.MV_GIGE_DEVICE | MyCamera.MV_USB_DEVICE,
             ref deviceList);
 
         if (nRet != 0)
@@ -157,13 +158,13 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
             try
             {
                 var deviceInfo = (MyCamera.MV_CC_DEVICE_INFO)Marshal.PtrToStructure(
-                    deviceList.pDeviceInfo[i], 
+                    deviceList.pDeviceInfo[i],
                     typeof(MyCamera.MV_CC_DEVICE_INFO))!;
 
                 var serialNumber = GetDeviceSerialNumber(deviceInfo);
                 var modelName = GetDeviceModelName(deviceInfo);
                 var name = string.IsNullOrEmpty(modelName) ? $"海康相机 {i + 1}" : $"{modelName} ({serialNumber})";
-                
+
                 availableCameras.Add(new CameraBasicInfo
                 {
                     Id = serialNumber, // 使用序列号作为唯一ID
@@ -190,8 +191,8 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
 
         // 枚举所有类型的设备
         var nRet = MyCamera.MV_CC_EnumDevices_NET(
-            MyCamera.MV_GIGE_DEVICE | 
-            MyCamera.MV_USB_DEVICE, 
+            MyCamera.MV_GIGE_DEVICE |
+            MyCamera.MV_USB_DEVICE,
             ref _deviceList);
 
         if (nRet != 0)
@@ -217,7 +218,7 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
 
         // 获取设备信息
         var deviceInfo = (MyCamera.MV_CC_DEVICE_INFO)Marshal.PtrToStructure(
-            _deviceList.pDeviceInfo[deviceIndex], 
+            _deviceList.pDeviceInfo[deviceIndex],
             typeof(MyCamera.MV_CC_DEVICE_INFO))!;
 
         // 创建设备
@@ -268,24 +269,28 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
         if (_device == null) return;
         try
         {
-            // 确保先停止抓图
-            if (_grabbing)
-            {
-                StopGrabbing();
-            }
-            
             // 关闭设备
+            Log.Debug("正在关闭设备...");
             var nRet = _device.MV_CC_CloseDevice_NET();
             if (nRet != 0)
             {
                 Log.Error("关闭设备失败: {ErrorCode}", nRet);
             }
-            
+            else
+            {
+                Log.Debug("设备已关闭");
+            }
+
             // 销毁设备
+            Log.Debug("正在销毁设备句柄...");
             nRet = _device.MV_CC_DestroyDevice_NET();
             if (nRet != 0)
             {
                 Log.Error("销毁设备失败: {ErrorCode}", nRet);
+            }
+            else
+            {
+                Log.Debug("设备句柄已销毁");
             }
         }
         catch (Exception ex)
@@ -296,7 +301,9 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
         {
             _device = null;
             // 设置为断开状态
-            IsConnected = false;
+            IsConnected = false; // 这会隐式调用 RaiseConnectionChanged
+            // RaiseConnectionChanged(_currentDeviceSerialNumber, false); // 不再需要显式调用
+            Log.Information("设备已断开连接");
             _currentDeviceSerialNumber = null;
         }
     }
@@ -310,34 +317,50 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
 
         try
         {
-            // 标志位置为true，必须在线程开始前设置
-            _grabbing = true;
-
-            // 创建并启动图像采集线程
-            _grabThread = new Thread(GrabThreadProcess);
-            _grabThread.Start(_device); // 注意：传递设备对象给线程
-
-            // 开始采集
+            // 1. 先开始采集
             var nRet = _device.MV_CC_StartGrabbing_NET();
             if (nRet != 0)
             {
-                _grabbing = false;
-                if (_grabThread is { IsAlive: true })
-                {
-                    _grabThread.Join(1000); // 等待线程结束
-                }
+                _grabbing = false; // 确保标志位为 false
+                // 线程此时还未创建或启动，无需 Join
                 Log.Error("开始采集图像失败: {ErrorCode}", nRet);
                 return false;
             }
 
+            // 采集成功后立即记录日志
             Log.Information("开始采集图像");
-            Thread.Sleep(100); // 给相机一点时间开始采集
+
+            // 2. 设置标志位
+            _grabbing = true;
+
+            // 3. 创建并启动图像采集线程
+            _grabThread = new Thread(GrabThreadProcess);
+            _grabThread.Start(_device);
+
+            // 可选：短暂等待或检查线程状态，但通常先启动采集再启动线程就够了
+            // Thread.Sleep(50); 
+
             return true;
         }
         catch (Exception ex)
         {
-            _grabbing = false;
             Log.Error(ex, "启动图像采集失败");
+            // 如果 StartGrabbing 成功但后续出错，需要尝试停止
+            if (_grabbing) // 检查标志位，判断是否需要停止
+            {
+                try
+                {
+                    _device?.MV_CC_StopGrabbing_NET();
+                    Log.Warning("因启动采集线程异常，已尝试停止采集");
+                }
+                catch (Exception stopEx)
+                {
+                    Log.Error(stopEx, "尝试停止采集时发生额外错误");
+                }
+            }
+
+            _grabbing = false; // 确保最终标志位为 false
+            _grabThread = null; // 清理线程引用
             return false;
         }
     }
@@ -351,47 +374,62 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
 
         try
         {
-            // 标志位设为false
-            _grabbing = false;
-            
-            // 等待采集线程结束
-            if (_grabThread is { IsAlive: true })
+            // 1. 先停止SDK采集
+            if (_device != null && IsConnected) // 检查设备是否有效
             {
-                _grabThread.Join(2000); // 最多等待2秒
-                if (_grabThread.IsAlive)
+                var nRet = _device.MV_CC_StopGrabbing_NET();
+                if (nRet != 0)
                 {
-                    Log.Warning("图像采集线程未能在预期时间内退出");
+                    Log.Error("停止采集图像失败: {ErrorCode}", nRet);
+                    // 即使停止失败，也应继续尝试清理线程
+                }
+                else
+                {
+                    Log.Information("已发送停止采集命令");
                 }
             }
-
-            if (_device == null || !IsConnected)
+            else
             {
-                return;
+                Log.Warning("尝试停止采集时设备无效或未连接");
             }
 
-            // 停止采集
-            var nRet = _device.MV_CC_StopGrabbing_NET();
-            if (nRet != 0)
+            // 2. 标志位设为false，通知线程退出循环
+            _grabbing = false;
+
+            // 3. 等待采集线程结束
+            if (_grabThread is { IsAlive: true })
             {
-                Log.Error("停止采集图像失败: {ErrorCode}", nRet);
-                return;
+                Log.Debug("等待图像采集线程退出...");
+                if (!_grabThread.Join(2000)) // 最多等待2秒
+                {
+                    Log.Warning("图像采集线程未能在预期时间内退出");
+                    // 可以考虑更强制的措施，但通常 Join 失败意味着线程可能卡死
+                }
+                else
+                {
+                    Log.Debug("图像采集线程已退出");
+                }
+
+                _grabThread = null; // 清理线程引用
             }
 
-            Log.Information("停止采集图像");
-
-            // 释放缓冲区
-            lock (BufForDriverLock)
+            // 4. 释放缓冲区 (如果还在使用的话 - 根据之前的分析，这些可能未使用或管理不当)
+            lock (BufForDriverLock) // 如果 BufForDriverLock 确实未使用，此锁和内部代码也应移除
             {
                 if (_bufForDriver != IntPtr.Zero)
                 {
                     Marshal.FreeHGlobal(_bufForDriver);
                     _bufForDriver = IntPtr.Zero;
+                    Log.Debug("驱动图像缓冲区已释放");
                 }
             }
 
-            if (_convertDstBuf == IntPtr.Zero) return;
-            Marshal.FreeHGlobal(_convertDstBuf);
-            _convertDstBuf = IntPtr.Zero;
+            if (_convertDstBuf != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(_convertDstBuf);
+                _convertDstBuf = IntPtr.Zero;
+                Log.Debug("转换目标缓冲区已释放");
+            }
         }
         catch (Exception ex)
         {
@@ -431,14 +469,10 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
                             {
                                 Marshal.FreeHGlobal(pImageBuf);
                             }
+
                             pImageBuf = Marshal.AllocHGlobal((int)stFrameInfo.stFrameInfo.nFrameLen);
                             nBufSize = stFrameInfo.stFrameInfo.nFrameLen;
                         }
-
-                        // 复制图像数据
-                        Marshal.Copy(stFrameInfo.pBufAddr, new byte[stFrameInfo.stFrameInfo.nFrameLen], 0, (int)stFrameInfo.stFrameInfo.nFrameLen);
-
-                        // 创建BitmapSource对象
                         try
                         {
                             var bitmapSource = ConvertToBitmapSource(stFrameInfo);
@@ -451,8 +485,12 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
                                 }
                                 else
                                 {
-                                    Log.Warning("无法发布图像，因为当前设备序列号未知");
+                                    Log.Warning("无法发布图像 {FrameNum}，因为当前设备序列号未知", stFrameInfo.stFrameInfo.nFrameNum);
                                 }
+                            }
+                            else
+                            {
+                                Log.Warning("图像帧 {FrameNum} 转换失败，无法发布", stFrameInfo.stFrameInfo.nFrameNum);
                             }
                         }
                         catch (Exception ex)
@@ -484,7 +522,7 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
             {
                 Marshal.FreeHGlobal(pImageBuf);
             }
-            
+
             Log.Information("图像采集线程退出");
         }
     }
@@ -499,11 +537,11 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
             // 准备转换参数
             var width = frameInfo.stFrameInfo.nWidth;
             var height = frameInfo.stFrameInfo.nHeight;
-            
+
             // 分配转换缓冲区
             var rgbSize = (uint)(width * height * 3); // RGB每像素3字节
             var rgbBuffer = Marshal.AllocHGlobal((int)rgbSize);
-            
+
             try
             {
                 // 转换为RGB格式
@@ -518,19 +556,20 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
                     pDstBuffer = rgbBuffer,
                     nDstBufferSize = rgbSize
                 };
-                
+
                 var nRet = _device.MV_CC_ConvertPixelType_NET(ref convertParam);
                 if (nRet != 0)
                 {
                     Log.Error("像素格式转换失败: {ErrorCode}", nRet);
                     return null;
                 }
-                
+
+
                 // 创建BitmapSource
                 var stride = width * 3; // RGB每像素3字节
                 var pixelData = new byte[rgbSize];
                 Marshal.Copy(rgbBuffer, pixelData, 0, (int)rgbSize);
-                
+
                 var bitmap = BitmapSource.Create(
                     width,
                     height,
@@ -539,7 +578,7 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
                     null,
                     pixelData,
                     stride);
-                
+
                 bitmap.Freeze(); // 使图像可以跨线程访问
                 return bitmap;
             }
@@ -565,9 +604,9 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
             case MyCamera.MV_GIGE_DEVICE:
             {
                 var gigeInfo = (MyCamera.MV_GIGE_DEVICE_INFO_EX)MyCamera.ByteToStruct(
-                    deviceInfo.SpecialInfo.stGigEInfo, 
+                    deviceInfo.SpecialInfo.stGigEInfo,
                     typeof(MyCamera.MV_GIGE_DEVICE_INFO_EX));
-            
+
                 // 假设 chSerialNumber 是字符数组
                 serialNumber = new string(gigeInfo.chSerialNumber).TrimEnd('\0');
                 break;
@@ -575,16 +614,16 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
             case MyCamera.MV_USB_DEVICE:
             {
                 var usbInfo = (MyCamera.MV_USB3_DEVICE_INFO_EX)MyCamera.ByteToStruct(
-                    deviceInfo.SpecialInfo.stUsb3VInfo, 
+                    deviceInfo.SpecialInfo.stUsb3VInfo,
                     typeof(MyCamera.MV_USB3_DEVICE_INFO_EX));
-            
+
                 // 假设 chSerialNumber 是字符数组
                 serialNumber = new string(usbInfo.chSerialNumber).TrimEnd('\0');
                 break;
             }
         }
         // 可以根据需要添加其他设备类型的处理
-        
+
         return serialNumber;
     }
 
@@ -598,12 +637,12 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
     private static string GetDeviceModelName(MyCamera.MV_CC_DEVICE_INFO deviceInfo)
     {
         string modelName = string.Empty;
-         switch (deviceInfo.nTLayerType)
+        switch (deviceInfo.nTLayerType)
         {
             case MyCamera.MV_GIGE_DEVICE:
             {
                 var gigeInfo = (MyCamera.MV_GIGE_DEVICE_INFO_EX)MyCamera.ByteToStruct(
-                    deviceInfo.SpecialInfo.stGigEInfo, 
+                    deviceInfo.SpecialInfo.stGigEInfo,
                     typeof(MyCamera.MV_GIGE_DEVICE_INFO_EX));
                 modelName = new string(gigeInfo.chModelName).TrimEnd('\0');
                 break;
@@ -611,12 +650,13 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
             case MyCamera.MV_USB_DEVICE:
             {
                 var usbInfo = (MyCamera.MV_USB3_DEVICE_INFO_EX)MyCamera.ByteToStruct(
-                    deviceInfo.SpecialInfo.stUsb3VInfo, 
+                    deviceInfo.SpecialInfo.stUsb3VInfo,
                     typeof(MyCamera.MV_USB3_DEVICE_INFO_EX));
                 modelName = new string(usbInfo.chModelName).TrimEnd('\0');
                 break;
             }
         }
+
         return modelName;
     }
 
@@ -639,7 +679,7 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
         // 海康相机 SDK 资源已在 Stop() 中释放
 
         _disposedValue = true;
-        
+
         // 最后一个实例释放时，执行SDK反初始化
         lock (_lockObj)
         {
@@ -654,4 +694,4 @@ public sealed class HikvisionIndustrialCameraService : ICameraService
     {
         Dispose(disposing: true);
     }
-} 
+}

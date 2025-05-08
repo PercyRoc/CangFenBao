@@ -38,10 +38,10 @@ public class SerialPortWeightService : IDisposable
         _serialPortService = new SerialPortService("WeightScale", weightSettings.SerialPortParams);
     }
 
-    private bool IsConnected
+    public bool IsConnected
     {
         get => _isConnected;
-        set
+        private set
         {
             if (_isConnected == value) return;
             _isConnected = value;
@@ -284,12 +284,12 @@ public class SerialPortWeightService : IDisposable
         try
         {
             var receivedString = Encoding.ASCII.GetString(data);
-            Log.Verbose("SerialPortWeightService - 收到原始数据片段: {Data}", receivedString);
+            // Log.Verbose("SerialPortWeightService - 收到原始数据片段: {Data}", receivedString);
 
             lock (_lock)
             {
                 _receiveBuffer.Append(receivedString);
-                Log.Verbose("当前接收缓冲区内容: {BufferContent}", _receiveBuffer.ToString());
+                // Log.Verbose("当前接收缓冲区内容: {BufferContent}", _receiveBuffer.ToString());
 
                 const int maxInternalBufferSize = 4096; // 定义一个合适的缓冲区大小
                 if (_receiveBuffer.Length > maxInternalBufferSize)
@@ -436,13 +436,11 @@ public class SerialPortWeightService : IDisposable
 
     private void ProcessDynamicWeight(double weightG, DateTime timestamp)
     {
-        Log.Debug("处理动态重量: {Weight:F3}kg ({WeightG:F2}g)", weightG / 1000, weightG);
 
         lock (_lock)
         {
             _weightCache.Enqueue((weightG, timestamp));
             while (_weightCache.Count > MaxCacheSize) _weightCache.Dequeue();
-            Log.Debug("已缓存动态重量数据，当前缓存数量: {CacheCount}", _weightCache.Count);
         }
 
         _weightReceived.Set();
@@ -478,7 +476,6 @@ public class SerialPortWeightService : IDisposable
     {
         if (_disposed) return;
 
-        Log.Debug("开始 Dispose SerialPortWeightService...");
 
         if (disposing)
         {
@@ -490,6 +487,5 @@ public class SerialPortWeightService : IDisposable
         }
 
         _disposed = true;
-        Log.Information("SerialPortWeightService 已 Dispose");
     }
 }

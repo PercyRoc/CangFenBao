@@ -105,11 +105,18 @@ internal partial class App
         containerRegistry.AddCommonServices();
         containerRegistry.AddShardUi();
 
-        // 注册设备服务
-        containerRegistry.AddPhotoCamera() // 拍照相机
-            .AddVolumeCamera() // 体积相机
-            .AddScanner() // 扫码枪
-            .AddWeightScale(); // 重量称
+        // 显式注册 Factory 和 Startup 服务为 Singleton
+        containerRegistry.RegisterSingleton<CameraFactory>();
+        containerRegistry.RegisterSingleton<CameraStartupService>();
+        containerRegistry.RegisterSingleton<VolumeCameraStartupService>();
+        containerRegistry.RegisterSingleton<ScannerStartupService>();
+        containerRegistry.RegisterSingleton<WeightStartupService>();
+
+        // 使用扩展方法注册设备服务 (现在它们依赖的 Startup 服务已明确为 Singleton)
+        containerRegistry.AddPhotoCamera(); // 拍照相机
+        containerRegistry.AddVolumeCamera(); // 体积相机
+        containerRegistry.AddScanner(); // 扫码枪
+        containerRegistry.AddWeightScale(); // 重量称
 
         // 注册桑能服务
         containerRegistry.RegisterSingleton<ISangNengService, SangNengService>();

@@ -8,7 +8,8 @@ namespace Common.Data;
 /// <remarks>
 ///     构造函数
 /// </remarks>
-public class PackageDbContext(DbContextOptions<PackageDbContext> options, DateTime? date = null) : DbContext(options)
+public class PackageDbContext(DbContextOptions<PackageDbContext> options, DateTime? date = null)
+    : DbContext(options)
 {
     private readonly DateTime _date = date ?? DateTime.Today;
 
@@ -44,10 +45,6 @@ public class PackageDbContext(DbContextOptions<PackageDbContext> options, DateTi
             entity.Property(static e => e.PalletWidth);
             entity.Property(static e => e.PalletHeight);
         });
-
-        modelBuilder.Entity<PackageRecord>()
-            .HasIndex(static p => p.CreateTime)
-            .HasDatabaseName($"IX_{tableName}_CreateTime");
 
         base.OnModelCreating(modelBuilder);
     }

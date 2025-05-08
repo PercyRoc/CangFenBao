@@ -218,95 +218,79 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private void InitializeStatisticsItems()
     {
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "总包裹数",
-            Value = "0",
-            Unit = "个",
-            Description = "累计处理包裹总数",
-            Icon = "CubeOutline24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            label: "总包裹数",
+            value: "0",
+            unit: "个",
+            description: "累计处理包裹总数",
+            icon: "CubeOutline24"
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "异常数",
-            Value = "0",
-            Unit = "个",
-            Description = "处理异常的包裹数量",
-            Icon = "AlertOutline24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            label: "异常数",
+            value: "0",
+            unit: "个",
+            description: "处理异常的包裹数量",
+            icon: "AlertOutline24"
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "预测效率",
-            Value = "0",
-            Unit = "个/小时",
-            Description = "预计每小时处理量",
-            Icon = "TrendingUp24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            label: "预测效率",
+            value: "0",
+            unit: "个/小时",
+            description: "预计每小时处理量",
+            icon: "TrendingUp24"
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "平均处理时间",
-            Value = "0",
-            Unit = "ms",
-            Description = "单个包裹平均处理时间",
-            Icon = "TimerOutline24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            label: "平均处理时间",
+            value: "0",
+            unit: "ms",
+            description: "单个包裹平均处理时间",
+            icon: "TimerOutline24"
+        ));
     }
 
     private void InitializePackageInfoItems()
     {
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "条码",
-            Value = "--",
-            Description = "包裹条码信息",
-            Icon = "Barcode24"
-        });
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "重量",
-            Value = "--",
-            Unit = "kg",
-            Description = "包裹重量",
-            Icon = "ScaleBalance24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            label: "重量",
+            value: "--",
+            unit: "kg",
+            description: "包裹重量",
+            icon: "ScaleBalance24"
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "尺寸",
-            Value = "--",
-            Unit = "cm",
-            Description = "长×宽×高",
-            Icon = "RulerSquare24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            label: "尺寸",
+            value: "--",
+            unit: "cm",
+            description: "长×宽×高",
+            icon: "RulerSquare24"
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "分拣口",
-            Value = "--",
-            Description = "目标分拣位置",
-            Icon = "ArrowSplitHorizontal24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            label: "分拣口",
+            value: "--",
+            description: "目标分拣位置",
+            icon: "ArrowSplitHorizontal24"
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "处理时间",
-            Value = "--",
-            Unit = "ms",
-            Description = "系统处理耗时",
-            Icon = "Timer24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            label: "处理时间",
+            value: "--",
+            unit: "ms",
+            description: "系统处理耗时",
+            icon: "Timer24"
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "时间",
-            Value = "--:--:--",
-            Description = "包裹处理时间",
-            Icon = "Clock24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            label: "时间",
+            value: "--:--:--",
+            description: "包裹处理时间",
+            icon: "Clock24"
+        ));
     }
 
     private void OnDeviceConnectionStatusChanged(object? sender, (string Name, bool Connected) e)

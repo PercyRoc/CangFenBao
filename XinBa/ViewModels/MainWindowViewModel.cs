@@ -1,4 +1,5 @@
 ﻿using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
@@ -14,6 +15,7 @@ using MessageBox = HandyControl.Controls.MessageBox;
 using MessageBoxImage = System.Windows.MessageBoxImage;
 using System.Windows.Media.Imaging;
 using DeviceService.DataSourceDevices.Weight;
+using System.Windows.Media;
 
 namespace XinBa.ViewModels;
 
@@ -37,7 +39,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private int _packagesInLastHour;
     private int _processingRate;
     private int _successPackages;
-    private SystemStatus _systemStatus = new();
     private int _totalPackages;
     private BitmapSource? _currentImage;
 
@@ -216,31 +217,31 @@ public class MainWindowViewModel : BindableBase, IDisposable
         {
             Log.Debug("开始初始化设备状态列表");
 
-            // 添加相机状态
+            // 添加相机状态 - Revert to property initializers
             DeviceStatuses.Add(new DeviceStatus
             {
-                Name = "Camera",
-                Status = "Disconnected",
-                Icon = "Camera24",
-                StatusColor = "#F44336" // Red indicates disconnected
+                 Name = "Camera",
+                 Status = "Disconnected",
+                 Icon = "Camera24",
+                 StatusColor = "#F44336"
             });
 
-            // 添加重量设备状态
+            // 添加重量设备状态 - Revert to property initializers
             DeviceStatuses.Add(new DeviceStatus
             {
-                Name = "Weight",
-                Status = "Disconnected",
-                Icon = "Scales24", // 重量图标
-                StatusColor = "#F44336"
+                 Name = "Weight",
+                 Status = "Disconnected",
+                 Icon = "Scales24",
+                 StatusColor = "#F44336"
             });
 
-            // 添加体积相机状态 (使用一个合适的图标，例如 ScanObject24 或 BoxMultiple24)
+            // 添加体积相机状态 - Revert to property initializers
             DeviceStatuses.Add(new DeviceStatus
             {
-                Name = "Volume Camera",
-                Status = "Disconnected",
-                Icon = "ScanObject24", // 体积测量图标
-                StatusColor = "#F44336"
+                 Name = "Volume Camera",
+                 Status = "Disconnected",
+                 Icon = "ScanObject24",
+                 StatusColor = "#F44336"
             });
 
             Log.Information("设备状态列表初始化完成, 总计 {Count} 个设备", DeviceStatuses.Count);
@@ -253,78 +254,72 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     private void InitializeStatisticsItems()
     {
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "Total Packages",
-            Value = "0",
-            Unit = "pcs",
-            Description = "Total number of processed packages",
-            Icon = "BoxMultiple24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            "Total Packages",
+            "0",
+            "pcs",
+            "Total number of processed packages",
+            "BoxMultiple24"
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "Success Count",
-            Value = "0",
-            Unit = "pcs",
-            Description = "Number of successfully processed packages",
-            Icon = "CheckmarkCircle24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            "Success Count",
+            "0",
+            "pcs",
+            "Number of successfully processed packages",
+            "CheckmarkCircle24"
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "Failure Count",
-            Value = "0",
-            Unit = "pcs",
-            Description = "Number of failed packages",
-            Icon = "ErrorCircle24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            "Failure Count",
+            "0",
+            "pcs",
+            "Number of failed packages",
+            "ErrorCircle24"
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "Processing Rate",
-            Value = "0",
-            Unit = "pcs/hour",
-            Description = "Packages processed per hour",
-            Icon = "ArrowTrendingLines24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            "Processing Rate",
+            "0",
+            "pcs/hour",
+            "Packages processed per hour",
+            "ArrowTrendingLines24"
+        ));
     }
 
     private void InitializePackageInfoItems()
     {
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "Weight",
-            Value = "0.00",
-            Unit = "kg",
-            Description = "Package weight",
-            Icon = "Scales24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            "Weight",
+            "0.00",
+            "kg",
+            "Package weight",
+            "Scales24"
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "Dimensions",
-            Value = "0 × 0 × 0",
-            Unit = "mm",
-            Description = "Length × Width × Height",
-            Icon = "Ruler24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            "Dimensions",
+            "0 × 0 × 0",
+            "mm",
+            "Length × Width × Height",
+            "Ruler24"
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "Time",
-            Value = "--:--:--",
-            Description = "Processing time",
-            Icon = "Timer24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            "Time",
+            "--:--:--",
+            "",
+            "Processing time",
+            "Timer24"
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "Status",
-            Value = "Waiting",
-            Description = "Processing status",
-            Icon = "Alert24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            "Status",
+            "Waiting",
+            "",
+            "Processing status",
+            "Alert24"
+        ));
     }
 
     /// <summary>
@@ -366,8 +361,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
             Log.Debug("接收到包裹信息: 条码={Barcode}", package.Barcode);
 
             // --- Start: Added Weight Logic ---
+            // 检查包裹是否已经有重量数据（大于0），如果没有且重量服务存在，则尝试查询
+            if (package.Weight <= 0.0 && _weightService != null) // Check if service exists and weight is not set
             {
-                var weightInGrams = _weightService!.FindNearestWeight(package.CreateTime); // Call method on the instance
+                var weightInGrams = _weightService.FindNearestWeight(package.CreateTime); // Call method on the instance
                 if (weightInGrams.HasValue)
                 {
                     var weightInKg = weightInGrams.Value / 1000.0;
@@ -381,18 +378,22 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 }
             }
 
-            // 查询体积数据
-            var volume = _volumeDataService.FindVolumeData(package);
-            if (volume.HasValue)
+            // 检查包裹是否已经有体积数据，如果没有则尝试查询
+            if (!package.Length.HasValue || !package.Width.HasValue || !package.Height.HasValue)
             {
-                // 使用 SetDimensions 方法设置长宽高
-                package.SetDimensions(volume.Value.Length, volume.Value.Width, volume.Value.Height);
-                Log.Information("为包裹 {Index} 找到并设置体积: L={Length}, W={Width}, H={Height}", 
-                    package.Index, package.Length, package.Width, package.Height);
-            }
-            else
-            {
-                Log.Warning("未找到包裹 {Index} 的体积数据", package.Index);
+                // 查询体积数据
+                var volume = _volumeDataService.FindVolumeData(package);
+                if (volume.HasValue)
+                {
+                    // 使用 SetDimensions 方法设置长宽高
+                    package.SetDimensions(volume.Value.Length, volume.Value.Width, volume.Value.Height);
+                    Log.Information("为包裹 {Index} 找到并设置体积: L={Length}, W={Width}, H={Height}", 
+                        package.Index, package.Length, package.Width, package.Height);
+                }
+                else
+                {
+                    Log.Warning("未找到包裹 {Index} 的体积数据", package.Index);
+                }
             }
 
             // 使用Dispatcher确保在UI线程上更新
@@ -416,29 +417,40 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 // 准备图片数据
                 var photoData = new List<byte[]>();
+                BitmapSource? imageToSubmit = package.Image; // 默认使用原始图像
 
-                // 如果有图片，转换为字节数组
-                if (package.Image != null)
+                // 如果有图片，添加水印并转换为字节数组
+                if (imageToSubmit != null)
                     try
                     {
+                        // 添加水印
+                        imageToSubmit = AddWatermarkToImage(imageToSubmit, package);
+                        Log.Debug("已为图片添加水印");
+
+                        // 将带水印的图片转换为字节数组
                         using var ms = new MemoryStream();
-                        // await package.Image.SaveAsync(ms, new JpegEncoder());
+                        var encoder = new JpegBitmapEncoder { QualityLevel = 90 }; // 使用JPEG编码器
+                        encoder.Frames.Add(BitmapFrame.Create(imageToSubmit));
+                        encoder.Save(ms);
                         photoData.Add(ms.ToArray());
-                        Log.Debug("图片已转换为字节数组");
+                        Log.Debug("带水印的图片已转换为字节数组");
                     }
                     catch (Exception ex)
                     {
-                        Log.Warning(ex, "转换图片数据失败");
+                        Log.Warning(ex, "处理或转换图片数据失败");
+                        // 如果水印或转换失败，可以选择不提交图片或提交原始图片（取决于需求）
+                        // 这里我们选择不提交图片
+                        photoData.Clear(); 
                     }
 
-                // 提交尺寸信息
+                // 提交尺寸信息 (即使图片处理失败，也可能需要提交尺寸)
                 var success = await _apiService.SubmitDimensionsAsync(
                     package.Barcode,
-                    package.Height.Value.ToString("F2"),
-                    package.Length.Value.ToString("F2"),
-                    package.Width.Value.ToString("F2"),
-                    (package.Weight * 1000).ToString("F2"), // 转换为克 (kg -> g)
-                    photoData
+                    package.Height.Value.ToString("F2"), // 已确保非 null
+                    package.Length.Value.ToString("F2"), // 已确保非 null
+                    package.Width.Value.ToString("F2"),  // 已确保非 null
+                    package.Weight.ToString("F2"),       // Weight 可能是 null，但API可能接受
+                    photoData                          // 可能为空列表
                 );
 
                 if (success)
@@ -454,6 +466,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "处理包裹信息时出错: 条码={Barcode}", package.Barcode);
+        }
+        finally // Ensure image is released
+        {
+             package.ReleaseImage();
         }
     }
 
@@ -589,7 +605,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
             // 限制历史记录数量
             const int maxHistoryItems = 1000;
-            while (PackageHistory.Count > maxHistoryItems) PackageHistory.RemoveAt(PackageHistory.Count - 1);
+            while (PackageHistory.Count > maxHistoryItems)
+            {
+               var removedPackage = PackageHistory[^1]; // Get the last item
+               PackageHistory.RemoveAt(PackageHistory.Count - 1);
+               removedPackage.Dispose(); // Dispose if not null
+            }
         }
         catch (Exception ex)
         {
@@ -629,7 +650,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
     // --- 结束修改 ---
 
-    protected void Dispose(bool disposing)
+    protected virtual void Dispose(bool disposing)
     {
         if (_disposed) return;
 
@@ -648,8 +669,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 Log.Information("已取消订阅体积服务连接状态变化事件");
 
                 // --- 修改: 取消订阅重量服务事件 ---
-                _weightService!.ConnectionChanged -= OnWeightConnectionChanged;
-                Log.Information("已取消订阅重量串口服务连接状态变化事件");
+                if (_weightService != null) // Check before unsubscribing
+                {
+                    _weightService.ConnectionChanged -= OnWeightConnectionChanged;
+                    Log.Information("已取消订阅重量串口服务连接状态变化事件");
+                }
                 // --- 结束修改 ---
 
                 // 释放所有订阅
@@ -704,6 +728,133 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
+    /// <summary>
+    /// 为图像添加包含包裹信息的水印
+    /// </summary>
+    /// <param name="originalImage">原始图像</param>
+    /// <param name="package">包裹信息</param>
+    /// <returns>带有水印的新图像</returns>
+    private BitmapSource AddWatermarkToImage(BitmapSource originalImage, PackageInfo package)
+    {
+        try
+        {
+            // 定义画笔和字体
+            var pen = new Pen(Brushes.LimeGreen, 1);
+            var textBrush = Brushes.LimeGreen;
+            var typeface = new Typeface("Consolas");
+            const double fontSize = 14;
+            const double rulerLength = 100; // 比例尺的像素长度
+            const double rulerTickHeight = 5; // 比例尺刻度线高度
+            var dpi = new DpiScale(1,1); // Assume 96 DPI if window not available
+             if(Application.Current?.MainWindow != null)
+             {
+                 dpi = VisualTreeHelper.GetDpi(Application.Current.MainWindow);
+             }
+
+
+            // 创建绘制目标
+            var drawingVisual = new DrawingVisual();
+            using (var drawingContext = drawingVisual.RenderOpen())
+            {
+                // 1. 绘制原始图像
+                drawingContext.DrawImage(originalImage, new Rect(0, 0, originalImage.PixelWidth, originalImage.PixelHeight));
+
+                // 2. 准备并绘制文本水印
+                var watermarkText = $"""
+                                     Code:{package.Barcode}
+                                     Length:{package.Length ?? 0}MM
+                                     Width:{package.Width ?? 0}MM
+                                     Height:{package.Height ?? 0}MM
+                                     Weight:{package.Weight:F1}KG
+                                     Date:{package.CreateTime:yyyy.MM.dd}
+                                     Time:{package.CreateTime:HH:mm:ss}
+                                     """;
+                var formattedText = new FormattedText(
+                    watermarkText,
+                    CultureInfo.CurrentCulture,
+                    FlowDirection.LeftToRight,
+                    typeface,
+                    fontSize,
+                    textBrush,
+                    dpi.PixelsPerDip
+                );
+                var textPosition = new Point(10, 10);
+                drawingContext.DrawText(formattedText, textPosition);
+
+                // 3. 绘制尺寸比例尺 (在文本下方)
+                var rulerStartY = textPosition.Y + formattedText.Height + 15; // 文本下方加一点间距
+                var rulerStartX = textPosition.X;
+
+                // 绘制长度比例尺
+                DrawRuler(drawingContext, pen, textBrush, typeface, fontSize, dpi.PixelsPerDip,
+                          new Point(rulerStartX, rulerStartY),
+                          rulerLength, rulerTickHeight,
+                          $"Length: {package.Length ?? 0} MM");
+
+                // 绘制宽度比例尺 (在长度下方)
+                rulerStartY += fontSize + 10; // 下移一行加间距
+                DrawRuler(drawingContext, pen, textBrush, typeface, fontSize, dpi.PixelsPerDip,
+                          new Point(rulerStartX, rulerStartY),
+                          rulerLength, rulerTickHeight,
+                          $"Width: {package.Width ?? 0} MM");
+
+                // 绘制高度比例尺 (在宽度下方)
+                 rulerStartY += fontSize + 10; // 下移一行加间距
+                DrawRuler(drawingContext, pen, textBrush, typeface, fontSize, dpi.PixelsPerDip,
+                           new Point(rulerStartX, rulerStartY),
+                           rulerLength, rulerTickHeight,
+                           $"Height: {package.Height ?? 0} MM");
+            }
+
+            // 创建 RenderTargetBitmap
+            var renderTargetBitmap = new RenderTargetBitmap(
+                originalImage.PixelWidth,
+                originalImage.PixelHeight,
+                originalImage.DpiX,
+                originalImage.DpiY,
+                PixelFormats.Pbgra32); // 使用支持透明度的格式
+
+            // 渲染 DrawingVisual 到 Bitmap
+            renderTargetBitmap.Render(drawingVisual);
+            renderTargetBitmap.Freeze(); // 冻结以提高性能
+
+            return renderTargetBitmap;
+        }
+        catch (Exception ex)
+        {
+             Log.Error(ex, "添加水印时发生错误，将返回原始图像");
+             return originalImage; // 发生错误时返回原始图像
+        }
+    }
+
+    /// <summary>
+    /// 绘制单个比例尺及其标签
+    /// </summary>
+    private static void DrawRuler(DrawingContext dc, Pen pen, Brush textBrush, Typeface typeface, double fontSize, double pixelsPerDip,
+                           Point startPoint, double length, double tickHeight, string label)
+    {
+        // 绘制主线
+        dc.DrawLine(pen, startPoint, new Point(startPoint.X + length, startPoint.Y));
+
+        // 绘制开始刻度
+        dc.DrawLine(pen, new Point(startPoint.X, startPoint.Y - tickHeight / 2), new Point(startPoint.X, startPoint.Y + tickHeight / 2));
+
+        // 绘制结束刻度
+        dc.DrawLine(pen, new Point(startPoint.X + length, startPoint.Y - tickHeight / 2), new Point(startPoint.X + length, startPoint.Y + tickHeight / 2));
+
+        // 绘制标签 (在比例尺右侧)
+        var formattedLabel = new FormattedText(
+            label,
+            CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            typeface,
+            fontSize,
+            textBrush,
+            pixelsPerDip
+        );
+        dc.DrawText(formattedLabel, new Point(startPoint.X + length + 5, startPoint.Y - formattedLabel.Height / 2)); // 垂直居中对齐
+    }
+
     #region Properties
 
     public DelegateCommand OpenSettingsCommand { get; }
@@ -722,11 +873,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         private set => SetProperty(ref _currentImage, value);
     }
 
-    public SystemStatus SystemStatus
-    {
-        get => _systemStatus;
-        private set => SetProperty(ref _systemStatus, value);
-    }
+    public SystemStatus SystemStatus { get; private set; } = new();
 
     public string CurrentEmployeeInfo
     {

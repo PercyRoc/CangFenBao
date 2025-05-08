@@ -31,14 +31,6 @@ public partial class App
     private static bool _isShuttingDown;
 
     /// <summary>
-    /// 创建容器扩展
-    /// </summary>
-    protected override IContainerExtension CreateContainerExtension()
-    {
-        return new DryIocContainerExtension();
-    }
-
-    /// <summary>
     /// 创建主窗口 (返回 MainWindow)
     /// </summary>
     protected override Window CreateShell()

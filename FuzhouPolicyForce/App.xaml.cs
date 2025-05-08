@@ -21,6 +21,10 @@ using System.Diagnostics;
 using FuzhouPolicyForce.ViewModels.Settings;
 using FuzhouPolicyForce.WangDianTong;
 using SharedUI.Views.Settings;
+using System.Globalization;
+using System.Net.Http;
+using WPFLocalizeExtension.Engine;
+using WPFLocalizeExtension.Providers;
 
 namespace FuzhouPolicyForce;
 
@@ -33,6 +37,8 @@ internal partial class App
     private const string MutexName = "Global\\FuzhouPolicyForce_App_Mutex";
     private Timer? _cleanupTimer;
     private bool _ownsMutex;
+    
+    private static ResxLocalizationProvider ResxProvider { get; } = ResxLocalizationProvider.Instance;
 
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
@@ -58,6 +64,12 @@ internal partial class App
         containerRegistry.RegisterPendulumSortService(PendulumServiceType.Multi);
         containerRegistry.RegisterSingleton<IHostedService, PendulumSortHostedService>();
         containerRegistry.RegisterSingleton<IWangDianTongApiService, WangDianTongApiService>();
+
+        // 注册旺店通API服务 V2
+        // 注册 HttpClient
+        containerRegistry.RegisterSingleton<HttpClient>();
+        // 注册新的旺店通API服务实现
+        containerRegistry.RegisterSingleton<IWangDianTongApiServiceV2, WangDianTongApiServiceImplV2>();
     }
 
     protected override Window CreateShell()
@@ -122,6 +134,12 @@ internal partial class App
     {
         try
         {
+            // Set the static instance as the default provider (optional but good practice)
+            LocalizeDictionary.Instance.DefaultProvider = ResxProvider; 
+            // Force English culture for testing
+            var culture = new CultureInfo("zh-CN"); 
+            LocalizeDictionary.Instance.Culture = culture;
+
             // 配置Serilog
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Debug()

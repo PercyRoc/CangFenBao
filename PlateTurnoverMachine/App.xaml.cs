@@ -210,7 +210,7 @@ internal partial class App
             }
             catch (Exception logEx)
             {
-                Console.WriteLine($"刷新日志时也发生错误: {logEx}");
+                Console.WriteLine(@$"刷新日志时也发生错误: {logEx}");
             }
         }
     }

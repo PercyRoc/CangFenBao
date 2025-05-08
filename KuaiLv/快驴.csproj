@@ -14,12 +14,11 @@
     <ItemGroup>
         <ProjectReference Include="..\Common\基础服务.csproj" />
         <ProjectReference Include="..\DeviceService\设备服务.csproj" />
-        <ProjectReference Include="..\SharedUI\公共UI.csproj" />
+        <ProjectReference Include="..\SharedUI\UI组件.csproj" />
     </ItemGroup>
 
     <ItemGroup>
         <!-- Prism -->
-        <PackageReference Include="Prism.DryIoc" />
         <PackageReference Include="Prism.Wpf" />
 
         <!-- Serilog -->

@@ -1,0 +1,67 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0-windows</TargetFramework>
+        <RootNamespace>SharedUI</RootNamespace>
+        <Nullable>enable</Nullable>
+        <UseWPF>true</UseWPF>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <PackageId>SharedUI</PackageId>
+		<RootNamespace>SharedUI</RootNamespace>
+		<AssemblyName>SharedUI</AssemblyName>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Resource Include="Resources\Icon\*.png" />
+        <Resource Include="Resources\Icon\*.ico" />
+        <Resource Include="Resources\Styles\**\*.xaml">
+            <SubType>Designer</SubType>
+            <Generator>MSBuild:Compile</Generator>
+        </Resource>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="FluentFTP" />
+        <PackageReference Include="MahApps.Metro.IconPacks.Material" />
+        <PackageReference Include="Prism.Unity" />
+        <PackageReference Include="Prism.Wpf" />
+        <PackageReference Include="WPF-UI" />
+        <PackageReference Include="HandyControl" />
+        <PackageReference Include="NPOI" />
+        <PackageReference Include="WPFLocalizeExtension" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Folder Include="Resources\Styles\" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Common\基础服务.csproj" />
+        <ProjectReference Include="..\DeviceService\设备服务.csproj" />
+        <ProjectReference Include="..\SortingServices\分拣服务.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Update="Resources\Strings.resx">
+        <Generator>ResXFileCodeGenerator</Generator>
+        <LastGenOutput>Strings.Designer.cs</LastGenOutput>
+      </EmbeddedResource>
+      <EmbeddedResource Update="Resources\Strings.zh-CN.resx">
+        <Generator>ResXFileCodeGenerator</Generator>
+        <LastGenOutput>Strings.zh-CN.Designer.cs</LastGenOutput>
+      </EmbeddedResource>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Update="Resources\Strings.Designer.cs">
+        <DesignTime>True</DesignTime>
+        <AutoGen>True</AutoGen>
+        <DependentUpon>Strings.resx</DependentUpon>
+      </Compile>
+      <Compile Update="Resources\Strings.zh-CN.Designer.cs">
+        <DesignTime>True</DesignTime>
+        <AutoGen>True</AutoGen>
+        <DependentUpon>Strings.zh-CN.resx</DependentUpon>
+      </Compile>
+    </ItemGroup>
+</Project>

@@ -54,7 +54,8 @@ public class WangDianTongApiService(HttpClient httpClient, ISettingsService sett
             requestParams.Add("sign", sign);
 
             // 构建请求URL
-            var apiUrl = $"{settings.GetApiBaseUrl()}vip_stockout_sales_weight_push.php";
+            var apiUrl = $"{settings.GetApiBaseUrl()}open_api/service.php";
+            // var apiUrl = $"{settings.GetApiBaseUrl()}vip_stockout_sales_weight_push.php";
             
             // 记录请求详情
             Log.Information("旺店通重量回传请求: URL={Url}, 参数={@Params}", 

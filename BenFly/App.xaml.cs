@@ -25,7 +25,10 @@ using DeviceService.DataSourceDevices.Belt;
 using Timer = System.Timers.Timer;
 using System.Windows.Threading;
 using System.ComponentModel;
+using System.Globalization;
 using SharedUI.Views.Windows;
+using WPFLocalizeExtension.Engine;
+using WPFLocalizeExtension.Providers;
 
 namespace BenFly;
 
@@ -39,7 +42,7 @@ public partial class App
     private Timer? _cleanupTimer;
     private bool _ownsMutex;
     private bool _isShuttingDown;
-
+    private static ResxLocalizationProvider ResxProvider { get; } = ResxLocalizationProvider.Instance;
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
         // 注册主窗口
@@ -129,6 +132,11 @@ public partial class App
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        // Set the static instance as the default provider (optional but good practice)
+        LocalizeDictionary.Instance.DefaultProvider = ResxProvider; 
+        // Force English culture for testing
+        var culture = new CultureInfo("zh-CN"); 
+        LocalizeDictionary.Instance.Culture = culture;
         // 配置Serilog
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Debug()

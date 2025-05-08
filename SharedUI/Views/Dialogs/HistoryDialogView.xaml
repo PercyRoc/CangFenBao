@@ -7,9 +7,13 @@
              xmlns:prism="http://prismlibrary.com/"
              xmlns:hc="https://handyorg.github.io/handycontrol"
              xmlns:viewModels="clr-namespace:SharedUI.ViewModels"
+             xmlns:lex="http://wpflocalizeextension.codeplex.com" 
+             lex:LocalizeDictionary.DesignCulture="en" 
+             lex:ResxLocalizationProvider.DefaultAssembly="SharedUI" 
+             lex:ResxLocalizationProvider.DefaultDictionary="Resources.Strings" 
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
-             d:DataContext="{d:DesignInstance Type=viewModels:HistoryDialogViewModel}" >
+             d:DataContext="{d:DesignInstance Type=viewModels:HistoryDialogViewModel}">
 
     <UserControl.Resources>
         <ResourceDictionary>
@@ -40,157 +44,159 @@
     <Grid>
         <!-- 主要内容 -->
         <Border Background="{StaticResource MainBackground}">
-            <Grid Margin="16">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
+            <ScrollViewer>
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
 
-                <!-- 查询条件 -->
-                <Border Grid.Row="0"
-                        Margin="0,0,0,16"
-                        Background="{DynamicResource ControlFillColorDefaultBrush}"
-                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                        BorderThickness="1"
-                        CornerRadius="4"
-                        Padding="16">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="180" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="180" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="180" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="120" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="180" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
+                    <!-- 查询条件 -->
+                    <Border Grid.Row="0"
+                            Margin="0,0,0,16"
+                            Background="{DynamicResource ControlFillColorDefaultBrush}"
+                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="16">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="120" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
 
-                        <TextBlock Grid.Column="0"
-                                   Text="开始日期:"
-                                   VerticalAlignment="Center"
-                                   Margin="0,0,8,0"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                        <DatePicker Grid.Column="1"
-                                    SelectedDate="{Binding StartDate}"
-                                    Margin="0,0,16,0" />
+                            <TextBlock Grid.Column="0"
+                                       Text="{lex:Loc Key=HistoryDialog_Label_StartDate}"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,0"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                            <DatePicker Grid.Column="1"
+                                        SelectedDate="{Binding StartDate}"
+                                        Margin="0,0,16,0" />
 
-                        <TextBlock Grid.Column="2"
-                                   Text="结束日期:"
-                                   VerticalAlignment="Center"
-                                   Margin="0,0,8,0"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                        <DatePicker Grid.Column="3"
-                                    SelectedDate="{Binding EndDate}"
-                                    Margin="0,0,16,0" />
+                            <TextBlock Grid.Column="2"
+                                       Text="{lex:Loc Key=HistoryDialog_Label_EndDate}"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,0"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                            <DatePicker Grid.Column="3"
+                                        SelectedDate="{Binding EndDate}"
+                                        Margin="0,0,16,0" />
 
-                        <TextBlock Grid.Column="4"
-                                   Text="条码:"
-                                   VerticalAlignment="Center"
-                                   Margin="0,0,8,0"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                        <ui:TextBox Grid.Column="5"
-                                    Text="{Binding SearchBarcode, UpdateSourceTrigger=PropertyChanged}"
-                                    PlaceholderText="输入条码..."
-                                    ClearButtonEnabled="True"
-                                    Icon="Barcode24"
-                                    Margin="0,0,16,0" />
+                            <TextBlock Grid.Column="4"
+                                       Text="{lex:Loc Key=HistoryDialog_Label_Barcode}"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,0"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                            <ui:TextBox Grid.Column="5"
+                                        Text="{Binding SearchBarcode, UpdateSourceTrigger=PropertyChanged}"
+                                        PlaceholderText="{lex:Loc Key=HistoryDialog_Placeholder_Barcode}"
+                                        ClearButtonEnabled="True"
+                                        Icon="Barcode24"
+                                        Margin="0,0,16,0" />
 
-                        <TextBlock Grid.Column="6"
-                                   Text="格口:"
-                                   VerticalAlignment="Center"
-                                   Margin="0,0,8,0"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                        <ui:TextBox Grid.Column="7"
-                                    Text="{Binding SearchChute, UpdateSourceTrigger=PropertyChanged}"
-                                    PlaceholderText="输入格口号..."
-                                    ClearButtonEnabled="True"
-                                    Icon="BoxMultiple24"
-                                    Margin="0,0,16,0" />
+                            <TextBlock Grid.Column="6"
+                                       Text="{lex:Loc Key=HistoryDialog_Label_Chute}"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,0"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                            <ui:TextBox Grid.Column="7"
+                                        Text="{Binding SearchChute, UpdateSourceTrigger=PropertyChanged}"
+                                        PlaceholderText="{lex:Loc Key=HistoryDialog_Placeholder_Chute}"
+                                        ClearButtonEnabled="True"
+                                        Icon="BoxMultiple24"
+                                        Margin="0,0,16,0" />
 
-                        <TextBlock Grid.Column="8"
-                                   Text="状态:"
-                                   VerticalAlignment="Center"
-                                   Margin="0,0,8,0"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                        <ComboBox Grid.Column="9"
-                                     ItemsSource="{Binding StatusList}"
-                                     SelectedItem="{Binding SelectedStatus}"
-                                     Margin="0,0,16,0" />
+                            <TextBlock Grid.Column="8"
+                                       Text="{lex:Loc Key=HistoryDialog_Label_Status}"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,0"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                            <ComboBox Grid.Column="9"
+                                         ItemsSource="{Binding StatusList}"
+                                         SelectedItem="{Binding SelectedStatus}"
+                                         Margin="0,0,16,0" />
 
-                        <StackPanel Grid.Column="10" Orientation="Horizontal">
-                            <ui:Button Appearance="Primary"
-                                       Command="{Binding QueryCommand}">
-                                <StackPanel Orientation="Horizontal">
-                                    <ui:SymbolIcon Symbol="Search24" Margin="0,0,8,0" />
-                                    <TextBlock Text="查询" />
-                                </StackPanel>
-                            </ui:Button>
+                            <StackPanel Grid.Column="10" Orientation="Horizontal">
+                                <ui:Button Appearance="Primary"
+                                           Command="{Binding QueryCommand}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:SymbolIcon Symbol="Search24" Margin="0,0,8,0" />
+                                        <TextBlock Text="{lex:Loc Key=HistoryDialog_Button_Query}" />
+                                    </StackPanel>
+                                </ui:Button>
 
-                            <ui:Button Appearance="Secondary"
-                                       Command="{Binding ExportToExcelCommand}"
-                                       Margin="8,0,0,0">
-                                <StackPanel Orientation="Horizontal">
-                                    <ui:SymbolIcon Symbol="DocumentTable24" Margin="0,0,8,0" />
-                                    <TextBlock Text="导出Excel" />
-                                </StackPanel>
-                            </ui:Button>
-                        </StackPanel>
-                    </Grid>
-                </Border>
+                                <ui:Button Appearance="Secondary"
+                                           Command="{Binding ExportToExcelCommand}"
+                                           Margin="8,0,0,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:SymbolIcon Symbol="DocumentTable24" Margin="0,0,8,0" />
+                                        <TextBlock Text="{lex:Loc Key=HistoryDialog_Button_ExportExcel}" />
+                                    </StackPanel>
+                                </ui:Button>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
 
-                <!-- 数据列表 -->
-                <Border Grid.Row="1"
-                        Background="{DynamicResource ControlFillColorDefaultBrush}"
-                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                        BorderThickness="1"
-                        CornerRadius="4">
-                    <DataGrid Margin="1"
-                              ItemsSource="{Binding PackageRecords}"
-                              AutoGenerateColumns="False"
-                              IsReadOnly="True"
-                              CanUserSortColumns="True"
-                              CanUserResizeColumns="True"
-                              GridLinesVisibility="All"
-                              Style="{DynamicResource DefaultDataGridStyle}"
-                              ColumnHeaderStyle="{DynamicResource DefaultDataGridColumnHeaderStyle}"
-                              CellStyle="{DynamicResource DefaultDataGridCellStyle}"
-                              RowStyle="{DynamicResource DefaultDataGridRowStyle}">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="编号" Binding="{Binding Id}" Width="80" />
-                            <DataGridTextColumn Header="条码" Binding="{Binding Barcode}" Width="250" />
-                            <DataGridTemplateColumn Header="图片" Width="60">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <Button Style="{StaticResource ImageButtonStyle}"
-                                                Command="{Binding DataContext.OpenImageCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                                                CommandParameter="{Binding ImagePath}"
-                                                ToolTip="打开图片">
-                                            <ui:SymbolIcon Symbol="Image24" FontSize="18" />
-                                        </Button>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                            <DataGridTextColumn Header="格口" Binding="{Binding ChuteNumber}" Width="80" />
-                            <DataGridTextColumn Header="重量(kg)" Binding="{Binding Weight}" Width="100" />
-                            <DataGridTextColumn Header="长度(cm)" Binding="{Binding Length, StringFormat={}{0:F1}}"
-                                                Width="100" />
-                            <DataGridTextColumn Header="宽度(cm)" Binding="{Binding Width, StringFormat={}{0:F1}}"
-                                                Width="100" />
-                            <DataGridTextColumn Header="高度(cm)" Binding="{Binding Height, StringFormat={}{0:F1}}"
-                                                Width="100" />
-                            <DataGridTextColumn Header="体积(cm³)" Binding="{Binding Volume}" Width="120" />
-                            <DataGridTextColumn Header="状态" Binding="{Binding StatusDisplay}" Width="100" />
-                            <DataGridTextColumn Header="创建时间"
-                                                Binding="{Binding CreateTime, StringFormat=yyyy-MM-dd HH:mm:ss}"
-                                                Width="*" />
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </Border>
-            </Grid>
+                    <!-- 数据列表 -->
+                    <Border Grid.Row="1"
+                            Background="{DynamicResource ControlFillColorDefaultBrush}"
+                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4">
+                        <DataGrid Margin="1"
+                                  ItemsSource="{Binding PackageRecords}"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  CanUserSortColumns="True"
+                                  CanUserResizeColumns="True"
+                                  GridLinesVisibility="All"
+                                  Style="{DynamicResource DefaultDataGridStyle}"
+                                  ColumnHeaderStyle="{DynamicResource DefaultDataGridColumnHeaderStyle}"
+                                  CellStyle="{DynamicResource DefaultDataGridCellStyle}"
+                                  RowStyle="{DynamicResource DefaultDataGridRowStyle}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="{lex:Loc Key=HistoryDialog_Header_Id}" Binding="{Binding Id}" Width="80" />
+                                <DataGridTextColumn Header="{lex:Loc Key=HistoryDialog_Header_Barcode}" Binding="{Binding Barcode}" Width="250" />
+                                <DataGridTemplateColumn Header="{lex:Loc Key=HistoryDialog_Header_Image}" Width="60">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Button Style="{StaticResource ImageButtonStyle}"
+                                                    Command="{Binding DataContext.OpenImageCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                    CommandParameter="{Binding ImagePath}"
+                                                    ToolTip="{lex:Loc Key=HistoryDialog_Tooltip_OpenImage}">
+                                                <ui:SymbolIcon Symbol="Image24" FontSize="18" />
+                                            </Button>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Header="{lex:Loc Key=HistoryDialog_Header_Chute}" Binding="{Binding ChuteNumber}" Width="80" />
+                                <DataGridTextColumn Header="{lex:Loc Key=HistoryDialog_Header_Weight}" Binding="{Binding Weight}" Width="100" />
+                                <DataGridTextColumn Header="{lex:Loc Key=HistoryDialog_Header_Length}" Binding="{Binding Length, StringFormat={}{0:F1}}"
+                                                    Width="100" />
+                                <DataGridTextColumn Header="{lex:Loc Key=HistoryDialog_Header_Width}" Binding="{Binding Width, StringFormat={}{0:F1}}"
+                                                    Width="100" />
+                                <DataGridTextColumn Header="{lex:Loc Key=HistoryDialog_Header_Height}" Binding="{Binding Height, StringFormat={}{0:F1}}"
+                                                    Width="100" />
+                                <DataGridTextColumn Header="{lex:Loc Key=HistoryDialog_Header_Volume}" Binding="{Binding Volume}" Width="120" />
+                                <DataGridTextColumn Header="{lex:Loc Key=HistoryDialog_Header_Status}" Binding="{Binding StatusDisplay}" Width="100" />
+                                <DataGridTextColumn Header="{lex:Loc Key=HistoryDialog_Header_CreateTime}"
+                                                    Binding="{Binding CreateTime, StringFormat=yyyy-MM-dd HH:mm:ss}"
+                                                    Width="*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </ScrollViewer>
         </Border>
 
         <!-- 消息通知容器 -->

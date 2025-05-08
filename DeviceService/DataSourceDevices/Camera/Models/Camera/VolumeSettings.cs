@@ -12,4 +12,9 @@ public class VolumeSettings : CameraSettings
     ///     超时时间（毫秒）
     /// </summary>
     public int TimeoutMs { get; set; } = 5000;
+
+    /// <summary>
+    ///     尺寸刻度图保存模式
+    /// </summary>
+    public DimensionImageSaveMode ImageSaveMode { get; set; } = DimensionImageSaveMode.Vertical; // Default to Vertical view
 }

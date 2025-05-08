@@ -9,6 +9,7 @@ using Microsoft.Win32;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
 using Serilog;
+using WPFLocalizeExtension.Engine;
 
 namespace SharedUI.ViewModels;
 
@@ -19,13 +20,14 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
 {
     private readonly INotificationService _notificationService;
     private readonly IPackageDataService _packageDataService;
+
     private DateTime _endDate = DateTime.Today;
     private bool _isLoading;
     private ObservableCollection<PackageRecord> _packageRecords = [];
     private string _searchBarcode = string.Empty;
     private string _searchChute = string.Empty;
     private DateTime _startDate = DateTime.Today;
-    private string _selectedStatus = "全部";
+    private string _selectedStatus;
 
     /// <summary>
     ///     状态列表 - 动态生成
@@ -33,7 +35,7 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
     public List<string> StatusList { get; }
 
     /// <summary>
-    ///     选中的状态
+    ///     选中的状态 (Localized string from WPFLocalizeExtension)
     /// </summary>
     public string SelectedStatus
     {
@@ -57,20 +59,27 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
         _packageDataService = packageDataService;
         _notificationService = notificationService;
 
-        // 动态生成状态列表
-        var statusOptions = new List<string> { "全部" }; // 添加 "全部" 选项
+        // 动态生成状态列表 - 使用本地化
+        var allOption = GetLocString("HistoryDialog_All", "All");
+        var statusOptions = new List<string> { allOption };
         var displayNames = Enum.GetValues<PackageStatus>()
-                               .Select(GetStatusDisplay) // 获取所有状态的显示名称
-                               .Distinct() // 去除重复的显示名称
-                               .OrderBy(s => s); // 按名称排序
+                               .Select(GetLocalizedStatusDisplayForFilter)
+                               .Distinct()
+                               .OrderBy(s => s);
         statusOptions.AddRange(displayNames);
         StatusList = statusOptions;
-        // _selectedStatus 默认是 "全部", 无需重新设置
+        _selectedStatus = allOption;
 
         QueryCommand = new DelegateCommand(QueryAsync);
         ExportToExcelCommand = new DelegateCommand(ExecuteExportToExcel, CanExportToExcel)
             .ObservesProperty(() => PackageRecords.Count);
         OpenImageCommand = new DelegateCommand<string>(OpenImageExecute, CanOpenImage);
+    }
+
+    private static string GetLocString(string key, string? fallback = null)
+    {
+        var value = LocalizeDictionary.Instance.DefaultProvider?.GetLocalizedObject(key, null, LocalizeDictionary.Instance.Culture) as string;
+        return value ?? fallback ?? key;
     }
 
     /// <summary>
@@ -142,8 +151,6 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
     /// </summary>
     public ICommand OpenImageCommand { get; }
 
-    public string Title => "包裹历史记录";
-
     public DialogCloseListener RequestClose { get; private set; } = default!;
 
     public bool CanCloseDialog()
@@ -157,7 +164,6 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
 
     public void OnDialogOpened(IDialogParameters parameters)
     {
-        // 执行初始查询
         QueryAsync();
     }
 
@@ -170,69 +176,55 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
         {
             var startTime = StartDate.Date;
             var endTime = EndDate.Date.AddDays(1).AddSeconds(-1);
+            var allOptionLocalized = GetLocString("HistoryDialog_All", "All");
 
-            // 打印查询参数用于调试
             Log.Information("历史记录查询参数 - 开始日期: {StartDate}, 结束日期: {EndDate}, 条码: {Barcode}, 格口: {Chute}, 状态: {Status}",
                 startTime, endTime, SearchBarcode, SearchChute, SelectedStatus);
 
-            // 显示加载状态
             IsLoading = true;
-
-            // 获取基础查询结果
             var records = await _packageDataService.GetPackagesInTimeRangeAsync(startTime, endTime);
 
-            // 如果有条码搜索条件，进行过滤
             if (!string.IsNullOrWhiteSpace(SearchBarcode))
             {
                 records = records.Where(r => r.Barcode.Contains(SearchBarcode, StringComparison.OrdinalIgnoreCase))
                     .ToList();
             }
 
-            // 如果有格口搜索条件，进行过滤
             if (!string.IsNullOrWhiteSpace(SearchChute) && int.TryParse(SearchChute, out var chuteNumber))
             {
                 records = records.Where(r => r.ChuteNumber == chuteNumber).ToList();
             }
 
-            // 根据状态进行过滤
-            if (SelectedStatus != "全部")
+            if (SelectedStatus != allOptionLocalized)
             {
-                // 查找与所选显示名称匹配的状态枚举值
                 var targetStatuses = Enum.GetValues<PackageStatus>()
-                                         .Where(s => GetStatusDisplay(s) == SelectedStatus)
+                                         .Where(s => GetLocalizedStatusDisplayForFilter(s) == SelectedStatus)
                                          .ToList();
-
-                if (targetStatuses.Count != 0)
+                if (targetStatuses.Any())
                 {
-                    // 过滤记录，使其状态必须是目标状态之一
                     records = records.Where(r => targetStatuses.Contains(r.Status)).ToList();
                 }
                 else
                 {
-                    // 如果选中的状态字符串没有匹配到任何枚举值（理论上不应发生）
-                    Log.Warning("无法将选择的状态 '{SelectedStatus}' 映射到任何 PackageStatus。", SelectedStatus);
-                    records = []; // 清空结果
+                    Log.Warning("无法将选择的状态 '{SelectedStatus}' 映射到任何 PackageStatus。将显示所有状态。", SelectedStatus);
                 }
             }
-
+            
             PackageRecords = [.. records];
-            _notificationService.ShowSuccessWithToken("查询成功", "HistoryWindowGrowl");
+            _notificationService.ShowSuccessWithToken(
+                GetLocString("HistoryDialog_QuerySuccess", "Query successful"),
+                "HistoryWindowGrowl");
         }
         catch (Exception ex)
-        {
-            // 记录错误
-            Log.Error(ex, "查询历史记录时发生错误");
-
-            // 通知用户
-            _notificationService.ShowErrorWithToken("查询失败", "HistoryWindowGrowl");
-
-            // 确保有一个空的结果集
+        {             Log.Error(ex, "查询历史记录时发生错误");
+            _notificationService.ShowErrorWithToken(
+                GetLocString("HistoryDialog_QueryFailed", "Query failed"),
+                "HistoryWindowGrowl");
             PackageRecords = [];
         }
         finally
-        {
-            // 无论成功失败，都结束加载状态
-            IsLoading = false;
+        {             IsLoading = false;
+            ExportToExcelCommand.RaiseCanExecuteChanged();
         }
     }
 
@@ -253,9 +245,9 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
 
         var dialog = new SaveFileDialog
         {
-            Filter = "Excel文件|*.xlsx",
-            Title = "导出包裹记录",
-            FileName = $"包裹记录_{DateTime.Now:yyyyMMddHHmmss}.xlsx"
+            Filter = GetLocString("HistoryDialog_ExportFilter", "Excel Files|*.xlsx"),
+            Title = GetLocString("HistoryDialog_ExportTitle", "Export Package Records"),
+            FileName = $"{GetLocString("HistoryDialog_ExportFileNamePrefix", "PackageRecords")}_{DateTime.Now:yyyyMMddHHmmss}.xlsx"
         };
 
         if (dialog.ShowDialog() != true) return;
@@ -267,16 +259,15 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
         {
             await Task.Run(() =>
             {
-                IWorkbook workbook = new XSSFWorkbook();
-                ISheet worksheet = workbook.CreateSheet("包裹记录");
+                var workbook = new XSSFWorkbook();
+                var worksheet = workbook.CreateSheet(GetLocString("HistoryDialog_ExportSheetName", "Package Records"));
 
-                // 创建字体和样式
-                IFont headerFont = workbook.CreateFont();
+                var headerFont = workbook.CreateFont();
                 headerFont.IsBold = true;
 
-                ICellStyle headerStyle = workbook.CreateCellStyle();
+                var headerStyle = workbook.CreateCellStyle();
                 headerStyle.SetFont(headerFont);
-                headerStyle.FillForegroundColor = IndexedColors.Grey25Percent.Index; // 使用预定义颜色
+                headerStyle.FillForegroundColor = IndexedColors.Grey25Percent.Index;
                 headerStyle.FillPattern = FillPattern.SolidForeground;
                 headerStyle.BorderBottom = BorderStyle.Thin;
                 headerStyle.BorderLeft = BorderStyle.Thin;
@@ -285,19 +276,26 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
                 headerStyle.Alignment = HorizontalAlignment.Center;
                 headerStyle.VerticalAlignment = VerticalAlignment.Center;
 
-                // 日期格式
-                IDataFormat dataFormat = workbook.CreateDataFormat();
-                ICellStyle dateStyle = workbook.CreateCellStyle();
+                var dataFormat = workbook.CreateDataFormat();
+                var dateStyle = workbook.CreateCellStyle();
                 dateStyle.DataFormat = dataFormat.GetFormat("yyyy-MM-dd HH:mm:ss");
 
-                // 设置表头
                 var headers = new[]
                 {
-                    "编号", "条码", "格口", "重量(kg)", "长度(cm)", "宽度(cm)", "高度(cm)",
-                    "体积(cm³)", "状态", "备注", "创建时间"
+                    GetLocString("HistoryDialog_Header_Id", "ID"),
+                    GetLocString("HistoryDialog_Header_Barcode", "Barcode"),
+                    GetLocString("HistoryDialog_Header_Chute", "Chute"),
+                    GetLocString("HistoryDialog_Header_Weight", "Weight(kg)"),
+                    GetLocString("HistoryDialog_Header_Length", "Length(cm)"),
+                    GetLocString("HistoryDialog_Header_Width", "Width(cm)"),
+                    GetLocString("HistoryDialog_Header_Height", "Height(cm)"),
+                    GetLocString("HistoryDialog_Header_Volume", "Volume(cm³)"),
+                    GetLocString("HistoryDialog_Header_Status", "Status"),
+                    GetLocString("HistoryDialog_Header_Remarks", "Remarks"),
+                    GetLocString("HistoryDialog_Header_CreateTime", "Create Time")
                 };
 
-                IRow headerRow = worksheet.CreateRow(0);
+                var headerRow = worksheet.CreateRow(0);
                 for (var i = 0; i < headers.Length; i++)
                 {
                     ICell cell = headerRow.CreateCell(i);
@@ -305,68 +303,53 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
                     cell.CellStyle = headerStyle;
                 }
 
-                // 写入数据
                 var recordsToExport = PackageRecords.ToList();
                 for (var i = 0; i < recordsToExport.Count; i++)
                 {
                     var record = recordsToExport[i];
-                    var row = worksheet.CreateRow(i + 1); // NPOI 行索引从 0 开始
+                    var row = worksheet.CreateRow(i + 1);
 
                     row.CreateCell(0).SetCellValue(record.Id);
                     row.CreateCell(1).SetCellValue(record.Barcode);
-
-                    // Handle nullable int? for ChuteNumber
-                    ICell chuteCell = row.CreateCell(2);
+                    var chuteCell = row.CreateCell(2);
                     if (record.ChuteNumber.HasValue) chuteCell.SetCellValue(record.ChuteNumber.Value); else chuteCell.SetCellType(CellType.Blank);
-
-                    // Handle double for Weight (non-nullable)
                     row.CreateCell(3).SetCellValue(record.Weight);
-
-                    // Handle nullable double? for Length, Width, Height
-                    ICell lengthCell = row.CreateCell(4);
+                    var lengthCell = row.CreateCell(4);
                     if (record.Length.HasValue) lengthCell.SetCellValue(Math.Round(record.Length.Value, 1)); else lengthCell.SetCellType(CellType.Blank);
-
-                    ICell widthCell = row.CreateCell(5);
+                    var widthCell = row.CreateCell(5);
                     if (record.Width.HasValue) widthCell.SetCellValue(Math.Round(record.Width.Value, 1)); else widthCell.SetCellType(CellType.Blank);
-
-                    ICell heightCell = row.CreateCell(6);
+                    var heightCell = row.CreateCell(6);
                     if (record.Height.HasValue) heightCell.SetCellValue(Math.Round(record.Height.Value, 1)); else heightCell.SetCellType(CellType.Blank);
-
-                    // Handle nullable double? for Volume
-                    ICell volumeCell = row.CreateCell(7);
+                    var volumeCell = row.CreateCell(7);
                     if (record.Volume.HasValue) volumeCell.SetCellValue(record.Volume.Value); else volumeCell.SetCellType(CellType.Blank);
 
                     row.CreateCell(8).SetCellValue(record.StatusDisplay);
                     row.CreateCell(9).SetCellValue(record.ErrorMessage);
 
-                    ICell dateCell = row.CreateCell(10);
+                    var dateCell = row.CreateCell(10);
                     dateCell.SetCellValue(record.CreateTime);
-                    dateCell.CellStyle = dateStyle; // 应用日期样式
+                    dateCell.CellStyle = dateStyle;
                 }
 
-                // 自动调整列宽
-                for (int i = 0; i < headers.Length; i++)
+                for (var i = 0; i < headers.Length; i++)
                 {
                     worksheet.AutoSizeColumn(i);
                 }
 
-                // 保存文件
-                using (var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write))
-                {
-                    workbook.Write(fs);
-                }
-            }); // Task.Run 结束
+                using var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write);
+                workbook.Write(fs);
+            });
 
-            _notificationService.ShowSuccessWithToken($"已成功导出 {PackageRecords.Count} 条记录到 {Path.GetFileName(filePath)}", "HistoryWindowGrowl");
+            var successMsgFormat = GetLocString("HistoryDialog_ExportSuccessFormat", "{0} records exported successfully to {1}");
+            _notificationService.ShowSuccessWithToken(string.Format(successMsgFormat, PackageRecords.Count, Path.GetFileName(filePath)), "HistoryWindowGrowl");
         }
         catch (Exception ex)
-        {
-            Log.Error(ex, "使用NPOI导出Excel失败");
-            _notificationService.ShowErrorWithToken($"导出失败: {ex.Message}", "HistoryWindowGrowl");
+        {             Log.Error(ex, "使用NPOI导出Excel失败");
+            var errorMsgFormat = GetLocString("HistoryDialog_ExportFailedFormat", "Export failed: {0}");
+            _notificationService.ShowErrorWithToken(string.Format(errorMsgFormat, ex.Message), "HistoryWindowGrowl");
         }
         finally
-        {
-            IsLoading = false;
+        {             IsLoading = false;
         }
     }
 
@@ -383,54 +366,54 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
     /// </summary>
     private void OpenImageExecute(string? imagePath)
     {
-        if (!CanOpenImage(imagePath))
+        if (!CanOpenImage(imagePath) || imagePath == null)
         {
-            Log.Warning("Attempted to open image with invalid path: {ImagePath}", imagePath);
+            Log.Warning("Attempted to open image with invalid path: {ImagePath}", imagePath ?? "null");
             return;
         }
 
         try
         {
-            if (File.Exists(imagePath)) // Check if file exists
+            if (File.Exists(imagePath))
             {
-                var processStartInfo = new ProcessStartInfo(imagePath) // Use '!' as path is checked by CanOpenImage
-                {
-                    UseShellExecute = true // Required to use system default app
-                };
+                var processStartInfo = new ProcessStartInfo(imagePath) { UseShellExecute = true };
                 Process.Start(processStartInfo);
                 Log.Information("Opened image file: {ImagePath}", imagePath);
             }
             else
             {
                 Log.Error("Image file not found at path: {ImagePath}", imagePath);
-                _notificationService.ShowErrorWithToken($"图片文件未找到: {imagePath}", "HistoryWindowGrowl");
+                var notFoundMsgFormat = GetLocString("HistoryDialog_ImageNotFoundFormat", "Image file not found: {0}");
+                _notificationService.ShowErrorWithToken(string.Format(notFoundMsgFormat, imagePath), "HistoryWindowGrowl");
             }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to open image file: {ImagePath}", imagePath);
-            _notificationService.ShowErrorWithToken($"无法打开图片: {ex.Message}", "HistoryWindowGrowl");
+            var openFailedMsgFormat = GetLocString("HistoryDialog_ImageOpenFailedFormat", "Could not open image: {0}");
+            _notificationService.ShowErrorWithToken(string.Format(openFailedMsgFormat, ex.Message), "HistoryWindowGrowl");
         }
     }
 
     /// <summary>
-    ///     获取状态的中文显示
+    ///     获取用于状态筛选器下拉列表的本地化显示名称
     /// </summary>
-    private static string GetStatusDisplay(PackageStatus status)
+    private string GetLocalizedStatusDisplayForFilter(PackageStatus status)
     {
-        return status switch
+        var resourceKey = status switch
         {
-            PackageStatus.Created => "已创建",
-            PackageStatus.Success => "分拣成功",
-            PackageStatus.Failed => "分拣失败",
-            PackageStatus.WaitingForLoading => "等待上传",
-            PackageStatus.LoadingRejected => "上传拒绝",
-            PackageStatus.LoadingSuccess => "上传成功",
-            PackageStatus.LoadingTimeout => "上传超时",
-            PackageStatus.Error => "异常",
-            PackageStatus.Timeout => "超时",
-            PackageStatus.Offline => "离线",
-            _ => status.ToString()
+            PackageStatus.Created => "HistoryDialog_Status_Created",
+            PackageStatus.Success => "HistoryDialog_Status_Success",
+            PackageStatus.Failed => "HistoryDialog_Status_Failed",
+            PackageStatus.WaitingForLoading => "HistoryDialog_Status_WaitingForLoading",
+            PackageStatus.LoadingRejected => "HistoryDialog_Status_LoadingRejected",
+            PackageStatus.LoadingSuccess => "HistoryDialog_Status_LoadingSuccess",
+            PackageStatus.LoadingTimeout => "HistoryDialog_Status_LoadingTimeout",
+            PackageStatus.Error => "HistoryDialog_Status_Error",
+            PackageStatus.Timeout => "HistoryDialog_Status_Timeout",
+            PackageStatus.Offline => "HistoryDialog_Status_Offline",
+            _ => $"HistoryDialog_Status_{status}"
         };
+        return GetLocString(resourceKey, status.ToString());
     }
 }

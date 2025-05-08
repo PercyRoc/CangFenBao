@@ -159,78 +159,72 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private void InitializeStatisticsItems()
     {
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "总包裹数",
-            Value = "0",
-            Unit = "个",
-            Description = "累计处理包裹总数",
-            Icon = "BoxMultiple24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            "总包裹数",
+            "0",
+            "个",
+            "累计处理包裹总数",
+            "BoxMultiple24"
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "成功数",
-            Value = "0",
-            Unit = "个",
-            Description = "处理成功的包裹数量",
-            Icon = "CheckmarkCircle24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            "成功数",
+            "0",
+            "个",
+            "处理成功的包裹数量",
+            "CheckmarkCircle24"
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "失败数",
-            Value = "0",
-            Unit = "个",
-            Description = "处理失败的包裹数量",
-            Icon = "ErrorCircle24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            "失败数",
+            "0",
+            "个",
+            "处理失败的包裹数量",
+            "ErrorCircle24"
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "处理速率",
-            Value = "0",
-            Unit = "个/小时",
-            Description = "每小时处理包裹数量",
-            Icon = "ArrowTrendingLines24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            "处理速率",
+            "0",
+            "个/小时",
+            "每小时处理包裹数量",
+            "ArrowTrendingLines24"
+        ));
     }
 
     private void InitializePackageInfoItems()
     {
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "重量",
-            Value = "0.00",
-            Unit = "kg",
-            Description = "包裹重量",
-            Icon = "Scale24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            "重量",
+            "0.00",
+            "kg",
+            "包裹重量",
+            "Scale24"
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "尺寸",
-            Value = "0 × 0 × 0",
-            Unit = "mm",
-            Description = "长 × 宽 × 高",
-            Icon = "Ruler24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            "尺寸",
+            "0 × 0 × 0",
+            "mm",
+            "长 × 宽 × 高",
+            "Ruler24"
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "时间",
-            Value = "--:--:--",
-            Description = "处理时间",
-            Icon = "Timer24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            "时间",
+            "--:--:--",
+            "",
+            "处理时间",
+            "Timer24"
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "状态",
-            Value = "等待",
-            Description = "处理状态",
-            Icon = "AlertCircle24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            "状态",
+            "等待",
+            "",
+            "处理状态",
+            "AlertCircle24"
+        ));
     }
 
     private void OnCameraConnectionChanged(string? deviceId, bool isConnected)

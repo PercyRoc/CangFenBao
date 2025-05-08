@@ -1,6 +1,6 @@
 namespace Sunnen.Views.Settings;
 
-internal partial class VolumeSettingsView
+public partial class VolumeSettingsView
 {
     public VolumeSettingsView()
     {
