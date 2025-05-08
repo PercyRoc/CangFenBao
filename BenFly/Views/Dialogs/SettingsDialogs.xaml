@@ -11,9 +11,7 @@
              xmlns:settings="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
-             d:DataContext="{d:DesignInstance Type=dialogs:SettingsDialogViewModel}"
-             Width="1280"
-             Height="720">
+             d:DataContext="{d:DesignInstance Type=dialogs:SettingsDialogViewModel}">
 
     <UserControl.Resources>
         <ResourceDictionary>

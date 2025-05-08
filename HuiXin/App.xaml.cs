@@ -13,12 +13,12 @@ using SharedUI.Extensions;
 using SharedUI.ViewModels;
 using SharedUI.ViewModels.Settings;
 using SharedUI.Views.Settings;
-using SortingServices.Car;
 using SortingServices.Servers.Services.JuShuiTan;
 using Timer = System.Timers.Timer;
 using System.ComponentModel;
 using System.Windows.Threading;
 using SharedUI.Views.Windows;
+using SortingServices.Car.Service;
 
 namespace HuiXin;
 
@@ -32,11 +32,6 @@ public partial class App
     private Timer? _cleanupTimer;
     private bool _ownsMutex;
     private bool _isShuttingDown;
-
-    protected override IContainerExtension CreateContainerExtension()
-    {
-        return new DryIocContainerExtension();
-    }
 
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
@@ -65,8 +60,8 @@ public partial class App
 
         containerRegistry.RegisterDialog<SettingsDialogs, SettingsDialogViewModel>("SettingsDialog");
         containerRegistry.RegisterSingleton<IJuShuiTanService, JuShuiTanService>();
-        containerRegistry.RegisterSingleton<ICarSortService, CarSortService>();
-        containerRegistry.RegisterSingleton<ICarSortingService, CarSortingService>();
+        containerRegistry.RegisterSingleton<CarSortService, CarSortService>();
+        containerRegistry.RegisterSingleton<CarSortingService, CarSortingService>();
     }
 
     protected override Window CreateShell()

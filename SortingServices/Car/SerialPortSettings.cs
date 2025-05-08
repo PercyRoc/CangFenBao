@@ -110,4 +110,4 @@ namespace SortingServices.Car
             set => SetProperty(ref _commandDelayMs, value);
         }
     }
-} 
+}

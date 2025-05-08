@@ -1,8 +1,8 @@
 using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera.HuaRay;
-using DeviceService.DataSourceDevices.Camera.Hikvision;
-using DeviceService.DataSourceDevices.Camera.HikvisionSmartSdk;
+// using DeviceService.DataSourceDevices.Camera.Hikvision;
+// using DeviceService.DataSourceDevices.Camera.HikvisionSmartSdk;
 using DeviceService.DataSourceDevices.Camera.Models.Camera;
 using DeviceService.DataSourceDevices.Camera.Models.Camera.Enums;
 using DeviceService.DataSourceDevices.Camera.TCP;
@@ -92,11 +92,11 @@ public class CameraFactory : IDisposable
             ICameraService camera = manufacturer switch
             {
                 CameraManufacturer.HuaRay => new HuaRayCameraService(),
-                CameraManufacturer.Hikvision when cameraType == CameraType.Industrial =>
-                    new HikvisionIndustrialCameraService(),
-                CameraManufacturer.Hikvision when cameraType == CameraType.Smart =>
-                    new HikvisionSmartCameraService(),
-                CameraManufacturer.Tcp => new TcpCameraService(),
+                // CameraManufacturer.Hikvision when cameraType == CameraType.Industrial =>
+                //     new HikvisionIndustrialCameraService(),
+                // CameraManufacturer.Hikvision when cameraType == CameraType.Smart =>
+                //     new HikvisionSmartCameraService(),
+                // CameraManufacturer.Tcp => new TcpCameraService(),
                 _ => throw new ArgumentException($"不支持的相机厂商和类型组合: {manufacturer} - {cameraType}")
             };
             Log.Information("创建 {Manufacturer} {Type} 相机服务成功", manufacturer, cameraType);

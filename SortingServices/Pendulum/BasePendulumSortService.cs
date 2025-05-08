@@ -251,11 +251,9 @@ public abstract class BasePendulumSortService : IPendulumSortService
             if (PendingSortPackages.TryRemove(package.Index, out _))
             {
                 Log.Warning("分拣超时，已从待处理队列移除.");
-                // TODO: Consider setting package status to Timeout and notifying ViewModel if needed
             }
             else
             {
-                // 可能已经被正常处理了，记录 Debug 信息
                 Log.Debug("超时触发，但包裹已不在待处理队列中 (可能已处理).");
             }
         } // --- 日志上下文结束 ---
@@ -602,67 +600,83 @@ public abstract class BasePendulumSortService : IPendulumSortService
 
                 var photoelectricConfig = GetPhotoelectricConfig(photoelectricName);
 
-
                 // 1. 等待到达最佳位置
                 var sortDelay = photoelectricConfig.SortingDelay;
                 Log.Debug("等待分拣延迟: {SortDelay}ms", sortDelay);
                 await Task.Delay(sortDelay);
 
-                // 2. 确定并发送摆动/回正命令
+                // 2. 确定目标状态和所需命令
                 var targetSlot = package.ChuteNumber;
+                var swingLeft = ShouldSwingLeft(targetSlot);
+                var swingRight = ShouldSwingRight(targetSlot);
+
                 var commandToSend = string.Empty;
                 var commandLogName = string.Empty;
                 var needsResetLater = false;
 
-                var swingLeft = ShouldSwingLeft(targetSlot);
-                var swingRight = ShouldSwingRight(targetSlot);
-
-                // 核心逻辑：决定是否摆动以及摆动方向
+                // 3. 根据当前状态和目标状态决定是否需要发送命令
                 if (swingLeft || swingRight) // 需要摆动
                 {
-                    commandToSend =
-                        swingLeft ? PendulumCommands.Module2.SwingLeft : PendulumCommands.Module2.SwingRight;
-                    commandLogName = swingLeft ? "左摆" : "右摆";
-                    pendulumState.SetSwing(); // 标记为摆动状态
-                    needsResetLater = true; // 摆动后需要回正
-                    Log.Debug("确定命令: {CommandLogName} ({CommandToSend})", commandLogName, commandToSend);
-                }
-                else // 不需要摆动，但可能需要回正
-                {
-                    if (pendulumState.GetCurrentState() == "Swing") // 如果当前是摆动状态
+                    // 检查当前状态是否已经符合要求
+                    if ((swingLeft && pendulumState.CurrentDirection == PendulumDirection.SwingingLeft) ||
+                        (swingRight && pendulumState.CurrentDirection == PendulumDirection.SwingingRight))
                     {
-                        commandToSend = pendulumState.LastSlot % 2 == 1
-                            ? PendulumCommands.Module2.ResetLeft
-                            : PendulumCommands.Module2.ResetRight;
-                        commandLogName = pendulumState.LastSlot % 2 == 1 ? "左回正(之前是奇数口)" : "右回正(之前是偶数口)";
-                        pendulumState.SetReset(); // 标记为回正状态
-                        Log.Debug("当前无需摆动但摆轮非复位状态，确定命令: {CommandLogName} ({CommandToSend})", commandLogName,
-                            commandToSend);
+                        Log.Debug("摆轮已在所需状态 ({CurrentState})，无需发送摆动命令", pendulumState.GetCurrentState());
+                        needsResetLater = true; // 仍然需要后续回正
                     }
                     else
                     {
-                        Log.Debug("当前无需摆动且摆轮已复位，无需发送命令.");
+                        commandToSend = swingLeft ? PendulumCommands.Module2.SwingLeft : PendulumCommands.Module2.SwingRight;
+                        commandLogName = swingLeft ? "左摆" : "右摆";
+                        needsResetLater = true;
+                        Log.Debug("需要改变摆轮状态，确定命令: {CommandLogName} ({CommandToSend})", commandLogName, commandToSend);
+                    }
+                }
+                else // 不需要摆动，但可能需要回正
+                {
+                    if (pendulumState.CurrentDirection != PendulumDirection.Reset)
+                    {
+                        commandToSend = pendulumState.CurrentDirection == PendulumDirection.SwingingLeft
+                            ? PendulumCommands.Module2.ResetLeft
+                            : PendulumCommands.Module2.ResetRight;
+                        commandLogName = pendulumState.CurrentDirection == PendulumDirection.SwingingLeft 
+                            ? "左回正" 
+                            : "右回正";
+                        Log.Debug("摆轮需要回正，确定命令: {CommandLogName} ({CommandToSend})", commandLogName, commandToSend);
+                    }
+                    else
+                    {
+                        Log.Debug("摆轮已在复位状态，无需发送命令");
                     }
                 }
 
-
-                // 3. 发送命令 (如果需要)
+                // 4. 发送命令 (如果需要)
                 if (!string.IsNullOrEmpty(commandToSend))
                 {
                     var commandBytes = GetCommandBytes(commandToSend);
                     if (!await SendCommandWithRetryAsync(client, commandBytes, photoelectricName))
                     {
                         Log.Error("发送命令 '{CommandLogName}' ({CommandToSend}) 失败.", commandLogName, commandToSend);
-                        ProcessingPackages.TryRemove(package.Barcode, out _); // 发送失败，移除处理标记
+                        ProcessingPackages.TryRemove(package.Barcode, out _);
+                        pendulumState.ForceReset(); // 发送失败时强制复位状态
                         return;
                     }
 
-                    Log.Information("已发送命令: {CommandLogName} ({CommandToSend})", commandLogName, commandToSend);
+                    // 命令发送成功，更新状态
+                    if (swingLeft)
+                        pendulumState.SetSwinging(true);
+                    else if (swingRight)
+                        pendulumState.SetSwinging(false);
+                    else
+                        pendulumState.SetReset();
+
+                    Log.Information("已发送命令: {CommandLogName} ({CommandToSend}) 并更新状态为: {State}", 
+                        commandLogName, commandToSend, pendulumState.GetCurrentState());
                 }
 
-                pendulumState.UpdateLastSlot(targetSlot); // 记录这次处理的格口
+                PendulumState.UpdateLastSlot(targetSlot);
 
-                // 4. 如果需要，设置回正定时器
+                // 5. 如果需要，设置回正定时器
                 if (needsResetLater)
                 {
                     var resetDelay = photoelectricConfig.ResetDelay;
@@ -671,73 +685,68 @@ public abstract class BasePendulumSortService : IPendulumSortService
                     var resetTimer = new Timer { Interval = resetDelay, AutoReset = false };
                     resetTimer.Elapsed += async (_, _) =>
                     {
-                        resetTimer.Stop(); // 确保只执行一次
-                        // 在 Timer 回调中再次应用上下文
+                        resetTimer.Stop();
                         using (LogContext.PushProperty("PackageContext", packageContext))
                         {
                             Log.Debug("回正定时器触发.");
                             try
                             {
-                                // 检查客户端连接状态
                                 if (client == null || !client.IsConnected())
                                 {
                                     Log.Warning("回正时客户端 '{Name}' 未连接.", photoelectricName);
-                                    pendulumState.ForceReset(); // 强制标记为复位
+                                    pendulumState.ForceReset();
                                     return;
                                 }
 
-                                // 检查下一个包裹是否需要跳过回正 (逻辑简化)
+                                // 检查下一个包裹是否需要跳过回正
                                 var nextPackageIndex = package.Index + 1;
-                                var skipReset =
-                                    PendingSortPackages.TryGetValue(nextPackageIndex, out var nextPackage) &&
-                                    nextPackage.ChuteNumber == targetSlot && // 下一个目标格口相同
-                                    SlotBelongsToPhotoelectric(nextPackage.ChuteNumber, photoelectricName); // 且属于同一个光电
+                                var skipReset = PendingSortPackages.TryGetValue(nextPackageIndex, out var nextPackage) &&
+                                              nextPackage.ChuteNumber == targetSlot &&
+                                              SlotBelongsToPhotoelectric(nextPackage.ChuteNumber, photoelectricName);
 
                                 if (skipReset)
                                 {
                                     Log.Information("检测到下一个包裹 {NextIndex}|{NextBarcode} 目标格口 ({NextChute}) 与当前相同，跳过回正.",
                                         nextPackage!.Index, nextPackage.Barcode, nextPackage.ChuteNumber);
+                                    return;
                                 }
-                                else
+
+                                // 再次检查当前状态，避免重复发送回正命令
+                                if (pendulumState.CurrentDirection == PendulumDirection.Reset)
                                 {
-                                    // 执行回正
-                                    var resetCommand = swingLeft
-                                        ? PendulumCommands.Module2.ResetLeft
-                                        : PendulumCommands.Module2.ResetRight;
-                                    var resetCmdBytes = GetCommandBytes(resetCommand);
-                                    var resetDir = swingLeft ? "左" : "右";
+                                    Log.Debug("摆轮已经处于复位状态，无需发送回正命令");
+                                    return;
+                                }
 
-                                    Log.Debug("准备发送第一次 {ResetDir} 回正命令 ({ResetCommand})...", resetDir, resetCommand);
-                                    if (await SendCommandWithRetryAsync(client, resetCmdBytes, photoelectricName))
+                                // 执行回正
+                                var resetCommand = pendulumState.CurrentDirection == PendulumDirection.SwingingLeft
+                                    ? PendulumCommands.Module2.ResetLeft
+                                    : PendulumCommands.Module2.ResetRight;
+                                var resetCmdBytes = GetCommandBytes(resetCommand);
+                                var resetDir = pendulumState.CurrentDirection == PendulumDirection.SwingingLeft ? "左" : "右";
+
+                                Log.Debug("准备发送第一次 {ResetDir} 回正命令 ({ResetCommand})...", resetDir, resetCommand);
+                                if (await SendCommandWithRetryAsync(client, resetCmdBytes, photoelectricName))
+                                {
+                                    Log.Information("第一次 {ResetDir} 回正命令 ({ResetCommand}) 发送成功.", resetDir, resetCommand);
+                                    pendulumState.SetReset();
+
+                                    await Task.Delay(10);
+
+                                    Log.Debug("准备发送第二次 {ResetDir} 回正命令 ({ResetCommand})...", resetDir, resetCommand);
+                                    if (await SendCommandWithRetryAsync(client, resetCmdBytes, photoelectricName, maxRetries: 1))
                                     {
-                                        Log.Information("第一次 {ResetDir} 回正命令 ({ResetCommand}) 发送成功.", resetDir,
-                                            resetCommand);
-                                        pendulumState.SetReset(); // 第一次发送成功后就认为状态已复位
-
-                                        // 增加短暂延迟
-                                        await Task.Delay(10); // 延迟10毫秒
-
-                                        Log.Debug("准备发送第二次 {ResetDir} 回正命令 ({ResetCommand})...", resetDir,
-                                            resetCommand);
-                                        if (await SendCommandWithRetryAsync(client, resetCmdBytes, photoelectricName,
-                                                maxRetries: 1)) // 第二次重试次数减少
-                                        {
-                                            Log.Information("第二次 {ResetDir} 回正命令 ({ResetCommand}) 发送成功.", resetDir,
-                                                resetCommand);
-                                        }
-                                        else
-                                        {
-                                            Log.Warning("第二次 {ResetDir} 回正命令 ({ResetCommand}) 发送失败.", resetDir,
-                                                resetCommand);
-                                            // 即使第二次失败，也保持复位状态，因为第一次成功了
-                                        }
+                                        Log.Information("第二次 {ResetDir} 回正命令 ({ResetCommand}) 发送成功.", resetDir, resetCommand);
                                     }
                                     else
                                     {
-                                        Log.Error("第一次发送 {ResetDir} 回正命令 ({ResetCommand}) 失败，强制复位状态.", resetDir,
-                                            resetCommand);
-                                        pendulumState.ForceReset();
+                                        Log.Warning("第二次 {ResetDir} 回正命令 ({ResetCommand}) 发送失败.", resetDir, resetCommand);
                                     }
+                                }
+                                else
+                                {
+                                    Log.Error("第一次发送 {ResetDir} 回正命令 ({ResetCommand}) 失败，强制复位状态.", resetDir, resetCommand);
+                                    pendulumState.ForceReset();
                                 }
                             }
                             catch (Exception ex)
@@ -747,82 +756,42 @@ public abstract class BasePendulumSortService : IPendulumSortService
                             }
                             finally
                             {
-                                resetTimer.Dispose(); // 释放定时器资源
+                                resetTimer.Dispose();
                             }
-                        } // Timer LogContext 结束
+                        }
                     };
                     resetTimer.Start();
                 }
-                else
-                {
-                    // 如果不需要回正，说明动作已完成，可以从 Pending 队列移除
-                    // 修正：无论是否需要回正，分拣动作主要部分完成时就应该移除
-                    if (PendingSortPackages.TryRemove(package.Index, out _))
-                    {
-                        Log.Debug("分拣动作完成 (无需回正)，已从待处理队列移除.");
-                    }
-                    else
-                    {
-                        Log.Warning("尝试移除已完成(无需回正)的包裹失败 (可能已被移除).");
-                    }
-                }
 
-
-                // 修正：包裹移除逻辑应该在回正定时器设置之后，或者在回正定时器内部完成时执行。
-                // 为了确保包裹在物理动作完成前不被错误移除，我们将移除操作放到回正定时器回调中（如果需要回正）
-                // 或者在确定无需回正时立即移除。
-                if (!needsResetLater)
+                // 从待处理队列中移除包裹
+                if (PendingSortPackages.TryRemove(package.Index, out _))
                 {
-                    if (PendingSortPackages.TryRemove(package.Index, out _))
-                    {
-                        Log.Debug("分拣动作完成 (无需回正)，已从待处理队列移除.");
-                    }
-                    else
-                    {
-                        Log.Warning("尝试移除已完成(无需回正)的包裹失败 (可能已被移除).");
-                    }
+                    Log.Debug("分拣动作完成，已从待处理队列移除. {NeedsReset}", 
+                        needsResetLater ? "等待回正" : "无需回正");
                 }
                 else
                 {
-                    // 移除操作将在回正定时器回调中进行 (修改回正定时器逻辑)
-                    // 在回正定时器回调的 finally 块中添加移除逻辑
-                    // (需要传递 package.Index 到回调中)
-                    // **修改回正定时器回调逻辑**
-                    // 移除上述 resetTimer.Elapsed 中的移除逻辑，改为在 finally 中执行
-                    // 需要修改 Elapsed 事件处理器的签名以接收 package.Index 或修改类的状态
-                    // 为了简化，我们在执行完主要动作后就认为可以移除了，后续的回正是独立动作
-                    if (PendingSortPackages.TryRemove(package.Index, out _))
-                    {
-                        Log.Debug("分拣动作完成 (等待回正)，已从待处理队列移除.");
-                    }
-                    else
-                    {
-                        Log.Warning("尝试移除已完成(等待回正)的包裹失败 (可能已被移除).");
-                    }
+                    Log.Warning("尝试移除已完成的包裹失败 (可能已被移除).");
                 }
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "执行分拣动作时发生异常.");
-                // 异常时尝试移除
                 PendingSortPackages.TryRemove(package.Index, out _);
-                // 强制复位摆轮状态？
                 pendulumState?.ForceReset();
             }
             finally
             {
-                // 无论成功失败，最终都要从 ProcessingPackages 中移除标记
                 if (ProcessingPackages.TryRemove(package.Barcode, out _))
                 {
                     Log.Debug("已从处理中状态移除.");
                 }
                 else
                 {
-                    // 这通常不应该发生，但也记录一下
                     Log.Warning("尝试从处理中状态移除失败 (可能已被移除).");
                 }
             }
-        } // --- 日志上下文结束 ---
+        }
     }
 
     /// <summary>
@@ -885,36 +854,73 @@ public abstract class BasePendulumSortService : IPendulumSortService
     }
 
     /// <summary>
-    ///     摆轮状态类
+    /// 摆轮方向枚举
+    /// </summary>
+    protected enum PendulumDirection
+    {
+        Reset,          // 复位状态
+        SwingingLeft,   // 左摆状态
+        SwingingRight   // 右摆状态
+    }
+
+    /// <summary>
+    /// 摆轮状态类
     /// </summary>
     protected class PendulumState
     {
-        private bool _isInReset = true;
-        public int LastSlot { get; private set; }
+        /// <summary>
+        /// 获取当前摆轮方向
+        /// </summary>
+        public PendulumDirection CurrentDirection { get; private set; } = PendulumDirection.Reset;
 
-        public void SetSwing()
+        /// <summary>
+        /// 设置摆动状态
+        /// </summary>
+        /// <param name="swingLeft">true表示左摆，false表示右摆</param>
+        public void SetSwinging(bool swingLeft)
         {
-            _isInReset = false;
+            CurrentDirection = swingLeft ? PendulumDirection.SwingingLeft : PendulumDirection.SwingingRight;
+            Log.Debug("摆轮状态更新为: {Direction}", CurrentDirection);
         }
 
+        /// <summary>
+        /// 设置复位状态
+        /// </summary>
         public void SetReset()
         {
-            _isInReset = true;
+            CurrentDirection = PendulumDirection.Reset;
+            Log.Debug("摆轮状态更新为: Reset");
         }
 
-        public void UpdateLastSlot(int slot)
-        {
-            LastSlot = slot;
-        }
-
-        public string GetCurrentState()
-        {
-            return _isInReset ? "Reset" : "Swing";
-        }
-
+        /// <summary>
+        /// 强制设置复位状态
+        /// </summary>
         public void ForceReset()
         {
-            _isInReset = true;
+            CurrentDirection = PendulumDirection.Reset;
+            Log.Debug("摆轮状态被强制复位");
+        }
+
+        /// <summary>
+        /// 更新最后处理的格口号
+        /// </summary>
+        public static void UpdateLastSlot(int slot)
+        {
+            Log.Debug("更新最后处理的格口为: {Slot}", slot);
+        }
+
+        /// <summary>
+        /// 获取当前状态的字符串表示
+        /// </summary>
+        public string GetCurrentState()
+        {
+            return CurrentDirection switch
+            {
+                PendulumDirection.Reset => "Reset",
+                PendulumDirection.SwingingLeft => "SwingingLeft",
+                PendulumDirection.SwingingRight => "SwingingRight",
+                _ => "Unknown"
+            };
         }
     }
 

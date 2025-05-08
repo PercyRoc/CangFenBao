@@ -13,6 +13,7 @@
     <ItemGroup>
         <PackageReference Include="FluentFTP" />
         <PackageReference Include="MahApps.Metro.IconPacks.Material" />
+        <PackageReference Include="Prism.Wpf" />
         <PackageReference Include="SixLabors.ImageSharp" />
         <PackageReference Include="TurboJpegWrapper" />
         <PackageReference Include="Serilog" />

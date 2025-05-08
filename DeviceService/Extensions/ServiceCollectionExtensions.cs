@@ -14,40 +14,35 @@ public static class ContainerRegistryExtensions
     /// <summary>
     ///     添加拍照相机服务
     /// </summary>
-    public static IContainerRegistry AddPhotoCamera(this IContainerRegistry containerRegistry)
+    public static void AddPhotoCamera(this IContainerRegistry containerRegistry)
     {
         // 注册相机工厂
         containerRegistry.RegisterSingleton<CameraFactory>();
         containerRegistry.RegisterSingleton<PackageTransferService>();
+        containerRegistry.RegisterSingleton<CameraStartupService>();
         containerRegistry.RegisterSingleton<IImageSavingService, ImageSavingService>();
        
 
         containerRegistry.RegisterSingleton<ICameraService>(static sp =>
             sp.Resolve<CameraStartupService>().GetCameraService());
-
-        return containerRegistry;
     }
 
     /// <summary>
     ///     添加体积相机服务
     /// </summary>
-    public static IContainerRegistry AddVolumeCamera(this IContainerRegistry containerRegistry)
+    public static void AddVolumeCamera(this IContainerRegistry containerRegistry)
     {
         containerRegistry.RegisterSingleton<RenJiaCameraService>(static sp =>
             sp.Resolve<VolumeCameraStartupService>().GetCameraService());
-
-        return containerRegistry;
     }
 
     /// <summary>
     ///     添加扫码枪服务
     /// </summary>
-    public static IContainerRegistry AddScanner(this IContainerRegistry containerRegistry)
+    public static void AddScanner(this IContainerRegistry containerRegistry)
     {
         containerRegistry.RegisterSingleton<IScannerService>(static sp =>
             sp.Resolve<ScannerStartupService>().GetScannerService());
-
-        return containerRegistry;
     }
 
     /// <summary>

@@ -11,9 +11,7 @@
                  xmlns:settings1="clr-namespace:FuzhouPolicyForce.Views.Settings"
                  prism:ViewModelLocator.AutoWireViewModel="True"
                  mc:Ignorable="d"
-                 d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}"
-                 Height="720"
-                 Width="1280">
+                 d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}">
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -42,7 +40,7 @@
                     Width="48"
                     Height="32"
                     Effect="{StaticResource IconGlowEffect}">
-                <Image Source="/Resources/favicon.ico"
+                <Image Source="/logo.ico"
                        Width="32"
                        Height="32"
                        Margin="8,0,8,0"

@@ -17,6 +17,7 @@ using FuzhouPolicyForce.WangDianTong;
 using Serilog;
 using SharedUI.Models;
 using SortingServices.Pendulum;
+using System.Threading.Tasks;
 
 namespace FuzhouPolicyForce.ViewModels;
 
@@ -37,7 +38,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private bool _disposed;
 
-    private readonly IWangDianTongApiService _wangDianTongApiService;
+    private readonly IWangDianTongApiServiceV2 _wangDianTongApiServiceV2;
 
     private long _totalPackageCount;
     private long _errorPackageCount;
@@ -52,14 +53,14 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         PackageTransferService packageTransferService,
         ScannerStartupService scannerStartupService,
         IPackageDataService packageDataService,
-        IWangDianTongApiService wangDianTongApiService)
+        IWangDianTongApiServiceV2 wangDianTongApiServiceV2)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
         _settingsService = settingsService;
         _sortService = sortService;
         _packageDataService = packageDataService;
-        _wangDianTongApiService = wangDianTongApiService;
+        _wangDianTongApiServiceV2 = wangDianTongApiServiceV2;
         scannerStartupService.GetScannerService();
 
         // 初始化命令
@@ -163,7 +164,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private void ExecuteOpenHistory()
     {
-        _dialogService.ShowDialog("HistoryDialog");
+        _dialogService.ShowDialog("HistoryDialogView");
     }
 
     private void Timer_Tick(object? sender, EventArgs e)
@@ -240,95 +241,85 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private void InitializeStatisticsItems()
     {
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "总包裹数",
-            Value = "0",
-            Unit = "个",
-            Description = "累计处理包裹总数",
-            Icon = "CubeOutline24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            label: "总包裹数",
+            value: "0",
+            unit: "个",
+            description: "累计处理包裹总数",
+            icon: "CubeOutline24"
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "异常数",
-            Value = "0",
-            Unit = "个",
-            Description = "处理异常的包裹数量",
-            Icon = "AlertOutline24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            label: "异常数",
+            value: "0",
+            unit: "个",
+            description: "处理异常的包裹数量",
+            icon: "AlertOutline24"
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "预测效率",
-            Value = "0",
-            Unit = "个/小时",
-            Description = "预计每小时处理量",
-            Icon = "TrendingUp24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            label: "预测效率",
+            value: "0",
+            unit: "个/小时",
+            description: "预计每小时处理量",
+            icon: "TrendingUp24"
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "平均处理时间",
-            Value = "0",
-            Unit = "ms",
-            Description = "单个包裹平均处理时间",
-            Icon = "TimerOutline24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            label: "平均处理时间",
+            value: "0",
+            unit: "ms",
+            description: "单个包裹平均处理时间",
+            icon: "TimerOutline24"
+        ));
     }
 
     private void InitializePackageInfoItems()
     {
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "条码",
-            Value = "--",
-            Description = "包裹条码信息",
-            Icon = "Barcode24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            label: "条码",
+            value: "--",
+            description: "包裹条码信息",
+            icon: "Barcode24"
+        )); 
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "重量",
-            Value = "--",
-            Unit = "kg",
-            Description = "包裹重量",
-            Icon = "ScaleBalance24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            label: "重量",
+            value: "--",
+            unit: "kg",
+            description: "包裹重量",
+            icon: "ScaleBalance24"
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "尺寸",
-            Value = "--",
-            Unit = "cm",
-            Description = "长×宽×高",
-            Icon = "RulerSquare24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            label: "尺寸",
+            value: "--",
+            unit: "cm",
+            description: "长×宽×高",
+            icon: "RulerSquare24"
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "分拣口",
-            Value = "--",
-            Description = "目标分拣位置",
-            Icon = "ArrowSplitHorizontal24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            label: "分拣口",
+            value: "--",
+            description: "目标分拣位置",
+            icon: "ArrowSplitHorizontal24"
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "处理时间",
-            Value = "--",
-            Unit = "ms",
-            Description = "系统处理耗时",
-            Icon = "Timer24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            label: "处理时间",
+            value: "--",
+            unit: "ms",
+            description: "系统处理耗时",
+            icon: "Timer24"
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "时间",
-            Value = "--:--:--",
-            Description = "包裹处理时间",
-            Icon = "Clock24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            label: "时间",
+            value: "--:--:--",
+            description: "包裹处理时间",
+            icon: "Clock24"
+        ));
     }
 
     private void OnDeviceConnectionStatusChanged(object? sender, (string Name, bool Connected) e)
@@ -368,85 +359,121 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             Application.Current.Dispatcher.Invoke(() => { CurrentBarcode = package.Barcode; });
+
+            // 获取格口规则配置 - 始终需要，用于本地规则和异常口
+            var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
+
+            // 检查条码是否为空或noread - 这是最早的判断
+            if (string.IsNullOrEmpty(package.Barcode) ||
+                string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase))
+            {
+                package.SetChute(chuteSettings.NoReadChuteNumber);
+                package.SetStatus(PackageStatus.Failed, "条码为空或无法识别");
+                Log.Warning("包裹条码为空或noread，使用异常口：{NoReadChute}", chuteSettings.NoReadChuteNumber);
+                Interlocked.Increment(ref _errorPackageCount);
+
+                // 直接处理包裹，跳过API调用和本地规则匹配
+                _sortService.ProcessPackage(package);
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    try
+                    {
+                        UpdatePackageInfoItems(package);
+                        PackageHistory.Insert(0, package);
+                        while (PackageHistory.Count > 1000) { var removedPackage = PackageHistory[^1]; PackageHistory.RemoveAt(PackageHistory.Count - 1); removedPackage.Dispose(); }
+                        UpdateStatistics();
+                    }
+                    catch (Exception ex) { Log.Error(ex, "更新UI时发生错误"); }
+                });
+                await SavePackageRecordAsync(package); // 保存记录
+                package.ReleaseImage(); // 释放资源
+                return; // 处理完毕，退出方法
+            }
+
+            // 条码有效，尝试调用旺店通API回传重量
+            bool apiSuccess = false;
+            string apiMessage = "未调用API";
+
             try
             {
-                // 获取格口规则配置
-                var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
-
-                // 判断条码是否为空或noread
-                if (string.IsNullOrEmpty(package.Barcode) ||
-                    string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase))
+                var requestV2 = new WeightPushRequestV2
                 {
-                    // 使用异常口
+                    LogisticsNo = package.Barcode, // Assuming Barcode is the logistics_no
+                    Weight = (decimal)package.Weight,
+                    Volume = (decimal?)package.Volume, // Assuming PackageInfo dimensions are in cm³ (double?)
+                    Length = (decimal?)package.Length, // Assuming PackageInfo dimensions are in cm (double?)
+                    Width = (decimal?)package.Width,
+                    Height = (decimal?)package.Height,
+                };
+
+                var responseV2 = await _wangDianTongApiServiceV2.PushWeightAsync(requestV2);
+
+                // 只判断API回传是否成功，不使用API返回的格口号
+                apiSuccess = responseV2.IsSuccess;
+                apiMessage = responseV2.Message ?? (apiSuccess ? "API回传成功" : "API回传失败");
+
+                if (!apiSuccess)
+                {
+                    // API 回传失败，设置错误状态和异常口
                     package.SetChute(chuteSettings.ErrorChuteNumber);
-                    package.SetStatus(PackageStatus.Failed, "条码为空或无法识别");
-                    Log.Warning("包裹条码为空或noread，使用异常口：{ErrorChute}", chuteSettings.ErrorChuteNumber);
+                    package.SetStatus(PackageStatus.Error, $"API回传失败: {apiMessage}");
+                    Log.Warning("包裹 {Barcode} 旺店通回传失败: {Message}", package.Barcode, apiMessage);
                     Interlocked.Increment(ref _errorPackageCount);
                 }
                 else
                 {
-                    // 尝试匹配格口规则
+                    // API 回传成功，日志记录但不设置状态和格口，留待本地规则处理
+                    Log.Information("包裹 {Barcode} 旺店通回传成功 (将使用本地规则)", package.Barcode);
+                    // API成功，此时不设置状态和格口，继续走本地规则判断
+                }
+            }
+            catch (Exception ex)
+            {
+                // API 调用本身发生异常
+                apiSuccess = false; // 标记API失败
+                apiMessage = $"API调用异常: {ex.Message}";
+                Log.Error(ex, "网店通重量回传V2时发生异常：{Barcode}", package.Barcode);
+                package.SetChute(chuteSettings.ErrorChuteNumber);
+                package.SetStatus(PackageStatus.Error, apiMessage);
+                Interlocked.Increment(ref _errorPackageCount);
+            }
+
+            // 只有当API回传成功时，才执行本地格口规则匹配
+            if (apiSuccess)
+            {
+                try
+                {
                     var matchedChute = chuteSettings.FindMatchingChute(package.Barcode);
 
                     if (matchedChute.HasValue)
                     {
+                        // 本地规则匹配成功
                         package.SetChute(matchedChute.Value);
-                        Log.Information("包裹 {Barcode} 匹配到格口 {Chute}", package.Barcode, matchedChute.Value);
+                        package.SetStatus(PackageStatus.Success, "本地规则匹配成功");
+                        Log.Information("包裹 {Barcode} 本地规则匹配到格口 {Chute}", package.Barcode, matchedChute.Value);
                     }
                     else
                     {
-                        // 没有匹配到规则，使用异常口
+                        // 本地规则未匹配到
                         package.SetChute(chuteSettings.ErrorChuteNumber);
-                        package.SetStatus(PackageStatus.Failed, "未匹配到格口规则");
-                        Log.Warning("包裹 {Barcode} 未匹配到任何规则，使用异常口：{ErrorChute}",
+                        package.SetStatus(PackageStatus.Failed, "本地规则未匹配到");
+                        Log.Warning("包裹 {Barcode} 本地规则未匹配到任何规则，使用异常口：{ErrorChute}",
                             package.Barcode, chuteSettings.ErrorChuteNumber);
                         Interlocked.Increment(ref _errorPackageCount);
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "获取格口号时发生错误：{Barcode}", package.Barcode);
-                package.SetStatus(PackageStatus.Error, $"{ex.Message}");
-                Interlocked.Increment(ref _errorPackageCount);
-            }
-
-            // 调用网店通API并处理响应
-            try
-            {
-                var response = await _wangDianTongApiService.PushWeightAsync(package.Barcode, (decimal)package.Weight);
-                if (!response.IsSuccess)
+                catch (Exception ex)
                 {
-                    package.SetChute(_settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber);
-                    package.SetStatus(PackageStatus.Error, response.Message);
+                    // 本地规则匹配过程中发生异常
+                    Log.Error(ex, "执行本地格口规则时发生错误：{Barcode}", package.Barcode);
+                    package.SetChute(chuteSettings.ErrorChuteNumber);
+                    package.SetStatus(PackageStatus.Error, $"本地规则异常: {ex.Message}");
                     Interlocked.Increment(ref _errorPackageCount);
                 }
-                else
-                {
-                    package.SetStatus(PackageStatus.Success, response.Message);
-                }
             }
-            catch (Exception ex)
-            {
-                var errorMessage = $"{ex.Message}";
-                Log.Error(ex, "网店通重量回传时发生错误：{Barcode}", package.Barcode);
-                package.SetChute(_settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber);
-                package.SetStatus(PackageStatus.Error, errorMessage);
-                Interlocked.Increment(ref _errorPackageCount);
-            }
+            // 如果apiSuccess为false (API调用失败或返回失败状态，或调用异常)，则包裹状态和格口已经在上面的catch或!apiSuccess分支中设置为Error/异常口。
 
-            if (package.Status != PackageStatus.Error && package.Status != PackageStatus.Failed)
-            {
-                package.SetStatus(PackageStatus.Success);
-            }
-            else if (package.Status is PackageStatus.Error or PackageStatus.Failed)
-            {
-                // 可以在这里再确认一次，如果已经是Error或Failed状态，也增加异常计数，防止遗漏
-                // 注意：上面已经在可能导致Error/Failed的地方增加了计数，这里可能重复，需要根据具体逻辑判断是否需要
-                // 如果前面已经确保所有Error/Failed情况都计数了，这行可以不要。
-                // Interlocked.Increment(ref _errorPackageCount);
-            }
-
+            // 统一处理包裹分拣、UI更新和数据保存
             _sortService.ProcessPackage(package);
 
             Application.Current.Dispatcher.Invoke(() =>
@@ -473,29 +500,57 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             });
 
             // 保存包裹记录到数据库
-            try
-            {
-                await _packageDataService.AddPackageAsync(package);
-                Log.Information("包裹记录已保存到数据库：{Barcode}", package.Barcode);
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "保存包裹记录到数据库时发生错误：{Barcode}", package.Barcode);
-                 // 考虑：数据库保存失败是否算作异常？如果算，也需要在这里增加异常计数
-                 // Interlocked.Increment(ref _errorPackageCount);
-            }
+            await SavePackageRecordAsync(package);
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "处理包裹信息时发生错误：{Barcode}", package.Barcode);
-            package.SetStatus(PackageStatus.Error, $"{ex.Message}");
-             // 新增：在顶层catch中也增加异常计数
+            // 顶层catch，捕获其他未处理的异常
+            Log.Fatal(ex, "处理包裹 {Barcode} 时发生未处理的异常", package.Barcode);
+            package.SetStatus(PackageStatus.Error, $"未处理异常: {ex.Message}");
+            // 这里的错误可能没有设置格口，为安全起见，再次确保设置异常口（尽管上面的逻辑应该已经设置了）
+             try
+             {
+                var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
+                package.SetChute(chuteSettings.ErrorChuteNumber);
+             }
+             catch { /* Ignore if getting settings fails */ }
             Interlocked.Increment(ref _errorPackageCount);
+
+            // 尝试保存异常记录
+            await SavePackageRecordAsync(package);
+
+             // 通知UI更新以便显示错误信息
+            Application.Current.Dispatcher.Invoke(() =>
+             {
+                 try
+                 {
+                    UpdatePackageInfoItems(package);
+                    PackageHistory.Insert(0, package);
+                    while (PackageHistory.Count > 1000) { var removedPackage = PackageHistory[^1]; PackageHistory.RemoveAt(PackageHistory.Count - 1); removedPackage.Dispose(); }
+                    UpdateStatistics();
+                 }
+                 catch (Exception uiEx) { Log.Error(uiEx, "顶层异常处理后更新UI时发生错误"); }
+             });
         }
         finally
         {
-            package.ReleaseImage(); // 确保包裹被释放
+            package.ReleaseImage(); // 确保包裹图像资源被释放
         }
+    }
+
+    // Helper method to save package record, extracted to reduce duplication
+    private async Task SavePackageRecordAsync(PackageInfo package)
+    {
+         try
+         {
+             await _packageDataService.AddPackageAsync(package);
+             Log.Information("包裹记录已保存到数据库：{Barcode}", package.Barcode);
+         }
+         catch (Exception ex)
+         {
+             Log.Error(ex, "保存包裹记录到数据库时发生错误：{Barcode}", package.Barcode);
+             // 数据库保存失败是否算作异常？此处不重复增加_errorPackageCount，因为它反映的是业务处理异常。
+         }
     }
 
     private void UpdatePackageInfoItems(PackageInfo package)
@@ -512,7 +567,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         var weightItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "重量");
         if (weightItem != null)
         {
-            weightItem.Value = package.Weight.ToString(CultureInfo.InvariantCulture);
+            // package.Weight is already in kg (double)
+            // Format double to string with 3 decimal places
+            weightItem.Value = package.Weight.ToString("F3", CultureInfo.InvariantCulture);
             weightItem.Unit = "kg";
         }
 
@@ -533,7 +590,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         if (chuteItem != null)
         {
             chuteItem.Value = package.ChuteNumber.ToString();
-            chuteItem.Description = package.ChuteNumber == 0 ? "等待分配..." : "目标分拣位置";
+            chuteItem.Description = package.ChuteNumber == 0 ? "等待分配..." : "目标分拣位置"; // 根据实际业务逻辑调整0是否表示待分配
+             chuteItem.StatusColor = package.Status == PackageStatus.Success ? "#4CAF50" : "#F44336"; // 根据状态更新颜色
         }
 
         var timeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "时间");
@@ -565,7 +623,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         {
             // 使用新的异常数计数器
             // var errorCount = PackageHistory.Count(static p => !string.IsNullOrEmpty(p.ErrorMessage)); // 移除旧逻辑
-            var errorCount = _errorPackageCount; // 使用新计数器
+            var errorCount = _errorPackageCount; // 使用新计数器·
             errorItem.Value = errorCount.ToString();
             errorItem.Description = $"共有 {errorCount} 个异常包裹";
         }

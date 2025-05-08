@@ -56,10 +56,16 @@ public class WangDianTongSettings : BindableBase
     /// <summary>
     /// 获取API基础URL
     /// </summary>
+    // public string GetApiBaseUrl()
+    // {
+    //     return IsProductionEnvironment 
+    //         ? "https://api.wangdian.cn/openapi2/"
+    //         : "https://sandbox.wangdian.cn/openapi2/";
+    // }
     public string GetApiBaseUrl()
     {
         return IsProductionEnvironment 
-            ? "https://api.wangdian.cn/openapi2/" 
+            ? "https://openapi.wdtwms.com/"
             : "https://sandbox.wangdian.cn/openapi2/";
     }
 } 

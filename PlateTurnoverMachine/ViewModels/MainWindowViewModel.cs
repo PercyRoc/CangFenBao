@@ -477,86 +477,82 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private void InitializeStatisticsItems()
     {
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "总包裹数",
-            Value = "0",
-            Unit = "个",
-            Description = "累计处理包裹总数",
-            Icon = "BoxMultiple24"
-        });
+        // Use constructor arguments
+        StatisticsItems.Add(new StatisticsItem(
+            "总包裹数", // label
+            "0", // value
+            "个", // unit
+            "累计处理包裹总数", // description
+            "BoxMultiple24" // icon
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "成功数",
-            Value = "0",
-            Unit = "个",
-            Description = "处理成功的包裹数量",
-            Icon = "CheckmarkCircle24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            "成功数", // label
+            "0", // value
+            "个", // unit
+            "处理成功的包裹数量", // description
+            "CheckmarkCircle24" // icon
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "失败数",
-            Value = "0",
-            Unit = "个",
-            Description = "处理失败的包裹数量",
-            Icon = "ErrorCircle24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            "失败数", // label
+            "0", // value
+            "个", // unit
+            "处理失败的包裹数量", // description
+            "ErrorCircle24" // icon
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "处理速率",
-            Value = "0",
-            Unit = "个/小时",
-            Description = "每小时处理包裹数量",
-            Icon = "ArrowTrendingLines24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            "处理速率", // label
+            "0", // value
+            "个/小时", // unit
+            "每小时处理包裹数量", // description
+            "ArrowTrendingLines24" // icon
+        ));
     }
 
     private void InitializePackageInfoItems()
     {
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "重量",
-            Value = "0.00",
-            Unit = "kg",
-            Description = "包裹重量",
-            Icon = "Scales24"
-        });
+        // Use constructor arguments
+        PackageInfoItems.Add(new PackageInfoItem(
+            "重量", // label
+            "0.00", // value
+            "kg", // unit
+            "包裹重量", // description
+            "Scales24" // icon
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "尺寸",
-            Value = "0 × 0 × 0",
-            Unit = "mm",
-            Description = "长 × 宽 × 高",
-            Icon = "Ruler24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            "尺寸", // label
+            "0 × 0 × 0", // value
+            "mm", // unit
+            "长 × 宽 × 高", // description
+            "Ruler24" // icon
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "格口",
-            Value = "--",
-            Description = "目标格口",
-            Icon = "BoxMultiple24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            "格口", // label
+            "--", // value
+            "", // unit
+            "目标格口", // description
+            "BoxMultiple24" // icon
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "时间",
-            Value = "--:--:--",
-            Description = "处理时间",
-            Icon = "Timer24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            "时间", // label
+            "--:--:--", // value
+            "", // unit
+            "处理时间", // description
+            "Timer24" // icon
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "状态",
-            Value = "等待",
-            Description = "处理状态",
-            Icon = "Alert24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            "状态", // label
+            "等待", // value
+            "", // unit
+            "处理状态", // description
+            "Alert24" // icon
+        ));
     }
 
     protected virtual void Dispose(bool disposing)

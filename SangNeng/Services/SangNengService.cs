@@ -43,7 +43,6 @@ internal class SangNengService(ISettingsService settingsService) : ISangNengServ
             request.Sign = settings.Sign;
 
             var json = JsonSerializer.Serialize(request, _jsonOptions);
-            Log.Debug("发送到桑能服务器的 JSON 数据: {JsonData}", json); // 记录发送的数据
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             var response = await _httpClient.PostAsync(url, content);

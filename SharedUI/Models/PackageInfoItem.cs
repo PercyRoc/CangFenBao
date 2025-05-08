@@ -9,10 +9,6 @@ public class PackageInfoItem : BindableBase
     private string _unit = string.Empty;
     private string _value = string.Empty;
 
-    public PackageInfoItem()
-    {
-    }
-
     public PackageInfoItem(string label, string value, string unit = "", string description = "", string icon = "")
     {
         Label = label;
@@ -28,7 +24,7 @@ public class PackageInfoItem : BindableBase
     public string Label
     {
         get => _label;
-        init => SetProperty(ref _label, value);
+        private init => SetProperty(ref _label, value);
     }
 
     /// <summary>

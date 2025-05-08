@@ -11,11 +11,14 @@ namespace Common.Extensions;
 
 public static class ServiceCollectionExtensions
 {
-    public static void AddCommonServices(this IContainerRegistry services)
+    /// <summary>
+    ///     添加通用服务
+    /// </summary>
+    public static IContainerRegistry AddCommonServices(this IContainerRegistry containerRegistry)
     {
         // 注册设置服务
         var settingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Settings");
-        services.RegisterSingleton<ISettingsService>(() =>
+        containerRegistry.RegisterSingleton<ISettingsService>(() =>
         {
             // 创建一个临时的ServiceProvider用于初始化SettingsService
             var serviceCollection = new ServiceCollection();
@@ -23,7 +26,13 @@ public static class ServiceCollectionExtensions
             return new SettingsService(settingsPath);
         });
 
-        // 数据库配置
+        // 注册UI通知服务
+        containerRegistry.RegisterSingleton<INotificationService, NotificationService>();
+
+        // 注册音频服务
+        containerRegistry.RegisterSingleton<IAudioService, AudioService>();
+
+        // 注册数据库上下文
         var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "packages.db");
         Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
 
@@ -35,22 +44,12 @@ public static class ServiceCollectionExtensions
             })
             .Options;
 
-        // 初始化核心表结构
-        using (var context = new PackageDbContext(options))
-        {
-            context.Database.EnsureCreated();
-        }
-
         // 注册数据库上下文选项
-        services.RegisterInstance(options);
+        containerRegistry.RegisterInstance(options);
         // 注册数据服务
-        services.RegisterSingleton<IPackageDataService, PackageDataService>();
-        // 注册音频服务
-        services.RegisterSingleton<IAudioService, AudioService>();
-        // 注册通知服务
-        services.RegisterSingleton<INotificationService, NotificationService>();
-        // 注册授权服务
-        services.RegisterSingleton<ILicenseService, LicenseService>();
+        containerRegistry.RegisterSingleton<IPackageDataService, PackageDataService>();
+
+        return containerRegistry;
     }
 
     /// <summary>

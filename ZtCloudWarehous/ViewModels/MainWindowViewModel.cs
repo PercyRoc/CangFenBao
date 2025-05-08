@@ -224,114 +224,102 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private void InitializeStatisticsItems()
     {
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "总包裹数",
-            Value = "0",
-            Unit = "个",
-            Description = "累计处理包裹总数",
-            Icon = "BoxMultiple24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            label: "总包裹数",
+            value: "0",
+            unit: "个",
+            description: "累计处理包裹总数",
+            icon: "BoxMultiple24"
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "成功数",
-            Value = "0",
-            Unit = "个",
-            Description = "处理成功的包裹数量",
-            Icon = "CheckmarkCircle24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            label: "成功数",
+            value: "0",
+            unit: "个",
+            description: "处理成功的包裹数量",
+            icon: "CheckmarkCircle24"
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "超时响应",
-            Value = "0",
-            Unit = "个",
-            Description = "数据上传超时的包裹数量",
-            Icon = "Timer24",
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            label: "超时响应",
+            value: "0",
+            unit: "个",
+            description: "数据上传超时的包裹数量",
+            icon: "Timer24"
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "未读包裹",
-            Value = "0",
-            Unit = "个",
-            Description = "条码无法识别的包裹数量",
-            Icon = "ErrorCircle24",
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            label: "未读包裹",
+            value: "0",
+            unit: "个",
+            description: "条码无法识别的包裹数量",
+            icon: "ErrorCircle24"
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "重量异常",
-            Value = "0",
-            Unit = "个",
-            Description = "重量不匹配的包裹数量",
-            Icon = "Scales24",
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            label: "重量异常",
+            value: "0",
+            unit: "个",
+            description: "重量不匹配的包裹数量",
+            icon: "Scales24"
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "其他异常",
-            Value = "0",
-            Unit = "个",
-            Description = "其他异常包裹数量",
-            Icon = "Alert24",
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            label: "其他异常",
+            value: "0",
+            unit: "个",
+            description: "其他异常包裹数量",
+            icon: "Alert24"
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "处理速率",
-            Value = "0",
-            Unit = "个/小时",
-            Description = "每小时处理包裹数量",
-            Icon = "ArrowTrendingLines24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            label: "处理速率",
+            value: "0",
+            unit: "个/小时",
+            description: "每小时处理包裹数量",
+            icon: "ArrowTrendingLines24"
+        ));
 
         // 添加峰值效率统计
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "峰值效率",
-            Value = "0",
-            Unit = "个/小时",
-            Description = "最高处理速率",
-            Icon = "Trophy24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            label: "峰值效率",
+            value: "0",
+            unit: "个/小时",
+            description: "最高处理速率",
+            icon: "Trophy24"
+        ));
     }
 
     private void InitializePackageInfoItems()
     {
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "重量",
-            Value = "0.00",
-            Unit = "kg",
-            Description = "包裹重量",
-            Icon = "Scales24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            label: "重量",
+            value: "0.00",
+            unit: "kg",
+            description: "包裹重量",
+            icon: "Scales24"
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "格口",
-            Value = "--",
-            Description = "目标分拣位置",
-            Icon = "ArrowCircleDown24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            label: "格口",
+            value: "--",
+            description: "目标分拣位置",
+            icon: "ArrowCircleDown24"
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "时间",
-            Value = "--:--:--",
-            Description = "处理时间",
-            Icon = "Timer24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            label: "时间",
+            value: "--:--:--",
+            description: "处理时间",
+            icon: "Timer24"
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "状态",
-            Value = "等待",
-            Description = "处理状态",
-            Icon = "Alert24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            label: "状态",
+            value: "等待",
+            description: "处理状态",
+            icon: "Alert24"
+        ));
     }
 
     private void OnCameraConnectionChanged(string? deviceId, bool isConnected)
@@ -422,7 +410,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                         };
 
                         var uploadTask = _weighingService.SendWeightDataAsync(request);
-                        var timeoutTask = Task.Delay(800); // 800ms timeout
+                        var timeoutTask = Task.Delay(500);
 
                         var completedTask = await Task.WhenAny(uploadTask, timeoutTask);
 

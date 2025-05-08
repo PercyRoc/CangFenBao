@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.IO;
 using Common.Models.Package;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 
@@ -57,6 +58,7 @@ internal class PackageDataService : IPackageDataService
     private readonly string _dbPath;
     private readonly DbContextOptions<PackageDbContext> _options;
     private readonly ConcurrentDictionary<string, bool> _tableExistsCache = new();
+    private readonly string _connectionString;
 
     /// <summary>
     ///     构造函数
@@ -64,6 +66,7 @@ internal class PackageDataService : IPackageDataService
     public PackageDataService(DbContextOptions<PackageDbContext> options)
     {
         _dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "packages.db");
+        _connectionString = $"Data Source={_dbPath}";
         _options = options;
 
         // 初始化数据库
@@ -101,7 +104,7 @@ internal class PackageDataService : IPackageDataService
             await connection.OpenAsync();
             await using var checkCommand = connection.CreateCommand();
             checkCommand.CommandText = checkSql;
-            checkCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@barcode", record.Barcode));
+            checkCommand.Parameters.Add(new SqliteParameter("@barcode", record.Barcode));
             var existingCount = Convert.ToInt32(await checkCommand.ExecuteScalarAsync());
 
             if (existingCount > 0)
@@ -127,39 +130,39 @@ internal class PackageDataService : IPackageDataService
             insertCommand.CommandText = insertSql;
 
             // 添加参数 - 移除不存在的字段并修正字段类型，加入托盘信息参数
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@PackageIndex", record.Index));
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@Barcode", record.Barcode));
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@SegmentCode",
+            insertCommand.Parameters.Add(new SqliteParameter("@PackageIndex", record.Index));
+            insertCommand.Parameters.Add(new SqliteParameter("@Barcode", record.Barcode));
+            insertCommand.Parameters.Add(new SqliteParameter("@SegmentCode",
                 record.SegmentCode as object ?? DBNull.Value));
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@Weight", record.Weight));
-            _ = insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@ChuteNumber",
+            insertCommand.Parameters.Add(new SqliteParameter("@Weight", record.Weight));
+            _ = insertCommand.Parameters.Add(new SqliteParameter("@ChuteNumber",
                 record.ChuteNumber.HasValue ? record.ChuteNumber.Value : DBNull.Value));
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@Status", (int)record.Status));
+            insertCommand.Parameters.Add(new SqliteParameter("@Status", (int)record.Status));
             insertCommand.Parameters.Add(
-                new Microsoft.Data.Sqlite.SqliteParameter("@StatusDisplay", record.StatusDisplay));
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@CreateTime",
+                new SqliteParameter("@StatusDisplay", record.StatusDisplay));
+            insertCommand.Parameters.Add(new SqliteParameter("@CreateTime",
                 record.CreateTime.ToString("yyyy-MM-dd HH:mm:ss")));
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@Length",
+            insertCommand.Parameters.Add(new SqliteParameter("@Length",
                 record.Length.HasValue ? record.Length.Value : DBNull.Value));
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@Width",
+            insertCommand.Parameters.Add(new SqliteParameter("@Width",
                 record.Width.HasValue ? record.Width.Value : DBNull.Value));
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@Height",
+            insertCommand.Parameters.Add(new SqliteParameter("@Height",
                 record.Height.HasValue ? record.Height.Value : DBNull.Value));
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@Volume",
+            insertCommand.Parameters.Add(new SqliteParameter("@Volume",
                 record.Volume.HasValue ? record.Volume.Value : DBNull.Value));
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@ErrorMessage",
+            insertCommand.Parameters.Add(new SqliteParameter("@ErrorMessage",
                 record.ErrorMessage as object ?? DBNull.Value));
             insertCommand.Parameters.Add(
-                new Microsoft.Data.Sqlite.SqliteParameter("@ImagePath", record.ImagePath as object ?? DBNull.Value));
+                new SqliteParameter("@ImagePath", record.ImagePath as object ?? DBNull.Value));
             insertCommand.Parameters.Add(
-                new Microsoft.Data.Sqlite.SqliteParameter("@PalletName", record.PalletName as object ?? DBNull.Value));
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@PalletWeight",
+                new SqliteParameter("@PalletName", record.PalletName as object ?? DBNull.Value));
+            insertCommand.Parameters.Add(new SqliteParameter("@PalletWeight",
                  record.PalletWeight.HasValue ? record.PalletWeight.Value : DBNull.Value));
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@PalletLength",
+            insertCommand.Parameters.Add(new SqliteParameter("@PalletLength",
                  record.PalletLength.HasValue ? record.PalletLength.Value : DBNull.Value));
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@PalletWidth",
+            insertCommand.Parameters.Add(new SqliteParameter("@PalletWidth",
                  record.PalletWidth.HasValue ? record.PalletWidth.Value : DBNull.Value));
-            insertCommand.Parameters.Add(new Microsoft.Data.Sqlite.SqliteParameter("@PalletHeight",
+            insertCommand.Parameters.Add(new SqliteParameter("@PalletHeight",
                  record.PalletHeight.HasValue ? record.PalletHeight.Value : DBNull.Value));
 
             await insertCommand.ExecuteNonQueryAsync();
@@ -249,7 +252,7 @@ internal class PackageDataService : IPackageDataService
             try
             {
                 return await dbContext.Set<PackageRecord>()
-                    .FromSqlRaw(sql, new Microsoft.Data.Sqlite.SqliteParameter("@barcode", barcode))
+                    .FromSqlRaw(sql, new SqliteParameter("@barcode", barcode))
                     .FirstOrDefaultAsync();
             }
             catch (Exception ex)
@@ -268,55 +271,78 @@ internal class PackageDataService : IPackageDataService
     /// <inheritdoc />
     public async Task<List<PackageRecord>> GetPackagesInTimeRangeAsync(DateTime startTime, DateTime endTime)
     {
+        var allResults = new List<PackageRecord>();
+
         try
         {
-            // 确保所有需要的表都存在
-            await EnsureDateRangeTablesExistAsync(startTime, endTime);
-
             // 获取所有需要查询的月份
             var startMonth = new DateTime(startTime.Year, startTime.Month, 1);
             var endMonth = new DateTime(endTime.Year, endTime.Month, 1);
-            var months = new List<DateTime>();
+            var monthsToQuery = new List<DateTime>();
 
-            for (var month = startMonth; month <= endMonth; month = month.AddMonths(1)) months.Add(month);
-
-            // 并行查询所有月份的数据
-            var tasks = months.Select(async month =>
+            for (var month = startMonth; month <= endMonth; month = month.AddMonths(1))
             {
+                monthsToQuery.Add(month);
+            }
+
+            Log.Debug("Querying time range [{StartTime}, {EndTime}] across {MonthCount} potential months using raw SQL.",
+                startTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                endTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                monthsToQuery.Count);
+
+            foreach (var month in monthsToQuery)
+            {
+                var tableName = GetTableName(month);
+
+                // 检查表是否存在 (可以重用现有方法，或直接SQL查询)
+                if (!await TableExistsAsync(tableName))
+                {
+                    continue;
+                }
+
+                // 计算此月份在查询范围内的实际开始和结束时间
+                var monthActualStart = (month == startMonth) ? startTime : new DateTime(month.Year, month.Month, 1);
+                var monthActualEnd = (month == endMonth) ? endTime : new DateTime(month.Year, month.Month, 1).AddMonths(1).AddSeconds(-1);
+
                 try
                 {
-                    await using var dbContext = CreateDbContext(month);
-                    var query = dbContext.Set<PackageRecord>().AsQueryable();
+                    await using var connection = new SqliteConnection(_connectionString);
+                    await connection.OpenAsync();
 
-                    // 如果是起始月份，添加开始时间过滤
-                    if (month == startMonth)
+                    // 构建参数化的 SQL 查询
+                    var sql = $@"SELECT Id, PackageIndex, Barcode, SegmentCode, Weight, ChuteNumber, Status, StatusDisplay,
+                                        CreateTime, Length, Width, Height, Volume, ErrorMessage, ImagePath,
+                                        PalletName, PalletWeight, PalletLength, PalletWidth, PalletHeight
+                                 FROM {tableName}
+                                 WHERE CreateTime >= @startTime AND CreateTime <= @endTime";
+
+                    await using var command = new SqliteCommand(sql, connection);
+                    // 使用 ISO 8601 格式 (yyyy-MM-dd HH:mm:ss) 进行比较
+                    command.Parameters.AddWithValue("@startTime", monthActualStart.ToString("yyyy-MM-dd HH:mm:ss"));
+                    command.Parameters.AddWithValue("@endTime", monthActualEnd.ToString("yyyy-MM-dd HH:mm:ss"));
+
+                    await using var reader = await command.ExecuteReaderAsync();
+                    while (await reader.ReadAsync())
                     {
-                        query = query.Where(p => p.CreateTime >= startTime);
+                        var record = MapReaderToPackageRecord(reader);
+                        allResults.Add(record);
                     }
-
-                    // 如果是结束月份，添加结束时间过滤
-                    if (month == endMonth)
-                    {
-                        query = query.Where(p => p.CreateTime <= endTime);
-                    }
-
-                    return await query.ToListAsync();
                 }
-                catch (Exception ex)
+                catch (Exception monthEx)
                 {
-                    Log.Error(ex, "查询月份 {Month} 的数据时出错", month.ToString("yyyy-MM"));
-                    return [];
+                    Log.Error(monthEx, "Error querying table {TableName} with raw SQL.", tableName);
+                    // 选择继续查询其他月份，而不是让整个操作失败
                 }
-            });
+            }
 
-            var results = await Task.WhenAll(tasks);
-            return [.. results.SelectMany(static x => x).OrderByDescending(static p => p.CreateTime)];
+            // 对所有结果进行排序
+            return [.. allResults.OrderByDescending(p => p.CreateTime)];
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "查询时间范围内的包裹失败：{StartTime} - {EndTime}",
+            Log.Error(ex, "查询时间范围内的包裹失败 (Raw SQL Approach)：{StartTime} - {EndTime}",
                 startTime.ToString("yyyy-MM-dd HH:mm:ss"), endTime.ToString("yyyy-MM-dd HH:mm:ss"));
-            return [];
+            return []; // 发生错误时返回空列表
         }
     }
 
@@ -532,7 +558,7 @@ internal class PackageDataService : IPackageDataService
             // 使用原始SQL查询，确保查询正确的表
             var sql = $"SELECT * FROM {tableName} WHERE Barcode = @barcode";
             var record = await dbContext.Set<PackageRecord>()
-                .FromSqlRaw(sql, new Microsoft.Data.Sqlite.SqliteParameter("@barcode", barcode))
+                .FromSqlRaw(sql, new SqliteParameter("@barcode", barcode))
                 .FirstOrDefaultAsync();
 
             if (record == null)
@@ -556,9 +582,9 @@ internal class PackageDataService : IPackageDataService
                 WHERE Barcode = @barcode";
 
             await dbContext.Database.ExecuteSqlRawAsync(updateSql,
-                new Microsoft.Data.Sqlite.SqliteParameter("@status", (int)status),
-                new Microsoft.Data.Sqlite.SqliteParameter("@statusDisplay", statusDisplay),
-                new Microsoft.Data.Sqlite.SqliteParameter("@barcode", barcode));
+                new SqliteParameter("@status", (int)status),
+                new SqliteParameter("@statusDisplay", statusDisplay),
+                new SqliteParameter("@barcode", barcode));
 
             Log.Information("成功更新表 {TableName} 中包裹 {Barcode} 的状态为 {Status}", tableName, barcode, status);
             return true;
@@ -788,38 +814,6 @@ internal class PackageDataService : IPackageDataService
         catch (Exception ex)
         {
             Log.Error(ex, "创建数据表时发生错误：{TableName}", tableName);
-            throw;
-        }
-    }
-
-    /// <summary>
-    ///     批量确保多个月份的数据表存在
-    /// </summary>
-    private async Task EnsureDateRangeTablesExistAsync(DateTime startDate, DateTime endDate)
-    {
-        try
-        {
-            // 确保日期范围有效
-            if (startDate > endDate)
-            {
-                Log.Warning("批量检查表时日期范围无效：开始日期 {StartDate} 大于结束日期 {EndDate}",
-                    startDate.ToString("yyyy-MM-dd"), endDate.ToString("yyyy-MM-dd"));
-                (startDate, endDate) = (endDate, startDate);
-            }
-
-            Log.Information("批量检查日期范围表: {StartDate} 到 {EndDate}",
-                startDate.ToString("yyyy-MM-dd"), endDate.ToString("yyyy-MM-dd"));
-
-            // 获取所有需要检查的月份
-            var startMonth = new DateTime(startDate.Year, startDate.Month, 1);
-            var endMonth = new DateTime(endDate.Year, endDate.Month, 1);
-
-            for (var month = startMonth; month <= endMonth; month = month.AddMonths(1))
-                await EnsureMonthlyTableExists(month);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "批量确保数据表存在时发生错误");
             throw;
         }
     }
@@ -1094,7 +1088,105 @@ internal class PackageDataService : IPackageDataService
     {
         date = default;
         if (tableName.Length <= 9 || !tableName.StartsWith("Packages_")) return false;
-        return DateTime.TryParseExact(tableName[9..], "yyyyMM", CultureInfo.InvariantCulture,
+        return DateTime.TryParseExact(tableName[9..], "yyyyMM", null,
             DateTimeStyles.None, out date);
+    }
+
+    // --- 添加辅助方法：将 SqliteDataReader 行映射到 PackageRecord ---
+    private static PackageRecord MapReaderToPackageRecord(SqliteDataReader reader)
+    {
+        var record = new PackageRecord();
+        string currentBarcode = "<N/A>"; // 用于错误日志记录
+        try
+        {
+            // 先获取 Barcode 用于可能的错误日志
+            var barcodeOrdinal = reader.GetOrdinal("Barcode");
+            if (!reader.IsDBNull(barcodeOrdinal))
+            {
+                currentBarcode = reader.GetString(barcodeOrdinal);
+                record.Barcode = currentBarcode;
+            }
+
+            record.Id = reader.GetInt32(reader.GetOrdinal("Id"));
+            record.Index = reader.GetInt32(reader.GetOrdinal("PackageIndex"));
+            record.SegmentCode = GetNullableString(reader, "SegmentCode");
+            record.Weight = GetDouble(reader, "Weight"); // 假设 Weight 不为 null
+            record.ChuteNumber = GetNullableInt32(reader, "ChuteNumber");
+            record.Status = (PackageStatus)reader.GetInt32(reader.GetOrdinal("Status"));
+            record.StatusDisplay = GetString(reader, "StatusDisplay"); // 假设 StatusDisplay 不为 null
+
+            // 处理 DateTime
+            var createTimeOrdinal = reader.GetOrdinal("CreateTime");
+            if (!reader.IsDBNull(createTimeOrdinal))
+            {
+                var dateString = reader.GetString(createTimeOrdinal);
+                // 尝试多种可能的格式进行解析，增加健壮性
+                if (DateTime.TryParse(dateString, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var parsedDate) ||
+                    DateTime.TryParseExact(dateString, "yyyy-MM-dd HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out parsedDate) || // 带7位小数秒
+                    DateTime.TryParseExact(dateString, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out parsedDate))     // 不带小数秒
+                {
+                    record.CreateTime = parsedDate;
+                }
+                else
+                {
+                    Log.Warning("Could not parse CreateTime string '{DateString}' for Barcode {Barcode}. Using default.", dateString, record.Barcode);
+                    record.CreateTime = DateTime.MinValue; // 或其他默认值
+                }
+            }
+            else
+            {
+                record.CreateTime = DateTime.MinValue; // 处理 CreateTime 为 NULL 的情况
+            }
+
+            record.Length = GetNullableDouble(reader, "Length");
+            record.Width = GetNullableDouble(reader, "Width");
+            record.Height = GetNullableDouble(reader, "Height");
+            record.Volume = GetNullableDouble(reader, "Volume");
+            record.ErrorMessage = GetNullableString(reader, "ErrorMessage");
+            record.ImagePath = GetNullableString(reader, "ImagePath");
+            record.PalletName = GetNullableString(reader, "PalletName");
+            record.PalletWeight = GetNullableDouble(reader, "PalletWeight");
+            record.PalletLength = GetNullableDouble(reader, "PalletLength");
+            record.PalletWidth = GetNullableDouble(reader, "PalletWidth");
+            record.PalletHeight = GetNullableDouble(reader, "PalletHeight");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to map SqliteDataReader row to PackageRecord. Barcode: {Barcode}", currentBarcode);
+            // 返回部分填充的记录或根据需要处理错误
+        }
+        return record;
+    }
+
+    // --- Reader 辅助方法 ---
+    private static string? GetNullableString(SqliteDataReader reader, string columnName)
+    {
+        var ordinal = reader.GetOrdinal(columnName);
+        return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
+    }
+
+    private static string GetString(SqliteDataReader reader, string columnName)
+    {
+        var ordinal = reader.GetOrdinal(columnName);
+        return reader.GetString(ordinal); // 假设不为 null
+    }
+
+     private static double GetDouble(SqliteDataReader reader, string columnName)
+    {
+        var ordinal = reader.GetOrdinal(columnName);
+        // 根据实际情况决定，如果可能为 NULL，则使用 GetNullableDouble
+        return reader.GetDouble(ordinal);
+    }
+
+    private static double? GetNullableDouble(SqliteDataReader reader, string columnName)
+    {
+        var ordinal = reader.GetOrdinal(columnName);
+        return reader.IsDBNull(ordinal) ? null : reader.GetDouble(ordinal);
+    }
+
+     private static int? GetNullableInt32(SqliteDataReader reader, string columnName)
+    {
+        var ordinal = reader.GetOrdinal(columnName);
+        return reader.IsDBNull(ordinal) ? null : reader.GetInt32(ordinal);
     }
 }
