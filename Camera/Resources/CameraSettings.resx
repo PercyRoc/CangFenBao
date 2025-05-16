@@ -1,0 +1,177 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+
+<root>
+    <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+        <xsd:element name="root" msdata:IsDataSet="true">
+            
+        </xsd:element>
+    </xsd:schema>
+    <resheader name="resmimetype">
+        <value>text/microsoft-resx</value>
+    </resheader>
+    <resheader name="version">
+        <value>1.3</value>
+    </resheader>
+    <resheader name="reader">
+        <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+    </resheader>
+    <resheader name="writer">
+        <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+    </resheader>
+    <data name="Button_AddFilterGroup" xml:space="preserve">
+        <value>添加过滤组</value>
+    </data>
+    <data name="Button_Browse" xml:space="preserve">
+        <value>浏览...</value>
+    </data>
+    <data name="Button_RemoveFilterGroup" xml:space="preserve">
+        <value>删除组</value>
+    </data>
+    <data name="Button_SaveSettings" xml:space="preserve">
+        <value>保存设置</value>
+    </data>
+    <data name="Enum_BarcodeCharacterType_Alphabetic" xml:space="preserve">
+        <value>字母</value>
+    </data>
+    <data name="Enum_BarcodeCharacterType_AlphaNumeric" xml:space="preserve">
+        <value>字母数字</value>
+    </data>
+    <data name="Enum_BarcodeCharacterType_Any" xml:space="preserve">
+        <value>任意字符</value>
+    </data>
+    <data name="Enum_BarcodeCharacterType_Hexadecimal" xml:space="preserve">
+        <value>十六进制</value>
+    </data>
+    <data name="Enum_BarcodeCharacterType_Numeric" xml:space="preserve">
+        <value>数字</value>
+    </data>
+    <data name="Enum_BarcodeCharacterType_PrintableAscii" xml:space="preserve">
+        <value>可打印ASCII</value>
+    </data>
+    <data name="Header_CharTypeRule" xml:space="preserve">
+        <value>字符类型规则</value>
+    </data>
+    <data name="Header_ContainsRule" xml:space="preserve">
+        <value>包含规则</value>
+    </data>
+    <data name="Header_CustomRegexRule" xml:space="preserve">
+        <value>自定义正则规则</value>
+    </data>
+    <data name="Header_EndsWithRule" xml:space="preserve">
+        <value>结尾规则</value>
+    </data>
+    <data name="Header_LengthRule" xml:space="preserve">
+        <value>长度规则</value>
+    </data>
+    <data name="Header_NotContainsRule" xml:space="preserve">
+        <value>不包含规则</value>
+    </data>
+    <data name="Header_StartsWithRule" xml:space="preserve">
+        <value>起始规则</value>
+    </data>
+    <data name="Label_CharacterType" xml:space="preserve">
+        <value>字符类型:</value>
+    </data>
+    <data name="Label_DuplicationTimeWindow" xml:space="preserve">
+        <value>时间窗口 (毫秒):</value>
+    </data>
+    <data name="Label_FilterCount" xml:space="preserve">
+        <value>过滤数量:</value>
+    </data>
+    <data name="Label_MaxLength" xml:space="preserve">
+        <value>最大长度:</value>
+    </data>
+    <data name="Label_MinLength" xml:space="preserve">
+        <value>最小长度:</value>
+    </data>
+    <data name="Label_Pattern" xml:space="preserve">
+        <value>模式:</value>
+    </data>
+    <data name="Label_RegexPattern" xml:space="preserve">
+        <value>正则表达式:</value>
+    </data>
+    <data name="Label_RuleGroupName" xml:space="preserve">
+        <value>规则组名称:</value>
+    </data>
+    <data name="Label_SaveFolder" xml:space="preserve">
+        <value>保存文件夹:</value>
+    </data>
+    <data name="PageTitle_CameraSettings" xml:space="preserve">
+        <value>相机设置</value>
+    </data>
+    <data name="TabHeader_BarcodeDuplication" xml:space="preserve">
+        <value>条码去重</value>
+    </data>
+    <data name="TabHeader_BarcodeFiltering" xml:space="preserve">
+        <value>条码过滤</value>
+    </data>
+    <data name="TabHeader_BarcodeTypes" xml:space="preserve">
+        <value>条码类型</value>
+    </data>
+    <data name="TabHeader_ImageSaving" xml:space="preserve">
+        <value>图像保存</value>
+    </data>
+    <data name="Toggle_EnableBarcodeDuplication" xml:space="preserve">
+        <value>启用条码去重过滤器</value>
+    </data>
+    <data name="Toggle_EnableBarcodeFiltering" xml:space="preserve">
+        <value>启用条码过滤</value>
+    </data>
+    <data name="Toggle_EnableBarcodeTypeSelection" xml:space="preserve">
+        <value>启用条码类型选择</value>
+    </data>
+    <data name="Toggle_EnableCharTypeRule" xml:space="preserve">
+        <value>启用字符类型规则</value>
+    </data>
+    <data name="Toggle_EnableContainsRule" xml:space="preserve">
+        <value>启用包含规则</value>
+    </data>
+    <data name="Toggle_EnableCustomRegexRule" xml:space="preserve">
+        <value>启用自定义正则规则</value>
+    </data>
+    <data name="Toggle_EnableEndsWithRule" xml:space="preserve">
+        <value>启用结尾规则</value>
+    </data>
+    <data name="Toggle_EnableImageSaving" xml:space="preserve">
+        <value>启用图像保存</value>
+    </data>
+    <data name="Toggle_EnableLengthRule" xml:space="preserve">
+        <value>启用长度规则</value>
+    </data>
+    <data name="Toggle_EnableNotContainsRule" xml:space="preserve">
+        <value>启用不包含规则</value>
+    </data>
+    <data name="Toggle_EnableRuleGroup" xml:space="preserve">
+        <value>启用此规则组</value>
+    </data>
+    <data name="Toggle_EnableStartsWithRule" xml:space="preserve">
+        <value>启用起始规则</value>
+    </data>
+    <data name="Header_VolumeCameraSettings" xml:space="preserve">
+        <value>体积相机设置</value>
+    </data>
+    <data name="Toggle_EnableVolumeCamera" xml:space="preserve">
+        <value>启用体积相机</value>
+    </data>
+    <data name="Label_FusionTimeMs" xml:space="preserve">
+        <value>融合时间 (毫秒):</value>
+    </data>
+    <data name="Header_HikvisionSecurityCameraSettings" xml:space="preserve">
+        <value>海康安防相机设置</value>
+    </data>
+    <data name="Toggle_EnableHikvisionSecurityCamera" xml:space="preserve">
+        <value>启用海康安防相机</value>
+    </data>
+    <data name="Label_IPAddress" xml:space="preserve">
+        <value>IP 地址:</value>
+    </data>
+    <data name="Label_Port" xml:space="preserve">
+        <value>端口号:</value>
+    </data>
+    <data name="Label_Username" xml:space="preserve">
+        <value>用户名:</value>
+    </data>
+    <data name="Label_Password" xml:space="preserve">
+        <value>密码:</value>
+    </data>
+</root>

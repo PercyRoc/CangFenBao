@@ -1,0 +1,56 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0-windows</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AssemblyName>Camera</AssemblyName>
+        <RootNamespace>Camera</RootNamespace>
+        <UseWPF>true</UseWPF>
+        <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+    </PropertyGroup>
+    
+    <ItemGroup>
+        <PackageReference Include="Prism.Wpf"/>
+        <PackageReference Include="Serilog" />
+        <PackageReference Include="WPF-UI"/>
+        <PackageReference Include="HandyControl"/>
+        <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
+        <PackageReference Include="WPFLocalizeExtension" />
+        <PackageReference Include="System.Reactive" />
+    </ItemGroup>
+    
+    <ItemGroup>
+      <ProjectReference Include="..\Common\基础服务.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Include="Resources\CameraSettings.en-us.resx" />
+      <EmbeddedResource Include="Resources\CameraSettings.resx">
+        <Generator>ResXFileCodeGenerator</Generator>
+        <LastGenOutput>CameraSettings.Designer.cs</LastGenOutput>
+      </EmbeddedResource>
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Update="MVIDCodeReader.Net.dll">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="VolMeasure.Net.dll">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Reference Include="MVIDCodeReader.Net">
+        <HintPath>MVIDCodeReader.Net.dll</HintPath>
+      </Reference>
+      <Reference Include="MvLogisticsSDK.Net">
+        <HintPath>Services\Implementations\Hikvision\MvLogisticsSDK.Net.dll</HintPath>
+      </Reference>
+      <Reference Include="VolMeasure.Net">
+        <HintPath>VolMeasure.Net.dll</HintPath>
+      </Reference>
+    </ItemGroup>
+
+</Project>

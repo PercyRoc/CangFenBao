@@ -67,18 +67,18 @@ namespace Rookie.Views.Windows
                     return;
                 }
 
-                // Dispose ViewModel in background
+                // Dispose ViewModels in background
                 if (DataContext is IDisposable viewModel)
                     Task.Run(() =>
                     {
                         try
                         {
                             viewModel.Dispose();
-                            Log.Information("Main window ViewModel disposed.");
+                            Log.Information("Main window ViewModels disposed.");
                         }
                         catch (Exception ex)
                         {
-                            Log.Error(ex, "Error disposing ViewModel.");
+                            Log.Error(ex, "Error disposing ViewModels.");
                         }
                         finally
                         {
@@ -92,8 +92,8 @@ namespace Rookie.Views.Windows
                     });
                 else
                 {
-                    // If no disposable ViewModel, shut down directly
-                    Log.Information("ViewModel not disposable or null, shutting down directly.");
+                    // If no disposable ViewModels, shut down directly
+                    Log.Information("ViewModels not disposable or null, shutting down directly.");
                     e.Cancel = false;
                     Application.Current.Shutdown();
                 }

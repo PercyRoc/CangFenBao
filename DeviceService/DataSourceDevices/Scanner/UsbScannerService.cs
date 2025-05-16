@@ -13,8 +13,6 @@ namespace DeviceService.DataSourceDevices.Scanner;
 /// </summary>
 internal class UsbScannerService : IScannerService
 {
-    // 扫描枪输入超时时间 (毫秒)
-    private const int ScannerTimeout = 200;
     private readonly StringBuilder _barcodeBuilder = new(); // 用于构建条码字符串
     private readonly LowLevelKeyboardProc _proc; // 低级键盘钩子回调函数
     private readonly Queue<string> _barcodeQueue = new(); // 条码处理队列
@@ -23,16 +21,12 @@ internal class UsbScannerService : IScannerService
     private readonly Subject<string> _barcodeSubject = new(); // 用于发布条码的 Reactive Subject
     private IntPtr _hookId = IntPtr.Zero; // 键盘钩子句柄
     private bool _isRunning; // 服务运行状态标志
-    private DateTime _lastKeyTime = DateTime.MinValue; // 上次按键时间
     private bool _isShiftPressed; // 新增：追踪Shift键状态
 
     // 添加最后处理条码的记录
     private string _lastBarcode = string.Empty; // 上一个成功处理的条码
     private DateTime _lastBarcodeTime = DateTime.MinValue; // 上一个条码的处理时间
     private const int DuplicateBarcodeIntervalMs = 3000; // 重复条码过滤时间间隔 (毫秒)
-
-    // 添加拦截控制开关
-    private bool _interceptAllInput = true; // 控制是否拦截所有扫码枪输入 (防止字符进入输入框)
 
     // WinAPI 常量
     private const int WhKeyboardLl = 13; // 低级键盘钩子类型
@@ -43,16 +37,6 @@ internal class UsbScannerService : IScannerService
     private const short VkRshift = 0xA1; // 右 Shift 虚拟键码
     private const short VkReturn = 0x0D; // Enter 虚拟键码
     private const short VkOemMinus = 0xBD; // OEM_MINUS 虚拟键码
-
-
-    /// <summary>
-    /// 获取或设置是否拦截所有扫码枪输入，防止字符进入输入框
-    /// </summary>
-    public bool InterceptAllInput
-    {
-        get => _interceptAllInput;
-        set => _interceptAllInput = value;
-    }
 
     public UsbScannerService()
     {
@@ -188,42 +172,38 @@ internal class UsbScannerService : IScannerService
         // --- 处理字符按键的 KeyDown 事件 (后续逻辑不变) ---
         if (wParam == WmKeydown)
         {
-            // --- 超时检查 (逻辑不变) ---
-            var timeDiff = (currentTime - _lastKeyTime).TotalMilliseconds;
-            if (timeDiff >= ScannerTimeout && _barcodeBuilder.Length > 0)
-            {
-                Log.Debug("输入超时 ({TimeDiff}ms)...", timeDiff);
-                _barcodeBuilder.Clear();
-            }
-
-            _lastKeyTime = currentTime;
-
+            
             // --- 处理回车键 (逻辑不变) ---
             if (vkCode == VkReturn)
             {
                 if (_barcodeBuilder.Length <= 0) return CallNextHookEx(_hookId, nCode, wParam, lParam);
                 var barcode = _barcodeBuilder.ToString();
                 _barcodeBuilder.Clear();
-                Log.Debug("收到可能的条码（回车触发）：{Barcode}, 长度: {Length}", barcode, barcode.Length);
-                if (ValidateBarcode(barcode))
+                bool isScanner = false;
+                string barcodeToPublish = barcode;
+                if (barcode.StartsWith('@'))
+                {
+                    isScanner = true;
+                    barcodeToPublish = barcode[1..]; // 去除前缀@
+                }
+                Log.Information("收到条码：{Barcode}，方式：{Type}", barcodeToPublish, isScanner ? "扫码枪(@前缀+回车)" : "手动输入");
+                if (ValidateBarcode(barcodeToPublish))
                 {
                     lock (_lock)
                     {
-                        _barcodeQueue.Enqueue(barcode);
+                        _barcodeQueue.Enqueue(barcodeToPublish);
                     }
-
-                    Log.Debug("条码有效，已入队：{Barcode}", barcode);
+                    Log.Debug("条码有效，已入队：{Barcode}", barcodeToPublish);
                     return 1;
                 }
                 else
                 {
-                    Log.Warning("条码无效（回车触发）：{Barcode}，长度: {Length}", barcode, barcode.Length);
-                    if (barcode.Length >= 3)
+                    Log.Warning("条码无效（回车触发）：{Barcode}，长度: {Length}", barcodeToPublish, barcodeToPublish.Length);
+                    if (barcodeToPublish.Length >= 3)
                     {
                         return 1;
                     }
                 }
-
                 return CallNextHookEx(_hookId, nCode, wParam, lParam);
             }
 
@@ -232,7 +212,7 @@ internal class UsbScannerService : IScannerService
             if (!GetKeyboardState(keyboardState))
             {
                 Log.Warning("GetKeyboardState 调用失败。VKCode={VKCode}", vkCode);
-                return _interceptAllInput ? 1 : CallNextHookEx(_hookId, nCode, wParam, lParam);
+                return CallNextHookEx(_hookId, nCode, wParam, lParam);
             }
 
             // *** 使用追踪的 Shift 状态修正 keyboardState ***
@@ -304,33 +284,14 @@ internal class UsbScannerService : IScannerService
                 }
 
                 _barcodeBuilder.Append(charToAdd);
-                Log.Debug("添加字符 '{Char}' (VKCode: {VKCode}) 到缓冲区. 当前模式: {Mode}",
-                    charToAdd, vkCode, _interceptAllInput ? "扫描枪(拦截)" : "手动(不拦截)");
+                Log.Debug("添加字符 '{Char}' (VKCode: {VKCode}) 到缓冲区.", charToAdd, vkCode);
 
-                if (_interceptAllInput)
-                {
-                    Log.Debug("拦截按键 (扫描枪模式): '{Char}'", charToAdd);
-                    return 1;
-                }
-                else
-                {
-                    Log.Debug("不拦截按键 (手动模式): '{Char}'", charToAdd);
-                    return CallNextHookEx(_hookId, nCode, wParam, lParam);
-                }
+                return CallNextHookEx(_hookId, nCode, wParam, lParam);
             }
             else // ToUnicodeEx 转换失败
             {
                 Log.Debug("ToUnicodeEx 转换失败或未产生字符 (VKCode: {VKCode}, Result: {Result})", vkCode, result);
-                if (_interceptAllInput)
-                {
-                    Log.Debug("拦截按键 (扫描枪模式, ToUnicodeEx失败): VKCode {VKCode}", vkCode);
-                    return 1;
-                }
-                else
-                {
-                    Log.Debug("不拦截按键 (手动模式, ToUnicodeEx失败): VKCode {VKCode}", vkCode);
-                    return CallNextHookEx(_hookId, nCode, wParam, lParam);
-                }
+                return CallNextHookEx(_hookId, nCode, wParam, lParam);
             }
         } // 结束 if (wParam == WM_KEYDOWN)
         // --- 处理非 Shift 键的 KeyUp 事件 ---

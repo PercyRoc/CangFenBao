@@ -1,11 +1,8 @@
-using System.Diagnostics.CodeAnalysis;
-
 namespace DeviceService.DataSourceDevices.Camera.Models;
 
 /// <summary>
 /// Represents basic information about a camera device.
 /// </summary>
-[SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
 public class CameraBasicInfo
 {
     /// <summary>

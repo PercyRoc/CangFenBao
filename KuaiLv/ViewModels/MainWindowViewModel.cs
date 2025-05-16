@@ -758,7 +758,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     #endregion
     
-    #region Camera Layout Methods
+    #region 相机模块 Layout Methods
 
     /// <summary>
     /// 初始化相机列表和布局

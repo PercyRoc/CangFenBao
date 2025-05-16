@@ -29,14 +29,7 @@ public class JushuitanSettingsViewModel : BindableBase
     {
         try
         {
-            var results = _settingsService.SaveSettings(Settings, true);
-            if (results.Length > 0)
-            {
-                var errorMessage = string.Join("\n", results.Select(static r => r.ErrorMessage));
-                _notificationService.ShowError($"保存设置失败：\n{errorMessage}");
-                return;
-            }
-
+            _settingsService.SaveSettings(Settings, true);
             _notificationService.ShowSuccess("聚水潭设置已保存");
             Log.Information("聚水潭设置已保存");
         }

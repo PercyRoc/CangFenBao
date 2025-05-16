@@ -2,58 +2,80 @@
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
-using Common.Data;
 using Common.Models.Package;
-using Common.Services.Settings;
-using Common.Services.Ui;
-using DeviceService.DataSourceDevices.Camera;
-using DeviceService.DataSourceDevices.Services;
 using Serilog;
 using SharedUI.Models;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using Rookie.Services;
+using DeviceService.DataSourceDevices.Weight;
+using Common.Services.Settings;
+using DeviceService.DataSourceDevices.Camera.Models.Camera;
+using System.IO;
+using Camera.Interface;
+using Camera.Services;
+using Camera.Services.Implementations.Hikvision.Security;
+using Camera.Services.Implementations.Hikvision.Volume;
 using Rookie.Models.Api;
+using Sorting_Car.Services;
+using Weight.Services;
 
 namespace Rookie.ViewModels.Windows;
 
 public class MainWindowViewModel : BindableBase, IDisposable
 {
-    private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
-    private readonly INotificationService _notificationService;
-    private readonly IPackageDataService _packageDataService;
-    private readonly ISettingsService _settingsService;
     private readonly IRookieApiService _rookieApiService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
+    private readonly ISettingsService _settingsService;
 
     private string _currentBarcode = string.Empty;
     private BitmapSource? _currentImage;
+    private BitmapSource? _eventPackageImage;
     private bool _disposed;
     private SystemStatus _systemStatus = new();
 
-    // Statistics Counters
     private long _totalPackageCount;
     private long _successPackageCount;
     private long _failedPackageCount;
     private long _peakRate;
 
+    private const int SupplementDataPollIntervalMs = 50;
+
+    private (double WeightInGrams, DateTime Timestamp)? _lastReceivedValidWeight;
+    private (float Length, float Width, float Height, DateTime Timestamp)? _lastReceivedValidVolume;
+
+    private readonly HikvisionSecurityCameraService _securityCameraService;
+    private readonly HikvisionVolumeCameraService _volumeCameraService;
+    private readonly ICameraService _industrialCameraService;
+    private readonly IWeightService _weightService;
+    private readonly CarSortService _carSortService;
+    private readonly CarSortingService _carSortingService;
+
+    private volatile bool _isProcessingPackage;
+
     public MainWindowViewModel(
         IDialogService dialogService,
-        ICameraService cameraService,
         ISettingsService settingsService,
-        INotificationService notificationService,
-        IPackageDataService packageDataService,
         IRookieApiService rookieApiService,
-        PackageTransferService? packageTransferService = null)
+        IWeightService weightService,
+        CarSortService carSortService,
+        CarSortingService carSortingService,
+        ICameraService industrialCameraService,
+        CameraDataProcessingService cameraDataProcessingService,
+        HikvisionSecurityCameraService securityCameraService,
+        HikvisionVolumeCameraService volumeCameraService)
     {
-        _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
-        _cameraService = cameraService ?? throw new ArgumentNullException(nameof(cameraService));
-        _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
-        _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
-        _packageDataService = packageDataService ?? throw new ArgumentNullException(nameof(packageDataService));
-        // packageTransferService is used directly in subscription setup
+        _dialogService = dialogService;
+        _settingsService = settingsService;
+        _rookieApiService = rookieApiService;
+        _weightService = weightService;
+        _carSortService = carSortService;
+        _carSortingService = carSortingService;
+        _industrialCameraService = industrialCameraService;
+        _securityCameraService = securityCameraService;
+        _volumeCameraService = volumeCameraService;
 
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
         OpenHistoryCommand = new DelegateCommand(ExecuteOpenHistory);
@@ -69,39 +91,103 @@ public class MainWindowViewModel : BindableBase, IDisposable
         InitializeStatisticsItems();
         InitializePackageInfoItems();
 
-        _cameraService.ConnectionChanged += OnCameraConnectionChanged;
-        _subscriptions.Add(_cameraService.ImageStream
+        _securityCameraService.ConnectionChanged += OnSecurityCameraConnectionChanged;
+        _volumeCameraService.ConnectionChanged += OnVolumeCameraConnectionChanged;
+        _industrialCameraService.ConnectionChanged += OnIndustrialCameraConnectionChanged;
+        _weightService.ConnectionChanged += OnWeightServiceConnectionChanged;
+        _carSortingService.ConnectionChanged += OnCarSerialPortConnectionChanged;
+
+        _subscriptions.Add(_industrialCameraService.ImageStreamWithId
             .ObserveOn(TaskPoolScheduler.Default)
             .Subscribe(imageData =>
             {
                 try
                 {
-                    imageData.Freeze();
+                    imageData.Image.Freeze();
                     Application.Current?.Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
                     {
-                        try { CurrentImage = imageData; }
-                        catch (Exception ex) { Log.Error(ex, "Error updating UI image."); }
+                        try 
+                        { 
+                            EventPackageImage = imageData.Image; 
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error(ex, "Error updating EventPackageImage on UI thread from Industrial  live stream.");
+                        }
                     });
                 }
-                catch (Exception ex) { Log.Error(ex, "Error processing image stream."); }
-            }, ex => Log.Error(ex, "Error in camera image stream subscription.")));
-
-        if (packageTransferService != null)
-        {
-            // Corrected: Use Dispatcher.BeginInvoke inside Subscribe like ZtCloudWarehous
-            _subscriptions.Add(packageTransferService.PackageStream
-                .Subscribe(package =>
+                catch (Exception ex)
                 {
-                    Application.Current?.Dispatcher.BeginInvoke(() => OnPackageInfo(package));
-                },
-                ex => Log.Error(ex, "Error in package stream subscription.")));
-        }
-        else
-        {
-            Log.Warning("PackageTransferService not available or not injected, cannot subscribe to package stream.");
-        }
+                    Log.Error(ex, "Error processing image from Industrial  live stream.");
+                }
+            }, ex => Log.Error(ex, "Error in Industrial  live image stream subscription.")));
 
-        Log.Information("Rookie MainWindowViewModel initialized.");
+        // 订阅体积数据流
+        _subscriptions.Add(_volumeCameraService.VolumeDataWithVerticesStream
+            .Subscribe(volumeData =>
+            {
+                Application.Current?.Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
+                {
+                    var (length, width, height, timestamp, isValid, receivedImage) = volumeData;
+                    try
+                    {
+                        var dimensionsItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Dimensions");
+                        if (dimensionsItem != null)
+                        {
+                            if (isValid && length > 0 && width > 0 && height > 0)
+                            {
+                                dimensionsItem.Value = $"{length:F0}x{width:F0}x{height:F0}";
+                                _lastReceivedValidVolume = (length, width, height, timestamp);
+                            }
+                            else
+                            {
+                                dimensionsItem.Value = "-- x -- x --";
+                            }
+                        }
+                        CurrentImage = receivedImage;
+
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "更新实时包裹体积信息或主图像时出错。");
+                    }
+                });
+            }, ex => Log.Error(ex, "体积数据流订阅出错。")));
+
+        // 订阅重量数据流
+        _subscriptions.Add(_weightService.WeightDataStream
+            .Subscribe(weightData =>
+            {
+                Application.Current?.Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
+                {
+                    try
+                    {
+                        var weightItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Scale");
+                        if (weightItem == null) return;
+                        if (weightData != null)
+                        {
+                            // 将 double 格式化为字符串，保留两位小数
+                            weightItem.Value = weightData.Value.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+                            // 更新 _lastReceivedValidWeight 缓存
+                            if (weightData.Value > 0) // 假设有效重量是正数
+                            {
+                                _lastReceivedValidWeight = (weightData.Value, weightData.Timestamp);
+                            }
+                        }
+                        else
+                        {
+                            weightItem.Value = "0.00"; 
+                           
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "更新实时包裹重量信息时出错。");
+                    }
+                });
+            }, ex => Log.Error(ex, "重量数据流订阅出错。")));
+
+        cameraDataProcessingService.PackageStream.Subscribe(async void (packageInfo) => await ProcessPackageAsync(packageInfo));
     }
 
     ~MainWindowViewModel()
@@ -121,13 +207,19 @@ public class MainWindowViewModel : BindableBase, IDisposable
     public BitmapSource? CurrentImage
     {
         get => _currentImage;
-        set => SetProperty(ref _currentImage, value);
+        private set => SetProperty(ref _currentImage, value);
+    }
+
+    public BitmapSource? EventPackageImage
+    {
+        get => _eventPackageImage;
+        private set => SetProperty(ref _eventPackageImage, value);
     }
 
     public SystemStatus SystemStatus
     {
         get => _systemStatus;
-        set => SetProperty(ref _systemStatus, value);
+        private set => SetProperty(ref _systemStatus, value);
     }
 
     public ObservableCollection<PackageInfo> PackageHistory { get; } = [];
@@ -137,8 +229,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     private void ExecuteOpenSettings()
     {
-        _dialogService.ShowDialog("SettingsDialog", new DialogParameters(), _ => { });
-        
+        _dialogService.ShowDialog("SettingsDialogs", new DialogParameters(), _ => { });
+
     }
 
     private void ExecuteOpenHistory()
@@ -155,7 +247,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Failed to update system status or statistics.");
+            Log.Warning(ex, "无法更新系统状态或统计信息。");
         }
     }
 
@@ -166,15 +258,43 @@ public class MainWindowViewModel : BindableBase, IDisposable
             DeviceStatuses.Clear();
             DeviceStatuses.Add(new DeviceStatus
             {
-                Name = "Camera",
+                Name = "Hikvision Security",
+                Status = "Disconnected",
+                Icon = "VideoSecurity24",
+                StatusColor = "#F44336"
+            });
+            DeviceStatuses.Add(new DeviceStatus
+            {
+                Name = "Hikvision Volume",
+                Status = "Disconnected",
+                Icon = "CubeScan24",
+                StatusColor = "#F44336"
+            });
+            DeviceStatuses.Add(new DeviceStatus
+            {
+                Name = "Hikvision Industrial",
                 Status = "Disconnected",
                 Icon = "Camera24",
                 StatusColor = "#F44336"
             });
+            DeviceStatuses.Add(new DeviceStatus
+            {
+                Name = "Scales",
+                Status = "Disconnected",
+                Icon = "ScaleBalance24",
+                StatusColor = "#F44336"
+            });
+            DeviceStatuses.Add(new DeviceStatus
+            {
+                Name = "Car SerialPort",
+                Status = _carSortingService.IsConnected ? "Connected" : "Disconnected",
+                Icon = "SerialPort24",
+                StatusColor = _carSortingService.IsConnected ? "#4CAF50" : "#F44336"
+            });
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Error initializing device status list.");
+            Log.Error(ex, "错误初始化设备状态列表。");
         }
     }
 
@@ -227,7 +347,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Error initializing statistics items.");
+            Log.Error(ex, "错误初始化统计信息项目。");
         }
     }
 
@@ -238,11 +358,29 @@ public class MainWindowViewModel : BindableBase, IDisposable
             PackageInfoItems.Clear();
 
             PackageInfoItems.Add(new PackageInfoItem(
-                label: "Weight",
+                label: "Scales",
                 value: "0.00",
                 unit: "kg",
                 description: "Package weight",
                 icon: "Scales24"
+            ));
+
+            // Add Dimensions item
+            PackageInfoItems.Add(new PackageInfoItem(
+                label: "Dimensions",
+                value: "-- x -- x --",
+                unit: "mm",
+                description: "L x W x H",
+                icon: "ScanObject24"
+            ));
+
+            // Add Destination/Chute item
+            PackageInfoItems.Add(new PackageInfoItem(
+                label: "Destination",
+                value: "--",
+                unit: "Chute",
+                description: "Assigned sorting chute",
+                icon: "BranchFork24" // Example icon
             ));
 
             PackageInfoItems.Add(new PackageInfoItem(
@@ -262,231 +400,392 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Error initializing package info items.");
+            Log.Error(ex, "错误初始化包裹信息项目。");
         }
     }
 
-    private void OnCameraConnectionChanged(string? deviceId, bool isConnected)
+    private void OnSecurityCameraConnectionChanged(string? deviceId, bool isConnected)
     {
         Application.Current?.Dispatcher.InvokeAsync(() =>
         {
             try
             {
-                var cameraStatus = DeviceStatuses.FirstOrDefault(d => d.Name == "Camera");
-                if (cameraStatus != null)
-                {
-                    cameraStatus.Status = isConnected ? "Connected" : "Disconnected";
-                    cameraStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
-                    Log.Information("Camera connection status updated: {Status}", cameraStatus.Status);
-                }
-
+                var hikvisionStatus = DeviceStatuses.FirstOrDefault(d => d.Name == "Hikvision Security");
+                if (hikvisionStatus == null) return;
+                hikvisionStatus.Status = isConnected ? "Connected" : "Disconnected";
+                hikvisionStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
+                Log.Information("Hikvision Security 相机模块 connection status updated: {Status}", hikvisionStatus.Status);
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Error updating camera/device connection status on UI thread.");
+                Log.Error(ex, "错误更新Hikvision Security Camera状态在UI线程。");
             }
         });
     }
 
-    private async void OnPackageInfo(PackageInfo package)
+    private void OnVolumeCameraConnectionChanged(string? deviceId, bool isConnected)
     {
-        // Initial UI Update on Dispatcher (Remove history add from here)
         Application.Current?.Dispatcher.InvokeAsync(() =>
         {
-            CurrentBarcode = package.Barcode;
-            UpdatePackageInfoItems(package); // Show initial data
-            Interlocked.Increment(ref _totalPackageCount); // Count every package received
+            try
+            {
+                var volumeCameraStatus = DeviceStatuses.FirstOrDefault(d => d.Name == "Hikvision Volume");
+                if (volumeCameraStatus == null) return;
+                volumeCameraStatus.Status = isConnected ? "Connected" : "Disconnected";
+                volumeCameraStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
+                Log.Information("Hikvision Volume  connection status updated: {Status} for device ID: {DeviceId}", volumeCameraStatus.Status, deviceId ?? "N/A");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error updating Hikvision Volume  status on UI thread.");
+            }
         });
+    }
 
-        Log.Information("开始处理包裹: {Barcode}", package.Barcode);
-        DestRequestResultParams? destinationResult;
-        string finalChute = "ERR"; // Default error chute for reporting if needed
-        string finalErrorMessage = "处理失败"; // Default error message
+    private void OnIndustrialCameraConnectionChanged(string? deviceId, bool isConnected)
+    {
+        Application.Current?.Dispatcher.InvokeAsync(() =>
+        {
+            try
+            {
+                var industrialCameraStatus = DeviceStatuses.FirstOrDefault(d => d.Name == "Hikvision Industrial");
+                if (industrialCameraStatus == null) return;
+                industrialCameraStatus.Status = isConnected ? "Connected" : "Disconnected";
+                industrialCameraStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
+                Log.Information("Hikvision Industrial  connection status updated: {Status} for device ID: {DeviceId}", industrialCameraStatus.Status, deviceId ?? "N/A");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error updating Hikvision Industrial  status on UI thread.");
+            }
+        });
+    }
 
+    private void OnWeightServiceConnectionChanged(string? deviceId, bool isConnected)
+    {
+        Application.Current?.Dispatcher.InvokeAsync(() =>
+        {
+            try
+            {
+                var weightScaleStatus = DeviceStatuses.FirstOrDefault(d => d.Name == "Scales");
+                if (weightScaleStatus == null) return;
+                weightScaleStatus.Status = isConnected ? "Connected" : "Disconnected";
+                weightScaleStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
+                Log.Information(" Scale connection status updated: {Status}", weightScaleStatus.Status);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error updating  Scale status on UI thread.");
+            }
+        });
+    }
+
+    private void OnCarSerialPortConnectionChanged(bool isConnected)
+    {
+        Application.Current?.Dispatcher.InvokeAsync(() =>
+        {
+            try
+            {
+                var carSerialStatus = DeviceStatuses.FirstOrDefault(d => d.Name == "Car SerialPort");
+                if (carSerialStatus == null) return;
+                carSerialStatus.Status = isConnected ? "Connected" : "Disconnected";
+                carSerialStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
+                Log.Information("小车串口连接状态变更: {Status}", carSerialStatus.Status);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "更新小车串口状态时发生错误。");
+            }
+        });
+    }
+
+    private async Task ProcessPackageAsync(PackageInfo package)
+    {
+        if (_isProcessingPackage)
+        {
+            Log.Information("包裹 {Barcode}: 当前正在处理另一个包裹，此包裹被忽略。", package.Barcode);
+            package.ReleaseImage(); // 释放未处理包裹的图像资源
+            package.Dispose();      // 释放未处理包裹的其他资源
+            return;
+        }
+
+        _isProcessingPackage = true;
         try
         {
-            // --- 1. 上报包裹信息 ---
-            Log.Debug("上报包裹信息: {Barcode}", package.Barcode ?? "NoRead");
-            bool uploadSuccess = await _rookieApiService.UploadParcelInfoAsync(package);
-            if (!uploadSuccess)
+            Log.Information("开始处理包裹: {Barcode}, 触发时间: {CreateTime:HH:mm:ss.fff}", package.Barcode, package.CreateTime);
+            if (package.Weight <= 0)
             {
-                Log.Error("上传包裹信息失败: {Barcode}", package.Barcode ?? "NoRead");
-                finalErrorMessage = "上传包裹信息失败";
-                package.SetStatus(PackageStatus.Error, finalErrorMessage);
-                package.ErrorMessage = finalErrorMessage;
-            }
-            else
-            {
-                Log.Information("包裹信息上传成功: {Barcode}", package.Barcode ?? "NoRead");
+                // 按需加载重量设置
+                var weightSettings = _settingsService.LoadSettings<WeightSettings>();
+                var currentWeightTimeoutMs = weightSettings.TimeRangeUpper;
 
-                // --- 2. 请求目的地 ---
-                Log.Debug("请求目的地: {Barcode}", package.Barcode ?? "NoRead");
-                destinationResult = await _rookieApiService.RequestDestinationAsync(package.Barcode ?? "NoRead");
-
-                if (destinationResult == null)
+                if (_lastReceivedValidWeight.HasValue)
                 {
-                    Log.Error("请求目的地失败或API返回错误: {Barcode}", package.Barcode ?? "NoRead");
-                    finalErrorMessage = "请求目的地失败";
-                    package.SetStatus(PackageStatus.Error, finalErrorMessage);
-                    package.ErrorMessage = finalErrorMessage;
+                    package.SetWeight(_lastReceivedValidWeight.Value.WeightInGrams);
+                    Log.Information("包裹 {Barcode}: 重量为0，已立即从缓存的流数据补充重量: {称重模块}g", package.Barcode, package.Weight);
                 }
                 else
                 {
-                    Log.Information("收到目的地信息: {Barcode}, Chute: {ChuteCode}, ErrorCode: {ErrorCode}, FinalBarcode: {FinalBarcode}",
-                        package.Barcode ?? "NoRead", destinationResult.ChuteCode, destinationResult.ErrorCode, destinationResult.FinalBarcode);
-
-                    if (!string.IsNullOrWhiteSpace(destinationResult.FinalBarcode) && destinationResult.FinalBarcode != package.Barcode)
+                    Log.Information("包裹 {Barcode}: 重量为0，且无可用流缓存，将轮询等待最多 {Timeout}ms...", package.Barcode, currentWeightTimeoutMs);
+                    bool weightSupplemented = false;
+                    for (int i = 0; i < (currentWeightTimeoutMs / SupplementDataPollIntervalMs); i++)
                     {
-                         Log.Information("DCS 返回不同的最终条码: {OldBarcode} -> {NewBarcode}", package.Barcode, destinationResult.FinalBarcode);
-                         // package.SetBarcode(destinationResult.FinalBarcode); // Use SetBarcode if needed
+                        await Task.Delay(SupplementDataPollIntervalMs);
+                        if (!_lastReceivedValidWeight.HasValue) continue;
+                        package.SetWeight(_lastReceivedValidWeight.Value.WeightInGrams);
+                        Log.Information("包裹 {Barcode}: 轮询等待期间，从流数据补充重量: {称重模块}g (尝试次数: {Attempt})", package.Barcode, package.Weight, i + 1);
+                        weightSupplemented = true;
+                        break;
                     }
-
-                    if (destinationResult.ErrorCode == 0) // 0 = 正常
+                    if (!weightSupplemented)
                     {
-                        if (int.TryParse(destinationResult.ChuteCode, out var chuteNumber))
-                        {
-                            package.SetChute(chuteNumber);
-                            package.SetStatus(PackageStatus.Success);
-                            package.ErrorMessage = null; 
-                            finalChute = destinationResult.ChuteCode;
-                            Log.Information("包裹 {Barcode} 分配到格口: {Chute}", package.Barcode ?? "NoRead", finalChute);
-                        }
-                        else
-                        {
-                            Log.Error("无法解析目的地格口 '{ChuteCode}' 为整数: {Barcode}", destinationResult.ChuteCode, package.Barcode ?? "NoRead");
-                            finalErrorMessage = $"无效格口: {destinationResult.ChuteCode}";
-                            package.SetStatus(PackageStatus.Error, finalErrorMessage);
-                            package.ErrorMessage = finalErrorMessage;
-                        }
-                    }
-                    else // DCS returned a business error
-                    {
-                        var dcsError = MapDcsErrorCodeToString(destinationResult.ErrorCode);
-                        Log.Error("DCS 目的地请求错误: {Barcode}, ErrorCode: {ErrorCode} ({ErrorString})",
-                                  package.Barcode ?? "NoRead", destinationResult.ErrorCode, dcsError);
-                        var mappedStatus = MapDcsErrorCodeToPackageStatus(destinationResult.ErrorCode); 
-                        package.SetStatus(mappedStatus, dcsError);
-                        package.ErrorMessage = dcsError;
-                        finalErrorMessage = package.ErrorMessage;
-                        finalChute = destinationResult.ChuteCode ?? "ERR"; 
+                        Log.Warning("包裹 {Barcode}: 轮询等待 {Timeout}ms 后，仍未从流中获取到有效重量。", package.Barcode, currentWeightTimeoutMs);
                     }
                 }
             }
 
-            // --- 3. 上报分拣结果 ---
-            // Note: We now use package.Status which reflects the outcome of the destination request
-            Log.Debug("上报分拣结果: {Barcode}, Chute: {Chute}, Success: {StatusBool}",
-                      package.Barcode ?? "NoRead", finalChute, package.Status == PackageStatus.Success);
-            bool reportSuccess = await _rookieApiService.ReportSortResultAsync(
-                package.Barcode ?? "NoRead",
-                finalChute,
-                package.Status == PackageStatus.Success, // Report based on final PackageStatus
-                package.Status == PackageStatus.Success ? null : package.ErrorMessage ?? finalErrorMessage); // Use actual error message if available
-
-            if (!reportSuccess)
+            if (package.Length <= 0 || package.Width <= 0 || package.Height <= 0)
             {
-                Log.Error("上报分拣结果失败: {Barcode}", package.Barcode ?? "NoRead");
-                // Consider if this failure should change the package status or just be logged.
+                // 按需加载相机设置
+                var cameraSettings = _settingsService.LoadSettings<CameraSettings>();
+                var currentVolumeTimeoutMs = cameraSettings.VolumeCameraFusionTimeMs;
+
+                if (_lastReceivedValidVolume.HasValue)
+                {
+                    var (l, w, h, _) = _lastReceivedValidVolume.Value;
+                    package.SetDimensions(l, w, h);
+                    Log.Information("包裹 {Barcode}: 尺寸无效，已立即从缓存的流数据补充尺寸: L{L} W{W} H{H}", package.Barcode, package.Length, package.Width, package.Height);
+                }
+                else
+                {
+                    Log.Information("包裹 {Barcode}: 尺寸无效，且无可用流缓存，将轮询等待最多 {Timeout}ms...", package.Barcode, currentVolumeTimeoutMs);
+                    bool volumeSupplemented = false;
+                    for (int i = 0; i < (currentVolumeTimeoutMs / SupplementDataPollIntervalMs); i++)
+                    {
+                        await Task.Delay(SupplementDataPollIntervalMs);
+                        if (_lastReceivedValidVolume.HasValue)
+                        {
+                            var (l, w, h, _) = _lastReceivedValidVolume.Value;
+                            package.SetDimensions(l, w, h);
+                            Log.Information("包裹 {Barcode}: 轮询等待期间，从流数据补充尺寸: L{L} W{W} H{H} (尝试次数: {Attempt})", package.Barcode, package.Length, package.Width, package.Height, i + 1);
+                            volumeSupplemented = true;
+                            break;
+                        }
+                    }
+                    if (!volumeSupplemented)
+                    {
+                        Log.Warning("包裹 {Barcode}: 轮询等待 {Timeout}ms 后，仍未从流中获取到有效尺寸。", package.Barcode, currentVolumeTimeoutMs);
+                    }
+                }
+            }
+
+            Application.Current?.Dispatcher.InvokeAsync(() =>
+            {
+                CurrentBarcode = package.Barcode;
+                UpdatePackageInfoItems(package);
+                Interlocked.Increment(ref _totalPackageCount);
+            });
+
+            // 检查重量和尺寸是否有效，无效则直接失败
+            bool hasWeight = package.Weight > 0;
+            bool hasDimensions = package is { Length: > 0, Width: > 0, Height: > 0 };
+
+            if (!hasWeight || !hasDimensions)
+            {
+                string skipReason = hasWeight switch
+                {
+                    false when !hasDimensions => "包裹重量和体积信息均缺失",
+                    false => "包裹重量信息缺失",
+                    _ => "包裹体积信息缺失"
+                };
+
+                Log.Warning("包裹 {Barcode}: {Reason}，跳过DCS及后续流程。", package.Barcode, skipReason);
+                var combinedErrorMessage = string.IsNullOrEmpty(package.ErrorMessage)
+                    ? skipReason
+                    : $"{package.ErrorMessage}; {skipReason}";
+                package.SetStatus(PackageStatus.Failed, combinedErrorMessage);
+                // 后续会在通用代码块中更新UI和历史记录
+            }
+            else // 重量和尺寸有效，开始DCS流程
+            {
+                // 1. 调用安防相机抓图并上传
+                BitmapSource? capturedImage = _securityCameraService.CaptureAndGetBitmapSource();
+                if (capturedImage != null)
+                {
+                    string tempImageDirectory = Path.Combine(Path.GetTempPath(), "RookieParcelImages");
+                    string tempImageFileName = $"pkg_{package.Index}_{DateTime.UtcNow:yyyyMMddHHmmssfff}.jpg";
+                    string? tempImagePath = SaveBitmapSourceAsJpeg(capturedImage, tempImageDirectory, tempImageFileName);
+
+                    if (tempImagePath != null)
+                    {
+                        Log.Information("包裹 {Barcode}: 安防相机图片已保存到临时路径 {Path}", package.Barcode, tempImagePath);
+                        string? imageUrl = await _rookieApiService.UploadImageAsync(tempImagePath);
+                        if (!string.IsNullOrEmpty(imageUrl))
+                        {
+                            package.ImagePath = imageUrl;
+                            Log.Information("包裹 {Barcode}: 图片上传到DCS成功: {ImageUrl}", package.Barcode, imageUrl);
+                        }
+                        else
+                        {
+                            Log.Warning("包裹 {Barcode}: 图片上传到DCS失败。", package.Barcode);
+                            package.ImagePath = null;
+                        }
+                        try
+                        {
+                            File.Delete(tempImagePath);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Warning(ex, "删除临时图片文件失败: {Path}", tempImagePath);
+                        }
+                    }
+                    else
+                    {
+                        Log.Warning("包裹 {Barcode}: 保存安防相机抓图到临时文件失败。", package.Barcode);
+                        package.ImagePath = null;
+                    }
+                }
+                else
+                {
+                    Log.Information("包裹 {Barcode}: 未从安防相机抓取到图片，跳过图片上传。", package.Barcode);
+                    package.ImagePath = null;
+                }
+
+                // 2. 调用 sorter.parcel_info_upload
+                Log.Information("包裹 {Barcode}: 准备上传包裹基础信息到DCS。图片路径: {ImagePath}", package.Barcode, package.ImagePath ?? "无");
+                bool parcelInfoUploaded = await _rookieApiService.UploadParcelInfoAsync(package);
+                if (!parcelInfoUploaded)
+                {
+                    package.SetStatus(PackageStatus.Failed, "包裹信息上传DCS失败");
+                    Log.Error("包裹 {Barcode}: 包裹基础信息上传DCS失败。", package.Barcode);
+                }
+                else
+                {
+                    Log.Information("包裹 {Barcode}: 包裹基础信息上传DCS成功。", package.Barcode);
+                    // 3. 调用 sorter.dest_request (仅当 parcel_info_upload 成功)
+                    DestRequestResultParams? destResult = await _rookieApiService.RequestDestinationAsync(package.Barcode);
+                    if (destResult?.ErrorCode == 0 && int.TryParse(destResult.ChuteCode, out int apiChute) && apiChute > 0)
+                    {
+                        package.SetChute(apiChute);
+                        package.SetStatus(PackageStatus.Success); // 初始成功状态，可能被小车分拣覆盖
+                        Log.Information("包裹 {Barcode}: DCS请求目的地成功，分配格口: {Chute}", package.Barcode, apiChute);
+
+                        // 4. 调用小车分拣 (仅当成功获取目的地)
+                        Log.Information("包裹 {Barcode}: 准备调用小车分拣服务，目标格口: {Chute}", package.Barcode, package.ChuteNumber);
+                        var carSortResult = await _carSortService.ProcessPackageSortingAsync(package);
+                        if (carSortResult)
+                        {
+                            Log.Information("包裹 {Barcode}: 小车分拣服务处理成功。", package.Barcode);
+                            // 如果之前是Success, 保持Success。如果ProcessPackageSortingAsync内部修改了状态(例如错误)，以那个为准
+                        }
+                        else
+                        {
+                            Log.Warning("包裹 {Barcode}: 小车分拣服务处理失败。", package.Barcode);
+                            const string carSortError = "小车分拣失败";
+                            var currentErrorMessage = string.IsNullOrEmpty(package.ErrorMessage) ? carSortError : $"{package.ErrorMessage}; {carSortError}";
+                            package.SetStatus(PackageStatus.Error, currentErrorMessage); // 或Failed
+                        }
+                    }
+                    else
+                    {
+                        string destError = destResult == null
+                            ? "DCS请求目的地API调用失败"
+                            : $"DCS请求目的地逻辑错误: Code {destResult.ErrorCode}, Chute '{destResult.ChuteCode}'";
+                        package.SetStatus(PackageStatus.Failed, destError);
+                        Log.Error("包裹 {Barcode}: {Error}", package.Barcode, destError);
+                    }
+                }
+            }
+
+            // 5. 调用 sorter.sort_report 上报数据 (无论之前成功与否，只要不是初始重量/体积检查失败就尝试上报)
+            // 如果初始重量/体积检查失败，package.Status 已经是 Failed，这里也会正确上报
+            string chuteToReport = package.ChuteNumber > 0 ? package.ChuteNumber.ToString() : "N/A"; // API可能需要特定错误格口
+            bool successForApiReport = package.Status == PackageStatus.Success;
+            string? errorReasonForApiReport = successForApiReport
+                ? null
+                : (string.IsNullOrEmpty(package.ErrorMessage) ? "未知分拣错误" : package.ErrorMessage);
+
+            Log.Information("包裹 {Barcode}: 准备上报分拣结果到DCS。格口: {Chute}, 状态: {IsSuccess}, 原因: {Reason}",
+                package.Barcode, chuteToReport, successForApiReport, errorReasonForApiReport);
+
+            bool reportAcknowledged = await _rookieApiService.ReportSortResultAsync(package.Barcode, chuteToReport, successForApiReport, errorReasonForApiReport);
+            if (!reportAcknowledged)
+            {
+                Log.Warning("包裹 {Barcode}: 上报分拣结果到DCS失败。最终状态: {Status}, 格口: {Chute}",
+                    package.Barcode, package.StatusDisplay, chuteToReport);
             }
             else
             {
-                Log.Information("分拣结果上报成功: {Barcode}", package.Barcode ?? "NoRead");
+                Log.Information("包裹 {Barcode}: 分拣结果已成功上报到DCS。", package.Barcode);
             }
+
+            // 统一的UI更新和历史记录
+            Application.Current?.Dispatcher.InvokeAsync(() =>
+            {
+                UpdatePackageInfoItems(package);
+                if (package.Status == PackageStatus.Success)
+                    Interlocked.Increment(ref _successPackageCount);
+                else
+                    Interlocked.Increment(ref _failedPackageCount); // 包括 Error 和 Failed
+                UpdateStatistics();
+                PackageHistory.Insert(0, package);
+                if (PackageHistory.Count > 1000)
+                    PackageHistory.RemoveAt(PackageHistory.Count - 1);
+                Log.Information("包裹 {Barcode} 处理流程核心逻辑结束, 最终状态: {Status}, 最终错误: {ErrorMessage}", package.Barcode, package.Status, package.ErrorMessage);
+            });
+            package.ReleaseImage(); // 释放工业相机图像（如果存在）
         }
-        catch (Exception ex)
+        catch (Exception ex) // 添加一个通用的try-catch来记录未预料的异常
         {
-            Log.Error(ex, "处理包裹 {Barcode} 时发生意外错误。", package.Barcode ?? "NoRead");
-            try 
+            Log.Error(ex, "处理包裹 {Barcode} 时发生意外错误。", package.Barcode);
+            if (package.Status != PackageStatus.Failed && package.Status != PackageStatus.Error)
             {
-                finalErrorMessage = $"处理异常: {ex.Message.Split(['\r', '\n'])[0]}";
-                package.SetStatus(PackageStatus.Error, finalErrorMessage); 
-                package.ErrorMessage = finalErrorMessage;
-            } 
-            catch { /* Ignore */ }
-            
-            // Attempt to report failure after exception
-            try
-            {
-                Log.Debug("尝试在异常后上报失败结果: {Barcode}, Chute: {Chute}", package.Barcode ?? "NoRead", finalChute);
-                await _rookieApiService.ReportSortResultAsync(
-                    package.Barcode ?? "NoRead",
-                    finalChute, 
-                    false,      
-                    finalErrorMessage);
-            }
-            catch(Exception reportEx)
-            {
-                Log.Error(reportEx, "在主处理异常后上报分拣结果也失败: {Barcode}", package.Barcode ?? "NoRead");
+                package.SetStatus(PackageStatus.Error, $"处理时发生意外错误: {ex.Message}");
             }
         }
         finally
         {
-             Application.Current?.Dispatcher.InvokeAsync(() =>
-            {
-                // Update UI elements based on final package status
-                UpdatePackageInfoItems(package); 
-
-                // Update statistics counters based on final package status
-                if (package.Status == PackageStatus.Success) 
-                { 
-                    Interlocked.Increment(ref _successPackageCount); 
-                }
-                else 
-                { 
-                    Interlocked.Increment(ref _failedPackageCount);
-                }
-                UpdateStatistics();
-
-                // Add package to history list AFTER all processing and UI updates
-                PackageHistory.Insert(0, package); 
-                if (PackageHistory.Count > 500)
-                {
-                    PackageHistory.RemoveAt(PackageHistory.Count - 1);
-                }
-
-            });
-
-            package.ReleaseImage(); 
-            Log.Information("包裹 {Barcode} 处理流程结束, 最终状态: {Status}", package.Barcode ?? "NoRead", package.Status);
+            _isProcessingPackage = false;
+            Log.Information("包裹 {Barcode} 处理流程结束 (或者被忽略后标志位重置)。最终状态: {Status}", package.Barcode, package.StatusDisplay);
         }
-    }
-
-    // Helper to map DCS error codes to string
-    private static string MapDcsErrorCodeToString(int errorCode)
-    {
-        return errorCode switch
-        {
-            1 => "无规则",
-            2 => "无任务",
-            3 => "重量异常",
-            4 => "业务拦截",
-            _ => $"未知错误码 ({errorCode})"
-        };
-    }
-    
-    // Helper to map DCS error codes to PackageStatus enum
-    private static PackageStatus MapDcsErrorCodeToPackageStatus(int errorCode)
-    {
-        return errorCode switch
-        {
-            1 => PackageStatus.Failed, // No Rule
-            2 => PackageStatus.Failed, // No Task
-            3 => PackageStatus.Error, // Weight Exception
-            4 => PackageStatus.Failed, // Business Intercept
-            _ => PackageStatus.Error   // Default to Error for unknown codes
-        };
     }
 
     private void UpdatePackageInfoItems(PackageInfo package)
     {
-        var weightItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Weight");
+        var weightItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Scale");
         if (weightItem != null) { weightItem.Value = package.Weight.ToString("F2"); }
 
-        // Removed: Chute item update
-        /*
-        var chuteItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Chute");
-        if (chuteItem != null) { chuteItem.Value = package.ChuteNumber > 0 ? package.ChuteNumber.ToString() : "--"; }
-        */
+        // Update Dimensions item
+        var dimensionsItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Dimensions");
+        if (dimensionsItem != null) 
+        {
+            if (package.Length > 0 || package.Width > 0 || package.Height > 0)
+            {
+                dimensionsItem.Value = $"{package.Length:F0}x{package.Width:F0}x{package.Height:F0}";
+            }
+            else
+            {
+                dimensionsItem.Value = "-- x -- x --";
+            }
+        }
+
+        // Update Destination/Chute item
+        var destinationItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Destination");
+        if (destinationItem != null) 
+        {
+            if (package.ChuteNumber > 0)
+            {
+                destinationItem.Value = package.ChuteNumber.ToString();
+            }
+            else if (package.Status == PackageStatus.Error || package.Status == PackageStatus.Failed || !string.IsNullOrEmpty(package.ErrorMessage))
+            {
+                 destinationItem.Value = "ERR"; // Or some other indicator for error/no chute
+            }
+            else
+            {
+                destinationItem.Value = "--";
+            }
+        }
 
         var timeItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Time");
         if (timeItem != null) { timeItem.Value = package.CreateTime.ToString("HH:mm:ss"); }
@@ -514,7 +813,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         if (successItem != null) successItem.Value = _successPackageCount.ToString();
 
         var failedItem = StatisticsItems.FirstOrDefault(i => i.Label == "Failed");
-        if (failedItem != null) failedItem.Value = _failedPackageCount.ToString();
+        if (failedItem != null) failedItem.Value = _failedPackageCount.ToString(); // Failed 包括了 Error 和 Failed 状态
 
         var rateItem = StatisticsItems.FirstOrDefault(i => i.Label == "Processing Rate");
         if (rateItem == null) return;
@@ -543,13 +842,15 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         if (disposing)
         {
-            Log.Information("Disposing Rookie MainWindowViewModel resources.");
             try
             {
                 _timer.Stop();
                 _timer.Tick -= Timer_Tick;
-
-                _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
+                _securityCameraService.ConnectionChanged -= OnSecurityCameraConnectionChanged;
+                _volumeCameraService.ConnectionChanged -= OnVolumeCameraConnectionChanged;
+                _industrialCameraService.ConnectionChanged -= OnIndustrialCameraConnectionChanged;
+                _weightService.ConnectionChanged -= OnWeightServiceConnectionChanged;
+                _carSortingService.ConnectionChanged -= OnCarSerialPortConnectionChanged;
 
                 foreach (var subscription in _subscriptions)
                 {
@@ -557,19 +858,57 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 }
                 _subscriptions.Clear();
 
-                PackageHistory.Clear();
-                StatisticsItems.Clear();
-                DeviceStatuses.Clear();
-                PackageInfoItems.Clear();
-
-                Log.Information("Rookie MainWindowViewModel resources disposed.");
+                Application.Current?.Dispatcher.Invoke(() =>
+                {
+                    PackageHistory.Clear();
+                    StatisticsItems.Clear();
+                    DeviceStatuses.Clear();
+                    PackageInfoItems.Clear();
+                });
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Error during MainWindowViewModel disposal.");
+                Log.Error(ex, "MainWindowViewModel 释放期间发生错误。");
             }
         }
 
         _disposed = true;
+    }
+
+    /// <summary>
+    /// 将 BitmapSource 保存为 JPEG 文件。
+    /// </summary>
+    /// <param name="bitmapSource">要保存的 BitmapSource。</param>
+    /// <param name="directory">目标目录。</param>
+    /// <param name="fileName">目标文件名 (含扩展名)。</param>
+    /// <returns>成功则返回完整文件路径，否则返回 null。</returns>
+    private static string? SaveBitmapSourceAsJpeg(BitmapSource? bitmapSource, string directory, string fileName)
+    {
+        if (bitmapSource == null) return null;
+        
+        string filePath = Path.Combine(directory, fileName);
+        try
+        {
+            if (!Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            using var fileStream = new FileStream(filePath, FileMode.Create);
+            BitmapEncoder encoder = new JpegBitmapEncoder
+            {
+                QualityLevel = 85 // 可选: 设置JPEG质量
+            };
+            encoder.Frames.Add(BitmapFrame.Create(bitmapSource));
+            encoder.Save(fileStream);
+            
+            Log.Debug("BitmapSource 已成功保存为 JPEG: {FilePath}", filePath);
+            return filePath;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "保存 BitmapSource 到文件 {FilePath} 失败。", filePath);
+            return null;
+        }
     }
 }

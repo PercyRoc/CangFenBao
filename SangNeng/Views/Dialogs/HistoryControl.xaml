@@ -131,7 +131,7 @@
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="No." Binding="{Binding Id}" MinWidth="60" Width="Auto" />
                     <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" MinWidth="150" Width="Auto" />
-                    <DataGridTextColumn Header="Weight(kg)" Binding="{Binding Weight}" MinWidth="100" Width="Auto" />
+                    <DataGridTextColumn Header="称重模块(kg)" Binding="{Binding Weight}" MinWidth="100" Width="Auto" />
                     <DataGridTextColumn Header="Length(cm)" Binding="{Binding Length, StringFormat={}{0:F1}}"
                                         MinWidth="100" Width="Auto" />
                     <DataGridTextColumn Header="Width(cm)" Binding="{Binding Width, StringFormat={}{0:F1}}"

@@ -7,7 +7,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
         <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
-        <AssemblyName>仓分宝-中旭云仓</AssemblyName>
+        <AssemblyName>仓分宝</AssemblyName>
         <RootNamespace>FuzhouPolicyForce</RootNamespace>
     </PropertyGroup>
 
@@ -20,7 +20,9 @@
 
     <ItemGroup>
         <!-- Prism -->
+        <PackageReference Include="JetBrains.Annotations" />
         <PackageReference Include="Prism.Wpf"/>
+        <PackageReference Include="Prism.Unity"/>
 
         <!-- Serilog -->
         <PackageReference Include="Serilog"/>

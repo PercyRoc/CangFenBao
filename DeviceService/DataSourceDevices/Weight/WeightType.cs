@@ -3,17 +3,17 @@ using System.ComponentModel;
 namespace DeviceService.DataSourceDevices.Weight;
 
 /// <summary>
-///     Weight Type
+///     称重模块 Type
 /// </summary>
 public enum WeightType
 {
     /// <summary>
-    ///     Static Weight
+    ///     Static 称重模块
     /// </summary>
-    [Description("Static Weight")] Static,
+    [Description("Static 称重模块")] Static,
 
     /// <summary>
-    ///     Dynamic Weight
+    ///     Dynamic 称重模块
     /// </summary>
-    [Description("Dynamic Weight")] Dynamic
+    [Description("Dynamic 称重模块")] Dynamic
 }

@@ -1,0 +1,66 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+
+<root>
+    <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+        <xsd:element name="root" msdata:IsDataSet="true">
+            
+        </xsd:element>
+    </xsd:schema>
+    <resheader name="resmimetype">
+        <value>text/microsoft-resx</value>
+    </resheader>
+    <resheader name="version">
+        <value>1.3</value>
+    </resheader>
+    <resheader name="reader">
+        <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+    </resheader>
+    <resheader name="writer">
+        <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+    </resheader>
+    <data name="EnableWeightFeature" xml:space="preserve">
+        <value>启用称重功能</value>
+    </data>
+    <data name="PortNameLabel" xml:space="preserve">
+        <value>串口号:</value>
+    </data>
+    <data name="BaudRateLabel" xml:space="preserve">
+        <value>波特率:</value>
+    </data>
+    <data name="WeightTypeLabel" xml:space="preserve">
+        <value>称重类型:</value>
+    </data>
+    <data name="StableWeightSamplesLabel" xml:space="preserve">
+        <value>稳定重量样本数:</value>
+    </data>
+    <data name="IntegrationTimeMsLabel" xml:space="preserve">
+        <value>融合时间 (ms):</value>
+    </data>
+    <data name="SaveButton" xml:space="preserve">
+        <value>保存</value>
+    </data>
+    <data name="CancelButton" xml:space="preserve">
+        <value>取消</value>
+    </data>
+    <data name="WeightType_Static" xml:space="preserve">
+        <value>静态称重</value>
+    </data>
+    <data name="WeightType_Dynamic" xml:space="preserve">
+        <value>动态称重</value>
+    </data>
+    <data name="WeightSettingsTitle" xml:space="preserve">
+        <value>称重设置</value>
+    </data>
+    <data name="GeneralSettings" xml:space="preserve">
+        <value>常规设置</value>
+    </data>
+    <data name="SerialPortParameters" xml:space="preserve">
+        <value>串口参数</value>
+    </data>
+    <data name="MeasurementParameters" xml:space="preserve">
+        <value>测量参数</value>
+    </data>
+    <data name="RefreshPorts" xml:space="preserve">
+        <value>刷新</value>
+    </data>
+</root>

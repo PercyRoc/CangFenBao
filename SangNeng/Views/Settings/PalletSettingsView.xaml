@@ -65,7 +65,7 @@
                                 <!-- Properties -->
                                 <UniformGrid Grid.Row="1" Columns="2" Rows="2">
                                     <DockPanel Margin="0,8,8,8">
-                                        <TextBlock Text="Weight (kg): "
+                                        <TextBlock Text="称重模块 (kg): "
                                                    Width="80"
                                                    VerticalAlignment="Center" />
                                         <ui:NumberBox Value="{Binding Weight, UpdateSourceTrigger=PropertyChanged}"

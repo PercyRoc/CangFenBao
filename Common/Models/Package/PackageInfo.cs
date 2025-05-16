@@ -1,4 +1,5 @@
 using System.Windows.Media.Imaging;
+using System.Collections.Generic;
 
 namespace Common.Models.Package;
 
@@ -51,6 +52,11 @@ public class PackageInfo : IDisposable
     ///     序号
     /// </summary>
     public int Index { get; set; }
+
+    /// <summary>
+    ///     唯一标识符 (来自TCP数据)
+    /// </summary>
+    public string Guid { get; private set; } = string.Empty;
 
     /// <summary>
     ///     条码
@@ -148,6 +154,11 @@ public class PackageInfo : IDisposable
     ///     包裹计数
     /// </summary>
     public int PackageCount { get; set; }
+
+    /// <summary>
+    ///     额外数据字典，用于存储像 CameraId 这样的自定义数据。
+    /// </summary>
+    public Dictionary<string, object> AdditionalData { get; } = new Dictionary<string, object>();
 
     /// <summary>
     ///     托盘名称 (Sunnen项目专用)
@@ -283,6 +294,15 @@ public class PackageInfo : IDisposable
     public void SetTriggerTimestamp(DateTime timestamp)
     {
         TriggerTimestamp = timestamp;
+    }
+
+    /// <summary>
+    ///     设置唯一标识符。
+    /// </summary>
+    /// <param name="guid">唯一标识符</param>
+    public void SetGuid(string? guid)
+    {
+        Guid = guid ?? string.Empty;
     }
 
     /// <summary>

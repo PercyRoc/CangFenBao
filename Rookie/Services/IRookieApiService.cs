@@ -29,4 +29,11 @@ public interface IRookieApiService
     /// <param name="errorReason">错误原因 (仅在 success 为 false 时相关)</param>
     /// <returns>True if the report was acknowledged successfully, false otherwise.</returns>
     Task<bool> ReportSortResultAsync(string barcode, string chuteCode, bool success, string? errorReason = null);
+
+    /// <summary>
+    /// 上传图片文件，返回图片URL（失败返回null）
+    /// </summary>
+    /// <param name="filePath">本地图片文件路径</param>
+    /// <returns>图片URL或null</returns>
+    Task<string?> UploadImageAsync(string filePath);
 } 

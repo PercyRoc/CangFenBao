@@ -112,7 +112,7 @@ public class VolumeSettingsViewModel : BindableBase
         {
             var dialog = new FolderBrowserDialog
             {
-                Description = "Select Image Save Folder",
+                Description = @"Select Image Save Folder",
                 UseDescriptionForTitle = true,
                 SelectedPath = Directory.Exists(ImageSavePath) ? ImageSavePath : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
             };
@@ -120,11 +120,10 @@ public class VolumeSettingsViewModel : BindableBase
             var result = dialog.ShowDialog();
 
             // Process dialog results
-            if (result == System.Windows.Forms.DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.SelectedPath))
-            {
-                ImageSavePath = dialog.SelectedPath;
-                Log.Information("用户选择了新的图像保存路径: {Path}", ImageSavePath);
-            }
+            if (result != System.Windows.Forms.DialogResult.OK ||
+                string.IsNullOrWhiteSpace(dialog.SelectedPath)) return;
+            ImageSavePath = dialog.SelectedPath;
+            Log.Information("用户选择了新的图像保存路径: {Path}", ImageSavePath);
         }
         catch (Exception ex)
         {
@@ -135,8 +134,7 @@ public class VolumeSettingsViewModel : BindableBase
 
     private void LoadSettings()
     {
-        Configuration = _settingsService.LoadSettings<VolumeSettings>();
-        // Ensure RaisePropertyChanged is called after loading to update all bindings
-        RaisePropertyChanged(string.Empty); // Passing empty string updates all properties
+        Configuration = _settingsService.LoadSettings<VolumeSettings>(); 
+        RaisePropertyChanged(string.Empty);
     }
 }

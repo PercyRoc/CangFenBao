@@ -9,6 +9,7 @@ using Serilog;
 using ShanghaiModuleBelt.Models;
 using ShanghaiModuleBelt.Services;
 using SharedUI.Models;
+using SortingServices.Modules;
 using LockingService = ShanghaiModuleBelt.Services.LockingService;
 
 namespace ShanghaiModuleBelt.ViewModels;

@@ -2,6 +2,7 @@ using Common.Services.Settings;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using ShanghaiModuleBelt.Models;
+using SortingServices.Modules;
 
 namespace ShanghaiModuleBelt.Services;
 

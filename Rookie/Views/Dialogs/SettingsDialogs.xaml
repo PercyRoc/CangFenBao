@@ -8,17 +8,13 @@
              xmlns:hc="https://handyorg.github.io/handycontrol"
              xmlns:settings="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
              xmlns:dialogs="clr-namespace:Rookie.ViewModels.Windows.Dialogs"
+             xmlns:settings1="clr-namespace:Rookie.Views.Settings"
+             xmlns:views="clr-namespace:Camera.Views;assembly=Camera"
+             xmlns:settings2="clr-namespace:Weight.Views.Settings;assembly=Weight"
+             xmlns:views1="clr-namespace:Sorting_Car.Views;assembly=Sorting_Car"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=dialogs:SettingsDialogViewModel}">
-   <UserControl.Resources>
-        <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary
-                    Source="pack://application:,,,/SharedUI;component/Resources/Styles/ColorStyles.xaml" />
-            </ResourceDictionary.MergedDictionaries>
-        </ResourceDictionary>
-    </UserControl.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
@@ -27,7 +23,7 @@
         </Grid.RowDefinitions>
 
         <!-- 标题栏 -->
-        <Grid Grid.Row="0" Background="{StaticResource TitleBarGradient}">
+        <Grid Grid.Row="0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
@@ -37,8 +33,7 @@
             <!-- 应用图标 -->
             <Border Grid.Column="0"
                     Width="48"
-                    Height="32"
-                    Effect="{StaticResource IconGlowEffect}">
+                    Height="32">
                 <Image Source="/logo.ico"
                        Width="32"
                        Height="32"
@@ -85,7 +80,7 @@
         </Grid>
 
         <!-- 导航区域 -->
-        <Border Grid.Row="1" Background="{StaticResource MainBackground}">
+        <Border Grid.Row="1">
             <Grid>
                 <ui:NavigationView IsPaneOpen="True"
                                    IsPaneVisible="True"
@@ -103,7 +98,47 @@
                                 <ui:SymbolIcon Symbol="Camera24" />
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="settings:CameraSettingsView" />
+                                <x:Type Type="views:CameraSettingsView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
+                        
+                        <ui:NavigationViewItem Content="Scales Settings"
+                                               Tag="Scales">
+                            <ui:NavigationViewItem.Icon>
+                                <ui:SymbolIcon Symbol="Scales24" />
+                            </ui:NavigationViewItem.Icon>
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="settings2:WeightSettingsView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
+                        <!-- 条码格口设置导航 -->
+                        <ui:NavigationViewItem Content="Barcode Chute Settings"
+                                               Tag="BarcodeChute">
+                            <ui:NavigationViewItem.Icon>
+                                <ui:SymbolIcon Symbol="BarcodeScanner24" />
+                            </ui:NavigationViewItem.Icon>
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="settings:BarcodeChuteSettingsView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
+                        <!-- 小车设置导航 -->
+                        <ui:NavigationViewItem Content="Car Settings"
+                                               Tag="CarConfig">
+                            <ui:NavigationViewItem.Icon>
+                                <ui:SymbolIcon Symbol="ArrowSort24" />
+                            </ui:NavigationViewItem.Icon>
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="views1:CarConfigView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
+
+                        <ui:NavigationViewItem Content="Car Sequence Settings"
+                                               Tag="CarSequence">
+                            <ui:NavigationViewItem.Icon>
+                                <ui:SymbolIcon Symbol="List24" />
+                            </ui:NavigationViewItem.Icon>
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="views1:CarSequenceView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
 
@@ -113,7 +148,17 @@
                                 <ui:SymbolIcon Symbol="BranchFork24" />
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="settings1:RookieApiSettingsView" xmlns:settings1="clr-namespace:Rookie.Views.Settings" />
+                                <x:Type Type="settings1:RookieApiSettingsView"/>
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
+                       
+                        <ui:NavigationViewItem Content="Serial Port Settings"
+                                               Tag="SerialPort">
+                            <ui:NavigationViewItem.Icon>
+                                <ui:SymbolIcon Symbol="PlugConnected24" />
+                            </ui:NavigationViewItem.Icon>
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="settings:SerialPortSettingsView"/>
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>

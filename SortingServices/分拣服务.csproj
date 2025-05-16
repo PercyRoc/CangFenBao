@@ -20,4 +20,8 @@
         <ProjectReference Include="..\DeviceService\设备服务.csproj"/>
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="Car\Service\" />
+    </ItemGroup>
+
 </Project>

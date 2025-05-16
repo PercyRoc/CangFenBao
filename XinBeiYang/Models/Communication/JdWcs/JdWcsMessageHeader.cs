@@ -78,7 +78,7 @@ public class JdWcsMessageHeader
         var buffer = new byte[Size];
         var span = buffer.AsSpan();
 
-        BinaryPrimitives.WriteInt32BigEndian(span.Slice(0, 4), MagicNumber);
+        BinaryPrimitives.WriteInt32BigEndian(span[..4], MagicNumber);
         BinaryPrimitives.WriteInt16BigEndian(span.Slice(4, 2), (short)MessageType);
         BinaryPrimitives.WriteInt32BigEndian(span.Slice(6, 4), MessageSequence);
         BinaryPrimitives.WriteInt32BigEndian(span.Slice(10, 4), DataLength);
@@ -100,7 +100,7 @@ public class JdWcsMessageHeader
     {
         if (bytes.Length < Size)
         { 
-            throw new ArgumentException("Byte array too short to be a valid header.", nameof(bytes));
+            throw new ArgumentException(@"Byte array too short to be a valid header.", nameof(bytes));
         }
         var span = bytes.AsSpan();
 

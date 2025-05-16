@@ -102,7 +102,7 @@
 
                     <ui:NavigationView.MenuItems>
                         <ui:NavigationViewItem Content="相机设置"
-                                               Tag="Camera">
+                                               Tag="相机模块">
                             <ui:NavigationViewItem.Icon>
                                 <ui:SymbolIcon Symbol="Camera24" />
                             </ui:NavigationViewItem.Icon>

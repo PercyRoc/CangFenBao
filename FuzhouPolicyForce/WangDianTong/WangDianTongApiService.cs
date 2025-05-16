@@ -77,12 +77,12 @@ public class WangDianTongApiService(HttpClient httpClient, ISettingsService sett
             // 记录响应详情
             if (result!.IsSuccess)
             {
-                Log.Information("旺店通重量回传成功: 物流单号={LogisticsNo}, 重量={Weight}g, 物流名称={LogisticsName}, 响应数据={@Response}",
+                Log.Information("旺店通重量回传成功: 物流单号={LogisticsNo}, 重量={称重模块}g, 物流名称={LogisticsName}, 响应数据={@Response}",
                     logisticsNo, weight, result.LogisticsName, result);
             }
             else
             {
-                Log.Warning("旺店通重量回传失败: 物流单号={LogisticsNo}, 重量={Weight}kg, 错误码={Code}, 错误信息={Message}, 响应数据={@Response}",
+                Log.Warning("旺店通重量回传失败: 物流单号={LogisticsNo}, 重量={称重模块}kg, 错误码={Code}, 错误信息={Message}, 响应数据={@Response}",
                     logisticsNo, weight, result.Code, result.Message, result);
             }
             

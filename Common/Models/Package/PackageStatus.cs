@@ -58,5 +58,15 @@ public enum PackageStatus
     /// <summary>
     ///     无法识别的条码（已处理或上传）
     /// </summary>
-    NoRead
+    NoRead,
+
+    /// <summary>
+    ///     被规则过滤
+    /// </summary>
+    Filtered,
+
+    /// <summary>
+    ///     重复条码
+    /// </summary>
+    Duplicate
 }

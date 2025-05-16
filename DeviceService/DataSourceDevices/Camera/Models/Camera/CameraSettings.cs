@@ -8,53 +8,93 @@ namespace DeviceService.DataSourceDevices.Camera.Models.Camera;
 ///     相机设置
 /// </summary>
 [Configuration("CameraSettings")]
-public class CameraSettings
+public class CameraSettings : BindableBase
 {
-    /// <summary>
-    ///     相机厂商
-    /// </summary>
-    [JsonPropertyName("Manufacturer")]
-    public CameraManufacturer Manufacturer { get; set; }
-
-    /// <summary>
-    ///     相机类型
-    /// </summary>
-    [JsonPropertyName("CameraType")]
-    public CameraType CameraType { get; set; }
-
-    /// <summary>
-    ///     是否启用条码重复过滤
-    /// </summary>
+    private bool _barcodeRepeatFilterEnabled;
     [JsonPropertyName("BarcodeRepeatFilterEnabled")]
-    public bool BarcodeRepeatFilterEnabled { get; set; }
+    public bool BarcodeRepeatFilterEnabled
+    {
+        get => _barcodeRepeatFilterEnabled;
+        set => SetProperty(ref _barcodeRepeatFilterEnabled, value);
+    }
 
-    /// <summary>
-    ///     条码重复次数阈值
-    /// </summary>
+    private int _repeatCount = 3;
     [JsonPropertyName("RepeatCount")]
-    public int RepeatCount { get; set; } = 3;
+    public int RepeatCount
+    {
+        get => _repeatCount;
+        set => SetProperty(ref _repeatCount, value);
+    }
 
-    /// <summary>
-    ///     条码重复时间窗口（毫秒）
-    /// </summary>
+    private int _repeatTimeMs = 1000;
     [JsonPropertyName("RepeatTimeMs")]
-    public int RepeatTimeMs { get; set; } = 1000;
+    public int RepeatTimeMs
+    {
+        get => _repeatTimeMs;
+        set => SetProperty(ref _repeatTimeMs, value);
+    }
 
-    /// <summary>
-    ///     是否启用图像保存
-    /// </summary>
+    private bool _enableImageSaving;
     [JsonPropertyName("EnableImageSaving")]
-    public bool EnableImageSaving { get; set; }
+    public bool EnableImageSaving
+    {
+        get => _enableImageSaving;
+        set => SetProperty(ref _enableImageSaving, value);
+    }
 
-    /// <summary>
-    ///     图像保存路径
-    /// </summary>
+    private string _imageSavePath = "Images";
     [JsonPropertyName("ImageSavePath")]
-    public string ImageSavePath { get; set; } = "Images";
+    public string ImageSavePath
+    {
+        get => _imageSavePath;
+        set => SetProperty(ref _imageSavePath, value);
+    }
 
-    /// <summary>
-    ///     图像保存格式
-    /// </summary>
+    private ImageFormat _imageFormat = ImageFormat.Jpeg;
     [JsonPropertyName("ImageFormat")]
-    public ImageFormat ImageFormat { get; set; } = ImageFormat.Jpeg;
+    public ImageFormat ImageFormat
+    {
+        get => _imageFormat;
+        set => SetProperty(ref _imageFormat, value);
+    }
+
+    private string _hikvisionIp = "192.168.1.64";
+    [JsonPropertyName("HikvisionIp")]
+    public string HikvisionIp
+    {
+        get => _hikvisionIp;
+        set => SetProperty(ref _hikvisionIp, value);
+    }
+
+    private int _hikvisionPort = 8000;
+    [JsonPropertyName("HikvisionPort")]
+    public int HikvisionPort
+    {
+        get => _hikvisionPort;
+        set => SetProperty(ref _hikvisionPort, value);
+    }
+
+    private string _hikvisionUser = "admin";
+    [JsonPropertyName("HikvisionUser")]
+    public string HikvisionUser
+    {
+        get => _hikvisionUser;
+        set => SetProperty(ref _hikvisionUser, value);
+    }
+
+    private string _hikvisionPassword = "12345";
+    [JsonPropertyName("HikvisionPassword")]
+    public string HikvisionPassword
+    {
+        get => _hikvisionPassword;
+        set => SetProperty(ref _hikvisionPassword, value);
+    }
+
+    private int _volumeCameraFusionTimeMs = 500;
+    [JsonPropertyName("VolumeCameraFusionTimeMs")]
+    public int VolumeCameraFusionTimeMs
+    {
+        get => _volumeCameraFusionTimeMs;
+        set => SetProperty(ref _volumeCameraFusionTimeMs, value);
+    }
 }

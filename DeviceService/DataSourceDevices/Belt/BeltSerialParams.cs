@@ -7,7 +7,7 @@ namespace DeviceService.DataSourceDevices.Belt;
 /// <summary>
 /// 皮带串口参数
 /// </summary>
-public class BeltSerialParams : SerialPortParams // 继承自 Weight 目录下的 SerialPortParams
+public class BeltSerialParams : SerialPortParams // 继承自 称重模块 目录下的 SerialPortParams
 {
     /// <summary>
     /// 是否启用皮带

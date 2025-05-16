@@ -54,7 +54,7 @@ internal partial class MainWindow
             return;
         }
 
-        // 3. 同步释放 ViewModel (如果需要)
+        // 3. 同步释放 ViewModels (如果需要)
         if (DataContext is IDisposable viewModel)
         {
             try

@@ -2,7 +2,9 @@
 using System.Net.Http;
 using System.Windows;
 using Common.Extensions;
+using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
+using DeviceService.DataSourceDevices.Camera.Hikvision;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
 using Serilog;
@@ -11,7 +13,8 @@ using ShanghaiModuleBelt.ViewModels;
 using ShanghaiModuleBelt.ViewModels.Settings;
 using ShanghaiModuleBelt.Views;
 using ShanghaiModuleBelt.Views.Settings;
-using SharedUI.Extensions;
+using SharedUI.Views.Settings;
+using SortingServices.Modules;
 using LockingService = ShanghaiModuleBelt.Services.LockingService;
 
 namespace ShanghaiModuleBelt;
@@ -99,9 +102,9 @@ public partial class App
 
         // 注册公共服务
         containerRegistry.AddCommonServices();
-        containerRegistry.AddShardUi();
         containerRegistry.AddPhotoCamera();
-
+        containerRegistry.RegisterSingleton<INotificationService, NotificationService>();
+        containerRegistry.RegisterSingleton<HikvisionDwsCommunicatorService>();
         containerRegistry.RegisterSingleton<HttpClient>();
         // 注册包裹中转服务
         containerRegistry.RegisterSingleton<PackageTransferService>();
@@ -122,7 +125,7 @@ public partial class App
         containerRegistry.RegisterSingleton<ChutePackageRecordService>();
 
         containerRegistry.RegisterForNavigation<ModuleConfigView, ModuleConfigViewModel>();
-        containerRegistry.RegisterForNavigation<TcpSettingsView, TcpSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<ModulesTcpSettingsView, TcpSettingsViewModel>();
 
         // 注册设置窗口
         containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>("SettingsDialog");

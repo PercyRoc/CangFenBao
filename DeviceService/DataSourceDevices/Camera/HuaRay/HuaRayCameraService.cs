@@ -18,7 +18,7 @@ namespace DeviceService.DataSourceDevices.Camera.HuaRay;
 /// <summary>
 /// 华睿相机服务实现类
 /// </summary>
-public class HuaRayCameraService : ICameraService
+public class HuaRayCameraService
 {
     #region 私有字段
 
@@ -95,12 +95,7 @@ public class HuaRayCameraService : ICameraService
     /// 包裹信息流
     /// </summary>
     public IObservable<PackageInfo> PackageStream => _packageSubject.AsObservable();
-
-    /// <summary>
-    /// 图像信息流
-    /// </summary>
-    IObservable<BitmapSource> ICameraService.ImageStream =>
-        _imageSubject.Select(tuple => (tuple.bitmapSource));
+    
 
     /// <summary>
     /// 带相机ID的图像信息流
@@ -532,7 +527,7 @@ public class HuaRayCameraService : ICameraService
                     {
                         var weightKg = args.Weight / 1000.0;
                         packageInfo.SetWeight(weightKg);
-                        // Log.Information("设置包裹重量: {Weight}", args.Weight); // 原有日志，考虑是否保留或改为 Debug
+                        // Log.Information("设置包裹重量: {称重模块}", args.称重模块); // 原有日志，考虑是否保留或改为 Debug
                         Log.Debug("设置包裹重量: {WeightKg} kg", weightKg); // 使用 Debug 级别记录详细信息
                     }
 

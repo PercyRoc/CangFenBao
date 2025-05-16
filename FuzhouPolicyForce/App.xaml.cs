@@ -12,7 +12,6 @@ using FuzhouPolicyForce.Views;
 using FuzhouPolicyForce.Views.Settings;
 using Microsoft.Extensions.Hosting;
 using Serilog;
-using SharedUI.Extensions;
 using SharedUI.ViewModels.Settings;
 using SortingServices.Pendulum;
 using SortingServices.Pendulum.Extensions;
@@ -23,6 +22,9 @@ using FuzhouPolicyForce.WangDianTong;
 using SharedUI.Views.Settings;
 using System.Globalization;
 using System.Net.Http;
+using SharedUI.ViewModels;
+using SharedUI.Views.Dialogs;
+using SharedUI.Views.Windows;
 using WPFLocalizeExtension.Engine;
 using WPFLocalizeExtension.Providers;
 
@@ -47,8 +49,12 @@ internal partial class App
 
         // 注册公共服务
         containerRegistry.AddCommonServices();
-        containerRegistry.AddShardUi();
+        // containerRegistry.AddShardUi();
         containerRegistry.AddPhotoCamera();
+        containerRegistry.RegisterSingleton<INotificationService, NotificationService>();
+        containerRegistry.RegisterForNavigation<CameraSettingsView, CameraSettingsViewModel>();
+        containerRegistry.RegisterDialog<HistoryDialogView, HistoryDialogViewModel>();
+        containerRegistry.RegisterDialogWindow<HistoryDialogWindow>();
 
         // 注册授权服务
         containerRegistry.RegisterSingleton<ILicenseService, LicenseService>();
@@ -57,8 +63,9 @@ internal partial class App
         containerRegistry.RegisterForNavigation<BalanceSortSettingsView, BalanceSortSettingsViewModel>();
         containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
         containerRegistry.RegisterForNavigation<WangDianTongSettingsView, WangDianTongSettingsViewModel>();
+        // containerRegistry.RegisterForNavigation<ShenTongLanShouSettingsView, ShenTongLanShouSettingsViewModel>();
 
-        containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>("SettingsDialog");
+        containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>();
 
         // 注册多摆轮分拣服务
         containerRegistry.RegisterPendulumSortService(PendulumServiceType.Multi);

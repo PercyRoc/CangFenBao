@@ -1,0 +1,57 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+
+<root>
+    <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+                xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+        <xsd:element name="root" msdata:IsDataSet="true">
+
+        </xsd:element>
+    </xsd:schema>
+    <resheader name="resmimetype">
+        <value>text/microsoft-resx</value>
+    </resheader>
+    <resheader name="version">
+        <value>1.3</value>
+    </resheader>
+    <resheader name="reader">
+        <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=2.0.0.0, Culture=neutral,
+            PublicKeyToken=b77a5c561934e089
+        </value>
+    </resheader>
+    <resheader name="writer">
+        <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral,
+            PublicKeyToken=b77a5c561934e089
+        </value>
+    </resheader>
+    <data name="CarSerialPortSettings_Title" xml:space="preserve">
+  <value>小车串口设置</value>
+</data>
+    <data name="CarSerialPortSettings_PortName" xml:space="preserve">
+  <value>端口名称</value>
+</data>
+    <data name="CarSerialPortSettings_BaudRate" xml:space="preserve">
+  <value>波特率</value>
+</data>
+    <data name="CarSerialPortSettings_DataBits" xml:space="preserve">
+  <value>数据位</value>
+</data>
+    <data name="CarSerialPortSettings_Parity" xml:space="preserve">
+  <value>校验位</value>
+</data>
+    <data name="CarSerialPortSettings_StopBits" xml:space="preserve">
+  <value>停止位</value>
+</data>
+    <data name="CarSerialPortSettings_CommandDelayMs" xml:space="preserve">
+      <value>命令延迟(ms)</value>
+    </data>
+
+  <!-- CarConfigViewModel Strings -->
+  <data name="CarConfig_NewCarNameFormat" xml:space="preserve">
+    <value>小车 {0}</value>
+  </data>
+
+  <!-- CarSequenceViewModel Strings -->
+  <data name="CarSequence_ChuteSequenceTitle" xml:space="preserve">
+    <value>格口 {0} 序列</value>
+  </data>
+</root>

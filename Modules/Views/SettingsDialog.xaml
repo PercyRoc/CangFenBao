@@ -42,13 +42,6 @@
                                    Name="RootNavigation">
 
                     <ui:NavigationView.MenuItems>
-                        <ui:NavigationViewItem Content="相机设置"
-                                               Tag="CameraSettingsView"
-                                               Icon="{ui:SymbolIcon Camera24}">
-                            <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="settings1:CameraSettingsView" />
-                            </ui:NavigationViewItem.TargetPageType>
-                        </ui:NavigationViewItem>
 
                         <ui:NavigationViewItem Content="模组带配置"
                                                Tag="ModuleConfigView"
@@ -59,7 +52,7 @@
                         </ui:NavigationViewItem>
 
                         <ui:NavigationViewItem Content="锁格设置"
-                                               Tag="TcpSettingsView"
+                                               Tag="ModulesTcpSettingsView"
                                                Icon="{ui:SymbolIcon LockClosed24}">
                             <ui:NavigationViewItem.TargetPageType>
                                 <x:Type Type="views1:TcpSettingsView" />

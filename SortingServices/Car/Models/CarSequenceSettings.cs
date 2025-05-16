@@ -52,7 +52,7 @@ namespace SortingServices.Car.Models
     public class ChuteCarSequence : BindableBase
     {
         private int _chuteNumber;
-        private ObservableCollection<CarSequenceItem> _carSequence = new();
+        private ObservableCollection<CarSequenceItem> _carSequence = [];
         
         /// <summary>
         /// 格口号

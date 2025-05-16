@@ -117,11 +117,11 @@ internal class PackageDataService : IPackageDataService
             // 构建插入SQL - 加入托盘信息字段
             var insertSql = $@"
                 INSERT INTO {tableName} (
-                    Id, PackageIndex, Barcode, SegmentCode, Weight, ChuteNumber, Status, StatusDisplay,
+                    Id, PackageIndex, Barcode, SegmentCode, 称重模块, ChuteNumber, Status, StatusDisplay,
                     CreateTime, Length, Width, Height, Volume, ErrorMessage, ImagePath,
                     PalletName, PalletWeight, PalletLength, PalletWidth, PalletHeight
                 ) VALUES (
-                    NULL, @PackageIndex, @Barcode, @SegmentCode, @Weight, @ChuteNumber, @Status, @StatusDisplay,
+                    NULL, @PackageIndex, @Barcode, @SegmentCode, @称重模块, @ChuteNumber, @Status, @StatusDisplay,
                     @CreateTime, @Length, @Width, @Height, @Volume, @ErrorMessage, @ImagePath,
                     @PalletName, @PalletWeight, @PalletLength, @PalletWidth, @PalletHeight
                 )";
@@ -134,7 +134,7 @@ internal class PackageDataService : IPackageDataService
             insertCommand.Parameters.Add(new SqliteParameter("@Barcode", record.Barcode));
             insertCommand.Parameters.Add(new SqliteParameter("@SegmentCode",
                 record.SegmentCode as object ?? DBNull.Value));
-            insertCommand.Parameters.Add(new SqliteParameter("@Weight", record.Weight));
+            insertCommand.Parameters.Add(new SqliteParameter("@称重模块", record.Weight));
             _ = insertCommand.Parameters.Add(new SqliteParameter("@ChuteNumber",
                 record.ChuteNumber.HasValue ? record.ChuteNumber.Value : DBNull.Value));
             insertCommand.Parameters.Add(new SqliteParameter("@Status", (int)record.Status));
@@ -310,7 +310,7 @@ internal class PackageDataService : IPackageDataService
                     await connection.OpenAsync();
 
                     // 构建参数化的 SQL 查询
-                    var sql = $@"SELECT Id, PackageIndex, Barcode, SegmentCode, Weight, ChuteNumber, Status, StatusDisplay,
+                    var sql = $@"SELECT Id, PackageIndex, Barcode, SegmentCode, 称重模块, ChuteNumber, Status, StatusDisplay,
                                         CreateTime, Length, Width, Height, Volume, ErrorMessage, ImagePath,
                                         PalletName, PalletWeight, PalletLength, PalletWidth, PalletHeight
                                  FROM {tableName}
@@ -778,7 +778,7 @@ internal class PackageDataService : IPackageDataService
                                                       PackageIndex INTEGER NOT NULL,
                                                       Barcode TEXT(50) NOT NULL,
                                                       SegmentCode TEXT(50),
-                                                      Weight REAL,
+                                                      称重模块 REAL,
                                                       ChuteNumber INTEGER,
                                                       Status INTEGER,
                                                       StatusDisplay TEXT(50),
@@ -910,7 +910,7 @@ internal class PackageDataService : IPackageDataService
                 { "PackageIndex", "INTEGER NOT NULL" },
                 { "Barcode", "TEXT(50) NOT NULL" },
                 { "SegmentCode", "TEXT(50)" },
-                { "Weight", "REAL" },
+                { "称重模块", "REAL" },
                 { "ChuteNumber", "INTEGER" },
                 { "Status", "INTEGER" },
                 { "StatusDisplay", "TEXT(50)" },
@@ -958,7 +958,7 @@ internal class PackageDataService : IPackageDataService
                                                   PackageIndex INTEGER NOT NULL,
                                                   Barcode TEXT(50) NOT NULL,
                                                   SegmentCode TEXT(50),
-                                                  Weight REAL,
+                                                  称重模块 REAL,
                                                   ChuteNumber INTEGER,
                                                   Status INTEGER,
                                                   StatusDisplay TEXT(50),
@@ -1110,7 +1110,7 @@ internal class PackageDataService : IPackageDataService
             record.Id = reader.GetInt32(reader.GetOrdinal("Id"));
             record.Index = reader.GetInt32(reader.GetOrdinal("PackageIndex"));
             record.SegmentCode = GetNullableString(reader, "SegmentCode");
-            record.Weight = GetDouble(reader, "Weight"); // 假设 Weight 不为 null
+            record.Weight = GetDouble(reader, "称重模块"); // 假设 称重模块 不为 null
             record.ChuteNumber = GetNullableInt32(reader, "ChuteNumber");
             record.Status = (PackageStatus)reader.GetInt32(reader.GetOrdinal("Status"));
             record.StatusDisplay = GetString(reader, "StatusDisplay"); // 假设 StatusDisplay 不为 null

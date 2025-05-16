@@ -41,5 +41,14 @@
       <Reference Include="MvCodeReaderSDK.Net">
         <HintPath>DataSourceDevices\Camera\Hikvision\MvCodeReaderSDK.Net.dll</HintPath>
       </Reference>
+      <Reference Include="MVIDCodeReader.Net">
+        <HintPath>DataSourceDevices\Camera\Hikvision\MVIDCodeReader.Net.dll</HintPath>
+      </Reference>
+      <Reference Include="MvLogisticsSDK.Net">
+        <HintPath>DataSourceDevices\Camera\Hikvision\MvLogisticsSDK.Net.dll</HintPath>
+      </Reference>
+      <Reference Include="VolMeasure.Net">
+        <HintPath>DataSourceDevices\Camera\Hikvision\VolMeasure.Net.dll</HintPath>
+      </Reference>
     </ItemGroup>
 </Project>

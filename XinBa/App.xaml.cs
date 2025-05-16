@@ -3,21 +3,14 @@ using System.Net.Http;
 using System.Windows;
 using System.Windows.Threading;
 using Common.Extensions;
-using DeviceService.DataSourceDevices.Camera;
-using DeviceService.DataSourceDevices.Weight;
-using DeviceService.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
-using SharedUI.Extensions;
-using SharedUI.ViewModels.Settings;
-using SharedUI.Views.Settings;
 using XinBa.Services;
 using XinBa.ViewModels;
-using XinBa.ViewModels.Settings;
 using XinBa.Views;
-using XinBa.Views.Settings;
 using System.ComponentModel;
 using SharedUI.Views.Windows;
+using DeviceService.DataSourceDevices.Camera.TCP;
 
 namespace XinBa;
 
@@ -56,38 +49,21 @@ public partial class App
     {
         // 添加通用服务
         containerRegistry.AddCommonServices();
-        containerRegistry.AddShardUi();
-
-        // 注册 XinBa 需要的设备服务启动配置
-        containerRegistry.AddPhotoCamera(); 
-        containerRegistry.AddWeightScale();
 
         // 注册 HttpClientFactory
         var services = new ServiceCollection();
         services.AddHttpClient();
         var serviceProvider = services.BuildServiceProvider();
         containerRegistry.RegisterInstance(serviceProvider.GetRequiredService<IHttpClientFactory>());
-
+        containerRegistry.RegisterSingleton<MainWindowViewModel>();
         // 注册视图和ViewModel
         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
-        containerRegistry.RegisterSingleton<MainWindowViewModel>(); // Ensure singleton for logout/login cycle
-        containerRegistry.RegisterForNavigation<CameraSettingsView, CameraSettingsViewModel>();
-        containerRegistry.RegisterForNavigation<VolumeSettingsView, VolumeSettingsViewModel>();
-        containerRegistry.RegisterForNavigation<WeightSettingsView, WeightSettingsViewModel>();
-
-        // 注册对话框
-        containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>("SettingsDialog");
+        containerRegistry.RegisterSingleton<MainWindowViewModel>();
+        containerRegistry.RegisterSingleton<TcpCameraService>();
         containerRegistry.RegisterDialog<LoginDialog, LoginViewModel>("LoginDialog");
 
         // 注册其他服务
         containerRegistry.RegisterSingleton<IApiService, ApiService>();
-        containerRegistry.RegisterSingleton<VolumeDataService>(); // VolumeDataHostedService 会用到
-
-        // 注册后台服务启动器 (需要手动管理生命周期)
-        Log.Debug("Registering background service singletons for manual management...");
-        containerRegistry.RegisterSingleton<CameraStartupService>();
-        containerRegistry.RegisterSingleton<WeightStartupService>();
-        containerRegistry.RegisterSingleton<VolumeDataHostedService>(); // XinBa specific volume service
 
         Log.Information("Type registration complete.");
     }
@@ -187,7 +163,7 @@ public partial class App
             Log.Information("收到登出请求，准备切换到登录窗口 ");
 
             // 停止后台服务
-            StopBackgroundServices(false); // Don't wait indefinitely on logout
+            StopBackgroundServices(); // Don't wait indefinitely on logout
 
             // 关闭主窗口（或隐藏）并显示登录对话框
             Dispatcher.Invoke(() =>
@@ -276,7 +252,7 @@ public partial class App
             Log.Information("开始后台清理任务... ");
             await Task.Run(async () =>
             {
-                StopBackgroundServices(true);
+                StopBackgroundServices();
                 await LogoutApiUserAsync();
             });
             Log.Information("后台清理任务完成。 ");
@@ -372,79 +348,16 @@ public partial class App
     /// </summary>
     private void StartBackgroundServices()
     {
-        try
-        {
-            Log.Information("手动启动后台服务... ");
-            var cameraStarter = Container.Resolve<CameraStartupService>();
-            var weightStarter = Container.Resolve<WeightStartupService>();
-            var volumeStarter = Container.Resolve<VolumeDataHostedService>();
-
-            // 使用 Task.Run 在后台启动，避免阻塞 UI
-            _ = Task.Run(() => { try { cameraStarter.StartAsync(CancellationToken.None).Wait(); } catch (Exception ex) { Log.Error(ex, "启动 CameraStartupService 时出错 "); } });
-            _ = Task.Run(() => { try { weightStarter.StartAsync(CancellationToken.None).Wait(); } catch (Exception ex) { Log.Error(ex, "启动 WeightStartupService 时出错 "); } });
-            _ = Task.Run(() => { try { volumeStarter.StartAsync(CancellationToken.None).Wait(); } catch (Exception ex) { Log.Error(ex, "启动 VolumeDataHostedService 时出错 "); } });
-
-            Log.Information("后台服务启动已发起。 ");
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "解析或发起后台服务启动时出错。 ");
-        }
+        var tcpCameraService = Container.Resolve<TcpCameraService>();
+        tcpCameraService.Start();
     }
 
     /// <summary>
     /// 手动停止已注册的后台服务。
     /// </summary>
-    /// <param name="waitForCompletion">是否等待服务停止完成。</param>
-    private void StopBackgroundServices(bool waitForCompletion)
+    private void StopBackgroundServices()
     {
-        Log.Information("手动停止后台服务... Wait for completion: {WaitForCompletion}", waitForCompletion);
-        try
-        {
-            var cameraStarter = Container?.Resolve<CameraStartupService>();
-            var weightStarter = Container?.Resolve<WeightStartupService>();
-            var volumeStarter = Container?.Resolve<VolumeDataHostedService>();
-
-            var tasks = new List<Task>();
-            if (cameraStarter != null) tasks.Add(Task.Run(() => { try { cameraStarter.StopAsync(CancellationToken.None).Wait(); } catch (Exception ex) { Log.Error(ex, "停止 CameraStartupService 时出错 "); } }));
-            if (weightStarter != null) tasks.Add(Task.Run(() => { try { weightStarter.StopAsync(CancellationToken.None).Wait(); } catch (Exception ex) { Log.Error(ex, "停止 WeightStartupService 时出错 "); } }));
-            if (volumeStarter != null) tasks.Add(Task.Run(() => { try { volumeStarter.StopAsync(CancellationToken.None).Wait(); } catch (Exception ex) { Log.Error(ex, "停止 VolumeDataHostedService 时出错 "); } }));
-
-            if (tasks.Count != 0 && waitForCompletion)
-            {
-                try
-                {
-                    // 等待所有停止任务完成，最多等待 5 秒
-                    if (!Task.WhenAll(tasks).Wait(TimeSpan.FromSeconds(5)))
-                    {
-                        Log.Warning("一个或多个后台服务未在超时时间内正常停止。 ");
-                    }
-                    else
-                    {
-                        Log.Information("后台服务已停止。 ");
-                    }
-                }
-                catch (AggregateException aex)
-                {
-                    Log.Error(aex, "等待后台服务停止时发生聚合错误。 ");
-                    foreach(var innerEx in aex.InnerExceptions)
-                    {
-                        Log.Error(innerEx, "  内部停止错误: ");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "等待后台服务停止时发生错误。 ");
-                }
-            }
-            else if (!waitForCompletion)
-            {
-                Log.Information("后台服务停止已发起 (不等待完成)。 ");
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "解析或发起后台服务停止时出错。 ");
-        }
+        var tcpCameraService = Container.Resolve<TcpCameraService>();
+        tcpCameraService.Stop();
     }
 }

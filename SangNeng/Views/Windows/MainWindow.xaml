@@ -179,16 +179,6 @@
                                             VerticalAlignment="Center"
                                             Padding="10,0"
                                             KeyDown="ManualBarcodeTextBox_KeyDown" />
-
-                                <!-- Manual Input Toggle -->
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0" VerticalAlignment="Center">
-                                    <CheckBox x:Name="BlockScannerInput" 
-                                              Content="Enable Manual Input" 
-                                              IsChecked="False"
-                                              Checked="BlockScannerInput_CheckedChanged"
-                                              Unchecked="BlockScannerInput_CheckedChanged"
-                                              ToolTip="启用此选项允许手动输入条码，禁用则只接受扫码枪输入" />
-                                </StackPanel>
                             </Grid>
                         </StackPanel>
 
@@ -325,7 +315,7 @@
                                                         <Run Text="cm" />
                                                     </TextBlock>
                                                     <TextBlock FontSize="12">
-                                                        <Run Text="Weight: " />
+                                                        <Run Text="称重模块: " />
                                                         <Run Text="{Binding Weight, StringFormat='{}{0:F3}'}" />
                                                         <Run Text="kg" />
                                                     </TextBlock>
@@ -462,7 +452,7 @@
                                            Margin="0,0,8,0"
                                            Foreground="{StaticResource AccentBrush}"
                                            VerticalAlignment="Center" />
-                            <TextBlock Text="Camera Images"
+                            <TextBlock Text="相机模块 Images"
                                        FontSize="16"
                                        FontWeight="SemiBold"
                                        Foreground="{StaticResource AccentBrush}"
@@ -499,7 +489,7 @@
                                                            Height="16"
                                                            Margin="0,0,8,0"
                                                            Foreground="{StaticResource AccentBrush}" />
-                                            <TextBlock Text="Hikvision Camera"
+                                            <TextBlock Text="Hikvision 相机模块"
                                                        FontSize="14"
                                                        FontWeight="SemiBold"
                                                        Foreground="{StaticResource AccentBrush}" />
@@ -543,7 +533,7 @@
                                                            Height="16"
                                                            Margin="0,0,8,0"
                                                            Foreground="{StaticResource AccentBrush}" />
-                                            <TextBlock Text="Volume Camera"
+                                            <TextBlock Text="Volume 相机模块"
                                                        FontSize="14"
                                                        FontWeight="SemiBold"
                                                        Foreground="{StaticResource AccentBrush}" />
@@ -606,7 +596,7 @@
                                 <DataGridTextColumn Header="No." Binding="{Binding Index}" MinWidth="60" Width="Auto" />
                                 <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" MinWidth="160"
                                                     Width="Auto" />
-                                <DataGridTextColumn Header="Weight" Binding="{Binding WeightDisplay}" MinWidth="80"
+                                <DataGridTextColumn Header="称重模块" Binding="{Binding WeightDisplay}" MinWidth="80"
                                                     Width="Auto" />
                                 <DataGridTextColumn Header="Size" Binding="{Binding VolumeDisplay}" MinWidth="200"
                                                     Width="Auto" />

@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace Rookie.Models.Api;
@@ -6,7 +5,7 @@ namespace Rookie.Models.Api;
 public class BaseRequest
 {
     [JsonPropertyName("source")]
-    public string Source { get; set; } = "CangFenBaoWcs"; // Default source, maybe make configurable later
+    public string? Source { get; set; }
 
     [JsonPropertyName("version")]
     public int Version { get; set; } = 1;
@@ -24,5 +23,5 @@ public class CommandData
     public string Command { get; set; } = string.Empty;
 
     [JsonPropertyName("params")]
-    public object Params { get; set; } = new(); // Use object for flexibility, specific types below
+    public object Params { get; set; } = new();
 } 

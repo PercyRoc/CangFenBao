@@ -13,7 +13,7 @@ namespace DeviceService.DataSourceDevices.Camera.TCP;
 /// <summary>
 ///     TCP相机服务实现 (已重构为使用 TcpClientService)
 /// </summary>
-internal class TcpCameraService : ICameraService
+public class TcpCameraService
 {
     private const int MinProcessInterval = 1000; // 最小处理间隔（毫秒）
     private const int MaxBufferSize = 1024 * 1024; // 最大缓冲区大小（1MB）
@@ -77,7 +77,7 @@ internal class TcpCameraService : ICameraService
             new DeviceCameraInfo
             {
                 SerialNumber = $"TCP_{_host}_{_port}", // 使用成员变量
-                Model = "TCP Camera (via TcpClientService)", // 更新模型名称
+                Model = "TCP 相机模块 (via TcpClientService)", // 更新模型名称
                 IpAddress = _host,
                 MacAddress = "N/A"
             }
@@ -232,29 +232,92 @@ internal class TcpCameraService : ICameraService
         }
     }
 
+    // Validates a packet according to the new 8-part structure.
+    private static bool ValidatePacket(List<string> packetParts)
+    {
+        if (packetParts.Count != 8) return false; // Strictly 8 parts
+
+        // part 0: guid (string, non-empty)
+        if (string.IsNullOrEmpty(packetParts[0]?.Trim())) return false;
+
+        // part 1: code (string, non-empty) - "noread" is a value, not a format failure here.
+        if (string.IsNullOrEmpty(packetParts[1]?.Trim())) return false;
+
+        // part 2: weight (float)
+        if (!float.TryParse(packetParts[2], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _)) return false;
+        // part 3: length (double)
+        if (!double.TryParse(packetParts[3], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _)) return false;
+        // part 4: width (double)
+        if (!double.TryParse(packetParts[4], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _)) return false;
+        // part 5: height (double)
+        if (!double.TryParse(packetParts[5], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _)) return false;
+        // part 6: volume (double)
+        if (!double.TryParse(packetParts[6], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _)) return false;
+        // part 7: timestamp (long)
+        if (!long.TryParse(packetParts[7], out _)) return false;
+
+        return true;
+    }
+
+    // Extracts the first valid 8-part packet from the beginning of the buffer.
     private static (string? Packet, int ProcessedLength) ExtractFirstValidPacket(string bufferContent)
     {
-        var potentialPackets = bufferContent.Split([','], StringSplitOptions.RemoveEmptyEntries);
+        List<string> parts = new List<string>(8);
+        int currentSearchIndex = 0;
+        int partEndIndex = -1;
 
-        for (var i = 0; i < potentialPackets.Length; i++)
+        for (int i = 0; i < 8; i++) // We need 8 parts
         {
-            if (potentialPackets.Length - i < 7) continue;
-            for (var j = i + 6; j < potentialPackets.Length; j++)
+            if (currentSearchIndex >= bufferContent.Length && i < 7) // Buffer ends prematurely (unless it's the last part potentially without a trailing comma)
             {
-                var subPacketParts = potentialPackets.Skip(i).Take(j - i + 1).ToList();
-                if (!ValidatePacket(subPacketParts)) continue;
-                var packetString = string.Join(",", subPacketParts);
-                var endIndex = bufferContent.IndexOf(packetString, StringComparison.Ordinal);
-                if (endIndex == -1) continue;
-                var processedLength = endIndex + packetString.Length;
-                if (processedLength != bufferContent.Length &&
-                    (processedLength >= bufferContent.Length || bufferContent[processedLength] != ',')) continue;
-                Log.Debug("找到有效包: {Packet}, 原始字符串长度近似: {Length}", packetString, packetString.Length);
-                var approxLength = CalculateApproximateLength(bufferContent, subPacketParts);
-                return (packetString, approxLength);
+                 Log.Debug("ExtractFirstValidPacket: Buffer ended prematurely while seeking part {PartNum}. Buffer: '{Buffer}'", i + 1, bufferContent);
+                 return (null, 0);
+            }
+
+            partEndIndex = bufferContent.IndexOf(',', currentSearchIndex);
+
+            if (i == 7) // Last part (8th part)
+            {
+                if (partEndIndex == -1) // No comma after the 8th part, it extends to the end of the buffer
+                {
+                    if (currentSearchIndex >= bufferContent.Length) // Buffer ends exactly after 7th comma, 8th part is empty string.
+                    {
+                        parts.Add(string.Empty);
+                        partEndIndex = bufferContent.Length; // Processed up to end.
+                    }
+                    else
+                    {
+                        parts.Add(bufferContent.Substring(currentSearchIndex).Trim());
+                        partEndIndex = bufferContent.Length; // Processed up to end.
+                    }
+                }
+                else // Comma found after 8th part, 8th part is between 7th and 8th comma.
+                {
+                    parts.Add(bufferContent.Substring(currentSearchIndex, partEndIndex - currentSearchIndex).Trim());
+                    // partEndIndex is already the index of the comma *after* the 8th part.
+                }
+            }
+            else // Parts 1 through 7
+            {
+                if (partEndIndex == -1) // Not enough commas for 8 distinct parts
+                {
+                    Log.Debug("ExtractFirstValidPacket: Not enough commas for 8 parts. Found {FoundParts} potential parts. Buffer: '{Buffer}'", i, bufferContent);
+                    return (null, 0);
+                }
+                parts.Add(bufferContent.Substring(currentSearchIndex, partEndIndex - currentSearchIndex).Trim());
+                currentSearchIndex = partEndIndex + 1; // Move past the comma for the next search
             }
         }
+        
+        // At this point, 'parts' should have 8 elements, and 'partEndIndex' is either buffer.Length or index of comma after 8th part.
+        if (ValidatePacket(parts))
+        {
+            string packetString = string.Join(",", parts); // Reconstruct from trimmed parts for logical consistency
+            Log.Debug("Found valid 8-part packet: {Packet}. Processed Length in buffer: {Length}", packetString, partEndIndex);
+            return (packetString, partEndIndex); // partEndIndex is where the processing should stop for this packet in the buffer
+        }
 
+        Log.Debug("ExtractFirstValidPacket: First 8 potential parts did not validate. Parts: [{CandidateParts}]. Buffer: '{Buffer}'", string.Join(" | ", parts), bufferContent);
         return (null, 0);
     }
 
@@ -270,112 +333,97 @@ internal class TcpCameraService : ICameraService
         return joinedString.Length + (parts.Count > 0 ? parts.Count - 1 : 0);
     }
 
-    private static bool ValidatePacket(List<string> packet)
-    {
-        if (packet.Count < 7) return false;
-
-        if (!long.TryParse(packet[^1], out _)) return false;
-
-        if (!float.TryParse(packet[^6], out _)) return false;
-        if (!double.TryParse(packet[^5], out _)) return false;
-        if (!double.TryParse(packet[^4], out _)) return false;
-        if (!double.TryParse(packet[^3], out _)) return false;
-        if (!double.TryParse(packet[^2], out _)) return false;
-
-        var firstBarcode = packet[0].Trim();
-        return !string.IsNullOrEmpty(firstBarcode) || string.Equals(firstBarcode, "noread", StringComparison.OrdinalIgnoreCase);
-    }
-
     private void ProcessPackageData(string packetData)
     {
         try
         {
             Log.Debug("开始处理单个数据包: {Data}", packetData);
-            var parts = packetData.Split(',');
-            if (!ValidatePacket(parts.ToList()))
+            var parts = packetData.Split(','); // packetData is the logical string "guid,code,w,l,w,h,v,t"
+            
+            // ValidatePacket was already called by ExtractFirstValidPacket on these logical parts.
+            // However, an extra check for count can be a safeguard.
+            if (parts.Length != 8)
             {
-                Log.Warning("无效的数据包格式 (再次验证失败): {Data}", packetData);
+                Log.Warning("ProcessPackageData received packet with unexpected part count ({Count}): {Data}", parts.Length, packetData);
                 return;
             }
 
+            var guid = parts[0].Trim();
+            var code = parts[1].Trim();
+
             DateTime timestamp;
-            if (long.TryParse(parts[^1], out var unixTimestamp))
+            if (long.TryParse(parts[7], out var unixTimestamp)) // Index 7 for timestamp
             {
                 try
                 {
-                    var currentTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                    if (unixTimestamp > currentTimestamp || unixTimestamp > 1000000000000)
+                    // Heuristic to differentiate between seconds and milliseconds
+                    var currentEpochSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                    if (unixTimestamp > currentEpochSeconds + (3600 * 24 * 365 * 5)) // If timestamp is > 5 years in future (likely ms)
                     {
-                        timestamp = DateTimeOffset.FromUnixTimeMilliseconds(unixTimestamp).LocalDateTime;
+                         timestamp = DateTimeOffset.FromUnixTimeMilliseconds(unixTimestamp).LocalDateTime;
+                    } else if (unixTimestamp > 100000000000) { // Very large number, likely milliseconds
+                         timestamp = DateTimeOffset.FromUnixTimeMilliseconds(unixTimestamp).LocalDateTime;
                     }
-                    else
+                    else // Assume seconds
                     {
                         timestamp = DateTimeOffset.FromUnixTimeSeconds(unixTimestamp).LocalDateTime;
                     }
                 }
                 catch (ArgumentOutOfRangeException ex)
                 {
-                    Log.Warning(ex, "时间戳超出有效范围: {Timestamp}，使用当前时间", unixTimestamp);
+                    Log.Warning(ex, "时间戳 ({TimestampValue}) 超出有效范围，使用当前时间", unixTimestamp);
                     timestamp = DateTime.Now;
                 }
             }
             else
             {
-                timestamp = DateTime.Now;
-                Log.Warning("无法解析时间戳: {Timestamp}，使用当前时间", parts[^1]);
+                timestamp = DateTime.Now; // Fallback, though ValidatePacket should ensure it's a long
+                Log.Warning("无法解析时间戳部分: {TimestampString} (来自包: {PacketData})，使用当前时间", parts[7], packetData);
             }
 
-            var firstBarcode = parts[0].Trim();
-            var isNoRead = string.Equals(firstBarcode, "noread", StringComparison.OrdinalIgnoreCase);
+            var isNoRead = string.Equals(code, "noread", StringComparison.OrdinalIgnoreCase);
 
             var package = PackageInfo.Create();
-            package.SetBarcode(firstBarcode);
+            package.SetGuid(guid); // 设置 GUID
+            package.SetBarcode(code); // Use 'code' (parts[1])
             package.SetTriggerTimestamp(timestamp);
 
             double? length = null, width = null, height = null, volume = null;
 
-            if (float.TryParse(parts[^6], out var parsedWeight)) package.SetWeight(parsedWeight);
-            if (double.TryParse(parts[^5], out var parsedLength)) length = parsedLength;
-            if (double.TryParse(parts[^4], out var parsedWidth)) width = parsedWidth;
-            if (double.TryParse(parts[^3], out var parsedHeight)) height = parsedHeight;
-            if (double.TryParse(parts[^2], out var parsedVolume)) volume = parsedVolume;
+            // Indices shifted: parts[2] to parts[6]
+            if (float.TryParse(parts[2], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsedWeight)) package.SetWeight(parsedWeight);
+            if (double.TryParse(parts[3], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsedLength)) length = parsedLength;
+            if (double.TryParse(parts[4], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsedWidth)) width = parsedWidth;
+            if (double.TryParse(parts[5], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsedHeight)) height = parsedHeight;
+            if (double.TryParse(parts[6], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsedVolume)) volume = parsedVolume;
 
             if (length.HasValue && width.HasValue && height.HasValue)
             {
                 package.SetDimensions(length.Value, width.Value, height.Value);
-                if (volume.HasValue)
+                if (volume.HasValue) // Use the parsed volume if available
                 {
                     package.SetVolume(volume.Value);
                 }
+                // else, volume will be auto-calculated by SetDimensions if that's its behavior
             }
             else
             {
-                Log.Warning("包裹 {Barcode} 尺寸信息不完整或无效 (L:{L}, W:{W}, H:{H})",
-                    package.Barcode, parts[^5], parts[^4], parts[^3]);
+                Log.Warning("包裹 {Barcode} (GUID: {Guid}) 尺寸信息不完整或无效 (L:'{LRaw}', W:'{WRaw}', H:'{HRaw}')",
+                    package.Barcode, guid, parts[3], parts[4], parts[5]);
             }
 
             if (isNoRead)
             {
                 package.SetStatus(PackageStatus.Failed, "无法识别条码");
-                Log.Information("收到无法识别条码的包裹: 时间={Time}, 重量={Weight:F2}kg, 长={Length:F2}cm, 宽={Width:F2}cm, 高={Height:F2}cm, 体积={Volume:F3}m³",
-                    timestamp, package.Weight, package.Length, package.Width, package.Height, package.Volume);
+                Log.Information("收到无法识别条码的包裹: GUID={Guid}, 时间={Time}, 重量={称重模块:F2}kg, 长={Length:F2}cm, 宽={Width:F2}cm, 高={Height:F2}cm, 体积={Volume:F3}m³ (按提供值)",
+                    guid, timestamp, package.Weight, package.Length, package.Width, package.Height, package.Volume);
             }
             else
             {
-                if (parts.Length > 7)
-                {
-                    var additionalBarcodes = string.Join(",", parts[1..^6].Select(b => b.Trim()));
-                    Log.Information(
-                        "收到包裹: 条码={Barcode}, 时间={Time}, 重量={Weight:F2}kg, 长={Length:F2}cm, 宽={Width:F2}cm, 高={Height:F2}cm, 体积={Volume:F3}m³, 额外条码={AdditionalBarcodes}",
-                        package.Barcode, timestamp, package.Weight, package.Length, package.Width, package.Height, package.Volume,
-                        additionalBarcodes);
-                }
-                else
-                {
-                    Log.Information(
-                        "收到包裹: 条码={Barcode}, 时间={Time}, 重量={Weight:F2}kg, 长={Length:F2}cm, 宽={Width:F2}cm, 高={Height:F2}cm, 体积={Volume:F3}m³",
-                        package.Barcode, timestamp, package.Weight, package.Length, package.Width, package.Height, package.Volume);
-                }
+                // No additional barcodes in the new fixed format
+                Log.Information(
+                    "收到包裹: GUID={Guid}, 条码={Barcode}, 时间={Time}, 重量={称重模块:F2}kg, 长={Length:F2}cm, 宽={Width:F2}cm, 高={Height:F2}cm, 体积={Volume:F3}m³ (按提供值)",
+                    guid, package.Barcode, timestamp, package.Weight, package.Length, package.Width, package.Height, package.Volume);
             }
 
             _packageSubject.OnNext(package);

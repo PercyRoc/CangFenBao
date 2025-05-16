@@ -1,7 +1,6 @@
 ﻿namespace FuzhouPolicyForce.WangDianTong;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -21,7 +20,7 @@ using System.Text.Json.Serialization;
 public class WangDianTongApiServiceImplV2(HttpClient httpClient, ISettingsService settingsService) : IWangDianTongApiServiceV2
 {
     // Cache JsonSerializerOptions for performance
-    private static readonly JsonSerializerOptions _jsonSerializerOptions = new JsonSerializerOptions
+    private static readonly JsonSerializerOptions JsonSerializerOptions = new()
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull // 排除null值
     };
@@ -65,7 +64,7 @@ public class WangDianTongApiServiceImplV2(HttpClient httpClient, ISettingsServic
 
             // 序列化业务参数为 JSON 字符串
             // 使用缓存的 options 实例
-             businessJsonBody = JsonSerializer.Serialize(businessObject, _jsonSerializerOptions);
+             businessJsonBody = JsonSerializer.Serialize(businessObject, JsonSerializerOptions);
 
 
             // 计算签名
@@ -113,15 +112,21 @@ public class WangDianTongApiServiceImplV2(HttpClient httpClient, ISettingsServic
                 };
             }
 
-            if (result.IsSuccess)
+            // 修改成功判断逻辑：IsSuccess为true 或 IsSuccess为false但Code和Message为空均视为成功
+            var apiSuccess = result.IsSuccess || (result.IsSuccess == false && string.IsNullOrEmpty(result.Code) && string.IsNullOrEmpty(result.Message));
+
+            // 设置Service层判断的最终成功状态
+            result.ServiceSuccess = apiSuccess;
+
+            if (!apiSuccess)
             {
-                Log.Information("旺店通重量回传成功V2: 物流单号={LogisticsNo}, 仓储单号={SrcOrderNo}, 重量={Weight}kg, 通道号={ExportNum}, 响应数据={@Response}",
-                    request.LogisticsNo, request.SrcOrderNo, request.Weight, result.export_num, result);
+                Log.Warning("旺店通重量回传失败V2: 物流单号={LogisticsNo}, 仓储单号={SrcOrderNo}, 重量={称重模块}kg, 错误码={Code}, 错误信息={Message}, 响应数据={@Response}",
+                     request.LogisticsNo, request.SrcOrderNo, request.Weight, result.Code, result.Message, result);
             }
             else
             {
-                Log.Warning("旺店通重量回传失败V2: 物流单号={LogisticsNo}, 仓储单号={SrcOrderNo}, 重量={Weight}kg, 错误码={Code}, 错误信息={Message}, 响应数据={@Response}",
-                     request.LogisticsNo, request.SrcOrderNo, request.Weight, result.Code, result.Message, result);
+                Log.Information("旺店通重量回传成功V2: 物流单号={LogisticsNo}, 仓储单号={SrcOrderNo}, 重量={称重模块}kg, 通道号={ExportNum}, 响应数据={@Response}",
+                    request.LogisticsNo, request.SrcOrderNo, request.Weight, result.ExportNum, result);
             }
 
             return result;
@@ -189,8 +194,7 @@ public class WangDianTongApiServiceImplV2(HttpClient httpClient, ISettingsServic
         var signStringWithSecret = $"{secret}{publicParamString}{secret}";
 
         // 第五步：生成32位MD5大写签名值
-        using var md5 = MD5.Create();
-        var hash = md5.ComputeHash(Encoding.UTF8.GetBytes(signStringWithSecret));
+        var hash = MD5.HashData(Encoding.UTF8.GetBytes(signStringWithSecret));
         var md5String = BitConverter.ToString(hash).Replace("-", "").ToUpper(); // 转为大写
 
         return md5String;

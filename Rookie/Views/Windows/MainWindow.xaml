@@ -15,13 +15,6 @@
                  ExtendsContentIntoTitleBar="False">
     <ui:FluentWindow.Resources>
         <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary
-                    Source="pack://application:,,,/SharedUI;component/Resources/Styles/DataGridStyles.xaml" />
-                <ResourceDictionary
-                    Source="pack://application:,,,/SharedUI;component/Resources/Styles/ColorStyles.xaml" />
-            </ResourceDictionary.MergedDictionaries>
-
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
         </ResourceDictionary>
     </ui:FluentWindow.Resources>
@@ -32,7 +25,7 @@
             <RowDefinition Height="28" />
         </Grid.RowDefinitions>
         <!-- 标题栏 -->
-        <Grid Grid.Row="0" Background="{StaticResource TitleBarGradient}">
+        <Grid Grid.Row="0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
@@ -44,8 +37,7 @@
             <!-- 应用图标 -->
             <Border Grid.Column="0"
                     Width="48"
-                    Height="32"
-                    Effect="{StaticResource IconGlowEffect}">
+                    Height="32">
                 <Image Source="/logo.ico"
                        Width="32"
                        Height="32"
@@ -125,7 +117,7 @@
                     BorderThickness="0,0,0,1" />
         </Grid>
         <!-- 主要内容区域 -->
-        <Grid Grid.Row="1" Background="{StaticResource MainBackground}">
+        <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="2*" />
                 <ColumnDefinition Width="3*" />
@@ -140,7 +132,6 @@
 
                 <!-- 实时包裹信息 -->
                 <Border Grid.Row="0"
-                        Style="{StaticResource CardStyle}"
                         Margin="16">
                     <Grid Margin="16">
                         <Grid.RowDefinitions>
@@ -249,8 +240,7 @@
                 </Border>
 
                 <!-- 统计信息区域 -->
-                <Border Grid.Row="1" Margin="16"
-                        Style="{StaticResource CardStyle}">
+                <Border Grid.Row="1" Margin="16">
                     <Grid Margin="16">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -355,46 +345,64 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <!-- 图片显示区域 -->
-                <Border Grid.Row="0"
-                        Style="{StaticResource CardStyle}"
-                        Margin="16">
-                    <Grid Margin="16">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
+                <!-- 图片显示区域 - 修改为左右两个 -->
+                <Grid Grid.Row="0" Margin="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
 
-                        <!-- 标题栏 -->
-                        <StackPanel Grid.Row="0"
-                                    Orientation="Horizontal"
-                                    Margin="0,0,0,8">
-                            <ui:SymbolIcon Symbol="Image24"
-                                           Margin="0,0,8,0"
-                                           Foreground="{StaticResource AccentBrush}"
-                                           VerticalAlignment="Center" />
-                            <TextBlock Text="Real-time Image"
-                                       FontSize="16"
-                                       FontWeight="SemiBold"
-                                       Foreground="{StaticResource AccentBrush}"
-                                       VerticalAlignment="Center" />
-                        </StackPanel>
+                    <!-- 左侧：安防相机实时图像 -->
+                    <Border Grid.Column="0" Margin="0,0,8,0">
+                        <Grid Margin="16">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
 
-                        <!-- 图片显示区 -->
-                        <Image Grid.Row="1"
-                               Source="{Binding CurrentImage}"
-                               RenderOptions.BitmapScalingMode="HighQuality"
-                               RenderOptions.EdgeMode="Aliased"
-                               Stretch="Uniform"
-                               StretchDirection="Both"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center" />
-                    </Grid>
-                </Border>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                                <ui:SymbolIcon Symbol="Record24" Margin="0,0,8,0" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="Real-time Security Image" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+
+                            <Image Grid.Row="1"
+                                   Source="{Binding CurrentImage}"
+                                   RenderOptions.BitmapScalingMode="HighQuality"
+                                   RenderOptions.EdgeMode="Aliased"
+                                   Stretch="Fill"
+                                   StretchDirection="Both"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+
+                    <!-- 右侧：包裹事件图像 -->
+                    <Border Grid.Column="1"  Margin="8,0,0,0">
+                        <Grid Margin="16">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                                <ui:SymbolIcon Symbol="ImageSearch24" Margin="0,0,8,0" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="Package Event Image" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+
+                            <Image Grid.Row="1"
+                                   Source="{Binding EventPackageImage}"
+                                   RenderOptions.BitmapScalingMode="HighQuality"
+                                   RenderOptions.EdgeMode="Aliased"
+                                   Stretch="Fill"
+                                   StretchDirection="Both"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+                </Grid>
 
                 <!-- 历史包裹信息 -->
-                <Border Grid.Row="1" Margin="16"
-                        Style="{StaticResource CardStyle}">
+                <Border Grid.Row="1" Margin="16">
                     <Grid Margin="16">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -425,21 +433,21 @@
                                   ItemsSource="{Binding PackageHistory}"
                                   CanUserAddRows="False"
                                   CanUserDeleteRows="False"
+                                  AutoGenerateColumns="False"
                                   GridLinesVisibility="Horizontal">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Index" Binding="{Binding Index}" MinWidth="50" Width="SizeToCells" />
+                                <DataGridTextColumn Header="Index" Binding="{Binding Index}" MinWidth="100" Width="SizeToCells" />
                                 <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" MinWidth="120" Width="SizeToCells" />
-                                <DataGridTextColumn Header="Segment Code" Binding="{Binding SegmentCode}" MinWidth="120" Width="SizeToCells" />
-                                <DataGridTextColumn Header="Weight" Binding="{Binding WeightDisplay}" MinWidth="60" Width="SizeToCells" />
+                                <DataGridTextColumn Header="Scale" Binding="{Binding WeightDisplay}" MinWidth="60" Width="SizeToCells" />
                                 <DataGridTextColumn Header="Dimensions" Binding="{Binding VolumeDisplay}" MinWidth="100" Width="SizeToCells" />
-                                <DataGridTextColumn Header="Chute" Binding="{Binding ChuteNumber}" MinWidth="50" Width="SizeToCells" />
+                                <DataGridTextColumn Header="Chute" Binding="{Binding ChuteNumber}" MinWidth="100" Width="SizeToCells" />
                                 <DataGridTextColumn Header="Status" Binding="{Binding StatusDisplay}" MinWidth="70" Width="SizeToCells" />
                                 <DataGridTextColumn Header="Proc. Time"
                                                     Binding="{Binding ProcessingTime, StringFormat={}{0:0}ms}"
-                                                    MinWidth="80" Width="SizeToCells" />
+                                                    MinWidth="100" Width="SizeToCells" />
                                 <DataGridTextColumn Header="Time"
                                                     Binding="{Binding CreateTime, StringFormat={}{0:HH:mm:ss}}"
-                                                    MinWidth="80" Width="SizeToCells" />
+                                                    MinWidth="100" Width="SizeToCells" />
                             </DataGrid.Columns>
                         </DataGrid>
                     </Grid>
@@ -448,7 +456,6 @@
         </Grid>
    <!-- 状态栏 -->
         <Border Grid.Row="2"
-                Background="{StaticResource SecondaryBrush}"
                 Opacity="0.8"
                 BorderBrush="{StaticResource BorderBrush}"
                 BorderThickness="0,1,0,0">

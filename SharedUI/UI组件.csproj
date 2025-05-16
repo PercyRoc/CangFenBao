@@ -42,7 +42,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <EmbeddedResource Update="Resources\Strings.resx">
+      <EmbeddedResource Update="Resources\Strings.en-US.resx">
         <Generator>ResXFileCodeGenerator</Generator>
         <LastGenOutput>Strings.Designer.cs</LastGenOutput>
       </EmbeddedResource>
@@ -53,15 +53,23 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Compile Update="Resources\Strings.Designer.cs">
+      <Compile Update="Resources\Strings.en-US.Designer.cs">
         <DesignTime>True</DesignTime>
         <AutoGen>True</AutoGen>
-        <DependentUpon>Strings.resx</DependentUpon>
+        <DependentUpon>Strings.en-US.resx</DependentUpon>
       </Compile>
       <Compile Update="Resources\Strings.zh-CN.Designer.cs">
         <DesignTime>True</DesignTime>
         <AutoGen>True</AutoGen>
         <DependentUpon>Strings.zh-CN.resx</DependentUpon>
       </Compile>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Page Update="Views\Settings\ModulesTcpSettingsView.xaml">
+        <Generator>MSBuild:Compile</Generator>
+        <XamlRuntime>Wpf</XamlRuntime>
+        <SubType>Designer</SubType>
+      </Page>
     </ItemGroup>
 </Project>

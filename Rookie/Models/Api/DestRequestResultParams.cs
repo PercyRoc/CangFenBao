@@ -21,5 +21,5 @@ public class DestRequestResultParams
     public string ChuteCode { get; set; } = string.Empty;
 
     [JsonPropertyName("errorCode")]
-    public int ErrorCode { get; set; } // 0: Normal, 1: No Rule, 2: No Task, 3: Weight Ex, 4: Biz Intercept
+    public int ErrorCode { get; set; } // 0: Normal, 1: No Rule, 2: No Task, 3: 称重模块 Ex, 4: Biz Intercept
 } 

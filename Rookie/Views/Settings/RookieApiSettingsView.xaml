@@ -9,29 +9,50 @@
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=settingsVm:RookieApiSettingsViewModel}">
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-        <StackPanel Margin="16">
 
-            <TextBlock Text="Rookie DCS API Settings" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,16"/>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
 
-            <ui:CardControl Header="Endpoint Configuration" Margin="0,0,0,16">
-                <StackPanel Margin="8">
-                    <TextBlock Text="API Base URL:" Margin="0,0,0,4"/>
-                    <ui:TextBox Text="{Binding ApiBaseUrl, UpdateSourceTrigger=PropertyChanged}"
-                                PlaceholderText="e.g., http://dcs.example.com/api"/>
+        <ui:Card Grid.Row="1" Grid.Column="1" Width="400">
+            <StackPanel Margin="16">
+                <TextBlock Text="Rookie DCS API Settings"
+                           Style="{DynamicResource SubtitleTextBlockStyle}"
+                           Margin="0,0,0,16" />
 
-                    <TextBlock Text="BCR Name (Sorter Location Code):" Margin="0,12,0,4"/>
-                    <ui:TextBox Text="{Binding BcrName, UpdateSourceTrigger=PropertyChanged}"
-                                PlaceholderText="e.g., sorter, pre_sorter"/>
+                <TextBlock Text="API Base URL:" Margin="0,0,0,4"/>
+                <ui:TextBox Text="{Binding ApiBaseUrl, UpdateSourceTrigger=PropertyChanged}"
+                            PlaceholderText="e.g., http://dcs.example.com/api"
+                            Margin="0,0,0,16"/>
 
-                    <TextBlock Text="BCR Code (Device ID):" Margin="0,12,0,4"/>
-                    <ui:TextBox Text="{Binding BcrCode, UpdateSourceTrigger=PropertyChanged}"
-                                PlaceholderText="e.g., sorter01"/>
-                </StackPanel>
-            </ui:CardControl>
+                <TextBlock Text="BCR Name (Sorter Location Code):" Margin="0,0,0,4"/>
+                <ui:TextBox Text="{Binding BcrName, UpdateSourceTrigger=PropertyChanged}"
+                            PlaceholderText="e.g., sorter, pre_sorter"
+                            Margin="0,0,0,16"/>
 
-            <!-- Add more settings groups here if needed -->
+                <TextBlock Text="BCR Code (Device ID):" Margin="0,0,0,4"/>
+                <ui:TextBox Text="{Binding BcrCode, UpdateSourceTrigger=PropertyChanged}"
+                            PlaceholderText="e.g., sorter01"
+                            Margin="0,0,0,16"/>
 
-        </StackPanel>
-    </ScrollViewer>
-</UserControl> 
+                <TextBlock Text="Source:" Margin="0,0,0,4"/>
+                <ui:TextBox Text="{Binding Source, UpdateSourceTrigger=PropertyChanged}"
+                            PlaceholderText="e.g., CangFenBaoWcs"
+                            Margin="0,0,0,16"/>
+
+                <TextBlock Text="Image Upload URL:" Margin="0,0,0,4"/>
+                <ui:TextBox Text="{Binding ImageUploadUrl, UpdateSourceTrigger=PropertyChanged}"
+                            PlaceholderText="e.g., http://localhost:8080/api/image/upload"
+                            Margin="0,0,0,16"/>
+            </StackPanel>
+        </ui:Card>
+    </Grid>
+</UserControl>

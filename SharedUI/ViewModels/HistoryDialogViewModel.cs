@@ -285,7 +285,7 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
                     GetLocString("HistoryDialog_Header_Id", "ID"),
                     GetLocString("HistoryDialog_Header_Barcode", "Barcode"),
                     GetLocString("HistoryDialog_Header_Chute", "Chute"),
-                    GetLocString("HistoryDialog_Header_Weight", "Weight(kg)"),
+                    GetLocString("HistoryDialog_Header_Weight", "称重模块(kg)"),
                     GetLocString("HistoryDialog_Header_Length", "Length(cm)"),
                     GetLocString("HistoryDialog_Header_Width", "Width(cm)"),
                     GetLocString("HistoryDialog_Header_Height", "Height(cm)"),

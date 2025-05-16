@@ -6,6 +6,7 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:prism="http://prismlibrary.com/"
              xmlns:settings="clr-namespace:SharedUI.ViewModels.Settings"
+             xmlns:lex="https://github.com/XAMLMarkupExtensions/WPFLocalizationExtension"
              prism:ViewModelLocator.AutoWireViewModel="True"
              d:DataContext="{d:DesignInstance Type=settings:BarcodeChuteSettingsViewModel}"
              mc:Ignorable="d">
@@ -13,7 +14,7 @@
     <Grid>
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel MaxWidth="500" Margin="16" VerticalAlignment="Top">
-                <TextBlock Text="格口规则设置"
+                <TextBlock Text="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_Title}"
                            Style="{DynamicResource SubtitleTextBlockStyle}"
                            HorizontalAlignment="Center"
                            Margin="0,0,0,16" />
@@ -21,7 +22,7 @@
                 <!-- 基础设置 -->
                 <ui:Card Margin="0,0,0,16">
                     <StackPanel Margin="16">
-                        <TextBlock Text="基础设置"
+                        <TextBlock Text="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_BasicTitle}"
                                    Style="{DynamicResource SubtitleTextBlockStyle}"
                                    Margin="0,0,0,16" />
 
@@ -32,7 +33,7 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
 
-                            <TextBlock Text="格口数量："
+                            <TextBlock Text="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_ChuteCount}"
                                        Grid.Column="0"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Right"
@@ -52,7 +53,7 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
 
-                            <TextBlock Text="异常格口："
+                            <TextBlock Text="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_ErrorChute}"
                                        Grid.Column="0"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Right"
@@ -72,7 +73,7 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
 
-                            <TextBlock Text="超时格口："
+                            <TextBlock Text="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_TimeoutChute}"
                                        Grid.Column="0"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Right"
@@ -92,7 +93,7 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
 
-                            <TextBlock Text="NoRead格口："
+                            <TextBlock Text="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_NoReadChute}"
                                        Grid.Column="0"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Right"
@@ -112,7 +113,7 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
 
-                            <TextBlock Text="重量不匹配格口："
+                            <TextBlock Text="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_WeightMismatchChute}"
                                        Grid.Column="0"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Right"
@@ -130,7 +131,7 @@
                 <!-- 规则设置 -->
                 <ui:Card>
                     <StackPanel Margin="16">
-                        <TextBlock Text="规则设置"
+                        <TextBlock Text="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_RuleTitle}"
                                    Style="{DynamicResource SubtitleTextBlockStyle}"
                                    Margin="0,0,0,16" />
 
@@ -141,7 +142,7 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
 
-                            <TextBlock Text="当前格口："
+                            <TextBlock Text="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_CurrentChute}"
                                        Grid.Column="0"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Right"
@@ -161,20 +162,20 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
 
-                            <TextBlock Text="字符类型："
+                            <TextBlock Text="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_CharType}"
                                        Grid.Column="0"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Right"
                                        Margin="0,0,8,0" />
 
                             <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                <RadioButton Content="数字"
+                                <RadioButton Content="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_CharType_Digit}"
                                              IsChecked="{Binding CurrentRule.IsDigitOnly}"
                                              Margin="0,0,16,0" />
-                                <RadioButton Content="字母"
+                                <RadioButton Content="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_CharType_Letter}"
                                              IsChecked="{Binding CurrentRule.IsLetterOnly}"
                                              Margin="0,0,16,0" />
-                                <RadioButton Content="字母数字"
+                                <RadioButton Content="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_CharType_Alphanumeric}"
                                              IsChecked="{Binding CurrentRule.IsAlphanumeric}" />
                             </StackPanel>
                         </Grid>
@@ -186,7 +187,7 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
 
-                            <TextBlock Text="长度范围："
+                            <TextBlock Text="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_LengthRange}"
                                        Grid.Column="0"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Right"
@@ -205,7 +206,7 @@
                                               Value="{Binding CurrentRule.MinLength, UpdateSourceTrigger=PropertyChanged}"
                                               ClearButtonEnabled="False" />
 
-                                <TextBlock Text=" - "
+                                <TextBlock Text="-"
                                            Grid.Column="1"
                                            Margin="8,0"
                                            VerticalAlignment="Center" />
@@ -235,80 +236,80 @@
                             </Grid.RowDefinitions>
 
                             <!-- 起始字符 -->
-                            <TextBlock Text="起始字符："
+                            <TextBlock Text="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_StartsWith}"
                                        Grid.Row="0" Grid.Column="0"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Right"
                                        Margin="0,0,8,8" />
                             <ui:TextBox Grid.Row="0" Grid.Column="1"
                                         Text="{Binding CurrentRule.StartsWith, UpdateSourceTrigger=PropertyChanged}"
-                                        PlaceholderText="请输入起始字符"
+                                        PlaceholderText="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_StartsWith_Placeholder}"
                                         Margin="0,0,0,8" />
 
                             <!-- 结束字符 -->
-                            <TextBlock Text="结束字符："
+                            <TextBlock Text="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_EndsWith}"
                                        Grid.Row="1" Grid.Column="0"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Right"
                                        Margin="0,0,8,8" />
                             <ui:TextBox Grid.Row="1" Grid.Column="1"
                                         Text="{Binding CurrentRule.EndsWith, UpdateSourceTrigger=PropertyChanged}"
-                                        PlaceholderText="请输入结束字符"
+                                        PlaceholderText="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_EndsWith_Placeholder}"
                                         Margin="0,0,0,8" />
 
                             <!-- 起始非 -->
-                            <TextBlock Text="起始非："
+                            <TextBlock Text="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_NotStartsWith}"
                                        Grid.Row="2" Grid.Column="0"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Right"
                                        Margin="0,0,8,8" />
                             <ui:TextBox Grid.Row="2" Grid.Column="1"
                                         Text="{Binding CurrentRule.NotStartsWith, UpdateSourceTrigger=PropertyChanged}"
-                                        PlaceholderText="请输入禁止的起始字符"
+                                        PlaceholderText="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_NotStartsWith_Placeholder}"
                                         Margin="0,0,0,8" />
 
                             <!-- 结束非 -->
-                            <TextBlock Text="结束非："
+                            <TextBlock Text="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_NotEndsWith}"
                                        Grid.Row="3" Grid.Column="0"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Right"
                                        Margin="0,0,8,8" />
                             <ui:TextBox Grid.Row="3" Grid.Column="1"
                                         Text="{Binding CurrentRule.NotEndsWith, UpdateSourceTrigger=PropertyChanged}"
-                                        PlaceholderText="请输入禁止的结束字符"
+                                        PlaceholderText="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_NotEndsWith_Placeholder}"
                                         Margin="0,0,0,8" />
 
                             <!-- 内容包含 -->
-                            <TextBlock Text="内容包含："
+                            <TextBlock Text="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_Contains}"
                                        Grid.Row="4" Grid.Column="0"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Right"
                                        Margin="0,0,8,8" />
                             <ui:TextBox Grid.Row="4" Grid.Column="1"
                                         Text="{Binding CurrentRule.Contains, UpdateSourceTrigger=PropertyChanged}"
-                                        PlaceholderText="请输入必须包含的内容"
+                                        PlaceholderText="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_Contains_Placeholder}"
                                         Margin="0,0,0,8" />
 
                             <!-- 内容不包含 -->
-                            <TextBlock Text="内容不包含："
+                            <TextBlock Text="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_NotContains}"
                                        Grid.Row="5" Grid.Column="0"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Right"
                                        Margin="0,0,8,8" />
                             <ui:TextBox Grid.Row="5" Grid.Column="1"
                                         Text="{Binding CurrentRule.NotContains, UpdateSourceTrigger=PropertyChanged}"
-                                        PlaceholderText="请输入禁止包含的内容"
+                                        PlaceholderText="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_NotContains_Placeholder}"
                                         Margin="0,0,0,8" />
 
                             <!-- 正则表达式 -->
-                            <TextBlock Text="正则表达式："
+                            <TextBlock Text="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_RegexPattern}"
                                        Grid.Row="6" Grid.Column="0"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Right"
                                        Margin="0,0,8,8" />
                             <ui:TextBox Grid.Row="6" Grid.Column="1"
                                         Text="{Binding CurrentRule.RegexPattern, UpdateSourceTrigger=PropertyChanged}"
-                                        PlaceholderText="请输入正则表达式"
+                                        PlaceholderText="{lex:Loc SharedUI:Strings:BarcodeChuteSettings_RegexPattern_Placeholder}"
                                         Margin="0,0,0,8" />
                         </Grid>
                     </StackPanel>

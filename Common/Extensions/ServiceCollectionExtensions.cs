@@ -18,13 +18,7 @@ public static class ServiceCollectionExtensions
     {
         // 注册设置服务
         var settingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Settings");
-        containerRegistry.RegisterSingleton<ISettingsService>(() =>
-        {
-            // 创建一个临时的ServiceProvider用于初始化SettingsService
-            var serviceCollection = new ServiceCollection();
-            serviceCollection.BuildServiceProvider();
-            return new SettingsService(settingsPath);
-        });
+        containerRegistry.RegisterSingleton<ISettingsService>(() => new SettingsService(settingsPath));
 
         // 注册UI通知服务
         containerRegistry.RegisterSingleton<INotificationService, NotificationService>();

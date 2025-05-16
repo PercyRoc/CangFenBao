@@ -1,5 +1,4 @@
 using Common.Services.Settings;
-using Prism.Mvvm;
 
 namespace XinJuLi.Models.ASN
 {

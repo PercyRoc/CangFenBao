@@ -1,0 +1,169 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+
+<root>
+    <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+        <xsd:element name="root" msdata:IsDataSet="true">
+            <xsd:complexType>
+                <xsd:choice maxOccurs="unbounded">
+                    <xsd:element name="data">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+                            </xsd:sequence>
+                            <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+                            <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+                            <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+                        </xsd:complexType>
+                    </xsd:element>
+                    <xsd:element name="resheader">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                            </xsd:sequence>
+                            <xsd:attribute name="name" type="xsd:string" use="required" />
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:choice>
+            </xsd:complexType>
+        </xsd:element>
+    </xsd:schema>
+    <resheader name="resmimetype">
+        <value>text/microsoft-resx</value>
+    </resheader>
+    <resheader name="version">
+        <value>2.0</value>
+    </resheader>
+    <resheader name="reader">
+        <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+    </resheader>
+    <resheader name="writer">
+        <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+    </resheader>
+    <data name="Button_AddFilterGroup" xml:space="preserve">
+        <value>Add Filter Group</value>
+    </data>
+    <data name="Button_Browse" xml:space="preserve">
+        <value>Browse...</value>
+    </data>
+    <data name="Button_RemoveFilterGroup" xml:space="preserve">
+        <value>Remove Group</value>
+    </data>
+    <data name="Button_SaveSettings" xml:space="preserve">
+        <value>Save Settings</value>
+    </data>
+    <data name="Enum_BarcodeCharacterType_Alphabetic" xml:space="preserve">
+        <value>Alphabetic</value>
+    </data>
+    <data name="Enum_BarcodeCharacterType_AlphaNumeric" xml:space="preserve">
+        <value>Alphanumeric</value>
+    </data>
+    <data name="Enum_BarcodeCharacterType_Any" xml:space="preserve">
+        <value>Any</value>
+    </data>
+    <data name="Enum_BarcodeCharacterType_Hexadecimal" xml:space="preserve">
+        <value>Hexadecimal</value>
+    </data>
+    <data name="Enum_BarcodeCharacterType_Numeric" xml:space="preserve">
+        <value>Numeric</value>
+    </data>
+    <data name="Enum_BarcodeCharacterType_PrintableAscii" xml:space="preserve">
+        <value>Printable ASCII</value>
+    </data>
+    <data name="Header_CharTypeRule" xml:space="preserve">
+        <value>Character Type Rule</value>
+    </data>
+    <data name="Header_ContainsRule" xml:space="preserve">
+        <value>Contains Rule</value>
+    </data>
+    <data name="Header_CustomRegexRule" xml:space="preserve">
+        <value>Custom Regex Rule</value>
+    </data>
+    <data name="Header_EndsWithRule" xml:space="preserve">
+        <value>Ends With Rule</value>
+    </data>
+    <data name="Header_LengthRule" xml:space="preserve">
+        <value>Length Rule</value>
+    </data>
+    <data name="Header_NotContainsRule" xml:space="preserve">
+        <value>Not Contains Rule</value>
+    </data>
+    <data name="Header_StartsWithRule" xml:space="preserve">
+        <value>Starts With Rule</value>
+    </data>
+    <data name="Label_CharacterType" xml:space="preserve">
+        <value>Character Type:</value>
+    </data>
+    <data name="Label_DuplicationTimeWindow" xml:space="preserve">
+        <value>Time Window (ms):</value>
+    </data>
+    <data name="Label_FilterCount" xml:space="preserve">
+        <value>Filter Count:</value>
+    </data>
+    <data name="Label_MaxLength" xml:space="preserve">
+        <value>Max Length:</value>
+    </data>
+    <data name="Label_MinLength" xml:space="preserve">
+        <value>Min Length:</value>
+    </data>
+    <data name="Label_Pattern" xml:space="preserve">
+        <value>Pattern:</value>
+    </data>
+    <data name="Label_RegexPattern" xml:space="preserve">
+        <value>Regex Pattern:</value>
+    </data>
+    <data name="Label_RuleGroupName" xml:space="preserve">
+        <value>Group Name:</value>
+    </data>
+    <data name="Label_SaveFolder" xml:space="preserve">
+        <value>Save Folder:</value>
+    </data>
+    <data name="TabHeader_BarcodeDuplication" xml:space="preserve">
+        <value>Barcode Duplication</value>
+    </data>
+    <data name="TabHeader_BarcodeFiltering" xml:space="preserve">
+        <value>Barcode Filtering</value>
+    </data>
+    <data name="TabHeader_BarcodeTypes" xml:space="preserve">
+        <value>Barcode Types</value>
+    </data>
+    <data name="TabHeader_ImageSaving" xml:space="preserve">
+        <value>Image Saving</value>
+    </data>
+    <data name="Toggle_EnableBarcodeDuplication" xml:space="preserve">
+        <value>Enable Barcode Duplication Filter</value>
+    </data>
+    <data name="Toggle_EnableBarcodeFiltering" xml:space="preserve">
+        <value>Enable Barcode Filtering</value>
+    </data>
+    <data name="Toggle_EnableBarcodeTypeSelection" xml:space="preserve">
+        <value>Enable Barcode Type Selection</value>
+    </data>
+    <data name="Toggle_EnableCharTypeRule" xml:space="preserve">
+        <value>Enable Character Type Rule</value>
+    </data>
+    <data name="Toggle_EnableContainsRule" xml:space="preserve">
+        <value>Enable Contains Rule</value>
+    </data>
+    <data name="Toggle_EnableCustomRegexRule" xml:space="preserve">
+        <value>Enable Custom Regex Rule</value>
+    </data>
+    <data name="Toggle_EnableEndsWithRule" xml:space="preserve">
+        <value>Enable Ends With Rule</value>
+    </data>
+    <data name="Toggle_EnableImageSaving" xml:space="preserve">
+        <value>Enable Image Saving</value>
+    </data>
+    <data name="Toggle_EnableLengthRule" xml:space="preserve">
+        <value>Enable Length Rule</value>
+    </data>
+    <data name="Toggle_EnableNotContainsRule" xml:space="preserve">
+        <value>Enable Not Contains Rule</value>
+    </data>
+    <data name="Toggle_EnableRuleGroup" xml:space="preserve">
+        <value>Enable This Group</value>
+    </data>
+    <data name="Toggle_EnableStartsWithRule" xml:space="preserve">
+        <value>Enable Starts With Rule</value>
+    </data>
+</root>

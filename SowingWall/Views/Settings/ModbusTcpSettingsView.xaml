@@ -1,0 +1,80 @@
+<UserControl x:Class="SowingWall.Views.Settings.ModbusTcpSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:local="clr-namespace:SowingWall.Views.Settings"
+             xmlns:vm="clr-namespace:SowingWall.ViewModels.Settings"
+             xmlns:prism="http://prismlibrary.com/"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             prism:ViewModelLocator.AutoWireViewModel="True"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:ModbusTcpSettingsViewModel, IsDesignTimeCreatable=False}"
+             d:DesignHeight="250" d:DesignWidth="450">
+    <UserControl.Resources>
+        <!-- 定义一个简单的错误模板 -->
+        <ControlTemplate x:Key="ValidationErrorTemplate">
+            <DockPanel LastChildFill="True">
+                <TextBlock DockPanel.Dock="Right" Foreground="Red" FontSize="12" FontWeight="Bold"
+                           ToolTip="{Binding ElementName=customAdorner, Path=AdornedElement.(Validation.Errors)[0].ErrorContent}">*</TextBlock>
+                <Border BorderBrush="Red" BorderThickness="1">
+                    <AdornedElementPlaceholder Name="customAdorner" />
+                </Border>
+            </DockPanel>
+        </ControlTemplate>
+
+        <!-- 统一样式 -->
+        <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,10,0"/>
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+        </Style>
+         <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,0,5"/>
+             <Setter Property="Validation.ErrorTemplate" Value="{StaticResource ValidationErrorTemplate}"/>
+             <Style.Triggers>
+                <Trigger Property="Validation.HasError" Value="true">
+                    <Setter Property="ToolTip" Value="{Binding RelativeSource={RelativeSource Self}, Path=(Validation.Errors)[0].ErrorContent}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+         <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+             <Setter Property="MinWidth" Value="80"/>
+             <Setter Property="Margin" Value="5"/>
+         </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" MinWidth="100"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="Modbus TCP/IP 设置" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,15" HorizontalAlignment="Left"/>
+
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="PLC IP 地址:"/>
+        <ui:TextBox Grid.Row="1" Grid.Column="1"
+                    PlaceholderText="例如: 192.168.1.10"
+                    Text="{Binding PlcIpAddress, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}"/>
+
+        <TextBlock Grid.Row="2" Grid.Column="0" Text="端口号:"/>
+        <ui:TextBox Grid.Row="2" Grid.Column="1" InputScope="Number"
+                    PlaceholderText="例如: 502"
+                    Text="{Binding PlcPort, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}"/>
+
+        <TextBlock Grid.Row="3" Grid.Column="0" Text="从站 ID:"/>
+        <ui:TextBox Grid.Row="3" Grid.Column="1" InputScope="Number"
+                    PlaceholderText="例如: 1"
+                    Text="{Binding SlaveId, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}"/>
+
+    </Grid>
+</UserControl> 

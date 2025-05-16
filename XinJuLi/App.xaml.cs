@@ -53,10 +53,10 @@ namespace XinJuLi
                 cameraStartupService.StartAsync(CancellationToken.None).Wait();
                 Log.Information("相机托管服务启动成功");
 
-                // // 启动摆轮分拣托管服务
-                // var pendulumHostedService = Container.Resolve<PendulumSortHostedService>();
-                // pendulumHostedService.StartAsync(CancellationToken.None).Wait();
-                // Log.Information("摆轮分拣托管服务启动成功");
+                // 启动摆轮分拣托管服务
+                var pendulumHostedService = Container.Resolve<PendulumSortHostedService>();
+                pendulumHostedService.StartAsync(CancellationToken.None).Wait();
+                Log.Information("摆轮分拣托管服务启动成功");
                 
                 // 启动ASN HTTP服务
                 var asnHttpServer = Container.Resolve<AsnHttpServer>();

@@ -1,0 +1,589 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!-- 
+    Microsoft ResX Schema 
+    
+    Version 2.0
+    
+    The primary goals of this format is to allow a simple XML format 
+    that is mostly human readable. The generation and parsing of the 
+    various data types are done through the TypeConverter classes 
+    associated with the data types.
+    
+    Example:
+    
+    ... ado.net/XML headers & schema ...
+    <resheader name="resmimetype">text/microsoft-resx</resheader>
+    <resheader name="version">2.0</resheader>
+    <resheader name="reader">System.Resources.ResXResourceReader, System.Windows.Forms, ...</resheader>
+    <resheader name="writer">System.Resources.ResXResourceWriter, System.Windows.Forms, ...</resheader>
+    <data name="Name1"><value>this is my long string</value><comment>this is a comment</comment></data>
+    <data name="Color1" type="System.Drawing.Color, System.Drawing">Blue</data>
+    <data name="Bitmap1" mimetype="application/x-microsoft.net.object.binary.base64">
+        <value>[base64 mime encoded serialized .NET Framework object]</value>
+    </data>
+    <data name="Icon1" type="System.Drawing.Icon, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+        <value>[base64 mime encoded string representing a byte array form of the .NET Framework object]</value>
+        <comment>This is a comment</comment>
+    </data>
+                
+    There are any number of "resheader" rows that contain simple 
+    name/value pairs.
+    
+    Each data row contains a name, and value. The row also contains a 
+    type or mimetype. Type corresponds to a .NET class that support 
+    text/value conversion through the TypeConverter architecture. 
+    Classes that don't support this are serialized and stored with the 
+    mimetype set.
+    
+    The mimetype is used for serialized objects, and tells the 
+    ResXResourceReader how to depersist the object. This is currently not 
+    extensible. For a given mimetype the value must be set accordingly:
+    
+    Note - application/x-microsoft.net.object.binary.base64 is the format 
+    that the ResXResourceWriter will generate, however the reader can 
+    read any of the formats listed below.
+    
+    mimetype: application/x-microsoft.net.object.binary.base64
+    value   : The object must be serialized with 
+            : System.Runtime.Serialization.Formatters.Binary.BinaryFormatter
+            : and then encoded with base64 encoding.
+    
+    mimetype: application/x-microsoft.net.object.soap.base64
+    value   : The object must be serialized with 
+            : System.Runtime.Serialization.Formatters.Soap.SoapFormatter
+            : and then encoded with base64 encoding.
+
+    mimetype: application/x-microsoft.net.object.bytearray.base64
+    value   : The object must be serialized into a byte array 
+            : using a System.ComponentModel.TypeConverter
+            : and then encoded with base64 encoding.
+    -->
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="HistoryDialog_All" xml:space="preserve">
+    <value>All</value>
+  </data>
+  <data name="HistoryDialog_QuerySuccess" xml:space="preserve">
+    <value>Query successful</value>
+  </data>
+  <data name="HistoryDialog_QueryFailed" xml:space="preserve">
+    <value>Query failed</value>
+  </data>
+  <data name="HistoryDialog_ExportFilter" xml:space="preserve">
+    <value>Excel Files|*.xlsx</value>
+  </data>
+  <data name="HistoryDialog_ExportTitle" xml:space="preserve">
+    <value>Export Package Records</value>
+  </data>
+  <data name="HistoryDialog_ExportFileNamePrefix" xml:space="preserve">
+    <value>PackageRecords</value>
+  </data>
+  <data name="HistoryDialog_ExportSheetName" xml:space="preserve">
+    <value>Package Records</value>
+  </data>
+  <data name="HistoryDialog_ExportSuccessFormat" xml:space="preserve">
+    <value>{0} records exported successfully to {1}</value>
+    <comment>{0} is count, {1} is filename</comment>
+  </data>
+  <data name="HistoryDialog_ExportFailedFormat" xml:space="preserve">
+    <value>Export failed: {0}</value>
+    <comment>{0} is error message</comment>
+  </data>
+  <data name="HistoryDialog_ImageNotFoundFormat" xml:space="preserve">
+    <value>Image file not found: {0}</value>
+    <comment>{0} is image path</comment>
+  </data>
+  <data name="HistoryDialog_ImageOpenFailedFormat" xml:space="preserve">
+    <value>Could not open image: {0}</value>
+    <comment>{0} is error message</comment>
+  </data>
+  <data name="HistoryDialog_Header_Id" xml:space="preserve">
+    <value>ID</value>
+  </data>
+  <data name="HistoryDialog_Header_Barcode" xml:space="preserve">
+    <value>Barcode</value>
+  </data>
+  <data name="HistoryDialog_Header_Image" xml:space="preserve">
+    <value>Image</value>
+  </data>
+  <data name="HistoryDialog_Header_Chute" xml:space="preserve">
+    <value>Chute</value>
+  </data>
+  <data name="HistoryDialog_Header_Weight" xml:space="preserve">
+    <value>称重模块(kg)</value>
+  </data>
+  <data name="HistoryDialog_Header_Length" xml:space="preserve">
+    <value>Length(cm)</value>
+  </data>
+  <data name="HistoryDialog_Header_Width" xml:space="preserve">
+    <value>Width(cm)</value>
+  </data>
+  <data name="HistoryDialog_Header_Height" xml:space="preserve">
+    <value>Height(cm)</value>
+  </data>
+  <data name="HistoryDialog_Header_Volume" xml:space="preserve">
+    <value>Volume(cm³)</value>
+  </data>
+  <data name="HistoryDialog_Header_Status" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="HistoryDialog_Header_Remarks" xml:space="preserve">
+    <value>Remarks</value>
+  </data>
+  <data name="HistoryDialog_Header_CreateTime" xml:space="preserve">
+    <value>Create Time</value>
+  </data>
+  <data name="HistoryDialog_Status_Created" xml:space="preserve">
+    <value>Created</value>
+  </data>
+  <data name="HistoryDialog_Status_Success" xml:space="preserve">
+    <value>Success</value>
+  </data>
+  <data name="HistoryDialog_Status_Failed" xml:space="preserve">
+    <value>Failed</value>
+  </data>
+  <data name="HistoryDialog_Status_WaitingForLoading" xml:space="preserve">
+    <value>Waiting For Loading</value>
+  </data>
+  <data name="HistoryDialog_Status_LoadingRejected" xml:space="preserve">
+    <value>Loading Rejected</value>
+  </data>
+  <data name="HistoryDialog_Status_LoadingSuccess" xml:space="preserve">
+    <value>Loading Success</value>
+  </data>
+  <data name="HistoryDialog_Status_LoadingTimeout" xml:space="preserve">
+    <value>Loading Timeout</value>
+  </data>
+  <data name="HistoryDialog_Status_Error" xml:space="preserve">
+    <value>Error</value>
+  </data>
+  <data name="HistoryDialog_Status_Timeout" xml:space="preserve">
+    <value>Timeout</value>
+  </data>
+  <data name="HistoryDialog_Status_Offline" xml:space="preserve">
+    <value>Offline</value>
+  </data>
+  <data name="HistoryDialog_Label_StartDate" xml:space="preserve">
+    <value>Start Date:</value>
+  </data>
+  <data name="HistoryDialog_Label_EndDate" xml:space="preserve">
+    <value>End Date:</value>
+  </data>
+  <data name="HistoryDialog_Label_Barcode" xml:space="preserve">
+    <value>Barcode:</value>
+  </data>
+  <data name="HistoryDialog_Label_Chute" xml:space="preserve">
+    <value>Chute:</value>
+  </data>
+  <data name="HistoryDialog_Label_Status" xml:space="preserve">
+    <value>Status:</value>
+  </data>
+  <data name="HistoryDialog_Button_Query" xml:space="preserve">
+    <value>Query</value>
+  </data>
+  <data name="HistoryDialog_Button_ExportExcel" xml:space="preserve">
+    <value>Export Excel</value>
+  </data>
+  <data name="HistoryDialog_Placeholder_Barcode" xml:space="preserve">
+    <value>Enter barcode...</value>
+  </data>
+  <data name="HistoryDialog_Placeholder_Chute" xml:space="preserve">
+    <value>Enter chute number...</value>
+  </data>
+  <data name="HistoryDialog_Tooltip_OpenImage" xml:space="preserve">
+    <value>Open Image</value>
+  </data>
+  <data name="CarConfig_Title" xml:space="preserve">
+    <value>Car Configuration</value>
+  </data>
+  <data name="CarConfig_Name" xml:space="preserve">
+    <value>Car Name</value>
+  </data>
+  <data name="CarConfig_Address" xml:space="preserve">
+    <value>Address</value>
+  </data>
+  <data name="CarConfig_Speed" xml:space="preserve">
+    <value>Speed</value>
+  </data>
+  <data name="CarConfig_Acceleration" xml:space="preserve">
+    <value>Acceleration</value>
+  </data>
+  <data name="CarConfig_Delay" xml:space="preserve">
+    <value>Delay (ms)</value>
+  </data>
+  <data name="CarConfig_Time" xml:space="preserve">
+    <value>Running Time (ms)</value>
+  </data>
+  <data name="CarConfig_AddCar" xml:space="preserve">
+    <value>Add Car</value>
+  </data>
+  <data name="Common_Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="CameraSettings_Title" xml:space="preserve">
+    <value>相机模块 Settings</value>
+  </data>
+  <data name="CameraSettings_CameraSelection_Title" xml:space="preserve">
+    <value>相机模块 Selection</value>
+  </data>
+  <data name="CameraSettings_ManufacturerLabel" xml:space="preserve">
+    <value>Manufacturer:</value>
+  </data>
+  <data name="CameraSettings_CameraTypeLabel" xml:space="preserve">
+    <value>相机模块 Type:</value>
+  </data>
+  <data name="CameraSettings_BarcodeFilter_Title" xml:space="preserve">
+    <value>Barcode Filter Configuration</value>
+  </data>
+  <data name="CameraSettings_EnableBarcodeRepeatFilter" xml:space="preserve">
+    <value>Enable Barcode Repeat Filter</value>
+  </data>
+  <data name="CameraSettings_RepeatCountLabel" xml:space="preserve">
+    <value>Repeat Count:</value>
+  </data>
+  <data name="CameraSettings_RepeatTimeLabel" xml:space="preserve">
+    <value>Repeat Time (ms):</value>
+  </data>
+  <data name="CameraSettings_ImageSave_Title" xml:space="preserve">
+    <value>Image Save Configuration</value>
+  </data>
+  <data name="CameraSettings_EnableImageSaving" xml:space="preserve">
+    <value>Enable Image Saving</value>
+  </data>
+  <data name="CameraSettings_ImageSavePathLabel" xml:space="preserve">
+    <value>Save Path:</value>
+  </data>
+  <data name="CameraSettings_BrowseButton" xml:space="preserve">
+    <value>Browse...</value>
+  </data>
+  <data name="CameraSettings_ImageFormatLabel" xml:space="preserve">
+    <value>Save Format:</value>
+  </data>
+  <data name="华睿" xml:space="preserve">
+    <value>HuaRay</value>
+  </data>
+  <data name="海康" xml:space="preserve">
+    <value>Hikvision</value>
+  </data>
+  <data name="工业相机" xml:space="preserve">
+    <value>Industrial 相机模块</value>
+  </data>
+  <data name="智能相机" xml:space="preserve">
+    <value>Smart 相机模块</value>
+  </data>
+  <data name="TCP相机" xml:space="preserve">
+    <value>TCP 相机模块</value>
+  </data>
+  <data name="JPEG" xml:space="preserve">
+    <value>JPEG</value>
+  </data>
+  <data name="PNG" xml:space="preserve">
+    <value>PNG</value>
+  </data>
+  <data name="BMP" xml:space="preserve">
+    <value>BMP</value>
+  </data>
+  <data name="TIFF" xml:space="preserve">
+    <value>TIFF</value>
+  </data>
+  <data name="CarSequence_Reverse" xml:space="preserve">
+    <value>Reverse</value>
+  </data>
+  <data name="CarSequence_Forward" xml:space="preserve">
+    <value>Forward</value>
+  </data>
+  <data name="CarSequence_ChuteListTitle" xml:space="preserve">
+    <value>Chute List</value>
+  </data>
+  <data name="CarSequence_ChuteSequenceTitle" xml:space="preserve">
+    <value>Car Sequence for Chute {0}</value>
+  </data>
+  <data name="CarSequence_DelayLabel" xml:space="preserve">
+    <value>Delay:</value>
+  </data>
+  <data name="CarSequence_DelayTooltip" xml:space="preserve">
+    <value>Delay before sending this car command (ms)</value>
+  </data>
+  <data name="CarSequence_MsLabel" xml:space="preserve">
+    <value>ms</value>
+  </data>
+  <data name="CarSequence_SetForwardButton" xml:space="preserve">
+    <value>Set Forward</value>
+  </data>
+  <data name="CarSequence_SetReverseButton" xml:space="preserve">
+    <value>Set Reverse</value>
+  </data>
+  <data name="CarSequence_AddCarButton" xml:space="preserve">
+    <value>Add Car</value>
+  </data>
+  <data name="TCP" xml:space="preserve">
+    <value>TCP</value>
+  </data>
+  <data name="CarConfig_DefaultName" xml:space="preserve">
+    <value>Car</value>
+  </data>
+  <data name="BarcodeChuteSettings_Title" xml:space="preserve">
+    <value>Chute Rule Settings</value>
+  </data>
+  <data name="BarcodeChuteSettings_BasicTitle" xml:space="preserve">
+    <value>Basic Settings</value>
+  </data>
+  <data name="BarcodeChuteSettings_ChuteCount" xml:space="preserve">
+    <value>Chute Count:</value>
+  </data>
+  <data name="BarcodeChuteSettings_ErrorChute" xml:space="preserve">
+    <value>Error Chute:</value>
+  </data>
+  <data name="BarcodeChuteSettings_TimeoutChute" xml:space="preserve">
+    <value>Timeout Chute:</value>
+  </data>
+  <data name="BarcodeChuteSettings_NoReadChute" xml:space="preserve">
+    <value>NoRead Chute:</value>
+  </data>
+  <data name="BarcodeChuteSettings_WeightMismatchChute" xml:space="preserve">
+    <value>称重模块 Mismatch Chute:</value>
+  </data>
+  <data name="BarcodeChuteSettings_RuleTitle" xml:space="preserve">
+    <value>Rule Settings</value>
+  </data>
+  <data name="BarcodeChuteSettings_CurrentChute" xml:space="preserve">
+    <value>Current Chute:</value>
+  </data>
+  <data name="BarcodeChuteSettings_CharType" xml:space="preserve">
+    <value>Character Type:</value>
+  </data>
+  <data name="BarcodeChuteSettings_CharType_Digit" xml:space="preserve">
+    <value>Digit</value>
+  </data>
+  <data name="BarcodeChuteSettings_CharType_Letter" xml:space="preserve">
+    <value>Letter</value>
+  </data>
+  <data name="BarcodeChuteSettings_CharType_Alphanumeric" xml:space="preserve">
+    <value>Alphanumeric</value>
+  </data>
+  <data name="BarcodeChuteSettings_LengthRange" xml:space="preserve">
+    <value>Length Range:</value>
+  </data>
+  <data name="BarcodeChuteSettings_StartsWith" xml:space="preserve">
+    <value>Starts With:</value>
+  </data>
+  <data name="BarcodeChuteSettings_StartsWith_Placeholder" xml:space="preserve">
+    <value>Enter start characters</value>
+  </data>
+  <data name="BarcodeChuteSettings_EndsWith" xml:space="preserve">
+    <value>Ends With:</value>
+  </data>
+  <data name="BarcodeChuteSettings_EndsWith_Placeholder" xml:space="preserve">
+    <value>Enter end characters</value>
+  </data>
+  <data name="BarcodeChuteSettings_NotStartsWith" xml:space="preserve">
+    <value>Not Starts With:</value>
+  </data>
+  <data name="BarcodeChuteSettings_NotStartsWith_Placeholder" xml:space="preserve">
+    <value>Enter forbidden start characters</value>
+  </data>
+  <data name="BarcodeChuteSettings_NotEndsWith" xml:space="preserve">
+    <value>Not Ends With:</value>
+  </data>
+  <data name="BarcodeChuteSettings_NotEndsWith_Placeholder" xml:space="preserve">
+    <value>Enter forbidden end characters</value>
+  </data>
+  <data name="BarcodeChuteSettings_Contains" xml:space="preserve">
+    <value>Contains:</value>
+  </data>
+  <data name="BarcodeChuteSettings_Contains_Placeholder" xml:space="preserve">
+    <value>Enter required content</value>
+  </data>
+  <data name="BarcodeChuteSettings_NotContains" xml:space="preserve">
+    <value>Not Contains:</value>
+  </data>
+  <data name="BarcodeChuteSettings_NotContains_Placeholder" xml:space="preserve">
+    <value>Enter forbidden content</value>
+  </data>
+  <data name="BarcodeChuteSettings_RegexPattern" xml:space="preserve">
+    <value>Regex Pattern:</value>
+  </data>
+  <data name="BarcodeChuteSettings_RegexPattern_Placeholder" xml:space="preserve">
+    <value>Enter regex pattern</value>
+  </data>
+  <data name="HikvisionSettings_Title" xml:space="preserve">
+    <value>Hikvision Security 相机模块 Settings</value>
+  </data>
+  <data name="HikvisionSettings_IpLabel" xml:space="preserve">
+    <value>IP Address</value>
+  </data>
+  <data name="HikvisionSettings_PortLabel" xml:space="preserve">
+    <value>Port</value>
+  </data>
+  <data name="HikvisionSettings_UserLabel" xml:space="preserve">
+    <value>Username</value>
+  </data>
+  <data name="HikvisionSettings_PasswordLabel" xml:space="preserve">
+    <value>Password</value>
+  </data>
+  <data name="WeightSettings_Title" xml:space="preserve">
+    <value>称重模块 Settings</value>
+  </data>
+  <data name="WeightSettings_FusionTitle" xml:space="preserve">
+    <value>称重模块 Fusion Settings</value>
+  </data>
+  <data name="WeightSettings_EnableFusion" xml:space="preserve">
+    <value>Enable 称重模块 Fusion</value>
+  </data>
+  <data name="WeightSettings_WeightType" xml:space="preserve">
+    <value>称重模块 Type:</value>
+  </data>
+  <data name="WeightSettings_MinWeight" xml:space="preserve">
+    <value>Minimum 称重模块:</value>
+  </data>
+  <data name="WeightSettings_MinWeight_Placeholder" xml:space="preserve">
+    <value>Enter minimum weight</value>
+  </data>
+  <data name="WeightSettings_MinWeight_Tooltip" xml:space="preserve">
+    <value>Set the minimum threshold for weight detection (g)</value>
+  </data>
+  <data name="WeightSettings_Unit_Gram" xml:space="preserve">
+    <value>g</value>
+  </data>
+  <data name="WeightSettings_SampleCount" xml:space="preserve">
+    <value>Sample Count:</value>
+  </data>
+  <data name="WeightSettings_SampleCount_Placeholder" xml:space="preserve">
+    <value>Enter sample count (3-10)</value>
+  </data>
+  <data name="WeightSettings_SampleCount_Tooltip" xml:space="preserve">
+    <value>Number of samples required for stability check, range 3-10</value>
+  </data>
+  <data name="WeightSettings_SerialTitle" xml:space="preserve">
+    <value>Serial Port Settings</value>
+  </data>
+  <data name="WeightSettings_PortName" xml:space="preserve">
+    <value>Port Name:</value>
+  </data>
+  <data name="WeightSettings_Refresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="WeightSettings_Refresh_Tooltip" xml:space="preserve">
+    <value>Refresh available ports</value>
+  </data>
+  <data name="WeightSettings_BaudRate" xml:space="preserve">
+    <value>Baud Rate:</value>
+  </data>
+  <data name="WeightSettings_DataBits" xml:space="preserve">
+    <value>Data Bits:</value>
+  </data>
+  <data name="WeightSettings_StopBits" xml:space="preserve">
+    <value>Stop Bits:</value>
+  </data>
+  <data name="WeightSettings_Parity" xml:space="preserve">
+    <value>Parity:</value>
+  </data>
+  <data name="WeightSettings_TimeRangeTitle" xml:space="preserve">
+    <value>Time Range Settings</value>
+  </data>
+  <data name="WeightSettings_TimeRange" xml:space="preserve">
+    <value>Time Range:</value>
+  </data>
+  <data name="WeightSettings_TimeRange_Lower_Placeholder" xml:space="preserve">
+    <value>Min Time</value>
+  </data>
+  <data name="WeightSettings_TimeRange_Upper_Placeholder" xml:space="preserve">
+    <value>Max Time</value>
+  </data>
+  <data name="WeightSettings_Unit_Millisecond" xml:space="preserve">
+    <value>ms</value>
+  </data>
+  <data name="ModulesTcpSettings_Label_Address" xml:space="preserve">
+    <value>TCP Address:</value>
+  </data>
+  <data name="ModulesTcpSettings_Placeholder_Address" xml:space="preserve">
+    <value>Enter TCP Address</value>
+  </data>
+  <data name="ModulesTcpSettings_Label_Port" xml:space="preserve">
+    <value>Port:</value>
+  </data>
+  <data name="ModulesTcpSettings_Placeholder_Port" xml:space="preserve">
+    <value>Enter Port</value>
+  </data>
+  <data name="ModulesTcpSettings_Label_MinTime" xml:space="preserve">
+    <value>Min Time (ms):</value>
+  </data>
+  <data name="ModulesTcpSettings_Placeholder_MinTime" xml:space="preserve">
+    <value>Enter Min Time</value>
+  </data>
+  <data name="ModulesTcpSettings_Label_MaxTime" xml:space="preserve">
+    <value>Max Time (ms):</value>
+  </data>
+  <data name="ModulesTcpSettings_Placeholder_MaxTime" xml:space="preserve">
+    <value>Enter Max Time</value>
+  </data>
+  <data name="ModulesTcpSettings_Label_ExceptionChute" xml:space="preserve">
+    <value>Exception Chute:</value>
+  </data>
+  <data name="ModulesTcpSettings_Placeholder_ExceptionChute" xml:space="preserve">
+    <value>Enter Exception Chute</value>
+  </data>
+  <data name="VolumeCameraSettings_Title" xml:space="preserve">
+    <value>Volume 相机模块 Settings</value>
+  </data>
+  <data name="VolumeCameraSettings_FusionTimeLabel" xml:space="preserve">
+    <value>Fusion Time (ms)</value>
+  </data>
+</root>

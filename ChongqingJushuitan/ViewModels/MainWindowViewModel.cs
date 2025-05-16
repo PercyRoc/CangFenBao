@@ -160,7 +160,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             {
                 Name = "相机",
                 Status = "未连接",
-                Icon = "Camera",
+                Icon = "相机模块",
                 StatusColor = "#F44336" // 红色表示未连接
             });
             Log.Debug("已添加相机状态");

@@ -303,7 +303,7 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
             var headerRow = sheet.CreateRow(0);
             var headers = new[]
             {
-                "No.", "Barcode", "Chute", "Weight(kg)", "Length(cm)", "Width(cm)", "Height(cm)",
+                "No.", "Barcode", "Chute", "称重模块(kg)", "Length(cm)", "Width(cm)", "Height(cm)",
                 "Volume(cm³)", "Pallet Name", "Status", "Note", "Create Time"
             };
 
@@ -344,7 +344,7 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
                 dataRow.CreateCell(0).SetCellValue(record.Id); // No.
                 dataRow.CreateCell(1).SetCellValue(record.Barcode);
                 dataRow.CreateCell(2).SetCellValue(record.ChuteNumber ?? 0); // Chute (处理可能的 null)
-                dataRow.CreateCell(3).SetCellValue(record.Weight); // Weight
+                dataRow.CreateCell(3).SetCellValue(record.Weight); // 称重模块
                 dataRow.CreateCell(4)
                     .SetCellValue(record.Length.HasValue
                         ? Math.Round(record.Length.Value, 1)

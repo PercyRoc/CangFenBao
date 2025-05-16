@@ -415,7 +415,7 @@ internal class PlcCommunicationService(
             {
                 Log.Information("PLC连接断开，设置状态为 Disconnected。");
                 CurrentDeviceStatus = DeviceStatusCode.Disconnected; // Update internal state
-                DeviceStatusChanged?.Invoke(this, DeviceStatusCode.Disconnected); // Trigger ViewModel 更新
+                DeviceStatusChanged?.Invoke(this, DeviceStatusCode.Disconnected); // Trigger ViewModels 更新
             }
             else
             {

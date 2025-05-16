@@ -3,6 +3,7 @@ using System.Text;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.SerialPort; // 引入新服务的命名空间
 using Serilog;
+using System.Reactive.Subjects; // 添加 Reactive Subjects 命名空间
 
 // 如果尚未存在，添加LINQ命名空间
 
@@ -14,18 +15,15 @@ namespace DeviceService.DataSourceDevices.Weight;
 public class SerialPortWeightService : IDisposable
 {
     // 常量定义
-    private const int MaxCacheSize = 100;
-    private const int MaxCacheAgeMinutes = 2;
     private const double StableThreshold = 0.001;
     private const int ProcessInterval = 100;
 
     private readonly object _lock = new();
-    private readonly Queue<(double Weight, DateTime Timestamp)> _weightCache = new();
-    private readonly AutoResetEvent _weightReceived = new(false);
     private readonly List<double> _weightSamples = [];
     private readonly StringBuilder _receiveBuffer = new();
     private readonly SerialPortService _serialPortService;
     private readonly ISettingsService _settingsService;
+    private readonly Subject<(double Weight, DateTime Timestamp, WeightType Type)> _weightDataSubject = new();
 
     private bool _disposed;
     private bool _isConnected;
@@ -38,6 +36,8 @@ public class SerialPortWeightService : IDisposable
         _serialPortService = new SerialPortService("WeightScale", weightSettings.SerialPortParams);
     }
 
+    public IObservable<(double Weight, DateTime Timestamp, WeightType Type)> WeightDataStream => _weightDataSubject;
+
     public bool IsConnected
     {
         get => _isConnected;
@@ -45,7 +45,7 @@ public class SerialPortWeightService : IDisposable
         {
             if (_isConnected == value) return;
             _isConnected = value;
-            ConnectionChanged?.Invoke("Weight Scale", value);
+            ConnectionChanged?.Invoke("称重模块 Scale", value);
         }
     }
 
@@ -57,7 +57,7 @@ public class SerialPortWeightService : IDisposable
 
     public event Action<string, bool>? ConnectionChanged;
 
-    internal bool Start()
+    public bool Start()
     {
         try
         {
@@ -93,7 +93,7 @@ public class SerialPortWeightService : IDisposable
         }
     }
 
-    internal void Stop()
+    public void Stop()
     {
         try
         {
@@ -102,164 +102,16 @@ public class SerialPortWeightService : IDisposable
 
             _serialPortService.Disconnect();
 
-            _receiveBuffer.Clear();
-            _weightSamples.Clear();
             lock (_lock)
             {
-                _weightCache.Clear();
+                _receiveBuffer.Clear();
             }
-
+            _weightSamples.Clear();
             Log.Information("串口重量称服务已停止");
         }
         catch (Exception ex)
         {
             Log.Error(ex, "停止串口重量称服务时发生错误");
-        }
-    }
-
-    public double? FindNearestWeight(DateTime targetTime)
-    {
-        lock (_lock)
-        {
-            var lowerBound = targetTime.AddMilliseconds(_settingsService.LoadSettings<WeightSettings>().TimeRangeLower);
-            var upperBound = targetTime.AddMilliseconds(_settingsService.LoadSettings<WeightSettings>().TimeRangeUpper);
-
-            Log.Debug("查找重量数据 - 目标时间: {TargetTime}, 下限: {LowerBound}, 上限: {UpperBound}, 缓存数量: {CacheCount}",
-                targetTime, lowerBound, upperBound, _weightCache.Count);
-
-            (double Weight, DateTime Timestamp)? nearestZeroWeight = null;
-
-            if (_weightCache.Count > 0)
-            {
-                (double Weight, DateTime Timestamp)? initialWeightInRange = _weightCache
-                    .Where(w => w.Timestamp >= lowerBound && w.Timestamp <= upperBound)
-                    .OrderBy(w => Math.Abs((w.Timestamp - targetTime).TotalMilliseconds))
-                    .FirstOrDefault();
-
-                if (initialWeightInRange != default)
-                {
-                    var timeDiff = (initialWeightInRange.Value.Timestamp - targetTime).TotalMilliseconds;
-                    if (initialWeightInRange.Value.Weight != 0)
-                    {
-                        Log.Debug("初始查找找到非零重量数据: {Weight:F3}kg, 时间差: {TimeDiff:F0}ms",
-                            initialWeightInRange.Value.Weight / 1000, timeDiff);
-                        return initialWeightInRange.Value.Weight;
-                    }
-                    // 找到的是 0，记录下来，继续等待
-                    Log.Debug("初始查找找到零重量数据，记录并继续等待: 时间差: {TimeDiff:F0}ms", timeDiff);
-                    nearestZeroWeight = initialWeightInRange;
-                }
-                else
-                {
-                    // Log the nearest out-of-range weight only if no in-range weight was found yet
-                    var nearestWeight = _weightCache
-                        .OrderBy(w => Math.Abs((w.Timestamp - targetTime).TotalMilliseconds))
-                        .FirstOrDefault();
-                    if (nearestWeight != default)
-                    {
-                        var timeDiff = (nearestWeight.Timestamp - targetTime).TotalMilliseconds;
-                        Log.Debug("未找到时间范围内的数据，最近的数据超出范围: {Weight:F3}kg, 时间差: {TimeDiff:F0}ms, 时间戳: {Timestamp}",
-                            nearestWeight.Weight / 1000, timeDiff, nearestWeight.Timestamp);
-                    }
-                }
-            }
-            else
-            {
-                Log.Debug("重量缓存为空");
-            }
-
-            // 如果初始找到了非零值，上面已经 return 了，能走到这里说明要么没找到，要么找到的是0
-
-            if (!IsConnected && DateTime.Now > upperBound)
-            {
-                Log.Debug("串口未连接且当前时间已超过上限，不再等待新数据");
-                // 如果之前找到了0，则返回0，否则返回null
-                return nearestZeroWeight?.Weight;
-            }
-
-            if (DateTime.Now > upperBound)
-            {
-                Log.Debug("当前时间已超过上限，不再等待新数据");
-                // 如果之前找到了0，则返回0，否则返回null
-                return nearestZeroWeight?.Weight;
-            }
-
-            var waitTime = upperBound - DateTime.Now;
-            if (waitTime <= TimeSpan.Zero)
-            {
-                 // 等待时间已过，如果之前找到了0，则返回0，否则返回null
-                 Log.Debug("等待时间已过，返回找到的零重量（如有）或null");
-                 return nearestZeroWeight?.Weight;
-            }
-
-
-            Log.Debug("继续等待新的重量数据（或非零重量），最大等待时间: {WaitTime:F0}ms", waitTime.TotalMilliseconds);
-
-            var remainingTime = waitTime;
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            while (remainingTime > TimeSpan.Zero && sw.Elapsed < waitTime)
-            {
-                var currentWaitTimeout = TimeSpan.FromMilliseconds(Math.Min(100, remainingTime.TotalMilliseconds));
-
-                if (_weightReceived.WaitOne(currentWaitTimeout))
-                {
-                    Log.Debug("收到新的重量数据信号，重新查找");
-                    var weightInRangeDuringWait = _weightCache
-                        .Where(w => w.Timestamp >= lowerBound && w.Timestamp <= upperBound)
-                        // 在等待期间，我们总是希望找到最新的非零值，或者最接近的零值（如果只有零）
-                        .OrderByDescending(w => w.Timestamp) // 优先考虑最新的数据
-                        .ThenBy(w => Math.Abs((w.Timestamp - targetTime).TotalMilliseconds))
-                        .ToList(); // 获取所有符合条件的，以便区分0和非0
-
-                    var nonZeroWeight = weightInRangeDuringWait.FirstOrDefault(w => w.Weight != 0);
-
-                    if (nonZeroWeight != default)
-                    {
-                        sw.Stop();
-                        var timeDiff = (nonZeroWeight.Timestamp - targetTime).TotalMilliseconds;
-                        Log.Debug("等待后找到符合条件的非零重量数据: {Weight:F3}kg, 时间差: {TimeDiff:F0}ms",
-                            nonZeroWeight.Weight / 1000, timeDiff);
-                        return nonZeroWeight.Weight;
-                    }
-
-                    // 检查是否有零重量数据
-                    var zeroWeight = weightInRangeDuringWait.FirstOrDefault(w => w.Weight == 0);
-                    if (zeroWeight != default)
-                    {
-                        // 如果当前找到的零重量比之前记录的更接近目标时间，则更新
-                        if (nearestZeroWeight == null ||
-                            Math.Abs((zeroWeight.Timestamp - targetTime).TotalMilliseconds) <
-                            Math.Abs((nearestZeroWeight.Value.Timestamp - targetTime).TotalMilliseconds))
-                        {
-                             Log.Debug("等待期间找到零重量数据，更新记录并继续等待");
-                             nearestZeroWeight = zeroWeight;
-                        }
-                    }
-
-
-                    Log.Debug("收到信号但新数据不符合时间范围或仍为零，继续等待");
-                }
-
-                if (!IsConnected)
-                {
-                    Log.Warning("等待重量数据期间串口连接断开，停止等待");
-                    break; // 退出 while 循环
-                }
-
-                remainingTime = upperBound - DateTime.Now;
-            }
-
-            sw.Stop();
-
-            // 等待结束（超时或断开连接）
-            if (nearestZeroWeight != null)
-            {
-                Log.Debug("等待结束 ({Elapsed}ms)，未找到非零重量，返回找到的最佳零重量", sw.ElapsedMilliseconds);
-                return nearestZeroWeight.Value.Weight; // 返回找到的 0 重量
-            }
-
-            Log.Debug("等待结束 ({Elapsed}ms)，未找到任何符合条件的重量数据", sw.ElapsedMilliseconds);
-            return null; // 在整个过程中（包括等待）都没有找到任何符合条件的重量
         }
     }
 
@@ -284,14 +136,12 @@ public class SerialPortWeightService : IDisposable
         try
         {
             var receivedString = Encoding.ASCII.GetString(data);
-            // Log.Verbose("SerialPortWeightService - 收到原始数据片段: {Data}", receivedString);
 
             lock (_lock)
             {
                 _receiveBuffer.Append(receivedString);
-                // Log.Verbose("当前接收缓冲区内容: {BufferContent}", _receiveBuffer.ToString());
 
-                const int maxInternalBufferSize = 4096; // 定义一个合适的缓冲区大小
+                const int maxInternalBufferSize = 4096;
                 if (_receiveBuffer.Length > maxInternalBufferSize)
                 {
                     Log.Warning("内部接收缓冲区超过限制 ({Length} > {Limit})，清空缓冲区", _receiveBuffer.Length, maxInternalBufferSize);
@@ -319,8 +169,6 @@ public class SerialPortWeightService : IDisposable
     {
         if ((receiveTime - _lastProcessTime).TotalMilliseconds < ProcessInterval) return;
         _lastProcessTime = receiveTime;
-
-        CleanExpiredWeightData(receiveTime);
 
         var bufferContent = _receiveBuffer.ToString();
         if (string.IsNullOrEmpty(bufferContent)) return;
@@ -424,45 +272,15 @@ public class SerialPortWeightService : IDisposable
             return;
         }
 
-        lock (_lock)
-        {
-            _weightCache.Enqueue((average, timestamp));
-            while (_weightCache.Count > MaxCacheSize) _weightCache.Dequeue();
-        }
+        var localTimestamp = timestamp.Kind == DateTimeKind.Local ? timestamp : timestamp.ToLocalTime();
+        _weightDataSubject.OnNext((average, localTimestamp, WeightType.Static));
 
-        _weightReceived.Set();
         _weightSamples.Clear();
     }
 
     private void ProcessDynamicWeight(double weightG, DateTime timestamp)
     {
-
-        lock (_lock)
-        {
-            _weightCache.Enqueue((weightG, timestamp));
-            while (_weightCache.Count > MaxCacheSize) _weightCache.Dequeue();
-        }
-
-        _weightReceived.Set();
-    }
-
-    private void CleanExpiredWeightData(DateTime currentTime)
-    {
-        lock (_lock)
-        {
-            var expireTime = currentTime.AddMinutes(-MaxCacheAgeMinutes);
-            var removedCount = 0;
-            while (_weightCache.Count > 0 && _weightCache.Peek().Timestamp < expireTime)
-            {
-                _weightCache.Dequeue();
-                removedCount++;
-            }
-
-            if (removedCount > 0)
-            {
-                Log.Debug("清理了 {Count} 条过期重量缓存数据", removedCount);
-            }
-        }
+        _weightDataSubject.OnNext((weightG, timestamp, WeightType.Dynamic));
     }
 
     private static string ReverseWeight(string weightStr)
@@ -483,7 +301,8 @@ public class SerialPortWeightService : IDisposable
 
             _serialPortService.Dispose();
 
-            _weightReceived.Dispose();
+            _weightDataSubject.OnCompleted();
+            _weightDataSubject.Dispose();
         }
 
         _disposed = true;

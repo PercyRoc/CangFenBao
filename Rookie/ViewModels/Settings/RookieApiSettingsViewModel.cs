@@ -18,57 +18,73 @@ public class RookieApiSettingsViewModel : BindableBase
     public string BcrName
     {
         get => _settings.BcrName;
-        set 
+        set
         {
-            if (_settings.BcrName != value)
-            {
-                _settings.BcrName = value;
-                RaisePropertyChanged();
-            }
+            if (_settings.BcrName == value) return;
+            _settings.BcrName = value;
+            RaisePropertyChanged();
         }
     }
 
     public string BcrCode
     {
         get => _settings.BcrCode;
-        set 
+        set
         {
-            if (_settings.BcrCode != value)
-            {
-                _settings.BcrCode = value;
-                RaisePropertyChanged();
-            }
+            if (_settings.BcrCode == value) return;
+            _settings.BcrCode = value;
+            RaisePropertyChanged();
         }
     }
 
     public string ApiBaseUrl
     {
         get => _settings.ApiBaseUrl;
-        set 
+        set
         {
-            if (_settings.ApiBaseUrl != value)
-            {
-                _settings.ApiBaseUrl = value;
-                RaisePropertyChanged();
-            }
+            if (_settings.ApiBaseUrl == value) return;
+            _settings.ApiBaseUrl = value;
+            RaisePropertyChanged();
         }
     }
 
-    public void LoadConfiguration()
+    public string Source
+    {
+        get => _settings.Source;
+        set
+        {
+            if (_settings.Source == value) return;
+            _settings.Source = value;
+            RaisePropertyChanged();
+        }
+    }
+
+    public string ImageUploadUrl
+    {
+        get => _settings.ImageUploadUrl;
+        set
+        {
+            if (_settings.ImageUploadUrl == value) return;
+            _settings.ImageUploadUrl = value;
+            RaisePropertyChanged();
+        }
+    }
+
+    private void LoadConfiguration()
     {
         try
         {
             _settings = _settingsService.LoadSettings<RookieApiSettings>();
-            // Manually raise property changed for all properties after loading
             RaisePropertyChanged(nameof(BcrName));
             RaisePropertyChanged(nameof(BcrCode));
             RaisePropertyChanged(nameof(ApiBaseUrl));
+            RaisePropertyChanged(nameof(Source));
             Log.Debug("Rookie API settings loaded.");
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to load Rookie API settings.");
-            _settings = new RookieApiSettings(); // Use defaults if loading fails
+            _settings = new RookieApiSettings();
         }
     }
 

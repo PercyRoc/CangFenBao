@@ -2,7 +2,6 @@
 using System.Windows;
 using System.Windows.Input;
 using Common.Services.Ui;
-using DeviceService.DataSourceDevices.Scanner;
 using Serilog;
 using Sunnen.ViewModels.Windows;
 using MessageBoxResult = System.Windows.MessageBoxResult;
@@ -15,18 +14,16 @@ namespace Sunnen.Views.Windows;
 /// </summary>
 public partial class MainWindow
 {
-    private readonly IScannerService _scannerService;
-
-    public MainWindow(INotificationService notificationService, IScannerService scannerService)
+    public MainWindow(INotificationService notificationService)
     {
         InitializeComponent();
-        _scannerService = scannerService;
-        
         // 注册Growl容器
         notificationService.Register("MainWindowGrowl", GrowlPanel);
         
         // 添加标题栏鼠标事件处理
         MouseDown += OnWindowMouseDown;
+        // 注册全局文本输入事件
+        PreviewTextInput += MainWindow_PreviewTextInput;
     }
 
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -43,23 +40,7 @@ public partial class MainWindow
             
             // Set initial focus to the window itself, away from the manual input box
             Keyboard.Focus(this); 
-            
-            // 设置扫码枪拦截模式和手动输入状态
-            if (BlockScannerInput != null)
-            {
-                bool enableManualInput = BlockScannerInput.IsChecked ?? true;
-                
-                // 设置文本框为只读（如果禁用手动输入）或可编辑，并确保始终启用
-                ManualBarcodeTextBox.IsEnabled = true;
-                ManualBarcodeTextBox.IsReadOnly = !enableManualInput;
-                
-                // 根据手动输入模式设置扫码枪拦截状态
-                _scannerService.InterceptAllInput = !enableManualInput; // 启用手动输入时不拦截键盘事件，禁用时拦截
-                
-                Log.Information("初始化手动输入模式: {0}, 扫码枪拦截: {1}", 
-                    enableManualInput ? "启用" : "禁用",
-                    enableManualInput ? "关闭" : "开启");
-            }
+        
         }
         catch (Exception ex)
         {
@@ -106,74 +87,31 @@ public partial class MainWindow
         if (e.ChangedButton == MouseButton.Left)
             DragMove();
     }
-
-    // Remove or comment out the old handler if no longer needed
-    /*
-    private async void BarcodeTextBox_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.Enter && sender is TextBox textBox)
-        {
-            var barcode = textBox.Text;
-            if (!string.IsNullOrWhiteSpace(barcode))
-            {
-                await ViewModel.ProcessBarcodeAsync(barcode);
-                // Optionally clear the box after processing
-                // textBox.Clear();
-            }
-        }
-    }
-    */
     
     // Add the new handler for the manual input TextBox
     private async void ManualBarcodeTextBox_KeyDown(object sender, KeyEventArgs e)
     {
-        // Explicitly use HandyControl.Controls.TextBox to resolve ambiguity
         if (e.Key != Key.Enter || sender is not HandyControl.Controls.TextBox textBox) return;
         var barcode = textBox.Text;
         if (string.IsNullOrWhiteSpace(barcode)) return;
-        // Access ViewModel through DataContext
+        if (barcode.StartsWith('\"'))
+        {
+            barcode = barcode[1..];
+        }
         if (DataContext is MainWindowViewModel viewModel)
         {
             await viewModel.ProcessBarcodeAsync(barcode);
         }
-        // Clear the manual input box after processing
         textBox.Clear(); 
-        // Move focus away from the manual input box to the main window
         Keyboard.Focus(this);
     }
-    
-    // 拦截开关变更处理
-    private void BlockScannerInput_CheckedChanged(object sender, RoutedEventArgs e)
+
+    // 新增：全局文本输入事件处理，输入@时自动聚焦到输入框
+    private void MainWindow_PreviewTextInput(object sender, TextCompositionEventArgs e)
     {
-        try
+        if (e.Text == "@")
         {
-            if (BlockScannerInput == null) return;
-            
-            var enableManualInput = BlockScannerInput.IsChecked ?? true;
-            
-            // 设置文本框为只读（如果禁用手动输入）或可编辑，并确保始终启用
-            ManualBarcodeTextBox.IsEnabled = true;
-            ManualBarcodeTextBox.IsReadOnly = !enableManualInput;
-            
-            // 调整界面提示
-            if (ManualBarcodeTextBox != null)
-            {
-                // HandyControl的TextBox使用hc:InfoElement.Placeholder附加属性设置占位符
-                HandyControl.Controls.InfoElement.SetPlaceholder(ManualBarcodeTextBox, 
-                    enableManualInput ? "Enter barcode manually and press Enter..." : "Manual input disabled");
-            }
-            
-            // 根据手动输入模式设置扫码枪拦截状态
-            _scannerService.InterceptAllInput = !enableManualInput; // 启用手动输入时不拦截键盘事件，禁用时拦截
-            
-            Log.Information("手动输入模式已{Mode}，输入框现在{Status}，扫码枪拦截已{Intercept}", 
-                enableManualInput ? "启用" : "禁用",
-                enableManualInput ? "可用" : "不可用",
-                enableManualInput ? "关闭" : "开启");
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "切换手动输入模式时发生错误");
+            ManualBarcodeTextBox.Focus();
         }
     }
 }

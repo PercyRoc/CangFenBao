@@ -11,7 +11,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
     private readonly HostSettingsViewModel _hostSettingsViewModel;
     private readonly INotificationService _notificationService;
-    private readonly ChineseWeightSettingsViewModel _chineseWeightSettingsViewModel;
+    private readonly WeightSettingsViewModel _chineseWeightSettingsViewModel;
     
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
@@ -23,7 +23,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
         // 创建各个设置页面的ViewModel实例
         _cameraSettingsViewModel = containerProvider.Resolve<CameraSettingsViewModel>();
         _hostSettingsViewModel = containerProvider.Resolve<HostSettingsViewModel>();
-        _chineseWeightSettingsViewModel = containerProvider.Resolve<ChineseWeightSettingsViewModel>();
+        _chineseWeightSettingsViewModel = containerProvider.Resolve<WeightSettingsViewModel>();
 
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);

@@ -1027,7 +1027,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             });
 
             // *** Use passed context for logging ***
-            Log.Information("{Context} 向PLC发送上传请求: W={Weight:F3}, L={L:F1}, W={W:F1}, H={H:F1}",
+            Log.Information("{Context} 向PLC发送上传请求: W={称重模块:F3}, L={L:F1}, W={W:F1}, H={H:F1}",
                  packageContext, package.Weight, package.Length ?? 0, package.Width ?? 0, package.Height ?? 0);
 
             var plcRequestTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -1047,7 +1047,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                  Log.Debug("{Context} 等待PLC ACK...", packageContext);
 
                 // *** Use passed context for logging ***
-                Log.Information("{Context} 准备调用 SendUploadRequestAsync: Barcode='{Barcode}', W={Weight:F3}, L={L:F1}, W={W:F1}, H={H:F1}, Timestamp={Ts}",
+                Log.Information("{Context} 准备调用 SendUploadRequestAsync: Barcode='{Barcode}', W={称重模块:F3}, L={L:F1}, W={W:F1}, H={H:F1}, Timestamp={Ts}",
                     packageContext, package.Barcode, package.Weight, package.Length ?? 0, package.Width ?? 0, package.Height ?? 0, plcRequestTimestamp);
 
                 ackResult = await _plcCommunicationService.SendUploadRequestAsync(
@@ -1680,7 +1680,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
 
         // 初始状态是 Created
         Log.Debug(
-            "合并后的包裹信息: Barcode='{Barcode}', Weight={Weight}, Dimensions='{Dims}', ImageSet={HasImage}, ImagePath='{Path}'",
+            "合并后的包裹信息: Barcode='{Barcode}', 称重模块={称重模块}, Dimensions='{Dims}', ImageSet={HasImage}, ImagePath='{Path}'",
             mergedPackage.Barcode, mergedPackage.Weight, mergedPackage.VolumeDisplay, mergedPackage.Image != null,
             mergedPackage.ImagePath ?? "N/A");
 
@@ -2094,7 +2094,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "[ViewModel] 更新京东WCS状态显示时发生错误");
+                Log.Error(ex, "[ViewModels] 更新京东WCS状态显示时发生错误");
             }
         });
     }

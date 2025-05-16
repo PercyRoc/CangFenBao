@@ -10,7 +10,7 @@
       prism:ViewModelLocator.AutoWireViewModel="True"
       d:DataContext="{d:DesignInstance Type=settings:VolumeSettingsViewModel}"
       mc:Ignorable="d"
-      Title="RenJia Camera Settings">
+      Title="RenJia 相机模块 Settings">
     <Page.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -26,7 +26,7 @@
         <StackPanel MaxWidth="800" 
                     Margin="16" 
                     HorizontalAlignment="Center">
-            <TextBlock Text="RenJia Camera Settings"
+            <TextBlock Text="RenJia 相机模块 Settings"
                        HorizontalAlignment="Center"
                        FontSize="20"
                        FontWeight="SemiBold"
@@ -36,12 +36,12 @@
             <ui:Card>
                 <StackPanel Margin="16">
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                        <TextBlock Text="Camera:"
+                        <TextBlock Text="相机模块:"
                                    VerticalAlignment="Center"
                                    Margin="0,0,8,0" />
                         <ComboBox Width="300"
                                   SelectedIndex="0">
-                            <ComboBoxItem Content="RenJia Camera" IsSelected="True" />
+                            <ComboBoxItem Content="RenJia 相机模块" IsSelected="True" />
                         </ComboBox>
                     </StackPanel>
 

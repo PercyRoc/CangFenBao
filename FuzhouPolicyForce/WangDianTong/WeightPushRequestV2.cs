@@ -1,3 +1,5 @@
+using JetBrains.Annotations;
+
 namespace FuzhouPolicyForce.WangDianTong;
 using System.Text.Json.Serialization;
 
@@ -21,27 +23,32 @@ public class WeightPushRequestV2
     /// <summary>
     /// 实际重量，单位kg。
     /// </summary>
+    [JsonPropertyName("weight")]
     public decimal Weight { get; set; }
 
     /// <summary>
     /// 体积，单位cm³。若体积为0，则不更新WMS内的体积
     /// </summary>
+    [JsonPropertyName("volume")]
     public decimal? Volume { get; set; }
 
     /// <summary>
     /// 长，单位cm。
     /// </summary>
-    public decimal? Length { get; set; }
+    [JsonPropertyName("length")]
+    public decimal? Length { [UsedImplicitly] get; set; }
 
     /// <summary>
     /// 宽，单位cm。
     /// </summary>
-    public decimal? Width { get; set; }
+    [JsonPropertyName("width")]
+    public decimal? Width { [UsedImplicitly] get; set; }
 
     /// <summary>
     /// 高，单位cm。
     /// </summary>
-    public decimal? Height { get; set; }
+    [JsonPropertyName("height")]
+    public decimal? Height { [UsedImplicitly] get; set; }
 
     /// <summary>
     /// 是否执行称重操作。Y : 是, N : 否。不传字段则默认是（Y）。
@@ -78,4 +85,4 @@ public class WeightPushRequestV2
     /// </summary>
     [JsonPropertyName("package_barcode")]
     public string? PackageBarcode { get; set; }
-} 
+}

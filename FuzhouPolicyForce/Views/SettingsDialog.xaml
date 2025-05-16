@@ -12,14 +12,6 @@
                  prism:ViewModelLocator.AutoWireViewModel="True"
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}">
-    <UserControl.Resources>
-        <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary
-                    Source="pack://application:,,,/SharedUI;component/Resources/Styles/ColorStyles.xaml" />
-            </ResourceDictionary.MergedDictionaries>
-        </ResourceDictionary>
-    </UserControl.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
@@ -28,7 +20,7 @@
         </Grid.RowDefinitions>
 
         <!-- 标题栏 -->
-        <Grid Grid.Row="0" Background="{StaticResource TitleBarGradient}">
+        <Grid Grid.Row="0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
@@ -38,8 +30,7 @@
             <!-- 应用图标 -->
             <Border Grid.Column="0"
                     Width="48"
-                    Height="32"
-                    Effect="{StaticResource IconGlowEffect}">
+                    Height="32">
                 <Image Source="/logo.ico"
                        Width="32"
                        Height="32"
@@ -87,7 +78,7 @@
         </Grid>
 
         <!-- 导航区域 -->
-        <Border Grid.Row="1" Background="{StaticResource MainBackground}">
+        <Border Grid.Row="1">
             <Grid>
                 <ui:NavigationView IsPaneOpen="True"
                                    IsPaneVisible="True"
@@ -100,7 +91,7 @@
 
                     <ui:NavigationView.MenuItems>
                         <ui:NavigationViewItem Content="相机设置"
-                                               Tag="Camera">
+                                               Tag="相机模块">
                             <ui:NavigationViewItem.Icon>
                                 <ui:SymbolIcon Symbol="Camera24" />
                             </ui:NavigationViewItem.Icon>
@@ -138,6 +129,16 @@
                                 <x:Type Type="settings1:WangDianTongSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
+
+                        <!-- <ui:NavigationViewItem Content="申通揽收接口设置" -->
+                        <!--                        Tag="ShenTongLanShou"> -->
+                        <!--     <ui:NavigationViewItem.Icon> -->
+                        <!--         <ui:SymbolIcon Symbol="Cloud24" /> -->
+                        <!--     </ui:NavigationViewItem.Icon> -->
+                        <!--     <ui:NavigationViewItem.TargetPageType> -->
+                        <!--         <x:Type Type="settings1:ShenTongLanShouSettingsView" /> -->
+                        <!--     </ui:NavigationViewItem.TargetPageType> -->
+                        <!-- </ui:NavigationViewItem> -->
                     </ui:NavigationView.MenuItems>
                 </ui:NavigationView>
 

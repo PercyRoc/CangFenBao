@@ -37,7 +37,7 @@
 
                 <ui:NavigationView.MenuItems>
                     <ui:NavigationViewItem Content="相机设置"
-                                           Tag="Camera">
+                                           Tag="相机模块">
                         <ui:NavigationViewItem.Icon>
                             <ui:SymbolIcon Symbol="Camera24" />
                         </ui:NavigationViewItem.Icon>
@@ -56,12 +56,12 @@
                         </ui:NavigationViewItem.TargetPageType>
                     </ui:NavigationViewItem>
                     <ui:NavigationViewItem Content="重量设置"
-                                           Tag="Weight">
+                                           Tag="称重模块">
                         <ui:NavigationViewItem.Icon>
                             <ui:SymbolIcon Symbol="Scales24" />
                         </ui:NavigationViewItem.Icon>
                         <ui:NavigationViewItem.TargetPageType>
-                            <x:Type Type="settings:ChineseWeightSettingsView" />
+                            <x:Type Type="settings:WeightSettingsView" />
                         </ui:NavigationViewItem.TargetPageType>
                     </ui:NavigationViewItem>
                 </ui:NavigationView.MenuItems>

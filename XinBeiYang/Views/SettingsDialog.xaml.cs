@@ -19,9 +19,9 @@ public partial class SettingsDialog
         // 确保 RootNavigation 存在并且已经加载
         if (RootNavigation is not { } navigationView) return;
         
-        // 找到 Tag 为 "Camera" 的导航项
+        // 找到 Tag 为 "相机模块" 的导航项
         var cameraItem = navigationView.MenuItems.OfType<NavigationViewItem>()
-            .FirstOrDefault(item => item.Tag is "Camera");
+            .FirstOrDefault(item => item.Tag is "相机模块");
 
         if (cameraItem != null)
         {
@@ -33,7 +33,7 @@ public partial class SettingsDialog
         }
         else
         {
-            Log.Warning("未能在 NavigationView 中找到 Tag 为 'Camera' 的导航项。");
+            Log.Warning("未能在 NavigationView 中找到 Tag 为 '相机模块' 的导航项。");
         }
     }
 }

@@ -9,13 +9,11 @@ using Common.Models.Package;
 using Serilog;
 using SharedUI.Models;
 using XinBa.Services;
-using DeviceService.DataSourceDevices.Services;
-using DeviceService.DataSourceDevices.Camera;
 using MessageBox = HandyControl.Controls.MessageBox;
 using MessageBoxImage = System.Windows.MessageBoxImage;
 using System.Windows.Media.Imaging;
-using DeviceService.DataSourceDevices.Weight;
 using System.Windows.Media;
+using DeviceService.DataSourceDevices.Camera.TCP;
 
 namespace XinBa.ViewModels;
 
@@ -26,9 +24,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly IApiService _apiService;
     private readonly IDialogService _dialogService;
-    private readonly ICameraService _cameraService;
-    private readonly VolumeDataService _volumeDataService;
-    private readonly SerialPortWeightService? _weightService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
     private string _currentBarcode = string.Empty;
@@ -41,20 +36,15 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private int _successPackages;
     private int _totalPackages;
     private BitmapSource? _currentImage;
+    private TcpCameraService _tcpCameraService;
 
     public MainWindowViewModel(
         IDialogService dialogService,
-        PackageTransferService packageTransferService,
-        IApiService apiService,
-        ICameraService cameraService,
-        VolumeDataService volumeDataService,
-        WeightStartupService weightStartupService)
+        IApiService apiService, TcpCameraService tcpCameraService)
     {
         _dialogService = dialogService;
         _apiService = apiService;
-        _cameraService = cameraService;
-        _volumeDataService = volumeDataService;
-        _weightService = weightStartupService.GetWeightService();
+        _tcpCameraService = tcpCameraService;
 
         // Initialize commands
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
@@ -78,66 +68,16 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _ = UpdateCurrentEmployeeInfo();
 
         // 新增：订阅 PackageTransferService 的包裹流
-        _subscriptions.Add(packageTransferService.PackageStream
+        _subscriptions.Add(_tcpCameraService.PackageStream
             .ObserveOn(TaskPoolScheduler.Default) // 或者 Scheduler.CurrentThread，根据需要调整
             .Subscribe(OnPackageReceived, ex => Log.Error(ex, "处理包裹流时发生错误")));
         Log.Information("已成功订阅 PackageTransferService 包裹流");
 
         // 订阅相机连接状态变化
-        _cameraService.ConnectionChanged += OnCameraConnectionChanged;
+        _tcpCameraService.ConnectionChanged += OnCameraConnectionChanged;
         Log.Information("已成功订阅相机连接状态变化事件");
-
-        // 订阅图像流
-        _subscriptions.Add(_cameraService.ImageStream
-            .ObserveOn(TaskPoolScheduler.Default) // 使用任务池调度器
-            .Subscribe(imageData =>
-            {
-                try
-                {
-                    Application.Current.Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
-                    {
-                        try
-                        {
-                            // 更新UI
-                            CurrentImage = imageData;
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Error(ex, "更新UI图像时发生错误");
-                        }
-                    });
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "处理图像流时发生错误");
-                }
-            }));
-        Log.Information("已成功订阅相机图像流");
-
-        // 订阅体积服务连接状态变化
-        _volumeDataService.ConnectionChanged += OnVolumeConnectionChanged;
-        Log.Information("已成功订阅体积服务连接状态变化事件");
-
-        // --- 修改: 订阅重量服务连接状态变化 ---
-        if (_weightService != null) // 确保服务实例不为空
-        {
-            _weightService.ConnectionChanged += OnWeightConnectionChanged;
-            Log.Information("已成功订阅重量串口服务连接状态变化事件");
-        }
-        else
-        {
-            Log.Warning("无法订阅重量串口服务连接状态变化：服务实例为空。");
-        }
-        // --- 结束修改 ---
-
         // --- 修改: 初始化设备状态 (移除对 IsConnected 的直接访问) ---
-        OnCameraConnectionChanged(null, _cameraService.IsConnected);
-        OnVolumeConnectionChanged(_volumeDataService.IsConnected);
-        if (_weightService == null) // 如果服务为空，显式设置为断开
-        {
-            Application.Current.Dispatcher.Invoke(() => UpdateDeviceStatus("Weight", false));
-        }
-        // --- 结束修改 ---
+        OnCameraConnectionChanged(null, _tcpCameraService.IsConnected);
     }
 
     public void Dispose()
@@ -220,27 +160,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // 添加相机状态 - Revert to property initializers
             DeviceStatuses.Add(new DeviceStatus
             {
-                 Name = "Camera",
+                 Name = "相机模块",
                  Status = "Disconnected",
                  Icon = "Camera24",
-                 StatusColor = "#F44336"
-            });
-
-            // 添加重量设备状态 - Revert to property initializers
-            DeviceStatuses.Add(new DeviceStatus
-            {
-                 Name = "Weight",
-                 Status = "Disconnected",
-                 Icon = "Scales24",
-                 StatusColor = "#F44336"
-            });
-
-            // 添加体积相机状态 - Revert to property initializers
-            DeviceStatuses.Add(new DeviceStatus
-            {
-                 Name = "Volume Camera",
-                 Status = "Disconnected",
-                 Icon = "ScanObject24",
                  StatusColor = "#F44336"
             });
 
@@ -290,7 +212,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private void InitializePackageInfoItems()
     {
         PackageInfoItems.Add(new PackageInfoItem(
-            "Weight",
+            "称重模块",
             "0.00",
             "kg",
             "Package weight",
@@ -360,42 +282,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
         {
             Log.Debug("接收到包裹信息: 条码={Barcode}", package.Barcode);
 
-            // --- Start: Added Weight Logic ---
-            // 检查包裹是否已经有重量数据（大于0），如果没有且重量服务存在，则尝试查询
-            if (package.Weight <= 0.0 && _weightService != null) // Check if service exists and weight is not set
-            {
-                var weightInGrams = _weightService.FindNearestWeight(package.CreateTime); // Call method on the instance
-                if (weightInGrams.HasValue)
-                {
-                    var weightInKg = weightInGrams.Value / 1000.0;
-                    package.SetWeight(weightInKg);
-                    Log.Information("为包裹 {Index} 找到并设置重量: {Weight} kg ({Grams} g)",
-                        package.Index, weightInKg.ToString("F3"), weightInGrams.Value.ToString("F2"));
-                }
-                else
-                {
-                    Log.Warning("未找到包裹 {Index} 的重量数据", package.Index);
-                }
-            }
-
-            // 检查包裹是否已经有体积数据，如果没有则尝试查询
-            if (!package.Length.HasValue || !package.Width.HasValue || !package.Height.HasValue)
-            {
-                // 查询体积数据
-                var volume = _volumeDataService.FindVolumeData(package);
-                if (volume.HasValue)
-                {
-                    // 使用 SetDimensions 方法设置长宽高
-                    package.SetDimensions(volume.Value.Length, volume.Value.Width, volume.Value.Height);
-                    Log.Information("为包裹 {Index} 找到并设置体积: L={Length}, W={Width}, H={Height}", 
-                        package.Index, package.Length, package.Width, package.Height);
-                }
-                else
-                {
-                    Log.Warning("未找到包裹 {Index} 的体积数据", package.Index);
-                }
-            }
-
             // 使用Dispatcher确保在UI线程上更新
             Application.Current.Dispatcher.Invoke(() =>
             {
@@ -417,40 +303,78 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 // 准备图片数据
                 var photoData = new List<byte[]>();
-                BitmapSource? imageToSubmit = package.Image; // 默认使用原始图像
 
-                // 如果有图片，添加水印并转换为字节数组
-                if (imageToSubmit != null)
-                    try
+                // 从本地文件夹加载图片 (带重试逻辑)
+                var currentDate = DateTime.Now.ToString("yyyy-MM-dd");
+                var imageDirectory = Path.Combine("E:\\Images", currentDate);
+                const int maxAttempts = 10;
+                const int delayBetweenAttemptsMs = 200;
+
+                for (int attempt = 1; attempt <= maxAttempts; attempt++)
+                {
+                    Log.Debug("图片查找尝试 {Attempt}/{MaxAttempts}，目录: {Directory}，条码: {Barcode}", attempt, maxAttempts, imageDirectory, package.Barcode);
+                    if (Directory.Exists(imageDirectory))
                     {
-                        // 添加水印
-                        imageToSubmit = AddWatermarkToImage(imageToSubmit, package);
-                        Log.Debug("已为图片添加水印");
+                        try
+                        {
+                            var imageFiles = Directory.GetFiles(imageDirectory, $"{package.Barcode}*");
+                            Log.Debug("尝试 {Attempt}: 正在从目录 {Directory} 查找条码为 {Barcode} 的图片，找到 {Count} 个文件。", attempt, imageDirectory, package.Barcode, imageFiles.Length);
 
-                        // 将带水印的图片转换为字节数组
-                        using var ms = new MemoryStream();
-                        var encoder = new JpegBitmapEncoder { QualityLevel = 90 }; // 使用JPEG编码器
-                        encoder.Frames.Add(BitmapFrame.Create(imageToSubmit));
-                        encoder.Save(ms);
-                        photoData.Add(ms.ToArray());
-                        Log.Debug("带水印的图片已转换为字节数组");
+                            foreach (var imageFile in imageFiles)
+                            {
+                                var extension = Path.GetExtension(imageFile).ToLowerInvariant();
+                                if (extension is ".jpg" or ".jpeg" or ".png" or ".bmp")
+                                {
+                                    photoData.Add(File.ReadAllBytes(imageFile));
+                                    Log.Information("尝试 {Attempt}: 已加载图片 {File} 到 photoData。", attempt, imageFile);
+                                }
+                                else
+                                {
+                                    Log.Debug("尝试 {Attempt}: 跳过非图片文件 {File}。", attempt, imageFile);
+                                }
+                            }
+
+                            if (photoData.Count > 0)
+                            {
+                                Log.Information("尝试 {Attempt}: 成功找到并加载了 {Count} 张图片，条码: {Barcode}。跳出查找循环。", attempt, photoData.Count, package.Barcode);
+                                break; // 找到图片，退出循环
+                            }
+                            else
+                            {
+                                Log.Information("尝试 {Attempt}: 在目录 {Directory} 中未找到条码为 {Barcode} 的有效图片文件。", attempt, imageDirectory, package.Barcode);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error(ex, "尝试 {Attempt}: 从本地文件夹 {Directory} 加载图片时发生错误，条码: {Barcode}", attempt, imageDirectory, package.Barcode);
+                            photoData.Clear(); // 如果本次尝试出错，清空已部分加载的数据，准备下次尝试或最终提交空数据
+                        }
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        Log.Warning(ex, "处理或转换图片数据失败");
-                        // 如果水印或转换失败，可以选择不提交图片或提交原始图片（取决于需求）
-                        // 这里我们选择不提交图片
-                        photoData.Clear(); 
+                        Log.Warning("尝试 {Attempt}: 图片目录 {Directory} 不存在。", attempt, imageDirectory);
                     }
 
-                // 提交尺寸信息 (即使图片处理失败，也可能需要提交尺寸)
+                    // 如果未找到图片且未达到最大尝试次数，则等待后重试
+                    if (photoData.Count == 0 && attempt < maxAttempts)
+                    {
+                        Log.Debug("尝试 {Attempt}: 未找到图片，将在 {Delay}ms 后重试...", attempt, delayBetweenAttemptsMs);
+                        await Task.Delay(delayBetweenAttemptsMs);
+                    }
+                    else if (photoData.Count == 0 && attempt == maxAttempts) // 最后一次尝试仍未找到
+                    {
+                        Log.Warning("已达到最大尝试次数 ({MaxAttempts})，仍未找到条码为 {Barcode} 的图片。", maxAttempts, package.Barcode);
+                    }
+                }
+
+                // 提交尺寸信息
                 var success = await _apiService.SubmitDimensionsAsync(
                     package.Barcode,
-                    package.Height.Value.ToString("F2"), // 已确保非 null
-                    package.Length.Value.ToString("F2"), // 已确保非 null
-                    package.Width.Value.ToString("F2"),  // 已确保非 null
-                    package.Weight.ToString("F2"),       // Weight 可能是 null，但API可能接受
-                    photoData                          // 可能为空列表
+                    package.Height.Value.ToString("F2"),
+                    package.Length.Value.ToString("F2"),
+                    package.Width.Value.ToString("F2"),
+                    package.Weight.ToString("F2"),
+                    photoData
                 );
 
                 if (success)
@@ -467,7 +391,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         {
             Log.Error(ex, "处理包裹信息时出错: 条码={Barcode}", package.Barcode);
         }
-        finally // Ensure image is released
+        finally
         {
              package.ReleaseImage();
         }
@@ -482,7 +406,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             // 更新重量
-            var weightItem = PackageInfoItems.FirstOrDefault(static p => p.Label == "Weight");
+            var weightItem = PackageInfoItems.FirstOrDefault(static p => p.Label == "称重模块");
 
             if (weightItem != null)
             {
@@ -624,7 +548,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private void OnCameraConnectionChanged(string? cameraId, bool isConnected)
     {
         Log.Information("相机连接状态改变: IsConnected = {IsConnected}, CameraId = {CameraId}", isConnected, cameraId ?? "N/A");
-        UpdateDeviceStatus("Camera", isConnected);
+        UpdateDeviceStatus("相机模块", isConnected);
     }
 
     /// <summary>
@@ -633,7 +557,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private void OnVolumeConnectionChanged(bool isConnected)
     {
         Log.Information("体积服务连接状态改变: IsConnected = {IsConnected}", isConnected);
-        UpdateDeviceStatus("Volume Camera", isConnected);
+        UpdateDeviceStatus("Volume 相机模块", isConnected);
     }
 
     // --- 修改: 处理重量服务连接状态变化 (调整签名) ---
@@ -644,9 +568,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
     /// <param name="isConnected">连接状态</param>
     private void OnWeightConnectionChanged(string deviceName, bool isConnected)
     {
-        // deviceName 参数通常是 "Weight Scale" 或类似的，但我们更新状态时用的是 "Weight"
+        // deviceName 参数通常是 "称重模块 Scale" 或类似的，但我们更新状态时用的是 "称重模块"
         Log.Information("重量服务连接状态改变 (来自 {DeviceName}): IsConnected = {IsConnected}", deviceName, isConnected);
-        UpdateDeviceStatus("Weight", isConnected); // 使用固定的名称 "Weight" 更新UI
+        UpdateDeviceStatus("称重模块", isConnected); // 使用固定的名称 "称重模块" 更新UI
     }
     // --- 结束修改 ---
 
@@ -661,20 +585,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 _timer.Stop();
 
                 // 取消订阅相机事件
-                _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
+                _tcpCameraService.ConnectionChanged -= OnCameraConnectionChanged;
                 Log.Information("已取消订阅相机连接状态变化事件");
-
-                // 取消订阅体积服务事件
-                _volumeDataService.ConnectionChanged -= OnVolumeConnectionChanged;
-                Log.Information("已取消订阅体积服务连接状态变化事件");
-
-                // --- 修改: 取消订阅重量服务事件 ---
-                if (_weightService != null) // Check before unsubscribing
-                {
-                    _weightService.ConnectionChanged -= OnWeightConnectionChanged;
-                    Log.Information("已取消订阅重量串口服务连接状态变化事件");
-                }
-                // --- 结束修改 ---
 
                 // 释放所有订阅
                 foreach (var subscription in _subscriptions) subscription.Dispose();
@@ -729,105 +641,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 为图像添加包含包裹信息的水印
-    /// </summary>
-    /// <param name="originalImage">原始图像</param>
-    /// <param name="package">包裹信息</param>
-    /// <returns>带有水印的新图像</returns>
-    private BitmapSource AddWatermarkToImage(BitmapSource originalImage, PackageInfo package)
-    {
-        try
-        {
-            // 定义画笔和字体
-            var pen = new Pen(Brushes.LimeGreen, 1);
-            var textBrush = Brushes.LimeGreen;
-            var typeface = new Typeface("Consolas");
-            const double fontSize = 14;
-            const double rulerLength = 100; // 比例尺的像素长度
-            const double rulerTickHeight = 5; // 比例尺刻度线高度
-            var dpi = new DpiScale(1,1); // Assume 96 DPI if window not available
-             if(Application.Current?.MainWindow != null)
-             {
-                 dpi = VisualTreeHelper.GetDpi(Application.Current.MainWindow);
-             }
-
-
-            // 创建绘制目标
-            var drawingVisual = new DrawingVisual();
-            using (var drawingContext = drawingVisual.RenderOpen())
-            {
-                // 1. 绘制原始图像
-                drawingContext.DrawImage(originalImage, new Rect(0, 0, originalImage.PixelWidth, originalImage.PixelHeight));
-
-                // 2. 准备并绘制文本水印
-                var watermarkText = $"""
-                                     Code:{package.Barcode}
-                                     Length:{package.Length ?? 0}MM
-                                     Width:{package.Width ?? 0}MM
-                                     Height:{package.Height ?? 0}MM
-                                     Weight:{package.Weight:F1}KG
-                                     Date:{package.CreateTime:yyyy.MM.dd}
-                                     Time:{package.CreateTime:HH:mm:ss}
-                                     """;
-                var formattedText = new FormattedText(
-                    watermarkText,
-                    CultureInfo.CurrentCulture,
-                    FlowDirection.LeftToRight,
-                    typeface,
-                    fontSize,
-                    textBrush,
-                    dpi.PixelsPerDip
-                );
-                var textPosition = new Point(10, 10);
-                drawingContext.DrawText(formattedText, textPosition);
-
-                // 3. 绘制尺寸比例尺 (在文本下方)
-                var rulerStartY = textPosition.Y + formattedText.Height + 15; // 文本下方加一点间距
-                var rulerStartX = textPosition.X;
-
-                // 绘制长度比例尺
-                DrawRuler(drawingContext, pen, textBrush, typeface, fontSize, dpi.PixelsPerDip,
-                          new Point(rulerStartX, rulerStartY),
-                          rulerLength, rulerTickHeight,
-                          $"Length: {package.Length ?? 0} MM");
-
-                // 绘制宽度比例尺 (在长度下方)
-                rulerStartY += fontSize + 10; // 下移一行加间距
-                DrawRuler(drawingContext, pen, textBrush, typeface, fontSize, dpi.PixelsPerDip,
-                          new Point(rulerStartX, rulerStartY),
-                          rulerLength, rulerTickHeight,
-                          $"Width: {package.Width ?? 0} MM");
-
-                // 绘制高度比例尺 (在宽度下方)
-                 rulerStartY += fontSize + 10; // 下移一行加间距
-                DrawRuler(drawingContext, pen, textBrush, typeface, fontSize, dpi.PixelsPerDip,
-                           new Point(rulerStartX, rulerStartY),
-                           rulerLength, rulerTickHeight,
-                           $"Height: {package.Height ?? 0} MM");
-            }
-
-            // 创建 RenderTargetBitmap
-            var renderTargetBitmap = new RenderTargetBitmap(
-                originalImage.PixelWidth,
-                originalImage.PixelHeight,
-                originalImage.DpiX,
-                originalImage.DpiY,
-                PixelFormats.Pbgra32); // 使用支持透明度的格式
-
-            // 渲染 DrawingVisual 到 Bitmap
-            renderTargetBitmap.Render(drawingVisual);
-            renderTargetBitmap.Freeze(); // 冻结以提高性能
-
-            return renderTargetBitmap;
-        }
-        catch (Exception ex)
-        {
-             Log.Error(ex, "添加水印时发生错误，将返回原始图像");
-             return originalImage; // 发生错误时返回原始图像
-        }
-    }
-
-    /// <summary>
     /// 绘制单个比例尺及其标签
     /// </summary>
     private static void DrawRuler(DrawingContext dc, Pen pen, Brush textBrush, Typeface typeface, double fontSize, double pixelsPerDip,
@@ -873,7 +686,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
         private set => SetProperty(ref _currentImage, value);
     }
 
-    public SystemStatus SystemStatus { get; private set; } = new();
+    private SystemStatus _systemStatus = new();
+    public SystemStatus SystemStatus
+    {
+        get => _systemStatus;
+        private set => SetProperty(ref _systemStatus, value);
+    }
 
     public string CurrentEmployeeInfo
     {

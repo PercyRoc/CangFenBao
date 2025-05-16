@@ -4,12 +4,14 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using Common.Extensions;
 using DeviceService.DataSourceDevices.Camera;
-using DeviceService.DataSourceDevices.Scanner;
+using DeviceService.DataSourceDevices.Camera.Hikvision;
 using DeviceService.DataSourceDevices.Weight;
 using DeviceService.Extensions;
 using HandyControl.Controls;
 using Serilog;
 using SharedUI.Extensions;
+using SharedUI.ViewModels.Settings;
+using SharedUI.Views.Settings;
 using Sunnen.Services;
 using Sunnen.ViewModels.Dialogs;
 using Sunnen.ViewModels.Settings;
@@ -109,13 +111,12 @@ internal partial class App
         containerRegistry.RegisterSingleton<CameraFactory>();
         containerRegistry.RegisterSingleton<CameraStartupService>();
         containerRegistry.RegisterSingleton<VolumeCameraStartupService>();
-        containerRegistry.RegisterSingleton<ScannerStartupService>();
         containerRegistry.RegisterSingleton<WeightStartupService>();
 
         // 使用扩展方法注册设备服务 (现在它们依赖的 Startup 服务已明确为 Singleton)
-        containerRegistry.AddPhotoCamera(); // 拍照相机
+        // containerRegistry.AddPhotoCamera(); // 拍照相机
+        containerRegistry.RegisterSingleton<HikvisionIndustrialCameraService>();
         containerRegistry.AddVolumeCamera(); // 体积相机
-        containerRegistry.AddScanner(); // 扫码枪
         containerRegistry.AddWeightScale(); // 重量称
 
         // 注册桑能服务
@@ -222,50 +223,26 @@ internal partial class App
             try
             {
                 // 在Task.Run外层声明变量
-                CameraStartupService cameraStartupService = null!;
+                HikvisionIndustrialCameraService cameraStartupService = null!;
                 VolumeCameraStartupService volumeCameraStartupService = null!;
-                ScannerStartupService scannerStartupService = null!;
                 WeightStartupService weightStartupService = null!;
 
                 await Current.Dispatcher.InvokeAsync(() =>
                 {
                     // 赋值已声明的变量
-                    cameraStartupService = Container.Resolve<CameraStartupService>();
+                    cameraStartupService = Container.Resolve<HikvisionIndustrialCameraService>();
                     volumeCameraStartupService = Container.Resolve<VolumeCameraStartupService>();
-                    scannerStartupService = Container.Resolve<ScannerStartupService>();
                     weightStartupService = Container.Resolve<WeightStartupService>();
                 });
 
                 // 修复：分步启动服务并添加延迟
                 UpdateProgress("Initializing camera service...", 20);
                 await Task.Delay(100); // 给UI更新留出时间
-                await cameraStartupService.StartAsync(CancellationToken.None);
+                cameraStartupService.Start();
 
                 UpdateProgress("Initializing volume camera...", 40);
                 await Task.Delay(100);
                 await volumeCameraStartupService.StartAsync(CancellationToken.None);
-
-                // 重点修复：扫码枪服务需要同步初始化
-                UpdateProgress("Initializing scanner...", 60);
-                try
-                {
-                    await Current.Dispatcher.InvokeAsync(async () =>
-                    {
-                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                        await scannerStartupService.StartAsync(cts.Token);
-                        Log.Information("扫码枪服务初始化成功");
-                    });
-                }
-                catch (OperationCanceledException)
-                {
-                    Log.Error("扫码枪服务初始化超时");
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "扫码枪服务初始化失败");
-                    throw;
-                }
 
                 UpdateProgress("Initializing weight scale...", 80);
                 await weightStartupService.StartAsync(CancellationToken.None);
@@ -324,25 +301,23 @@ internal partial class App
         try
         {
             // 停止托管服务
-            var cameraStartupService = Container.Resolve<CameraStartupService>();
+            var cameraStartupService = Container.Resolve<HikvisionIndustrialCameraService>();
             var volumeCameraStartupService = Container.Resolve<VolumeCameraStartupService>();
-            var scannerStartupService = Container.Resolve<ScannerStartupService>();
             var weightStartupService = Container.Resolve<WeightStartupService>();
 
-            cameraStartupService.StopAsync(CancellationToken.None).Wait();
+            cameraStartupService.Stop();
             volumeCameraStartupService.StopAsync(CancellationToken.None).Wait();
-            scannerStartupService.StopAsync(CancellationToken.None).Wait();
             weightStartupService.StopAsync(CancellationToken.None).Wait();
 
-            // 释放相机工厂
-            if (Container.Resolve<CameraFactory>() is IDisposable cameraFactory)
-            {
-                cameraFactory.Dispose();
-                Log.Information("相机工厂已释放");
-            }
+            // // 释放相机工厂
+            // if (Container.Resolve<CameraFactory>() is IDisposable cameraFactory)
+            // {
+            //     cameraFactory.Dispose();
+            //     Log.Information("相机工厂已释放");
+            // }
 
             // 释放相机服务
-            if (Container.Resolve<ICameraService>() is IDisposable cameraService)
+            if (Container.Resolve<HikvisionIndustrialCameraService>() is IDisposable cameraService)
             {
                 cameraService.Dispose();
                 Log.Information("相机服务已释放");

@@ -17,7 +17,6 @@ using FuzhouPolicyForce.WangDianTong;
 using Serilog;
 using SharedUI.Models;
 using SortingServices.Pendulum;
-using System.Threading.Tasks;
 
 namespace FuzhouPolicyForce.ViewModels;
 
@@ -183,7 +182,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             {
                 Name = "相机",
                 Status = "未连接",
-                Icon = "Camera",
+                Icon = "相机模块",
                 StatusColor = "#F44336" // 红色表示未连接
             });
             Log.Debug("已添加相机状态");
@@ -386,111 +385,123 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     catch (Exception ex) { Log.Error(ex, "更新UI时发生错误"); }
                 });
                 await SavePackageRecordAsync(package); // 保存记录
-                package.ReleaseImage(); // 释放资源
                 return; // 处理完毕，退出方法
             }
 
-            // 条码有效，尝试调用旺店通API回传重量
-            bool apiSuccess = false;
-            string apiMessage = "未调用API";
-
+            // 1. 调用旺店通V2接口并根据结果和本地规则分配格口
+            string wdtApiAttemptMessage;
             try
             {
-                var requestV2 = new WeightPushRequestV2
+                var wdtRequest = new WeightPushRequestV2
                 {
-                    LogisticsNo = package.Barcode, // Assuming Barcode is the logistics_no
+                    LogisticsNo = package.Barcode,
                     Weight = (decimal)package.Weight,
-                    Volume = (decimal?)package.Volume, // Assuming PackageInfo dimensions are in cm³ (double?)
-                    Length = (decimal?)package.Length, // Assuming PackageInfo dimensions are in cm (double?)
-                    Width = (decimal?)package.Width,
-                    Height = (decimal?)package.Height,
+                    Volume = package.Volume.HasValue ? (decimal?)package.Volume.Value : null,
+                    Length = package.Length.HasValue ? (decimal?)package.Length.Value : null,
+                    Width = package.Width.HasValue ? (decimal?)package.Width.Value : null,
+                    Height = package.Height.HasValue ? (decimal?)package.Height.Value : null,
+                    IsWeight = "Y"
                 };
-
-                var responseV2 = await _wangDianTongApiServiceV2.PushWeightAsync(requestV2);
-
-                // 只判断API回传是否成功，不使用API返回的格口号
-                apiSuccess = responseV2.IsSuccess;
-                apiMessage = responseV2.Message ?? (apiSuccess ? "API回传成功" : "API回传失败");
-
-                if (!apiSuccess)
+                var wdtResponse = await _wangDianTongApiServiceV2.PushWeightAsync(wdtRequest);
+                
+                if (wdtResponse.ServiceSuccess) // "正常" - WDT API 调用成功且服务报告成功
                 {
-                    // API 回传失败，设置错误状态和异常口
-                    package.SetChute(chuteSettings.ErrorChuteNumber);
-                    package.SetStatus(PackageStatus.Error, $"API回传失败: {apiMessage}");
-                    Log.Warning("包裹 {Barcode} 旺店通回传失败: {Message}", package.Barcode, apiMessage);
-                    Interlocked.Increment(ref _errorPackageCount);
-                }
-                else
-                {
-                    // API 回传成功，日志记录但不设置状态和格口，留待本地规则处理
-                    Log.Information("包裹 {Barcode} 旺店通回传成功 (将使用本地规则)", package.Barcode);
-                    // API成功，此时不设置状态和格口，继续走本地规则判断
-                }
-            }
-            catch (Exception ex)
-            {
-                // API 调用本身发生异常
-                apiSuccess = false; // 标记API失败
-                apiMessage = $"API调用异常: {ex.Message}";
-                Log.Error(ex, "网店通重量回传V2时发生异常：{Barcode}", package.Barcode);
-                package.SetChute(chuteSettings.ErrorChuteNumber);
-                package.SetStatus(PackageStatus.Error, apiMessage);
-                Interlocked.Increment(ref _errorPackageCount);
-            }
+                    wdtApiAttemptMessage = $"旺店通接口成功返回: {wdtResponse.Message ?? "无详细信息"}";
+                    Log.Information("包裹 {Barcode} {WdtApiAttemptMessage}", package.Barcode, wdtApiAttemptMessage);
 
-            // 只有当API回传成功时，才执行本地格口规则匹配
-            if (apiSuccess)
-            {
-                try
-                {
+                    // 根据本地规则获取格口
                     var matchedChute = chuteSettings.FindMatchingChute(package.Barcode);
-
                     if (matchedChute.HasValue)
                     {
-                        // 本地规则匹配成功
                         package.SetChute(matchedChute.Value);
-                        package.SetStatus(PackageStatus.Success, "本地规则匹配成功");
-                        Log.Information("包裹 {Barcode} 本地规则匹配到格口 {Chute}", package.Barcode, matchedChute.Value);
+                        package.SetStatus(PackageStatus.Success, "旺店通成功，本地规则分拣");
+                        Log.Information("包裹 {Barcode} (旺店通API成功后) 本地规则匹配到格口 {Chute}", package.Barcode, matchedChute.Value);
                     }
                     else
                     {
-                        // 本地规则未匹配到
                         package.SetChute(chuteSettings.ErrorChuteNumber);
-                        package.SetStatus(PackageStatus.Failed, "本地规则未匹配到");
-                        Log.Warning("包裹 {Barcode} 本地规则未匹配到任何规则，使用异常口：{ErrorChute}",
-                            package.Barcode, chuteSettings.ErrorChuteNumber);
+                        package.SetStatus(PackageStatus.Failed, "旺店通成功，本地规则未匹配");
+                        Log.Warning("包裹 {Barcode} (旺店通API成功后) 本地规则未匹配，使用错误口: {ErrorChute}", package.Barcode, chuteSettings.ErrorChuteNumber);
                         Interlocked.Increment(ref _errorPackageCount);
                     }
                 }
-                catch (Exception ex)
+                else // "异常" - WDT API 调用成功但服务报告失败
                 {
-                    // 本地规则匹配过程中发生异常
-                    Log.Error(ex, "执行本地格口规则时发生错误：{Barcode}", package.Barcode);
+                    wdtApiAttemptMessage = $"旺店通接口处理失败: {wdtResponse.Message}";
+                    Log.Warning("包裹 {Barcode} {WdtApiAttemptMessage}", package.Barcode, wdtApiAttemptMessage);
                     package.SetChute(chuteSettings.ErrorChuteNumber);
-                    package.SetStatus(PackageStatus.Error, $"本地规则异常: {ex.Message}");
+                    package.SetStatus(PackageStatus.Error, "旺店通接口处理失败");
                     Interlocked.Increment(ref _errorPackageCount);
                 }
             }
-            // 如果apiSuccess为false (API调用失败或返回失败状态，或调用异常)，则包裹状态和格口已经在上面的catch或!apiSuccess分支中设置为Error/异常口。
+            catch (Exception ex) // "异常" - WDT API 调用本身失败 (例如网络问题)
+            {
+                wdtApiAttemptMessage = $"旺店通接口调用异常: {ex.Message}";
+                Log.Error(ex, "包裹 {Barcode} {WdtApiAttemptMessage}", package.Barcode, wdtApiAttemptMessage);
+                package.SetChute(chuteSettings.ErrorChuteNumber);
+                package.SetStatus(PackageStatus.Error, "旺店通接口调用异常");
+                Interlocked.Increment(ref _errorPackageCount);
+            }
 
-            // 统一处理包裹分拣、UI更新和数据保存
+            // 分拣服务调用
             _sortService.ProcessPackage(package);
 
+            // // 2. 如果条码第一字符是7，则异步调用申通揽收接口 (即发即忘)
+            // if (!string.IsNullOrEmpty(package.Barcode) && package.Barcode.StartsWith('7'))
+            // {
+            //     Log.Information("包裹 {Barcode}: 条码以 '7' 开头，将异步发起申通揽收接口调用。", package.Barcode);
+            //     _ = Task.Run(async () =>
+            //     {
+            //         try
+            //         {
+            //             var stConfig = _settingsService.LoadSettings<ShenTongLanShouConfig>();
+            //             var cangKuRequest = new CangKuAutoRequest
+            //             {
+            //                 WhCode = stConfig.WhCode,
+            //                 OrgCode = stConfig.OrgCode,
+            //                 UserCode = stConfig.UserCode,
+            //                 Packages =
+            //                 [
+            //                     new CangKuAutoPackageDto
+            //                     {
+            //                         WaybillNo = package.Barcode,
+            //                         称重模块 = package.称重模块.ToString("F2"), // 保留F2格式
+            //                         OpTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+            //                     }
+            //                 ]
+            //             };
+            //             var lanShouService = new Services.ShenTongLanShouService(_settingsService);
+            //             var stResponse = await lanShouService.UploadCangKuAutoAsync(cangKuRequest);
+            //             Log.Information("包裹 {Barcode}: 申通揽收接口异步调用尝试完成。响应详情: {@StResponse}", package.Barcode, stResponse);
+            //         }
+            //         catch (Exception ex)
+            //         {
+            //             Log.Error(ex, "包裹 {Barcode}: 异步调用申通揽收接口时发生异常。", package.Barcode);
+            //         }
+            //     });
+            // }
+            // else
+            // {
+            //     if (string.IsNullOrEmpty(package.Barcode)) {
+            //          Log.Debug("包裹条码为空，跳过申通揽收接口调用检查。");
+            //     } else {
+            //          Log.Debug("包裹 {Barcode}: 条码不以 '7' 开头 (首字符: {FirstChar})，跳过申通揽收接口调用。", package.Barcode, package.Barcode[0]);
+            //     }
+            // }
+            
+            // UI更新和数据保存
             Application.Current.Dispatcher.Invoke(() =>
             {
                 try
                 {
                     UpdatePackageInfoItems(package);
-                    // 6. 更新统计信息和历史包裹列表
                     PackageHistory.Insert(0, package);
-                    while (PackageHistory.Count > 1000) // 保持最近1000条记录
+                    while (PackageHistory.Count > 1000)
                     {
                         var removedPackage = PackageHistory[^1];
                         PackageHistory.RemoveAt(PackageHistory.Count - 1);
-                        removedPackage.Dispose(); // 释放被移除的包裹
+                        removedPackage.Dispose();
                     }
-
-                    // 更新统计数据
                     UpdateStatistics();
                 }
                 catch (Exception ex)
@@ -499,42 +510,49 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 }
             });
 
-            // 保存包裹记录到数据库
             await SavePackageRecordAsync(package);
         }
         catch (Exception ex)
         {
-            // 顶层catch，捕获其他未处理的异常
             Log.Fatal(ex, "处理包裹 {Barcode} 时发生未处理的异常", package.Barcode);
             package.SetStatus(PackageStatus.Error, $"未处理异常: {ex.Message}");
-            // 这里的错误可能没有设置格口，为安全起见，再次确保设置异常口（尽管上面的逻辑应该已经设置了）
-             try
-             {
+            try
+            {
+                // 尝试在顶层异常中设置错误口
                 var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
                 package.SetChute(chuteSettings.ErrorChuteNumber);
-             }
-             catch { /* Ignore if getting settings fails */ }
+            }
+            catch (Exception chuteEx) 
+            {
+                Log.Error(chuteEx, "在顶层异常处理中设置错误口失败");
+            }
             Interlocked.Increment(ref _errorPackageCount);
+            
+            // 尝试保存记录和更新UI，即使发生顶层异常
+            try
+            {
+                await SavePackageRecordAsync(package);
+            }
+            catch(Exception saveEx)
+            {
+                Log.Error(saveEx, "顶层异常处理后保存包裹记录失败: {Barcode}", package.Barcode);
+            }
 
-            // 尝试保存异常记录
-            await SavePackageRecordAsync(package);
-
-             // 通知UI更新以便显示错误信息
             Application.Current.Dispatcher.Invoke(() =>
-             {
-                 try
-                 {
+            {
+                try
+                {
                     UpdatePackageInfoItems(package);
                     PackageHistory.Insert(0, package);
                     while (PackageHistory.Count > 1000) { var removedPackage = PackageHistory[^1]; PackageHistory.RemoveAt(PackageHistory.Count - 1); removedPackage.Dispose(); }
                     UpdateStatistics();
-                 }
-                 catch (Exception uiEx) { Log.Error(uiEx, "顶层异常处理后更新UI时发生错误"); }
-             });
+                }
+                catch (Exception uiEx) { Log.Error(uiEx, "顶层异常处理后更新UI时发生错误"); }
+            });
         }
         finally
         {
-            package.ReleaseImage(); // 确保包裹图像资源被释放
+            package.ReleaseImage(); // 确保图像资源总是被释放
         }
     }
 
@@ -567,8 +585,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         var weightItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "重量");
         if (weightItem != null)
         {
-            // package.Weight is already in kg (double)
-            // Format double to string with 3 decimal places
             weightItem.Value = package.Weight.ToString("F3", CultureInfo.InvariantCulture);
             weightItem.Unit = "kg";
         }

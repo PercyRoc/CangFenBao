@@ -341,7 +341,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
             var asnSettings = _settingsService.LoadSettings<AsnSettings>(); // 加载ASN设置
 
-            Log.Information("接收到包裹信息: {Barcode}, 重量: {Weight}kg", package.Barcode, package.Weight);
+            Log.Information("接收到包裹信息: {Barcode}, 重量: {称重模块}kg", package.Barcode, package.Weight);
 
             // 更新当前条码
             CurrentBarcode = package.Barcode;

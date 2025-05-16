@@ -1,4 +1,4 @@
-// Remove Prism.Services.Dialogs using if IDialogAware logic is fully in ViewModel
+// Remove Prism.Services.Dialogs using if IDialogAware logic is fully in ViewModels
 // using Prism.Services.Dialogs;
 using Serilog;
 // Add using for UserControl
