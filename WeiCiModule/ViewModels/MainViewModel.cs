@@ -74,7 +74,7 @@ public class MainViewModel : BindableBase, IDisposable
         _imageStreamSubscription = _cameraService.ImageStreamWithId.Subscribe(tuple => OnCameraImageReceived(tuple.Image, tuple.CameraId));
 
         // 启动时加载已保存的导入映射
-        LoadInitialImportedMappings();
+        _ = LoadInitialImportedMappingsAsync();
     }
     
     public DelegateCommand OpenSettingsCommand { get; }
@@ -168,7 +168,7 @@ public class MainViewModel : BindableBase, IDisposable
                     {
                         AllImportedMappings.Add(mapping);
                     }
-                    ExecuteSearchImported(); // 初始化过滤后的列表
+                    ExecuteSearchImported();
                 }
                 else
                 {
@@ -305,19 +305,11 @@ public class MainViewModel : BindableBase, IDisposable
     private void InitializePackageInfoItems()
     {
         PackageInfoItems.Add(new PackageInfoItem(
-            "称重模块", // "重量"
-            "0.00",
-            "kg",
-            "Package weight", // "包裹重量"
-            "Scale24"
-        ));
-
-        PackageInfoItems.Add(new PackageInfoItem(
-            "Dimensions", // "尺寸"
-            "0 × 0 × 0",
-            "mm",
-            "Length × Width × Height", // "长 × 宽 × 高"
-            "Ruler24"
+            "Chute", // "格口"
+            "N/A",
+            "",
+            "Target chute number", // "目标格口号"
+            "DoorArrowRight24" // 使用一个更合适的图标，如果可用
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
@@ -383,10 +375,6 @@ public class MainViewModel : BindableBase, IDisposable
         await Application.Current.Dispatcher.InvokeAsync(() =>
         {
             CurrentImage = image; // 更新主界面图像
-            // 可以考虑设置一个特殊的条码值，如果这个图像不伴随完整的包裹信息
-            // CurrentBarcode = "独立图像"; 
-            // 或者，如果这个图像通常表示NoRead，且没有通过PackageStream传递，则可以更新状态
-            // UpdatePackageInfoItems_NoRead(DateTime.Now); // 注意：这会清空其他信息，需要谨慎使用
         });
     }
 
@@ -409,9 +397,6 @@ public class MainViewModel : BindableBase, IDisposable
                 UpdatePackageInfoItems_Raw(packageInfo);
             }
         });
-
-        // Step 2: Business Logic (Chute assignment, status determination, etc.)
-        // This part modifies 'packageInfo' based on rules.
         string? operationMessage;
 
         try
@@ -429,7 +414,7 @@ public class MainViewModel : BindableBase, IDisposable
                 else
                 {
                     Log.Warning("无法将NoRead的异常格口 '{ExceptionChute}' 解析为整数", exceptionChuteStringNoRead);
-                    packageInfo.SetChute(998); // Default NoRead exception chute
+                    packageInfo.SetChute(998);
                 }
                 packageInfo.SetStatus(PackageStatus.NoRead, "NoRead, to exception chute"); // Ensure status is set
                 operationMessage = $"无码事件，分配到异常格口 {packageInfo.ChuteNumber}.";
@@ -532,11 +517,8 @@ public class MainViewModel : BindableBase, IDisposable
     // Helper methods for updating PackageInfoItems
     private void UpdatePackageInfoItems_Raw(PackageInfo rawPackage)
     {
-        var weightItem = PackageInfoItems.FirstOrDefault(i => i.Label == "称重模块");
-        if (weightItem != null) weightItem.Value = rawPackage.Weight.ToString("F2");
-
-        var dimensionItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Dimensions");
-        if (dimensionItem != null) dimensionItem.Value = $"{rawPackage.Length:F0} × {rawPackage.Width:F0} × {rawPackage.Height:F0}";
+        var chuteItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Chute");
+        if (chuteItem != null) chuteItem.Value = "Processing..."; // Or some initial value before chute is determined
 
         var timeItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Time");
         // Use CreateTime from package if available and valid, otherwise default to Now for display purposes during raw update
@@ -546,18 +528,15 @@ public class MainViewModel : BindableBase, IDisposable
         var statusItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Status");
         if (statusItem != null)
         {
-            statusItem.Value = "Processing..."; // Interim status
-            statusItem.Icon = "Hourglass24"; 
+            statusItem.Value = "Processing...";
+            statusItem.Icon = "Hourglass24";
         }
     }
 
     private void UpdatePackageInfoItems_NoRead(DateTime eventTime)
     {
-        var weightItem = PackageInfoItems.FirstOrDefault(i => i.Label == "称重模块");
-        if (weightItem != null) weightItem.Value = "N/A";
-
-        var dimensionItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Dimensions");
-        if (dimensionItem != null) dimensionItem.Value = "N/A";
+        var chuteItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Chute");
+        if (chuteItem != null) chuteItem.Value = "N/A"; // Or the specific exception chute if known at this stage
 
         var timeItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Time");
         if (timeItem != null) timeItem.Value = eventTime.ToString("HH:mm:ss");
@@ -572,11 +551,8 @@ public class MainViewModel : BindableBase, IDisposable
 
     private void UpdatePackageInfoItems_Reset()
     {
-        var weightItem = PackageInfoItems.FirstOrDefault(i => i.Label == "称重模块");
-        if (weightItem != null) weightItem.Value = "0.00";
-
-        var dimensionItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Dimensions");
-        if (dimensionItem != null) dimensionItem.Value = "0 × 0 × 0";
+        var chuteItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Chute");
+        if (chuteItem != null) chuteItem.Value = "N/A";
 
         var timeItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Time");
         if (timeItem != null) timeItem.Value = "--:--:--";
@@ -591,11 +567,8 @@ public class MainViewModel : BindableBase, IDisposable
 
     private void UpdatePackageInfoItems_Final(PackageInfo processedPackage)
     {
-        var weightItem = PackageInfoItems.FirstOrDefault(i => i.Label == "称重模块");
-        if (weightItem != null) weightItem.Value = processedPackage.Weight.ToString("F2");
-
-        var dimensionItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Dimensions");
-        if (dimensionItem != null) dimensionItem.Value = $"{processedPackage.Length:F0} × {processedPackage.Width:F0} × {processedPackage.Height:F0}";
+        var chuteItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Chute");
+        if (chuteItem != null) chuteItem.Value = processedPackage.ChuteNumber.ToString();
 
         var timeItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Time");
         if (timeItem != null) timeItem.Value = processedPackage.CreateTime.ToString("HH:mm:ss");
@@ -614,36 +587,44 @@ public class MainViewModel : BindableBase, IDisposable
         }
     }
 
-    private void LoadInitialImportedMappings()
+    private async Task LoadInitialImportedMappingsAsync()
     {
         try
         {
-            Log.Information("尝试在启动时加载已保存的条码格口映射配置。");
-            var savedMappingsSettings = _settingsService.LoadSettings<BarcodeChuteMappingSettings>();
+            Log.Information("尝试在启动时异步加载已保存的条码格口映射配置。");
+            // 模拟异步加载，如果 _settingsService.LoadSettings 本身不是异步的
+            // 在真实场景中，如果 LoadSettings 是CPU密集型或IO密集型，应考虑将其封装为真正的异步操作
+            var savedMappingsSettings = await Task.Run(() => _settingsService.LoadSettings<BarcodeChuteMappingSettings>());
 
-            if (savedMappingsSettings.Mappings.Count > 0)
+            await Application.Current.Dispatcher.InvokeAsync(() =>
             {
-                AllImportedMappings.Clear();
-                FilteredImportedMappings.Clear(); // 确保在添加前清空
-                foreach (var mapping in savedMappingsSettings.Mappings)
+                if (savedMappingsSettings.Mappings.Count > 0)
                 {
-                    AllImportedMappings.Add(mapping);
+                    AllImportedMappings.Clear();
+                    FilteredImportedMappings.Clear(); // 确保在添加前清空
+                    foreach (var mapping in savedMappingsSettings.Mappings)
+                    {
+                        AllImportedMappings.Add(mapping);
+                    }
+                    ExecuteSearchImported(); // 使用加载的数据填充过滤后的列表
+                    Log.Information("成功异步加载并显示了 {Count} 条已保存的条码格口映射配置。", AllImportedMappings.Count);
                 }
-                ExecuteSearchImported(); // 使用加载的数据填充过滤后的列表
-                Log.Information("成功加载并显示了 {Count} 条已保存的条码格口映射配置。", AllImportedMappings.Count);
-            }
-            else
-            {
-                Log.Information("未找到或无有效的已保存条码格口映射配置。");
-                AllImportedMappings.Clear(); // 确保集合为空
-                FilteredImportedMappings.Clear();
-            }
+                else
+                {
+                    Log.Information("未找到或无有效的已保存条码格口映射配置 (异步加载)。");
+                    AllImportedMappings.Clear(); // 确保集合为空
+                    FilteredImportedMappings.Clear();
+                }
+            });
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "在启动时加载已保存的条码格口映射配置失败。");
-            AllImportedMappings.Clear(); // 出错时也确保集合为空
-            FilteredImportedMappings.Clear();
+            Log.Error(ex, "在启动时异步加载已保存的条码格口映射配置失败。");
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                AllImportedMappings.Clear(); // 出错时也确保集合为空
+                FilteredImportedMappings.Clear();
+            });
         }
     }
 

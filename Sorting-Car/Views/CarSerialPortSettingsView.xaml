@@ -6,83 +6,86 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:prism="http://prismlibrary.com/"
              xmlns:lex="http://wpflocalizeextension.codeplex.com"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:viewModels="clr-namespace:Sorting_Car.ViewModels;assembly=Sorting_Car"
              lex:LocalizeDictionary.DesignCulture="en"
              lex:ResxLocalizationProvider.DefaultAssembly="Sorting_Car"
              lex:ResxLocalizationProvider.DefaultDictionary="Resources.Strings"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
-             d:DesignHeight="400" d:DesignWidth="600"
+             d:DesignHeight="450" d:DesignWidth="600"
              d:DataContext="{d:DesignInstance viewModels:CarSerialPortSettingsViewModel}">
-    <Grid Margin="15">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+    <Grid Margin="0">
+        <StackPanel MaxWidth="500" Margin="16" VerticalAlignment="Top" HorizontalAlignment="Center">
+            <TextBlock Text="{lex:Loc CarSerialPortSettings_Title}" 
+                       Style="{DynamicResource SubtitleTextBlockStyle}"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,16" />
 
-        <TextBlock Grid.Row="0" Text="{lex:Loc CarSerialPortSettings_Title}" FontSize="18" FontWeight="Bold" Margin="0,0,0,15"/>
+            <ui:Card>
+                <StackPanel Margin="16">
+                    <!-- 端口名称 -->
+                    <Grid Margin="0,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MinWidth="120"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{lex:Loc CarSerialPortSettings_PortName}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0" />
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding AvailablePortNames}" SelectedItem="{Binding Settings.PortName}" IsEditable="True" Width="150" HorizontalAlignment="Left"/>
+                    </Grid>
 
-        <StackPanel Grid.Row="1" Orientation="Vertical">
-            <!-- 端口名称 -->
-            <Grid Margin="0,5">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="{lex:Loc CarSerialPortSettings_PortName}" VerticalAlignment="Center" MinWidth="100"/>
-                <ComboBox Grid.Column="1" ItemsSource="{Binding AvailablePortNames}" SelectedItem="{Binding Settings.PortName}" IsEditable="True"/>
-            </Grid>
+                    <!-- 波特率 -->
+                    <Grid Margin="0,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MinWidth="120"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{lex:Loc CarSerialPortSettings_BaudRate}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0" />
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableBaudRates}" SelectedItem="{Binding Settings.BaudRate}" IsEditable="True" Width="150" HorizontalAlignment="Left"/>
+                    </Grid>
 
-            <!-- 波特率 -->
-            <Grid Margin="0,5">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="{lex:Loc CarSerialPortSettings_BaudRate}" VerticalAlignment="Center" MinWidth="100"/>
-                <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableBaudRates}" SelectedItem="{Binding Settings.BaudRate}" IsEditable="True"/>
-            </Grid>
+                    <!-- 数据位 -->
+                    <Grid Margin="0,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MinWidth="120"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{lex:Loc CarSerialPortSettings_DataBits}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0" />
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableDataBits}" SelectedItem="{Binding Settings.DataBits}" Width="150" HorizontalAlignment="Left"/>
+                    </Grid>
 
-            <!-- 数据位 -->
-            <Grid Margin="0,5">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="{lex:Loc CarSerialPortSettings_DataBits}" VerticalAlignment="Center" MinWidth="100"/>
-                <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableDataBits}" SelectedItem="{Binding Settings.DataBits}"/>
-            </Grid>
+                    <!-- 校验位 -->
+                    <Grid Margin="0,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MinWidth="120"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{lex:Loc CarSerialPortSettings_Parity}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0" />
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding ParityValues}" SelectedItem="{Binding Settings.Parity}" Width="150" HorizontalAlignment="Left"/>
+                    </Grid>
 
-            <!-- 校验位 -->
-            <Grid Margin="0,5">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="{lex:Loc CarSerialPortSettings_Parity}" VerticalAlignment="Center" MinWidth="100"/>
-                <ComboBox Grid.Column="1" ItemsSource="{Binding ParityValues}" SelectedItem="{Binding Settings.Parity}"/>
-            </Grid>
+                    <!-- 停止位 -->
+                    <Grid Margin="0,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MinWidth="120"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{lex:Loc CarSerialPortSettings_StopBits}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0" />
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding StopBitsValues}" SelectedItem="{Binding Settings.StopBits}" Width="150" HorizontalAlignment="Left"/>
+                    </Grid>
 
-            <!-- 停止位 -->
-            <Grid Margin="0,5">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="{lex:Loc CarSerialPortSettings_StopBits}" VerticalAlignment="Center" MinWidth="100"/>
-                <ComboBox Grid.Column="1" ItemsSource="{Binding StopBitsValues}" SelectedItem="{Binding Settings.StopBits}"/>
-            </Grid>
-
-            <!-- 命令延迟 -->
-            <Grid Margin="0,5">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="{lex:Loc CarSerialPortSettings_CommandDelayMs}" VerticalAlignment="Center" MinWidth="100"/>
-                <TextBox Grid.Column="1" Text="{Binding Settings.CommandDelayMs, UpdateSourceTrigger=PropertyChanged}" Width="80"/>
-            </Grid>
+                    <!-- 命令延迟 -->
+                    <Grid Margin="0,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MinWidth="120"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{lex:Loc CarSerialPortSettings_CommandDelayMs}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"/>
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.CommandDelayMs, UpdateSourceTrigger=PropertyChanged}" Width="150" HorizontalAlignment="Left"
+                                      Minimum="0" SmallChange="1" LargeChange="10" SpinButtonPlacementMode="Inline"/>
+                    </Grid>
+                </StackPanel>
+            </ui:Card>
         </StackPanel>
     </Grid>
 </UserControl> 

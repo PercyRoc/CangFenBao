@@ -75,7 +75,19 @@ namespace Sorting_Car.ViewModels
 
         private void PerformSaveSettings()
         {
-            _settingsService.SaveSettings(Settings); 
+            Log.Information("Attempting to save CarSerialPortSettings. PortName before save: {PortName}", Settings.PortName);
+            try
+            {
+                _settingsService.SaveSettings(Settings, throwOnError: true); 
+                Log.Information("CarSerialPortSettings saved successfully. PortName after save: {PortName}", Settings.PortName);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to save CarSerialPortSettings");
+                // Optionally, inform the user via a dialog or message
+                // For example, if IDialogService is available:
+                // _dialogService.ShowNotification("Failed to save settings: " + ex.Message);
+            }
         }
         
         private void PerformClose()

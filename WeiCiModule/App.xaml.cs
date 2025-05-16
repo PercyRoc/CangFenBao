@@ -80,16 +80,17 @@ public partial class App
 
         if (createdNew)
         {
+            // 确保模块已完全初始化, 这解决了之前的服务解析时序问题
+            var moduleManager = Container.Resolve<IModuleManager>();
+            moduleManager.Run(); 
             // 这是第一个实例，正常启动
             return Container.Resolve<MainWindow>();
         }
-        else
-        {
-            // 已有实例在运行
-            MessageBox.Show("WeiCiModule is already running.", "Application Already Running", MessageBoxButton.OK, MessageBoxImage.Information);
-            Current.Shutdown();
-            return null!; // 确保在所有路径上都有返回值
-        }
+
+        // 已有实例在运行
+        MessageBox.Show("WeiCiModule is already running.", "Application Already Running", MessageBoxButton.OK, MessageBoxImage.Information);
+        Current.Shutdown();
+        return null!; // 确保在所有路径上都有返回值
     }
 
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
@@ -147,8 +148,8 @@ public partial class App
     protected override void ConfigureModuleCatalog(IModuleCatalog moduleCatalog)
     {
         base.ConfigureModuleCatalog(moduleCatalog);
-        moduleCatalog.AddModule<IntegratedCameraModule>();
-        Log.Information("IntegratedCameraModule 已添加到模块目录。");
+        moduleCatalog.AddModule<SpecificIntegratedCameraModule>();
+        Log.Information("海康物流SDK 已添加到模块目录。");
     }
 
     protected override void OnExit(ExitEventArgs e)

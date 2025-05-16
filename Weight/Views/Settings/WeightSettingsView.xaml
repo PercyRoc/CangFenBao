@@ -27,7 +27,7 @@
                                Margin="0,0,0,16" />
 
                     <CheckBox Content="{lex:Loc EnableWeightFeature}" 
-                              IsChecked="{Binding IsEnabled}" 
+                              IsChecked="{Binding Settings.IsEnabled}" 
                               Margin="0,0,0,10"/>
                 </StackPanel>
             </ui:Card>
@@ -48,7 +48,7 @@
                         <StackPanel Grid.Column="1" Orientation="Horizontal">
                             <ComboBox Width="150"
                                       ItemsSource="{Binding AvailablePorts}"
-                                      SelectedItem="{Binding PortName}"
+                                      SelectedItem="{Binding Settings.PortName, UpdateSourceTrigger=PropertyChanged}"
                                       Margin="0,0,8,0" />
                             <ui:Button Content="{lex:Loc RefreshPorts}"
                                        Command="{Binding RefreshPortsCommand}"
@@ -65,7 +65,7 @@
                         <TextBlock Text="{lex:Loc BaudRateLabel}" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0" />
                         <ComboBox Grid.Column="1" Width="150" HorizontalAlignment="Left"
                                   ItemsSource="{Binding AvailableBaudRates}"
-                                  SelectedItem="{Binding BaudRate}" />
+                                  SelectedItem="{Binding Settings.BaudRate, UpdateSourceTrigger=PropertyChanged}" />
                     </Grid>
                 </StackPanel>
             </ui:Card>
@@ -85,7 +85,7 @@
                         <TextBlock Text="{lex:Loc WeightTypeLabel}" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0" />
                         <ComboBox Grid.Column="1" Width="150" HorizontalAlignment="Left"
                                   ItemsSource="{Binding WeightTypes}"
-                                  SelectedValue="{Binding SelectedWeightType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                  SelectedValue="{Binding Settings.WeightType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                   DisplayMemberPath="LocalizedName"
                                   SelectedValuePath="Value" />
                     </Grid>
@@ -98,7 +98,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="{lex:Loc StableWeightSamplesLabel}" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0" />
                         <ui:NumberBox Grid.Column="1" Width="150" HorizontalAlignment="Left"
-                                      Value="{Binding StableWeightSamples}"
+                                      Value="{Binding Settings.StableWeightSamples}"
                                       SpinButtonPlacementMode="Inline"
                                       Minimum="1" SmallChange="1" LargeChange="5" />
                     </Grid>
@@ -111,7 +111,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="{lex:Loc IntegrationTimeMsLabel}" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0" />
                         <ui:NumberBox Grid.Column="1" Width="150" HorizontalAlignment="Left"
-                                      Value="{Binding IntegrationTimeMs}"
+                                      Value="{Binding Settings.IntegrationTimeMs}"
                                       SpinButtonPlacementMode="Inline"
                                       Minimum="0" SmallChange="10" LargeChange="100"/>
                     </Grid>

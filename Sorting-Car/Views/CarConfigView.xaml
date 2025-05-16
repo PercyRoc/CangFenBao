@@ -6,66 +6,66 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:prism="http://prismlibrary.com/"
              xmlns:lex="http://wpflocalizeextension.codeplex.com"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml" 
              xmlns:viewModels1="clr-namespace:Sorting_Car.ViewModels"
-             lex:LocalizeDictionary.DesignCulture="en" 
-             lex:ResxLocalizationProvider.DefaultAssembly="Sorting_Car" 
-             lex:ResxLocalizationProvider.DefaultDictionary="Resources.Strings" 
+             lex:LocalizeDictionary.DesignCulture="en"
+             lex:ResxLocalizationProvider.DefaultAssembly="Sorting_Car"
+             lex:ResxLocalizationProvider.DefaultDictionary="Resources.Strings"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance viewModels1:CarConfigViewModel}">
     <Grid Margin="10">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+        <StackPanel MaxWidth="800" HorizontalAlignment="Center">
+            <TextBlock Text="{lex:Loc CarConfig_Title}"
+                       Style="{DynamicResource SubtitleTextBlockStyle}"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,16" />
 
-        <!-- 标题 -->
-        <TextBlock Grid.Row="0" Text="{lex:Loc SharedUI:Strings:CarConfig_Title}" FontSize="18" FontWeight="Bold" Margin="0,0,0,10"/>
+            <ui:Card Margin="0,0,0,16">
+                <StackPanel Margin="16">
+                    <DataGrid Style="{DynamicResource DefaultDataGridStyle}"
+                              ColumnHeaderStyle="{DynamicResource DefaultDataGridColumnHeaderStyle}"
+                              CellStyle="{DynamicResource DefaultDataGridCellStyle}"
+                              RowStyle="{DynamicResource DefaultDataGridRowStyle}"
+                              ItemsSource="{Binding CarConfigs}"
+                              SelectedItem="{Binding SelectedCarConfig}"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              CanUserDeleteRows="False"
+                              IsReadOnly="False"
+                              GridLinesVisibility="All"
+                              Margin="0,0,0,10"
+                              ColumnWidth="SizeToCells"
+                              MinColumnWidth="40">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="{lex:Loc CarConfig_Name}" Binding="{Binding Name}" MinWidth="100" Width="SizeToCells"/>
+                            <DataGridTextColumn Header="{lex:Loc CarConfig_Address}" Binding="{Binding Address}" MinWidth="100" Width="SizeToCells"/>
+                            <DataGridTextColumn Header="{lex:Loc CarConfig_Speed}" Binding="{Binding Speed}" MinWidth="100" Width="SizeToCells"/>
+                            <DataGridTextColumn Header="{lex:Loc CarConfig_Acceleration}" Binding="{Binding Acceleration}" MinWidth="100" Width="SizeToCells"/>
+                            <DataGridTextColumn Header="{lex:Loc CarConfig_Delay}" Binding="{Binding Delay}" MinWidth="100" Width="SizeToCells"/>
+                            <DataGridTextColumn Header="{lex:Loc CarConfig_Time}" Binding="{Binding Time}" MinWidth="120" Width="SizeToCells"/>
+                            <DataGridTemplateColumn Width="Auto">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ui:Button Content="{lex:Loc Common_Delete}"
+                                                   Command="{Binding DataContext.DeleteCarConfigCommand,
+                                                                  RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                   Margin="5"
+                                                   Padding="5,2"
+                                                   Appearance="Secondary"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
 
-        <!-- 数据表格 -->
-        <DataGrid Grid.Row="1"
-                  Style="{DynamicResource DefaultDataGridStyle}"
-                  ColumnHeaderStyle="{DynamicResource DefaultDataGridColumnHeaderStyle}"
-                  CellStyle="{DynamicResource DefaultDataGridCellStyle}"
-                  RowStyle="{DynamicResource DefaultDataGridRowStyle}"
-                  ItemsSource="{Binding CarConfigs}"
-                  SelectedItem="{Binding SelectedCarConfig}"
-                  AutoGenerateColumns="False"
-                  CanUserAddRows="False"
-                  CanUserDeleteRows="False"
-                  IsReadOnly="False"
-                  GridLinesVisibility="All"
-                  Margin="0,0,0,10"
-                  ColumnWidth="SizeToCells"
-                  MinColumnWidth="40">
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="{lex:Loc SharedUI:Strings:CarConfig_Name}" Binding="{Binding Name}" MinWidth="100" Width="SizeToCells"/>
-                <DataGridTextColumn Header="{lex:Loc SharedUI:Strings:CarConfig_Address}" Binding="{Binding Address}" MinWidth="100" Width="SizeToCells"/>
-                <DataGridTextColumn Header="{lex:Loc SharedUI:Strings:CarConfig_Speed}" Binding="{Binding Speed}" MinWidth="100" Width="SizeToCells"/>
-                <DataGridTextColumn Header="{lex:Loc SharedUI:Strings:CarConfig_Acceleration}" Binding="{Binding Acceleration}" MinWidth="100" Width="SizeToCells"/>
-                <DataGridTextColumn Header="{lex:Loc SharedUI:Strings:CarConfig_Delay}" Binding="{Binding Delay}" MinWidth="100" Width="SizeToCells"/>
-                <DataGridTextColumn Header="{lex:Loc SharedUI:Strings:CarConfig_Time}" Binding="{Binding Time}" MinWidth="120" Width="SizeToCells"/>
-                <DataGridTemplateColumn Width="Auto">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <Button Content="{lex:Loc SharedUI:Strings:Common_Delete}" 
-                                    Command="{Binding DataContext.DeleteCarConfigCommand, 
-                                              RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                                    Margin="5"
-                                    Padding="5,2"/>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-            </DataGrid.Columns>
-        </DataGrid>
-
-        <!-- 操作按钮 -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Left">
-            <Button Content="{lex:Loc SharedUI:Strings:CarConfig_AddCar}" 
-                    Command="{Binding AddCarConfigCommand}" 
-                    Margin="5" 
-                    Padding="10,5"/>
+                    <ui:Button Content="{lex:Loc CarConfig_AddCar}"
+                               Command="{Binding AddCarConfigCommand}"
+                               Margin="5"
+                               Padding="10,5"
+                               HorizontalAlignment="Left" />
+                </StackPanel>
+            </ui:Card>
         </StackPanel>
     </Grid>
 </UserControl>

@@ -17,8 +17,12 @@ using SharedUI.Views.Dialogs;
 using System.Globalization;
 using WPFLocalizeExtension.Engine;
 using Camera;
+using Camera.Interface;
 using Sorting_Car;
 using Weight;
+using Weight.Services;
+using Camera.Services.Implementations.Hikvision.Volume;
+using Camera.Services.Implementations.Hikvision.Security;
 
 namespace Rookie;
 
@@ -86,15 +90,14 @@ public partial class App
         containerRegistry.RegisterDialogWindow<HistoryDialogWindow>();
         containerRegistry.RegisterForNavigation<RookieApiSettingsView, RookieApiSettingsViewModel>();
         
-        containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
         containerRegistry.RegisterForNavigation<SerialPortSettingsView, SerialPortSettingsViewModel>();
     }
 
     protected override void ConfigureModuleCatalog(IModuleCatalog moduleCatalog)
     {
         base.ConfigureModuleCatalog(moduleCatalog);
-        // moduleCatalog.AddModule<FullFeaturedCameraModule>();
-        moduleCatalog.AddModule<IntegratedCameraModule>();
+        moduleCatalog.AddModule<FullFeaturedCameraModule>();
+        // moduleCatalog.AddModule<IntegratedCameraModule>();
         moduleCatalog.AddModule<WeightModule>();
         moduleCatalog.AddModule<SortingCarModule>();
     }
@@ -128,6 +131,16 @@ public partial class App
         {
             progressWindow = new ProgressIndicatorWindow("Shutting down services, please wait...");
             progressWindow.Show();
+
+            // 服务关闭逻辑
+            Log.Information("开始关闭应用程序服务...");
+
+            TryDisposeService<ICameraService>("HikvisionIndustrialCameraService");
+            TryDisposeService<HikvisionVolumeCameraService>("HikvisionVolumeCameraService");
+            TryDisposeService<HikvisionSecurityCameraService>("HikvisionSecurityCameraService");
+            TryDisposeService<IWeightService>("WeightService");
+            
+            Log.Information("应用程序服务关闭完成或已发起。");
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         }
@@ -197,6 +210,32 @@ public partial class App
                 args.IsTerminating);
         };
         Log.Information("全局异常处理程序已注册");
+    }
+
+    private void TryDisposeService<TService>(string serviceName) where TService : class, IDisposable
+    {
+        try
+        {
+            // 尝试解析服务。对于可选服务或根据条件注册的服务，这可能需要更复杂的逻辑
+            // (例如 TryResolve 或检查服务是否实际已激活)。
+            // 此处假设如果服务已注册，则应尝试处置。
+            var service = Container.Resolve<TService>();
+            
+            // Resolve<T> 在 Prism 中如果服务未注册通常会抛出异常。
+            // 如果服务可能未注册，应使用 Container.IsRegistered<TService>() 检查或 TryResolve。
+            // 为简化，此处假定如果我们要关闭它，它应该已被注册。
+            // 注意: Prism 的 Resolve<T>() 在某些配置下，如果找不到，可能返回 null，而不是抛出。
+            // 然而，更常见的行为是抛出 ResolutionFailedException。下面的 null 检查是为了以防万一。
+
+            Log.Information("正在处置服务: {ServiceName}...", serviceName);
+            service.Dispose();
+            Log.Information("服务 {ServiceName} 的处置操作已发起或完成。", serviceName);
+        }
+        catch (Exception ex) // 更具体的异常类型，如 ResolutionFailedException (取决于DI容器) 可能更合适
+        {
+            // 捕获解析服务或调用 Dispose 时可能发生的任何错误。
+            Log.Warning(ex, "解析或处置服务 {ServiceName} 时发生错误。该服务可能未注册、已被处置或在处置过程中出错。", serviceName);
+        }
     }
 
     private void ReleaseMutex()

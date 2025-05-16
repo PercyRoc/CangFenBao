@@ -12,7 +12,6 @@ namespace Weight.Services;
 public class WeightService : IWeightService
 {
     private const string DeviceName = "称重模块 Scale"; // 设备名称，用于事件
-    private const double StableThreshold = 0.001; // kg, 用于判断稳定
     private const int ProcessIntervalMs = 100; // 数据处理间隔
 
     private readonly ISettingsService _settingsService;
@@ -20,7 +19,6 @@ public class WeightService : IWeightService
     
     private SerialPort? _serialPort;
     private readonly StringBuilder _receiveBuffer = new();
-    private readonly List<double> _weightSamples = []; // 用于静态称重模式下的样本采集
     private readonly object _lock = new();
     private bool _isTryingToConnectOrDisconnect;
 
@@ -135,7 +133,6 @@ public class WeightService : IWeightService
             lock(_lock)
             {
                 _receiveBuffer.Clear();
-                _weightSamples.Clear();
                 _lastProcessedWeightData = null;
             }
             _weightDataSubject.OnNext(null); // Stream null when disconnected
@@ -289,46 +286,19 @@ public class WeightService : IWeightService
 
     private void HandleWeightValue(double weightKg, DateTime timestamp)
     {
-        WeightData? currentWeightDataForStream = null;
+        // 始终直接创建并发布数据，不再等待静态稳定
+        _lastProcessedWeightData = new WeightData { Value = weightKg, Unit = "kg", Timestamp = timestamp };
+        
+        // 根据称重类型记录不同的日志信息
         if (_weightSettings.WeightType == WeightType.Static)
         {
-            _weightSamples.Add(weightKg);
-            while (_weightSamples.Count > _weightSettings.StableWeightSamples) 
-            {
-                _weightSamples.RemoveAt(0);
-            }
-
-            if (_weightSamples.Count < _weightSettings.StableWeightSamples) 
-            {
-                _lastProcessedWeightData = null;
-                return;
-            }
-
-            var average = _weightSamples.Average();
-            var isStable = _weightSamples.All(w => Math.Abs(w - average) <= StableThreshold);
-
-            if (isStable)
-            {
-                _lastProcessedWeightData = new WeightData { Value = average, Unit = "kg", Timestamp = timestamp };
-                currentWeightDataForStream = _lastProcessedWeightData;
-                Log.Debug("静态重量稳定: {Weight} kg at {Timestamp}", average, timestamp);
-                _weightSamples.Clear();
-            }
-            else
-            {
-                _lastProcessedWeightData = null;
-                var samplesString = string.Join(", ", _weightSamples.Select(w => w.ToString("F3")));
-                Log.Verbose("静态重量样本不稳定: Avg={Avg:F3}kg, Samples=[{Samples}]", average, samplesString);
-            }
         }
-        else
+        else // Dynamic
         {
-            _lastProcessedWeightData = new WeightData { Value = weightKg, Unit = "kg", Timestamp = timestamp };
-            currentWeightDataForStream = _lastProcessedWeightData;
             Log.Debug("动态重量: {Weight} kg at {Timestamp}", weightKg, timestamp);
         }
         
-        _weightDataSubject.OnNext(currentWeightDataForStream); 
+        _weightDataSubject.OnNext(_lastProcessedWeightData); 
     }
 
     public Task<WeightData?> GetCurrentWeightAsync()

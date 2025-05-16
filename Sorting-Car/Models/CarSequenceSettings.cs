@@ -79,6 +79,7 @@ namespace Sorting_Car.Models
     public class CarSequenceSettings : BindableBase
     {
         private ObservableCollection<ChuteCarSequence> _chuteSequences = new();
+        private int _exceptionChuteNumber = 99; // 默认异常口为99
         
         /// <summary>
         /// 格口小车序列集合
@@ -87,6 +88,15 @@ namespace Sorting_Car.Models
         {
             get => _chuteSequences;
             set => SetProperty(ref _chuteSequences, value);
+        }
+        
+        /// <summary>
+        /// 异常口号
+        /// </summary>
+        public int ExceptionChuteNumber
+        {
+            get => _exceptionChuteNumber;
+            set => SetProperty(ref _exceptionChuteNumber, value);
         }
         
         /// <summary>

@@ -4,135 +4,157 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:lex="http://wpflocalizeextension.codeplex.com" 
-             lex:LocalizeDictionary.DesignCulture="en" 
-             lex:ResxLocalizationProvider.DefaultAssembly="Sorting_Car" 
-             lex:ResxLocalizationProvider.DefaultDictionary="Resources.Strings" 
+             xmlns:lex="http://wpflocalizeextension.codeplex.com"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             lex:LocalizeDictionary.DesignCulture="en"
+             lex:ResxLocalizationProvider.DefaultAssembly="Sorting_Car"
+             lex:ResxLocalizationProvider.DefaultDictionary="Resources.Strings"
              mc:Ignorable="d"
              xmlns:prism="http://prismlibrary.com/"
              xmlns:viewModels="clr-namespace:Sorting_Car.ViewModels"
              xmlns:converters="clr-namespace:SharedUI.Converters;assembly=SharedUI"
              prism:ViewModelLocator.AutoWireViewModel="True"
-             d:DesignHeight="450" d:DesignWidth="800"
+             d:DesignHeight="600" d:DesignWidth="800"
              d:DataContext="{d:DesignInstance viewModels:CarSequenceViewModel}">
     <UserControl.Resources>
-        <converters:BooleanToStringConverter x:Key="BooleanToDirectionConverter" 
-                                          TrueValue="{lex:Loc SharedUI:Strings:CarSequence_Reverse}" 
-                                          FalseValue="{lex:Loc SharedUI:Strings:CarSequence_Forward}"/>
+        <converters:BooleanToStringConverter x:Key="BooleanToDirectionConverter"
+                                          TrueValue="{lex:Loc CarSequence_Reverse}"
+                                          FalseValue="{lex:Loc CarSequence_Forward}"/>
     </UserControl.Resources>
-    
+
     <Grid Margin="10">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="200"/>
+            <ColumnDefinition Width="300"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
-        
+
         <!-- 左侧：格口列表 -->
-        <Grid Grid.Column="0">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-            
-            <TextBlock Grid.Row="0" Text="{lex:Loc SharedUI:Strings:CarSequence_ChuteListTitle}" FontSize="16" FontWeight="Bold" Margin="0,0,0,10"/>
-            
-            <ListBox Grid.Row="1" 
-                     ItemsSource="{Binding ChuteSequences}" 
-                     SelectedItem="{Binding SelectedChute}"
-                     DisplayMemberPath="ChuteNumber"
-                     BorderThickness="1"
-                     Margin="0,0,10,0"/>
-        </Grid>
-        
-        <!-- 右侧：选中格口的小车序列 -->
-        <Grid Grid.Column="1">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
-            
-            <TextBlock Grid.Row="0" 
-                       Text="{lex:Loc SharedUI:Strings:CarSequence_ChuteSequenceTitle}"  
-                       FontSize="16" 
-                       FontWeight="Bold" 
-                       Margin="0,0,0,10"/>
-            
-            <!-- 小车序列列表 -->
-            <ListBox Grid.Row="1"
-                     ItemsSource="{Binding CarSequence}"
-                     SelectedItem="{Binding SelectedCarItem}"
-                     BorderThickness="1"
-                     Margin="0,0,0,10">
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            
-                            <TextBlock Grid.Column="0" 
-                                       Text="{Binding CarName}"
-                                       VerticalAlignment="Center"/>
-                            
-                            <TextBlock Grid.Column="1" 
-                                       Text="{Binding IsReverse, Converter={StaticResource BooleanToDirectionConverter}}"
-                                       Margin="10,0,10,0"
-                                       VerticalAlignment="Center"/>
-                            
-                            <!-- 延迟时间输入 -->
-                            <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,0,10,0">
-                                <TextBlock Text="{lex:Loc SharedUI:Strings:CarSequence_DelayLabel}" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                                <TextBox Text="{Binding DelayMs, UpdateSourceTrigger=PropertyChanged}" 
-                                         Width="50" 
-                                         VerticalAlignment="Center"
-                                         ToolTip="{lex:Loc SharedUI:Strings:CarSequence_DelayTooltip}"/>
-                                <TextBlock Text="{lex:Loc SharedUI:Strings:CarSequence_MsLabel}" VerticalAlignment="Center" Margin="2,0,0,0"/>
-                            </StackPanel>
-                            
-                            <Button Grid.Column="3" 
-                                    Content="{lex:Loc SharedUI:Strings:Common_Delete}"
-                                    Command="{Binding DataContext.RemoveCarCommand, 
-                                              RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                    Padding="5,2"
-                                    Margin="0,2"/>
-                        </Grid>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
-            
-            <!-- 底部操作区 -->
-            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Left">
-                <!-- 设置方向按钮 -->
-                <StackPanel Orientation="Horizontal" Margin="0,0,20,0">
-                    <Button Content="{lex:Loc SharedUI:Strings:CarSequence_SetForwardButton}" 
-                            Command="{Binding SetForwardCommand}"
-                            Margin="0,0,5,0"
-                            Padding="5,2"/>
-                    <Button Content="{lex:Loc SharedUI:Strings:CarSequence_SetReverseButton}"
-                            Command="{Binding SetReverseCommand}"
-                            Margin="5,0,0,0"
-                            Padding="5,2"/>
-                </StackPanel>
+        <ui:Card Grid.Column="0" Margin="0,0,10,0">
+            <StackPanel Margin="16">
+                <TextBlock Text="{lex:Loc CarSequence_ChuteListTitle}"
+                           Style="{DynamicResource SubtitleTextBlockStyle}"
+                           Margin="0,0,0,10"/>
+
+                <ListBox ItemsSource="{Binding ChuteSequences}"
+                         SelectedItem="{Binding SelectedChute}"
+                         DisplayMemberPath="ChuteNumber"
+                         BorderThickness="1"
+                         MinHeight="200" Margin="0,0,0,10"/>
                 
-                <!-- 添加小车区域 -->
-                <StackPanel Orientation="Horizontal">
-                    <ComboBox ItemsSource="{Binding AvailableCars}"
-                              DisplayMemberPath="Name"
-                              SelectedValuePath="Address"
-                              Name="CarSelector"
-                              Width="120"
-                              Margin="0,0,5,0"/>
-                    
-                    <Button Content="{lex:Loc SharedUI:Strings:CarSequence_AddCarButton}"
-                            Command="{Binding AddCarCommand}"
-                            CommandParameter="{Binding SelectedItem, ElementName=CarSelector}"
-                            Padding="5,2"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <ui:Button Content="{lex:Loc AddChuteButtonText}" 
+                               Command="{Binding AddChuteCommand}"
+                               Margin="0,0,5,0" Padding="10,5"/>
+                    <ui:Button Content="{lex:Loc DeleteChuteButtonText}" 
+                               Command="{Binding DeleteChuteCommand}"
+                               Margin="5,0,0,0" Padding="10,5" Appearance="Secondary"/>
                 </StackPanel>
             </StackPanel>
-        </Grid>
+        </ui:Card>
+
+        <!-- 右侧：选中格口的小车序列 -->
+        <ui:Card Grid.Column="1">
+            <StackPanel Margin="16">
+                <TextBlock Text="{Binding SelectedChute.ChuteNumber, StringFormat={lex:Loc Key=CarSequence_ChuteSequenceTitle}}"
+                           Style="{DynamicResource SubtitleTextBlockStyle}"
+                           Margin="0,0,0,10"/>
+
+                <!-- 全局设置卡片 -->
+                <ui:CardControl Header="{lex:Loc GlobalSettingsCardHeader}" Margin="0,0,0,10">
+                    <StackPanel Orientation="Vertical">
+                        <Grid Margin="0,5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" MinWidth="100"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{lex:Loc ExceptionChuteLabel}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0" />
+                            <ui:NumberBox Grid.Column="1" Value="{Binding ExceptionChuteNumber, UpdateSourceTrigger=PropertyChanged}" 
+                                          Width="100" HorizontalAlignment="Center"  ClearButtonEnabled="False"
+                                          Minimum="1" SmallChange="1" LargeChange="10" SpinButtonPlacementMode="Inline"/>
+                        </Grid>
+                    </StackPanel>
+                </ui:CardControl>
+
+                <!-- 小车序列列表 -->
+                <TextBlock Text="{lex:Loc CarSequenceListHeader}" Style="{DynamicResource BodyStrongTextBlockStyle}" Margin="0,5,0,5" />
+                <ListBox ItemsSource="{Binding CarSequence}"
+                         SelectedItem="{Binding SelectedCarItem}"
+                         BorderThickness="1"
+                         Margin="0,0,0,10"
+                         MinHeight="200">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Column="0"
+                                           Text="{Binding CarName}"
+                                           VerticalAlignment="Center"/>
+
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding IsReverse, Converter={StaticResource BooleanToDirectionConverter}}"
+                                           Margin="10,0,10,0"
+                                           VerticalAlignment="Center"/>
+
+                                <!-- 延迟时间输入 -->
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,0,10,0">
+                                    <TextBlock Text="{lex:Loc CarSequence_DelayLabel}" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                    <ui:NumberBox Value="{Binding DelayMs, UpdateSourceTrigger=PropertyChanged}"
+                                                  Width="100"
+                                                  Minimum="0"
+                                                  ClearButtonEnabled="False"
+                                                  SpinButtonPlacementMode="Inline"
+                                                  SmallChange="10"
+                                                  VerticalAlignment="Center"
+                                                  ToolTip="{lex:Loc CarSequence_DelayTooltip}"/>
+                                    <TextBlock Text="{lex:Loc CarSequence_MsLabel}" VerticalAlignment="Center" Margin="2,0,0,0"/>
+                                </StackPanel>
+
+                                <ui:Button Grid.Column="3"
+                                           Content="{lex:Loc Common_Delete}"
+                                           Command="{Binding DataContext.RemoveCarCommand,
+                                                          RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                           Padding="5,2"
+                                           Margin="0,2"
+                                           Appearance="Secondary"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <!-- 底部操作区 -->
+                <StackPanel Orientation="Vertical">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <ui:Button Content="{lex:Loc CarSequence_SetForwardButton}"
+                                   Command="{Binding SetForwardCommand}"
+                                   Margin="0,0,5,0"
+                                   Padding="5,2"/>
+                        <ui:Button Content="{lex:Loc CarSequence_SetReverseButton}"
+                                   Command="{Binding SetReverseCommand}"
+                                   Margin="5,0,0,0"
+                                   Padding="5,2"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal">
+                        <ComboBox ItemsSource="{Binding AvailableCars}"
+                                  DisplayMemberPath="Name"
+                                  SelectedValuePath="Address" 
+                                  Name="CarSelector"
+                                  Width="150"
+                                  Margin="0,0,5,0"/>
+
+                        <ui:Button Content="{lex:Loc CarSequence_AddCarButton}"
+                                   Command="{Binding AddCarCommand}"
+                                   CommandParameter="{Binding SelectedItem, ElementName=CarSelector}"
+                                   Padding="5,2"/>
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+        </ui:Card>
     </Grid>
 </UserControl> 

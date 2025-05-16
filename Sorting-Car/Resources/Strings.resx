@@ -54,4 +54,73 @@
   <data name="CarSequence_ChuteSequenceTitle" xml:space="preserve">
     <value>格口 {0} 序列</value>
   </data>
+  <data name="CarConfig_Title" xml:space="preserve">
+    <value>小车配置</value>
+  </data>
+  <data name="CarConfig_Name" xml:space="preserve">
+    <value>名称</value>
+  </data>
+  <data name="CarConfig_Address" xml:space="preserve">
+    <value>地址</value>
+  </data>
+  <data name="CarConfig_Speed" xml:space="preserve">
+    <value>速度</value>
+  </data>
+  <data name="CarConfig_Acceleration" xml:space="preserve">
+    <value>加速度</value>
+  </data>
+  <data name="CarConfig_Delay" xml:space="preserve">
+    <value>延迟</value>
+  </data>
+  <data name="CarConfig_Time" xml:space="preserve">
+    <value>时间</value>
+  </data>
+  <data name="Common_Delete" xml:space="preserve">
+    <value>删除</value>
+  </data>
+  <data name="CarConfig_AddCar" xml:space="preserve">
+    <value>添加小车</value>
+  </data>
+  <data name="CarSequence_Reverse" xml:space="preserve">
+    <value>反向</value>
+  </data>
+  <data name="CarSequence_Forward" xml:space="preserve">
+    <value>正向</value>
+  </data>
+  <data name="CarSequence_ChuteListTitle" xml:space="preserve">
+    <value>格口列表</value>
+  </data>
+  <data name="CarSequence_DelayLabel" xml:space="preserve">
+    <value>延迟:</value>
+  </data>
+  <data name="CarSequence_DelayTooltip" xml:space="preserve">
+    <value>输入延迟时间 (毫秒)</value>
+  </data>
+  <data name="CarSequence_MsLabel" xml:space="preserve">
+    <value>ms</value>
+  </data>
+  <data name="CarSequence_SetForwardButton" xml:space="preserve">
+    <value>设为正向</value>
+  </data>
+  <data name="CarSequence_SetReverseButton" xml:space="preserve">
+    <value>设为反向</value>
+  </data>
+  <data name="CarSequence_AddCarButton" xml:space="preserve">
+    <value>添加小车到序列</value>
+  </data>
+  <data name="AddChuteButtonText" xml:space="preserve">
+    <value>添加格口</value>
+  </data>
+  <data name="DeleteChuteButtonText" xml:space="preserve">
+    <value>删除格口</value>
+  </data>
+  <data name="GlobalSettingsCardHeader" xml:space="preserve">
+    <value>全局设置</value>
+  </data>
+  <data name="ExceptionChuteLabel" xml:space="preserve">
+    <value>异常口:</value>
+  </data>
+  <data name="CarSequenceListHeader" xml:space="preserve">
+    <value>小车序列:</value>
+  </data>
 </root>

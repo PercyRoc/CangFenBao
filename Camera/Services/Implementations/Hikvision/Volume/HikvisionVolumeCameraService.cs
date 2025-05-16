@@ -360,35 +360,16 @@ namespace Camera.Services.Implementations.Hikvision.Volume
             }
 
             var timestamp = DateTime.Now;
-            Log.Debug("[海康体积相机服务] 持续测量回调数据接收. SN={SN}, Timestamp={Timestamp}", _currentCameraId, timestamp.ToString("HH:mm:ss.fff"));
 
             try
             {
-                var (length, width, height, isValid, image, vertexPoints) = ExtractMeasurementData(stResultInfo);
+                var (length, width, height, isValid, image, _) = ExtractMeasurementData(stResultInfo);
 
                 _volumeDataWithVerticesSubject.OnNext((length, width, height, timestamp, isValid, image));
 
-                if (isValid)
+                if (image != null)
                 {
-                    Log.Information("[海康体积相机服务] 有效测量: L={L} W={W} H={H}. SN={SN}. Image: {HasImage}. Vertices: {HasVertices}",
-                                    length, width, height, _currentCameraId, image != null, vertexPoints is
-                                    {
-                                        Length: > 0
-                                    });
-
-                    if (image != null)
-                    {
-                        _imageWithIdSubject.OnNext((image, _currentCameraId));
-                    }
-                }
-                else
-                {
-                    Log.Warning("[海康体积相机服务] 无效测量数据. SN={SN}. VolumeFlag: {VolFlag}, ImgFlag: {ImgFlag}", 
-                                _currentCameraId, stResultInfo.nVolumeFlag, stResultInfo.nImgFlag);
-                    if (image != null)
-                    {
-                         _imageWithIdSubject.OnNext((image, _currentCameraId));
-                    }
+                    _imageWithIdSubject.OnNext((image, _currentCameraId));
                 }
             }
             catch (Exception ex)
@@ -419,10 +400,20 @@ namespace Camera.Services.Implementations.Hikvision.Volume
 
                     if (volInfo.vertex_pnts is { Length: > 0 })
                     {
-                        vertexPoints = volInfo.vertex_pnts
-                            .Select(sdkPoint => new Point(sdkPoint.fX, sdkPoint.fY))
-                            .ToArray();
+                        vertexPoints = [.. volInfo.vertex_pnts.Select(sdkPoint => new Point(sdkPoint.fX, sdkPoint.fY))];
                         if(vertexPoints.Length == 0) vertexPoints = null;
+
+                        // 添加日志记录
+                        if (vertexPoints != null && image != null) // 确保 image 也不是 null
+                        {
+                            var pointsStr = string.Join(", ", vertexPoints.Select(p => $"({{X={p.X:F2},Y={p.Y:F2}}})"));
+                            Log.Debug("[海康体积相机服务] ExtractMeasurementData: 提取的顶点坐标: [{VertexPointsStr}]. 关联图像尺寸: {W}x{H}", pointsStr, image.PixelWidth, image.PixelHeight);
+                        }
+                        else if (vertexPoints != null)
+                        {
+                            var pointsStr = string.Join(", ", vertexPoints.Select(p => $"({{X={p.X:F2},Y={p.Y:F2}}})"));
+                            Log.Debug("[海康体积相机服务] ExtractMeasurementData: 提取的顶点坐标: [{VertexPointsStr}]. 关联图像为 null。", pointsStr);
+                        }
                     }
                 }
                 else
@@ -444,10 +435,18 @@ namespace Camera.Services.Implementations.Hikvision.Volume
                 {
                     var extendedFrame = ConvertExtendToFrameInfo(stResultInfo.stExtendImage);
                     image = ConvertFrameToBitmapSource(extendedFrame);
+                    if (image != null && vertexPoints == null) // 如果只有图像没有顶点，也记录一下图像尺寸
+                    {
+                        Log.Debug("[海康体积相机服务] ExtractMeasurementData: 提取到图像但无顶点数据. 图像尺寸: {W}x{H}", image.PixelWidth, image.PixelHeight);
+                    }
                 }
                 if (image == null && stResultInfo.stImage.nFrameLen > 0 && stResultInfo.stImage.pData != IntPtr.Zero)
                 {
                     image = ConvertFrameToBitmapSource(stResultInfo.stImage);
+                    if (image != null && vertexPoints == null) // 如果只有图像没有顶点，也记录一下图像尺寸
+                    {
+                         Log.Debug("[海康体积相机服务] ExtractMeasurementData: 提取到图像但无顶点数据. 图像尺寸: {W}x{H}", image.PixelWidth, image.PixelHeight);
+                    }
                 }
             }
             else
@@ -480,9 +479,22 @@ namespace Camera.Services.Implementations.Hikvision.Volume
             {
                 drawingContext.DrawImage(originalImage, new Rect(0, 0, originalImage.PixelWidth, originalImage.PixelHeight));
 
-                Pen redPen = new Pen(Brushes.Red, 2); // Thickness 2
+                Pen redPen = new(Brushes.Red, 2); // Thickness 2
+                Brush redBrush = Brushes.Red; // 用于绘制点的画刷
                 redPen.Freeze();
+                redBrush.Freeze();
 
+                // 诊断：绘制每个顶点
+                foreach (var vertex in vertices)
+                {
+                    var correctedX = vertex.X - originalImage.PixelWidth / 2.0;
+                    var correctedY = vertex.Y + originalImage.PixelHeight / 2.0;
+                    // 在每个顶点位置绘制一个半径为3像素的实心红点
+                    drawingContext.DrawEllipse(redBrush, null, new Point(correctedX, correctedY), 3, 3);
+                }
+
+                // 原来的连线逻辑暂时注释掉，用于诊断顶点位置
+                /*
                 if (vertices.Length >= 2) 
                 {
                     if (vertices.Length == 8) // Assume 8 points for a cuboid
@@ -524,6 +536,7 @@ namespace Camera.Services.Implementations.Hikvision.Volume
                          }
                     }
                 }
+                */
             }
 
             RenderTargetBitmap borderedBitmap = new RenderTargetBitmap(
@@ -557,9 +570,6 @@ namespace Camera.Services.Implementations.Hikvision.Volume
 
             try
             {
-                PixelFormat pf;
-                int stride; // Default for many formats
-
                 // Ensure data is copied to a managed array
                 byte[] imageData = new byte[frame.nFrameLen];
                 Marshal.Copy(frame.pData, imageData, 0, (int)frame.nFrameLen);
@@ -567,29 +577,57 @@ namespace Camera.Services.Implementations.Hikvision.Volume
                 switch ((VOLM_PIXEL_TYPE)frame.enPixelType) // Assuming VOLM_PIXEL_TYPE is an enum
                 {
                     case VOLM_PIXEL_TYPE.PIXEL_TYPE_RGB8_PLANAR: // This might be PIXEL_TYPE_BGR8_PACKED or similar
-                        pf = PixelFormats.Rgb24; // Or Bgr24 if SDK uses BGR order
-                        stride = frame.nWidth * 3;
+                        var pf = PixelFormats.Rgb24;
+                        var stride = frame.nWidth * 3; // Default for many formats
                          if (frame.nFrameLen < stride * frame.nHeight) {
-                            Log.Warning($"Frame length {frame.nFrameLen} is less than expected {stride * frame.nHeight} for RGB24.");
+                            Log.Warning($"[海康体积相机服务] 图像帧数据长度 {frame.nFrameLen} 不足以满足预期 RGB24 格式 ({stride * frame.nHeight}).");
+                            //return null; // Keep original behavior for now, but log it. The new planar conversion below has its own check.
+                        }
+                        
+                        // 正确处理 RGB8 Planar 格式
+                        int planeSize = frame.nWidth * frame.nHeight;
+                        if (frame.nFrameLen < planeSize * 3)
+                        {
+                            Log.Warning($"[海康体积相机服务] 图像帧数据长度 {frame.nFrameLen} 不足以满足 RGB8 Planar 格式 ({frame.nWidth}x{frame.nHeight}x3 = {planeSize * 3}).");
                             return null;
                         }
-                        break;
+
+                        // imageData 已经包含了 Marshal.Copy 过来的数据
+                        // byte[] planarData = imageData; // imageData is already the planar data
+
+                        byte[] interleavedRgbData = new byte[planeSize * 3];
+
+                        for (int y = 0; y < frame.nHeight; y++)
+                        {
+                            for (int x = 0; x < frame.nWidth; x++)
+                            {
+                                int planarPixelIndex = y * frame.nWidth + x; // 单个平面内的像素索引
+                                int interleavedPixelStartIndex = planarPixelIndex * 3; // 交错数据中此像素的起始索引
+
+                                // 假设平面顺序为 R, G, B
+                                interleavedRgbData[interleavedPixelStartIndex + 0] = imageData[planarPixelIndex];                 // R from R-plane
+                                interleavedRgbData[interleavedPixelStartIndex + 1] = imageData[planarPixelIndex + planeSize];     // G from G-plane
+                                interleavedRgbData[interleavedPixelStartIndex + 2] = imageData[planarPixelIndex + planeSize * 2]; // B from B-plane
+                            }
+                        }
+                        
+                        // 使用转换后的交错数据创建 BitmapSource
+                        var planarBitmap = BitmapSource.Create(
+                            frame.nWidth,
+                            frame.nHeight,
+                            96, 96, // Standard DPI
+                            pf,     // PixelFormats.Rgb24 for the interleavedRgbData
+                            null,   // Palette
+                            interleavedRgbData, // 使用正确格式化的数据
+                            stride  // 交错数据的正确步长
+                        );
+                        planarBitmap.Freeze();
+                        return planarBitmap;
+                        // break; // Unreachable after return
                     default:
                         Log.Warning("[海康体积相机服务] 不支持的像素类型转换: {PixelType}", (VOLM_PIXEL_TYPE)frame.enPixelType);
                         return null;
                 }
-
-                var bitmap = BitmapSource.Create(
-                    frame.nWidth,
-                    frame.nHeight,
-                    96, 96, // Standard DPI
-                    pf,
-                    null,    // Palette
-                    imageData,
-                    stride);
-                
-                bitmap.Freeze();
-                return bitmap;
             }
             catch (Exception ex)
             {
@@ -667,6 +705,66 @@ namespace Camera.Services.Implementations.Hikvision.Volume
             
             Log.Information("[海康体积相机服务] TriggerMeasure: 依赖于持续回调提供数据，不执行主动触发。请订阅 VolumeDataWithVerticesStream 或 PackageStream。");
              return (false, 0,0,0, "此相机工作在持续测量模式，请从数据流获取结果。");
+        }
+
+        /// <summary>
+        /// 主动获取一次测量结果。
+        /// 注意：此相机通常在持续测量模式下运行，并通过回调提供数据。
+        /// 此方法直接调用 SDK 的 GetResult，可能返回最新的缓存结果或在特定配置下工作。
+        /// </summary>
+        /// <returns>
+        /// 一个元组，包含SDK调用是否成功、测量尺寸、测量是否有效、图像、顶点和错误消息。
+        /// </returns>
+        public (bool IsSdkCallSuccess, float Length, float Width, float Height, bool IsMeasurementValid, BitmapSource? Image, Point[]? VertexPoints, string? ErrorMessage) GetSingleMeasurement()
+        {
+            Log.Information("[海康体积相机服务] GetSingleMeasurement 被调用。SN: {SN}", _currentCameraId ?? "N/A");
+
+            if (!IsConnected)
+            {
+                Log.Warning("[海康体积相机服务] GetSingleMeasurement: 相机未连接。");
+                return (false, 0, 0, 0, false, null, null, "相机未连接。");
+            }
+            if (!_isGrabbingActive)
+            {
+                 Log.Warning("[海康体积相机服务] GetSingleMeasurement: 相机未处于抓图/测量状态 (isGrabbingActive is false)。");
+                return (false, 0, 0, 0, false, null, null, "相机未处于抓图/测量状态。");
+            }
+
+            var stResultInfo = new VOLM_RESULT_INFO();
+            try
+            {
+                var ret = _mvVolmeasure.GetResult(ref stResultInfo);
+                if (ret != 0)
+                {
+                    string errorDesc = GetHikvisionErrorDescription(ret);
+                    Log.Error("[海康体积相机服务] GetSingleMeasurement: SDK GetResult 失败. SN: {SN}, ErrorCode: {ErrorCode:X8} - {ErrorDesc}", _currentCameraId, ret, errorDesc);
+                    return (false, 0, 0, 0, false, null, null, $"SDK GetResult 失败: {errorDesc} (Code: 0x{ret:X8})");
+                }
+
+                Log.Debug("[海康体积相机服务] GetSingleMeasurement: SDK GetResult 成功. SN: {SN}. VolumeFlag: {VolFlag}, ImgFlag: {ImgFlag}", 
+                          _currentCameraId, stResultInfo.nVolumeFlag, stResultInfo.nImgFlag);
+
+                var (length, width, height, isValid, image, vertexPoints) = ExtractMeasurementData(stResultInfo);
+
+                if (isValid)
+                {
+                     Log.Information("[海康体积相机服务] GetSingleMeasurement: 提取到有效测量: L={L} W={W} H={H}. SN={SN}. Image: {HasImage}. Vertices: {HasVertices}",
+                                    length, width, height, _currentCameraId, image != null, vertexPoints is
+                                    {
+                                        Length: > 0
+                                    });
+                }
+                else
+                {
+                    Log.Warning("[海康体积相机服务] GetSingleMeasurement: 提取到的测量数据无效. SN={SN}", _currentCameraId);
+                }
+                return (true, length, width, height, isValid, image, vertexPoints, null);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "[海康体积相机服务] GetSingleMeasurement: 调用过程中发生异常. SN: {SN}", _currentCameraId);
+                return (false, 0, 0, 0, false, null, null, $"处理 GetSingleMeasurement 时发生异常: {ex.Message}");
+            }
         }
     }
 } 

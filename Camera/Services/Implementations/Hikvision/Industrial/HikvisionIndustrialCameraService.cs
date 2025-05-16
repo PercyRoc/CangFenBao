@@ -150,29 +150,27 @@ namespace Camera.Services.Implementations.Hikvision.Industrial
                 if (_device != null)
                 {
                     Log.Information("[海康工业相机服务] 正在停止图像采集... SN: {SerialNumber}", disconnectedSn);
-                    var stopGrabbingTask = Task.Run(() => _device.MVID_CR_CAM_StopGrabbing_NET());
-                    if (!stopGrabbingTask.Wait(TimeSpan.FromSeconds(2))) // Increased timeout
+                    var nRetStop = _device.MVID_CR_CAM_StopGrabbing_NET();
+                    if (nRetStop != MVIDCodeReader.MVID_CR_OK)
                     {
-                        Log.Warning("[海康工业相机服务] 停止采集图像操作超时 (2 秒). SN: {SerialNumber}", disconnectedSn);
+                        Log.Error("[海康工业相机服务] 停止采集图像失败. SN: {SerialNumber}, ErrorCode: {ErrorCode:X8}", disconnectedSn, nRetStop);
                     }
-                    else if (stopGrabbingTask.Result != MVIDCodeReader.MVID_CR_OK)
+                    else
                     {
-                        Log.Error("[海康工业相机服务] 停止采集图像失败. SN: {SerialNumber}, ErrorCode: {ErrorCode:X8}", disconnectedSn, stopGrabbingTask.Result);
+                        Log.Information("[海康工业相机服务] 图像采集已停止. SN: {SerialNumber}", disconnectedSn);
                     }
-                    else { Log.Information("[海康工业相机服务] 图像采集已停止. SN: {SerialNumber}", disconnectedSn); }
 
 
                     Log.Information("[海康工业相机服务] 正在销毁 SDK 句柄... SN: {SerialNumber}", disconnectedSn);
-                    var destroyHandleTask = Task.Run(() => _device.MVID_CR_DestroyHandle_NET());
-                     if (!destroyHandleTask.Wait(TimeSpan.FromSeconds(2))) // Increased timeout
+                    var nRetDestroy = _device.MVID_CR_DestroyHandle_NET();
+                    if (nRetDestroy != MVIDCodeReader.MVID_CR_OK)
                     {
-                        Log.Warning("[海康工业相机服务] 销毁 SDK 句柄操作超时 (2 秒). SN: {SerialNumber}", disconnectedSn);
+                        Log.Error("[海康工业相机服务] 销毁 SDK 句柄失败. SN: {SerialNumber}, ErrorCode: {ErrorCode:X8}", disconnectedSn, nRetDestroy);
                     }
-                    else if (destroyHandleTask.Result != MVIDCodeReader.MVID_CR_OK)
+                    else
                     {
-                        Log.Error("[海康工业相机服务] 销毁 SDK 句柄失败. SN: {SerialNumber}, ErrorCode: {ErrorCode:X8}", disconnectedSn, destroyHandleTask.Result);
+                        Log.Information("[海康工业相机服务] SDK 句柄已销毁. SN: {SerialNumber}", disconnectedSn);
                     }
-                    else { Log.Information("[海康工业相机服务] SDK 句柄已销毁. SN: {SerialNumber}", disconnectedSn); }
                 }
             }
             catch (Exception ex)

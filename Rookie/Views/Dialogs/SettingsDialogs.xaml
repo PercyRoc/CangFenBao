@@ -52,7 +52,7 @@
 
             <!-- 标题 -->
             <TextBlock Grid.Column="1"
-                       Text="系统设置"
+                       Text="SYSTEM SETTINGS"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
                        Margin="0,0,8,0"
@@ -111,16 +111,6 @@
                                 <x:Type Type="settings2:WeightSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
-                        <!-- 条码格口设置导航 -->
-                        <ui:NavigationViewItem Content="Barcode Chute Settings"
-                                               Tag="BarcodeChute">
-                            <ui:NavigationViewItem.Icon>
-                                <ui:SymbolIcon Symbol="BarcodeScanner24" />
-                            </ui:NavigationViewItem.Icon>
-                            <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="settings:BarcodeChuteSettingsView" />
-                            </ui:NavigationViewItem.TargetPageType>
-                        </ui:NavigationViewItem>
                         <!-- 小车设置导航 -->
                         <ui:NavigationViewItem Content="Car Settings"
                                                Tag="CarConfig">
@@ -158,7 +148,7 @@
                                 <ui:SymbolIcon Symbol="PlugConnected24" />
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="settings:SerialPortSettingsView"/>
+                                <x:Type Type="views1:CarSerialPortSettingsView"/>
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>
