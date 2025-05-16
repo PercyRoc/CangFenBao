@@ -36,42 +36,42 @@
 
         <!-- TCP地址 -->
         <TextBlock Grid.Row="0" Grid.Column="0"
-                   Text="{lex:Loc ModulesTcpSettings_Label_Address}" />
+                   Text="Address" />
         <ui:TextBox Grid.Row="0" Grid.Column="2"
                     Text="{Binding Address, UpdateSourceTrigger=PropertyChanged}"
                     Width="200" HorizontalAlignment="Left"
-                    PlaceholderText="{lex:Loc ModulesTcpSettings_Placeholder_Address}" />
+                    PlaceholderText="Enter address" />
 
         <!-- 端口号 -->
         <TextBlock Grid.Row="2" Grid.Column="0"
-                   Text="{lex:Loc ModulesTcpSettings_Label_Port}" />
+                   Text="Port" />
         <ui:TextBox Grid.Row="2" Grid.Column="2"
                     Text="{Binding Port, UpdateSourceTrigger=PropertyChanged}"
                     Width="100" HorizontalAlignment="Left"
-                    PlaceholderText="{lex:Loc ModulesTcpSettings_Placeholder_Port}" />
+                    PlaceholderText="Enter port" />
 
         <!-- 最小时间 -->
         <TextBlock Grid.Row="4" Grid.Column="0"
-                   Text="{lex:Loc ModulesTcpSettings_Label_MinTime}" />
+                   Text="Min Time" />
         <ui:TextBox Grid.Row="4" Grid.Column="2"
                     Text="{Binding MinTime, UpdateSourceTrigger=PropertyChanged}"
                     Width="100" HorizontalAlignment="Left"
-                    PlaceholderText="{lex:Loc ModulesTcpSettings_Placeholder_MinTime}" />
+                    PlaceholderText="Enter min time" />
 
         <!-- 最大时间 -->
         <TextBlock Grid.Row="6" Grid.Column="0"
-                   Text="{lex:Loc ModulesTcpSettings_Label_MaxTime}" />
+                   Text="Max Time" />
         <ui:TextBox Grid.Row="6" Grid.Column="2"
                     Text="{Binding MaxTime, UpdateSourceTrigger=PropertyChanged}"
                     Width="100" HorizontalAlignment="Left"
-                    PlaceholderText="{lex:Loc ModulesTcpSettings_Placeholder_MaxTime}" />
+                    PlaceholderText="Enter max time" />
 
         <!-- 异常格口 -->
         <TextBlock Grid.Row="8" Grid.Column="0"
-                   Text="{lex:Loc ModulesTcpSettings_Label_ExceptionChute}" />
+                   Text="Exception Chute" />
         <ui:TextBox Grid.Row="8" Grid.Column="2"
                     Text="{Binding ExceptionChute, UpdateSourceTrigger=PropertyChanged}"
                     Width="100" HorizontalAlignment="Left"
-                    PlaceholderText="{lex:Loc ModulesTcpSettings_Placeholder_ExceptionChute}" />
+                    PlaceholderText="Enter exception chute" />
     </Grid>
 </Page>

@@ -348,47 +348,11 @@
                         <!-- Right Panel -->
                         <Grid Grid.Column="1" Margin="16,0,0,0">
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="2*" />
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
 
-                            <!-- Live Image Display Area -->
-                            <Border Grid.Row="0" Margin="0,0,0,8" Style="{DynamicResource CardStyle}">
-                                <Grid Margin="16">
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="*" />
-                                    </Grid.RowDefinitions>
-
-                                    <!-- Title Bar -->
-                                    <StackPanel Grid.Row="0"
-                                                Orientation="Horizontal"
-                                                Margin="0,0,0,8">
-                                        <ui:SymbolIcon Symbol="Image24"
-                                                       Margin="0,0,8,0"
-                                                       Foreground="{StaticResource AccentBrush}"
-                                                       VerticalAlignment="Center" />
-                                        <TextBlock Text="Live Image"
-                                                   FontSize="16"
-                                                   FontWeight="SemiBold"
-                                                   Foreground="{StaticResource AccentBrush}"
-                                                   VerticalAlignment="Center" />
-                                    </StackPanel>
-
-                                    <!-- Image Display -->
-                                    <Image Grid.Row="1"
-                                           Source="{Binding CurrentImage}"
-                                           RenderOptions.BitmapScalingMode="HighQuality"
-                                           RenderOptions.EdgeMode="Aliased"
-                                           Stretch="Uniform"
-                                           StretchDirection="Both"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center" />
-                                </Grid>
-                            </Border>
-
                             <!-- Package History -->
-                            <Border Grid.Row="1" Margin="0,8,0,0" Style="{DynamicResource CardStyle}">
+                            <Border Grid.Row="0" Margin="0,0,0,0" Style="{DynamicResource CardStyle}">
                                 <Grid Margin="16">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />

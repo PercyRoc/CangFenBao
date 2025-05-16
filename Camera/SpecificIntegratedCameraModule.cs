@@ -39,14 +39,8 @@ namespace Camera
                 // 如果在 RegisterTypes 中没有注册具体类型，这里会失败。
                 var integratedCameraService = containerProvider.Resolve<HikvisionIntegratedCameraService>();
 
-                if (integratedCameraService != null)
                 {
                     Log.Information("[SpecificIntegratedCameraModule] 正在启动 海康物流SDK...");
-                    // 启动相机服务
-                    // 注意：实际的 Start 方法应该是异步的还是同步的，取决于其实现。
-                    // 如果 Start() 是耗时操作且不是异步的，考虑在后台线程启动以避免阻塞UI。
-                    // 例如: Task.Run(() => integratedCameraService.Start());
-                    // 但根据 HikvisionIntegratedCameraService.Start() 的实现，它是同步的。
                     bool success = integratedCameraService.Start();
                     if (success)
                     {
@@ -57,12 +51,8 @@ namespace Camera
                         Log.Warning("[SpecificIntegratedCameraModule] 海康物流SDK 启动失败。请检查日志以获取更多信息。");
                     }
                 }
-                else
-                {
-                    Log.Error("[SpecificIntegratedCameraModule] 无法解析 海康物流SDK。服务可能未正确注册。");
-                }
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 Log.Error(ex, "[SpecificIntegratedCameraModule] 初始化或启动 海康物流SDK 时发生异常。");
             }

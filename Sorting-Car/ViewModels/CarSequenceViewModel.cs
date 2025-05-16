@@ -1,9 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
-using System.Linq; // Added for Linq operations like Max()
 using System.Windows.Input;
-using Common.Models.Settings.ChuteRules;
 using Common.Services.Settings;
 using Sorting_Car.Models;
 using Sorting_Car.Resources;
@@ -35,16 +33,10 @@ namespace Sorting_Car.ViewModels
         /// <summary>
         /// 格口序列标题（本地化+格式化）
         /// </summary>
-        public string ChuteSequenceTitle
-        {
-            get
-            {
-                if (SelectedChute == null)
-                    return string.Empty;
+        public string ChuteSequenceTitle =>
+            SelectedChute == null ? string.Empty :
                 // 使用本地化资源格式化
-                return string.Format(Strings.CarSequence_ChuteSequenceTitle, SelectedChute.ChuteNumber);
-            }
-        }
+                string.Format(Strings.CarSequence_ChuteSequenceTitle, SelectedChute.ChuteNumber);
 
         /// <summary>
         /// 选中的格口
@@ -140,10 +132,6 @@ namespace Sorting_Car.ViewModels
             _carSequenceSettings = _settingsService.LoadSettings<CarSequenceSettings>();
             
             // 如果 ChuteSequences 为 null（例如，首次加载或配置文件损坏），则初始化
-            if (_carSequenceSettings.ChuteSequences == null)
-            {
-                _carSequenceSettings.ChuteSequences = new ObservableCollection<ChuteCarSequence>();
-            }
 
             // 初始化命令
             AddCarCommand = new DelegateCommand<CarConfig>(ExecuteAddCar, CanAddCar);
@@ -171,14 +159,14 @@ namespace Sorting_Car.ViewModels
         {
             // 如果是添加操作，并且新添加的项是 SelectedChute（例如，添加第一个格口时）
             // 或者如果是重置操作，并且 SelectedChute 不再有效
-            if (e.Action == NotifyCollectionChangedAction.Add && e.NewItems != null && e.NewItems.Contains(SelectedChute) ||
-                e.Action == NotifyCollectionChangedAction.Reset && (SelectedChute == null || !ChuteSequences.Contains(SelectedChute)))
+            if ((e is not { Action: NotifyCollectionChangedAction.Add, NewItems: not null } ||
+                 !e.NewItems.Contains(SelectedChute)) &&
+                (e.Action != NotifyCollectionChangedAction.Reset ||
+                 (SelectedChute != null && ChuteSequences.Contains(SelectedChute)))) return;
+            // 确保订阅了正确的 SelectedChute
+            if (SelectedChute != null)
             {
-                 // 确保订阅了正确的 SelectedChute
-                if (SelectedChute != null)
-                {
-                     SubscribeToSequenceItems();
-                }
+                SubscribeToSequenceItems();
             }
         }
 
@@ -241,7 +229,7 @@ namespace Sorting_Car.ViewModels
         /// </summary>
         private void ExecuteAddCar(CarConfig? car)
         {
-            if (SelectedChute == null || car == null || SelectedChute.CarSequence == null) return;
+            if (SelectedChute == null || car == null) return;
 
             var carItem = new CarSequenceItem
             {
@@ -257,7 +245,7 @@ namespace Sorting_Car.ViewModels
 
         private bool CanAddCar(CarConfig? car)
         {
-            return SelectedChute != null && car != null && SelectedChute.CarSequence != null;
+            return SelectedChute != null && car != null;
         }
 
         /// <summary>
@@ -265,7 +253,7 @@ namespace Sorting_Car.ViewModels
         /// </summary>
         private void ExecuteRemoveCar()
         {
-            if (SelectedChute == null || SelectedCarItem == null || SelectedChute.CarSequence == null) return;
+            if (SelectedChute == null || SelectedCarItem == null) return;
 
             SelectedChute.CarSequence.Remove(SelectedCarItem);
             SelectedCarItem = SelectedChute.CarSequence.Any() ? SelectedChute.CarSequence.First() : null;
@@ -274,7 +262,7 @@ namespace Sorting_Car.ViewModels
 
         private bool CanRemoveCar()
         {
-            return SelectedChute != null && SelectedCarItem != null && SelectedChute.CarSequence != null;
+            return SelectedChute != null && SelectedCarItem != null;
         }
 
         /// <summary>

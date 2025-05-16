@@ -238,10 +238,10 @@ public class TcpCameraService
         if (packetParts.Count != 8) return false; // Strictly 8 parts
 
         // part 0: guid (string, non-empty)
-        if (string.IsNullOrEmpty(packetParts[0]?.Trim())) return false;
+        if (string.IsNullOrEmpty(packetParts[0].Trim())) return false;
 
         // part 1: code (string, non-empty) - "noread" is a value, not a format failure here.
-        if (string.IsNullOrEmpty(packetParts[1]?.Trim())) return false;
+        if (string.IsNullOrEmpty(packetParts[1].Trim())) return false;
 
         // part 2: weight (float)
         if (!float.TryParse(packetParts[2], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _)) return false;
@@ -259,78 +259,39 @@ public class TcpCameraService
         return true;
     }
 
-    // Extracts the first valid 8-part packet from the beginning of the buffer.
+    // Extracts the first valid packet, now delimited by '@'.
     private static (string? Packet, int ProcessedLength) ExtractFirstValidPacket(string bufferContent)
     {
-        List<string> parts = new List<string>(8);
-        int currentSearchIndex = 0;
-        int partEndIndex = -1;
+        int endOfPacketIndex = bufferContent.IndexOf('@');
 
-        for (int i = 0; i < 8; i++) // We need 8 parts
+        if (endOfPacketIndex == -1)
         {
-            if (currentSearchIndex >= bufferContent.Length && i < 7) // Buffer ends prematurely (unless it's the last part potentially without a trailing comma)
-            {
-                 Log.Debug("ExtractFirstValidPacket: Buffer ended prematurely while seeking part {PartNum}. Buffer: '{Buffer}'", i + 1, bufferContent);
-                 return (null, 0);
-            }
+            // No '@' delimiter found, so no complete packet in the buffer yet.
+            Log.Debug("ExtractFirstValidPacket: No '@' delimiter found. Buffer: '{Buffer}'", bufferContent);
+            return (null, 0); // Processed 0 bytes as no delimiter was found.
+        }
 
-            partEndIndex = bufferContent.IndexOf(',', currentSearchIndex);
+        // The packet data is the content before the '@' delimiter.
+        string potentialPacketData = bufferContent.Substring(0, endOfPacketIndex);
+        // We will consume data up to and including the '@' delimiter.
+        int processedLength = endOfPacketIndex + 1;
 
-            if (i == 7) // Last part (8th part)
-            {
-                if (partEndIndex == -1) // No comma after the 8th part, it extends to the end of the buffer
-                {
-                    if (currentSearchIndex >= bufferContent.Length) // Buffer ends exactly after 7th comma, 8th part is empty string.
-                    {
-                        parts.Add(string.Empty);
-                        partEndIndex = bufferContent.Length; // Processed up to end.
-                    }
-                    else
-                    {
-                        parts.Add(bufferContent.Substring(currentSearchIndex).Trim());
-                        partEndIndex = bufferContent.Length; // Processed up to end.
-                    }
-                }
-                else // Comma found after 8th part, 8th part is between 7th and 8th comma.
-                {
-                    parts.Add(bufferContent.Substring(currentSearchIndex, partEndIndex - currentSearchIndex).Trim());
-                    // partEndIndex is already the index of the comma *after* the 8th part.
-                }
-            }
-            else // Parts 1 through 7
-            {
-                if (partEndIndex == -1) // Not enough commas for 8 distinct parts
-                {
-                    Log.Debug("ExtractFirstValidPacket: Not enough commas for 8 parts. Found {FoundParts} potential parts. Buffer: '{Buffer}'", i, bufferContent);
-                    return (null, 0);
-                }
-                parts.Add(bufferContent.Substring(currentSearchIndex, partEndIndex - currentSearchIndex).Trim());
-                currentSearchIndex = partEndIndex + 1; // Move past the comma for the next search
-            }
+        // Validate the internal structure of the potential packet data.
+        // It should consist of 8 comma-separated parts that are subsequently trimmed.
+        var partsList = potentialPacketData.Split(',').Select(s => s.Trim()).ToList();
+
+        if (ValidatePacket(partsList)) // ValidatePacket checks for 8 valid parts.
+        {
+            Log.Debug("Found valid packet (terminated by '@'): '{PacketData}'. Processed Length: {Length}", potentialPacketData, processedLength);
+            // Return the raw packet data string; ProcessPackageData will handle splitting and parsing.
+            return (potentialPacketData, processedLength);
         }
         
-        // At this point, 'parts' should have 8 elements, and 'partEndIndex' is either buffer.Length or index of comma after 8th part.
-        if (ValidatePacket(parts))
-        {
-            string packetString = string.Join(",", parts); // Reconstruct from trimmed parts for logical consistency
-            Log.Debug("Found valid 8-part packet: {Packet}. Processed Length in buffer: {Length}", packetString, partEndIndex);
-            return (packetString, partEndIndex); // partEndIndex is where the processing should stop for this packet in the buffer
-        }
-
-        Log.Debug("ExtractFirstValidPacket: First 8 potential parts did not validate. Parts: [{CandidateParts}]. Buffer: '{Buffer}'", string.Join(" | ", parts), bufferContent);
-        return (null, 0);
-    }
-
-    private static int CalculateApproximateLength(string originalBuffer, List<string> parts)
-    {
-        if (parts.Count == 0) return 0;
-        var joinedString = string.Join(",", parts);
-        var index = originalBuffer.IndexOf(joinedString, StringComparison.Ordinal);
-        if (index != -1)
-        {
-            return index + joinedString.Length;
-        }
-        return joinedString.Length + (parts.Count > 0 ? parts.Count - 1 : 0);
+        // If validation fails, the segment up to and including '@' is still consumed.
+        // Log this occurrence.
+        Log.Warning("ExtractFirstValidPacket: Invalid packet data ('{PotentialData}') before '@' delimiter. Expected 8 comma-separated parts. Parts found: [{ActualParts}]. Discarding this segment (length {Length}).",
+            potentialPacketData, string.Join(" | ", partsList), processedLength);
+        return (null, processedLength); // Packet is invalid, but the segment is consumed to prevent reprocessing.
     }
 
     private void ProcessPackageData(string packetData)
@@ -447,6 +408,6 @@ public class TcpCameraService
                 new() { Id = $"TCP_{_host}_{_port}", Name = "TCP 数据源" }
             };
         }
-        return Enumerable.Empty<CameraBasicInfo>();
+        return [];
     }
 }

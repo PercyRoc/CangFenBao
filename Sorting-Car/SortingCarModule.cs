@@ -1,4 +1,3 @@
-using SharedUI.Views.Settings;
 using Sorting_Car.ViewModels;
 using Sorting_Car.Views;
 using Sorting_Car.Services;
@@ -10,7 +9,9 @@ namespace Sorting_Car
     {
         public void RegisterTypes(IContainerRegistry containerRegistry)
         {
-            // 注册设置对话框
+            containerRegistry.RegisterSingleton<CarSerialPortSettingsViewModel>();
+            containerRegistry.RegisterSingleton<CarConfigViewModel>();
+            containerRegistry.RegisterSingleton<CarSequenceViewModel>();
             containerRegistry.RegisterForNavigation<CarSerialPortSettingsView, CarSerialPortSettingsViewModel>();
             containerRegistry.RegisterForNavigation<CarConfigView, CarConfigViewModel>();
             containerRegistry.RegisterForNavigation<CarSequenceView, CarSequenceViewModel>();

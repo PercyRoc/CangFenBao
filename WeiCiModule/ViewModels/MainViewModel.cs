@@ -2,7 +2,7 @@
 using System.Windows.Threading;
 using Common.Models.Package;
 using Common.Services.Settings;
-using Camera.Interface;
+using DeviceService.DataSourceDevices.Camera.TCP;
 using Serilog;
 using SharedUI.Models;
 using SortingServices.Modules;
@@ -11,23 +11,21 @@ using Microsoft.Win32;
 using System.IO;
 using System.Text;
 using WeiCiModule.Models;
-using System.Windows.Media;
 
 namespace WeiCiModule.ViewModels;
 
 public class MainViewModel : BindableBase, IDisposable
 {
     private readonly IDialogService _dialogService;
-    private readonly ICameraService _cameraService;
+    private readonly TcpCameraService _cameraService;
     private readonly IModuleConnectionService _moduleConnectionService;
     private readonly ISettingsService _settingsService;
     private readonly DispatcherTimer _timer;
     private string _currentBarcode = string.Empty;
     private SystemStatus _systemStatus = new();
     private string _searchImportedText = string.Empty;
-    private ImageSource? _currentImage;
     private readonly IDisposable? _packageStreamSubscription;
-    private IDisposable? _imageStreamSubscription;
+    private int _nextChuteNumber = 1; // 修改：用于1-32格口循环
 
     public ObservableCollection<PackageInfo> PackageHistory { get; } = [];
     public ObservableCollection<StatisticsItem> StatisticsItems { get; } = [];
@@ -37,7 +35,7 @@ public class MainViewModel : BindableBase, IDisposable
     public ObservableCollection<BarcodeChuteMapping> FilteredImportedMappings { get; } = [];
     
     public MainViewModel(IDialogService dialogService, ISettingsService settingsService,
-        IModuleConnectionService moduleConnectionService, ICameraService cameraService)
+        IModuleConnectionService moduleConnectionService, TcpCameraService cameraService)
     {
         _dialogService = dialogService;
         _settingsService = settingsService;
@@ -70,8 +68,6 @@ public class MainViewModel : BindableBase, IDisposable
         // 订阅相机服务事件
         _cameraService.ConnectionChanged += OnCameraConnectionChanged;
         _packageStreamSubscription = _cameraService.PackageStream.Subscribe(OnCameraPackageStreamReceived);
-        // 订阅独立的图像流 (例如 NoRead 图像)
-        _imageStreamSubscription = _cameraService.ImageStreamWithId.Subscribe(tuple => OnCameraImageReceived(tuple.Image, tuple.CameraId));
 
         // 启动时加载已保存的导入映射
         _ = LoadInitialImportedMappingsAsync();
@@ -84,11 +80,6 @@ public class MainViewModel : BindableBase, IDisposable
     {
         get => _systemStatus;
         private set => SetProperty(ref _systemStatus, value);
-    }
-    public ImageSource? CurrentImage
-    {
-        get => _currentImage;
-        private set => SetProperty(ref _currentImage, value);
     }
 
     private void ExecuteOpenSettings()
@@ -246,7 +237,7 @@ public class MainViewModel : BindableBase, IDisposable
             // 添加相机状态
             DeviceStatuses.Add(new DeviceStatus
             {
-                Name = "相机模块", // "相机"
+                Name = "Camera Service", // "相机"
                 Status = "Disconnected", // "未连接"
                 Icon = "Camera24",
                 StatusColor = "#F44336"
@@ -352,7 +343,7 @@ public class MainViewModel : BindableBase, IDisposable
     {
         try
         {
-            var cameraStatus = DeviceStatuses.FirstOrDefault(static x => x.Name == "相机模块");
+            var cameraStatus = DeviceStatuses.FirstOrDefault(static x => x.Name == "Camera Service");
             if (cameraStatus == null) return;
 
             Application.Current.Dispatcher.InvokeAsync(() =>
@@ -368,25 +359,12 @@ public class MainViewModel : BindableBase, IDisposable
         }
     }
 
-    // This method handles NoRead images specifically if they come from a separate stream.
-    private async void OnCameraImageReceived(ImageSource image, string cameraId)
-    {
-        Log.Information("收到来自相机 {CameraId} 的独立图像。将更新 CurrentImage。", cameraId);
-        await Application.Current.Dispatcher.InvokeAsync(() =>
-        {
-            CurrentImage = image; // 更新主界面图像
-        });
-    }
-
     private async void OnCameraPackageStreamReceived(PackageInfo packageInfo)
     {
         // Step 1: Immediate UI Update with available data (on dispatcher)
         await Application.Current.Dispatcher.InvokeAsync(() =>
         {
-            CurrentImage = null; // Clear previous image
-
             CurrentBarcode = packageInfo.Barcode;
-            CurrentImage = packageInfo.Image; // Image is now BitmapSource
 
             if (packageInfo.Barcode == "NOREAD" || packageInfo.Status == PackageStatus.NoRead)
             {
@@ -486,6 +464,16 @@ public class MainViewModel : BindableBase, IDisposable
                 }
             }
             
+            // 修改：格口从1依次递增到32
+            packageInfo.SetChute(_nextChuteNumber);
+            Log.Information("循环格口逻辑：设置包裹 GUID:{Guid}, 条码:{Barcode} 到格口 {Chute}", packageInfo.Guid, packageInfo.Barcode, _nextChuteNumber);
+
+            _nextChuteNumber++;
+            if (_nextChuteNumber > 32)
+            {
+                _nextChuteNumber = 1; // 循环回1
+            }
+
             // Step 3: Send to module service
             _moduleConnectionService.OnPackageReceived(packageInfo);
 
@@ -509,7 +497,6 @@ public class MainViewModel : BindableBase, IDisposable
                 HandyControl.Controls.Growl.Error("Error processing package stream event, please check logs.");
                 UpdatePackageInfoItems_Reset();
                 CurrentBarcode = string.Empty;
-                CurrentImage = null;
             });
         }
     }
@@ -640,7 +627,6 @@ public class MainViewModel : BindableBase, IDisposable
             // Unsubscribe from ICameraService events
             _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
             _packageStreamSubscription?.Dispose();
-            _imageStreamSubscription?.Dispose(); // Dispose if used
 
             // Remove old unsubscribes
             // _hikvisionDwsCommunicatorService.ConnectionStatusChanged -= OnHikvisionDwsConnectionStatusChanged;

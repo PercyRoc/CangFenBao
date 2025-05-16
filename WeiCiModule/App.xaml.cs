@@ -15,6 +15,7 @@ using System.IO;
 using WPFLocalizeExtension.Engine;
 using WPFLocalizeExtension.Providers;
 using Camera;
+using DeviceService.DataSourceDevices.Camera.TCP;
 
 namespace WeiCiModule;
 
@@ -96,6 +97,7 @@ public partial class App
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
         containerRegistry.AddCommonServices();
+        containerRegistry.RegisterSingleton<TcpCameraService>();
         containerRegistry.RegisterSingleton<SettingsDialogViewModel>();
         containerRegistry.RegisterSingleton<ChuteSettingsViewModel>();
         containerRegistry.RegisterSingleton<ModulesTcpSettingsViewModel>();
@@ -142,14 +144,26 @@ public partial class App
             {
                 Log.Error(ex, "启动 ModuleConnectionService 时发生错误。");
             }
-        });
-    }
 
-    protected override void ConfigureModuleCatalog(IModuleCatalog moduleCatalog)
-    {
-        base.ConfigureModuleCatalog(moduleCatalog);
-        moduleCatalog.AddModule<SpecificIntegratedCameraModule>();
-        Log.Information("海康物流SDK 已添加到模块目录。");
+            // 启动 TcpCameraService
+            var tcpCameraService = Container.Resolve<TcpCameraService>();
+            try
+            {
+                Log.Information("正在启动 TcpCameraService...");
+                if (tcpCameraService.Start())
+                {
+                    Log.Information("TcpCameraService 已成功请求启动。连接状态将通过事件回调更新。");
+                }
+                else
+                {
+                    Log.Error("TcpCameraService 启动请求失败。");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "启动 TcpCameraService 时发生错误。");
+            }
+        });
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -171,6 +185,33 @@ public partial class App
                 Log.Error(ex, "停止 ModuleConnectionService 时发生意外错误。");
             }
         }));
+
+        // Stop TcpCameraService
+        if (ContainerLocator.Container.IsRegistered<TcpCameraService>())
+        {
+            var tcpCameraService = ContainerLocator.Container.Resolve<TcpCameraService>();
+            Log.Information("正在尝试停止 TcpCameraService...");
+            tasks.Add(Task.Run(() => 
+            {
+                try
+                {
+                    if (tcpCameraService.Stop())
+                    {
+                        Log.Information("TcpCameraService 已成功请求停止。");
+                    }
+                    else
+                    {
+                        Log.Warning("TcpCameraService 停止请求失败。");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "停止 TcpCameraService 时发生意外错误。");
+                }
+            }));
+        } else {
+            Log.Warning("TcpCameraService 未注册，跳过停止操作。");
+        }
 
         if (tasks.Count != 0)
         {

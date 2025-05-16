@@ -56,21 +56,43 @@ namespace SowingWall.Services
         /// <returns>如果连接成功则为 true，否则为 false。</returns>
         public async Task<bool> ConnectAsync(int timeoutMs = 5000)
         {
-            if (IsConnected || _isConnecting)
+            if (IsConnected) // Optimized initial check
             {
-                Log.Debug("播种墙PLC服务: 已连接或正在连接中。");
-                return IsConnected;
+                // Log.Debug("播种墙PLC服务: 已连接，跳过连接尝试。"); // Can be too verbose
+                return true;
+            }
+            if (_isConnecting) // If a connection process is already running by another call.
+            {
+                Log.Debug("播种墙PLC服务: 连接操作已在进行中，等待其完成。");
+                // Simple busy wait for the _isConnecting flag to clear or timeout.
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+                // Cap wait time to prevent indefinite loop if _isConnecting flag is stuck
+                while(_isConnecting && stopwatch.ElapsedMilliseconds < Math.Max(timeoutMs, 1000) && !_serviceCts.IsCancellationRequested) 
+                { 
+                    try
+                    {
+                        await Task.Delay(50, _serviceCts.Token); 
+                    }
+                    catch (OperationCanceledException) { break; } // Exit if service is shutting down
+                }
+                stopwatch.Stop();
+                return IsConnected; // Return the status after waiting
             }
 
-            await _connectSemaphore.WaitAsync(_serviceCts.Token); // 等待信号量
-            _isConnecting = true;
+            await _connectSemaphore.WaitAsync(_serviceCts.Token); 
             try
             {
-                // 获取信号量后再次检查连接状态
+                // Re-check connection status after acquiring semaphore, as another call might have completed connection.
                 if (IsConnected)
                 {
                     return true;
                 }
+                
+                _isConnecting = true; // Set flag to indicate this thread is handling the connection attempt.
+
+                // Load/Refresh settings right before attempting to use them for connection.
+                // This ensures that this specific connection attempt uses the latest known configuration.
+                LoadSettings(); 
 
                 Log.Information("播种墙PLC服务: 尝试连接到PLC {Ip}:{Port}...", _settings.PlcIpAddress, _settings.PlcPort);
                 
@@ -81,7 +103,7 @@ namespace SowingWall.Services
                 {
                     Log.Warning("播种墙PLC服务: PLC IP地址或端口未配置，无法连接。");
                     _isConnected = false;
-                    _isConnecting = false; // 在释放信号量之前重置连接中标志
+                    // _isConnecting will be reset in finally block
                     return false;
                 }
 
@@ -107,7 +129,13 @@ namespace SowingWall.Services
                 }
                 return IsConnected;
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (_serviceCts.IsCancellationRequested)
+            {
+                Log.Information("播种墙PLC服务: 连接尝试因服务关闭而被取消。");
+                _isConnected = false;
+                return false;
+            }
+            catch (OperationCanceledException) // Catch specific timeout from Task.Delay or other cancellations
             {
                 Log.Information("播种墙PLC服务: 连接尝试已取消。");
                 _isConnected = false;
@@ -123,7 +151,7 @@ namespace SowingWall.Services
             }
             finally
             {   
-                _isConnecting = false;
+                _isConnecting = false; // Reset flag when operation is complete or failed
                 _connectSemaphore.Release(); // 释放信号量
             }
         }

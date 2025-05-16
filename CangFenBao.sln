@@ -2,7 +2,7 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.14.35906.104
-MinimumVisualStudioVersion = 10.0.40219.1
+MinimumVisualStudioVersion = 10.0.40219.1s
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "笨鸟", "BenFly\笨鸟.csproj", "{18448ED3-612A-4C22-B5C8-5702AE299C44}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UI组件", "SharedUI\UI组件.csproj", "{3676AC7B-167D-42E4-A822-7669A970A572}"
