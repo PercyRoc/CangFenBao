@@ -358,7 +358,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// <summary>
     ///     处理触发光电信号
     /// </summary>
-    private void HandleTriggerPhotoelectric(string data)
+    protected void HandleTriggerPhotoelectric(string data)
     {
         // 记录触发时间
         var triggerTime = DateTime.Now;
@@ -394,12 +394,12 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// <summary>
     ///     处理第二光电信号，由子类实现具体逻辑
     /// </summary>
-    protected abstract void HandleSecondPhotoelectric(string data);
+    protected abstract Task HandleSecondPhotoelectricAsync(string data);
 
     /// <summary>
     ///     处理光电信号
     /// </summary>
-    protected void HandlePhotoelectricSignal(string data)
+    protected async Task HandlePhotoelectricSignalAsync(string data)
     {
         // 处理可能的黏包情况，按行分割数据
         var lines = data.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
@@ -415,14 +415,14 @@ public abstract class BasePendulumSortService : IPendulumSortService
 
             if (!line.Contains("OCCH2:1")) continue;
             Log.Debug("处理分拣光电信号: {Signal}", line);
-            HandleSecondPhotoelectric(line);
+            await HandleSecondPhotoelectricAsync(line);
         }
     }
 
     /// <summary>
     ///     处理分拣信号并匹配包裹
     /// </summary>
-    protected PackageInfo? MatchPackageForSorting(string photoelectricName)
+    protected async Task<PackageInfo?> MatchPackageForSorting(string photoelectricName)
     {
         Log.Information("收到分拣光电 {Name} 检测信号，开始匹配包裹", photoelectricName);
 
@@ -525,6 +525,42 @@ public abstract class BasePendulumSortService : IPendulumSortService
             return pkg;
         }
 
+        // 如果循环完成没有找到匹配的包裹，则执行以下逻辑
+        var pendulumState = PendulumStates.TryGetValue(photoelectricName, out var state) ? state : null;
+        if (pendulumState != null && pendulumState.GetCurrentState() == "Swing")
+        {
+            Log.Information("分拣光电 {Name} 未找到匹配包裹，且摆轮当前为 {PendulumState} 状态。将尝试发送两次回正命令。", photoelectricName, pendulumState.GetCurrentState());
+            var client = GetSortingClient(photoelectricName);
+            if (client != null && client.IsConnected())
+            {
+                string resetCommandString;
+                // 根据LastSlot决定回正方向，如果LastSlot为0，则默认为右回正
+                if (ShouldSwingLeft(pendulumState.LastSlot) && pendulumState.LastSlot != 0)
+                {
+                    resetCommandString = PendulumCommands.Module2.ResetLeft;
+                }
+                else
+                {
+                    resetCommandString = PendulumCommands.Module2.ResetRight;
+                }
+                
+                var commandBytes = GetCommandBytes(resetCommandString);
+                Log.Information("分拣光电 {Name} 准备发送回正命令 ({Command}) 两次。基于 LastSlot: {LastSlot}", photoelectricName, resetCommandString, pendulumState.LastSlot);
+
+                await SendCommandWithRetryAsync(client, commandBytes, photoelectricName, resetCommandString); // 第一次发送
+                await SendCommandWithRetryAsync(client, commandBytes, photoelectricName, resetCommandString); // 第二次发送
+                
+                Log.Information("分拣光电 {Name} 已发送回正命令 ({Command}) 两次。", photoelectricName, resetCommandString);
+                pendulumState.SetReset(); // 更新摆轮状态为已回正
+            }
+            else
+            {
+                Log.Warning("分拣光电 {Name} 客户端未连接或未找到，无法发送回正命令。摆轮状态仍为 {PendulumState}，LastSlot: {LastSlot}", photoelectricName, pendulumState.GetCurrentState(), pendulumState.LastSlot);
+                // 可选：如果客户端不存在，强制重置逻辑状态以避免卡住
+                // pendulumState.ForceReset();
+            }
+        }
+
         Log.Debug("分拣光电 {Name} 没有找到符合条件的待分拣包裹", photoelectricName);
         return null;
     }
@@ -551,6 +587,10 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// </summary>
     protected async Task ExecuteSortingAction(PackageInfo package, string photoelectricName)
     {
+        var pendulumState = PendulumStates[photoelectricName]; 
+
+        pendulumState.CancelPendingReset();
+
         try
         {
             // 获取用于执行分拣动作的客户端
@@ -564,7 +604,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
 
             // 获取光电配置
             var photoelectricConfig = GetPhotoelectricConfig(photoelectricName);
-            var pendulumState = PendulumStates[photoelectricName];
+            // var pendulumState = PendulumStates[photoelectricName]; // Already got this
 
             // 等待包裹到达最佳分拣位置
             await Task.Delay(photoelectricConfig.SortingDelay);
@@ -574,191 +614,163 @@ public abstract class BasePendulumSortService : IPendulumSortService
             // 根据包裹目标格口决定摆动方向
             var targetSlot = package.ChuteNumber;
             var command = string.Empty;
+            var commandDescription = string.Empty; 
 
-            // 根据目标格口和当前状态决定命令
-            if (ShouldSwingLeft(targetSlot))
+            // 新的命令决策逻辑
+            if (pendulumState.GetCurrentState() == "Swing")
             {
-                if (pendulumState.GetCurrentState() == "Reset")
+                bool needsReset = false;
+                string resetCmd = "";
+                string resetCmdDesc = "";
+
+                if (ShouldSwingLeft(targetSlot)) // 新目标是左
                 {
-                    command = PendulumCommands.Module2.SwingLeft;
-                    pendulumState.SetSwing();
-                }
-                else if (pendulumState.LastSlot != targetSlot)
-                {
-                    // 先回正再摆动
-                    var resetCommand = GetCommandBytes(PendulumCommands.Module2.ResetLeft);
-                    if (!await SendCommandWithRetryAsync(client, resetCommand, photoelectricName))
+                    if (pendulumState.LastSlot != targetSlot) // 如果不是已经为这个目标左摆
                     {
-                        Log.Error("发送左回正命令失败，无法执行分拣动作");
+                        needsReset = true; 
+                        // 根据上次摆动方向选择回正命令
+                        if (ShouldSwingRight(pendulumState.LastSlot)) // 如果上次是右摆
+                        {
+                            resetCmd = PendulumCommands.Module2.ResetRight;
+                            resetCmdDesc = "回正(从右为左摆准备)";
+                        }
+                        else // 上次是左摆 (到不同格口) 或初始状态
+                        {
+                            resetCmd = PendulumCommands.Module2.ResetLeft;
+                            resetCmdDesc = "回正(从左为左摆准备)";
+                        }
+                    }
+                    // 如果 pendulumState.LastSlot == targetSlot 并且是左摆目标，则不需要做任何事，command将为空
+                }
+                else if (ShouldSwingRight(targetSlot)) // 新目标是右
+                {
+                    if (pendulumState.LastSlot != targetSlot) // 如果不是已经为这个目标右摆
+                    {
+                        needsReset = true; 
+                        // 根据上次摆动方向选择回正命令
+                        if (ShouldSwingLeft(pendulumState.LastSlot)) // 如果上次是左摆
+                        {
+                            resetCmd = PendulumCommands.Module2.ResetLeft;
+                            resetCmdDesc = "回正(从左为右摆准备)";
+                        }
+                        else // 上次是右摆 (到不同格口) 或初始状态
+                        {
+                            resetCmd = PendulumCommands.Module2.ResetRight;
+                            resetCmdDesc = "回正(从右为右摆准备)";
+                        }
+                    }
+                    // 如果 pendulumState.LastSlot == targetSlot 并且是右摆目标，则不需要做任何事，command将为空
+                }
+                else // 新目标是中间 (不需要特定摆动)
+                {
+                    // 如果当前是摆动状态，则必须回正
+                    needsReset = true; 
+                    if (ShouldSwingLeft(pendulumState.LastSlot) || pendulumState.LastSlot == 0) // 如果上次是左摆或初始状态
+                    {
+                        resetCmd = PendulumCommands.Module2.ResetLeft;
+                        resetCmdDesc = "回正(到中间)";
+                    }
+                    else // 上次是右摆
+                    {
+                        resetCmd = PendulumCommands.Module2.ResetRight;
+                        resetCmdDesc = "回正(到中间)";
+                    }
+                }
+
+                if (needsReset && !string.IsNullOrEmpty(resetCmd))
+                {
+                    var resetCommandBytes = GetCommandBytes(resetCmd);
+                    if (!await SendCommandWithRetryAsync(client, resetCommandBytes, photoelectricName, resetCmdDesc))
+                    {
+                        Log.Error("发送预备回正命令 ('{Desc}') 失败. 包裹: {Barcode}, 光电: {Photoelectric}", resetCmdDesc, package.Barcode, photoelectricName);
+                        ProcessingPackages.TryRemove(package.Barcode, out _);
                         return;
                     }
+                    pendulumState.SetReset(); // 逻辑状态设置为 Reset
+                    Log.Debug("预备回正后，摆轮 {Name} 状态设置为 Reset", photoelectricName);
+                    await Task.Delay(20); // 等待物理回正完成 - 固定20ms延迟
+                }
+            }
 
-                    await Task.Delay(photoelectricConfig.ResetDelay);
-
+            // 此时，如果需要回正，则 pendulumState.GetCurrentState() 应该是 "Reset"
+            // 现在根据当前状态（可能是刚被置为Reset，或者一开始就是Reset，或者是不需要改变的Swing）决定最终的摆动命令
+            if (pendulumState.GetCurrentState() == "Reset")
+            {
+                if (ShouldSwingLeft(targetSlot))
+                {
                     command = PendulumCommands.Module2.SwingLeft;
+                    commandDescription = "摆动到左侧";
                     pendulumState.SetSwing();
                 }
-            }
-            else if (ShouldSwingRight(targetSlot))
-            {
-                if (pendulumState.GetCurrentState() == "Reset")
+                else if (ShouldSwingRight(targetSlot))
                 {
                     command = PendulumCommands.Module2.SwingRight;
+                    commandDescription = "摆动到右侧";
                     pendulumState.SetSwing();
                 }
-                else if (pendulumState.LastSlot != targetSlot)
-                {
-                    // 先回正再摆动
-                    var resetCommand = GetCommandBytes(PendulumCommands.Module2.ResetRight);
-                    if (!await SendCommandWithRetryAsync(client, resetCommand, photoelectricName))
-                    {
-                        Log.Error("发送右回正命令失败，无法执行分拣动作");
-                        return;
-                    }
-
-                    await Task.Delay(photoelectricConfig.ResetDelay);
-
-                    command = PendulumCommands.Module2.SwingRight;
-                    pendulumState.SetSwing();
-                }
+                // 如果目标是中间且当前是Reset，command 保持为空，不需要动作
             }
-            else if (pendulumState.GetCurrentState() == "Swing") // 其他格口，不需要摆动
-            {
-                // 需要回正
-                command = pendulumState.LastSlot == 1
-                    ? PendulumCommands.Module2.ResetLeft
-                    : PendulumCommands.Module2.ResetRight;
-                pendulumState.SetReset();
-            }
+            // 如果 pendulumState.GetCurrentState() 仍是 "Swing"，那意味着它已经是正确的方向和目标格口，command将为空
 
             if (!string.IsNullOrEmpty(command))
             {
                 var commandBytes = GetCommandBytes(command);
-                if (!await SendCommandWithRetryAsync(client, commandBytes, photoelectricName))
+                if (!await SendCommandWithRetryAsync(client, commandBytes, photoelectricName, commandDescription))
                 {
-                    Log.Error("发送分拣命令失败");
+                    Log.Error("发送分拣命令 '{CommandDesc}' ({CommandText}) 失败. 包裹: {Barcode}, 光电: {Photoelectric}", commandDescription, command, package.Barcode, photoelectricName);
+                    ProcessingPackages.TryRemove(package.Barcode, out _); 
                     return;
                 }
-
-                Log.Debug("已发送分拣命令到分拣光电 {Name}: {Command}", photoelectricName, command);
             }
 
             pendulumState.UpdateLastSlot(targetSlot);
             Log.Information("包裹 {Barcode} 分拣完成，目标格口: {TargetSlot}", package.Barcode, targetSlot);
+            
+            PendingSortPackages.TryRemove(package.Index, out _); // 包裹已分拣或命令已发出，从待处理移除
+            Log.Debug("包裹 {Barcode}(序号:{Index}) 已执行分拣动作或命令，从待处理队列中移除", package.Barcode, package.Index);
 
-            // 创建定时器，在指定延迟后回正
+
             if ((ShouldSwingLeft(targetSlot) || ShouldSwingRight(targetSlot)) &&
-                pendulumState.GetCurrentState() == "Swing") // 只有在摆动状态才需要回正
+                pendulumState.GetCurrentState() == "Swing")
             {
-                var resetTimer = new Timer
-                {
-                    Interval = photoelectricConfig.ResetDelay,
-                    AutoReset = false
+                Func<Task<bool>> resetAction = async () => {
+                    // client can be null if ExecuteSortingAction was called for a different package and this timer fires later
+                    // or if the client was disposed. We need to get a fresh client instance or ensure it's still valid.
+                    var currentClient = GetSortingClient(photoelectricName);
+                    if (currentClient == null || !currentClient.IsConnected()) 
+                    {
+                        Log.Warning("延迟回正: 客户端 {Name} 未连接或为null，无法回正。", photoelectricName);
+                        return false; 
+                    }
+
+                    var currentTargetIsLeftThatCausedSwing = ShouldSwingLeft(pendulumState.LastSlot); // Use LastSlot to determine the direction of the swing that scheduled this reset
+                    var resetCmdBytes = currentTargetIsLeftThatCausedSwing 
+                        ? GetCommandBytes(PendulumCommands.Module2.ResetLeft)
+                        : GetCommandBytes(PendulumCommands.Module2.ResetRight);
+                    var resetCmdDesc = currentTargetIsLeftThatCausedSwing ? "延迟回正(左)" : "延迟回正(右)";
+                    
+                    return await SendCommandWithRetryAsync(currentClient, resetCmdBytes, photoelectricName, resetCmdDesc);
                 };
 
-                resetTimer.Elapsed += async (_, _) =>
-                {
-                    resetTimer.Stop();
-                    try
-                    {
-                        // 如果没有连接，直接返回
-                        if (!client.IsConnected()) return;
-
-                        // 修改：现在从PendingSortPackages中移除包裹，分拣动作完成
-                        PendingSortPackages.TryRemove(package.Index, out _);
-                        Log.Debug("包裹 {Barcode}(序号:{Index}) 分拣动作完成，从待处理队列中移除",
-                            package.Barcode, package.Index);
-
-                        // 延迟结束后，查找序号+1的包裹
-                        var nextPackageIndex = package.Index + 1;
-                        PendingSortPackages.TryGetValue(nextPackageIndex, out var nextPackage);
-
-                        // 判断当前包裹和下一个包裹的摆动方向是否相同
-                        var currentIsLeft = ShouldSwingLeft(targetSlot);
-                        var skipReset = false;
-
-                        if (nextPackage != null)
-                        {
-                            // 检查下一个包裹的目标格口是否与当前相同
-                            skipReset = targetSlot == nextPackage.ChuteNumber;
-                            ShouldSwingLeft(nextPackage.ChuteNumber);
-
-                            Log.Debug(
-                                "延迟结束后找到下一个序号包裹 {NextBarcode} (序号: {NextIndex})，当前格口: {CurrentSlot}，下一个格口: {NextSlot}{Action}",
-                                nextPackage.Barcode, nextPackage.Index,
-                                targetSlot,
-                                nextPackage.ChuteNumber,
-                                skipReset ? "，格口相同，跳过回正" : "，格口不同，需要回正");
-                        }
-                        else
-                        {
-                            Log.Debug("没有找到序号为 {NextIndex} 的待处理包裹，将执行回正", nextPackageIndex);
-                        }
-
-                        if (skipReset)
-                        {
-                            resetTimer.Dispose();
-                            return;
-                        }
-
-                        // 执行回正
-                        var resetCommand = currentIsLeft
-                            ? GetCommandBytes(PendulumCommands.Module2.ResetLeft) // 左摆用左回正
-                            : GetCommandBytes(PendulumCommands.Module2.ResetRight); // 右摆用右回正
-
-                        var commandStr = currentIsLeft
-                            ? PendulumCommands.Module2.ResetLeft
-                            : PendulumCommands.Module2.ResetRight;
-
-                        if (await SendCommandWithRetryAsync(client, resetCommand, photoelectricName))
-                        {
-                            pendulumState.SetReset();
-                            Log.Debug("已发送{Direction}回正命令到分拣光电 {Name}: {Command}，原因：{Reason}",
-                                currentIsLeft ? "左" : "右",
-                                photoelectricName,
-                                commandStr,
-                                nextPackage == null
-                                    ? "无后续包裹"
-                                    : $"下一个序号包裹目标格口不同 (当前:{targetSlot}, 下一个:{nextPackage.ChuteNumber})");
-                        }
-                        else
-                        {
-                            Log.Error("发送{Direction}回正命令({Command})失败，尝试强制回正",
-                                currentIsLeft ? "左" : "右",
-                                commandStr);
-                            pendulumState.ForceReset();
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex, "发送回正命令到分拣光电 {Name} 失败", photoelectricName);
-                        pendulumState.ForceReset();
-                    }
-                    finally
-                    {
-                        resetTimer.Dispose();
-                    }
-                };
-
-                resetTimer.Start();
-            }
-            else
-            {
-                // 对于不需要回正的情况，直接从待处理队列中移除
-                PendingSortPackages.TryRemove(package.Index, out _);
-                Log.Debug("包裹 {Barcode}(序号:{Index}) 分拣动作完成且不需要回正，从待处理队列中移除",
-                    package.Barcode, package.Index);
+                pendulumState.ScheduleDelayedReset(photoelectricConfig.ResetDelay, resetAction);
             }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "执行分拣动作时发生错误");
-            // 发生错误时，从待处理队列中移除
-            PendingSortPackages.TryRemove(package.Index, out _);
+            Log.Error(ex, "执行分拣动作时发生错误. 包裹: {Barcode}, 光电: {Photoelectric}", package.Barcode, photoelectricName);
+            ProcessingPackages.TryRemove(package.Barcode, out _);
+            PendingSortPackages.TryRemove(package.Index, out _); // Ensure removal on error too
         }
         finally
         {
-            ProcessingPackages.TryRemove(package.Barcode, out _);
+            // This was moved up: ProcessingPackages.TryRemove(package.Barcode, out _);
+            // However, if an exception occurs before this line in the try block, it might not be removed.
+            // Ensure it's removed if an error occurred and it's still there.
+            if (ProcessingPackages.ContainsKey(package.Barcode))
+            {
+                ProcessingPackages.TryRemove(package.Barcode, out _);
+                Log.Debug("确保包裹 {Barcode} 在ExecuteSortingAction结束时从ProcessingPackages中移除 (可能由于异常)", package.Barcode);
+            }
         }
     }
 
@@ -825,18 +837,28 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// <summary>
     ///     摆轮状态类
     /// </summary>
-    protected class PendulumState
+    protected class PendulumState : IDisposable
     {
         private bool _isInReset = true;
         public int LastSlot { get; private set; }
+        private Timer? _pendingResetTimer; // Timer for delayed reset
+        private readonly string _photoelectricName; 
+        private Func<Task<bool>>? _resetActionAsync;
+
+        public PendulumState(string photoelectricName)
+        {
+            _photoelectricName = photoelectricName;
+        }
 
         public void SetSwing()
         {
+            CancelPendingReset(); 
             _isInReset = false;
         }
 
         public void SetReset()
         {
+            CancelPendingReset(); 
             _isInReset = true;
         }
 
@@ -852,41 +874,136 @@ public abstract class BasePendulumSortService : IPendulumSortService
 
         public void ForceReset()
         {
+            CancelPendingReset();
             _isInReset = true;
+            Log.Information("Pendulum state for {PhotoelectricName} forced to Reset.", _photoelectricName);
+        }
+
+        public void CancelPendingReset()
+        {
+            if (_pendingResetTimer != null)
+            {
+                _pendingResetTimer.Stop();
+                _pendingResetTimer.Elapsed -= OnPendingResetTimerElapsed; 
+                _pendingResetTimer.Dispose();
+                _pendingResetTimer = null;
+                Log.Debug("Pending reset timer cancelled for {PhotoelectricName}.", _photoelectricName);
+            }
+        }
+
+        public void ScheduleDelayedReset(double interval, Func<Task<bool>> resetActionAsync)
+        {
+            CancelPendingReset(); 
+
+            _resetActionAsync = resetActionAsync ?? throw new ArgumentNullException(nameof(resetActionAsync));
+
+            _pendingResetTimer = new Timer(interval)
+            {
+                AutoReset = false
+            };
+            _pendingResetTimer.Elapsed += OnPendingResetTimerElapsed;
+            _pendingResetTimer.Start();
+            Log.Debug("Scheduled delayed reset for {PhotoelectricName} in {Interval}ms.", _photoelectricName, interval);
+        }
+
+        private async void OnPendingResetTimerElapsed(object? sender, ElapsedEventArgs e)
+        {
+            var timerThatElapsed = _pendingResetTimer; // Capture the instance
+
+            Log.Information("Pending reset timer elapsed for {PhotoelectricName}. Current state before action: {State}, LastSlot: {LastSlot}. Executing reset action.", 
+                _photoelectricName, GetCurrentState(), LastSlot);
+            
+            // It's crucial to nullify and dispose the timer *before* any await that might switch context,
+            // or at least ensure this specific instance won't be reused or double-disposed if CancelPendingReset is called elsewhere.
+            // Simplest is to unsubscribe and dispose, then nullify the class member.
+            if (timerThatElapsed != null)
+            {
+                 timerThatElapsed.Stop(); // Ensure it's stopped
+                 timerThatElapsed.Elapsed -= OnPendingResetTimerElapsed; // Unsubscribe
+                 timerThatElapsed.Dispose();
+                 if (_pendingResetTimer == timerThatElapsed) // Only nullify if it's still the current timer
+                 {
+                    _pendingResetTimer = null;
+                 }
+            }
+
+            if (_isInReset && _resetActionAsync == null) // If already reset and no action (e.g. by another operation or a quick succession), do nothing
+            {
+                Log.Information("Reset timer for {PhotoelectricName} elapsed, but pendulum is already in Reset state or action is null. No action taken.", _photoelectricName);
+                return;
+            }
+            
+            if (_resetActionAsync == null)
+            {
+                Log.Warning("Reset timer for {PhotoelectricName} elapsed, but no reset action was defined.", _photoelectricName);
+                // Force reset the logical state if no action can be performed
+                _isInReset = true; 
+                return;
+            }
+
+            try
+            {
+                var success = await _resetActionAsync();
+                if (success)
+                {
+                    _isInReset = true; 
+                    Log.Information("Delayed reset action successfully executed for {PhotoelectricName}. State is now Reset.", _photoelectricName);
+                }
+                else
+                {
+                    Log.Warning("Delayed reset action failed for {PhotoelectricName}. State remains Swing (or previous state). LastSlot: {LastSlot}", _photoelectricName, LastSlot);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Exception during delayed reset action for {PhotoelectricName}. State remains Swing (or previous state). LastSlot: {LastSlot}", _photoelectricName, LastSlot);
+                // ForceReset(); // Consider forcing reset on exception
+            }
+            finally
+            {
+                _resetActionAsync = null; // Clear the action after execution
+            }
+        }
+
+        public void Dispose()
+        {
+            CancelPendingReset();
         }
     }
 
     /// <summary>
     ///     发送命令并重试
     /// </summary>
-    private async Task<bool> SendCommandWithRetryAsync(TcpClientService client, byte[] command,
-        string photoelectricName, int maxRetries = 3)
+    private async Task<bool> SendCommandWithRetryAsync(TcpClientService client, byte[] command, string photoelectricName, string commandDescription, int maxRetries = 3)
     {
+        var commandText = Encoding.ASCII.GetString(command).TrimEnd(); // 用于日志记录，移除 \r\n
         for (var i = 0; i < maxRetries; i++)
         {
             try
             {
                 if (!client.IsConnected())
                 {
-                    Log.Warning("分拣光电 {Name} 未连接，尝试重连", photoelectricName);
-                    await ReconnectAsync();
+                    Log.Warning("分拣光电 {Name} 未连接，尝试重连 (发送 '{CommandDesc}' ({CommandText}) 期间)", photoelectricName, commandDescription, commandText);
+                    await ReconnectAsync(); // 应该只尝试重连一次，或者有更复杂的重连策略
                     await Task.Delay(1000); // 等待重连完成
-                    continue;
+                    // 如果重连后仍未连接，则此次尝试失败，进入下一次重试或最终失败
+                    if(!client.IsConnected()) continue;
                 }
 
                 client.Send(command);
+                Log.Information("已发送命令 '{CommandDesc}' ({CommandText}) 到光电 {PhotoelectricName}", commandDescription, commandText, photoelectricName);
                 return true;
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, "发送命令到分拣光电 {Name} 失败，第 {Retry} 次重试", photoelectricName, i + 1);
+                Log.Warning(ex, "发送命令 '{CommandDesc}' ({CommandText}) 到分拣光电 {Name} 失败，第 {Retry} 次重试", commandDescription, commandText, photoelectricName, i + 1);
                 if (i < maxRetries - 1)
                 {
                     await Task.Delay(1000); // 等待1秒后重试
                 }
             }
         }
-
+        Log.Error("发送命令 '{CommandDesc}' ({CommandText}) 到分拣光电 {Name} 最终失败 (尝试 {MaxRetries} 次)", commandDescription, commandText, photoelectricName, maxRetries);
         return false;
     }
 }

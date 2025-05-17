@@ -80,7 +80,7 @@ public class MultiPendulumSortService : BasePendulumSortService
                 );
 
                 _sortingClients[photoelectric.Name] = client;
-                PendulumStates[photoelectric.Name] = new PendulumState();
+                PendulumStates[photoelectric.Name] = new PendulumState(photoelectric.Name);
 
                 // 初始化分拣光电信号状态
                 _photoelectricSignalStates[photoelectric.Name] = false;
@@ -287,7 +287,7 @@ public class MultiPendulumSortService : BasePendulumSortService
         }
     }
 
-    private void ProcessTriggerData(byte[] data)
+    private async void ProcessTriggerData(byte[] data)
     {
         try
         {
@@ -307,7 +307,7 @@ public class MultiPendulumSortService : BasePendulumSortService
             }
 
             // 使用基类的信号处理方法
-            HandlePhotoelectricSignal(message);
+            await HandlePhotoelectricSignalAsync(message);
         }
         catch (Exception ex)
         {
@@ -315,7 +315,7 @@ public class MultiPendulumSortService : BasePendulumSortService
         }
     }
 
-    private void ProcessSortingData(byte[] data, string photoelectricName)
+    private async void ProcessSortingData(byte[] data, string photoelectricName)
     {
         try
         {
@@ -328,7 +328,7 @@ public class MultiPendulumSortService : BasePendulumSortService
             UpdatePhotoelectricSignalState(photoelectricName, true);
             Log.Information("分拣光电 {Name} 收到上升沿信号，开始匹配包裹并执行分拣", photoelectricName);
             // 使用基类的匹配逻辑
-            var package = MatchPackageForSorting(photoelectricName);
+            var package = await MatchPackageForSorting(photoelectricName);
             if (package == null) return;
             // Calculate the time difference
             var matchTime = DateTime.Now;
@@ -372,9 +372,10 @@ public class MultiPendulumSortService : BasePendulumSortService
     /// <summary>
     ///     不处理第二光电信号
     /// </summary>
-    protected override void HandleSecondPhotoelectric(string data)
+    protected override async Task HandleSecondPhotoelectricAsync(string data)
     {
         // 多摆轮不处理第二光电信号
+        await Task.CompletedTask; // Added to make it async and compile
     }
 
     /// <summary>

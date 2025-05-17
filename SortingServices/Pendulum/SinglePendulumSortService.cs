@@ -35,7 +35,7 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
         }
 
         // 初始化摆轮状态
-        PendulumStates["默认"] = new PendulumState();
+        PendulumStates["默认"] = new PendulumState("默认");
 
         Log.Information("单光电单摆轮分拣服务初始化完成");
         return Task.CompletedTask;
@@ -172,7 +172,7 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
         }
     }
 
-    private void ProcessTriggerData(byte[] data)
+    private async void ProcessTriggerData(byte[] data)
     {
         try
         {
@@ -180,7 +180,7 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
             Log.Debug("收到触发光电数据: {Message}", message);
 
             // 使用基类的信号处理方法
-            HandlePhotoelectricSignal(message);
+            await HandlePhotoelectricSignalAsync(message);
         }
         catch (Exception ex)
         {
@@ -191,10 +191,10 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
     /// <summary>
     ///     处理第二光电信号
     /// </summary>
-    protected override void HandleSecondPhotoelectric(string data)
+    protected override async Task HandleSecondPhotoelectricAsync(string data)
     {
         // 使用基类的匹配逻辑
-        var package = MatchPackageForSorting("默认");
+        var package = await MatchPackageForSorting("默认");
         if (package == null) return;
 
         // 执行分拣动作

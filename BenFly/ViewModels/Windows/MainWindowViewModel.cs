@@ -5,7 +5,6 @@ using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -34,7 +33,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 {
     // 用于为合并后的包裹生成新的、线程安全的序号
     private static int _nextMergedPackageIndex;
-    
+
     private readonly BenNiaoPackageService _benNiaoService;
     private readonly BenNiaoPreReportService _preReportService;
     private readonly ICameraService _cameraService;
@@ -245,6 +244,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 beltStatus.StatusColor = _beltSerialService.IsOpen ? "#4CAF50" : "#F44336"; // Green/Red
                 Log.Debug("皮带串口已启用，初始状态: {Status}", beltStatus.Status);
             }
+
             DeviceStatuses.Add(beltStatus); // Add the configured status object
             Log.Debug("已添加皮带状态");
 
@@ -314,19 +314,17 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             var beltStatus = DeviceStatuses.FirstOrDefault(static x => x.Name == "皮带");
             if (beltStatus == null) return;
 
-            // Load the settings *inside* the dispatcher invoke to get the latest state
             var beltSettings = _settingsService.LoadSettings<BeltSerialParams>();
 
             if (!beltSettings.IsEnabled)
             {
                 beltStatus.Status = "已禁用";
-                beltStatus.StatusColor = "#9E9E9E"; // Gray
+                beltStatus.StatusColor = "#9E9E9E";
                 Log.Debug("皮带串口已禁用 (在状态更新时检测到)");
             }
             else
             {
-                // Only update based on isConnected if enabled
-            beltStatus.Status = isConnected ? "已连接" : "已断开";
+                beltStatus.Status = isConnected ? "已连接" : "已断开";
                 beltStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336"; // Green/Red
                 Log.Debug("皮带串口已启用，状态更新为: {Status}", beltStatus.Status);
             }
@@ -477,50 +475,11 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             barcodeItem.Value = barcode;
             barcodeItem.Description = "请按回车键确认";
         });
-        
+
         // 如果存在等待中的条码输入任务，则完成它
         if (_barcodeScanCompletionSource is not null && !_barcodeScanCompletionSource.Task.IsCompleted)
         {
             _barcodeScanCompletionSource.SetResult(barcode);
-        }
-    }
-
-    private async Task<string> WaitForBarcodeScanAsync()
-    {
-        _barcodeScanCompletionSource = new TaskCompletionSource<string>();
-
-        try
-        {
-            // 显示等待扫码提示
-            await Application.Current.Dispatcher.InvokeAsync(() =>
-            {
-                // 清空条码输入框
-                CurrentBarcode = string.Empty;
-
-                // 查找主窗口中的条码输入控件并设置焦点
-                if (Application.Current.MainWindow is null) return;
-
-                // 查找包含条码显示的控件
-                var textBox = FindBarcodeTextBox(Application.Current.MainWindow);
-                if (textBox is not null)
-                {
-                    // 设置焦点
-                    textBox.Focus();
-                    Log.Debug("已将焦点设置到条码输入控件");
-                }
-                else
-                {
-                    Log.Warning("未找到条码输入控件，无法设置焦点");
-                }
-            });
-
-            // 等待用户输入或扫码，并按回车确认
-            return await _barcodeScanCompletionSource.Task;
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "等待条码输入时发生错误");
-            throw;
         }
     }
 
@@ -575,18 +534,15 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             // 在方法开始时立即更新CurrentBarcode
-            await Application.Current.Dispatcher.InvokeAsync(() =>
-            {
-                CurrentBarcode = package.Barcode;
-            });
-            
+            await Application.Current.Dispatcher.InvokeAsync(() => { CurrentBarcode = package.Barcode; });
+
             // 如果不是noread，播放成功音效
             if (!string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase))
             {
                 _ = _audioService.PlayPresetAsync(AudioType.Success);
             }
 
-            Log.Information("收到包裹信息：{Barcode}, 序号：{Index}", package.Barcode, package.Index);
+            Log.Information("收到包裹信息：Barcode: {Barcode}, Index: {Index}", package.Barcode, package.Index);
 
             // 暂存原始图像，处理完成后清空
             var originalImage = package.Image;
@@ -596,18 +552,19 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             var skipFurtherProcessing = false;
 
             // 检查条码是否为 noread 或空
-            var isNoReadOrEmpty = string.IsNullOrWhiteSpace(package.Barcode) || string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase);
+            var isNoReadOrEmpty = string.IsNullOrWhiteSpace(package.Barcode) ||
+                                  string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase);
             // 检查数据是否有效 (重量 > 0 且 尺寸 > 0)
-            var isInvalidData = package.Weight <= 0 || 
-                                !package.Length.HasValue || package.Length.Value <= 0 || 
-                                !package.Width.HasValue || package.Width.Value <= 0 || 
+            var isInvalidData = package.Weight <= 0 ||
+                                !package.Length.HasValue || package.Length.Value <= 0 ||
+                                !package.Width.HasValue || package.Width.Value <= 0 ||
                                 !package.Height.HasValue || package.Height.Value <= 0;
 
 
             // 如果条码无效 或 数据无效
             if (isNoReadOrEmpty || isInvalidData)
             {
-                // 播放错误音效
+                // 播放错误音效 (对于 NoRead，如果需要不同音效，可以调整)
                 _ = _audioService.PlayPresetAsync(AudioType.SystemError);
 
                 // 加载格口规则以获取异常口
@@ -616,91 +573,133 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
                 // 分配到配置的异常口
                 package.SetChute(exceptionChute);
-                Log.Information("包裹 {Barcode} (Index: {Index}) 因 '{Reason}'，预分配到配置的异常口 {ExceptionChute}", 
-                    package.Barcode, package.Index, isNoReadOrEmpty ? "NoRead/Empty Barcode" : "Invalid Weight/Volume", exceptionChute);
-
-                // 加载皮带设置
-                var beltSettings = _settingsService.LoadSettings<BeltSerialParams>();
-
-                // 根据皮带启用状态决定后续操作
-                if (beltSettings.IsEnabled)
+                Log.Information("包裹 Barcode: {Barcode}, Index: {Index} 因 '{Reason}',预分配到配置的异常口 {ExceptionChute}",
+                    package.Barcode, package.Index, isNoReadOrEmpty ? "NoRead/Empty Barcode" : "Invalid Weight/Volume",
+                    exceptionChute);
+                if (isInvalidData)
                 {
-                    // 皮带启用: 尝试停止，显示完整错误信息
-                    // Note: StopBelt was already attempted above if enabled, no need to call again unless the logic changed
-                    // We just need to ensure the notification reflects the stopped state.
-                    Log.Information("皮带已启用，因数据无效停止。", package.Barcode); // Log confirming stop attempt was made
-                        await Application.Current.Dispatcher.InvokeAsync(() =>
-                        {
-                        _notificationService.ShowError($"包裹 {package.Barcode} 因数据无效停止。请检查包裹或设备。");
-                        UpdatePackageInfoItems(package); // 再次更新，确保状态和错误信息显示
-                    });
-                        }
-                        else
-                        {
-                    // 皮带禁用: 仅提示数据无效
-                    Log.Information("皮带已禁用，因数据无效跳过处理流程。", package.Barcode);
-                        await Application.Current.Dispatcher.InvokeAsync(() =>
-                        {
-                        _notificationService.ShowError($"包裹 {package.Barcode} 因数据无效跳过处理流程。请检查包裹或设备。 (皮带控制已禁用)");
-                         UpdatePackageInfoItems(package); // 再次更新，确保状态和错误信息显示
-                    });
-                }
+                    // 对于数据无效的包裹，也将其标记为 uploadAsNoRead 以跳过笨鸟主要交互
+                    // 并确保它进入后续的分拣和历史记录流程
+                    uploadAsNoRead = true; 
+                    var invalidDataErrorMsg = "包裹重量或体积数据无效";
+                    package.SetStatus(PackageStatus.Error, invalidDataErrorMsg); // 设置正确的状态和错误信息
+                    Log.Information("包裹数据无效 Barcode: {Barcode}, Index: {Index}。状态设为Error, ErrorMessage: '{ErrorMessage}'. 将标记为 uploadAsNoRead，并继续部分处理流程。", 
+                        package.Barcode, package.Index, invalidDataErrorMsg);
 
-                // 无论启用与否，都跳过后续处理
-                    skipFurtherProcessing = true;
-                    Log.Information("因数据无效，跳过包裹 {Barcode} 的后续处理流程。", package.Barcode);
+                    // 加载皮带设置
+                    var beltSettings = _settingsService.LoadSettings<BeltSerialParams>();
+                    if (beltSettings.IsEnabled)
+                    {
+                        Log.Information("皮带已启用，因数据无效停止。Barcode: {Barcode}, Index: {Index}", package.Barcode,
+                            package.Index);
+                        await Application.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            _notificationService.ShowError($"包裹 {package.Barcode} 因数据无效停止。请检查包裹或设备。");
+                            UpdatePackageInfoItems(package);
+                        });
+                    }
+                    else
+                    {
+                        Log.Information("皮带已禁用，因数据无效跳过处理流程。Barcode: {Barcode}, Index: {Index}", package.Barcode,
+                            package.Index);
+                        await Application.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            _notificationService.ShowError($"包裹 {package.Barcode} 因数据无效跳过处理流程。请检查包裹或设备。 (皮带控制已禁用)");
+                            UpdatePackageInfoItems(package);
+                        });
+                    }
+                    // 对于 NoRead 包裹，我们不再设置 skipFurtherProcessing = true
+                    // 而是设置 uploadAsNoRead = true，以便后续逻辑能识别并跳过笨鸟交互
+                    uploadAsNoRead = true;
+                    // 明确设置 NoRead 状态，如果之前没有因为 isInvalidData 而设置 Error 状态
+                    if (package.Status != PackageStatus.Error)
+                    {
+                        package.SetStatus(PackageStatus.NoRead); 
+                    }
+                    Log.Information("包裹为 NoRead/Empty，Barcode: {Barcode}, Index: {Index}。将标记为 uploadAsNoRead，继续部分处理流程。当前状态: {Status}",
+                        package.Barcode, package.Index, package.Status);
+                }
+                else if (isNoReadOrEmpty) // 仅当 isNoReadOrEmpty 且非 isInvalidData 时
+                {
+                    // 对于 NoRead 包裹，我们不再设置 skipFurtherProcessing = true
+                    // 而是设置 uploadAsNoRead = true，以便后续逻辑能识别并跳过笨鸟交互
+                    uploadAsNoRead = true;
+                    // 明确设置 NoRead 状态，如果之前没有因为 isInvalidData 而设置 Error 状态
+                    if (package.Status != PackageStatus.Error)
+                    {
+                        package.SetStatus(PackageStatus.NoRead); 
+                    }
+                    Log.Information("包裹为 NoRead/Empty，Barcode: {Barcode}, Index: {Index}。将标记为 uploadAsNoRead，继续部分处理流程。当前状态: {Status}",
+                        package.Barcode, package.Index, package.Status);
+                }
             }
 
-             // ****** 开始处理包裹（如果未跳过） ******
-            if (!skipFurtherProcessing)
+            // ****** 开始处理包裹（如果未跳过） ******
+            // 由于 isInvalidData 时不再设置 skipFurtherProcessing，此条件始终为 true（除非未来有其他地方设置它）
+            if (!skipFurtherProcessing) 
             {
-                Log.Information("开始处理包裹: {Barcode} (UploadAsNoRead: {IsNoRead})", package.Barcode, uploadAsNoRead);
+                Log.Information("开始处理包裹: Barcode: {Barcode}, Index: {Index}, UploadAsNoRead: {IsNoRead}",
+                    package.Barcode, package.Index, uploadAsNoRead);
+
+                // 将包裹提交给分拣服务 (无论是否是NoRead，只要没被skip)
+                try
+                {
+                    _sortService.ProcessPackage(package);
+                    Log.Information("包裹已提交到分拣服务: Barcode: {Barcode}, Index: {Index}", package.Barcode, package.Index);
+                }
+                catch (Exception ex)
+                {
+                    var errorMsg = $"提交到分拣服务异常: {ex.Message}";
+                    Log.Error(ex, "提交包裹到分拣服务时发生错误。Barcode: {Barcode}, Index: {Index}", package.Barcode, package.Index);
+                    package.SetStatus(PackageStatus.Error, errorMsg);
+                    // 如果提交到分拣服务失败，可能需要考虑是否影响后续笨鸟交互，这里暂时不改变 benNiaoInteractionSuccess
+                    // 但至少要分配到异常口
+                    package.SetChute(-1);
+                }
 
                 // 将变量声明移到此处
                 bool benNiaoInteractionSuccess = true;
                 string benNiaoErrorMessage = string.Empty;
                 DateTime uploadTime = DateTime.MinValue;
 
-                // 1. 分拣服务处理
-                if (!uploadAsNoRead)
-                {
-                    try
-                    {
-                        _sortService.ProcessPackage(package);
-                    }
-                    catch (Exception ex)
-                    {
-                        var errorMsg = $"分拣处理异常: {ex.Message}";
-                        Log.Error(ex, "分拣服务处理包裹 {Barcode} 时发生错误", package.Barcode);
-                        package.SetStatus(PackageStatus.Error, errorMsg);
-                        benNiaoInteractionSuccess = false; // 现在可以使用了
-                        benNiaoErrorMessage = errorMsg;    // 现在可以使用了
-                        package.SetChute(-1);
-                    }
-                }
+                // 1. 分拣服务处理 - 这部分逻辑已经移到上面了，保留原有注释结构或移除
+                // if (!uploadAsNoRead) // 这个条件不再适用于 _sortService.ProcessPackage
+                // {
+                //     try
+                //     {
+                //         _sortService.ProcessPackage(package); // 已上移
+                //     }
+                //     catch (Exception ex)
+                //     {
+                //         var errorMsg = $"分拣处理异常: {ex.Message}";
+                //         Log.Error(ex, "分拣服务处理包裹时发生错误。Barcode: {Barcode}, Index: {Index}", package.Barcode,
+                //             package.Index);
+                //         package.SetStatus(PackageStatus.Error, errorMsg);
+                //         benNiaoInteractionSuccess = false; 
+                //         benNiaoErrorMessage = errorMsg; 
+                //         package.SetChute(-1);
+                //     }
+                // }
 
-                // 2. 笨鸟系统交互 (仅当分拣未失败时继续, 或者本身就是 NoRead)
-                if (uploadAsNoRead)
+                // 2. 笨鸟系统交互
+                if (uploadAsNoRead) // 对于NoRead包裹或数据无效包裹，执行这里的逻辑
                 {
-                    // 2.a 上传 NoRead 数据
-                    Log.Information("调用笨鸟 UploadNoReadDataAsync for {Barcode}", package.Barcode);
-                    // bool noReadUploadSuccess = await _benNiaoService.UploadNoReadDataAsync(package, originalImage);
-                    var (noReadUploadSuccess, noReadErrorMessage) = await _benNiaoService.UploadNoReadDataAsync(package, originalImage);
-                    if (!noReadUploadSuccess)
+                    // 2.a 上传 NoRead 数据 (如果需要)
+                    // 示例：如果 _benNiaoService.UploadNoReadDataAsync 存在并且需要调用
+                    // Log.Information("调用笨鸟 UploadNoReadDataAsync for Barcode: {Barcode}, Index: {Index}",
+                    //    package.Barcode, package.Index);
+                    // var (noReadUploadSuccess, noReadErrorMessage) =
+                    // await _benNiaoService.UploadNoReadDataAsync(package, originalImage);
+                    // if (!noReadUploadSuccess) { ... } else { ... }
+                    Log.Information("包裹为 NoRead (Barcode: {Barcode}, Index: {Index})，跳过主要的笨鸟系统交互。当前状态: {Status}", 
+                        package.Barcode, package.Index, package.Status);
+                    // 如果是因数据无效导致 uploadAsNoRead，其状态已设为 Error。如果是纯NoRead，检查并设置状态。
+                    if (isNoReadOrEmpty && !isInvalidData) // 确认为纯NoRead (不是因为数据无效)
                     {
-                        benNiaoInteractionSuccess = false;
-                        // 使用服务返回的具体错误信息
-                        benNiaoErrorMessage = string.IsNullOrWhiteSpace(noReadErrorMessage) ? "异常数据上传失败(未知原因)" : noReadErrorMessage;
-                        package.SetStatus(PackageStatus.Error, benNiaoErrorMessage);
-                        Log.Warning("笨鸟异常数据上传失败: {Barcode}, Error: {Error}", package.Barcode, benNiaoErrorMessage);
-                    }
-                    else
-                    {
-                        package.SetStatus(PackageStatus.NoRead); // 标记为已上传的NoRead
-                        Log.Information("笨鸟异常数据上传成功: {Barcode}", package.Barcode);
+                         package.SetStatus(PackageStatus.NoRead); 
                     }
                 }
-                else if(benNiaoInteractionSuccess) // 仅当条码有效且分拣未出错时，才进行后续笨鸟操作
+                else if(benNiaoInteractionSuccess) // 仅当条码有效、分拣服务提交未出错（或错误不影响此处）、且非NoRead/非数据无效时，才进行后续笨鸟操作
                 {
                     // 2.b 获取段码
                     try
@@ -710,54 +709,68 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
                         if (preReportItem != null && !string.IsNullOrWhiteSpace(preReportItem.SegmentCode))
                         {
-                            Log.Information("在预报数据中找到包裹 {Barcode} 的三段码: {SegmentCode}", package.Barcode, preReportItem.SegmentCode);
+                            Log.Information("在预报数据中找到包裹的三段码: {SegmentCode}。Barcode: {Barcode}, Index: {Index}",
+                                preReportItem.SegmentCode, package.Barcode, package.Index);
                             package.SetSegmentCode(preReportItem.SegmentCode);
                         }
                         else
                         {
-                            Log.Information("预报数据未找到 {Barcode}，尝试实时查询...", package.Barcode);
+                            Log.Information("预报数据未找到包裹，尝试实时查询... Barcode: {Barcode}, Index: {Index}", package.Barcode,
+                                package.Index);
                             // var segmentCode = await _benNiaoService.GetRealTimeSegmentCodeAsync(package.Barcode);
-                            var (segmentCode, segmentError) = await _benNiaoService.GetRealTimeSegmentCodeAsync(package.Barcode);
+                            var (segmentCode, segmentError) =
+                                await _benNiaoService.GetRealTimeSegmentCodeAsync(package.Barcode);
                             if (!string.IsNullOrWhiteSpace(segmentCode))
                             {
-                                Log.Information("通过实时查询获取到包裹 {Barcode} 的三段码: {SegmentCode}", package.Barcode, segmentCode);
+                                Log.Information("通过实时查询获取到包裹的三段码: {SegmentCode}。Barcode: {Barcode}, Index: {Index}",
+                                    segmentCode, package.Barcode, package.Index);
                                 package.SetSegmentCode(segmentCode);
                             }
                             else
                             {
                                 // 获取段码失败，标记错误并记录消息
-                                benNiaoInteractionSuccess = false; 
-                                benNiaoErrorMessage = string.IsNullOrWhiteSpace(segmentError) ? "无法获取三段码(未知原因)" : segmentError;
+                                benNiaoInteractionSuccess = false;
+                                benNiaoErrorMessage = string.IsNullOrWhiteSpace(segmentError)
+                                    ? "无法获取三段码(未知原因)"
+                                    : segmentError;
                                 package.SetStatus(PackageStatus.Error, benNiaoErrorMessage);
-                                Log.Warning("无法获取包裹 {Barcode} 的三段码: {Error}", package.Barcode, benNiaoErrorMessage);
+                                Log.Warning("无法获取包裹的三段码: {Error}。Barcode: {Barcode}, Index: {Index}",
+                                    benNiaoErrorMessage, package.Barcode, package.Index);
                             }
                         }
                     }
                     catch (Exception ex)
                     {
                         // 获取段码过程中发生未预期的异常
-                        benNiaoInteractionSuccess = false; 
+                        benNiaoInteractionSuccess = false;
                         benNiaoErrorMessage = $"获取段码异常: {ex.Message}";
                         package.SetStatus(PackageStatus.Error, benNiaoErrorMessage);
-                        Log.Error(ex, "获取包裹 {Barcode} 三段码时发生异常", package.Barcode);
+                        Log.Error(ex, "获取包裹三段码时发生异常。Barcode: {Barcode}, Index: {Index}", package.Barcode,
+                            package.Index);
                     }
 
                     // 2.c 上传包裹数据 (仅当获取段码成功时)
                     if (benNiaoInteractionSuccess)
                     {
-                        Log.Information("调用笨鸟 UploadPackageDataAsync for {Barcode}", package.Barcode);
-                        var (dataSuccess, time, dataErrorMessage) = await _benNiaoService.UploadPackageDataAsync(package);
+                        Log.Information("调用笨鸟 UploadPackageDataAsync for Barcode: {Barcode}, Index: {Index}",
+                            package.Barcode, package.Index);
+                        var (dataSuccess, time, dataErrorMessage) =
+                            await _benNiaoService.UploadPackageDataAsync(package);
                         if (!dataSuccess)
                         {
                             benNiaoInteractionSuccess = false;
-                            benNiaoErrorMessage = string.IsNullOrEmpty(dataErrorMessage) ? "数据上传失败(未知原因)" : dataErrorMessage;
+                            benNiaoErrorMessage = string.IsNullOrEmpty(dataErrorMessage)
+                                ? "数据上传失败(未知原因)"
+                                : dataErrorMessage;
                             package.SetStatus(PackageStatus.Error, benNiaoErrorMessage);
-                            Log.Warning("笨鸟数据上传失败: {Barcode}, Error: {Error}", package.Barcode, benNiaoErrorMessage);
+                            Log.Warning("笨鸟数据上传失败: Barcode: {Barcode}, Index: {Index}, Error: {Error}", package.Barcode,
+                                package.Index, benNiaoErrorMessage);
                         }
                         else
                         {
                             uploadTime = time;
-                            Log.Information("笨鸟数据上传成功: {Barcode}", package.Barcode);
+                            Log.Information("笨鸟数据上传成功: Barcode: {Barcode}, Index: {Index}", package.Barcode,
+                                package.Index);
                             // 初始状态设为成功，后续格口分配失败可覆盖
                             package.SetStatus(PackageStatus.Success);
                         }
@@ -766,10 +779,13 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     // 2.d 启动图片上传 (仅当数据上传成功且有图片时)
                     if (benNiaoInteractionSuccess && originalImage != null)
                     {
-                        Log.Information("准备启动后台图片上传 for {Barcode}", package.Barcode);
+                        Log.Information("准备启动后台图片上传 for Barcode: {Barcode}, Index: {Index}", package.Barcode,
+                            package.Index);
                         try
                         {
-                            var tempImagePath = BenNiaoPackageService.SaveImageToTempFileAsync(originalImage, package.Barcode, uploadTime);
+                            var tempImagePath =
+                                BenNiaoPackageService.SaveImageToTempFileAsync(originalImage, package.Barcode,
+                                    uploadTime);
                             if (!string.IsNullOrWhiteSpace(tempImagePath))
                             {
                                 _ = Task.Run(async () =>
@@ -777,19 +793,24 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                                     try
                                     {
                                         // await _benNiaoService.UploadImageAsync(package.Barcode, uploadTime, tempImagePath);
-                                        var (imageUploadSuccess, imageUploadError) = await _benNiaoService.UploadImageAsync(package.Barcode, uploadTime, tempImagePath);
-                                        if (!imageUploadSuccess) 
+                                        var (imageUploadSuccess, imageUploadError) =
+                                            await _benNiaoService.UploadImageAsync(package.Barcode, uploadTime,
+                                                tempImagePath);
+                                        if (!imageUploadSuccess)
                                         {
-                                            Log.Warning("后台图片上传失败 for {Barcode}: {Error}. 包裹状态不会更新。", package.Barcode, imageUploadError ?? "未知原因");
+                                            Log.Warning(
+                                                "后台图片上传失败 for Barcode: {Barcode}, Index: {Index}: {Error}. 包裹状态不会更新。",
+                                                package.Barcode, package.Index, imageUploadError ?? "未知原因");
                                         }
                                         else
                                         {
-                                            Log.Information("后台图片上传成功 for {Barcode}", package.Barcode);
+                                            Log.Information("后台图片上传成功 for Barcode: {Barcode}, Index: {Index}",
+                                                package.Barcode, package.Index);
                                         }
 
                                         try
                                         {
-                                             // 尝试删除临时文件，无论上传是否成功
+                                            // 尝试删除临时文件，无论上传是否成功
                                             File.Delete(tempImagePath);
                                         }
                                         catch (Exception ex)
@@ -799,7 +820,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                                     }
                                     catch (Exception ex)
                                     {
-                                        Log.Error(ex, "后台上传包裹 {Barcode} 的图片任务发生未捕获异常", package.Barcode);
+                                        Log.Error(ex, "后台上传包裹图片任务发生未捕获异常。Barcode: {Barcode}, Index: {Index}",
+                                            package.Barcode, package.Index);
                                         // 也可以记录这个异常信息，但同样不更新包裹状态
                                     }
                                 });
@@ -807,14 +829,16 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                             }
                             else
                             {
-                                Log.Warning("保存临时图片失败，无法启动后台图片上传 for {Barcode}", package.Barcode);
+                                Log.Warning("保存临时图片失败，无法启动后台图片上传 for Barcode: {Barcode}, Index: {Index}",
+                                    package.Barcode, package.Index);
                                 // 是否需要标记包裹错误？根据业务决定，目前只记录日志
                             }
                         }
                         catch (Exception ex)
                         {
-                             Log.Error(ex, "保存临时图片或启动图片后台上传任务时发生错误 for {Barcode}", package.Barcode);
-                             // 是否需要标记包裹错误？根据业务决定，目前只记录日志
+                            Log.Error(ex, "保存临时图片或启动图片后台上传任务时发生错误 for Barcode: {Barcode}, Index: {Index}",
+                                package.Barcode, package.Index);
+                            // 是否需要标记包裹错误？根据业务决定，目前只记录日志
                         }
                     }
                 }
@@ -828,21 +852,25 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                             var chuteConfig = _settingsService.LoadSettings<SegmentCodeRules>();
                             var chute = chuteConfig.GetChuteBySpaceSeparatedSegments(package.SegmentCode);
                             package.SetChute(chute);
-                            Log.Information("包裹 {Barcode} 分配到格口 {Chute}，段码：{SegmentCode}", package.Barcode, chute, package.SegmentCode);
+                            Log.Information("包裹分配到格口 {Chute}，段码：{SegmentCode}。Barcode: {Barcode}, Index: {Index}",
+                                chute, package.SegmentCode, package.Barcode, package.Index);
                         }
                         catch (Exception ex)
                         {
-                            Log.Error(ex, "获取格口号时发生错误：{Barcode}, {SegmentCode}", package.Barcode, package.SegmentCode);
+                            Log.Error(ex, "获取格口号时发生错误：SegmentCode: {SegmentCode}。Barcode: {Barcode}, Index: {Index}",
+                                package.SegmentCode, package.Barcode, package.Index);
                             package.SetStatus(PackageStatus.Error, $"格口分配错误: {ex.Message}");
                             package.SetChute(-1); // 分配到异常格口
-                            Log.Information("包裹 {Barcode} 因获取格口号失败，分配到异常格口", package.Barcode);
+                            Log.Information("包裹因获取格口号失败，分配到异常格口。Barcode: {Barcode}, Index: {Index}", package.Barcode,
+                                package.Index);
                         }
 
                         break;
                     case false when !uploadAsNoRead && !benNiaoInteractionSuccess:
                         // 如果是非NoRead但分拣或笨鸟交互失败，也分配到异常口
                         package.SetChute(-1);
-                        Log.Information("包裹 {Barcode} 因处理失败 ({FailureReason})，分配到异常格口", package.Barcode, benNiaoErrorMessage);
+                        Log.Information("包裹因处理失败 ({FailureReason})，分配到异常格口。Barcode: {Barcode}, Index: {Index}",
+                            benNiaoErrorMessage, package.Barcode, package.Index);
                         break;
                 }
                 // 对于NoRead包裹，通常不分配格口，保持默认或特定值
@@ -854,23 +882,23 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     {
                         // 更新条码显示
                         CurrentBarcode = package.Barcode;
-                        
+
                         // 更新包裹信息项显示
                         UpdatePackageInfoItems(package);
-                        
+
                         // 正常处理的包裹需要在这里添加到历史记录
-                        if (!skipFurtherProcessing && !isNoReadOrEmpty && !isInvalidData)
+                        if (!skipFurtherProcessing)
                         {
                             PackageHistory.Insert(0, package);
                             while (PackageHistory.Count > 1000)
                                 PackageHistory.RemoveAt(PackageHistory.Count - 1);
                         }
-                        
+
                         UpdateStatistics();
                     }
                     catch (Exception ex)
                     {
-                        Log.Error(ex, "最终更新UI时发生错误");
+                        Log.Error(ex, "最终更新UI时发生错误。Barcode: {Barcode}, Index: {Index}", package.Barcode, package.Index);
                     }
                 });
             }
@@ -886,13 +914,12 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             {
                 Log.Error(ex, "异步保存包裹 {Barcode} (Index: {Index}) 到数据库时发生错误", package.Barcode, package.Index);
             }
-
         }
         catch (Exception ex)
         {
-             Log.Error(ex, "处理包裹信息时发生严重错误：{Barcode}", package.Barcode);
-             package.SetStatus(PackageStatus.Error, $"系统异常: {ex.Message}");
-             // 尝试更新UI以反映错误
+            Log.Error(ex, "处理包裹信息时发生严重错误：Barcode: {Barcode}, Index: {Index}", package.Barcode, package.Index);
+            package.SetStatus(PackageStatus.Error, $"系统异常: {ex.Message}");
+            // 尝试更新UI以反映错误
             await Application.Current.Dispatcher.InvokeAsync(() => UpdatePackageInfoItems(package));
         }
         finally
@@ -901,10 +928,10 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             if (package.Image != null) // package.Image 引用的是 originalImage
             {
                 package.Image = null;
-                Log.Debug("已清除包裹 {Barcode} 的图像引用", package.Barcode);
+                Log.Debug("已清除包裹的图像引用。Barcode: {Barcode}, Index: {Index}", package.Barcode, package.Index);
             }
-             // 原始图像资源如果需要 Dispose，应在此处处理，但 BitmapSource 通常不需要显式 Dispose
-             // originalImage?.Dispose();
+            // 原始图像资源如果需要 Dispose，应在此处处理，但 BitmapSource 通常不需要显式 Dispose
+            // originalImage?.Dispose();
         }
     }
 
@@ -1046,9 +1073,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             var currentPackage = buffer[i];
 
             // 合并条码：优先使用非空且不是 "noread" 的条码
-            if (!string.IsNullOrWhiteSpace(currentPackage.Barcode) && 
+            if (!string.IsNullOrWhiteSpace(currentPackage.Barcode) &&
                 !string.Equals(currentPackage.Barcode, "noread", StringComparison.OrdinalIgnoreCase) &&
-                (string.IsNullOrWhiteSpace(mergedPackage.Barcode) || 
+                (string.IsNullOrWhiteSpace(mergedPackage.Barcode) ||
                  string.Equals(mergedPackage.Barcode, "noread", StringComparison.OrdinalIgnoreCase)))
             {
                 mergedPackage.SetBarcode(currentPackage.Barcode);
@@ -1061,7 +1088,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             }
 
             // 合并长度：优先使用大于0的长度
-            if (currentPackage.Length is > 0 && 
+            if (currentPackage.Length is > 0 &&
                 mergedPackage.Length is null or <= 0)
             {
                 // mergedPackage.SetLength(currentPackage.Length.Value);
@@ -1070,17 +1097,17 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             }
 
             // 合并宽度：优先使用大于0的宽度
-            if (currentPackage.Width is > 0 && 
+            if (currentPackage.Width is > 0 &&
                 mergedPackage.Width is null or <= 0)
             {
-                 // mergedPackage.SetWidth(currentPackage.Width.Value);
+                // mergedPackage.SetWidth(currentPackage.Width.Value);
             }
 
             // 合并高度：优先使用大于0的高度
-            if (currentPackage.Height is > 0 && 
+            if (currentPackage.Height is > 0 &&
                 mergedPackage.Height is null or <= 0)
             {
-                 // mergedPackage.SetHeight(currentPackage.Height.Value);
+                // mergedPackage.SetHeight(currentPackage.Height.Value);
             }
 
             // 使用 SetDimensions 一次性设置尺寸
@@ -1092,10 +1119,12 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             {
                 newLength = currentPackage.Length.Value;
             }
+
             if (currentPackage.Width is > 0 && newWidth <= 0)
             {
                 newWidth = currentPackage.Width.Value;
             }
+
             if (currentPackage.Height is > 0 && newHeight <= 0)
             {
                 newHeight = currentPackage.Height.Value;
@@ -1108,13 +1137,14 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             }
         }
 
-        Log.Debug("Merged {Count} packages into one: {Barcode}, Weight: {Weight}, LWH: {L}x{W}x{H}", 
-            buffer.Count, mergedPackage.Barcode, mergedPackage.Weight, 
+        Log.Debug("Merged {Count} packages into one: {Barcode}, Weight: {Weight}, LWH: {L}x{W}x{H}",
+            buffer.Count, mergedPackage.Barcode, mergedPackage.Weight,
             mergedPackage.Length, mergedPackage.Width, mergedPackage.Height);
 
         // 为合并后的包裹分配新的、线程安全的序号
         mergedPackage.Index = Interlocked.Increment(ref _nextMergedPackageIndex);
-        Log.Debug("Assigned new merged index {NewIndex} to package {Barcode}", mergedPackage.Index, mergedPackage.Barcode);
+        Log.Debug("Assigned new merged index {NewIndex} to package {Barcode}", mergedPackage.Index,
+            mergedPackage.Barcode);
 
         return mergedPackage;
     }
@@ -1147,6 +1177,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     {
                         Log.Error(ex, "释放常规订阅时发生错误");
                     }
+
                 _subscriptions.Clear();
 
                 // 释放扫码流订阅
