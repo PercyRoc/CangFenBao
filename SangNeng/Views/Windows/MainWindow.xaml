@@ -17,23 +17,13 @@
                  ExtendsContentIntoTitleBar="False">
 
     <ui:FluentWindow.Resources>
-        <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary
-                    Source="pack://application:,,,/SharedUI;component/Resources/Styles/DataGridStyles.xaml" />
-                <ResourceDictionary
-                    Source="pack://application:,,,/SharedUI;component/Resources/Styles/ColorStyles.xaml" />
-            </ResourceDictionary.MergedDictionaries>
-
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
-
             <!-- 添加SubtitleTextBlockStyle样式 -->
             <Style x:Key="SubtitleTextBlockStyle" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="16" />
                 <Setter Property="FontWeight" Value="SemiBold" />
                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
             </Style>
-        </ResourceDictionary>
     </ui:FluentWindow.Resources>
 
     <Grid>
@@ -44,7 +34,7 @@
         </Grid.RowDefinitions>
 
         <!-- Title Bar -->
-        <Grid Grid.Row="0" Background="{StaticResource TitleBarGradient}">
+        <Grid Grid.Row="0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
@@ -117,7 +107,7 @@
         </Grid>
 
         <!-- Main Content Area -->
-        <Grid Grid.Row="1" Background="{StaticResource MainBackground}">
+        <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="2*" />
                 <ColumnDefinition Width="3*" />
@@ -133,7 +123,6 @@
 
                 <!-- Real-time Package Info -->
                 <Border Grid.Row="0"
-                        Style="{StaticResource CardStyle}"
                         Margin="16">
                     <Grid Margin="16">
                         <Grid.RowDefinitions>
@@ -249,7 +238,6 @@
 
                 <!-- Pallet Selection -->
                 <Border Grid.Row="1"
-                        Style="{StaticResource CardStyle}"
                         Margin="16,0,16,16">
                     <Grid Margin="16">
                         <Grid.RowDefinitions>
@@ -315,7 +303,7 @@
                                                         <Run Text="cm" />
                                                     </TextBlock>
                                                     <TextBlock FontSize="12">
-                                                        <Run Text="称重模块: " />
+                                                        <Run Text="Weight: " />
                                                         <Run Text="{Binding Weight, StringFormat='{}{0:F3}'}" />
                                                         <Run Text="kg" />
                                                     </TextBlock>
@@ -331,7 +319,6 @@
 
                 <!-- Statistics Area -->
                 <Border Grid.Row="2"
-                        Style="{StaticResource CardStyle}"
                         Margin="16,0,16,16">
                     <Grid Margin="16">
                         <Grid.RowDefinitions>
@@ -435,7 +422,6 @@
 
                 <!-- Image Display Area -->
                 <Border Grid.Row="0"
-                        Style="{StaticResource CardStyle}"
                         Margin="16">
                     <Grid Margin="16">
                         <Grid.RowDefinitions>
@@ -452,7 +438,7 @@
                                            Margin="0,0,8,0"
                                            Foreground="{StaticResource AccentBrush}"
                                            VerticalAlignment="Center" />
-                            <TextBlock Text="相机模块 Images"
+                            <TextBlock Text="Camera Images"
                                        FontSize="16"
                                        FontWeight="SemiBold"
                                        Foreground="{StaticResource AccentBrush}"
@@ -489,7 +475,7 @@
                                                            Height="16"
                                                            Margin="0,0,8,0"
                                                            Foreground="{StaticResource AccentBrush}" />
-                                            <TextBlock Text="Hikvision 相机模块"
+                                            <TextBlock Text="Hikvision Camera"
                                                        FontSize="14"
                                                        FontWeight="SemiBold"
                                                        Foreground="{StaticResource AccentBrush}" />
@@ -533,7 +519,7 @@
                                                            Height="16"
                                                            Margin="0,0,8,0"
                                                            Foreground="{StaticResource AccentBrush}" />
-                                            <TextBlock Text="Volume 相机模块"
+                                            <TextBlock Text="Volume Camera"
                                                        FontSize="14"
                                                        FontWeight="SemiBold"
                                                        Foreground="{StaticResource AccentBrush}" />
@@ -559,7 +545,6 @@
 
                 <!-- Package History -->
                 <Border Grid.Row="1"
-                        Style="{StaticResource CardStyle}"
                         Margin="16">
                     <Grid Margin="16">
                         <Grid.RowDefinitions>
@@ -591,12 +576,13 @@
                                   ItemsSource="{Binding PackageHistory}"
                                   CanUserAddRows="False"
                                   CanUserDeleteRows="False"
+                                  AutoGenerateColumns="False"
                                   GridLinesVisibility="Horizontal">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="No." Binding="{Binding Index}" MinWidth="60" Width="Auto" />
                                 <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" MinWidth="160"
                                                     Width="Auto" />
-                                <DataGridTextColumn Header="称重模块" Binding="{Binding WeightDisplay}" MinWidth="80"
+                                <DataGridTextColumn Header="Weight" Binding="{Binding WeightDisplay}" MinWidth="80"
                                                     Width="Auto" />
                                 <DataGridTextColumn Header="Size" Binding="{Binding VolumeDisplay}" MinWidth="200"
                                                     Width="Auto" />
@@ -641,11 +627,13 @@
                                                     Width="Auto">
                                     <DataGridTextColumn.CellStyle>
                                         <Style TargetType="DataGridCell">
+                                            <!-- Default to Red for non-Success states -->
                                             <Setter Property="Background" Value="#F44336" />
                                             <Setter Property="Foreground" Value="White" />
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Status}" Value="Success">
-                                                    <Setter Property="Background" Value="#4CAF50" />
+                                                    <!-- Blue for Success/Complete -->
+                                                    <Setter Property="Background" Value="DodgerBlue" />
                                                     <Setter Property="Foreground" Value="White" />
                                                 </DataTrigger>
                                             </Style.Triggers>
@@ -664,7 +652,6 @@
 
         <!-- Status Bar -->
         <Border Grid.Row="2"
-                Background="{StaticResource SecondaryBrush}"
                 Opacity="0.8"
                 BorderBrush="{StaticResource BorderBrush}"
                 BorderThickness="0,1,0,0">

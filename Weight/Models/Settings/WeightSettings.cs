@@ -47,4 +47,25 @@ public class WeightSettings : BindableBase
         get => _integrationTimeMs;
         set => SetProperty(ref _integrationTimeMs, value);
     }
+
+    private int _stabilityCheckSamples = 5;
+    public int StabilityCheckSamples
+    {
+        get => _stabilityCheckSamples;
+        set => SetProperty(ref _stabilityCheckSamples, value);
+    }
+
+    private double _stabilityThresholdGrams = 20.0;
+    public double StabilityThresholdGrams
+    {
+        get => _stabilityThresholdGrams;
+        set => SetProperty(ref _stabilityThresholdGrams, value);
+    }
+
+    private int _stableWeightQueryWindowSeconds = 2;
+    public int StableWeightQueryWindowSeconds
+    {
+        get => _stableWeightQueryWindowSeconds;
+        set => SetProperty(ref _stableWeightQueryWindowSeconds, value);
+    }
 } 

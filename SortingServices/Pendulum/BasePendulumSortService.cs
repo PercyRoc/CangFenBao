@@ -163,7 +163,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
                 // 处理匹配结果
                 if (matchedTriggerTime.HasValue)
                 {
-                    package.SetTriggerTimestamp(matchedTriggerTime.Value);
+                    package.TriggerTimestamp = matchedTriggerTime.Value;
                 }
                 else
                 {

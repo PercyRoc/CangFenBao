@@ -251,20 +251,20 @@ namespace Camera.Services.Implementations.Hikvision.Integrated
                 {
                     try
                     {
-                        DateTime triggerTime = DateTimeOffset.FromUnixTimeMilliseconds(stPackageInfoEx.llTriggerStartTimeStamp).DateTime;
-                        packageInfo.SetTriggerTimestamp(triggerTime);
+                        var triggerTime = DateTimeOffset.FromUnixTimeMilliseconds(stPackageInfoEx.llTriggerStartTimeStamp).DateTime;
+                        packageInfo.TriggerTimestamp = triggerTime;
                         Log.Debug("[HikvisionIntegratedCameraService] 包裹触发时间已设置为SDK提供的值: {TriggerTime}", triggerTime);
                     }
                     catch (ArgumentOutOfRangeException ex)
                     {
                         Log.Error(ex, "[HikvisionIntegratedCameraService] 无效的 llTriggerStartTimeStamp ({TimestampValue})，无法转换为DateTimeOffset。将使用当前时间作为备用。", stPackageInfoEx.llTriggerStartTimeStamp);
-                        packageInfo.SetTriggerTimestamp(DateTime.Now); // Fallback
+                        packageInfo.TriggerTimestamp = DateTime.Now; // Fallback
                     }
                 }
                 else
                 {
                     Log.Warning("[HikvisionIntegratedCameraService] SDK提供的 llTriggerStartTimeStamp ({TimestampValue}) 无效或为0。将使用当前时间作为包裹触发时间。", stPackageInfoEx.llTriggerStartTimeStamp);
-                    packageInfo.SetTriggerTimestamp(DateTime.Now); // Fallback if timestamp is not positive
+                    packageInfo.TriggerTimestamp = DateTime.Now; // Fallback if timestamp is not positive
                 }
 
                 if (stPackageInfoEx.bCodeEnable)
@@ -310,12 +310,12 @@ namespace Camera.Services.Implementations.Hikvision.Integrated
                         stPackageInfoEx.stVolumeInfo.fLength,
                         stPackageInfoEx.stVolumeInfo.fWidth,
                         stPackageInfoEx.stVolumeInfo.fHeight);
-                    packageInfo.SetVolume(stPackageInfoEx.stVolumeInfo.fVolume);
+                    packageInfo.Volume = stPackageInfoEx.stVolumeInfo.fVolume;
                     Log.Debug("[HikvisionIntegratedCameraService] 体积: L={Length}, W={Width}, H={Height}, V={Volume}", packageInfo.Length, packageInfo.Width, packageInfo.Height, packageInfo.Volume);
                 }
 
                 if (stPackageInfoEx.bWeightEnable)                {
-                    packageInfo.SetWeight(stPackageInfoEx.fWeight);
+                    packageInfo.Weight = stPackageInfoEx.fWeight;
                     Log.Debug("[HikvisionIntegratedCameraService] 重量: {Weight}", packageInfo.Weight);
                 }
                 packageInfo.SetStatus(PackageStatus.Created, "包裹已创建/检测到");
@@ -377,7 +377,7 @@ namespace Camera.Services.Implementations.Hikvision.Integrated
                 var noReadPackageInfo = PackageInfo.Create();
                 noReadPackageInfo.SetBarcode("NOREAD");
                 noReadPackageInfo.SetStatus(PackageStatus.NoRead, "NoRead event from camera");
-                noReadPackageInfo.SetTriggerTimestamp(DateTime.Now); // 或者尝试从 stNoReadInfo 获取更精确的时间
+                noReadPackageInfo.TriggerTimestamp = DateTime.Now; // 或者尝试从 stNoReadInfo 获取更精确的时间
                 if (bitmapSource != null)
                 {
                     noReadPackageInfo.SetImage(bitmapSource, null); // 将转换后的图像赋给 PackageInfo

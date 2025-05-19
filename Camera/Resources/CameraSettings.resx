@@ -156,6 +156,18 @@
     <data name="Label_FusionTimeMs" xml:space="preserve">
         <value>融合时间 (毫秒):</value>
     </data>
+    <data name="Label_VolumeCameraImageSavePath" xml:space="preserve">
+        <value>体积相机图像保存路径:</value>
+    </data>
+    <data name="Toggle_SaveVerticalView" xml:space="preserve">
+        <value>保存俯视图</value>
+    </data>
+    <data name="Toggle_SaveSideView" xml:space="preserve">
+        <value>保存侧视图</value>
+    </data>
+    <data name="Toggle_SaveOriginalView" xml:space="preserve">
+        <value>保存原图</value>
+    </data>
     <data name="Header_HikvisionSecurityCameraSettings" xml:space="preserve">
         <value>海康安防相机设置</value>
     </data>

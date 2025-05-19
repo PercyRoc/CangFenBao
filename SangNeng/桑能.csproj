@@ -29,25 +29,20 @@
 
         <!-- Serial Port -->
         <PackageReference Include="System.IO.Ports" />
+        <PackageReference Include="WPFLocalizeExtension"/>
     </ItemGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\Camera\相机模块.csproj" />
         <ProjectReference Include="..\Common\基础服务.csproj" />
-        <ProjectReference Include="..\DeviceService\设备服务.csproj" />
+        <ProjectReference Include="..\History\历史模块.csproj" />
         <ProjectReference Include="..\SharedUI\UI组件.csproj" />
+        <ProjectReference Include="..\Weight\称重模块.csproj" />
     </ItemGroup>
 
     <ItemGroup>
         <Resource Include="..\SharedUI\Resources\Icon\logo.ico">
             <Link>logo.ico</Link>
         </Resource>
-    </ItemGroup>
-
-    <ItemGroup>
-      <Page Update="Views\Dialogs\HistoryControl.xaml">
-        <Generator>MSBuild:Compile</Generator>
-        <XamlRuntime>Wpf</XamlRuntime>
-        <SubType>Designer</SubType>
-      </Page>
     </ItemGroup>
 </Project>

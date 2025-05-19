@@ -73,10 +73,10 @@
                        Command="{Binding OpenHistoryCommand}"
                        Margin="0,0,8,0"
                        Padding="8,6"
-                       ToolTip="History">
+                       ToolTip="历史模块">
                 <StackPanel Orientation="Horizontal">
                     <ui:SymbolIcon Symbol="History24" Margin="0,0,8,0" />
-                    <TextBlock Text="History" VerticalAlignment="Center" />
+                    <TextBlock Text="历史模块" VerticalAlignment="Center" />
                 </StackPanel>
             </ui:Button>
 
@@ -417,7 +417,7 @@
                                            Margin="0,0,8,0"
                                            VerticalAlignment="Center" 
                                            Foreground="{StaticResource AccentBrush}"/>
-                            <TextBlock Text="Package History"
+                            <TextBlock Text="Package 历史模块"
                                        Foreground="{StaticResource AccentBrush}"
                                        FontSize="16"
                                        FontWeight="SemiBold"

@@ -2,7 +2,6 @@
 using System.IO;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
-using System.Threading;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -12,7 +11,6 @@ using Camera.Services.Implementations.Hikvision.Security;
 using Camera.Services.Implementations.Hikvision.Volume;
 using Common.Models.Package;
 using Common.Services.Settings;
-using DeviceService.DataSourceDevices.Camera.Models.Camera;
 using Rookie.Models.Api;
 using Rookie.Services;
 using Serilog;
@@ -21,13 +19,15 @@ using Sorting_Car.Models;
 using Sorting_Car.Services;
 using Weight.Services;
 using LocalWeightSettings = Weight.Models.Settings.WeightSettings;
+using System.Diagnostics;
+using Camera.Models.Settings;
 
 namespace Rookie.ViewModels.Windows;
 
 public class MainWindowViewModel : BindableBase, IDisposable
 {
     private static long _globalPackageIndex;
-    private static int _nextCyclicChute = 0; // 新增: 用于循环格口分配的静态计数器
+    private static int _nextCyclicChute; // 新增: 用于循环格口分配的静态计数器
 
     private readonly IDialogService _dialogService;
     private readonly IRookieApiService _rookieApiService;
@@ -47,11 +47,23 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private long _failedPackageCount;
     private long _peakRate;
 
-    private const int SupplementDataPollIntervalMs = 50;
-    private const int MIN_SAMPLES_FOR_STABILITY_CHECK = 2;
+    // 移除了轮询相关的常量和旧的重量缓存字段
+    // private const int SupplementDataPollIntervalMs = 50;
+    // private (double WeightInKg, DateTime Timestamp)? _lastReceivedValidWeight; // 移除
+    // private volatile Tuple<double, DateTime>? _logicOrientedWeightCache; // 移除
 
-    private (double WeightInKg, DateTime Timestamp)? _lastReceivedValidWeight;
-    private volatile Tuple<double, DateTime>? _logicOrientedWeightCache;
+    // 新增: 稳定重量队列相关定义 (类似SangNeng)
+    private readonly struct StableWeightEntry(double weightKg, DateTime timestamp)
+    {
+        public double WeightKg { get; } = weightKg;
+        public DateTime Timestamp { get; } = timestamp;
+    }
+    private readonly Queue<StableWeightEntry> _stableWeightQueue = new();
+    private const int MaxStableWeightQueueSize = 100; // 与SangNeng保持一致或设为可配置
+    private readonly List<double> _rawWeightBuffer = [];
+    // StabilityCheckSamples, StabilityThresholdGrams 将从 LocalWeightSettings 加载
+    // IntegrationTimeMs (from LocalWeightSettings) 将用作队列查询窗口
+
     private (float Length, float Width, float Height, DateTime Timestamp)? _lastReceivedValidVolume;
 
     private readonly HikvisionSecurityCameraService _securityCameraService;
@@ -63,30 +75,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     private volatile bool _isProcessingPackage;
 
-    // Helper function for weight stability check
-    private static bool IsWeightStable(List<double> weightValues, double tolerance, out double stableWeight)
-    {
-        stableWeight = 0;
-        if (weightValues.Count < MIN_SAMPLES_FOR_STABILITY_CHECK)
-        {
-            if (weightValues.Count == 1 && MIN_SAMPLES_FOR_STABILITY_CHECK == 1)
-            {
-                 stableWeight = weightValues[0];
-                 return true;
-            }
-            return false;
-        }
-
-        double min = weightValues.Min();
-        double max = weightValues.Max();
-
-        if ((max - min) <= tolerance)
-        {
-            stableWeight = weightValues.Average(); 
-            return true;
-        }
-        return false;
-    }
+    // 移除了 IsWeightStable 辅助函数，因为稳定性检查逻辑将在订阅中处理
 
     public MainWindowViewModel(
         IDialogService dialogService,
@@ -141,9 +130,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     imageData.Image.Freeze();
                     Application.Current?.Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
                     {
-                        try 
-                        { 
-                            EventPackageImage = imageData.Image; 
+                        try
+                        {
+                            EventPackageImage = imageData.Image;
                         }
                         catch (Exception ex)
                         {
@@ -157,7 +146,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 }
             }, ex => Log.Error(ex, "工业相机实时图像流订阅出错。")));
 
-        // 订阅体积数据流
         _subscriptions.Add(_volumeCameraService.VolumeDataWithVerticesStream
             .Subscribe(volumeData =>
             {
@@ -189,7 +177,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 });
             }, ex => Log.Error(ex, "体积数据流订阅出错。")));
 
-        // 订阅重量数据流
+        // 订阅重量数据流 (用于UI实时显示)
         _subscriptions.Add(_weightService.WeightDataStream
             .Subscribe(weightData =>
             {
@@ -199,37 +187,60 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     {
                         var weightItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Weight");
                         if (weightItem == null) return;
-                        if (weightData != null)
-                        {
-                            // 将 double 格式化为字符串，保留两位小数
-                            weightItem.Value = weightData.Value.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
-                            // 更新 _lastReceivedValidWeight 缓存
-                            if (weightData.Value > 0) // 假设有效重量是正数
-                            {
-                                _lastReceivedValidWeight = (weightData.Value, weightData.Timestamp);
-                            }
-                        }
-                        else
-                        {
-                            weightItem.Value = "0.00"; 
-                           
-                        }
+                        weightItem.Value = weightData != null ? weightData.Value.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) : "0.00";
                     }
                     catch (Exception ex)
                     {
                         Log.Error(ex, "更新实时包裹重量信息时出错。");
                     }
                 });
-            }, ex => Log.Error(ex, "重量数据流订阅出错。")));
+            }, ex => Log.Error(ex, "UI重量数据流订阅出错。")));
 
-        // 新增: 专门为处理逻辑订阅重量数据流，在后台线程更新 _logicOrientedWeightCache
+        // 新增: 专门为稳定重量处理订阅重量数据流 (后台线程)
         _subscriptions.Add(_weightService.WeightDataStream
-            .ObserveOn(TaskPoolScheduler.Default)
-            .Where(weightData => weightData != null && weightData.Value > 0)
+            .ObserveOn(TaskPoolScheduler.Default) // 在后台线程处理
+            .Where(wd => wd != null) // 确保数据不为null
             .Subscribe(weightData =>
             {
-                _logicOrientedWeightCache = new Tuple<double, DateTime>(weightData!.Value, weightData.Timestamp);
-            }, ex => Log.Error(ex, "后台逻辑重量数据流订阅出错。")));
+                var weightSettings = _settingsService.LoadSettings<LocalWeightSettings>();
+                var stabilityCheckSamples = weightSettings.StabilityCheckSamples > 0 ? weightSettings.StabilityCheckSamples : 5;
+                var stabilityThresholdGrams = weightSettings.StabilityThresholdGrams > 0 ? weightSettings.StabilityThresholdGrams : 20.0;
+
+                // weightData.Value 是 double (kg), 稳定性判断通常用 g
+                double currentRawWeightGrams = weightData!.Value * 1000.0;
+                DateTime currentTimestamp = weightData.Timestamp;
+
+                _rawWeightBuffer.Add(currentRawWeightGrams);
+                if (_rawWeightBuffer.Count > stabilityCheckSamples)
+                {
+                    _rawWeightBuffer.RemoveAt(0);
+                }
+
+                if (_rawWeightBuffer.Count == stabilityCheckSamples)
+                {
+                    double minWeightInWindow = _rawWeightBuffer.Min();
+                    double maxWeightInWindow = _rawWeightBuffer.Max();
+
+                    if ((maxWeightInWindow - minWeightInWindow) < stabilityThresholdGrams)
+                    {
+                        double stableAverageWeightGrams = _rawWeightBuffer.Average();
+                        var stableEntry = new StableWeightEntry(stableAverageWeightGrams / 1000.0, currentTimestamp);
+
+                        lock (_stableWeightQueue)
+                        {
+                            _stableWeightQueue.Enqueue(stableEntry);
+                            if (_stableWeightQueue.Count > MaxStableWeightQueueSize)
+                            {
+                                _stableWeightQueue.Dequeue();
+                            }
+                        }
+                        Log.Debug("稳定的重量数据已添加到队列(菜鸟): {Weight}kg, 时间: {Timestamp}. 队列大小: {QueueSize}",
+                                  stableEntry.WeightKg, stableEntry.Timestamp, _stableWeightQueue.Count);
+                    }
+                }
+            }, ex => Log.Error(ex, "后台稳定重量处理数据流订阅出错。")));
+
+        // 移除了原有的 _logicOrientedWeightCache 订阅
 
         cameraDataProcessingService.PackageStream.Subscribe(async void (packageInfo) => await ProcessPackageAsync(packageInfo));
     }
@@ -511,11 +522,22 @@ public class MainWindowViewModel : BindableBase, IDisposable
         {
             try
             {
-                var weightScaleStatus = DeviceStatuses.FirstOrDefault(d => d.Name == "Scales");
+                // 注意: DeviceStatuses 中的名称可能需要与 InitializeDeviceStatuses 中的匹配
+                var weightScaleStatus = DeviceStatuses.FirstOrDefault(d => d.Name == "Weight Service");
                 if (weightScaleStatus == null) return;
                 weightScaleStatus.Status = isConnected ? "Connected" : "Disconnected";
                 weightScaleStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
                 Log.Information("称重模块连接状态已更新: {Status}", weightScaleStatus.Status);
+
+                if (!isConnected)
+                {
+                    _rawWeightBuffer.Clear();
+                    lock (_stableWeightQueue)
+                    {
+                        _stableWeightQueue.Clear();
+                    }
+                    Log.Information("称重服务已断开，原始重量缓冲和稳定重量队列已清空(菜鸟)。");
+                }
             }
             catch (Exception ex)
             {
@@ -554,151 +576,144 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
 
         _isProcessingPackage = true;
+        var processingStopwatch = Stopwatch.StartNew(); // 记录总处理时间
         try
         {
             Log.Information("开始处理包裹: {Barcode}, 触发时间: {CreateTime:HH:mm:ss.fff}", package.Barcode, package.CreateTime);
-            if (package.Weight <= 0)
+
+            // 定义并行获取重量和体积的本地异步函数
+            async Task FetchWeightAsync(PackageInfo pkg)
             {
-                var weightSettings = _settingsService.LoadSettings<LocalWeightSettings>();
-                var stableSamplesRequired = Math.Max(MIN_SAMPLES_FOR_STABILITY_CHECK, weightSettings.StableWeightSamples);
-                var fusionTimeMs = weightSettings.IntegrationTimeMs; 
-                var stabilityToleranceKg = 0.02; // 20g tolerance, can be made a setting if needed
-
-                Log.Information("包裹 {Barcode}: 重量为0或无效，尝试获取稳定重量。稳定样本数配置: {ConfigSamples}, 实际最少判断样本数: {ActualSamples}, 融合/轮询时间: {FusionMs}ms, 公差: {ToleranceKg}kg",
-                                package.Barcode, weightSettings.StableWeightSamples, stableSamplesRequired, fusionTimeMs, stabilityToleranceKg);
-
-                List<(double weight, DateTime timestamp)> collectedWeightEntries = new();
-                DateTime packageCreateTime = package.CreateTime;
-                bool weightSupplemented = false;
-                int collectedEntriesCountForLog = 0;
-
-                for (int i = 0; i < (fusionTimeMs / SupplementDataPollIntervalMs); i++)
+                if (pkg.Weight <= 0)
                 {
-                    await Task.Delay(SupplementDataPollIntervalMs);
+                    var weightSettings = _settingsService.LoadSettings<LocalWeightSettings>();
+                    var weightFetchStartTime = DateTime.Now; // Timestamp for when weight fetching starts for this package
 
-                    var currentLogicalWeightTuple = _logicOrientedWeightCache;
-
-                    if (currentLogicalWeightTuple != null)
+                    // 1. Initial Look-back for stable weight
+                    var lookbackWindowSeconds = weightSettings.StableWeightQueryWindowSeconds > 0 ? weightSettings.StableWeightQueryWindowSeconds : 2;
+                    Log.Information("包裹 {Barcode}: 重量为0或无效，开始初始查找稳定重量 (回溯窗口: {LookbackSec}s)。获取开始时间: {FetchStartTime:HH:mm:ss.fff}", pkg.Barcode, lookbackWindowSeconds, weightFetchStartTime);
+                    StableWeightEntry? bestStableWeight;
+                    lock (_stableWeightQueue)
                     {
-                        var currentWeightVal = currentLogicalWeightTuple.Item1;
-                        var tsCurrentWeight = currentLogicalWeightTuple.Item2;
-                        
-                        if (Math.Abs((tsCurrentWeight - packageCreateTime).TotalMilliseconds) <= fusionTimeMs)
-                        {
-                            if (!collectedWeightEntries.Any() || collectedWeightEntries.Last().timestamp < tsCurrentWeight)
-                            {
-                                collectedWeightEntries.Add((currentWeightVal, tsCurrentWeight));
-                                collectedEntriesCountForLog = collectedWeightEntries.Count;
-                                Log.Verbose("包裹 {Barcode}: 轮询中收集到重量样本 {Weight}kg @ {Timestamp:HH:mm:ss.fff}. 已收集 {Count} 个不同时间戳的条目.",
-                                           package.Barcode, currentWeightVal, tsCurrentWeight, collectedEntriesCountForLog);
-
-                                if (collectedEntriesCountForLog >= stableSamplesRequired)
-                                {
-                                    var samplesForCheck = collectedWeightEntries
-                                                            .Skip(Math.Max(0, collectedEntriesCountForLog - stableSamplesRequired))
-                                                            .Select(entry => entry.weight)
-                                                            .ToList();
-                                    
-                                    if (IsWeightStable(samplesForCheck, stabilityToleranceKg, out double stableWeightValue))
-                                    {
-                                        package.SetWeight(stableWeightValue);
-                                        Log.Information("包裹 {Barcode}: 成功获取稳定重量: {Weight}kg (基于最近 {NumSamples} 个样本，轮询尝试: {Attempt})",
-                                                        package.Barcode, package.Weight, samplesForCheck.Count, i + 1);
-                                        weightSupplemented = true;
-                                        break; 
-                                    }
-                                    Log.Verbose("包裹 {Barcode}: 已收集 {NumCollected} 个样本, 最近 {NumChecked} 个样本尚不稳定 (轮询尝试 {Attempt})。样本: [{SampleData}]", 
-                                                package.Barcode, collectedEntriesCountForLog, samplesForCheck.Count, i + 1, string.Join(", ", samplesForCheck));
-                                }
-                            }
-                        }
+                        bestStableWeight = _stableWeightQueue
+                            .Where(entry => (weightFetchStartTime - entry.Timestamp).TotalSeconds < lookbackWindowSeconds &&
+                                            (weightFetchStartTime - entry.Timestamp).TotalSeconds >= 0)
+                            .OrderByDescending(entry => entry.Timestamp)
+                            .Cast<StableWeightEntry?>()
+                            .FirstOrDefault();
                     }
-                }
 
-                if (!weightSupplemented)
-                {
-                    Log.Warning("包裹 {Barcode}: 轮询等待 {Timeout}ms后 ({Attempts}次尝试)，未能获取到稳定重量。共收集到 {CollectedCount} 个不同时间戳的重量条目。", 
-                                package.Barcode, fusionTimeMs, fusionTimeMs / SupplementDataPollIntervalMs, collectedEntriesCountForLog);
-                }
-            }
-
-            // 修改后的条件，用于检查尺寸是否为null或无效
-            if (!package.Length.HasValue || package.Length.Value <= 0 || 
-                !package.Width.HasValue || package.Width.Value <= 0 || 
-                !package.Height.HasValue || package.Height.Value <= 0)
-            {
-                // 按需加载相机设置
-                var cameraSettings = _settingsService.LoadSettings<CameraSettings>();
-                var fusionTimeMs = cameraSettings.VolumeCameraFusionTimeMs; // 作为融合时间窗口
-
-                bool volumeSupplementedSuccessfully = false;
-
-                bool TrySupplementVolumeFromStream()
-                {
-                    if (_lastReceivedValidVolume.HasValue)
+                    if (bestStableWeight.HasValue)
                     {
-                        var (l, w, h, tsVolume) = _lastReceivedValidVolume.Value;
-                        if (Math.Abs((tsVolume - package.CreateTime).TotalMilliseconds) <= fusionTimeMs)
-                        {
-                            package.SetDimensions(l, w, h);
-                            Log.Information("包裹 {Barcode}: 从缓存的有效流数据补充尺寸: 长{L} 宽{W} 高{H} (时间戳匹配). 体积时间: {tsVolume:HH:mm:ss.fff}, 包裹创建时间: {pkgCreateTime:HH:mm:ss.fff}",
-                                package.Barcode, package.Length, package.Width, package.Height, tsVolume, package.CreateTime);
-                            return true;
-                        }
-                        Log.Information("包裹 {Barcode}: 缓存的体积数据时间戳 ({tsVolume:HH:mm:ss.fff}) 与包裹创建时间 ({pkgCreateTime:HH:mm:ss.fff}) 相差超过 {FusionMs}ms，视为陈旧数据。",
-                                package.Barcode, tsVolume, package.CreateTime, fusionTimeMs);
+                        pkg.Weight = bestStableWeight.Value.WeightKg;
+                        Log.Information("包裹 {Barcode}: 初始查找获取到稳定重量: {Weight}kg (时间戳: {Timestamp:HH:mm:ss.fff})", pkg.Barcode, pkg.Weight, bestStableWeight.Value.Timestamp);
+                        return; // Found weight, exit
                     }
-                    return false;
-                }
+                    Log.Information("包裹 {Barcode}: 初始查找未能找到稳定重量，将开始等待和向前查找。", pkg.Barcode);
 
-                if (TrySupplementVolumeFromStream())
-                {
+                    // 2. Wait and Look-forward if initial look-back failed
+                    var maxWaitTimeForWeightMs = weightSettings.IntegrationTimeMs > 0 ? weightSettings.IntegrationTimeMs : 2000; // Use IntegrationTimeMs for forward look
+                    Log.Information("包裹 {Barcode}: 开始向前查找稳定重量 (最大等待 {MaxWaitMs}ms)。", pkg.Barcode, maxWaitTimeForWeightMs);
+                    
+                    var sw = Stopwatch.StartNew();
+                    while (sw.ElapsedMilliseconds < maxWaitTimeForWeightMs)
+                    {
+                        lock (_stableWeightQueue) // Ensure thread-safe access to the queue
+                        {
+                            bestStableWeight = _stableWeightQueue
+                                .Where(entry => entry.Timestamp > weightFetchStartTime) // Look for weights after fetching started
+                                .OrderBy(entry => entry.Timestamp)      // Get the earliest one
+                                .Cast<StableWeightEntry?>()
+                                .FirstOrDefault();
+                        }
+
+                        if (bestStableWeight.HasValue)
+                        {
+                            pkg.Weight = bestStableWeight.Value.WeightKg;
+                            Log.Information("包裹 {Barcode}: 向前查找获取到稳定重量: {Weight}kg (时间戳: {Timestamp:HH:mm:ss.fff})，耗时: {ElapsedMs}ms。", pkg.Barcode, pkg.Weight, bestStableWeight.Value.Timestamp, sw.ElapsedMilliseconds);
+                            sw.Stop();
+                            return; // Found weight, exit
+                        }
+                        await Task.Delay(20); // Short delay before retrying
+                    }
+                    sw.Stop();
+                    Log.Warning("包裹 {Barcode}: 在最大等待 {MaxWaitMs}ms 内未能向前获取到稳定重量。", pkg.Barcode, maxWaitTimeForWeightMs);
                 }
                 else
                 {
-                    Log.Information("包裹 {Barcode}: 从流数据缓存补充尺寸失败，尝试主动获取一次测量结果。", package.Barcode);
-                    var (isSdkCallSuccess, l, w, h, isMeasurementValid, _, _, errorMsg) = _volumeCameraService.GetSingleMeasurement();
-
-                    if (isSdkCallSuccess && isMeasurementValid && l > 0 && w > 0 && h > 0)
-                    {
-                        package.SetDimensions(l, w, h);
-                        Log.Information("包裹 {Barcode}: 单次主动获取成功补充尺寸: 长{L} 宽{W} 高{H}", package.Barcode, l, w, h);
-                    }
-                    else
-                    {
-                        Log.Warning("包裹 {Barcode}: 单次主动获取尺寸失败或数据无效/为零。SDK调用成功: {SdkSuccess}, 测量有效: {MeasureValid}, LWH: {L},{W},{H}. 错误: {ErrorMsg}。尝试轮询主动获取。",
-                                    package.Barcode, isSdkCallSuccess, isMeasurementValid, l, w, h, errorMsg ?? "N/A");
-
-                        const int maxAttempts = 10;
-                        const int delayPerAttemptMs = 10;
-                        for (int attempt = 0; attempt < maxAttempts; attempt++)
-                        {
-                            await Task.Delay(delayPerAttemptMs);
-                            Log.Information("包裹 {Barcode}: 轮询主动获取尺寸，尝试次数: {Attempt}/{MaxAttempts}", package.Barcode, attempt + 1, maxAttempts);
-                            var (pollSdkSuccess, pollL, pollW, pollH, pollValid, _, _, pollErrorMsg) = _volumeCameraService.GetSingleMeasurement();
-
-                            if (pollSdkSuccess && pollValid && pollL > 0 && pollW > 0 && pollH > 0)
-                            {
-                                package.SetDimensions(pollL, pollW, pollH);
-                                Log.Information("包裹 {Barcode}: 轮询主动获取成功补充尺寸: 长{L} 宽{W} 高{H} (尝试 {Attempt})", package.Barcode, pollL, pollW, pollH, attempt + 1);
-                                volumeSupplementedSuccessfully = true;
-                                break;
-                            }
-                            Log.Debug("包裹 {Barcode}: 轮询主动获取尝试 {Attempt} 失败。SDK调用成功: {SdkSuccess}, 测量有效: {MeasureValid}, LWH: {L},{W},{H}. 错误: {ErrorMsg}",
-                                       package.Barcode, attempt + 1, pollSdkSuccess, pollValid, pollL, pollW, pollH, pollErrorMsg ?? "N/A");
-                        }
-
-                        if (!volumeSupplementedSuccessfully)
-                        {
-                            Log.Warning("包裹 {Barcode}: 经过流缓存、单次主动获取和 {MaxAttempts} 次轮询主动获取后，仍未能补充有效尺寸。", package.Barcode, maxAttempts);
-                        }
-                    }
+                    Log.Information("包裹 {Barcode}: 重量 {Weight}kg 有效，跳过并行重量获取。", pkg.Barcode, pkg.Weight);
                 }
             }
 
+            async Task FetchVolumeAsync(PackageInfo pkg)
+            {
+                if (!pkg.Length.HasValue || pkg.Length.Value <= 0 ||
+                    !pkg.Width.HasValue || pkg.Width.Value <= 0 ||
+                    !pkg.Height.HasValue || pkg.Height.Value <= 0)
+                {
+                    var cameraSettings = _settingsService.LoadSettings<CameraOverallSettings>();
+                    int fusionTimeMs = cameraSettings.VolumeCamera.FusionTimeMs > 0 ? cameraSettings.VolumeCamera.FusionTimeMs : 2000;
+                    DateTime packageCreateTime = pkg.CreateTime;
+                    Log.Information("包裹 {Barcode}: 尺寸无效，开始并行查找体积数据 (最大等待 {FusionMs}ms)。", pkg.Barcode, fusionTimeMs);
+                    Stopwatch sw = Stopwatch.StartNew();
+                    bool volumeSupplementedFromStream = false;
+                    while (sw.ElapsedMilliseconds < fusionTimeMs)
+                    {
+                        if (_lastReceivedValidVolume.HasValue)
+                        {
+                            var (l, w, h, tsVolume) = _lastReceivedValidVolume.Value;
+                            // 体积数据的时间戳应该在包裹创建时间之后，或者在一个非常小的时间窗口内，以避免使用过旧数据
+                            // 这里简单处理为大于包裹创建时间
+                            if (tsVolume > packageCreateTime && l > 0 && w > 0 && h > 0)
+                            {
+                                pkg.SetDimensions(l, w, h);
+                                Log.Information("包裹 {Barcode}: 并行从流中获取到体积数据: 长{L} 宽{W} 高{H} (体积时间: {tsVolume:HH:mm:ss.fff})，耗时: {ElapsedMs}ms。", pkg.Barcode, l, w, h, tsVolume, sw.ElapsedMilliseconds);
+                                volumeSupplementedFromStream = true;
+                                break;
+                            }
+                        }
+                        await Task.Delay(20); // 短暂等待后重试
+                    }
+                    sw.Stop();
+
+                    if (!volumeSupplementedFromStream)
+                    {
+                        Log.Warning("包裹 {Barcode}: 在最大等待 {FusionMs}ms 内未能并行从流中获取到体积数据，尝试主动测量。", pkg.Barcode, fusionTimeMs);
+                        var (isSdkCallSuccess, l, w, h, isMeasurementValid, _, _, errorMsg) = _volumeCameraService.GetSingleMeasurement();
+                        if (isSdkCallSuccess && isMeasurementValid && l > 0 && w > 0 && h > 0)
+                        {
+                            pkg.SetDimensions(l, w, h);
+                            Log.Information("包裹 {Barcode}: 并行主动测量成功补充尺寸: 长{L} 宽{W} 高{H}", pkg.Barcode, l, w, h);
+                        }
+                        else
+                        {
+                            Log.Warning("包裹 {Barcode}: 并行主动测量尺寸失败或数据无效/为零。SDK调用成功: {SdkSuccess}, 测量有效: {MeasureValid}, LWH: {L},{W},{H}. 错误: {ErrorMsg}",
+                                pkg.Barcode, isSdkCallSuccess, isMeasurementValid, l, w, h, errorMsg ?? "N/A");
+                        }
+                    }
+                }
+                else
+                {
+                    Log.Information("包裹 {Barcode}: 尺寸 长{L} 宽{W} 高{H} 有效，跳过并行体积获取。", pkg.Barcode, pkg.Length, pkg.Width, pkg.Height);
+                }
+            }
+
+            // 并行获取重量和体积
+            Log.Information("包裹 {Barcode}: 开始并行获取重量和体积数据。", package.Barcode);
+            var fetchWeightTask = FetchWeightAsync(package);
+            var fetchVolumeTask = FetchVolumeAsync(package);
+            await Task.WhenAll(fetchWeightTask, fetchVolumeTask);
+            Log.Information("包裹 {Barcode}: 重量和体积并行获取阶段完成。重量: {Weight}kg, 长宽高: {L}x{W}x{H}mm",
+                package.Barcode,
+                package.Weight,
+                package.Length.HasValue ? package.Length.Value.ToString("F0") : "N/A",
+                package.Width.HasValue ? package.Width.Value.ToString("F0") : "N/A",
+                package.Height.HasValue ? package.Height.Value.ToString("F0") : "N/A");
+
+
             Application.Current?.Dispatcher.InvokeAsync(() =>
             {
-                package.Index = (int)Interlocked.Increment(ref _globalPackageIndex);
+                package.SetIndex((int)Interlocked.Increment(ref _globalPackageIndex));
                 CurrentBarcode = package.Barcode;
                 UpdatePackageInfoItems(package);
                 Interlocked.Increment(ref _totalPackageCount);
@@ -723,15 +738,19 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     _ => "包裹体积信息缺失"
                 };
 
-                Log.Warning("包裹 {Barcode}: {Reason}，跳过DCS及后续流程。", package.Barcode, logMessage);
-                var combinedErrorMessageForUi = string.IsNullOrEmpty(package.ErrorMessage) // ErrorMessage 可能已有内容
-                    ? uiErrorMessage
-                    : $"{package.ErrorMessage}; {uiErrorMessage}"; // 假设 package.ErrorMessage 已是英文或无关紧要
-                package.SetStatus(PackageStatus.Failed, combinedErrorMessageForUi); // UI相关的错误信息使用英文
+                Log.Warning("包裹 {Barcode}: {Reason}，处理终止。", package.Barcode, logMessage);
+                package.SetStatus(PackageStatus.Failed, uiErrorMessage); // UI相关的错误信息使用英文
+                // 注意：如果在这里终止，后续的小车分拣和DCS上报逻辑将不会执行。
+                // ReportSortResultAsync 仍然会在外层被调用，上报此处的Failed状态和无效格口。
             }
-            else // 重量和尺寸有效，开始DCS流程
+            else // 重量和尺寸有效，开始DCS交互和小车分拣流程
             {
-                // 1. 调用安防相机抓图并上传
+                string dcsErrorMessage = string.Empty; // 用于存储DCS交互过程中的错误信息
+
+                // 1. DCS相关操作：尝试安防抓图并上传，上传包裹信息，获取目的地建议
+                // 这些操作的失败不应阻止后续的小车分拣（如果适用），但会影响最终状态和上报信息
+
+                // 1.1 安防相机抓图并上传
                 BitmapSource? capturedImage = _securityCameraService.CaptureAndGetBitmapSource();
                 if (capturedImage != null)
                 {
@@ -751,106 +770,131 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         else
                         {
                             Log.Warning("包裹 {Barcode}: 图片上传到DCS失败。", package.Barcode);
+                            dcsErrorMessage = AppendError(dcsErrorMessage, "DCS image upload failed.");
                             package.ImagePath = null;
                         }
-                        try
-                        {
-                            File.Delete(tempImagePath);
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Warning(ex, "删除临时图片文件失败: {Path}", tempImagePath);
-                        }
+                        try { File.Delete(tempImagePath); }
+                        catch (Exception ex) { Log.Warning(ex, "删除临时图片文件失败: {Path}", tempImagePath); }
                     }
                     else
                     {
                         Log.Warning("包裹 {Barcode}: 保存安防相机抓图到临时文件失败。", package.Barcode);
+                        dcsErrorMessage = AppendError(dcsErrorMessage, "Failed to save security camera image locally.");
                         package.ImagePath = null;
                     }
                 }
                 else
                 {
                     Log.Information("包裹 {Barcode}: 未从安防相机抓取到图片，跳过图片上传。", package.Barcode);
-                    package.ImagePath = null;
+                    package.ImagePath = null; // 明确设置为null
                 }
 
-                // 2. 调用 sorter.parcel_info_upload
+                // 1.2 调用 sorter.parcel_info_upload
                 Log.Information("包裹 {Barcode}: 准备上传包裹基础信息到DCS。图片路径: {ImagePath}", package.Barcode, package.ImagePath ?? "无");
                 bool parcelInfoUploaded = await _rookieApiService.UploadParcelInfoAsync(package);
                 if (!parcelInfoUploaded)
                 {
-                    package.SetStatus(PackageStatus.Failed, "Parcel info upload to DCS failed"); // UI 英文
-                    Log.Error("包裹 {Barcode}: 包裹基础信息上传DCS失败。", package.Barcode);
+                    dcsErrorMessage = AppendError(dcsErrorMessage, "Parcel info upload to DCS failed.");
+                    Log.Error("包裹 {Barcode}: 包裹基础信息上传DCS失败。 {DcsError}", package.Barcode, dcsErrorMessage);
                 }
-                else
+                else // 包裹基础信息上传DCS成功
                 {
                     Log.Information("包裹 {Barcode}: 包裹基础信息上传DCS成功。", package.Barcode);
-                    // 3. 调用 sorter.dest_request (仅当 parcel_info_upload 成功)
+                    // 1.3 调用 sorter.dest_request (仅当 parcel_info_upload 成功)
                     DestRequestResultParams? destResult = await _rookieApiService.RequestDestinationAsync(package.Barcode);
-                    if (destResult?.ErrorCode == 0 && int.TryParse(destResult.ChuteCode, out int apiChute) && apiChute > 0)
-                    {
-                        // 新增: 循环分配格口号 1-4
-                        if (_nextCyclicChute <= 0 || _nextCyclicChute >= 4) // 如果是初始值或达到上限，则重置为1开始
-                        {
-                            _nextCyclicChute = 1;
-                        }
-                        else
-                        {
-                            _nextCyclicChute++;
-                        }
-                        package.SetChute(_nextCyclicChute);
-                        Log.Information("包裹 {Barcode}: DCS请求目的地成功。已覆盖API分配格口，循环分配格口为: {CyclicChute}", package.Barcode, _nextCyclicChute);
-                        
-                        package.SetStatus(PackageStatus.Success); 
+                    bool dcsDestinationSuccess = destResult?.ErrorCode == 0 && int.TryParse(destResult.ChuteCode, out int apiChute) && apiChute > 0;
 
-                        Log.Information("包裹 {Barcode}: 准备调用小车分拣服务，目标格口(循环分配后): {Chute}", package.Barcode, package.ChuteNumber);
-                        var carSortResult = await _carSortService.ProcessPackageSortingAsync(package);
-                        if (carSortResult)
-                        {
-                            Log.Information("包裹 {Barcode}: 小车分拣服务处理成功。", package.Barcode);
-                            // 如果之前是Success, 保持Success。如果ProcessPackageSortingAsync内部修改了状态(例如错误)，以那个为准
-                        }
-                        else
-                        {
-                            Log.Warning("包裹 {Barcode}: 小车分拣服务处理失败。", package.Barcode);
-                            const string carSortErrorUi = "Car sorting failed"; // UI 英文
-                            var currentErrorMessage = string.IsNullOrEmpty(package.ErrorMessage) || package.Status == PackageStatus.Success // 如果之前是Success, ErrorMessage为空
-                                ? carSortErrorUi 
-                                : $"{package.ErrorMessage}; {carSortErrorUi}"; // 假设 package.ErrorMessage 已是英文或其内容适合拼接
-                            package.SetStatus(PackageStatus.Error, currentErrorMessage); // UI 英文
-                        }
+                    if (dcsDestinationSuccess)
+                    {
+                        package.SetChute(_nextCyclicChute); // ChuteNumber is now set by cyclic logic
+                        Log.Information("包裹 {Barcode}: DCS请求目的地成功。已覆盖API分配格口，循环分配格口为: {CyclicChute}", package.Barcode, _nextCyclicChute);
+                    }
+                    else // DCS请求目的地失败或返回无效格口
+                    {
+                        string destFailReason = destResult == null
+                            ? "DCS destination request API call failed"
+                            : $"DCS destination request logical error: Code {destResult.ErrorCode}, Chute '{destResult.ChuteCode}'";
+                        dcsErrorMessage = AppendError(dcsErrorMessage, destFailReason);
+                        Log.Warning("包裹 {Barcode}: DCS 请求目的地失败/无效。原因: {Reason}", package.Barcode, destFailReason);
+                        // package.ChuteNumber 此时未被DCS设置或保持原样(可能为0)
+                    }
+                }
+                // --- DCS交互结束 --- 
+
+                // 2. 确定小车分拣的目标格口 (独立于DCS是否成功，但可受其影响)
+                if (package.ChuteNumber <= 0) // 如果DCS未能成功设置有效格口 (包括 parcelInfoUpload 失败的情况)
+                {
+                    if (_carSequenceSettings.ExceptionChuteNumber > 0)
+                    {
+                        package.SetChute(_carSequenceSettings.ExceptionChuteNumber);
+                        Log.Information("包裹 {Barcode}: DCS未成功分配格口或交互失败，已分配配置的异常格口: {ExceptionChute} 用于小车分拣。", package.Barcode, _carSequenceSettings.ExceptionChuteNumber);
                     }
                     else
                     {
-                        string destErrorUi = destResult == null
-                            ? "DCS destination request API call failed"
-                            : $"DCS destination request logical error: Code {destResult.ErrorCode}, Chute '{destResult.ChuteCode}'"; // UI 英文
-                        string destErrorLog = destResult == null // 中文日志
-                            ? "DCS请求目的地API调用失败"
-                            : $"DCS请求目的地逻辑错误: 代码 {destResult.ErrorCode}, 格口 '{destResult.ChuteCode}'";
-                        package.SetStatus(PackageStatus.Failed, destErrorUi);
-                        Log.Error("包裹 {Barcode}: {Error}", package.Barcode, destErrorLog);
+                        // package.ChuteNumber 保持为0或无效。小车服务需能处理。
+                        Log.Warning("包裹 {Barcode}: DCS未成功分配格口或交互失败，且未配置有效异常格口。小车分拣将使用当前格口: {Chute}", package.Barcode, package.ChuteNumber);
                     }
                 }
+                // DCS请求目的地成功，使用循环格口覆盖API返回的格口
+                if (_nextCyclicChute <= 0 || _nextCyclicChute >= 4) // 如果是初始值或达到上限，则重置为1开始
+                {
+                    _nextCyclicChute = 1;
+                }
+                else
+                {
+                    _nextCyclicChute++;
+                }
+                package.SetChute(_nextCyclicChute);
+                // 3. 调用小车分拣服务
+                Log.Information("包裹 {Barcode}: 准备调用小车分拣服务。目标格口: {Chute}", package.Barcode, package.ChuteNumber > 0 ? package.ChuteNumber.ToString() : "未指定/异常");
+                var carSortResult = await _carSortService.ProcessPackageSortingAsync(package); // ProcessPackageSortingAsync 应该能够处理 package.ChuteNumber <= 0 的情况
+
+                string? carSortErrorMessage = null;
+                if (!carSortResult)
+                {
+                    carSortErrorMessage = "Car sorting failed."; // UI 英文
+                    Log.Warning("包裹 {Barcode}: 小车分拣服务处理失败。", package.Barcode);
+                }
+                else
+                {
+                    Log.Information("包裹 {Barcode}: 小车分拣服务处理成功。", package.Barcode);
+                }
+
+                // 4. 根据小车分拣结果和DCS交互历史，设定最终状态和错误信息
+                string finalCombinedErrorMessage = dcsErrorMessage;
+                if (carSortErrorMessage != null)
+                {
+                    finalCombinedErrorMessage = AppendError(finalCombinedErrorMessage, carSortErrorMessage);
+                }
+
+                // 小车分拣失败
+                // 即使DCS有错，但小车分拣成功了，整体认为是成功的，但错误信息会保留DCS的问题
+                package.SetStatus(carSortResult ? PackageStatus.Success : PackageStatus.Error, // 小车分拣成功是主要成功标准
+                    finalCombinedErrorMessage);
             }
 
+            // 5. 上报分拣结果到DCS (无论之前发生什么，都尝试上报)
             string chuteToReport;
-            if (package.ChuteNumber > 0)
+            if (package.ChuteNumber > 0) // 使用最终确定的 package.ChuteNumber
             {
                 chuteToReport = package.ChuteNumber.ToString();
             }
-            else
+            else // 如果 package.ChuteNumber 最终为0 (例如DCS失败且异常格口也为0)
             {
-                chuteToReport = _carSequenceSettings.ExceptionChuteNumber > 0 
-                                ? _carSequenceSettings.ExceptionChuteNumber.ToString() 
-                                : "N/A"; // Fallback if ExceptionChuteNumber is somehow invalid
-                Log.Information("包裹 {Barcode}: 未分配有效格口或处理失败，将上报至配置的异常口/默认值: {ErrorChuteValue}", package.Barcode, chuteToReport);
+                chuteToReport = _carSequenceSettings.ExceptionChuteNumber > 0
+                                ? _carSequenceSettings.ExceptionChuteNumber.ToString()
+                                : "N/A"; // 如果配置的异常格口也无效，则上报N/A
+                Log.Information("包裹 {Barcode}: 最终指定格口为0或无效，将尝试使用配置的异常口 ({ConfiguredExceptionChute}) 或 N/A ({ChuteToReportActual}) 上报DCS。",
+                    package.Barcode,
+                    _carSequenceSettings.ExceptionChuteNumber,
+                    chuteToReport);
             }
 
+            // 根据最终的 package.Status 判断上报给API的成功状态
             bool successForApiReport = package.Status == PackageStatus.Success;
             string? errorReasonForApiReportUi = successForApiReport
                 ? null
-                : (string.IsNullOrEmpty(package.ErrorMessage) ? "Unknown sorting error" : package.ErrorMessage); // ErrorMessage已是英文
+                : (string.IsNullOrEmpty(package.ErrorMessage) ? "Unknown sorting error" : package.ErrorMessage); // ErrorMessage已经处理为UI适用的英文
             string? errorReasonForApiReportLog = successForApiReport // 中文日志
                 ? null
                 : (string.IsNullOrEmpty(package.ErrorMessage) ? "未知分拣错误" : package.ErrorMessage); // ErrorMessage可能是英文，但作日志用途也可
@@ -891,14 +935,16 @@ public class MainWindowViewModel : BindableBase, IDisposable
             if (package.Status != PackageStatus.Failed && package.Status != PackageStatus.Error)
             {
                 // UI 英文. Ensure ErrorMessage on package is also set to this if it's directly bound to UI.
-                package.SetStatus(PackageStatus.Error, $"Unexpected error during processing: {ex.Message}"); 
+                package.SetStatus(PackageStatus.Error, $"Unexpected error during processing: {ex.Message}");
             }
         }
         finally
         {
+            processingStopwatch.Stop();
+            package.ProcessingTime = (int)processingStopwatch.ElapsedMilliseconds;
             _isProcessingPackage = false;
             // StatusDisplay 假设由 PackageInfo 控制，可能是中文或已本地化
-            Log.Information("包裹 {Barcode} 处理流程结束 (或者被忽略后标志位重置)。最终状态: {StatusDisplay}", package.Barcode, package.StatusDisplay);
+            Log.Information("包裹 {Barcode} 处理流程结束 (或者被忽略后标志位重置)。最终状态: {StatusDisplay}, 总耗时: {TotalTime}ms", package.Barcode, package.StatusDisplay, package.ProcessingTime);
         }
     }
 
@@ -909,7 +955,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         // Update Dimensions item
         var dimensionsItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Dimensions");
-        if (dimensionsItem != null) 
+        if (dimensionsItem != null)
         {
             if (package.Length > 0 || package.Width > 0 || package.Height > 0)
             {
@@ -923,7 +969,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         // Update Destination/Chute item
         var destinationItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Destination");
-        if (destinationItem != null) 
+        if (destinationItem != null)
         {
             if (package.ChuteNumber > 0)
             {
@@ -931,7 +977,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             }
             else if (package.Status == PackageStatus.Error || package.Status == PackageStatus.Failed || !string.IsNullOrEmpty(package.ErrorMessage))
             {
-                 destinationItem.Value = "ERR"; // Or some other indicator for error/no chute
+                destinationItem.Value = "ERR"; // Or some other indicator for error/no chute
             }
             else
             {
@@ -1027,6 +1073,16 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _disposed = true;
     }
 
+    // 辅助方法用于拼接错误信息，避免前导分号
+    private static string AppendError(string? existingError, string newError)
+    {
+        if (string.IsNullOrEmpty(existingError))
+        {
+            return newError;
+        }
+        return $"{existingError}; {newError}";
+    }
+
     /// <summary>
     /// 将 BitmapSource 保存为 JPEG 文件。
     /// </summary>
@@ -1037,7 +1093,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private static string? SaveBitmapSourceAsJpeg(BitmapSource? bitmapSource, string directory, string fileName)
     {
         if (bitmapSource == null) return null;
-        
+
         string filePath = Path.Combine(directory, fileName);
         try
         {
@@ -1053,7 +1109,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             };
             encoder.Frames.Add(BitmapFrame.Create(bitmapSource));
             encoder.Save(fileStream);
-            
+
             Log.Debug("BitmapSource 已成功保存为 JPEG: {FilePath}", filePath);
             return filePath;
         }

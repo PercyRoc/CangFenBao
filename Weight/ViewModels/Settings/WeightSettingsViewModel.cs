@@ -43,21 +43,18 @@ public class WeightSettingsViewModel : BindableBase
 
     private void OnSave()
     {
-        // Properties are now directly bound to Settings object, which itself notifies changes.
         _settingsService.SaveSettings(Settings, validate: true, throwOnError: false);
-        // 可选，通过状态栏消息或Toast通知提供用户反馈。
     }
 
     private void OnLoad()
     {
         Settings = _settingsService.LoadSettings<WeightSettings>();
-        RefreshPorts(); // Refresh ports as PortName might have changed.
-        // 可选，通过状态栏消息或Toast通知提供用户反馈。
+        RefreshPorts();
     }
 
     private void RefreshPorts()
     {
-        string? previouslySelectedPort = Settings.PortName; // Use Settings.PortName
+        string? previouslySelectedPort = Settings.PortName;
         AvailablePorts.Clear();
         try
         {
@@ -69,21 +66,21 @@ public class WeightSettingsViewModel : BindableBase
 
             if (!string.IsNullOrEmpty(previouslySelectedPort) && AvailablePorts.Contains(previouslySelectedPort))
             {
-                Settings.PortName = previouslySelectedPort; // Set on Settings.PortName
+                Settings.PortName = previouslySelectedPort;
             }
             else if (AvailablePorts.Any())
             {
-                Settings.PortName = AvailablePorts.First(); // Set on Settings.PortName
+                Settings.PortName = AvailablePorts.First();
             }
             else
             {
-                Settings.PortName = string.Empty; // Set on Settings.PortName
+                Settings.PortName = string.Empty;
             }
         }
         catch (Exception ex)
         {
             Serilog.Log.Error(ex, "刷新串口列表失败");
-            Settings.PortName = string.Empty; // Set on Settings.PortName
+            Settings.PortName = string.Empty;
         }
     }
 }

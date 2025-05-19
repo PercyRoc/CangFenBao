@@ -149,6 +149,18 @@
     <data name="Label_FusionTimeMs" xml:space="preserve">
         <value>Fusion Time (ms):</value>
     </data>
+    <data name="Label_VolumeCameraImageSavePath" xml:space="preserve">
+        <value>Volume Camera Image Save Path:</value>
+    </data>
+    <data name="Toggle_SaveVerticalView" xml:space="preserve">
+        <value>Save Top View</value>
+    </data>
+    <data name="Toggle_SaveSideView" xml:space="preserve">
+        <value>Save Side View</value>
+    </data>
+    <data name="Toggle_SaveOriginalView" xml:space="preserve">
+        <value>Save Original View</value>
+    </data>
     <!-- Hikvision Security Camera -->
     <data name="Header_HikvisionSecurityCameraSettings" xml:space="preserve">
         <value>Hikvision Security Camera Settings</value>

@@ -109,7 +109,7 @@ public partial class MainWindow
     // 新增：全局文本输入事件处理，输入@时自动聚焦到输入框
     private void MainWindow_PreviewTextInput(object sender, TextCompositionEventArgs e)
     {
-        if (e.Text == "@")
+        if (e.Text == "\"")
         {
             ManualBarcodeTextBox.Focus();
         }

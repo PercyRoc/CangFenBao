@@ -1,6 +1,4 @@
 ﻿using System.Windows;
-using SharedUI.ViewModels;
-using SharedUI.Views.Dialogs; 
 using SowingWall.Views;
 using SowingWall.ViewModels;
 using SowingWall.Views.Settings;
@@ -36,7 +34,6 @@ namespace SowingWall
         protected override void RegisterTypes(IContainerRegistry containerRegistry)
         {
             containerRegistry.RegisterForNavigation<MainWindow, MainViewModel>();
-            containerRegistry.RegisterDialog<HistoryDialogView, HistoryDialogViewModel>();
             containerRegistry.RegisterDialog<SettingsDialog, SettingsViewModel>();
             containerRegistry.RegisterForNavigation<WangDianTongSettingsView, WangDianTongSettingsViewModel>();
             containerRegistry.RegisterSingleton<IWangDianTongService, WangDianTongService>();

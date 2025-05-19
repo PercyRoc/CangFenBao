@@ -1,17 +1,17 @@
 using System.ComponentModel.DataAnnotations;
-using Common.Models.Package;
+using Common.Models.Package; // Assuming PackageStatus will be used from Common
 
-namespace Common.Data;
+namespace History.Data;
 
 /// <summary>
-///     包裹记录
+///     历史包裹记录
 /// </summary>
-public class PackageRecord
+public class PackageHistoryRecord
 {
     /// <summary>
     ///     主键ID
     /// </summary>
-    public int Id { get; set; }
+    public long Id { get; set; }
 
     /// <summary>
     ///     包裹序号
@@ -52,22 +52,22 @@ public class PackageRecord
     public string? ErrorMessage { get; set; }
 
     /// <summary>
-    ///     长度（毫米）
+    ///     长度（厘米） - 注意单位与PackageInfo一致
     /// </summary>
     public double? Length { get; set; }
 
     /// <summary>
-    ///     宽度（毫米）
+    ///     宽度（厘米）
     /// </summary>
     public double? Width { get; set; }
 
     /// <summary>
-    ///     高度（毫米）
+    ///     高度（厘米）
     /// </summary>
     public double? Height { get; set; }
 
     /// <summary>
-    ///     体积（立方毫米）
+    ///     体积（立方厘米）
     /// </summary>
     public double? Volume { get; set; }
 
@@ -89,37 +89,42 @@ public class PackageRecord
     public string? ImagePath { get; set; }
 
     /// <summary>
-    ///     托盘名称 (Sunnen项目专用)
+    ///     托盘名称
     /// </summary>
     [StringLength(50)]
     public string? PalletName { get; set; }
 
     /// <summary>
-    ///     托盘重量，单位kg (Sunnen项目专用)
+    ///     托盘重量，单位kg
     /// </summary>
     public double? PalletWeight { get; set; }
 
     /// <summary>
-    ///     托盘长度，单位cm (Sunnen项目专用)
+    ///     托盘长度，单位cm
     /// </summary>
     public double? PalletLength { get; set; }
 
     /// <summary>
-    ///     托盘宽度，单位cm (Sunnen项目专用)
+    ///     托盘宽度，单位cm
     /// </summary>
     public double? PalletWidth { get; set; }
 
     /// <summary>
-    ///     托盘高度，单位cm (Sunnen项目专用)
+    ///     托盘高度，单位cm
     /// </summary>
     public double? PalletHeight { get; set; }
 
     /// <summary>
-    ///     从包裹信息创建记录
+    ///     指示此记录是否有错误消息。
     /// </summary>
-    internal static PackageRecord FromPackageInfo(PackageInfo info)
+    public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
+
+    /// <summary>
+    ///     从 Common.Models.Package.PackageInfo 创建记录
+    /// </summary>
+    public static PackageHistoryRecord FromPackageInfo(PackageInfo info)
     {
-        var record = new PackageRecord
+        return new PackageHistoryRecord
         {
             Index = info.Index,
             Barcode = info.Barcode,
@@ -140,7 +145,10 @@ public class PackageRecord
             PalletLength = info.PalletLength,
             PalletWidth = info.PalletWidth,
             PalletHeight = info.PalletHeight
+            // 注意：PackageInfo中的PalletHeight是private set，但FromPackageInfo可以访问它
+            // 如果PackageInfo.PalletHeight改为public set，可以直接赋值。
+            // 此处假设PackageInfo的PalletHeight可以通过某种方式在创建时或通过方法设置，
+            // 并且此FromPackageInfo方法能访问到最终值。
         };
-        return record;
     }
-}
+} 

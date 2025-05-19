@@ -111,7 +111,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="{lex:Loc IntegrationTimeMsLabel}" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0" />
                         <ui:NumberBox Grid.Column="1" Width="150" HorizontalAlignment="Left"
-                                      Value="{Binding Settings.IntegrationTimeMs}"
+                                      Value="{Binding Settings.IntegrationTimeMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                       SpinButtonPlacementMode="Inline"
                                       Minimum="0" SmallChange="10" LargeChange="100"/>
                     </Grid>

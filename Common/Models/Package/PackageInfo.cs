@@ -1,5 +1,6 @@
 using System.Windows.Media.Imaging;
-using System.Collections.Generic;
+using System.Globalization;
+using WPFLocalizeExtension.Engine;
 
 namespace Common.Models.Package;
 
@@ -10,20 +11,6 @@ public class PackageInfo : IDisposable
 {
     private static int _currentIndex;
     private bool _disposed;
-
-    private static readonly Dictionary<PackageStatus, string> DefaultStatusDisplays = new()
-    {
-        { PackageStatus.Created, "已创建" },
-        { PackageStatus.Success, "分拣成功" },
-        { PackageStatus.Failed, "分拣失败" },
-        { PackageStatus.Timeout, "处理超时" },
-        { PackageStatus.Offline, "设备离线" },
-        { PackageStatus.Error, "异常" },
-        { PackageStatus.WaitingForLoading, "等待上包" },
-        { PackageStatus.LoadingRejected, "拒绝上包" },
-        { PackageStatus.LoadingSuccess, "上包成功" },
-        { PackageStatus.LoadingTimeout, "上包超时" }
-    };
 
     /// <summary>
     ///     构造函数
@@ -51,7 +38,7 @@ public class PackageInfo : IDisposable
     /// <summary>
     ///     序号
     /// </summary>
-    public int Index { get; set; }
+    public int Index { get; private set; }
 
     /// <summary>
     ///     唯一标识符 (来自TCP数据)
@@ -71,7 +58,7 @@ public class PackageInfo : IDisposable
     /// <summary>
     ///     重量（千克）
     /// </summary>
-    public double Weight { get; private set; }
+    public double Weight { get; set; }
 
     /// <summary>
     ///     重量显示
@@ -81,14 +68,14 @@ public class PackageInfo : IDisposable
     /// <summary>
     ///     体积显示
     /// </summary>
-    public string VolumeDisplay => Length.HasValue && Width.HasValue && Height.HasValue 
+    public string VolumeDisplay => Length.HasValue && Width.HasValue && Height.HasValue
         ? $"{Length:F1}cm*{Width:F1}cm*{Height:F1}cm"
         : string.Empty;
 
     /// <summary>
     ///     格口号
     /// </summary>
-    public int ChuteNumber { get; private set; }
+    public int ChuteNumber { get; set; }
 
     /// <summary>
     ///     状态显示
@@ -103,7 +90,7 @@ public class PackageInfo : IDisposable
     /// <summary>
     ///     创建时间
     /// </summary>
-    public DateTime CreateTime { get; set; }
+    public DateTime CreateTime { get; private set; }
 
     /// <summary>
     ///     错误信息
@@ -113,7 +100,7 @@ public class PackageInfo : IDisposable
     /// <summary>
     ///     触发时间戳
     /// </summary>
-    public DateTime TriggerTimestamp { get; private set; }
+    public DateTime TriggerTimestamp { get; set; }
 
     /// <summary>
     ///     长度（厘米）
@@ -133,12 +120,12 @@ public class PackageInfo : IDisposable
     /// <summary>
     ///     体积（立方厘米）
     /// </summary>
-    public double? Volume { get; private set; }
+    public double? Volume { get; set; }
 
     /// <summary>
     ///     图像 (WPF BitmapSource format)
     /// </summary>
-    public BitmapSource? Image { get; set; }
+    public BitmapSource? Image { get; private set; }
 
     /// <summary>
     ///     图片路径
@@ -158,27 +145,27 @@ public class PackageInfo : IDisposable
     /// <summary>
     ///     额外数据字典，用于存储像 CameraId 这样的自定义数据。
     /// </summary>
-    public Dictionary<string, object> AdditionalData { get; } = new Dictionary<string, object>();
+    public Dictionary<string, object> AdditionalData { get; } = [];
 
     /// <summary>
     ///     托盘名称 (Sunnen项目专用)
     /// </summary>
-    public string? PalletName { get; set; }
+    public string? PalletName { get; private set; }
 
     /// <summary>
     ///     托盘重量，单位kg (Sunnen项目专用)
     /// </summary>
-    public double PalletWeight { get; set; }
+    public double PalletWeight { get; private set; }
 
     /// <summary>
     ///     托盘长度，单位cm (Sunnen项目专用)
     /// </summary>
-    public double PalletLength { get; set; }
+    public double PalletLength { get; private set; }
 
     /// <summary>
     ///     托盘宽度，单位cm (Sunnen项目专用)
     /// </summary>
-    public double PalletWidth { get; set; }
+    public double PalletWidth { get; private set; }
 
     /// <summary>
     ///     托盘高度，单位cm (Sunnen项目专用)
@@ -229,15 +216,6 @@ public class PackageInfo : IDisposable
     }
 
     /// <summary>
-    ///     设置重量。
-    /// </summary>
-    /// <param name="weight">重量（千克）</param>
-    public void SetWeight(double weight)
-    {
-        Weight = weight;
-    }
-
-    /// <summary>
     ///     设置尺寸。
     /// </summary>
     /// <param name="length">长度（厘米）</param>
@@ -251,16 +229,6 @@ public class PackageInfo : IDisposable
     }
 
     /// <summary>
-    ///     设置格口号。
-    /// </summary>
-    /// <param name="chuteNumber">格口号</param>
-    /// <param name="originalChuteNumber">原始格口号 (可选)</param>
-    public void SetChute(int chuteNumber, int? originalChuteNumber = null)
-    {
-        ChuteNumber = chuteNumber;
-    }
-
-    /// <summary>
     ///     设置处理状态。如果未提供 statusDisplay，则使用默认值。
     /// </summary>
     /// <param name="status">新的状态</param>
@@ -268,9 +236,28 @@ public class PackageInfo : IDisposable
     public void SetStatus(PackageStatus status, string? statusDisplay = null)
     {
         Status = status;
-        StatusDisplay = !string.IsNullOrEmpty(statusDisplay)
-                        ? statusDisplay
-                        : DefaultStatusDisplays.GetValueOrDefault(status, status.ToString()); // Use default or enum name as fallback
+        if (!string.IsNullOrEmpty(statusDisplay))
+        {
+            StatusDisplay = statusDisplay;
+        }
+        else
+        {
+            string resourceKey = $"PackageStatus_{status}";
+            object? localizedValue = LocalizeDictionary.Instance.GetLocalizedObject(
+                resourceKey,
+                null,
+                CultureInfo.CurrentUICulture);
+
+            if (localizedValue is string localizedString && !string.IsNullOrEmpty(localizedString))
+            {
+                StatusDisplay = localizedString;
+            }
+            else
+            {
+                StatusDisplay = status.ToString();
+            }
+        }
+
         if (status == PackageStatus.Error && string.IsNullOrEmpty(ErrorMessage))
         {
             ErrorMessage = StatusDisplay;
@@ -289,14 +276,6 @@ public class PackageInfo : IDisposable
     }
 
     /// <summary>
-    ///     设置触发时间戳
-    /// </summary>
-    public void SetTriggerTimestamp(DateTime timestamp)
-    {
-        TriggerTimestamp = timestamp;
-    }
-
-    /// <summary>
     ///     设置唯一标识符。
     /// </summary>
     /// <param name="guid">唯一标识符</param>
@@ -306,12 +285,21 @@ public class PackageInfo : IDisposable
     }
 
     /// <summary>
-    ///     设置体积。
+    ///     重新设置包裹的序号。
     /// </summary>
-    /// <param name="volume">体积（立方厘米）</param>
-    public void SetVolume(double volume)
+    /// <param name="newIndex">新的序号值。</param>
+    public void SetIndex(int newIndex)
     {
-        Volume = volume;
+        Index = newIndex;
+    }
+
+    /// <summary>
+    /// 设置格口号。
+    /// </summary>
+    /// <param name="chuteNumber">格口号</param>
+    public void SetChute(int chuteNumber)
+    {
+        ChuteNumber = chuteNumber;
     }
 
     /// <summary>

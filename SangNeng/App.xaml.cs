@@ -1,17 +1,11 @@
 ﻿using System.Diagnostics;
+using System.Globalization;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-using Common.Extensions;
-using DeviceService.DataSourceDevices.Camera;
-using DeviceService.DataSourceDevices.Camera.Hikvision;
-using DeviceService.DataSourceDevices.Weight;
-using DeviceService.Extensions;
-using HandyControl.Controls;
+using Camera;
+using Camera.Interface;
+using Camera.Services.Implementations.RenJia;
+using Common;
 using Serilog;
-using SharedUI.Extensions;
-using SharedUI.ViewModels.Settings;
-using SharedUI.Views.Settings;
 using Sunnen.Services;
 using Sunnen.ViewModels.Dialogs;
 using Sunnen.ViewModels.Settings;
@@ -19,7 +13,12 @@ using Sunnen.ViewModels.Windows;
 using Sunnen.Views.Dialogs;
 using Sunnen.Views.Settings;
 using Sunnen.Views.Windows;
+using Weight;
+using Weight.Services;
+using WPFLocalizeExtension.Engine;
 using Window = System.Windows.Window;
+using History;
+using SharedUI.Views.Windows;
 
 namespace Sunnen;
 
@@ -31,8 +30,6 @@ internal partial class App
     private static Mutex? _mutex;
     private const string MutexName = "Global\\SangNeng_App_Mutex";
     private bool _ownsMutex;
-    private CircleProgressBar? _loadingControl;
-    private Window? _loadingWindow;
 
     /// <summary>
     ///     创建主窗口
@@ -42,7 +39,7 @@ internal partial class App
         // 检查是否已经运行（进程级检查）
         if (IsApplicationAlreadyRunning())
         {
-            System.Windows.MessageBox.Show("程序已在运行中，请勿重复启动！", "提示", MessageBoxButton.OK,
+            MessageBox.Show("Application is already running. Please do not start it again!", "Information", MessageBoxButton.OK,
                 MessageBoxImage.Information);
             Environment.Exit(0); // 直接退出进程
             return null!;
@@ -56,6 +53,9 @@ internal partial class App
 
             if (createdNew)
             {
+                // 确保模块已完全初始化
+                var moduleManager = Container.Resolve<IModuleManager>();
+                moduleManager.Run();
                 return Container.Resolve<MainWindow>();
             }
 
@@ -63,15 +63,18 @@ internal partial class App
             var canAcquire = _mutex.WaitOne(TimeSpan.Zero, false);
             if (!canAcquire)
             {
-                System.Windows.MessageBox.Show("程序已在运行中，请勿重复启动！", "提示", MessageBoxButton.OK,
+                MessageBox.Show("Application is already running. Please do not start it again!", "Information", MessageBoxButton.OK,
                     MessageBoxImage.Information);
-                Environment.Exit(0); // 直接退出进程
-                return null!; // 虽然不会执行到这里，但需要满足返回类型
+                Environment.Exit(0);
+                return null!;
             }
-            else
+
             {
                 // 可以获取Mutex，说明前一个实例可能异常退出但Mutex已被释放
                 _ownsMutex = true;
+                // 确保模块已完全初始化
+                var moduleManager = Container.Resolve<IModuleManager>();
+                moduleManager.Run();
                 return Container.Resolve<MainWindow>();
             }
         }
@@ -79,7 +82,7 @@ internal partial class App
         {
             // Mutex创建或获取失败
             Log.Error(ex, "检查应用程序实例时发生错误");
-            System.Windows.MessageBox.Show($"启动程序时发生错误: {ex.Message}", "错误", MessageBoxButton.OK,
+            MessageBox.Show($"Error starting application: {ex.Message}", "Error", MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Current.Shutdown();
             return null!;
@@ -103,41 +106,34 @@ internal partial class App
     /// </summary>
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
-        // 注册通用服务
-        containerRegistry.AddCommonServices();
-        containerRegistry.AddShardUi();
-
-        // 显式注册 Factory 和 Startup 服务为 Singleton
-        containerRegistry.RegisterSingleton<CameraFactory>();
-        containerRegistry.RegisterSingleton<CameraStartupService>();
-        containerRegistry.RegisterSingleton<VolumeCameraStartupService>();
-        containerRegistry.RegisterSingleton<WeightStartupService>();
+        // 确保 Serilog.Log.Logger 已经被配置 (通常在 OnStartup 早期)
+        // 如果 Log.Logger 此时可能可能未初始化，需要调整 App.xaml.cs 的初始化顺序
+        // 或者在这里进行一个简单的检查和配置。
+        // 但基于现有代码，OnStartup 中配置 Logger，RegisterTypes 在那之后被框架调用以构建Shell。
+        containerRegistry.RegisterInstance(Log.Logger);
 
         // 使用扩展方法注册设备服务 (现在它们依赖的 Startup 服务已明确为 Singleton)
-        // containerRegistry.AddPhotoCamera(); // 拍照相机
-        containerRegistry.RegisterSingleton<HikvisionIndustrialCameraService>();
-        containerRegistry.AddVolumeCamera(); // 体积相机
-        containerRegistry.AddWeightScale(); // 重量称
-
-        // 注册桑能服务
         containerRegistry.RegisterSingleton<ISangNengService, SangNengService>();
-
+        containerRegistry.RegisterDialogWindow<HistoryDialogWindow>();
         // 注册窗口和ViewModel
         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
-
-        // 注册设置页面
-        containerRegistry.Register<VolumeSettingsView>();
-        containerRegistry.Register<WeightSettingsView>();
+        
         containerRegistry.RegisterForNavigation<PalletSettingsView, PalletSettingsViewModel>();
-        containerRegistry.RegisterDialog<HistoryControl, HistoryWindowViewModel>("HistoryWindow");
-        containerRegistry.RegisterDialog<SettingsControl, SettingsDialogViewModel>("SettingsDialog");
-
-        // 注册设置页面的ViewModel
-        containerRegistry.Register<VolumeSettingsViewModel>();
-        containerRegistry.Register<WeightSettingsViewModel>();
-
+        containerRegistry.RegisterDialog<SettingsControl, SettingsDialogViewModel>();
         // 注册桑能设置页面
         containerRegistry.RegisterForNavigation<SangNengSettingsPage, SangNengSettingsViewModel>();
+    }
+
+    /// <summary>
+    /// 配置模块目录
+    /// </summary>
+    protected override void ConfigureModuleCatalog(IModuleCatalog moduleCatalog)
+    {
+        base.ConfigureModuleCatalog(moduleCatalog);
+        moduleCatalog.AddModule<CommonServicesModule>();
+        moduleCatalog.AddModule<RenJiaIndustrialCameraModule>();
+        moduleCatalog.AddModule<WeightModule>();
+        moduleCatalog.AddModule<HistoryModule>();
     }
 
     /// <summary>
@@ -147,7 +143,7 @@ internal partial class App
     {
         // 配置Serilog
         Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Debug()
+            .MinimumLevel.Information()
             .WriteTo.Console()
             .WriteTo.Debug()
             .WriteTo.File("logs/app-.log",
@@ -158,139 +154,11 @@ internal partial class App
             .CreateLogger();
 
         Log.Information("应用程序启动");
-
-        // 在主线程创建和显示加载窗口
-        _loadingWindow = new Window
-        {
-            Title = "Starting...",
-            WindowStartupLocation = WindowStartupLocation.CenterScreen,
-            SizeToContent = SizeToContent.WidthAndHeight,
-            ResizeMode = ResizeMode.NoResize,
-            WindowStyle = WindowStyle.None,
-            AllowsTransparency = true,
-            Background = Brushes.Transparent,
-            Width = 300,
-            Height = 150,
-            Topmost = true
-        };
-
-        var grid = new Grid();
-        grid.Children.Add(new Border
-        {
-            Background = new SolidColorBrush(Color.FromArgb(230, 255, 255, 255)),
-            CornerRadius = new CornerRadius(8),
-            Margin = new Thickness(0)
-        });
-
-        var stackPanel = new StackPanel
-        {
-            Margin = new Thickness(20),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-
-        _loadingControl = new CircleProgressBar
-        {
-            Width = 60,
-            Height = 60,
-            Value = 0,
-            IsIndeterminate = false,
-            Foreground = new SolidColorBrush(Color.FromRgb(0, 122, 204)),
-            Background = new SolidColorBrush(Color.FromArgb(50, 0, 122, 204))
-        };
-
-        var textBlock = new TextBlock
-        {
-            Text = "Initializing system...",
-            Margin = new Thickness(0, 10, 0, 0),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            FontSize = 14,
-            Foreground = new SolidColorBrush(Color.FromRgb(51, 51, 51))
-        };
-
-        stackPanel.Children.Add(_loadingControl);
-        stackPanel.Children.Add(textBlock);
-        grid.Children.Add(stackPanel);
-        _loadingWindow.Content = grid;
-        _loadingWindow.Show();
-
+        // 设置 WPFLocalizeExtension 的区域性
+        LocalizeDictionary.Instance.SetCurrentThreadCulture = true;
+        LocalizeDictionary.Instance.Culture = new CultureInfo("en-US");
         // 先调用基类方法初始化容器
         base.OnStartup(e);
-
-        // 在后台线程启动服务
-        Task.Run(async () =>
-        {
-            try
-            {
-                // 在Task.Run外层声明变量
-                HikvisionIndustrialCameraService cameraStartupService = null!;
-                VolumeCameraStartupService volumeCameraStartupService = null!;
-                WeightStartupService weightStartupService = null!;
-
-                await Current.Dispatcher.InvokeAsync(() =>
-                {
-                    // 赋值已声明的变量
-                    cameraStartupService = Container.Resolve<HikvisionIndustrialCameraService>();
-                    volumeCameraStartupService = Container.Resolve<VolumeCameraStartupService>();
-                    weightStartupService = Container.Resolve<WeightStartupService>();
-                });
-
-                // 修复：分步启动服务并添加延迟
-                UpdateProgress("Initializing camera service...", 20);
-                await Task.Delay(100); // 给UI更新留出时间
-                cameraStartupService.Start();
-
-                UpdateProgress("Initializing volume camera...", 40);
-                await Task.Delay(100);
-                await volumeCameraStartupService.StartAsync(CancellationToken.None);
-
-                UpdateProgress("Initializing weight scale...", 80);
-                await weightStartupService.StartAsync(CancellationToken.None);
-
-                UpdateProgress("Initialization complete", 100);
-                Log.Information("托管服务启动成功");
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "启动托管服务时发生错误");
-                throw;
-            }
-            finally
-            {
-                // 关闭加载窗口
-                await Current.Dispatcher.InvokeAsync(() =>
-                {
-                    if (_loadingWindow != null)
-                    {
-                        _loadingWindow.Close();
-                        _loadingWindow = null;
-                    }
-
-                    _loadingControl = null;
-                });
-            }
-        });
-    }
-
-    private void UpdateProgress(string message, double progress)
-    {
-        if (_loadingWindow == null || _loadingControl == null) return;
-
-        Current.Dispatcher.Invoke(() =>
-        {
-            if (_loadingWindow.Content is not Grid grid ||
-                grid.Children[1] is not StackPanel stackPanel) return;
-
-            if (stackPanel.Children[1] is TextBlock textBlock)
-            {
-                textBlock.Text = message;
-            }
-
-            _loadingControl.Value = progress;
-        });
-
-        // 给UI一点时间更新
-        Thread.Sleep(100);
     }
 
     /// <summary>
@@ -300,37 +168,21 @@ internal partial class App
     {
         try
         {
-            // 停止托管服务
-            var cameraStartupService = Container.Resolve<HikvisionIndustrialCameraService>();
-            var volumeCameraStartupService = Container.Resolve<VolumeCameraStartupService>();
-            var weightStartupService = Container.Resolve<WeightStartupService>();
+            Log.Information("应用程序正在关闭，开始停止服务...");
 
-            cameraStartupService.Stop();
-            volumeCameraStartupService.StopAsync(CancellationToken.None).Wait();
-            weightStartupService.StopAsync(CancellationToken.None).Wait();
-
-            // // 释放相机工厂
-            // if (Container.Resolve<CameraFactory>() is IDisposable cameraFactory)
-            // {
-            //     cameraFactory.Dispose();
-            //     Log.Information("相机工厂已释放");
-            // }
-
-            // 释放相机服务
-            if (Container.Resolve<HikvisionIndustrialCameraService>() is IDisposable cameraService)
-            {
-                cameraService.Dispose();
-                Log.Information("相机服务已释放");
-            }
+            // 使用 TryDisposeService 关闭服务
+            TryDisposeService<ICameraService>("默认相机服务 (ICameraService)");
+            TryDisposeService<RenJiaCameraService>("人加体积相机服务 (RenJiaCameraService)");
+            TryDisposeService<IWeightService>("重量服务 (IWeightService)");
 
             // 等待所有日志写入完成
-            Log.Information("应用程序关闭");
+            Log.Information("应用程序关闭流程完成。");
             Log.CloseAndFlush();
         }
         catch (Exception ex)
         {
             Log.Error(ex, "应用程序关闭时发生错误");
-            Log.CloseAndFlush();
+            Log.CloseAndFlush(); // 确保即使在异常情况下也尝试刷新日志
         }
         finally
         {
@@ -355,6 +207,31 @@ internal partial class App
             }
 
             base.OnExit(e);
+        }
+    }
+
+    /// <summary>
+    /// 尝试解析并处置一个服务。
+    /// </summary>
+    /// <typeparam name="TService">要处置的服务类型。</typeparam>
+    /// <param name="serviceName">用于日志记录的服务名称。</param>
+    private void TryDisposeService<TService>(string serviceName) where TService : class, IDisposable
+    {
+        try
+        {
+            // 假设服务已在容器中注册为 TService 类型。
+            // 如果服务是可选的或条件注册的，可能需要 Container.IsRegistered<TService>() 检查。
+            var service = Container.Resolve<TService>();
+            
+            Log.Information("正在处置服务: {ServiceName}...", serviceName);
+            service.Dispose(); // 调用 Dispose 方法进行清理
+            Log.Information("服务 {ServiceName} 的处置操作已发起或完成。", serviceName);
+        }
+        // 根据DI容器的具体行为，可能需要捕获更具体的异常，如 Prism 的 ResolutionFailedException。
+        catch (Exception ex) 
+        {
+            // 捕获解析服务或调用 Dispose 时可能发生的任何错误。
+            Log.Warning(ex, "解析或处置服务 {ServiceName} 时发生错误。该服务可能未注册、已被处置或在处置过程中出错。", serviceName);
         }
     }
 }

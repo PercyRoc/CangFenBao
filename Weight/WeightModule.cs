@@ -11,7 +11,7 @@ public class WeightModule : IModule
     {
         // 注册服务
         containerRegistry.RegisterSingleton<IWeightService, WeightService>();
-
+        containerRegistry.RegisterSingleton<WeightSettingsViewModel>();
         // 注册设置对话框
         containerRegistry.RegisterForNavigation<WeightSettingsView, WeightSettingsViewModel>();
     }

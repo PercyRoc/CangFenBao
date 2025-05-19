@@ -160,7 +160,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // 添加相机状态 - Revert to property initializers
             DeviceStatuses.Add(new DeviceStatus
             {
-                 Name = "相机模块",
+                 Name = "Camera",
                  Status = "Disconnected",
                  Icon = "Camera24",
                  StatusColor = "#F44336"
@@ -212,7 +212,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private void InitializePackageInfoItems()
     {
         PackageInfoItems.Add(new PackageInfoItem(
-            "称重模块",
+            "Weight",
             "0.00",
             "kg",
             "Package weight",
@@ -306,19 +306,19 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                 // 从本地文件夹加载图片 (带重试逻辑)
                 var currentDate = DateTime.Now.ToString("yyyy-MM-dd");
-                var imageDirectory = Path.Combine("E:\\Images", currentDate);
+                var imageDirectory = Path.Combine(@"E:\Image\Panorama", currentDate);
                 const int maxAttempts = 10;
                 const int delayBetweenAttemptsMs = 200;
 
                 for (int attempt = 1; attempt <= maxAttempts; attempt++)
                 {
-                    Log.Debug("图片查找尝试 {Attempt}/{MaxAttempts}，目录: {Directory}，条码: {Barcode}", attempt, maxAttempts, imageDirectory, package.Barcode);
+                    Log.Debug("图片查找尝试 {Attempt}/{MaxAttempts}，目录: {Directory}，包裹 Guid: {Guid}", attempt, maxAttempts, imageDirectory, package.Guid);
                     if (Directory.Exists(imageDirectory))
                     {
                         try
                         {
-                            var imageFiles = Directory.GetFiles(imageDirectory, $"{package.Barcode}*");
-                            Log.Debug("尝试 {Attempt}: 正在从目录 {Directory} 查找条码为 {Barcode} 的图片，找到 {Count} 个文件。", attempt, imageDirectory, package.Barcode, imageFiles.Length);
+                            var imageFiles = Directory.GetFiles(imageDirectory, $"*{package.Guid}*");
+                            Log.Debug("尝试 {Attempt}: 正在从目录 {Directory} 查找 Guid 为 {Guid} 的图片，找到 {Count} 个文件。", attempt, imageDirectory, package.Guid, imageFiles.Length);
 
                             foreach (var imageFile in imageFiles)
                             {
@@ -336,17 +336,17 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                             if (photoData.Count > 0)
                             {
-                                Log.Information("尝试 {Attempt}: 成功找到并加载了 {Count} 张图片，条码: {Barcode}。跳出查找循环。", attempt, photoData.Count, package.Barcode);
+                                Log.Information("尝试 {Attempt}: 成功找到并加载了 {Count} 张图片，Guid: {Guid}。跳出查找循环。", attempt, photoData.Count, package.Guid);
                                 break; // 找到图片，退出循环
                             }
                             else
                             {
-                                Log.Information("尝试 {Attempt}: 在目录 {Directory} 中未找到条码为 {Barcode} 的有效图片文件。", attempt, imageDirectory, package.Barcode);
+                                Log.Information("尝试 {Attempt}: 在目录 {Directory} 中未找到 Guid 为 {Guid} 的有效图片文件。", attempt, imageDirectory, package.Guid);
                             }
                         }
                         catch (Exception ex)
                         {
-                            Log.Error(ex, "尝试 {Attempt}: 从本地文件夹 {Directory} 加载图片时发生错误，条码: {Barcode}", attempt, imageDirectory, package.Barcode);
+                            Log.Error(ex, "尝试 {Attempt}: 从本地文件夹 {Directory} 加载图片时发生错误，Guid: {Guid}", attempt, imageDirectory, package.Guid);
                             photoData.Clear(); // 如果本次尝试出错，清空已部分加载的数据，准备下次尝试或最终提交空数据
                         }
                     }
@@ -363,7 +363,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     }
                     else if (photoData.Count == 0 && attempt == maxAttempts) // 最后一次尝试仍未找到
                     {
-                        Log.Warning("已达到最大尝试次数 ({MaxAttempts})，仍未找到条码为 {Barcode} 的图片。", maxAttempts, package.Barcode);
+                        Log.Warning("已达到最大尝试次数 ({MaxAttempts})，仍未找到 Guid 为 {Guid} 的图片。", maxAttempts, package.Guid);
                     }
                 }
 
@@ -406,7 +406,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             // 更新重量
-            var weightItem = PackageInfoItems.FirstOrDefault(static p => p.Label == "称重模块");
+            var weightItem = PackageInfoItems.FirstOrDefault(static p => p.Label == "Weight");
 
             if (weightItem != null)
             {
@@ -548,30 +548,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private void OnCameraConnectionChanged(string? cameraId, bool isConnected)
     {
         Log.Information("相机连接状态改变: IsConnected = {IsConnected}, CameraId = {CameraId}", isConnected, cameraId ?? "N/A");
-        UpdateDeviceStatus("相机模块", isConnected);
-    }
-
-    /// <summary>
-    /// 处理体积服务连接状态变化
-    /// </summary>
-    private void OnVolumeConnectionChanged(bool isConnected)
-    {
-        Log.Information("体积服务连接状态改变: IsConnected = {IsConnected}", isConnected);
-        UpdateDeviceStatus("Volume 相机模块", isConnected);
+        UpdateDeviceStatus("Camera", isConnected);
     }
 
     // --- 修改: 处理重量服务连接状态变化 (调整签名) ---
-    /// <summary>
-    /// 处理重量服务连接状态变化
-    /// </summary>
-    /// <param name="deviceName">设备名 (来自事件)</param>
-    /// <param name="isConnected">连接状态</param>
-    private void OnWeightConnectionChanged(string deviceName, bool isConnected)
-    {
-        // deviceName 参数通常是 "称重模块 Scale" 或类似的，但我们更新状态时用的是 "称重模块"
-        Log.Information("重量服务连接状态改变 (来自 {DeviceName}): IsConnected = {IsConnected}", deviceName, isConnected);
-        UpdateDeviceStatus("称重模块", isConnected); // 使用固定的名称 "称重模块" 更新UI
-    }
     // --- 结束修改 ---
 
     protected virtual void Dispose(bool disposing)

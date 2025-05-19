@@ -494,15 +494,13 @@ namespace Camera.Services.Implementations.Hikvision.Industrial
                 foreach (var codeInfo in allCodeInfosForThisCallback)
                 {
                     var barcode = codeInfo.strCode?.TrimEnd('\0') ?? string.Empty;
-                    // barcode 空检查已在填充 allCodeInfosForThisCallback 时完成，此处可省略
-                    
                     var package = PackageInfo.Create(); 
                     package.SetBarcode(barcode);
                     package.SetStatus(PackageStatus.Success);
-                    package.SetTriggerTimestamp(DateTime.Now);
+                    package.TriggerTimestamp = (DateTime.Now);
                     if (finalBitmapSource != null) // 使用可能已绘制边框的图像
                     {
-                        package.Image = finalBitmapSource;
+                        package.SetImage(finalBitmapSource,null);
                     }
 
                     _packageSubject.OnNext(package);

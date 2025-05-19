@@ -6,21 +6,13 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:prism="http://prismlibrary.com/"
              xmlns:hc="https://handyorg.github.io/handycontrol"
-             xmlns:settings="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
              xmlns:dialogs="clr-namespace:Sunnen.ViewModels.Dialogs"
              xmlns:local1="clr-namespace:Sunnen.Views.Settings"
+             xmlns:views="clr-namespace:Camera.Views;assembly=Camera"
+             xmlns:settings1="clr-namespace:Weight.Views.Settings;assembly=Weight"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=dialogs:SettingsDialogViewModel}">
-
-    <UserControl.Resources>
-        <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary
-                    Source="pack://application:,,,/SharedUI;component/Resources/Styles/ColorStyles.xaml" />
-            </ResourceDictionary.MergedDictionaries>
-        </ResourceDictionary>
-    </UserControl.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
@@ -29,7 +21,7 @@
         </Grid.RowDefinitions>
 
         <!-- Title Bar -->
-        <Grid Grid.Row="0" Background="{StaticResource TitleBarGradient}">
+        <Grid Grid.Row="0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
@@ -38,8 +30,7 @@
             <!-- App Icon -->
             <Border Grid.Column="0"
                     Width="48"
-                    Height="32"
-                    Effect="{StaticResource IconGlowEffect}" />
+                    Height="32"/>
 
             <!-- Title -->
             <TextBlock Grid.Column="1"
@@ -70,7 +61,7 @@
         </Grid>
 
         <!-- Navigation Area -->
-        <Border Grid.Row="1" Background="{StaticResource MainBackground}">
+        <Border Grid.Row="1">
             <Grid>
                 <ui:NavigationView IsPaneOpen="True"
                                    IsPaneVisible="True"
@@ -82,33 +73,23 @@
                                    Name="RootNavigation">
 
                     <ui:NavigationView.MenuItems>
-                        <ui:NavigationViewItem Content="相机模块 Settings"
-                                               Tag="相机模块">
+                        <ui:NavigationViewItem Content="Camera Settings"
+                                               Tag="Camera">
                             <ui:NavigationViewItem.Icon>
                                 <ui:SymbolIcon Symbol="Camera24" />
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="settings:CameraSettingsView" />
+                                <x:Type Type="views:CameraSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
 
-                        <ui:NavigationViewItem Content="Volume Settings"
-                                               Tag="Volume">
-                            <ui:NavigationViewItem.Icon>
-                                <ui:SymbolIcon Symbol="Cube24" />
-                            </ui:NavigationViewItem.Icon>
-                            <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="local1:VolumeSettingsView" />
-                            </ui:NavigationViewItem.TargetPageType>
-                        </ui:NavigationViewItem>
-
-                        <ui:NavigationViewItem Content="称重模块 Settings"
-                                               Tag="称重模块">
+                        <ui:NavigationViewItem Content="Weight Settings"
+                                               Tag="Weight">
                             <ui:NavigationViewItem.Icon>
                                 <ui:SymbolIcon Symbol="Scales24" />
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="settings:WeightSettingsView" />
+                                <x:Type Type="settings1:WeightSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
 

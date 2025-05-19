@@ -15,6 +15,15 @@
       <EmbeddedResource Remove="Models\Sortings\**" />
       <None Remove="Models\Sortings\**" />
       <Page Remove="Models\Sortings\**" />
+      <EmbeddedResource Update="Resources\Strings.resx">
+        <Generator>ResXFileCodeGenerator</Generator>
+        <LastGenOutput>Strings.Designer.cs</LastGenOutput>
+      </EmbeddedResource>
+      <Compile Update="Resources\Strings.Designer.cs">
+        <DesignTime>True</DesignTime>
+        <AutoGen>True</AutoGen>
+        <DependentUpon>Strings.resx</DependentUpon>
+      </Compile>
     </ItemGroup>
 
 
@@ -33,5 +42,6 @@
         <PackageReference Include="System.IO.Ports" />
         <PackageReference Include="HandyControl" />
         <PackageReference Include="WPF-UI" />
+        <PackageReference Include="WPFLocalizeExtension"/>
     </ItemGroup>
 </Project>

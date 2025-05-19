@@ -28,9 +28,10 @@ namespace Camera.Services
         private IDisposable? _packageSubscription;
         private IDisposable? _imageSubscription;
 
-        // 用于条码重复过滤：存储 (条码, 首次出现时间, 最后一次出现时间, 当前窗口内计数)
-        private readonly List<(string Barcode, DateTime FirstSeen, DateTime LastSeen, int Count)> _recentBarcodeInfo = new();
-        private readonly object _barcodeHistoryLock = new();
+        // State for the new N-2 barcode duplication filter
+        private string? _nMinus1BarcodeForFilter;
+        private string? _nMinus2BarcodeForFilter;
+        private readonly object _nBackFilterLock = new();
 
         public bool IsConnected => _actualCameraService.IsConnected;
         public IObservable<PackageInfo> PackageStream => _processedPackageSubject.AsObservable();
@@ -76,7 +77,7 @@ namespace Camera.Services
                 return;
             }
 
-            if (settings.IsBarcodeDuplicationEnabled && IsBarcodeDuplicateAndFilter(package, settings.BarcodeDuplication))
+            if (settings.IsBarcodeDuplicationEnabled && IsBarcodeDuplicateAndFilter(package))
             {
                 // 日志已在 IsBarcodeDuplicateAndFilter 方法内部记录，如果它被过滤。
                 // 此处不需要额外日志，除非要标记为重复状态。
@@ -181,66 +182,32 @@ namespace Camera.Services
         }
 
         /// <summary>
-        /// 检查条码是否重复，并根据规则决定是否过滤。如果被过滤，则返回 true。
+        /// 检查条码是否重复，并根据新的 N-2 规则决定是否过滤。如果被过滤，则返回 true。
         /// </summary>
-        private bool IsBarcodeDuplicateAndFilter(PackageInfo package, BarcodeDuplicationSettings duplicationSettings)
+        private bool IsBarcodeDuplicateAndFilter(PackageInfo package)
         {
             if (string.IsNullOrEmpty(package.Barcode)) return false; // 空条码不参与重复过滤
 
-            DateTime now = DateTime.UtcNow;
             string currentBarcode = package.Barcode;
 
-            lock (_barcodeHistoryLock)
+            lock (_nBackFilterLock)
             {
-                // 清理非常陈旧的条目 (例如，超过重复时间窗口数倍的)
-                _recentBarcodeInfo.RemoveAll(entry => (now - entry.LastSeen).TotalMilliseconds > duplicationSettings.DuplicationTimeMs * 5);
-
-                int existingIndex = _recentBarcodeInfo.FindIndex(entry => entry.Barcode == currentBarcode);
-
-                if (existingIndex != -1)
+                // Filter condition: current barcode is the same as the one before the previous one (_nMinus2BarcodeForFilter).
+                if (_nMinus2BarcodeForFilter != null && currentBarcode == _nMinus2BarcodeForFilter)
                 {
-                    // 条码已存在
-                    var existingEntry = _recentBarcodeInfo[existingIndex];
-
-                    if ((now - existingEntry.FirstSeen).TotalMilliseconds > duplicationSettings.DuplicationTimeMs)
-                    {
-                        // 超出时间窗口，重置计数和时间，不视作重复（即，继续处理）
-                        _recentBarcodeInfo[existingIndex] = (currentBarcode, now, now, 1);
-                        Log.Verbose("[相机数据处理服务] 条码 '{Barcode}' 超出重复时间窗口 ({TimeMs}ms)，重置计数并处理.", currentBarcode, duplicationSettings.DuplicationTimeMs);
-                        return false; // 不过滤
-                    }
-                    else
-                    {
-                        // 在时间窗口内
-                        if (existingEntry.Count < duplicationSettings.FilterCount)
-                        {
-                            // 未达到过滤次数上限，增加计数，标记为重复并过滤
-                            _recentBarcodeInfo[existingIndex] = (existingEntry.Barcode, existingEntry.FirstSeen, now, existingEntry.Count + 1);
-                            Log.Information("[相机数据处理服务] 条码 '{Barcode}' 在 {TimeMs}ms 内出现 {Count}/{MaxCount} 次，判定为重复并过滤.", 
-                                currentBarcode, duplicationSettings.DuplicationTimeMs, existingEntry.Count + 1, duplicationSettings.FilterCount);
-                            return true; // 过滤
-                        }
-                        else
-                        {
-                            // 已达到或超过过滤次数上限，重置计数和时间，视为新序列的开始（即，继续处理）
-                            _recentBarcodeInfo[existingIndex] = (currentBarcode, now, now, 1);
-                            Log.Information("[相机数据处理服务] 条码 '{Barcode}' 在 {TimeMs}ms 内达到重复次数上限 ({MaxCount})，重置计数并处理.", 
-                                currentBarcode, duplicationSettings.DuplicationTimeMs, duplicationSettings.FilterCount);
-                            return false; // 不过滤
-                        }
-                    }
+                    Log.Information("[相机数据处理服务] 条码 '{Barcode}' 与上上一次条码 '{NMinus2Barcode}' 相同 (N-2 规则)，判定为重复并过滤.",
+                                    currentBarcode, _nMinus2BarcodeForFilter);
+                    return true; // Filter
                 }
                 else
                 {
-                    // 新条码，添加并处理
-                    _recentBarcodeInfo.Add((currentBarcode, now, now, 1));
-                    // 限制列表大小，防止无限增长。FilterCount * N (e.g., 5) seems reasonable.
-                    while (_recentBarcodeInfo.Count > duplicationSettings.FilterCount * 5 && _recentBarcodeInfo.Count > 0) 
-                    {
-                        _recentBarcodeInfo.RemoveAt(0); // Remove the oldest based on LastSeen or insertion order
-                    }
-                    Log.Verbose("[相机数据处理服务] 新条码 '{Barcode}'，添加到重复检测列表并处理.", currentBarcode);
-                    return false; // 不过滤
+                    // Not filtered by N-2 rule. Update history for the next check.
+                    // This effectively shifts the history: current becomes N-1, old N-1 becomes N-2.
+                    _nMinus2BarcodeForFilter = _nMinus1BarcodeForFilter;
+                    _nMinus1BarcodeForFilter = currentBarcode;
+                    Log.Verbose("[相机数据处理服务] 条码 '{Barcode}' 通过 N-2 重复检查。N-1 更新为 '{N1}', N-2 更新为 '{N2}'.",
+                                currentBarcode, _nMinus1BarcodeForFilter, _nMinus2BarcodeForFilter ?? "null");
+                    return false; // Do not filter
                 }
             }
         }

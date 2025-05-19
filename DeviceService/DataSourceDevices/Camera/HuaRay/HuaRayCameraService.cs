@@ -89,7 +89,7 @@ public class HuaRayCameraService
     /// <summary>
     /// 相机连接状态
     /// </summary>
-    public bool IsConnected { get; private set; }
+    private bool IsConnected { get; set; }
 
     /// <summary>
     /// 包裹信息流
@@ -509,7 +509,7 @@ public class HuaRayCameraService
                         if (args.TriggerTimeTicks > 0)
                         {
                             var triggerTime = DateTimeOffset.FromUnixTimeMilliseconds(args.TriggerTimeTicks).LocalDateTime;
-                            packageInfo.SetTriggerTimestamp(triggerTime);
+                            packageInfo.TriggerTimestamp = triggerTime;
                             Log.Debug("设置触发时间戳: {TriggerTimestamp}", triggerTime);
                         }
                         else {
@@ -526,7 +526,7 @@ public class HuaRayCameraService
                     if (args.Weight > 0)
                     {
                         var weightKg = args.Weight / 1000.0;
-                        packageInfo.SetWeight(weightKg);
+                        packageInfo.Weight = weightKg;
                         // Log.Information("设置包裹重量: {称重模块}", args.称重模块); // 原有日志，考虑是否保留或改为 Debug
                         Log.Debug("设置包裹重量: {WeightKg} kg", weightKg); // 使用 Debug 级别记录详细信息
                     }
@@ -542,7 +542,7 @@ public class HuaRayCameraService
                             var volumeCm3 = Math.Round(args.VolumeInfo.volume / 1000.0, 2); // 假设 volume 是 mm³, 转换为 cm³
 
                             packageInfo.SetDimensions(lengthCm, widthCm, heightCm);
-                            packageInfo.SetVolume(volumeCm3);
+                            packageInfo.Volume = volumeCm3;
                             Log.Debug("设置包裹尺寸: L={LengthCm}cm W={WidthCm}cm H={HeightCm}cm, Vol={VolumeCm3}cm³",
                                          lengthCm, widthCm, heightCm, volumeCm3); // 使用 Debug 级别
                         }

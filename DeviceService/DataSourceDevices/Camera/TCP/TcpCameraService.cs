@@ -347,12 +347,12 @@ public class TcpCameraService
             var package = PackageInfo.Create();
             package.SetGuid(guid); // 设置 GUID
             package.SetBarcode(code); // Use 'code' (parts[1])
-            package.SetTriggerTimestamp(timestamp);
+            package.TriggerTimestamp = timestamp;
 
             double? length = null, width = null, height = null, volume = null;
 
             // Indices shifted: parts[2] to parts[6]
-            if (float.TryParse(parts[2], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsedWeight)) package.SetWeight(parsedWeight);
+            if (float.TryParse(parts[2], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsedWeight)) package.Weight = parsedWeight;
             if (double.TryParse(parts[3], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsedLength)) length = parsedLength;
             if (double.TryParse(parts[4], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsedWidth)) width = parsedWidth;
             if (double.TryParse(parts[5], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsedHeight)) height = parsedHeight;
@@ -363,7 +363,7 @@ public class TcpCameraService
                 package.SetDimensions(length.Value, width.Value, height.Value);
                 if (volume.HasValue) // Use the parsed volume if available
                 {
-                    package.SetVolume(volume.Value);
+                    package.Volume = volume.Value;
                 }
                 // else, volume will be auto-calculated by SetDimensions if that's its behavior
             }

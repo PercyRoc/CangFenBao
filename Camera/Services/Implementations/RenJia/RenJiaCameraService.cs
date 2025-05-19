@@ -3,11 +3,13 @@ using System.Reactive.Subjects;
 using System.Runtime.InteropServices;
 using System.Text;
 using Common.Models.Package;
-using DeviceService.DataSourceDevices.Camera.Models;
+using Camera.Interface; // 从 DeviceService... 更改为 Camera.Interface
+using Camera.Models;    // 从 DeviceService... 更改为 Camera.Models
 using Serilog;
 using System.Windows.Media.Imaging;
+using System.IO;
 
-namespace DeviceService.DataSourceDevices.Camera.RenJia;
+namespace Camera.Services.Implementations.RenJia; // 更改的命名空间
 
 /// <summary>
 ///     测量结果
@@ -17,7 +19,8 @@ public record MeasureResult(
     string? ErrorMessage = null,
     float Length = 0,
     float Width = 0,
-    float Height = 0);
+    float Height = 0,
+    BitmapSource? MeasuredImage = null);
 
 /// <summary>
 ///     尺寸刻度图结果
@@ -26,13 +29,15 @@ public record DimensionImagesResult(
     bool IsSuccess,
     string? ErrorMessage = null,
     BitmapSource? VerticalViewImage = null, // 俯视图
-    BitmapSource? SideViewImage = null // 侧视图
-);
+    BitmapSource? SideViewImage = null, // 侧视图
+    float Width = 0,
+    float Height = 0,
+    BitmapSource? MeasuredImage = null);
 
 /// <summary>
 ///     人加体积相机服务
 /// </summary>
-public class RenJiaCameraService
+public class RenJiaCameraService : ICameraService // 实现 ICameraService 接口
 {
     private readonly Subject<(BitmapSource Image, string CameraId)> _imageSubject = new();
     private readonly Subject<PackageInfo> _packageSubject = new();
@@ -40,7 +45,7 @@ public class RenJiaCameraService
     private bool _disposed;
     private bool _isConnected;
 
-    public event Action<string, bool>? ConnectionChanged;
+    public event Action<string?, bool>? ConnectionChanged; // string? 类型以匹配 ICameraService（如果该接口中定义为可空类型，此处假设是这样）
 
     public bool IsConnected
     {
@@ -50,12 +55,13 @@ public class RenJiaCameraService
             if (_isConnected == value) return;
 
             _isConnected = value;
-            ConnectionChanged?.Invoke("RenJia", value);
+            ConnectionChanged?.Invoke("RenJia_0", value); // 更改为使用 CameraId 调用事件
         }
     }
 
     public IObservable<PackageInfo> PackageStream => _packageSubject.AsObservable();
 
+    // 此特定的 ImageStream 不是 ICameraService 接口的一部分，作为 RenJiaCameraService 的公共成员保留
     public IObservable<BitmapSource> ImageStream => _imageSubject.Select(tuple => tuple.Image);
 
     public IObservable<(BitmapSource Image, string CameraId)> ImageStreamWithId => _imageSubject.AsObservable();
@@ -117,7 +123,7 @@ public class RenJiaCameraService
             }
 
             Log.Error("等待系统状态就绪超时");
-            Stop();
+            Stop(); //确保在初始化失败时调用 Stop
             return false;
         }
         catch (Exception ex)
@@ -127,17 +133,30 @@ public class RenJiaCameraService
         }
     }
 
-    /// <summary>
-    ///     异步停止相机服务，带超时控制
-    /// </summary>
-    /// <returns>操作是否成功</returns>
     public bool Stop()
     {
-        if (!IsConnected) return true;
+        if (!IsConnected && !_disposed) // 同时检查 _disposed，如果已释放则无需停止
+        {
+           // 如果未连接且未释放，则可能部分启动资源已被获取。
+           // 然而，当前的 Stop 逻辑主要处理活动连接。
+           // 如果没有活动连接，若 StartProcess 已被调用，则 KillProcess 可能仍然相关。
+            try
+            {
+                Log.Information("人加体积相机服务未连接，尝试清理后台进程（如果存在）。");
+                NativeMethods.KillProcess(); // 即使未"连接"，也尝试终止进程
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "尝试关闭后台进程时出错（服务未连接）。");
+            }
+            return true; // 表明它已"停止"，因为它并未运行。
+        }
+        if (_disposed) return true; // 已释放
+
 
         try
         {
-            Log.Information("正在停止体积相机服务...");
+            Log.Information("正在停止人加体积相机服务...");
 
             // 1. 关闭设备
             var closeResult = NativeMethods.CloseDevice();
@@ -150,50 +169,56 @@ public class RenJiaCameraService
             // 重置状态
             IsConnected = false;
 
-            Log.Information("体积相机服务已停止");
+            Log.Information("人加体积相机服务已停止");
             return success;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "停止体积相机服务时发生错误");
+            Log.Error(ex, "停止人加体积相机服务时发生错误");
             IsConnected = false; // 强制重置状态
             return false;
         }
     }
 
-    /// <summary>
-    ///     异步释放资源
-    /// </summary>
     public void Dispose()
     {
         if (_disposed) return;
+        _disposed = true; // 在开始时设置 disposed 为 true
+
+        Log.Information("正在释放人加体积相机资源...");
+        Stop(); // 确保在释放资源前停止服务
 
         try
         {
-            Log.Information("正在异步释放人加体积相机资源...");
-            // 释放其他资源
-            try
-            {
-                _packageSubject.Dispose();
-                _imageSubject.Dispose();
-                _processingCancellation.Dispose();
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "释放资源时发生错误");
-            }
-
-            Log.Information("人加体积相机资源已异步释放完成");
+            _packageSubject.OnCompleted();
+            _packageSubject.Dispose();
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "异步释放人加体积相机资源时发生错误");
-        }
-        finally
-        {
-            _disposed = true;
+            Log.Error(ex, "释放 PackageSubject 时发生错误");
         }
 
+        try
+        {
+            _imageSubject.OnCompleted();
+            _imageSubject.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "释放 ImageSubject 时发生错误");
+        }
+        
+        try
+        {
+            _processingCancellation.Cancel();
+            _processingCancellation.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "释放 CancellationTokenSource 时发生错误");
+        }
+        
+        Log.Information("人加体积相机资源已释放。");
         GC.SuppressFinalize(this);
     }
 
@@ -203,46 +228,51 @@ public class RenJiaCameraService
     /// <returns>测量结果</returns>
     public MeasureResult TriggerMeasure()
     {
+        if (!IsConnected)
+        {
+            Log.Warning("人加相机未连接，无法触发测量。");
+            return new MeasureResult(false, "相机未连接");
+        }
+        if (_disposed)
+        {
+            Log.Warning("人加相机已释放，无法触发测量。");
+            return new MeasureResult(false, "相机已释放");
+        }
+
         try
         {
             var startTime = DateTime.Now;
 
-            // 创建测量任务
             var measureTask = Task.Run(() =>
             {
                 try
                 {
-                    // 0. 检查设备状态
                     var state = new int[1];
                     var stateResult = NativeMethods.GetSystemState(state);
                     if (stateResult != 0)
                     {
                         Log.Warning("触发测量前获取设备状态失败：{Result}", stateResult);
-                        // 不return，继续往下
                     }
 
-                    if (state[0] != 1) // 1 表示就绪
+                    if (state[0] != 1) 
                     {
                         Log.Warning("设备状态异常，当前状态：{State}，依然尝试获取图像", state[0]);
-                        // 不return，继续往下
                     }
 
-                    // 1. 执行测量（非阻塞）
                     var computeResult = NativeMethods.ComputeOnce();
                     if (computeResult != 0)
                     {
                         Log.Warning("触发测量失败：{Result}", computeResult);
-                        // 不return，继续往下
                     }
 
-                    // 2. 获取测量结果
                     var dimensionData = new float[3];
-                    var imageDataBuffer = new byte[10 * 1024 * 1024];
+                    var imageDataBuffer = new byte[10 * 1024 * 1024]; // 10MB 缓冲区
                     var len = NativeMethods.GetDmsResult(dimensionData, imageDataBuffer);
+
+                    BitmapSource? measuredBitmapImage = null; // 用于存储转换后的图像
 
                     if (len > 0)
                     {
-                        // 始终推送图像
                         try
                         {
                             using var memoryStream = new MemoryStream(imageDataBuffer, 0, len);
@@ -252,6 +282,7 @@ public class RenJiaCameraService
                             bitmapImage.StreamSource = memoryStream;
                             bitmapImage.EndInit();
                             bitmapImage.Freeze();
+                            measuredBitmapImage = bitmapImage; // 存起来
 
                             _imageSubject.OnNext((bitmapImage, "RenJia_0"));
                             Log.Debug("推送测量图像 (JPEG, 大小: {Size} bytes)", len);
@@ -265,11 +296,7 @@ public class RenJiaCameraService
                             {
                                 prefix = Convert.ToBase64String(imageDataBuffer, 0, Math.Min(len, prefixLength));
                             }
-                            catch
-                            {
-                                // ignored
-                            }
-
+                            catch {/* ignored */}
                             Log.Warning("Data Prefix (Base64): {Prefix}", prefix);
                         }
                         catch (Exception ex)
@@ -281,48 +308,49 @@ public class RenJiaCameraService
                     {
                         var error = GetErrorMessage();
                         Log.Warning("获取测量结果失败：{Error}", error);
-                        return new MeasureResult(false, error);
+                        return new MeasureResult(false, error, MeasuredImage: null);
                     }
 
-                    // 3. 检查测量数据有效性
                     if (dimensionData.Any(static d => float.IsNaN(d) || float.IsInfinity(d) || d is <= 0 or > 2000))
                     {
                         var error = $"测量结果无效：L={dimensionData[0]}, W={dimensionData[1]}, H={dimensionData[2]}";
                         Log.Warning(error);
-                        // 图像已推送，返回失败
-                        return new MeasureResult(false, error);
+                        return new MeasureResult(false, error, MeasuredImage: null);
                     }
 
                     var duration = (DateTime.Now - startTime).TotalMilliseconds;
                     Log.Information("测量成功：{Length}x{Width}x{Height}mm，耗时：{Duration:F2}ms",
                         dimensionData[0], dimensionData[1], dimensionData[2], duration);
+                    
+                    // 根据请求，PackageInfo 的创建和 _packageSubject.OnNext() 已移除。
+                    // 该方法现在仅通过 MeasureResult 返回数据。
+                    // ImageStreamWithId 仍将接收图像。
 
                     return new MeasureResult(
                         true,
-                        Length: dimensionData[0],
+                        Length: dimensionData[0], // dimensionData 单位是毫米
                         Width: dimensionData[1],
-                        Height: dimensionData[2]
+                        Height: dimensionData[2],
+                        MeasuredImage: measuredBitmapImage
                     );
                 }
                 catch (AccessViolationException ex)
                 {
                     Log.Fatal(ex, "测量过程中发生内存访问冲突");
-                    return new MeasureResult(false, "硬件通信异常");
+                    return new MeasureResult(false, "硬件通信异常", MeasuredImage: null);
                 }
                 catch (Exception ex)
                 {
                     Log.Error(ex, "测量过程中发生异常");
-                    return new MeasureResult(false, ex.Message);
+                    return new MeasureResult(false, ex.Message, MeasuredImage: null);
                 }
             });
-
-            // 无限期等待测量任务完成
             return measureTask.Result;
         }
         catch (Exception ex)
         {
             Log.Error(ex, "执行测量时发生异常");
-            return new MeasureResult(false, ex.Message);
+            return new MeasureResult(false, ex.Message, MeasuredImage: null);
         }
     }
 
@@ -341,21 +369,15 @@ public class RenJiaCameraService
         }
     }
 
-    /// <summary>
-    ///     设置托盘高度
-    /// </summary>
-    /// <param name="palletHeightMm">托盘高度（毫米）</param>
-    /// <returns>0表示成功，其他值表示失败</returns>
     public int SetPalletHeight(int palletHeightMm)
     {
+        if (!IsConnected || _disposed)
+        {
+            Log.Warning("相机未连接或已释放，无法设置托盘高度");
+            return -1; 
+        }
         try
         {
-            if (!IsConnected)
-            {
-                Log.Warning("相机未连接，无法设置托盘高度");
-                return -1;
-            }
-
             var result = NativeMethods.SetPalletHeight(palletHeightMm);
             if (result != 0)
             {
@@ -365,7 +387,6 @@ public class RenJiaCameraService
             {
                 Log.Information("成功设置托盘高度：{Height}mm", palletHeightMm);
             }
-
             return result;
         }
         catch (Exception ex)
@@ -375,39 +396,31 @@ public class RenJiaCameraService
         }
     }
 
-    // Implement the GetAvailableCameras method
-    public IEnumerable<CameraBasicInfo> GetAvailableCameras()
+    public IEnumerable<CameraInfo> GetAvailableCameras() // 更改返回类型
     {
-        // RenJia typically represents a single volume measurement device.
-        // Return a list containing one entry if connected.
         if (IsConnected)
         {
-            return
-            [
-                new() { Id = "RenJia_0", Name = "人加体积相机" } // Provide default info
-            ];
+            return new List<CameraInfo> // 更改为 Camera.Models.CameraInfo
+            {
+                new() { Id = "RenJia_0", Name = "人加体积相机" } 
+            };
         }
-
-        return []; // Return empty list if not connected
+        return Enumerable.Empty<CameraInfo>(); // 为清晰起见，使用 Enumerable.Empty<CameraInfo>()
     }
 
-    /// <summary>
-    ///     异步获取尺寸刻度图 (俯视图和侧视图)
-    /// </summary>
-    /// <returns>包含图像的 DimensionImagesResult 对象</returns>
     public async Task<DimensionImagesResult> GetDimensionImagesAsync()
     {
-        if (!IsConnected)
+        if (!IsConnected || _disposed)
         {
-            Log.Warning("相机未连接，无法获取尺寸刻度图");
-            return new DimensionImagesResult(false, "相机未连接");
+            Log.Warning("相机未连接或已释放，无法获取尺寸刻度图");
+            return new DimensionImagesResult(false, "相机未连接或已释放");
         }
 
         try
         {
             return await Task.Run(() =>
             {
-                const int bufferSize = 10 * 1024 * 1024; // 假设与 GetDmsResult 缓冲区大小相同
+                const int bufferSize = 10 * 1024 * 1024; 
                 var verticalViewBuffer = new byte[bufferSize];
                 var sideViewBuffer = new byte[bufferSize];
 
@@ -420,14 +433,12 @@ public class RenJiaCameraService
                     return new DimensionImagesResult(false, $"获取图像失败: {error}");
                 }
 
-                // 假设成功时，DLL将实际图像大小的数据填充到缓冲区开头 (4 bytes size + data)
                 BitmapSource? verticalImage = null;
                 BitmapSource? sideImage = null;
                 string? conversionError = null;
 
                 try
                 {
-                    // 尝试转换俯视图
                     verticalImage = ConvertBytesToBitmapSource(verticalViewBuffer, "俯视图");
                 }
                 catch (Exception ex)
@@ -438,7 +449,6 @@ public class RenJiaCameraService
 
                 try
                 {
-                    // 尝试转换侧视图
                     sideImage = ConvertBytesToBitmapSource(sideViewBuffer, "侧视图");
                 }
                 catch (Exception ex)
@@ -470,31 +480,26 @@ public class RenJiaCameraService
 
     private static BitmapSource? ConvertBytesToBitmapSource(byte[] buffer, string imageNameForLogging)
     {
-        if (buffer.Length < 4) // Need at least 4 bytes for the size
+        if (buffer.Length < 4)
         {
             Log.Warning("缓冲区太小，无法读取 {ImageName} 图像大小 (Length: {Length})", imageNameForLogging, buffer.Length);
             return null;
         }
 
-        // Read the size from the first 4 bytes (little-endian)
         var imageSize = BitConverter.ToInt32(buffer, 0);
-
         const int headerSize = 4;
         var remainingBufferSize = buffer.Length - headerSize;
 
         if (imageSize <= 0 || imageSize > remainingBufferSize)
         {
-            // Plausible check for PNG signature anyway if size looks wrong
-            const int pngSignatureOffset = headerSize; // Expected offset of PNG signature
-            var signatureBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47 }; // PNG signature
+            const int pngSignatureOffset = headerSize; 
+            var signatureBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47 }; 
             if (buffer.Length >= pngSignatureOffset + signatureBytes.Length &&
                 buffer.Skip(pngSignatureOffset).Take(signatureBytes.Length).SequenceEqual(signatureBytes))
             {
                 Log.Warning("读取的 {ImageName} 图像大小无效 ({Size}), 但在偏移量 {Offset} 处找到PNG签名。尝试直接从签名开始解码整个剩余缓冲区。",
                     imageNameForLogging, imageSize, pngSignatureOffset);
-                // Fallback: Try decoding from the PNG signature onwards, using the rest of the buffer. Might still fail.
-                imageSize = remainingBufferSize; // Use the maximum possible size as a guess
-                // If this still fails, the data is likely corrupt or the size interpretation is wrong.
+                imageSize = remainingBufferSize; 
             }
             else
             {
@@ -507,34 +512,28 @@ public class RenJiaCameraService
 
         try
         {
-            // Create a stream over the actual image data segment
             using var stream = new MemoryStream(buffer, headerSize, imageSize);
             var bitmap = new BitmapImage();
             bitmap.BeginInit();
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
             bitmap.StreamSource = stream;
             bitmap.EndInit();
-            bitmap.Freeze(); // Important for cross-thread access
+            bitmap.Freeze(); 
             Log.Debug("成功解码 {ImageName} 图像 (大小: {Size} bytes)", imageNameForLogging, imageSize);
             return bitmap;
         }
-        catch (NotSupportedException nex) // Often indicates invalid image format within the segment
+        catch (NotSupportedException nex) 
         {
-            // Log details for debugging
             var prefix = string.Empty;
-            const int prefixLength = 32; // Log first 32 bytes of the *segment*
+            const int prefixLength = 32; 
             if (imageSize > 0)
             {
                 try
                 {
                     prefix = Convert.ToBase64String(buffer, headerSize, Math.Min(imageSize, prefixLength));
                 }
-                catch
-                {
-                    /* Ignore potential errors during prefix generation */
-                }
+                catch { /* Ignore */ }
             }
-
             Log.Warning(nex,
                 "转换 {ImageName} 图像数据失败 (在偏移量 {Offset}, 尝试长度 {Length})，可能格式无效或数据损坏。Segment Prefix (Base64): {Prefix}",
                 imageNameForLogging, headerSize, imageSize, prefix);
@@ -546,14 +545,13 @@ public class RenJiaCameraService
             return null;
         }
     }
-
-    /// <summary>
-    /// 触发一次体积测量，返回长宽高等测量结果（isSuccess=false表示失败）
-    /// </summary>
+    
+    // 此重载是人加相机特有的，并非 ICameraService 接口的一部分。
+    // 它调用另一个 TriggerMeasure 方法并适配返回类型。
     public (bool isSuccess, float length, float width, float height, string? errorMessage) TriggerMeasure(
-        int workMode = 7, int timeoutMs = 3000)
+      int workMode = 7, int timeoutMs = 3000)
     {
-        var result = TriggerMeasure(); // 调用原有 MeasureResult 版本
+        var result = TriggerMeasure(); 
         return (result.IsSuccess, result.Length, result.Width, result.Height, result.ErrorMessage);
     }
 }
@@ -563,56 +561,46 @@ public class RenJiaCameraService
 /// </summary>
 internal static class NativeMethods
 {
-    // 关闭后台应用程序
-    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "KillProcess", CallingConvention = CallingConvention.Cdecl)]
+    private const string DllName = "VolumeMeasurementDll.dll";
+
+    [DllImport(DllName, EntryPoint = "KillProcess", CallingConvention = CallingConvention.Cdecl)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool KillProcess();
 
-    // 开启后台应用程序
-    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "StartProcess", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(DllName, EntryPoint = "StartProcess", CallingConvention = CallingConvention.Cdecl)]
     public static extern void StartProcess();
 
-    // 扫描设备，返回在线设备数量
-    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "ScanDevice", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(DllName, EntryPoint = "ScanDevice", CallingConvention = CallingConvention.Cdecl)]
     public static extern int ScanDevice();
 
-    // 开启设备
-    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "OpenDevice", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(DllName, EntryPoint = "OpenDevice", CallingConvention = CallingConvention.Cdecl)]
     public static extern int OpenDevice();
 
-    // 关闭设备
-    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "CloseDevice", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(DllName, EntryPoint = "CloseDevice", CallingConvention = CallingConvention.Cdecl)]
     public static extern int CloseDevice();
 
-    // 计算一次体积测量
-    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "ComputeOnce", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(DllName, EntryPoint = "ComputeOnce", CallingConvention = CallingConvention.Cdecl)]
     public static extern int ComputeOnce();
 
-    // 获取体积测量结果
-    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "GetDmsResult", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(DllName, EntryPoint = "GetDmsResult", CallingConvention = CallingConvention.Cdecl)]
     public static extern int GetDmsResult(
         [Out] float[] dimensionData,
-        [Out, MarshalAs(UnmanagedType.LPArray)] // Use MarshalAs like example, removed SizeConst
+        [Out, MarshalAs(UnmanagedType.LPArray)] // 使用 MarshalAs (如示例)，移除了 SizeConst
         byte[] imageData);
 
-    // 获取体积测量结果错误信息
-    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "GetErrorMes", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(DllName, EntryPoint = "GetErrorMes", CallingConvention = CallingConvention.Cdecl)]
     public static extern int GetErrorMes([Out] byte[] errMes);
 
-    // 获取系统状态
-    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "GetSystemState", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(DllName, EntryPoint = "GetSystemState", CallingConvention = CallingConvention.Cdecl)]
     public static extern int GetSystemState([Out] int[] systemState);
 
-    // 设置托盘高度
-    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "SetPalletHeight", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(DllName, EntryPoint = "SetPalletHeight", CallingConvention = CallingConvention.Cdecl)]
     public static extern int SetPalletHeight(int palletHeight);
 
-    // 获取尺寸刻度图，参数verticalViewImage存储俯视图，参数sideViewImage用于存储侧视图
-    [DllImport("VolumeMeasurementDll.dll", EntryPoint = "GetDimensionImage",
-        CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(DllName, EntryPoint = "GetDimensionImage", CallingConvention = CallingConvention.Cdecl)]
     public static extern int GetDimensionImage(
-        [Out, MarshalAs(UnmanagedType.LPArray)]
-        byte[] verticalViewImage, // Use MarshalAs like example
-        [Out, MarshalAs(UnmanagedType.LPArray)]
-        byte[] sideViewImage); // Use MarshalAs like example
-}
+        [Out, MarshalAs(UnmanagedType.LPArray)] // 使用 MarshalAs (如示例)
+        byte[] verticalViewImage, 
+        [Out, MarshalAs(UnmanagedType.LPArray)] // 使用 MarshalAs (如示例)
+        byte[] sideViewImage); 
+} 

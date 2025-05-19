@@ -40,7 +40,6 @@ namespace Camera
         public void RegisterTypes(IContainerRegistry containerRegistry)
         {
             containerRegistry.RegisterForNavigation<CameraSettingsView, CameraSettingsViewModel>();
-
             // 注册 ICameraService 的主要实现
             containerRegistry.RegisterSingleton<ICameraService, HikvisionIndustrialCameraService>();
             containerRegistry.RegisterSingleton<HikvisionSecurityCameraService>();

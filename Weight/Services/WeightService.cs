@@ -104,7 +104,7 @@ public class WeightService : IWeightService
         }
     }
 
-    public async Task DisconnectAsync()
+    public void Disconnect()
     {
         if (!IsConnected || _isTryingToConnectOrDisconnect) return;
         _isTryingToConnectOrDisconnect = true;
@@ -112,15 +112,13 @@ public class WeightService : IWeightService
         Log.Information("断开称重设备连接...");
         try
         {
-            if (_serialPort != null)
+            if (_serialPort == null) return;
+            _serialPort.DataReceived -= SerialPort_DataReceived;
+            if (_serialPort.IsOpen)
             {
-                _serialPort.DataReceived -= SerialPort_DataReceived;
-                if (_serialPort.IsOpen)
-                {
-                    await Task.Run(() => _serialPort.Close());
-                }
-                _serialPort.Dispose();
+                _serialPort.Close();
             }
+            _serialPort.Dispose();
         }
         catch (Exception ex)
         {
@@ -130,7 +128,7 @@ public class WeightService : IWeightService
         {
             _serialPort = null;
             IsConnected = false; // IsConnected setter 将触发事件
-            lock(_lock)
+            lock (_lock)
             {
                 _receiveBuffer.Clear();
                 _lastProcessedWeightData = null;
@@ -310,7 +308,7 @@ public class WeightService : IWeightService
     public void Dispose()
     {
         Log.Information("正在 Dispose WeightService...");
-        Task.Run(async () => await DisconnectAsync()).Wait(TimeSpan.FromSeconds(2));
+       Disconnect();
         _serialPort?.Dispose();
         _weightDataSubject.OnCompleted();
         _weightDataSubject.Dispose();

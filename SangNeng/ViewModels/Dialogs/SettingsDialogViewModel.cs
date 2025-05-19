@@ -1,7 +1,8 @@
+using Camera.ViewModels;
 using Common.Services.Ui;
 using Serilog;
-using SharedUI.ViewModels.Settings;
 using Sunnen.ViewModels.Settings;
+using Weight.ViewModels.Settings;
 
 namespace Sunnen.ViewModels.Dialogs;
 
@@ -12,7 +13,6 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
     private readonly INotificationService _notificationService;
     private readonly PalletSettingsViewModel _palletSettingsViewModel;
     private readonly SangNengSettingsViewModel _sangNengSettingsViewModel;
-    private readonly VolumeSettingsViewModel _volumeSettingsViewModel;
     private readonly WeightSettingsViewModel _weightSettingsViewModel;
 
     public SettingsDialogViewModel(
@@ -25,7 +25,6 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
 
         // 创建各个设置页面的ViewModel实例
         _cameraSettingsViewModel = containerProvider.Resolve<CameraSettingsViewModel>();
-        _volumeSettingsViewModel = containerProvider.Resolve<VolumeSettingsViewModel>();
         _weightSettingsViewModel = containerProvider.Resolve<WeightSettingsViewModel>();
         _palletSettingsViewModel = containerProvider.Resolve<PalletSettingsViewModel>();
         _sangNengSettingsViewModel = containerProvider.Resolve<SangNengSettingsViewModel>();
@@ -62,9 +61,8 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
         try
         {
             // 保存所有设置
-            _cameraSettingsViewModel.SaveConfigurationCommand.Execute();
-            _volumeSettingsViewModel.SaveConfigurationCommand.Execute();
-            _weightSettingsViewModel.SaveConfigurationCommand.Execute();
+            _cameraSettingsViewModel.SaveSettingsCommand.Execute(null);
+            _weightSettingsViewModel.SaveCommand.Execute();
             _palletSettingsViewModel.SaveConfigurationCommand.Execute();
             _sangNengSettingsViewModel.SaveConfigurationCommand.Execute();
 

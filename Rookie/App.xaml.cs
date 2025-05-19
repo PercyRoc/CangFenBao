@@ -1,5 +1,4 @@
 ﻿using System.Windows;
-using Common.Extensions;
 using Microsoft.Extensions.Configuration;
 using Rookie.ViewModels.Windows;
 using Rookie.ViewModels.Windows.Dialogs;
@@ -13,7 +12,6 @@ using SharedUI.Views.Settings;
 using SharedUI.ViewModels;
 using SharedUI.ViewModels.Settings;
 using SharedUI.Views.Windows;
-using SharedUI.Views.Dialogs;
 using System.Globalization;
 using WPFLocalizeExtension.Engine;
 using Camera;
@@ -23,6 +21,8 @@ using Weight;
 using Weight.Services;
 using Camera.Services.Implementations.Hikvision.Volume;
 using Camera.Services.Implementations.Hikvision.Security;
+using Common.Services.Settings;
+using Common.Services.Ui;
 
 namespace Rookie;
 
@@ -77,17 +77,13 @@ public partial class App
             .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
             .Build();
         containerRegistry.RegisterInstance<IConfiguration>(configuration);
-
-        containerRegistry.AddCommonServices();
+        containerRegistry.RegisterSingleton<ISettingsService, SettingsService>();
+        containerRegistry.RegisterSingleton<INotificationService,NotificationService>();
         containerRegistry.RegisterSingleton<BarcodeChuteSettingsViewModel>();
-        containerRegistry.RegisterSingleton<HistoryDialogViewModel>();
-
-
+        
         containerRegistry.RegisterSingleton<IRookieApiService, RookieApiService>();
         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
         containerRegistry.RegisterDialog<SettingsDialogs, SettingsDialogViewModel>();
-        containerRegistry.RegisterDialog<HistoryDialogView, HistoryDialogViewModel>();
-        containerRegistry.RegisterDialogWindow<HistoryDialogWindow>();
         containerRegistry.RegisterForNavigation<RookieApiSettingsView, RookieApiSettingsViewModel>();
         
         containerRegistry.RegisterForNavigation<SerialPortSettingsView, SerialPortSettingsViewModel>();

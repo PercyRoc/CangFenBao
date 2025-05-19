@@ -32,12 +32,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <Folder Include="Resources\Styles\" />
-    </ItemGroup>
-
-    <ItemGroup>
         <ProjectReference Include="..\Common\基础服务.csproj" />
-        <ProjectReference Include="..\DeviceService\设备服务.csproj" />
         <ProjectReference Include="..\SortingServices\分拣服务.csproj" />
     </ItemGroup>
 

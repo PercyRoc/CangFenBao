@@ -382,7 +382,7 @@
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="No." Binding="{Binding Index}" MinWidth="60" Width="Auto" />
                                 <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" MinWidth="160" Width="Auto" />
-                                <DataGridTextColumn Header="称重模块" Binding="{Binding WeightDisplay}" MinWidth="80" Width="Auto" />
+                                <DataGridTextColumn Header="Weight" Binding="{Binding WeightDisplay}" MinWidth="80" Width="Auto" />
                                 <DataGridTextColumn Header="Dimensions" Binding="{Binding VolumeDisplay}" MinWidth="120" Width="Auto" />
                                 <DataGridTextColumn Header="Status" Binding="{Binding StatusDisplay}" MinWidth="80" Width="Auto" />
                                 <DataGridTextColumn Header="Processing Time"
