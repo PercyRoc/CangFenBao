@@ -136,7 +136,7 @@ public partial class App
     {
         // 配置Serilog
         Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Debug()
+            .MinimumLevel.Information()
             .WriteTo.Console()
             .WriteTo.Debug()
             .WriteTo.File("logs/app-.log",

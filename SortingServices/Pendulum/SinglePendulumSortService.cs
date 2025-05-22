@@ -13,6 +13,9 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
 {
     private readonly ISettingsService _settingsService = settingsService;
 
+    // 记录上次分拣信号时间
+    private DateTime _lastSortingSignalTime = DateTime.MinValue;
+
     public override Task InitializeAsync(PendulumSortConfig configuration)
     {
         // 初始化触发光电连接
@@ -193,10 +196,23 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
     /// </summary>
     protected override async Task HandleSecondPhotoelectricAsync(string data)
     {
+        // 重复信号过滤逻辑
+        var now = DateTime.Now;
+        var config = _settingsService.LoadSettings<PendulumSortConfig>();
+        var filterMs = config.DuplicateSignalFilterMs;
+        if (_lastSortingSignalTime != DateTime.MinValue)
+        {
+            var interval = (now - _lastSortingSignalTime).TotalMilliseconds;
+            if (interval < filterMs)
+            {
+                Log.Warning("单摆轮分拣光电信号间隔 {Interval}ms 小于过滤阈值 {Threshold}ms，本次信号被忽略", interval, filterMs);
+                return;
+            }
+        }
+        _lastSortingSignalTime = now;
         // 使用基类的匹配逻辑
         var package = await MatchPackageForSorting("默认");
         if (package == null) return;
-
         // 执行分拣动作
         _ = ExecuteSortingAction(package, "默认");
     }

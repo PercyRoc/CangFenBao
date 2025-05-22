@@ -4,7 +4,7 @@ using Prism.Mvvm;
 namespace ShanghaiModuleBelt.Models;
 
 [Configuration("TcpSettings")]
-internal class TcpSettings : BindableBase
+public class TcpSettings : BindableBase
 {
     private string _address = "127.0.0.1";
     private int _port = 8080;

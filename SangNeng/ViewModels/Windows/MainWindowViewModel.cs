@@ -4,7 +4,7 @@ using Common.Services.Audio;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
-using DeviceService.DataSourceDevices.Camera.Hikvision;
+// using DeviceService.DataSourceDevices.Camera.Hikvision;
 using DeviceService.DataSourceDevices.Camera.Models.Camera;
 using DeviceService.DataSourceDevices.Camera.Models.Camera.Enums;
 using DeviceService.DataSourceDevices.Camera.RenJia;

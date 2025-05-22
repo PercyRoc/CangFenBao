@@ -1,6 +1,5 @@
 ﻿using System.Collections.ObjectModel;
 using System.Windows;
-using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Common.Models.Package;
 using Common.Services.Settings;
@@ -94,8 +93,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         get => _currentBarcode;
         private set => SetProperty(ref _currentBarcode, value);
     }
-
-    public BitmapSource? CurrentImage { get; }
+    
 
     public SystemStatus SystemStatus
     {
@@ -277,16 +275,17 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    private async void OnPackageInfo(PackageInfo package)
+    private async Task OnPackageInfo(PackageInfo package)
     {
         try
         {
             Log.Information("收到包裹信息: {Barcode}, 序号={Index}", package.Barcode, package.Index);
 
             var config = _settingsService.LoadSettings<ModuleConfig>();
-            var chuteNumber = await _chuteMappingService.GetChuteNumberAsync(package);
+            // 注释掉原有的格口分配逻辑
+            int chuteNumber = (await _chuteMappingService.GetChuteNumberAsync(package)) ?? 0;
 
-            if (chuteNumber == null)
+            if (chuteNumber == 0)
             {
                 Log.Warning("无法获取格口号，使用异常格口: {Barcode}", package.Barcode);
                 package.SetStatus(PackageStatus.Error, "格口分配失败");
@@ -294,18 +293,21 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             else
             {
                 // 检查分配的格口是否被锁定
-                if (IsChuteLocked(chuteNumber.Value))
+                if (IsChuteLocked(chuteNumber))
                 {
                     Log.Warning("分配的格口 {ChuteNumber} 已被锁定，重新分配到异常格口: {Barcode}",
-                        chuteNumber.Value, package.Barcode);
+                        chuteNumber, package.Barcode);
 
                     // 记录原始分配的格口号
-                    var originalChuteNumber = chuteNumber.Value;
-                    package.SetChute(config.ExceptionChute, originalChuteNumber);
-
+                    package.SetChute(config.ExceptionChute);
+                    Log.Information("使用异常格口: {Barcode}，格口号: {ChuteNumber}", package.Barcode, config.ExceptionChute);
                     // 设置为错误状态
                     package.SetStatus(PackageStatus.Error, "格口已锁定，使用异常格口");
-                    package.SetStatus(PackageStatus.Error,$"原格口 {originalChuteNumber} 已锁定");
+                    package.SetStatus(PackageStatus.Error,$"原格口 {chuteNumber} 已锁定");
+                }
+                else
+                {
+                    package.SetChute(chuteNumber);
                 }
             }
 

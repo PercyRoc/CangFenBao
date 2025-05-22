@@ -1,4 +1,5 @@
 ﻿<wpf:ResourceDictionary xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:s="clr-namespace:System;assembly=mscorlib" xmlns:wpf="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xml:space="preserve">
+	<s:Boolean x:Key="/Default/AddReferences/RecentPaths/=D_003A_005CRiderProjects_005CCangFenBao_005CCamera_005CServices_005CImplementations_005CHuaRay_005CLogisticsBaseCSharp_002Edll/@EntryIndexedValue">True</s:Boolean>
 	<s:Boolean x:Key="/Default/AddReferences/RecentPaths/=D_003A_005CRiderProjects_005CCangFenBao_005CDeviceService_005CDataSourceDevices_005CCamera_005CHikvision_005CMvCameraControl_002ENet_002Edll/@EntryIndexedValue">True</s:Boolean>
 	<s:Boolean x:Key="/Default/AddReferences/RecentPaths/=D_003A_005CRiderProjects_005CCangFenBao_005CDeviceService_005CDataSourceDevices_005CCamera_005CHikvision_005CMVIDCodeReader_002ENet_002Edll/@EntryIndexedValue">True</s:Boolean>
 	<s:Boolean x:Key="/Default/AddReferences/RecentPaths/=D_003A_005CRiderProjects_005CCangFenBao_005CDeviceService_005CDataSourceDevices_005CCamera_005CHuaRay_005CLogisticsBaseCSharp_002Edll/@EntryIndexedValue">True</s:Boolean>

@@ -128,7 +128,7 @@ public class ChutePackageRecordService(HttpClient httpClient, ISettingsService s
         try
         {
             // 根据站点代码确定handlers
-            var handlers = _config.SiteCode == "1002" ? "深圳收货组03" : "上海收货组03";
+            var handlers = _config.SiteCode;
 
             // 构建包裹条码字符串，用逗号分隔
             var packageCodes = string.Join(",", packages.Select(static p => p.Barcode));

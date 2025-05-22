@@ -103,13 +103,15 @@ public partial class LockingService : IDisposable
                     int.TryParse(match.Groups[2].Value, out var statusValue))
                 {
                     var isLocked = statusValue == 1;
+                    // 将接收到的格口号乘以2作为实际的格口号
+                    var actualChuteNumber = chuteNumber * 2;
 
                     // 记录锁格状态变更
                     Log.Information("格口 {ChuteNumber} 状态变更: {Status}",
-                        chuteNumber, isLocked ? "锁定" : "解锁");
+                        actualChuteNumber, isLocked ? "锁定" : "解锁");
 
                     // 触发锁格状态变更事件
-                    ChuteLockStatusChanged?.Invoke(chuteNumber, isLocked);
+                    ChuteLockStatusChanged?.Invoke(actualChuteNumber, isLocked);
                 }
                 else
                 {

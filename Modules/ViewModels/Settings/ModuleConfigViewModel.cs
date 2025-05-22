@@ -8,7 +8,7 @@ using ShanghaiModuleBelt.Models;
 
 namespace ShanghaiModuleBelt.ViewModels.Settings;
 
-internal class ModuleConfigViewModel : BindableBase
+public class ModuleConfigViewModel : BindableBase
 {
     private readonly ModuleConfig _config = null!;
     private readonly INotificationService _notificationService;
@@ -36,6 +36,7 @@ internal class ModuleConfigViewModel : BindableBase
     public ObservableCollection<SiteOption> SiteOptions { get; } =
     [
         new() { Value = "1001", Display = "1001-上海" },
+        new() { Value = "1001-2", Display = "1001-2上海" },
         new() { Value = "1002", Display = "1002-深圳" }
     ];
 

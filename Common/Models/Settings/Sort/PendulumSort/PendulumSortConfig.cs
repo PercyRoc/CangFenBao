@@ -13,6 +13,7 @@ public class PendulumSortConfig : BindableBase
 {
     private ObservableCollection<SortPhotoelectric> _sortingPhotoelectrics = [];
     private TriggerPhotoelectric _triggerPhotoelectric = new();
+    private int _duplicateSignalFilterMs;
 
     /// <summary>
     ///     触发光电配置
@@ -31,6 +32,16 @@ public class PendulumSortConfig : BindableBase
     {
         get => _sortingPhotoelectrics;
         set => SetProperty(ref _sortingPhotoelectrics, value);
+    }
+
+    /// <summary>
+    ///     重复光电信号过滤时长（单位：毫秒）
+    /// </summary>
+    [Range(0, 10000, ErrorMessage = "重复光电信号过滤时长应在0~10000ms之间")]
+    public int DuplicateSignalFilterMs
+    {
+        get => _duplicateSignalFilterMs;
+        set => SetProperty(ref _duplicateSignalFilterMs, value);
     }
 }
 

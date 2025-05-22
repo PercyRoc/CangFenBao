@@ -12,6 +12,7 @@ namespace XinBeiYang.Services;
 public class LocalImageStorageService : IImageStorageService
 {
     private readonly string _baseStoragePath;
+    private const double DISK_SPACE_THRESHOLD = 90.0; // 磁盘空间占用率阈值（百分比）
 
     public LocalImageStorageService()
     {
@@ -30,6 +31,49 @@ public class LocalImageStorageService : IImageStorageService
         Log.Information("本地图像存储路径设置为: {Path}", _baseStoragePath);
     }
 
+    /// <summary>
+    /// 检查磁盘空间并清理最早的数据
+    /// </summary>
+    private void CheckAndCleanupDiskSpace()
+    {
+        try
+        {
+            var driveInfo = new DriveInfo(Path.GetPathRoot(_baseStoragePath)!);
+            var diskSpaceUsedPercentage = 100 - ((double)driveInfo.AvailableFreeSpace / driveInfo.TotalSize * 100);
+
+            if (diskSpaceUsedPercentage >= DISK_SPACE_THRESHOLD)
+            {
+                Log.Warning("磁盘空间使用率超过 {Threshold}%，当前使用率: {UsedPercentage}%，开始清理最早的数据",
+                    DISK_SPACE_THRESHOLD, diskSpaceUsedPercentage);
+
+                // 获取所有日期文件夹并按日期排序
+                var dateFolders = Directory.GetDirectories(_baseStoragePath)
+                    .Select(d => new DirectoryInfo(d))
+                    .OrderBy(d => d.CreationTime)
+                    .ToList();
+
+                if (dateFolders.Any())
+                {
+                    // 删除最早的文件夹
+                    var oldestFolder = dateFolders.First();
+                    try
+                    {
+                        Directory.Delete(oldestFolder.FullName, true);
+                        Log.Information("已删除最早的图像文件夹: {Folder}", oldestFolder.FullName);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "删除文件夹失败: {Folder}", oldestFolder.FullName);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "检查磁盘空间时发生错误");
+        }
+    }
+
     /// <inheritdoc />
     public async Task<string?> SaveImageAsync(BitmapSource? image, string barcode, DateTime createTime)
     {
@@ -41,6 +85,9 @@ public class LocalImageStorageService : IImageStorageService
 
         try
         {
+            // 检查磁盘空间并清理
+            CheckAndCleanupDiskSpace();
+
             // 创建目录结构：基础路径 / yyyy-MM-dd
             var dateFolderName = createTime.ToString("yyyy-MM-dd");
             var dailyFolderPath = Path.Combine(_baseStoragePath, dateFolderName);

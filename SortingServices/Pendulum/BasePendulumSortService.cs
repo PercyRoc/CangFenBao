@@ -446,8 +446,9 @@ public abstract class BasePendulumSortService : IPendulumSortService
         Log.Information("当前待分拣队列中有 {Count} 个包裹:", packages.Count);
         foreach (var pkg in packages)
         {
-            Log.Information("检查包裹 {Barcode}(序号:{Index}) 触发时间:{TriggerTime:HH:mm:ss.fff} 目标格口:{Slot}",
-                pkg.Barcode, pkg.Index, pkg.TriggerTimestamp, pkg.ChuteNumber);
+            var timeDiff = (currentTime - pkg.TriggerTimestamp).TotalMilliseconds;
+            Log.Information("检查包裹 {Barcode}(序号:{Index}) 触发时间:{TriggerTime:HH:mm:ss.fff} 目标格口:{Slot}，与当前分拣信号时间差:{TimeDiff}ms",
+                pkg.Barcode, pkg.Index, pkg.TriggerTimestamp, pkg.ChuteNumber, timeDiff);
 
             // 检查包裹是否已超时
             if (PackageTimers.TryGetValue(pkg.Index, out var timer))

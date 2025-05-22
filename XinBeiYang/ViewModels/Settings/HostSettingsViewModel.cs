@@ -7,7 +7,7 @@ using XinBeiYang.Models;
 
 namespace XinBeiYang.ViewModels.Settings;
 
-internal class HostSettingsViewModel : BindableBase
+public class HostSettingsViewModel : BindableBase
 {
     private readonly INotificationService _notificationService;
     private readonly ISettingsService _settingsService;

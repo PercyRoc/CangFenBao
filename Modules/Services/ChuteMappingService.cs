@@ -12,18 +12,9 @@ namespace ShanghaiModuleBelt.Services;
 /// <summary>
 ///     格口映射服务，负责与服务器通信获取格口号
 /// </summary>
-public class ChuteMappingService : IDisposable
+public class ChuteMappingService(HttpClient httpClient, ISettingsService settingsService) : IDisposable
 {
     private const string ApiUrl = "http://123.56.22.107:28081/api/DWSInfo";
-    private readonly HttpClient _httpClient;
-    private readonly ISettingsService _settingsService;
-
-    public ChuteMappingService(HttpClient httpClient, ISettingsService settingsService)
-    {
-        _httpClient = httpClient;
-        _settingsService = settingsService;
-        // Log.Information("格口映射服务已初始化"); // 可以在这里保留一个通用的初始化日志
-    }
 
     public void Dispose()
     {
@@ -38,7 +29,7 @@ public class ChuteMappingService : IDisposable
     internal async Task<int?> GetChuteNumberAsync(PackageInfo package)
     {
         // 每次请求时加载最新配置
-        var config = _settingsService.LoadSettings<ModuleConfig>();
+        var config = settingsService.LoadSettings<ModuleConfig>();
 
         if (string.IsNullOrEmpty(package.Barcode) ||
             package.Barcode.Equals("NoRead", StringComparison.OrdinalIgnoreCase))
@@ -50,7 +41,7 @@ public class ChuteMappingService : IDisposable
         try
         {
             // 根据站点代码确定handlers
-            var handlers = config.SiteCode == "1002" ? "深圳收货组03" : "上海收货组03";
+            var handlers = config.SiteCode;
 
             // 构建请求数据
             var requestData = new
@@ -79,7 +70,7 @@ public class ChuteMappingService : IDisposable
             request.Headers.Add("equickToken", config.Token);
             request.Content = content;
             
-            var response = await _httpClient.SendAsync(request, cts.Token);
+            var response = await httpClient.SendAsync(request, cts.Token);
 
             // 检查响应状态
             if (!response.IsSuccessStatusCode)

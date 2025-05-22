@@ -5,7 +5,12 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:prism="http://prismlibrary.com/"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-      prism:ViewModelLocator.AutoWireViewModel="True">
+      prism:ViewModelLocator.AutoWireViewModel="True"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:viewModels="clr-namespace:ShanghaiModuleBelt.ViewModels"
+      mc:Ignorable="d"
+      d:DataContext="{d:DesignInstance Type=viewModels:TcpSettingsViewModel}">
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -24,7 +29,7 @@
                    Text="TCP地址:"
                    VerticalAlignment="Center" />
         <ui:TextBox Grid.Row="0" Grid.Column="2"
-                    Text="{Binding Address, UpdateSourceTrigger=PropertyChanged}"
+                    Text="{Binding Config.Address, UpdateSourceTrigger=PropertyChanged}"
                     Width="200" HorizontalAlignment="Left"
                     PlaceholderText="请输入TCP地址" />
 
@@ -33,7 +38,7 @@
                    Text="端口号:"
                    VerticalAlignment="Center" />
         <ui:TextBox Grid.Row="2" Grid.Column="2"
-                    Text="{Binding Port, UpdateSourceTrigger=PropertyChanged}"
+                    Text="{Binding Config.Port, UpdateSourceTrigger=PropertyChanged}"
                     Width="100" HorizontalAlignment="Left"
                     PlaceholderText="请输入端口号" />
     </Grid>

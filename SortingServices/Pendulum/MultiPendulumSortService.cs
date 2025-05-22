@@ -23,6 +23,9 @@ public class MultiPendulumSortService : BasePendulumSortService
     // 记录上一次信号状态的字典
     private readonly ConcurrentDictionary<string, bool> _previousPhotoelectricSignalStates = new();
 
+    // 记录每个分拣光电上次信号时间
+    private readonly ConcurrentDictionary<string, DateTime> _lastSortingSignalTimes = new();
+
     public MultiPendulumSortService(ISettingsService settingsService) 
         : base(settingsService)
     {
@@ -326,6 +329,22 @@ public class MultiPendulumSortService : BasePendulumSortService
             if (!message.Contains("OCCH1:1")) return;
             // 高电平
             UpdatePhotoelectricSignalState(photoelectricName, true);
+
+            // 重复信号过滤逻辑
+            var now = DateTime.Now;
+            var config = _settingsService.LoadSettings<PendulumSortConfig>();
+            var filterMs = config.DuplicateSignalFilterMs;
+            if (_lastSortingSignalTimes.TryGetValue(photoelectricName, out var lastTime))
+            {
+                var interval = (now - lastTime).TotalMilliseconds;
+                if (interval < filterMs)
+                {
+                    Log.Warning("分拣光电 {Name} 信号间隔 {Interval}ms 小于过滤阈值 {Threshold}ms，本次信号被忽略", photoelectricName, interval, filterMs);
+                    return;
+                }
+            }
+            _lastSortingSignalTimes[photoelectricName] = now;
+
             Log.Information("分拣光电 {Name} 收到上升沿信号，开始匹配包裹并执行分拣", photoelectricName);
             // 使用基类的匹配逻辑
             var package = await MatchPackageForSorting(photoelectricName);
