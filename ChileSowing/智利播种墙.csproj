@@ -1,0 +1,62 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>WinExe</OutputType>
+        <TargetFramework>net8.0-windows</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <UseWPF>true</UseWPF>
+        <RootNamespace>ChileSowing</RootNamespace>
+        <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
+        <AssemblyName>ChileSowing</AssemblyName>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Page Update="Views\MainWindow.xaml">
+            <Generator>MSBuild:Compile</Generator>
+            <XamlRuntime>Wpf</XamlRuntime>
+            <SubType>Designer</SubType>
+        </Page>
+        <Page Update="Views\SettingsDialog.xaml">
+            <Generator>MSBuild:Compile</Generator>
+            <XamlRuntime>Wpf</XamlRuntime>
+            <SubType>Designer</SubType>
+        </Page>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Prism -->
+        <PackageReference Include="Prism.Wpf"/>
+        <PackageReference Include="Prism.Unity"/>
+
+        <!-- Serilog -->
+        <PackageReference Include="Serilog"/>
+        <PackageReference Include="Serilog.Sinks.Console"/>
+        <PackageReference Include="Serilog.Sinks.File"/>
+        <PackageReference Include="Serilog.Sinks.Debug"/>
+        <PackageReference Include="Serilog.Extensions.Logging"/>
+        <PackageReference Include="Serilog.Settings.Configuration"/>
+
+        <!-- UI Framework -->
+        <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
+        <PackageReference Include="Microsoft.Extensions.Http"/>
+        <PackageReference Include="WPF-UI"/>
+        <PackageReference Include="HandyControl"/>
+
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\History\历史模块.csproj"/>
+        <ProjectReference Include="..\SowingSorting\播种分拣.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Update="appsettings.json">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <Resource Include="..\SharedUI\Resources\Icon\logo.ico">
+            <Link>logo.ico</Link>
+        </Resource>
+    </ItemGroup>
+
+</Project>

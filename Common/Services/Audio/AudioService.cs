@@ -77,7 +77,12 @@ public enum AudioType
     /// <summary>
     ///     重量异常
     /// </summary>
-    WeightAbnormal
+    WeightAbnormal,
+
+    /// <summary>
+    ///     离开提示音
+    /// </summary>
+    Leave
 }
 
 /// <summary>
@@ -111,7 +116,8 @@ public class AudioService : IAudioService, IDisposable
             { AudioType.LoadingRejected, Path.Combine(audioDirectory, "拒绝上包.wav") },
             { AudioType.LoadingSuccess, Path.Combine(audioDirectory, "上包成功.wav") },
             { AudioType.VolumeAbnormal, Path.Combine(audioDirectory, "体积异常.wav") },
-            { AudioType.WeightAbnormal, Path.Combine(audioDirectory, "重量异常.wav") }
+            { AudioType.WeightAbnormal, Path.Combine(audioDirectory, "重量异常.wav") },
+            { AudioType.Leave, Path.Combine(audioDirectory, "leave.wav") }
         };
 
         // 确保音频目录存在

@@ -1,6 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json.Serialization;
-using DeviceService.DataSourceDevices.Weight;
+using Common.Services.SerialPort;
 
 namespace DeviceService.DataSourceDevices.Belt;
 

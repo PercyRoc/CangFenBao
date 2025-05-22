@@ -5,7 +5,6 @@ using System.Reactive.Subjects;
 using System.Text.RegularExpressions;
 using System.Windows.Media.Imaging;
 using Camera.Interface;
-using Camera.Models;
 using Camera.Models.Settings;
 using Common.Models.Package;
 using Common.Services.Settings;
@@ -67,7 +66,7 @@ namespace Camera.Services
 
         private void HandleRawPackage(PackageInfo package)
         {
-            var settings = _settingsService.LoadSettings<CameraOverallSettings>() ?? new CameraOverallSettings();
+            var settings = _settingsService.LoadSettings<CameraOverallSettings>();
 
             if (settings.IsBarcodeFilterEnabled && !IsBarcodeValid(package, settings.BarcodeFilter))
             {
@@ -259,11 +258,6 @@ namespace Camera.Services
             
             Log.Information("[相机数据处理服务] 订阅已停止。");
             return true;
-        }
-
-        public IEnumerable<CameraInfo> GetAvailableCameras()
-        {
-            return _actualCameraService.GetAvailableCameras();
         }
         
         private void OnStreamError(Exception ex)

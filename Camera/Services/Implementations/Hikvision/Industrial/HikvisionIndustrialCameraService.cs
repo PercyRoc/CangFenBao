@@ -4,7 +4,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Media.Imaging;
 using Camera.Interface;
-using Camera.Models;
 using Camera.Models.Settings;
 using Common.Models.Package;
 using Common.Services.Settings;
@@ -13,6 +12,7 @@ using System.IO;
 using System.Windows.Media;
 using MVIDCodeReaderNet;
 using System.Windows;
+using Pen = System.Windows.Media.Pen;
 
 namespace Camera.Services.Implementations.Hikvision.Industrial
 {
@@ -26,6 +26,7 @@ namespace Camera.Services.Implementations.Hikvision.Industrial
         private readonly Subject<PackageInfo> _packageSubject = new();
         private readonly Subject<(BitmapSource Image, string CameraId)> _imageWithIdSubject = new();
         private bool _disposedValue;
+        private string? _lastPublishedCombinedBarcode;
 
         private MVIDCodeReader? _device;
         private MVIDCodeReader.MVID_CAMERA_INFO_LIST _enumeratedDeviceList;
@@ -56,7 +57,7 @@ namespace Camera.Services.Implementations.Hikvision.Industrial
 
             var overallSettings = _settingsService.LoadSettings<CameraOverallSettings>();
 
-            var barcodeTypeSettings = overallSettings?.BarcodeType;
+            var barcodeTypeSettings = overallSettings.BarcodeType;
 
             Log.Information("[海康工业相机服务] 正在启动...");
 
@@ -75,7 +76,7 @@ namespace Camera.Services.Implementations.Hikvision.Industrial
                 Log.Information("[海康工业相机服务] 将尝试连接第一个枚举到的设备 (索引 0)。");
 
                 uint handleType = MVIDCodeReader.MVID_BCR | MVIDCodeReader.MVID_TDCR; // Default to both
-                if (barcodeTypeSettings != null && barcodeTypeSettings.BarcodeTypes.Any())
+                if (barcodeTypeSettings.BarcodeTypes.Any())
                 {
                     bool enable1D = barcodeTypeSettings.BarcodeTypes.Any(bt => Is1DBarcodeType(bt.TypeId) && bt.IsEnabled);
                     bool enable2D = barcodeTypeSettings.BarcodeTypes.Any(bt => Is2DBarcodeType(bt.TypeId) && bt.IsEnabled);
@@ -202,87 +203,62 @@ namespace Camera.Services.Implementations.Hikvision.Industrial
                 return false;
             }
             Log.Information("[海康工业相机服务] 枚举到 {DeviceCount} 个海康读码器设备。", _enumeratedDeviceList.nDeviceNum);
-            return true;
-        }
 
-        public IEnumerable<CameraInfo> GetAvailableCameras()
-        {
-            var availableCameras = new List<CameraInfo>();
-            // Use a local list for enumeration to avoid issues if _enumeratedDeviceList is modified elsewhere,
-            // though current design makes it updated only in Start() path.
-            var localDeviceList = new MVIDCodeReader.MVID_CAMERA_INFO_LIST();
-            var nRet = MVIDCodeReader.MVID_CR_CAM_EnumDevices_NET(ref localDeviceList);
-
-            if (nRet != MVIDCodeReader.MVID_CR_OK)
+            // 新增：详细日志输出每台相机信息
+            for (uint i = 0; i < _enumeratedDeviceList.nDeviceNum; i++)
             {
-                Log.Error("[海康工业相机服务] (GetAvailable) 枚举设备失败: {ErrorCode:X8}", nRet);
-                return availableCameras; // Return empty list on failure
-            }
-
-            Log.Debug("[海康工业相机服务] (GetAvailable) 枚举到 {DeviceCount} 台设备。", localDeviceList.nDeviceNum);
-
-            for (uint i = 0; i < localDeviceList.nDeviceNum; i++)
-            {
-                if (localDeviceList.pstCamInfo == null || localDeviceList.pstCamInfo[i] == IntPtr.Zero)
+                if (_enumeratedDeviceList.pstCamInfo == null || _enumeratedDeviceList.pstCamInfo[i] == IntPtr.Zero)
                 {
-                    Log.Warning("[海康工业相机服务] (GetAvailable) 设备信息指针为空，索引: {Index}", i);
+                    Log.Warning("[海康工业相机服务] (Enumerate) 设备信息指针为空，索引: {Index}", i);
                     continue;
                 }
                 try
                 {
                     var deviceInfo = (MVIDCodeReader.MVID_CAMERA_INFO)Marshal.PtrToStructure(
-                        localDeviceList.pstCamInfo[i], typeof(MVIDCodeReader.MVID_CAMERA_INFO))!;
-
+                        _enumeratedDeviceList.pstCamInfo[i], typeof(MVIDCodeReader.MVID_CAMERA_INFO))!;
                     string serialNumber = deviceInfo.chSerialNumber ?? $"UnknownSN_{i}";
                     string parsedUserDefinedName = Encoding.UTF8.GetString(deviceInfo.chUserDefinedName).TrimEnd('\0');
                     string baseModelName = (deviceInfo.chModelName ?? string.Empty).TrimEnd('\0');
-                    
-                    if (string.IsNullOrWhiteSpace(baseModelName))
-                    {
-                        baseModelName = "海康读码器"; 
-                    }
-
+                    if (string.IsNullOrWhiteSpace(baseModelName)) baseModelName = "海康读码器";
                     string finalModelName;
-
                     switch (deviceInfo.nCamType)
                     {
                         case MVIDCodeReader.MVID_GIGE_CAM:
-                        {
                             finalModelName = $"GigE ({baseModelName})";
                             break;
-                        }
                         case MVIDCodeReader.MVID_USB_CAM:
-                        {
                             finalModelName = $"USB ({baseModelName})";
                             break;
-                        }
                         default:
                             finalModelName = baseModelName;
                             break;
                     }
-                    
-                    string displayName = string.IsNullOrWhiteSpace(parsedUserDefinedName) ? serialNumber : parsedUserDefinedName;
-
-                    var cameraStatus = (_currentDeviceSerialNumber == serialNumber && IsConnected) ? "已连接" : "未连接";
-
-
-                    availableCameras.Add(new CameraInfo
-                    {
-                        Id = serialNumber, // Use serial number as the unique ID
-                        Name = displayName,
-                        Model = finalModelName,
-                        SerialNumber = serialNumber,
-                        Status = cameraStatus
-                    });
-                    Log.Verbose("[海康工业相机服务] (GetAvailable) 发现设备: ID={Id}, Name={Name}, Model={Model}, Status={Status}",
-                        serialNumber, displayName, finalModelName, cameraStatus);
+                    string mac = $"{(deviceInfo.nMacAddrHigh >> 8) & 0xFF:X2}:{deviceInfo.nMacAddrHigh & 0xFF:X2}:{(deviceInfo.nMacAddrLow >> 24) & 0xFF:X2}:{(deviceInfo.nMacAddrLow >> 16) & 0xFF:X2}:{(deviceInfo.nMacAddrLow >> 8) & 0xFF:X2}:{deviceInfo.nMacAddrLow & 0xFF:X2}";
+                    string ip = string.Join(".", BitConverter.GetBytes(deviceInfo.nCurrentIp));
+                    Log.Information(
+                        "[海康工业相机] 详细信息: 序号={Index}, 类型={Type}, 厂商={Manufacturer}, 型号={Model}, 版本={Version}, 序列号={Serial}, 用户名={UserName}, MAC={Mac}, IP={Ip}, USB_VID={Vid}, USB_PID={Pid}, 设备编号={DevNum}, 选中={Selected}, 厂商自定义={ManuInfo}",
+                        i,
+                        deviceInfo.nCamType,
+                        deviceInfo.chManufacturerName,
+                        deviceInfo.chModelName,
+                        deviceInfo.chDeviceVersion,
+                        deviceInfo.chSerialNumber,
+                        Encoding.UTF8.GetString(deviceInfo.chUserDefinedName).TrimEnd('\0'),
+                        mac,
+                        ip,
+                        deviceInfo.idVendor,
+                        deviceInfo.idProduct,
+                        deviceInfo.nDeviceNumber,
+                        deviceInfo.bSelectDevice,
+                        deviceInfo.chManufacturerSpecificInfo
+                    );
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "[海康工业相机服务] (GetAvailable) 处理设备信息时出错，索引: {Index}", i);
+                    Log.Error(ex, "[海康工业相机服务] (Enumerate) 处理设备信息时出错，索引: {Index}", i);
                 }
             }
-            return availableCameras;
+            return true;
         }
 
 
@@ -439,8 +415,7 @@ namespace Camera.Services.Implementations.Hikvision.Industrial
                     originalBitmapSource = ConvertImageDataToBitmapSource(stCamOutputInfo.stImage);
                 }
 
-                BitmapSource? finalBitmapSource = originalBitmapSource; // 默认使用原始图像
-                var validBarcodesInCallback = new List<string>();
+                var finalBitmapSource = originalBitmapSource; // 默认使用原始图像
                 var allCodeInfosForThisCallback = new List<MVIDCodeReader.MVID_CODE_INFO>();
 
                 if (stCamOutputInfo.stCodeList is { nCodeNum: > 0, stCodeInfo: not null })
@@ -463,7 +438,7 @@ namespace Camera.Services.Implementations.Hikvision.Industrial
 
                 if (originalBitmapSource != null && allCodeInfosForThisCallback.Count != 0)
                 {
-                    BitmapSource? bitmapWithBorders = DrawBarcodeBordersOnImage(originalBitmapSource, allCodeInfosForThisCallback);
+                    var bitmapWithBorders = DrawBarcodeBordersOnImage(originalBitmapSource, allCodeInfosForThisCallback);
                     if (bitmapWithBorders != null)
                     {
                         finalBitmapSource = bitmapWithBorders;
@@ -491,26 +466,55 @@ namespace Camera.Services.Implementations.Hikvision.Industrial
                 }
 
 
-                foreach (var codeInfo in allCodeInfosForThisCallback)
+                // 修改后的逻辑：合并条码
+                if (allCodeInfosForThisCallback.Any()) 
                 {
-                    var barcode = codeInfo.strCode?.TrimEnd('\0') ?? string.Empty;
-                    var package = PackageInfo.Create(); 
-                    package.SetBarcode(barcode);
-                    package.SetStatus(PackageStatus.Success);
-                    package.TriggerTimestamp = (DateTime.Now);
-                    if (finalBitmapSource != null) // 使用可能已绘制边框的图像
-                    {
-                        package.SetImage(finalBitmapSource,null);
-                    }
+                    var collectedBarcodes = allCodeInfosForThisCallback.Select(codeInfo => codeInfo.strCode?.TrimEnd('\0')).Where(barcodeString => !string.IsNullOrEmpty(barcodeString)).ToList();
 
-                    _packageSubject.OnNext(package);
-                    validBarcodesInCallback.Add(barcode);
+                    if (collectedBarcodes.Any())
+                    {
+                        string combinedBarcode = string.Join(",", collectedBarcodes);
+
+                        // 新增检查：如果此次条码集合完全包含上次发布条码集合，则跳过
+                        if (!string.IsNullOrEmpty(_lastPublishedCombinedBarcode) && !string.IsNullOrEmpty(combinedBarcode))
+                        {
+                            var lastSet = new HashSet<string>(_lastPublishedCombinedBarcode.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+                            var currentSet = new HashSet<string>(combinedBarcode.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+                            if (lastSet.All(currentSet.Contains))
+                            {
+                                Log.Information("[海康工业相机服务] 本次回调条码集合 {CurrentSet} 全部包含上次已发布条码集合 {LastSet}，跳过处理。帧号: {FrameNum}. SN: {SN}",
+                                    string.Join("|", currentSet), string.Join("|", lastSet), stCamOutputInfo.stImage.nFrameNum, currentCameraIdForEvent);
+                                return; // 直接返回，不处理此次回调的PackageInfo
+                            }
+                        }
+
+                        var package = PackageInfo.Create();
+                        package.SetBarcode(combinedBarcode);
+                        package.SetStatus(PackageStatus.Success);
+                        package.TriggerTimestamp = DateTime.Now; // 注意：这里的时间戳是当前时间
+                        if (finalBitmapSource != null)
+                        {
+                            package.SetImage(finalBitmapSource, null);
+                        }
+
+                        _packageSubject.OnNext(package);
+
+                        // 成功推送后，更新上次发布的条码
+                        _lastPublishedCombinedBarcode = combinedBarcode;
+
+                        Log.Information("[海康工业相机服务] 本次回调识别并合并推送 {Count} 个条码为一个事件. 合并后条码: '{CombinedBarcode}'. 帧号: {FrameNum}. SN: {SN}",
+                            collectedBarcodes.Count, combinedBarcode, stCamOutputInfo.stImage.nFrameNum, currentCameraIdForEvent);
+                    }
+                    else
+                    {
+                        // 如果收集后发现没有有效条码（例如，所有条码都是空或null），则不推送
+                        Log.Debug("[海康工业相机服务] 本次回调中未收集到有效条码进行推送. 帧号: {FrameNum}. SN: {SN}", stCamOutputInfo.stImage.nFrameNum, currentCameraIdForEvent);
+                    }
                 }
-                
-                if (validBarcodesInCallback.Count != 0)
+                else if (finalBitmapSource != null) // 如果没有条码，但有图像，则可能只推送图像流，不推送PackageInfo
                 {
-                    Log.Information("[海康工业相机服务] 本次回调共识别并推送 {Count} 个新条码. 条码: {Barcodes}. 帧号: {FrameNum}. SN: {SN}",
-                        validBarcodesInCallback.Count, string.Join(", ", validBarcodesInCallback), stCamOutputInfo.stImage.nFrameNum, currentCameraIdForEvent);
+                     // Log.Debug("[海康工业相机服务] 本次回调无条码，但有图像. 帧号: {FrameNum}. SN: {SN}", stCamOutputInfo.stImage.nFrameNum, currentCameraIdForEvent);
+                     // 根据现有逻辑，_imageWithIdSubject.OnNext((finalBitmapSource, currentCameraIdForEvent)); 已在前面处理，这里无需额外操作PackageInfo
                 }
             }
             catch (Exception ex)
@@ -567,6 +571,38 @@ namespace Camera.Services.Implementations.Hikvision.Industrial
                         Log.Warning("[海康工业相机服务] 无法从JPEG数据解码图像。");
                         return null;
                     // Add other MVID_IMAGE_TYPE cases as needed, e.g., Bayer formats might require debayering
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_Undefined:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_BMP:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_RGB24:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_MONO10:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_MONO10_Packed:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_MONO12:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_MONO12_Packed:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_MONO16:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_BayerGR8:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_BayerRG8:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_BayerGB8:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_BayerBG8:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_BayerGR10:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_BayerRG10:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_BayerGB10:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_BayerBG10:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_BayerGR12:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_BayerRG12:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_BayerGB12:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_BayerBG12:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_BayerGR10_Packed:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_BayerRG10_Packed:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_BayerGB10_Packed:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_BayerBG10_Packed:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_BayerGR12_Packed:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_BayerRG12_Packed:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_BayerGB12_Packed:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_BayerBG12_Packed:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_YUV422_Packed:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_YUV422_YUYV_Packed:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_RGBA8_Packed:
+                    case MVIDCodeReader.MVID_IMAGE_TYPE.MVID_IMAGE_BGRA8_Packed:
                     default:
                         Log.Warning("[海康工业相机服务] 不支持的 MVID_IMAGE_TYPE 进行直接 BitmapSource 转换: {PixelType}", imageInfo.enImageType);
                         return null;
@@ -649,7 +685,7 @@ namespace Camera.Services.Implementations.Hikvision.Industrial
                     // 绘制原始图像
                     drawingContext.DrawImage(originalImage, new Rect(0, 0, originalImage.PixelWidth, originalImage.PixelHeight));
 
-                    Pen greenPen = new(Brushes.LimeGreen, 2); // 使用石灰绿，粗细为2
+                    Pen greenPen = new(System.Windows.Media.Brushes.LimeGreen, 5); // 使用石灰绿，粗细为2
                     if (greenPen.CanFreeze) greenPen.Freeze();
 
                     foreach (var codeInfo in mvidCodeInfos)
@@ -659,10 +695,10 @@ namespace Camera.Services.Implementations.Hikvision.Industrial
                         // 假设 MVID_POINT_I 有公共成员 nX 和 nY
                         // SDK 定义: public struct MVID_POINT_I { public int nX; public int nY; } (假设)
                         // 如果实际名称不同, 则需要修改下面的 .nX 和 .nY
-                        Point p1 = new(codeInfo.stCornerPt[0].nX, codeInfo.stCornerPt[0].nY);
-                        Point p2 = new(codeInfo.stCornerPt[1].nX, codeInfo.stCornerPt[1].nY);
-                        Point p3 = new(codeInfo.stCornerPt[2].nX, codeInfo.stCornerPt[2].nY);
-                        Point p4 = new(codeInfo.stCornerPt[3].nX, codeInfo.stCornerPt[3].nY);
+                        System.Windows.Point p1 = new(codeInfo.stCornerPt[0].nX, codeInfo.stCornerPt[0].nY);
+                        System.Windows.Point p2 = new(codeInfo.stCornerPt[1].nX, codeInfo.stCornerPt[1].nY);
+                        System.Windows.Point p3 = new(codeInfo.stCornerPt[2].nX, codeInfo.stCornerPt[2].nY);
+                        System.Windows.Point p4 = new(codeInfo.stCornerPt[3].nX, codeInfo.stCornerPt[3].nY);
 
                         PathFigure figure = new() { StartPoint = p1, IsClosed = true };
                         figure.Segments.Add(new LineSegment(p2, true));

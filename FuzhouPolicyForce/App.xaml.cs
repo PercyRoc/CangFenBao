@@ -1,20 +1,13 @@
 ﻿using System.IO;
 using System.Windows;
 using System.Windows.Threading;
-using Common.Extensions;
-using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.License;
 using Common.Services.Ui;
-using DeviceService.DataSourceDevices.Camera;
-using DeviceService.Extensions;
 using FuzhouPolicyForce.ViewModels;
 using FuzhouPolicyForce.Views;
 using FuzhouPolicyForce.Views.Settings;
-using Microsoft.Extensions.Hosting;
 using Serilog;
 using SharedUI.ViewModels.Settings;
-using SortingServices.Pendulum;
-using SortingServices.Pendulum.Extensions;
 using Timer = System.Timers.Timer;
 using System.Diagnostics;
 using FuzhouPolicyForce.ViewModels.Settings;
@@ -22,11 +15,15 @@ using FuzhouPolicyForce.WangDianTong;
 using SharedUI.Views.Settings;
 using System.Globalization;
 using System.Net.Http;
-using SharedUI.ViewModels;
-using SharedUI.Views.Dialogs;
 using SharedUI.Views.Windows;
 using WPFLocalizeExtension.Engine;
 using WPFLocalizeExtension.Providers;
+using History; // 新增引用
+using Camera; // 注册相机模块需要
+using BalanceSorting.Modules;
+using BalanceSorting.Service;
+using Camera.Interface;
+using Common; // 注册多摆轮模块需要
 
 namespace FuzhouPolicyForce;
 
@@ -47,29 +44,12 @@ internal partial class App
         // 注册视图和ViewModel
         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
 
-        // 注册公共服务
-        containerRegistry.AddCommonServices();
-        // containerRegistry.AddShardUi();
-        containerRegistry.AddPhotoCamera();
-        containerRegistry.RegisterSingleton<INotificationService, NotificationService>();
-        containerRegistry.RegisterForNavigation<CameraSettingsView, CameraSettingsViewModel>();
-        containerRegistry.RegisterDialog<HistoryDialogView, HistoryDialogViewModel>();
-        containerRegistry.RegisterDialogWindow<HistoryDialogWindow>();
-
-        // 注册授权服务
         containerRegistry.RegisterSingleton<ILicenseService, LicenseService>();
-
-        // 注册设置页面的ViewModel
-        containerRegistry.RegisterForNavigation<BalanceSortSettingsView, BalanceSortSettingsViewModel>();
         containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
         containerRegistry.RegisterForNavigation<WangDianTongSettingsView, WangDianTongSettingsViewModel>();
-        // containerRegistry.RegisterForNavigation<ShenTongLanShouSettingsView, ShenTongLanShouSettingsViewModel>();
-
+        containerRegistry.RegisterForNavigation<ShenTongLanShouSettingsView, ShenTongLanShouSettingsViewModel>();
+        containerRegistry.RegisterDialogWindow<HistoryDialogWindow>();
         containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>();
-
-        // 注册多摆轮分拣服务
-        containerRegistry.RegisterPendulumSortService(PendulumServiceType.Multi);
-        containerRegistry.RegisterSingleton<IHostedService, PendulumSortHostedService>();
         containerRegistry.RegisterSingleton<IWangDianTongApiService, WangDianTongApiService>();
 
         // 注册旺店通API服务 V2
@@ -88,7 +68,6 @@ internal partial class App
             Current.Shutdown();
             return null!;
         }
-
         try
         {
             // 尝试创建全局Mutex
@@ -97,6 +76,9 @@ internal partial class App
 
             if (createdNew)
             {
+                // 强制立即运行所有模块，防止注入顺序问题
+                var moduleManager = Container.Resolve<IModuleManager>();
+                moduleManager.Run();
                 return Container.Resolve<MainWindow>();
             }
 
@@ -141,10 +123,8 @@ internal partial class App
     {
         try
         {
-            // Set the static instance as the default provider (optional but good practice)
-            LocalizeDictionary.Instance.DefaultProvider = ResxProvider; 
-            // Force English culture for testing
-            var culture = new CultureInfo("zh-CN"); 
+            LocalizeDictionary.Instance.DefaultProvider = ResxProvider;
+            var culture = new CultureInfo("zh-CN");
             LocalizeDictionary.Instance.Culture = culture;
 
             // 配置Serilog
@@ -173,38 +153,12 @@ internal partial class App
             {
                 // 授权验证失败，退出应用
                 Current.Shutdown();
-                return;
             }
-
-            // 启动服务
-            _ = InitializeServicesAsync();
         }
         catch (Exception ex)
         {
             Log.Error(ex, "应用程序启动时发生错误");
             MessageBox.Show($"应用程序启动时发生错误: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
-            Current.Shutdown();
-        }
-    }
-
-    private async Task InitializeServicesAsync()
-    {
-        try
-        {
-            // 启动相机托管服务
-            var cameraStartupService = Container.Resolve<CameraStartupService>();
-            await cameraStartupService.StartAsync(CancellationToken.None);
-            Log.Information("相机托管服务启动成功");
-
-            // 启动摆轮分拣托管服务
-            var pendulumHostedService = Container.Resolve<IHostedService>();
-            await pendulumHostedService.StartAsync(CancellationToken.None);
-            Log.Information("摆轮分拣托管服务启动成功");
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "启动托管服务时发生错误");
-            MessageBox.Show($"启动服务时发生错误: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
             Current.Shutdown();
         }
     }
@@ -382,8 +336,13 @@ internal partial class App
                 Log.Information("清理定时器已停止");
             }
 
-            // 停止服务
-            _ = ShutdownServicesAsync();
+            // 手动停止华睿相机服务和多摆轮分拣服务
+            StopHuaRayCameraService();
+            StopMultiPendulumSortService();
+
+            // 等待所有日志写入完成
+            Log.Information("应用程序关闭");
+            Log.CloseAndFlush();
         }
         catch (Exception ex)
         {
@@ -415,38 +374,59 @@ internal partial class App
         }
     }
 
-    private async Task ShutdownServicesAsync()
+    protected override void ConfigureModuleCatalog(IModuleCatalog moduleCatalog)
+    {
+        base.ConfigureModuleCatalog(moduleCatalog);
+        moduleCatalog.AddModule<CommonServicesModule>(); // 注册公共服务模块
+        moduleCatalog.AddModule<HistoryModule>(); // 注册历史模块
+        moduleCatalog.AddModule<HuaRayCameraModule>(); // 注册华睿相机模块
+        moduleCatalog.AddModule<MultiPendulumSortModule>(); // 注册多摆轮分拣模块
+    }
+
+    /// <summary>
+    /// 手动停止华睿相机服务
+    /// </summary>
+    public static void StopHuaRayCameraService()
     {
         try
         {
-            // 停止摆轮分拣托管服务
-            var pendulumHostedService = Container.Resolve<IHostedService>();
-            await pendulumHostedService.StopAsync(CancellationToken.None);
-            Log.Information("摆轮分拣托管服务已停止");
-
-            // 停止相机托管服务
-            var cameraStartupService = Container.Resolve<CameraStartupService>();
-            await cameraStartupService.StopAsync(CancellationToken.None);
-            Log.Information("相机托管服务已停止");
-
-            // 释放相机工厂
-            var cameraFactory = Container.Resolve<CameraFactory>();
-            cameraFactory.Dispose();
-            Log.Information("相机工厂已释放");
-
-            // 释放相机服务
-            var cameraService = Container.Resolve<ICameraService>();
-            cameraService.Dispose();
-            Log.Information("相机服务已释放");
-
-            // 等待所有日志写入完成
-            Log.Information("应用程序关闭");
-            await Log.CloseAndFlushAsync();
+            // 通过 Prism 容器解析并停止华睿相机服务
+            var container = ContainerLocator.Container;
+            var huaRayService = container.Resolve<ICameraService>();
+            huaRayService.Stop();
+            Log.Information("华睿相机服务已手动停止");
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "关闭服务时发生错误");
-            await Log.CloseAndFlushAsync();
+            Log.Error(ex, "手动停止华睿相机服务时发生异常");
+        }
+    }
+
+    /// <summary>
+    /// 手动停止多摆轮分拣服务
+    /// </summary>
+    private static void StopMultiPendulumSortService()
+    {
+        try
+        {
+            // 通过 Prism 容器解析多摆轮分拣服务
+            var container = ContainerLocator.Container;
+            var sortService = container.Resolve<IPendulumSortService>();
+            sortService.StopAsync();
+            // 判断是否实现 IDisposable，优先调用 Dispose
+            if (sortService is IDisposable disposable)
+            {
+                disposable.Dispose();
+                Log.Information("多摆轮分拣服务已手动 Dispose");
+            }
+            else
+            {
+                Log.Information("多摆轮分拣服务未实现 Dispose，仅释放引用");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "手动停止多摆轮分拣服务时发生异常");
         }
     }
 }

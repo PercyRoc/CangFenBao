@@ -9,6 +9,9 @@ using Camera.Models;
 using Common.Models.Package;
 using MvVolmeasure.NET;
 using Serilog;
+using Brushes = System.Windows.Media.Brushes;
+using Pen = System.Windows.Media.Pen;
+using Point = System.Windows.Point;
 
 namespace Camera.Services.Implementations.Hikvision.Volume
 {
@@ -29,9 +32,9 @@ namespace Camera.Services.Implementations.Hikvision.Volume
         private string? _currentDeviceModelName;
         private bool _disposedValue;
         private bool _isGrabbingActive;
-        
-        private readonly MvVolmeasure.NET.MvVolmeasure.ResultCallback? _persistentResultCallback;
         private const int ContinuousWorkMode = 14; 
+
+        private MvVolmeasure.NET.MvVolmeasure.ResultCallback? _resultCallback; // 回调委托字段
 
         public bool IsConnected { get; private set; }
         public IObservable<PackageInfo> PackageStream => _packageSubject.AsObservable();
@@ -43,7 +46,6 @@ namespace Camera.Services.Implementations.Hikvision.Volume
 
         public HikvisionVolumeCameraService()
         {
-            _persistentResultCallback = HandlePersistentResultCallback;
             Log.Information("[海康体积相机服务] 实例已创建. HashCode: {HashCode}", GetHashCode());
         }
 
@@ -60,86 +62,71 @@ namespace Camera.Services.Implementations.Hikvision.Volume
                 return false;
             }
             Log.Information("[海康体积相机服务] 枚举到 {DeviceCount} 个海康体积测量设备。", _deviceList.nDeviceNum);
-            return true;
-        }
 
-        public IEnumerable<CameraInfo> GetAvailableCameras()
-        {
-            var availableCameras = new List<CameraInfo>();
-             var localDeviceList = new MvVolmeasure.NET.MvVolmeasure.VOLM_DEVICE_INFO_LIST();
-            var nRet = MvVolmeasure.NET.MvVolmeasure.EnumStereoCamEx(
-                MvVolmeasure.NET.MvVolmeasure.MV_VOLM_GIGE_DEVICE | MvVolmeasure.NET.MvVolmeasure.MV_VOLM_USB_DEVICE, 
-                ref localDeviceList);
-
-            if (nRet != 0)
+            // 枚举到设备后，详细输出每台设备的关键信息
+            for (uint i = 0; i < _deviceList.nDeviceNum; i++)
             {
-                Log.Error("[海康体积相机服务] (GetAvailable) 枚举设备失败. ErrorCode: {ErrorCode:X8} - {ErrorDesc}", nRet, GetHikvisionErrorDescription(nRet));
-                return availableCameras;
-            }
-
-            Log.Debug("[海康体积相机服务] (GetAvailable) 枚举到 {DeviceCount} 台设备。", localDeviceList.nDeviceNum);
-
-            for (uint i = 0; i < localDeviceList.nDeviceNum; i++)
-            {
-                if (localDeviceList.pDeviceInfo == null || localDeviceList.pDeviceInfo[i] == IntPtr.Zero)
-                {
-                    Log.Warning("[海康体积相机服务] (GetAvailable) 设备信息指针为空，索引: {Index}", i);
-                    continue;
-                }
                 try
                 {
-                    var devInfo = Marshal.PtrToStructure<MvVolmeasure.NET.MvVolmeasure.VOLM_DEVICE_INFO>(localDeviceList.pDeviceInfo[i]);
-                    string id = $"VolumeCam_{i}";
-                    string? name = $"海康体积相机 {i}";
-                    string? model = "未知型号";
-                    string? serial = null;
-
-                    switch (devInfo.nTLayerType)
+                    if (_deviceList.pDeviceInfo == null || _deviceList.pDeviceInfo[i] == IntPtr.Zero)
                     {
-                        case MvVolmeasure.NET.MvVolmeasure.MV_VOLM_GIGE_DEVICE:
-                        {
-                            var gigeInfo = (MvVolmeasure.NET.MvVolmeasure.MV_VOLM_GIGE_NET_INFO)
-                                MvVolmeasure.NET.MvVolmeasure.ByteToStruct(devInfo.SpecialInfo.stGigEInfo, typeof(MvVolmeasure.NET.MvVolmeasure.MV_VOLM_GIGE_NET_INFO));
-                            serial = gigeInfo.chSerialNumber?.TrimEnd('\0');
-                            name = gigeInfo.chUserDefinedName?.TrimEnd('\0');
-                            if (string.IsNullOrWhiteSpace(name)) name = gigeInfo.chModelName?.TrimEnd('\0');
-                            model = gigeInfo.chModelName?.TrimEnd('\0');
-                            if (!string.IsNullOrEmpty(serial)) id = serial;
-                            break;
-                        }
-                        case MvVolmeasure.NET.MvVolmeasure.MV_VOLM_USB_DEVICE:
-                        {
-                            var usbInfo = (MvVolmeasure.NET.MvVolmeasure.VOLM_USB3_DEVICE_INFO)
-                                MvVolmeasure.NET.MvVolmeasure.ByteToStruct(devInfo.SpecialInfo.stUsb3VInfo, typeof(MvVolmeasure.NET.MvVolmeasure.VOLM_USB3_DEVICE_INFO));
-                            serial = usbInfo.chSerialNumber?.TrimEnd('\0');
-                            name = usbInfo.chUserDefinedName?.TrimEnd('\0');
-                            if (string.IsNullOrWhiteSpace(name)) name = usbInfo.chModelName?.TrimEnd('\0');
-                            model = usbInfo.chModelName?.TrimEnd('\0');
-                            if (!string.IsNullOrEmpty(serial)) id = serial;
-                            break;
-                        }
+                        Log.Warning("[海康体积相机服务] 设备信息指针为空，索引: {Index}", i);
+                        continue;
                     }
-                    
-                    string displayName = string.IsNullOrWhiteSpace(name) ? (serial ?? id) : name;
-                    var cameraStatus = (_currentCameraId == serial && IsConnected) ? "已连接" : "未连接";
 
-                    availableCameras.Add(new CameraInfo
+                    var devInfo = Marshal.PtrToStructure<MvVolmeasure.NET.MvVolmeasure.VOLM_DEVICE_INFO>(_deviceList.pDeviceInfo[i]);
+                    string typeDesc = devInfo.nTLayerType switch
                     {
-                        Id = id,
-                        Name = displayName,
-                        Model = model ?? "N/A",
-                        SerialNumber = serial ?? "N/A",
-                        Status = cameraStatus
-                    });
-                    Log.Verbose("[海康体积相机服务] (GetAvailable) 发现设备: ID={Id}, Name={Name}, Model={Model}, SN={SN}, Status={Status}",
-                                id, displayName, model, serial, cameraStatus);
+                        MvVolmeasure.NET.MvVolmeasure.MV_VOLM_GIGE_DEVICE => "千兆网口",
+                        MvVolmeasure.NET.MvVolmeasure.MV_VOLM_USB_DEVICE => "USB3.0",
+                        _ => $"未知类型({devInfo.nTLayerType})"
+                    };
+
+                    Log.Information("【体积相机】设备[{Index}] 类型: {TypeDesc} 版本: {Major}.{Minor} MAC: {MacHigh:X8}{MacLow:X8}",
+                        i, typeDesc, devInfo.nMajorVer, devInfo.nMinorVer, devInfo.nMacAddrHigh, devInfo.nMacAddrLow);
+
+                    if (devInfo.nTLayerType == MvVolmeasure.NET.MvVolmeasure.MV_VOLM_GIGE_DEVICE)
+                    {
+                        // 解析千兆网口设备详细信息
+                        var gigeInfo = (MvVolmeasure.NET.MvVolmeasure.MV_VOLM_GIGE_NET_INFO)
+                            MvVolmeasure.NET.MvVolmeasure.ByteToStruct(devInfo.SpecialInfo.stGigEInfo, typeof(MvVolmeasure.NET.MvVolmeasure.MV_VOLM_GIGE_NET_INFO));
+                        Log.Information("【体积相机】GIGE详细信息: SN={SN} 型号={Model} 厂商={Vendor} 版本={Ver} 用户名={User} IP={IP:X8} 掩码={Mask:X8} 网关={GW:X8} 厂商自定义={Custom}",
+                            gigeInfo.chSerialNumber?.TrimEnd('\0'),
+                            gigeInfo.chModelName?.TrimEnd('\0'),
+                            gigeInfo.chManufacturerName?.TrimEnd('\0'),
+                            gigeInfo.chDeviceVersion?.TrimEnd('\0'),
+                            gigeInfo.chUserDefinedName?.TrimEnd('\0'),
+                            gigeInfo.nCurrentIp,
+                            gigeInfo.nCurrentSubNetMask,
+                            gigeInfo.nDefultGateWay,
+                            gigeInfo.chManufacturerSpecificInfo?.TrimEnd('\0'));
+                    }
+                    else if (devInfo.nTLayerType == MvVolmeasure.NET.MvVolmeasure.MV_VOLM_USB_DEVICE)
+                    {
+                        // 解析USB3.0设备详细信息
+                        var usbInfo = (MvVolmeasure.NET.MvVolmeasure.VOLM_USB3_DEVICE_INFO)
+                            MvVolmeasure.NET.MvVolmeasure.ByteToStruct(devInfo.SpecialInfo.stUsb3VInfo, typeof(MvVolmeasure.NET.MvVolmeasure.VOLM_USB3_DEVICE_INFO));
+                        Log.Information("【体积相机】USB3详细信息: SN={SN} 型号={Model} 厂商={Vendor} 版本={Ver} 用户名={User} VID={VID:X4} PID={PID:X4} 设备号={DevNum} GUID={GUID} 系列={Family} 厂商名={Manu} ",
+                            usbInfo.chSerialNumber?.TrimEnd('\0'),
+                            usbInfo.chModelName?.TrimEnd('\0'),
+                            usbInfo.chVendorName?.TrimEnd('\0'),
+                            usbInfo.chDeviceVersion?.TrimEnd('\0'),
+                            usbInfo.chUserDefinedName?.TrimEnd('\0'),
+                            usbInfo.idVendor,
+                            usbInfo.idProduct,
+                            usbInfo.nDeviceNumber,
+                            usbInfo.chDeviceGUID?.TrimEnd('\0'),
+                            usbInfo.chFamilyName?.TrimEnd('\0'),
+                            usbInfo.chManufacturerName?.TrimEnd('\0'));
+                    }
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "[海康体积相机服务] (GetAvailable) 处理设备信息时出错，索引: {Index}", i);
+                    Log.Error(ex, "[海康体积相机服务] 解析设备[{Index}]详细信息时异常", i);
                 }
             }
-            return availableCameras;
+
+            return true;
         }
 
         public bool Start()
@@ -220,31 +207,19 @@ namespace Camera.Services.Implementations.Hikvision.Volume
                 }
                 Log.Debug("[海康体积相机服务] 算法类型已设置为持续测量模式 ({ContinuousWorkMode}).", ContinuousWorkMode);
                 
-                // Register persistent callback
-                if (_persistentResultCallback != null)
+                // 注册回调函数
+                _resultCallback = OnResultCallback; // 委托实例化
+                ret = _mvVolmeasure.RegisterResultCallBack(_resultCallback, IntPtr.Zero);
+                if (ret != 0)
                 {
-                     ret = _mvVolmeasure.RegisterResultCallBack(_persistentResultCallback, IntPtr.Zero);
-                    if (ret != 0)
-                    {
-                        Log.Error("[海康体积相机服务] 注册持续结果回调失败. ErrorCode: {ErrorCode:X8} - {ErrorDesc}", ret, GetHikvisionErrorDescription(ret));
-                        _mvVolmeasure.DeInit();
-                        IsConnected = false;
-                        ConnectionChanged?.Invoke(_currentCameraId, false);
-                        _currentCameraId = null;
-                        return false;
-                    }
-                    Log.Debug("[海康体积相机服务] 持续结果回调注册成功.");
-                }
-                else
-                {
-                    Log.Error("[海康体积相机服务] 持续结果回调委托为空，无法注册!");
-                     _mvVolmeasure.DeInit();
-                     IsConnected = false;
+                    Log.Error("[海康体积相机服务] 注册回调失败. ErrorCode: {ErrorCode:X8} - {ErrorDesc}", ret, GetHikvisionErrorDescription(ret));
+                    _mvVolmeasure.DeInit();
+                    IsConnected = false;
                     ConnectionChanged?.Invoke(_currentCameraId, false);
                     _currentCameraId = null;
                     return false;
                 }
-
+                Log.Debug("[海康体积相机服务] 回调注册成功.");
 
                 ret = _mvVolmeasure.StartGrabbing();
                 if (ret != 0)
@@ -256,14 +231,14 @@ namespace Camera.Services.Implementations.Hikvision.Volume
                     _currentCameraId = null;
                     return false;
                 }
-                Log.Debug("[海康体积相机服务] 抓图已启动 (StartGrabbing).");
+                Log.Debug("[海康体积相机服务] 抓图已启动 (StartGrabbing).\n");
 
                 ret = _mvVolmeasure.StartMeasure();
                 if (ret != 0)
                 {
                     Log.Error("[海康体积相机服务] 开始测量失败 (StartMeasure). ErrorCode: {ErrorCode:X8} - {ErrorDesc}", ret, GetHikvisionErrorDescription(ret));
-                    _mvVolmeasure.StopGrabbing(); // Attempt to stop grabbing
-                    _mvVolmeasure.DeInit();       // Clean up
+                    _mvVolmeasure.StopGrabbing();
+                    _mvVolmeasure.DeInit();
                     IsConnected = false;
                     ConnectionChanged?.Invoke(_currentCameraId, false);
                     _currentCameraId = null;
@@ -271,6 +246,7 @@ namespace Camera.Services.Implementations.Hikvision.Volume
                 }
                 _isGrabbingActive = true;
                 Log.Information("[海康体积相机服务] 服务启动成功，已开始抓图和测量. SN={SerialNumber}", _currentCameraId);
+
                 return true;
             }
             catch (Exception ex)
@@ -350,34 +326,6 @@ namespace Camera.Services.Implementations.Hikvision.Volume
             return deinitPerformedSuccessfully;
         }
 
-        private void HandlePersistentResultCallback(ref VOLM_RESULT_INFO stResultInfo, IntPtr pUser)
-        {
-            if (!_isGrabbingActive || _disposedValue) return;
-            if (string.IsNullOrEmpty(_currentCameraId))
-            {
-                Log.Warning("[海康体积相机服务] 回调触发，但当前相机ID为空，忽略数据。");
-                return;
-            }
-
-            var timestamp = DateTime.Now;
-
-            try
-            {
-                var (length, width, height, isValid, image, _) = ExtractMeasurementData(stResultInfo);
-
-                _volumeDataWithVerticesSubject.OnNext((length, width, height, timestamp, isValid, image));
-
-                if (image != null)
-                {
-                    _imageWithIdSubject.OnNext((image, _currentCameraId));
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "[海康体积相机服务] 处理持续测量回调时发生异常. SN={SN}", _currentCameraId);
-            }
-        }
-        
         #region SDK Data Conversion and Extraction (Adapted from DeviceService)
 
         private static (float Length, float Width, float Height, bool IsValid, BitmapSource? Image, Point[]? VertexPoints) ExtractMeasurementData(VOLM_RESULT_INFO stResultInfo)
@@ -474,69 +422,27 @@ namespace Camera.Services.Implementations.Hikvision.Volume
         {
             if (vertices.Length == 0) return originalImage;
 
-            DrawingVisual drawingVisual = new DrawingVisual();
+            // 坐标变换：将中心原点坐标转为左上角原点坐标
+            var correctedVertices = vertices.Select(v =>
+                new Point(v.X + originalImage.PixelWidth / 2.0, v.Y + originalImage.PixelHeight / 2.0)
+            ).ToArray();
+
+            DrawingVisual drawingVisual = new();
             using (DrawingContext drawingContext = drawingVisual.RenderOpen())
             {
                 drawingContext.DrawImage(originalImage, new Rect(0, 0, originalImage.PixelWidth, originalImage.PixelHeight));
 
-                Pen redPen = new(Brushes.Red, 2); // Thickness 2
-                Brush redBrush = Brushes.Red; // 用于绘制点的画刷
+                Pen redPen = new(Brushes.Red, 10);
                 redPen.Freeze();
-                redBrush.Freeze();
 
-                // 诊断：绘制每个顶点
-                foreach (var vertex in vertices)
+                if (correctedVertices.Length > 1)
                 {
-                    var correctedX = vertex.X - originalImage.PixelWidth / 2.0;
-                    var correctedY = vertex.Y + originalImage.PixelHeight / 2.0;
-                    // 在每个顶点位置绘制一个半径为3像素的实心红点
-                    drawingContext.DrawEllipse(redBrush, null, new Point(correctedX, correctedY), 3, 3);
+                    for (int i = 0; i < correctedVertices.Length - 1; i++)
+                    {
+                        drawingContext.DrawLine(redPen, correctedVertices[i], correctedVertices[i + 1]);
+                    }
+                    drawingContext.DrawLine(redPen, correctedVertices[^1], correctedVertices[0]);
                 }
-
-                // 原来的连线逻辑暂时注释掉，用于诊断顶点位置
-                /*
-                if (vertices.Length >= 2) 
-                {
-                    if (vertices.Length == 8) // Assume 8 points for a cuboid
-                    {
-                        // Draw "bottom" face
-                        drawingContext.DrawLine(redPen, vertices[0], vertices[1]);
-                        drawingContext.DrawLine(redPen, vertices[1], vertices[2]);
-                        drawingContext.DrawLine(redPen, vertices[2], vertices[3]);
-                        drawingContext.DrawLine(redPen, vertices[3], vertices[0]);
-
-                        // Draw "top" face
-                        drawingContext.DrawLine(redPen, vertices[4], vertices[5]);
-                        drawingContext.DrawLine(redPen, vertices[5], vertices[6]);
-                        drawingContext.DrawLine(redPen, vertices[6], vertices[7]);
-                        drawingContext.DrawLine(redPen, vertices[7], vertices[4]);
-
-                        // Draw connecting edges
-                        drawingContext.DrawLine(redPen, vertices[0], vertices[4]);
-                        drawingContext.DrawLine(redPen, vertices[1], vertices[5]);
-                        drawingContext.DrawLine(redPen, vertices[2], vertices[6]);
-                        drawingContext.DrawLine(redPen, vertices[3], vertices[7]);
-                    }
-                    else if (vertices.Length == 4) // Assume 4 points for a rectangle
-                    {
-                        drawingContext.DrawLine(redPen, vertices[0], vertices[1]);
-                        drawingContext.DrawLine(redPen, vertices[1], vertices[2]);
-                        drawingContext.DrawLine(redPen, vertices[2], vertices[3]);
-                        drawingContext.DrawLine(redPen, vertices[3], vertices[0]);
-                    }
-                    else // Fallback: connect all points sequentially
-                    {
-                         for (int i = 0; i < vertices.Length - 1; i++)
-                         {
-                             drawingContext.DrawLine(redPen, vertices[i], vertices[i+1]);
-                         }
-                         if (vertices.Length > 1) // Connect last to first if more than one point
-                         {
-                             drawingContext.DrawLine(redPen, vertices[^1], vertices[0]);
-                         }
-                    }
-                }
-                */
             }
 
             RenderTargetBitmap borderedBitmap = new RenderTargetBitmap(
@@ -650,11 +556,10 @@ namespace Camera.Services.Implementations.Hikvision.Volume
                 unchecked((int)0x80011000) => "SDK：错误或无效的句柄 (MV_VOLM_E_HANDLE)",
                 unchecked((int)0x80011001) => "SDK：不支持的功能 (MV_VOLM_E_SUPPORT)",
                 unchecked((int)0x80011004) => "SDK：错误的参数 (MV_VOLM_E_PARAMETER)",
-                // ... more SDK general errors ...
+                unchecked((int)0x80011006) => "SDK：超时 (MV_VOLM_E_TIMEOUT)",
+                unchecked((int)0x80011007) => "SDK：无数据 (MV_VOLM_E_NODATA)",
                 unchecked((int)0x80000100) => "GenICam：通用错误 (MV_VOLM_E_GC_GENERIC)",
-                // ... more GenICam errors ...
                 unchecked((int)0x80000204) => "GigE：设备忙或网络断开 (MV_VOLM_E_BUSY)",
-                // ... more GigE errors ...
                 _ => $"未知错误 (0x{errorCode:X8})",
             };
         }
@@ -764,6 +669,19 @@ namespace Camera.Services.Implementations.Hikvision.Volume
             {
                 Log.Error(ex, "[海康体积相机服务] GetSingleMeasurement: 调用过程中发生异常. SN: {SN}", _currentCameraId);
                 return (false, 0, 0, 0, false, null, null, $"处理 GetSingleMeasurement 时发生异常: {ex.Message}");
+            }
+        }
+
+        // 新增：SDK回调处理方法
+        private void OnResultCallback(ref VOLM_RESULT_INFO stResultInfo, IntPtr pUser)
+        {
+            // 解析数据并推送到流
+            var (length, width, height, isValid, image, _) = ExtractMeasurementData(stResultInfo);
+            var timestamp = DateTime.Now;
+            _volumeDataWithVerticesSubject.OnNext((length, width, height, timestamp, isValid, image));
+            if (image != null)
+            {
+                _imageWithIdSubject.OnNext((image, _currentCameraId ?? "Unknown"));
             }
         }
     }

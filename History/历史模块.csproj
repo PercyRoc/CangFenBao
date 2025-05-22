@@ -6,6 +6,7 @@
         <UseWPF>true</UseWPF>
         <ImplicitUsings>enable</ImplicitUsings>
         <RootNamespace>History</RootNamespace>
+        <AssemblyName>History</AssemblyName>
     </PropertyGroup>
 
     <ItemGroup>
@@ -15,24 +16,25 @@
         <PackageReference Include="NPOI" />
         <PackageReference Include="WPFLocalizeExtension"/>
         <PackageReference Include="HandyControl"/>
+        <PackageReference Include="WPF-UI" />
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Common\基础服务.csproj" />
+      <ProjectReference Include="..\Common\基础模块.csproj" />
     </ItemGroup>
 
     <ItemGroup>
-      <EmbeddedResource Update="Resources\Strings.resx">
+      <EmbeddedResource Update="Resources\HistoryStrings.resx">
         <Generator>ResXFileCodeGenerator</Generator>
-        <LastGenOutput>Strings.Designer.cs</LastGenOutput>
+        <LastGenOutput>HistoryStrings.Designer.cs</LastGenOutput>
       </EmbeddedResource>
     </ItemGroup>
 
     <ItemGroup>
-      <Compile Update="Resources\Strings.Designer.cs">
+      <Compile Update="Resources\HistoryStrings.Designer.cs">
         <DesignTime>True</DesignTime>
         <AutoGen>True</AutoGen>
-        <DependentUpon>Strings.resx</DependentUpon>
+        <DependentUpon>HistoryStrings.resx</DependentUpon>
       </Compile>
     </ItemGroup>
     

@@ -37,10 +37,4 @@ public interface ICameraService: IDisposable
     /// </summary>
     /// <returns>操作是否成功</returns>
     bool Stop();
-
-    /// <summary>
-    ///     获取所有可用的相机基本信息
-    /// </summary>
-    /// <returns>相机基本信息列表</returns>
-    IEnumerable<CameraInfo> GetAvailableCameras();
 }

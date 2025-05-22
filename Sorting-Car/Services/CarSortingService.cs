@@ -1,10 +1,8 @@
 using Common.Models.Package;
+using Common.Services.SerialPort;
 using Common.Services.Settings;
-using DeviceService.DataSourceDevices.SerialPort;
-using DeviceService.DataSourceDevices.Weight;
 using Serilog;
 using Sorting_Car.Models;
-using SortingServices.Car;
 using CarSequenceSettings = SortingServices.Car.Models.CarSequenceSettings;
 
 namespace Sorting_Car.Services
@@ -471,7 +469,7 @@ namespace Sorting_Car.Services
             return (byte)(crc & 0x7F); // 根据规范，最后与0x7F进行与操作
         }
 
-        public async ValueTask DisposeAsync()
+        public ValueTask DisposeAsync()
         {
             Log.Information("正在释放 CarSortingService...");
             _isInitialized = false;
@@ -491,6 +489,7 @@ namespace Sorting_Car.Services
 
             Log.Information("CarSortingService 已释放。");
             GC.SuppressFinalize(this);
+            return ValueTask.CompletedTask;
         }
     }
 }

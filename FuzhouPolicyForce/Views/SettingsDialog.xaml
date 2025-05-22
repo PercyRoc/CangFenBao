@@ -9,6 +9,8 @@
                  xmlns:hc="https://handyorg.github.io/handycontrol"
                  xmlns:settings="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
                  xmlns:settings1="clr-namespace:FuzhouPolicyForce.Views.Settings"
+                 xmlns:views="clr-namespace:Camera.Views;assembly=Camera"
+                 xmlns:settings2="clr-namespace:BalanceSorting.Views.Settings;assembly=BalanceSorting"
                  prism:ViewModelLocator.AutoWireViewModel="True"
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}">
@@ -96,7 +98,7 @@
                                 <ui:SymbolIcon Symbol="Camera24" />
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="settings:CameraSettingsView" />
+                                <x:Type Type="views:CameraSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
 
@@ -106,7 +108,7 @@
                                 <ui:SymbolIcon Symbol="ArrowSort24" />
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="settings:BalanceSortSettingsView" />
+                                <x:Type Type="settings2:BalanceSortSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
 
@@ -130,15 +132,15 @@
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
 
-                        <!-- <ui:NavigationViewItem Content="申通揽收接口设置" -->
-                        <!--                        Tag="ShenTongLanShou"> -->
-                        <!--     <ui:NavigationViewItem.Icon> -->
-                        <!--         <ui:SymbolIcon Symbol="Cloud24" /> -->
-                        <!--     </ui:NavigationViewItem.Icon> -->
-                        <!--     <ui:NavigationViewItem.TargetPageType> -->
-                        <!--         <x:Type Type="settings1:ShenTongLanShouSettingsView" /> -->
-                        <!--     </ui:NavigationViewItem.TargetPageType> -->
-                        <!-- </ui:NavigationViewItem> -->
+                        <ui:NavigationViewItem Content="申通揽收接口设置"
+                                               Tag="ShenTongLanShou">
+                            <ui:NavigationViewItem.Icon>
+                                <ui:SymbolIcon Symbol="Cloud24" />
+                            </ui:NavigationViewItem.Icon>
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="settings1:ShenTongLanShouSettingsView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>
                 </ui:NavigationView>
 

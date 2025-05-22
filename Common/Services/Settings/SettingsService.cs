@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.IO;
@@ -6,6 +7,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Configuration;
+using Serilog;
 
 namespace Common.Services.Settings;
 
@@ -22,13 +24,19 @@ public class SettingsService : ISettingsService
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
-    private readonly Dictionary<string, object> _cachedSettings = [];
-    private readonly Dictionary<Type, List<Action<object>>> _changeCallbacks = [];
-    private readonly Dictionary<Type, IDisposable> _changeTokens = [];
-
-    private readonly Dictionary<Type, string> _configurationKeys = [];
-    private readonly Dictionary<Type, IConfiguration> _configurations = [];
+    private readonly ConcurrentDictionary<string, object> _cachedSettings = new();
+    private readonly ConcurrentDictionary<Type, List<Action<object>>> _changeCallbacks = new();
+    private readonly ConcurrentDictionary<Type, IDisposable> _changeTokens = new();
+    private readonly ConcurrentDictionary<Type, string> _configurationKeys = new();
+    private readonly ConcurrentDictionary<Type, IConfiguration> _configurations = new();
     private readonly string _settingsDirectory;
+    private readonly TaskCompletionSource<bool> _initializationComplete = new();
+    private readonly object _lock = new();
+
+    /// <summary>
+    ///     设置服务初始化完成事件
+    /// </summary>
+    public event EventHandler? InitializationCompleted;
 
     /// <summary>
     ///     初始化设置服务
@@ -40,7 +48,46 @@ public class SettingsService : ISettingsService
 
         if (!Directory.Exists(_settingsDirectory)) Directory.CreateDirectory(_settingsDirectory);
 
-        RegisterConfigurationTypes();
+        // 异步初始化
+        Task.Run(InitializeAsync);
+    }
+
+    /// <summary>
+    ///     等待设置服务初始化完成
+    /// </summary>
+    public Task WaitForInitializationAsync()
+    {
+        return _initializationComplete.Task;
+    }
+
+    /// <summary>
+    ///     异步初始化设置服务
+    /// </summary>
+    private async Task InitializeAsync()
+    {
+        try
+        {
+            await Task.Run(() =>
+            {
+                RegisterConfigurationTypes();
+                // 预加载所有配置
+                foreach (var type in _configurationKeys.Keys)
+                {
+                    var method = typeof(SettingsService)
+                        .GetMethod(nameof(LoadSettings), [typeof(string), typeof(bool)])
+                        ?.MakeGenericMethod(type);
+                    method?.Invoke(this, [null, true]);
+                }
+            });
+
+            _initializationComplete.TrySetResult(true);
+            InitializationCompleted?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"设置服务初始化失败: {ex.Message}");
+            _initializationComplete.TrySetException(ex);
+        }
     }
 
     /// <summary>
@@ -71,12 +118,18 @@ public class SettingsService : ISettingsService
         {
             if (!_configurations.TryGetValue(typeof(T), out var configuration))
             {
-                var builder = new ConfigurationBuilder()
-                    .AddJsonFile(filePath, false, true);
-                configuration = builder.Build();
-                _configurations[typeof(T)] = configuration;
+                lock (_lock)
+                {
+                    if (!_configurations.TryGetValue(typeof(T), out configuration))
+                    {
+                        var builder = new ConfigurationBuilder()
+                            .AddJsonFile(filePath, false, true);
+                        configuration = builder.Build();
+                        _configurations[typeof(T)] = configuration;
 
-                SetupChangeToken<T>(configuration);
+                        SetupChangeToken<T>(configuration);
+                    }
+                }
             }
 
             var settings = new T();
@@ -108,13 +161,8 @@ public class SettingsService : ISettingsService
         if (callback == null) return;
 
         var type = typeof(T);
-        if (!_changeCallbacks.TryGetValue(type, out var value))
-        {
-            value = [];
-            _changeCallbacks[type] = value;
-        }
-
-        value.Add(obj => callback((T)obj));
+        var callbacks = _changeCallbacks.GetOrAdd(type, _ => []);
+        callbacks.Add(obj => callback((T)obj));
     }
 
     /// <summary>
@@ -157,12 +205,11 @@ public class SettingsService : ISettingsService
     /// <typeparam name="T">配置类型</typeparam>
     /// <param name="settings">配置实例</param>
     /// <returns>校验结果，如果有错误则包含错误信息</returns>
-    public ValidationResult[] ValidateSettings<T>(T settings) where T : class
+    public static ValidationResult[] ValidateSettings<T>(T settings) where T : class
     {
-        var results = new List<ValidationResult>();
-        var validationContext = new ValidationContext(settings);
-        Validator.TryValidateObject(settings, validationContext, results, true);
-        return [.. results];
+        var validationResults = new List<ValidationResult>();
+        Validator.TryValidateObject(settings, new ValidationContext(settings), validationResults, true);
+        return [.. validationResults];
     }
 
     /// <summary>
@@ -170,37 +217,35 @@ public class SettingsService : ISettingsService
     /// </summary>
     public void Dispose()
     {
-        foreach (var token in _changeTokens.Values) token.Dispose();
-
+        foreach (var token in _changeTokens.Values)
+        {
+            token.Dispose();
+        }
         _changeTokens.Clear();
-
+        _cachedSettings.Clear();
+        _configurations.Clear();
+        _changeCallbacks.Clear();
+        _configurationKeys.Clear();
         GC.SuppressFinalize(this);
     }
 
     private void SetupChangeToken<T>(IConfiguration configuration) where T : class, new()
     {
-        if (_changeTokens.TryGetValue(typeof(T), out var oldToken))
-        {
-            oldToken.Dispose();
-            _changeTokens.Remove(typeof(T));
-        }
-
+        var type = typeof(T);
         var token = configuration.GetReloadToken();
-        var registration = token.RegisterChangeCallback(_ =>
+        var disposable = token.RegisterChangeCallback(_ =>
         {
-            var settings = LoadSettings<T>(useCache: false);
-
-            var key = GetConfigurationKey<T>();
-            _cachedSettings[key] = settings;
-
-            if (_changeCallbacks.TryGetValue(typeof(T), out var callbacks))
+            var newSettings = LoadSettings<T>(null, false);
+            if (_changeCallbacks.TryGetValue(type, out var callbacks))
+            {
                 foreach (var callback in callbacks)
-                    callback(settings);
-
-            SetupChangeToken<T>(configuration);
+                {
+                    callback(newSettings);
+                }
+            }
         }, null);
 
-        _changeTokens[typeof(T)] = registration;
+        _changeTokens[type] = disposable;
     }
 
     /// <summary>
@@ -208,23 +253,30 @@ public class SettingsService : ISettingsService
     /// </summary>
     private void RegisterConfigurationTypes()
     {
-        var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+        var assemblies = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location));
+
         foreach (var assembly in assemblies)
+        {
             try
             {
-                var configTypes = assembly.GetTypes()
-                    .Where(t => t.GetCustomAttribute<ConfigurationAttribute>() != null);
+                var types = assembly.GetExportedTypes()
+                    .Where(t => t.IsClass && !t.IsAbstract && t.GetCustomAttribute<ConfigurationAttribute>() != null);
 
-                foreach (var type in configTypes)
+                foreach (var type in types)
                 {
                     var attribute = type.GetCustomAttribute<ConfigurationAttribute>();
-                    if (attribute != null) _configurationKeys[type] = attribute.Key;
+                    if (attribute != null)
+                    {
+                        _configurationKeys[type] = attribute.Key;
+                    }
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // 忽略无法加载的程序集
+                Log.Warning("扫描程序集 {Assembly} 时发生错误: {Message}", assembly.FullName, ex.Message);
             }
+        }
     }
 
     /// <summary>
@@ -235,20 +287,20 @@ public class SettingsService : ISettingsService
     private string GetConfigurationKey<T>()
     {
         var type = typeof(T);
-        if (_configurationKeys.TryGetValue(type, out var key)) return key;
+        if (_configurationKeys.TryGetValue(type, out var key))
+        {
+            return key;
+        }
 
         var attribute = type.GetCustomAttribute<ConfigurationAttribute>();
         if (attribute != null)
         {
             key = attribute.Key;
             _configurationKeys[type] = key;
-        }
-        else
-        {
-            throw new ArgumentException($"未找到类型 {type.Name} 的配置键名");
+            return key;
         }
 
-        return key;
+        return type.Name;
     }
 
     /// <summary>
@@ -269,7 +321,6 @@ public class SettingsService : ISettingsService
     /// <typeparam name="T">配置类型</typeparam>
     private void SaveToFile<T>(string key, T configuration) where T : class?
     {
-        ArgumentNullException.ThrowIfNull(configuration);
         var filePath = GetSettingsFilePath(key);
         var json = JsonSerializer.Serialize(configuration, JsonOptions);
         File.WriteAllText(filePath, json);

@@ -5,18 +5,17 @@ using System.Reactive.Linq;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
-using Common.Data;
+using BalanceSorting.Models;
+using BalanceSorting.Service;
+using Camera.Interface;
 using Common.Models.Package;
 using Common.Models.Settings.ChuteRules;
-using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
-using DeviceService.DataSourceDevices.Camera;
-using DeviceService.DataSourceDevices.Scanner;
-using DeviceService.DataSourceDevices.Services;
+using FuzhouPolicyForce.Models;
 using FuzhouPolicyForce.WangDianTong;
 using Serilog;
 using SharedUI.Models;
-using SortingServices.Pendulum;
+using History.Data;
 
 namespace FuzhouPolicyForce.ViewModels;
 
@@ -24,7 +23,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
-    private readonly IPackageDataService _packageDataService;
     private readonly ISettingsService _settingsService;
     private readonly IPendulumSortService _sortService;
     private readonly List<IDisposable> _subscriptions = [];
@@ -44,23 +42,22 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private SystemStatus _systemStatus = new();
 
+    private readonly IPackageHistoryDataService _packageHistoryDataService;
+
     public MainWindowViewModel(
         IDialogService dialogService,
         ICameraService cameraService,
         ISettingsService settingsService,
         IPendulumSortService sortService,
-        PackageTransferService packageTransferService,
-        ScannerStartupService scannerStartupService,
-        IPackageDataService packageDataService,
-        IWangDianTongApiServiceV2 wangDianTongApiServiceV2)
+        IWangDianTongApiServiceV2 wangDianTongApiServiceV2,
+        IPackageHistoryDataService packageHistoryDataService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
         _settingsService = settingsService;
         _sortService = sortService;
-        _packageDataService = packageDataService;
         _wangDianTongApiServiceV2 = wangDianTongApiServiceV2;
-        scannerStartupService.GetScannerService();
+        _packageHistoryDataService = packageHistoryDataService;
 
         // 初始化命令
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
@@ -90,12 +87,12 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         _cameraService.ConnectionChanged += OnCameraConnectionChanged;
 
         // 订阅包裹流
-        _subscriptions.Add(packageTransferService.PackageStream
+        _subscriptions.Add(_cameraService.PackageStream
             .ObserveOn(Scheduler.CurrentThread)
             .Subscribe(OnPackageInfo));
 
         // 订阅图像流
-        _subscriptions.Add(_cameraService.ImageStream
+        _subscriptions.Add(_cameraService.ImageStreamWithId
             .ObserveOn(TaskPoolScheduler.Default) // 使用任务池调度器
             .Subscribe(imageData =>
             {
@@ -108,7 +105,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                         try
                         {
                             // 更新UI
-                            CurrentImage = bitmapSource;
+                            CurrentImage = bitmapSource.Image;
                         }
                         catch (Exception ex)
                         {
@@ -121,6 +118,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     Log.Error(ex, "处理图像流时发生错误");
                 }
             }));
+
+        // 主动查询一次相机连接状态，防止事件先于窗口初始化触发
+        OnCameraConnectionChanged(null, _cameraService.IsConnected);
     }
 
     public DelegateCommand OpenSettingsCommand { get; }
@@ -182,7 +182,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             {
                 Name = "相机",
                 Status = "未连接",
-                Icon = "相机模块",
+                Icon = "Camera24",
                 StatusColor = "#F44336" // 红色表示未连接
             });
             Log.Debug("已添加相机状态");
@@ -196,7 +196,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             {
                 Name = "触发光电",
                 Status = "未连接",
-                Icon = "RadioTower",
+                Icon = "LightbulbPerson24",
                 StatusColor = "#F44336"
             });
             Log.Debug("已添加触发光电状态");
@@ -208,7 +208,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 {
                     Name = photoelectric.Name,
                     Status = "未连接",
-                    Icon = "RadioTower",
+                    Icon = "LightbulbPerson24",
                     StatusColor = "#F44336"
                 });
                 Log.Debug("已添加分拣光电状态: {Name}", photoelectric.Name);
@@ -245,7 +245,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             value: "0",
             unit: "个",
             description: "累计处理包裹总数",
-            icon: "CubeOutline24"
+            icon: "CubeMultiple24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
@@ -253,7 +253,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             value: "0",
             unit: "个",
             description: "处理异常的包裹数量",
-            icon: "AlertOutline24"
+            icon: "AlertOff24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
@@ -261,7 +261,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             value: "0",
             unit: "个/小时",
             description: "预计每小时处理量",
-            icon: "TrendingUp24"
+            icon: "ArrowTrending24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
@@ -269,25 +269,18 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             value: "0",
             unit: "ms",
             description: "单个包裹平均处理时间",
-            icon: "TimerOutline24"
+            icon: "Timer24"
         ));
     }
 
     private void InitializePackageInfoItems()
     {
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "条码",
-            value: "--",
-            description: "包裹条码信息",
-            icon: "Barcode24"
-        )); 
-
-        PackageInfoItems.Add(new PackageInfoItem(
             label: "重量",
             value: "--",
             unit: "kg",
             description: "包裹重量",
-            icon: "ScaleBalance24"
+            icon: "Scales24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
@@ -295,14 +288,14 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             value: "--",
             unit: "cm",
             description: "长×宽×高",
-            icon: "RulerSquare24"
+            icon: "Ruler24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
             label: "分拣口",
             value: "--",
             description: "目标分拣位置",
-            icon: "ArrowSplitHorizontal24"
+            icon: "ArrowCircleDown24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
@@ -314,7 +307,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "时间",
+            label: "当前时间",
             value: "--:--:--",
             description: "包裹处理时间",
             icon: "Clock24"
@@ -446,48 +439,48 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             // 分拣服务调用
             _sortService.ProcessPackage(package);
 
-            // // 2. 如果条码第一字符是7，则异步调用申通揽收接口 (即发即忘)
-            // if (!string.IsNullOrEmpty(package.Barcode) && package.Barcode.StartsWith('7'))
-            // {
-            //     Log.Information("包裹 {Barcode}: 条码以 '7' 开头，将异步发起申通揽收接口调用。", package.Barcode);
-            //     _ = Task.Run(async () =>
-            //     {
-            //         try
-            //         {
-            //             var stConfig = _settingsService.LoadSettings<ShenTongLanShouConfig>();
-            //             var cangKuRequest = new CangKuAutoRequest
-            //             {
-            //                 WhCode = stConfig.WhCode,
-            //                 OrgCode = stConfig.OrgCode,
-            //                 UserCode = stConfig.UserCode,
-            //                 Packages =
-            //                 [
-            //                     new CangKuAutoPackageDto
-            //                     {
-            //                         WaybillNo = package.Barcode,
-            //                         称重模块 = package.称重模块.ToString("F2"), // 保留F2格式
-            //                         OpTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
-            //                     }
-            //                 ]
-            //             };
-            //             var lanShouService = new Services.ShenTongLanShouService(_settingsService);
-            //             var stResponse = await lanShouService.UploadCangKuAutoAsync(cangKuRequest);
-            //             Log.Information("包裹 {Barcode}: 申通揽收接口异步调用尝试完成。响应详情: {@StResponse}", package.Barcode, stResponse);
-            //         }
-            //         catch (Exception ex)
-            //         {
-            //             Log.Error(ex, "包裹 {Barcode}: 异步调用申通揽收接口时发生异常。", package.Barcode);
-            //         }
-            //     });
-            // }
-            // else
-            // {
-            //     if (string.IsNullOrEmpty(package.Barcode)) {
-            //          Log.Debug("包裹条码为空，跳过申通揽收接口调用检查。");
-            //     } else {
-            //          Log.Debug("包裹 {Barcode}: 条码不以 '7' 开头 (首字符: {FirstChar})，跳过申通揽收接口调用。", package.Barcode, package.Barcode[0]);
-            //     }
-            // }
+            // 2. 如果条码第一字符是7，则异步调用申通揽收接口 (即发即忘)
+            if (!string.IsNullOrEmpty(package.Barcode) && package.Barcode.StartsWith('7'))
+            {
+                Log.Information("包裹 {Barcode}: 条码以 '7' 开头，将异步发起申通揽收接口调用。", package.Barcode);
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var stConfig = _settingsService.LoadSettings<ShenTongLanShouConfig>();
+                        var cangKuRequest = new CangKuAutoRequest
+                        {
+                            WhCode = stConfig.WhCode,
+                            OrgCode = stConfig.OrgCode,
+                            UserCode = stConfig.UserCode,
+                            Packages =
+                            [
+                                new CangKuAutoPackageDto
+                                {
+                                    WaybillNo = package.Barcode,
+                                    Weight = package.Weight.ToString("F2"), // 保留F2格式
+                                    OpTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                                }
+                            ]
+                        };
+                        var lanShouService = new Services.ShenTongLanShouService(_settingsService);
+                        var stResponse = await lanShouService.UploadCangKuAutoAsync(cangKuRequest);
+                        Log.Information("包裹 {Barcode}: 申通揽收接口异步调用尝试完成。响应详情: {@StResponse}", package.Barcode, stResponse);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "包裹 {Barcode}: 异步调用申通揽收接口时发生异常。", package.Barcode);
+                    }
+                });
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(package.Barcode)) {
+                     Log.Debug("包裹条码为空，跳过申通揽收接口调用检查。");
+                } else {
+                     Log.Debug("包裹 {Barcode}: 条码不以 '7' 开头 (首字符: {FirstChar})，跳过申通揽收接口调用。", package.Barcode, package.Barcode[0]);
+                }
+            }
             
             // UI更新和数据保存
             Application.Current.Dispatcher.Invoke(() =>
@@ -561,7 +554,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     {
          try
          {
-             await _packageDataService.AddPackageAsync(package);
+             var record = PackageHistoryRecord.FromPackageInfo(package);
+             await _packageHistoryDataService.AddPackageAsync(record);
              Log.Information("包裹记录已保存到数据库：{Barcode}", package.Barcode);
          }
          catch (Exception ex)
@@ -606,8 +600,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         if (chuteItem != null)
         {
             chuteItem.Value = package.ChuteNumber.ToString();
-            chuteItem.Description = package.ChuteNumber == 0 ? "等待分配..." : "目标分拣位置"; // 根据实际业务逻辑调整0是否表示待分配
-             chuteItem.StatusColor = package.Status == PackageStatus.Success ? "#4CAF50" : "#F44336"; // 根据状态更新颜色
+            chuteItem.Description = package.ChuteNumber == 0 ? "等待分配..." : "目标分拣位置";
+             chuteItem.StatusColor = package.Status == PackageStatus.Success ? "#4CAF50" : "#F44336";
         }
 
         var timeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "时间");

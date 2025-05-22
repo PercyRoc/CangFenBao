@@ -20,7 +20,7 @@ public class WeightSettings : BindableBase
         set => SetProperty(ref _portName, value);
     }
 
-    private int _baudRate = 9600;
+    private int _baudRate = 38400;
     public int BaudRate
     {
         get => _baudRate;

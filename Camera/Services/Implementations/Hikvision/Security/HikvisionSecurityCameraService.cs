@@ -163,39 +163,6 @@ public sealed class HikvisionSecurityCameraService : ICameraService
         }
     }
 
-    public IEnumerable<CameraInfo> GetAvailableCameras()
-    {
-        var settings = GetCurrentHikvisionSettings();
-        string cameraIdForInfo = _currentCameraId;
-        string nameForInfo;
-        string statusForInfo = IsConnected ? "Connected" : "Disconnected";
-        const string modelForInfo = "Hikvision Security Series";
-        const string serialForInfo = "N/A";
-
-        if (settings != null)
-        {
-            cameraIdForInfo = !string.IsNullOrWhiteSpace(settings.IpAddress) ? settings.IpAddress : _currentCameraId;
-            nameForInfo = $"海康安防相机 ({settings.IpAddress})";
-        }
-        else
-        {
-             nameForInfo = "海康安防相机 (配置错误或禁用)";
-            statusForInfo = "Disabled/Error"; 
-        }
-
-        return new List<CameraInfo>
-        {
-            new()
-            {
-                Id = cameraIdForInfo,
-                Name = nameForInfo,
-                Model = modelForInfo, 
-                SerialNumber = serialForInfo, 
-                Status = statusForInfo
-            }
-        };
-    }
-
     public void Dispose()
     {
         Log.Debug("[海康安防相机服务] Dispose() 方法被调用. CameraID: {CameraId}, HashCode: {HashCode}", _currentCameraId, GetHashCode());

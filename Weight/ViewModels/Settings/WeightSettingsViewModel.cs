@@ -1,7 +1,6 @@
 using Common.Services.Settings;
 using System.Collections.ObjectModel;
 using System.IO.Ports;
-using System.Linq;
 using Weight.Models.Settings;
 
 namespace Weight.ViewModels.Settings;
@@ -10,7 +9,7 @@ public class WeightSettingsViewModel : BindableBase
 {
     private readonly ISettingsService _settingsService;
     
-    private WeightSettings _settings;
+    private WeightSettings _settings = null!;
     public WeightSettings Settings
     {
         get => _settings;
@@ -24,7 +23,6 @@ public class WeightSettingsViewModel : BindableBase
 
     public DelegateCommand RefreshPortsCommand { get; }
     public DelegateCommand SaveCommand { get; }
-    public DelegateCommand LoadCommand { get; }
 
     public WeightSettingsViewModel(ISettingsService settingsService)
     {
@@ -38,7 +36,6 @@ public class WeightSettingsViewModel : BindableBase
 
         RefreshPortsCommand = new DelegateCommand(RefreshPorts);
         SaveCommand = new DelegateCommand(OnSave);
-        LoadCommand = new DelegateCommand(OnLoad);
     }
 
     private void OnSave()
@@ -46,15 +43,9 @@ public class WeightSettingsViewModel : BindableBase
         _settingsService.SaveSettings(Settings, validate: true, throwOnError: false);
     }
 
-    private void OnLoad()
-    {
-        Settings = _settingsService.LoadSettings<WeightSettings>();
-        RefreshPorts();
-    }
-
     private void RefreshPorts()
     {
-        string? previouslySelectedPort = Settings.PortName;
+        string previouslySelectedPort = Settings.PortName;
         AvailablePorts.Clear();
         try
         {

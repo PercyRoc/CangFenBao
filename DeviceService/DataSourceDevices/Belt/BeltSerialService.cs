@@ -1,4 +1,4 @@
-using DeviceService.DataSourceDevices.SerialPort;
+using Common.Services.SerialPort;
 using Serilog;
 using Common.Services.Settings;
 

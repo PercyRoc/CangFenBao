@@ -23,7 +23,10 @@ internal class SangNengService(ISettingsService settingsService) : ISangNengServ
         {
             // 在每次请求时获取最新的设置
             var settings = settingsService.LoadSettings<SangNengSettings>();
-            Log.Information("发送前加载桑能配置: Username={Username}, Sign={Sign}", settings.Username, settings.Sign);
+            Log.Information("发送前加载桑能配置: Username={Username}, Password={Password}, Sign={Sign}", 
+                settings.Username, 
+                settings.Password, 
+                settings.Sign);
 
             // 更新认证头 (如果需要每次更新的话)
             var authToken = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{settings.Username}:{settings.Password}"));

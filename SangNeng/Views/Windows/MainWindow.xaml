@@ -167,7 +167,8 @@
                                             FontWeight="Bold" 
                                             VerticalAlignment="Center"
                                             Padding="10,0"
-                                            KeyDown="ManualBarcodeTextBox_KeyDown" />
+                                            KeyDown="ManualBarcodeTextBox_KeyDown"
+                                            GotKeyboardFocus="ManualBarcodeTextBox_GotKeyboardFocus" />
                             </Grid>
                         </StackPanel>
 
@@ -648,6 +649,20 @@
                     </Grid>
                 </Border>
             </Grid>
+
+            <!-- Full Screen Initializing Overlay -->
+            <Border Grid.ColumnSpan="2" Grid.Column="0"
+                    Background="#CC000000"
+                    Visibility="{Binding IsInitializingOverlayVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
+                    Panel.ZIndex="999"> <!-- Ensure it's on top -->
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <ui:ProgressRing IsIndeterminate="True" Width="60" Height="60" Margin="0,0,0,20"/>
+                    <TextBlock Text="Initializing devices, please wait..."
+                               Foreground="White"
+                               FontSize="24"
+                               FontWeight="SemiBold"/>
+                </StackPanel>
+            </Border>
         </Grid>
 
         <!-- Status Bar -->
@@ -765,7 +780,7 @@
                                FontSize="12"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                         <Run Text="Running Time: " />
-                        <Run Text="{Binding SystemStatus.RunningTime, Mode=OneWay, StringFormat={}{0:hh\\:mm\\:ss}}" />
+                        <Run Text="{Binding SystemStatus.RunningTime, Mode=OneWay, StringFormat={}{0:hh\:mm\:ss}}" />
                     </TextBlock>
                 </StackPanel>
             </Grid>

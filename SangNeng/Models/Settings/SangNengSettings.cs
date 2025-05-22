@@ -1,17 +1,19 @@
 using Common.Services.Settings;
+using System.ComponentModel.DataAnnotations;
 
 namespace Sunnen.Models.Settings;
 
-[Configuration("sangNengSettings")]
+[Configuration("SangNengSettings")]
 public class SangNengSettings : BindableBase
 {
     private string _password = "2025";
     private string _username = "247";
-    private string _sign = string.Empty;
+    private string _sign = "K1A";
 
     /// <summary>
     ///     Username for SangNeng server
     /// </summary>
+    [Required(ErrorMessage = "用户名不能为空")]
     public string Username
     {
         get => _username;
@@ -21,6 +23,7 @@ public class SangNengSettings : BindableBase
     /// <summary>
     ///     Password for SangNeng server
     /// </summary>
+    [Required(ErrorMessage = "密码不能为空")]
     public string Password
     {
         get => _password;
@@ -30,6 +33,7 @@ public class SangNengSettings : BindableBase
     /// <summary>
     ///     Sign for SangNeng server
     /// </summary>
+    [Required(ErrorMessage = "签名不能为空")]
     public string Sign
     {
         get => _sign;

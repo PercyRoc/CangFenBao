@@ -1,0 +1,104 @@
+<UserControl x:Class="SowingSorting.Views.Settings.ModbusTcpSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:prism="http://prismlibrary.com/"
+             xmlns:viewModels="clr-namespace:SowingSorting.ViewModels.Settings"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             prism:ViewModelLocator.AutoWireViewModel="True"
+             mc:Ignorable="d" 
+             d:DataContext="{d:DesignInstance Type=viewModels:ModbusTcpSettingsViewModel, IsDesignTimeCreatable=False}">
+    <Grid>
+        <StackPanel MaxWidth="500" Margin="16" VerticalAlignment="Top">
+            <TextBlock Text="Modbus TCP 设置" 
+                       Style="{DynamicResource SubtitleTextBlockStyle}"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,16" />
+
+            <ui:Card Margin="0,0,0,16">
+                <StackPanel Margin="16">
+                    <TextBlock Text="连接参数"
+                               Style="{DynamicResource SubtitleTextBlockStyle}"
+                               Margin="0,0,0,16" />
+
+                    <!-- IP 地址 -->
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="IP 地址:" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"/>
+                        <ui:TextBox Grid.Column="1" 
+                                    Text="{Binding Settings.IpAddress, UpdateSourceTrigger=PropertyChanged}" 
+                                    Padding="5"/>
+                    </Grid>
+
+                    <!-- 端口 -->
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="端口:" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"/>
+                        <ui:NumberBox Grid.Column="1" HorizontalAlignment="Left"
+                                      Value="{Binding Settings.Port, UpdateSourceTrigger=PropertyChanged}"
+                                      SpinButtonPlacementMode="Inline"
+                                      Minimum="1" Maximum="65535" SmallChange="1" LargeChange="100" />
+                    </Grid>
+                    
+                    <!-- 连接超时 -->
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="连接超时 (ms):" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"/>
+                        <ui:NumberBox Grid.Column="1" HorizontalAlignment="Left"
+                                      Value="{Binding Settings.ConnectionTimeout, UpdateSourceTrigger=PropertyChanged}" 
+                                      SpinButtonPlacementMode="Inline"
+                                      Minimum="0" SmallChange="100" LargeChange="1000"/>
+                    </Grid>
+                </StackPanel>
+            </ui:Card>
+            
+            <ui:Card Margin="0,0,0,16">
+                <StackPanel Margin="16">
+                     <TextBlock Text="寄存器操作" 
+                               Style="{DynamicResource SubtitleTextBlockStyle}"
+                               Margin="0,0,0,16" />
+                    
+                    <!-- 默认寄存器地址 -->
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="默认寄存器地址:" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"/>
+                        <ui:NumberBox Grid.Column="1" HorizontalAlignment="Left"
+                                      Value="{Binding Settings.DefaultRegisterAddress, UpdateSourceTrigger=PropertyChanged}"
+                                      SpinButtonPlacementMode="Inline"
+                                      Minimum="0" SmallChange="1" LargeChange="10"/>
+                    </Grid>
+
+                    <!-- 测试写入值 -->
+                    <Grid Margin="0,15,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="测试写入值:" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"/>
+                        <ui:NumberBox Grid.Column="1" HorizontalAlignment="Left"
+                                      Value="{Binding TestRegisterValue, UpdateSourceTrigger=PropertyChanged}" 
+                                      SpinButtonPlacementMode="Inline"
+                                      SmallChange="1" LargeChange="10"/>
+                    </Grid>
+
+                    <ui:Button Content="写入默认寄存器地址" Command="{Binding TestWriteRegisterCommand}" 
+                               HorizontalAlignment="Right" Margin="0,15,0,5" Padding="10,5"/>
+                </StackPanel>
+            </ui:Card>
+            <ui:TextBlock Text="{Binding OperationStatusMessage}" Margin="0,10,0,0" FontWeight="SemiBold" MinHeight="20" TextWrapping="Wrap"/>
+        </StackPanel>
+    </Grid>
+</UserControl> 

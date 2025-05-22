@@ -2,7 +2,6 @@
 using System.Net.Http;
 using System.Windows;
 using System.Windows.Threading;
-using Common.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using XinBa.Services;
@@ -47,8 +46,6 @@ public partial class App
     /// </summary>
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
-        // 添加通用服务
-        containerRegistry.AddCommonServices();
 
         // 注册 HttpClientFactory
         var services = new ServiceCollection();

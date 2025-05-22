@@ -13,7 +13,6 @@ using Common.Models.Package;
 using Common.Services.Audio;
 using Common.Services.Settings;
 using Common.Services.Ui;
-using DeviceService.DataSourceDevices.Camera.Models.Camera.Enums;
 using History.Data;
 using History.Views.Dialogs;
 using Serilog;
@@ -37,21 +36,21 @@ namespace Sunnen.ViewModels.Windows;
 /// </summary>
 public class MainWindowViewModel : BindableBase, IDisposable
 {
-    private readonly IAudioService _audioService;
-    private readonly ICameraService _cameraService;
-    private readonly IDialogService _dialogService;
+    private readonly IAudioService _audioService = null!;
+    private readonly ICameraService _cameraService = null!;
+    private readonly IDialogService _dialogService = null!;
     private readonly SemaphoreSlim _measurementLock = new(1, 1);
-    private readonly IPackageHistoryDataService _packageHistoryDataService;
-    private readonly ISangNengService _sangNengService;
-    private readonly ISettingsService _settingsService;
-    private readonly Timer _timer;
-    private readonly RenJiaCameraService _volumeCamera;
-    private readonly IWeightService _weightService;
-    private readonly INotificationService _notificationService;
-    private ObservableCollection<SelectablePalletModel> _availablePallets;
+    private readonly IPackageHistoryDataService _packageHistoryDataService = null!;
+    private readonly ISangNengService _sangNengService = null!;
+    private readonly ISettingsService _settingsService = null!;
+    private readonly Timer _timer = null!;
+    private readonly RenJiaCameraService _volumeCamera = null!;
+    private readonly IWeightService _weightService = null!;
+    private readonly INotificationService _notificationService = null!;
+    private ObservableCollection<SelectablePalletModel> _availablePallets = null!;
     private string _currentBarcode = string.Empty;
     private ImageSource? _currentImage;
-    private PackageInfo _currentPackage;
+    private PackageInfo _currentPackage = null!;
     private ObservableCollection<DeviceStatus> _deviceStatuses = [];
     private bool _disposed;
     private bool _hasPlayedErrorSound;
@@ -83,6 +82,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly IDisposable? _palletSettingsChangedSubscription;
 
     private BitmapSource? _lastVolumeMeasuredImage; // 新增字段，用于暂存体积相机测量图像
+    private bool _isInitializingOverlayVisible = true; // 新增：控制初始化遮罩的可见性
 
     /// <summary>
     /// 构造函数
@@ -152,13 +152,13 @@ public class MainWindowViewModel : BindableBase, IDisposable
             var currentTimestamp = streamTuple.Timestamp;
 
             // 使用最新的原始重量数据更新实时UI显示 (保持UI显示部分的即时性)
-            Application.Current.Dispatcher.Invoke(() =>
+            /*Application.Current.Dispatcher.Invoke(() =>
             {
                 if (PackageInfoItems.Count <= 0) return; // 索引 0 是 "Weight"
                 var weightDisplayItem = PackageInfoItems[0];
                 // currentRawWeightKg 已经是 kg，直接格式化
                 weightDisplayItem.Value = $"{currentRawWeightKg:F3}";
-            });
+            });*/
 
             // 将当前原始重量(kg)添加到缓冲区
             _rawWeightBuffer.Add(currentRawWeightKg);
@@ -189,7 +189,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     _stableWeightQueue.Dequeue();
                 }
             }
-            Log.Debug("稳定的重量数据已添加到队列: {Weight}kg, 时间: {Timestamp}. 当前队列大小: {QueueSize}",
+            Log.Debug("Stable weight data added to queue: {Weight}kg, Time: {Timestamp}. Current queue size: {QueueSize}",
                 stableEntry.WeightKg, stableEntry.Timestamp, _stableWeightQueue.Count);
         });
 
@@ -364,6 +364,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
             return;
         }
 
+        // 播放离开提示音（leave.wav）
+        _ = _audioService.PlayPresetAsync(AudioType.Leave);
+
         var currentBarcodeToProcess = barcode;
 
         await Application.Current.Dispatcher.InvokeAsync(() =>
@@ -384,12 +387,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // --- 原始逻辑开始 ---
             // 加载体积相机配置
             var cameraOverallSettings = _settingsService.LoadSettings<CameraOverallSettings>();
-            Log.Information("等待处理包裹，延时: {TimeoutMs}毫秒", cameraOverallSettings.VolumeCamera.FusionTimeMs);
+            Log.Information("Waiting to process package, delay: {TimeoutMs}ms", cameraOverallSettings.VolumeCamera.FusionTimeMs);
 
             // 等待配置的时间 - 此延迟在UI更新调度之后发生
             await Task.Delay(cameraOverallSettings.VolumeCamera.FusionTimeMs);
 
-            Log.Information("延时结束，开始处理包裹: {Barcode}",
+            Log.Information("Delay ended, starting to process package: {Barcode}",
                 currentBarcodeToProcess); // 使用此实例的正确条码进行日志记录
 
             try // 内部 try 块，处理包裹逻辑并捕获特定异常
@@ -410,7 +413,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                 if (isDuplicate)
                 {
-                    Log.Warning("忽略相似条码：{Barcode}，上一条码：{LastBarcode}，间隔仅 {Interval}毫秒",
+                    Log.Warning("Ignoring similar barcode: {Barcode}, previous barcode: {LastBarcode}, interval only {Interval}ms",
                         currentBarcodeToProcess, _lastProcessedBarcode, (now - _lastProcessedTime).TotalMilliseconds);
                     return; // 注意：此处直接返回，将执行外层 finally 块释放锁
                 }
@@ -422,7 +425,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 // 重置错误音效播放标志
                 _hasPlayedErrorSound = false;
 
-                Log.Information("开始创建包裹对象: {Barcode}", currentBarcodeToProcess); // 使用一致的条码
+                Log.Information("Start creating package object: {Barcode}", currentBarcodeToProcess); // 使用一致的条码
 
                 // 创建新的包裹对象
                 _currentPackage = PackageInfo.Create();
@@ -439,7 +442,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         SelectedPallet.Width,
                         SelectedPallet.Height);
 
-                    Log.Information("设置包裹托盘信息：{PalletName}, 重量: {Weight}kg, 尺寸: {Length}×{Width}×{Height}cm",
+                    Log.Information("Set package pallet info: {PalletName}, Weight: {Weight}kg, Size: {Length}×{Width}×{Height}cm",
                         SelectedPallet.Name, SelectedPallet.Weight,
                         SelectedPallet.Length, SelectedPallet.Width, SelectedPallet.Height);
                 }
@@ -478,11 +481,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                             clone.Freeze();
                                             frozenClone = clone;
                                             CurrentImage = clone;
-                                            Log.Information("已在UI线程克隆并冻结图像");
+                                            Log.Information("Image cloned and frozen on UI thread");
                                         }
                                         catch (Exception uiEx)
                                         {
-                                            Log.Error(uiEx, "在UI线程克隆/冻结图像时出错");
+                                            Log.Error(uiEx, "Error cloning/freezing image on UI thread");
                                         }
                                     });
                                     if (frozenClone != null)
@@ -491,22 +494,22 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                         {
                                             capturedImage = frozenClone;
                                         }
-                                        Log.Information("已从图像流获取并处理一帧图像");
+                                        Log.Information("One frame of image obtained and processed from image stream");
                                     }
                                 }
                                 else
                                 {
-                                    Log.Warning("未能从图像流获取有效图像数据");
+                                    Log.Warning("Failed to get valid image data from image stream");
                                 }
                             }
                         }
                         catch (TimeoutException)
                         {
-                            Log.Warning("获取图像流超时");
+                            Log.Warning("Timeout getting image stream");
                         }
                         catch (Exception ex)
                         {
-                            Log.Error(ex, "从图像流获取图像失败");
+                            Log.Error(ex, "Failed to get image from image stream");
                         }
                     }
                     // 拍照结束
@@ -539,7 +542,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         if (bestStableWeight.HasValue)
                         {
                             weightInKg = bestStableWeight.Value.WeightKg;
-                            Log.Information("包裹 {Barcode}: 使用初始查找的稳定重量: {Weight}kg (时间戳: {Timestamp})", 
+                            Log.Information("Package {Barcode}: Using initially found stable weight: {Weight}kg (Timestamp: {Timestamp})", 
                                 _currentPackage.Barcode, // 使用当前包裹的条码
                                 bestStableWeight.Value.WeightKg, 
                                 bestStableWeight.Value.Timestamp);
@@ -547,7 +550,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         else
                         {
                             // 2. 等待逻辑: 如果初始查找失败，则等待一段时间查找 barcodeScanTime 之后的重量
-                            Log.Warning("包裹 {Barcode}: 初始查找在 {QueryWindow}s 内未能找到稳定重量 (处理时间: {ScanTime:HH:mm:ss.fff})。开始等待最多 {MaxWait}ms 查找后续重量。", 
+                            Log.Warning("Package {Barcode}: Initial search failed to find stable weight within {QueryWindow}s (Processing time: {ScanTime:HH:mm:ss.fff}). Starting to wait up to {MaxWait}ms for subsequent weight.", 
                                         _currentPackage.Barcode, stableWeightQueryWindowSeconds, barcodeScanTime, maxWaitTimeForWeightMs);
                             
                             var sw = Stopwatch.StartNew();
@@ -565,7 +568,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                 if (bestStableWeight.HasValue)
                                 {
                                     weightInKg = bestStableWeight.Value.WeightKg;
-                                    Log.Information("包裹 {Barcode}: 等待期间获取到稳定重量: {Weight}kg (时间戳: {Timestamp:HH:mm:ss.fff})",
+                                    Log.Information("Package {Barcode}: Stable weight obtained during wait: {Weight}kg (Timestamp: {Timestamp:HH:mm:ss.fff})",
                                                     _currentPackage.Barcode, weightInKg, bestStableWeight.Value.Timestamp);
                                     break;
                                 }
@@ -575,7 +578,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                             if (!bestStableWeight.HasValue)
                             {
-                                Log.Warning("包裹 {Barcode}: 在最大等待 {MaxWait}ms 后，仍未能获取到稳定重量。", _currentPackage.Barcode, maxWaitTimeForWeightMs);
+                                Log.Warning("Package {Barcode}: Still failed to obtain stable weight after maximum wait of {MaxWait}ms.", _currentPackage.Barcode, maxWaitTimeForWeightMs);
                             }
                         }
 
@@ -588,12 +591,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         }
                         else
                         {
-                            Log.Warning("包裹 {Barcode}: 最终未能获取包裹重量。", _currentPackage.Barcode);
+                            Log.Warning("Package {Barcode}: Ultimately failed to obtain package weight.", _currentPackage.Barcode);
                         }
                     }
                     catch (Exception ex)
                     {
-                        Log.Error(ex, "包裹 {Barcode}: 获取重量数据时发生错误。", _currentPackage.Barcode);
+                        Log.Error(ex, "Package {Barcode}: Error obtaining weight data.", _currentPackage.Barcode);
                     }
                     try
                     {
@@ -601,7 +604,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     }
                     catch (Exception ex)
                     {
-                        Log.Error(ex, "体积测量任务异常");
+                        Log.Error(ex, "Volume measurement task exception");
                     }
                     // 体积测量结束
                     try
@@ -609,7 +612,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         var volSettings = cameraOverallSettings.VolumeCamera;
                         if (volSettings.ImageSaveMode != DimensionImageSaveMode.None) // Check if any save flag is set
                         {
-                            Log.Information("根据配置获取尺寸刻度图，模式: {Mode}", volSettings.ImageSaveMode);
+                            Log.Information("Getting dimension scale images as per configuration, mode: {Mode}", volSettings.ImageSaveMode);
                             var dimensionImagesResult = await _volumeCamera.GetDimensionImagesAsync();
 
                             string barcodeSpecificPath = string.Empty; // 在外部声明以便后续使用
@@ -633,7 +636,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                     const string fileName = "Vertical.jpg"; 
                                     var filePath = Path.Combine(barcodeSpecificPath, fileName);
                                     await SaveDimensionImageAsync(dimensionImagesResult.VerticalViewImage, filePath);
-                                    Log.Information("已保存俯视图: {FilePath}", filePath);
+                                    Log.Information("Vertical view image saved: {FilePath}", filePath);
                                 }
 
                                 // 保存侧视图
@@ -643,13 +646,13 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                     const string fileName = "Side.jpg"; 
                                     var filePath = Path.Combine(barcodeSpecificPath, fileName);
                                     await SaveDimensionImageAsync(dimensionImagesResult.SideViewImage, filePath);
-                                    Log.Information("已保存侧视图: {FilePath}", filePath);
+                                    Log.Information("Side view image saved: {FilePath}", filePath);
                                 }
-                                Log.Debug("已释放尺寸刻度图 BitmapSource 引用 (通过 dimensionImagesResult 作用域)");
+                                Log.Debug("Released dimension scale image BitmapSource reference (via dimensionImagesResult scope)");
                             }
                             else if(volSettings.ImageSaveMode.HasFlag(DimensionImageSaveMode.Vertical) || volSettings.ImageSaveMode.HasFlag(DimensionImageSaveMode.Side))
                             {
-                                Log.Warning("获取尺寸刻度图失败: {Error}", dimensionImagesResult.ErrorMessage);
+                                Log.Warning("Failed to get dimension scale images: {Error}", dimensionImagesResult.ErrorMessage);
                             }
 
                             // 保存体积相机原图 (如果已配置)
@@ -665,7 +668,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                             frozenClone = _lastVolumeMeasuredImage.Clone(); 
                                             frozenClone.Freeze(); 
                                         }
-                                        catch(Exception uiEx) { Log.Error(uiEx, "克隆/冻结体积相机测量原图时出错"); }
+                                        catch(Exception uiEx) { Log.Error(uiEx, "Error cloning/freezing original volume camera image"); }
                                     });
 
                                     if (frozenClone != null)
@@ -681,23 +684,23 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                         const string fileName = "Original_Volume.jpg"; 
                                         var filePath = Path.Combine(barcodeSpecificPath, fileName);
                                         await SaveDimensionImageAsync(frozenClone, filePath); 
-                                        Log.Information("已保存体积相机测量原图: {FilePath}", filePath);
+                                        Log.Information("Original volume camera measurement image saved: {FilePath}", filePath);
                                     }
                                 }
                                 else
                                 {
-                                    Log.Warning("未能从测量过程中获取体积相机原图 (_lastVolumeMeasuredImage 为空)。");
+                                    Log.Warning("Failed to get original volume camera image from measurement process (_lastVolumeMeasuredImage is null).");
                                 }
                             }
                         }
                         else if (_currentPackage.Length <= 0) // 这个判断条件可能需要审视，原图保存可能不依赖于此
                         {
-                            Log.Debug("包裹长度未获取或为0，跳过获取尺寸刻度图和体积相机原图的保存。");
+                            Log.Debug("Package length not obtained or is 0, skipping saving of dimension scale images and original volume camera image.");
                         }
                     }
                     catch (Exception imgEx)
                     {
-                        Log.Error(imgEx, "获取或保存尺寸刻度图时发生错误");
+                        Log.Error(imgEx, "Error getting or saving dimension scale images");
                     }
                     // --- 尺寸刻度图保存逻辑结束 ---
 
@@ -838,14 +841,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 }
                 catch (Exception ex) // 捕获包裹处理过程中的其他通用异常
                 {
-                    Log.Error(ex, "处理扫码信息时发生未预期的错误: {Barcode}", currentBarcodeToProcess); // 使用一致的条码
+                    Log.Error(ex, "An unexpected error occurred while processing barcode information: {Barcode}", currentBarcodeToProcess); // 使用一致的条码
                     _currentPackage.SetStatus(PackageStatus.Error, "Processing Error"); // UI String
                     PlayErrorSound();
                 }
             }
             catch (Exception ex) // 捕获包裹处理过程中的其他通用异常
             {
-                Log.Error(ex, "处理扫码信息时发生未预期的错误: {Barcode}", currentBarcodeToProcess); // 使用一致的条码
+                Log.Error(ex, "An unexpected error occurred while processing barcode information: {Barcode}", currentBarcodeToProcess); // 使用一致的条码
 
                 _currentPackage.SetStatus(PackageStatus.Error, "Processing Error"); // UI String
                 PlayErrorSound();
@@ -886,7 +889,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // 使用信号量确保同一时间只有一个测量任务在进行
             if (!await _measurementLock.WaitAsync(TimeSpan.FromSeconds(1), cancellationToken))
             {
-                Log.Warning("上一次测量尚未完成，跳过本次测量");
+                Log.Warning("Previous measurement not yet complete, skipping this measurement");
                 PlayErrorSound();
                 return;
             }
@@ -970,7 +973,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                     if (cancellationToken.IsCancellationRequested)
                     {
-                        Log.Warning("保存图像操作被取消 (编码后)");
+                        Log.Warning("Save image operation cancelled (after encoding)");
                         return; // Exiting Task.Run lambda
                     }
 
@@ -989,7 +992,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                             $"Barcode: {package.Barcode}", 
                             $"Size: {package.Length:F1}cm × {package.Width:F1}cm × {package.Height:F1}cm",
                             $"Weight: {package.Weight:F3}kg", 
-                            $"Volume: {package.Volume / 1000.0:N0}cm³",
+                            $"Volume: {package.Volume / 1000.0:N0}cm³", // Corrected: Volume is in cm³, display as cm³
                             $"Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}"
                         };
 
@@ -1013,25 +1016,26 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         // 保存带水印的图像到最终路径
                         bitmap.Save(finalFilePath, System.Drawing.Imaging.ImageFormat.Jpeg); 
 
+                        // package.ImagePath = finalFilePath; // 访问性问题
+                        package.ImagePath = finalFilePath; // 设置图像路径
+                        Log.Information("Main camera image path {FilePath} attempted to set to package object", finalFilePath);
+
                         // 转换为Base64 (从最终文件读取或从内存中的bitmap，这里选择从内存)
                         using var ms = new MemoryStream();
                         bitmap.Save(ms, System.Drawing.Imaging.ImageFormat.Jpeg);
                         base64Image = Convert.ToBase64String(ms.ToArray());
                     }
 
-                    // package.ImagePath = finalFilePath; // 访问性问题
-                    Log.Information("已将主相机图像路径 {FilePath} 尝试设置到包裹对象", finalFilePath);
-
-                    Log.Debug("主相机图像已保存：{FilePath}", finalFilePath);
+                    Log.Debug("Main camera image saved: {FilePath}", finalFilePath);
                 }
                 catch (OperationCanceledException)
                 {
-                    Log.Warning("图像处理操作被取消 (SaveImageAsync Task.Run)");
+                    Log.Warning("Image processing operation cancelled (SaveImageAsync Task.Run)");
                     throw; 
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "图像处理过程中发生错误 (SaveImageAsync Task.Run): {Error}", ex.Message);
+                    Log.Error(ex, "Error during image processing (SaveImageAsync Task.Run): {Error}", ex.Message);
                     throw;
                 }
 
@@ -1040,12 +1044,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
         catch (OperationCanceledException)
         {
-            Log.Warning("保存图像任务被取消");
+            Log.Warning("Save image task cancelled");
             return null;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "保存图像时发生错误");
+            Log.Error(ex, "Error saving image");
             return null;
         }
     }
@@ -1056,6 +1060,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private void UpdateCurrentPackageUiDisplay(PackageStatus status, string customDisplay)
     {
         var items = PackageInfoItems.ToList();
+        
+        // 更新重量 (UI String from PackageInfoItem definition)
+        // _currentPackage.Weight ist bereits der Nettowert (ggf. ohne Palettengewicht)
+        items[0].Value = $"{_currentPackage.Weight:F3}"; // Index 0 ist "Weight"
+
         // 更新尺寸 (UI String from PackageInfoItem definition)
         items[1].Value = $"{_currentPackage.Length:F1}x{_currentPackage.Width:F1}x{_currentPackage.Height:F1}";
         // 更新时间 (UI String from PackageInfoItem definition)
@@ -1098,18 +1107,35 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            var volumeCameraStatus = DeviceStatuses.FirstOrDefault(x => x.Name == "Volume Camera"); // UI String
+            var volumeCameraStatus = DeviceStatuses.FirstOrDefault(x => x.Name == "Volume Camera"); // UI String (Keep as is, Name is an identifier)
             if (volumeCameraStatus == null) return;
 
             Application.Current.Dispatcher.Invoke(() =>
             {
-                volumeCameraStatus.Status = isConnected ? "Online" : "Offline"; // UI Strings
+                volumeCameraStatus.Status = isConnected ? "Online" : "Offline"; // UI Strings (Keep as is, Status is a state identifier)
                 volumeCameraStatus.StatusColor = isConnected ? "#4CAF50" : "#FFA500";
+
+                if (isConnected)
+                {
+                    if (IsInitializingOverlayVisible) // 仅当遮罩当前可见时才隐藏
+                    {
+                        IsInitializingOverlayVisible = false;
+                        Log.Information("Volume camera connected, hiding initialization overlay.");
+                    }
+                }
+                else
+                {
+                    // 如果遮罩已隐藏，这意味着相机已连接然后断开连接。
+                    // 因此，我们显示一个Growl通知。
+                    // 如果遮罩仍然可见，则表示初始连接尝试失败。
+                    // 遮罩仍然存在，并且还会显示Growl。
+                    _notificationService.ShowWarning("Volume camera connection failed or lost.");
+                }
             });
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "更新体积相机状态时发生错误");
+            Log.Error(ex, "Error updating volume camera status");
         }
     }
 
@@ -1117,18 +1143,22 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            var cameraStatus = DeviceStatuses.FirstOrDefault(x => x.Name == "Photo Camera"); // UI String
+            var cameraStatus = DeviceStatuses.FirstOrDefault(x => x.Name == "Photo Camera"); // UI String (Keep as is, Name is an identifier)
             if (cameraStatus == null) return;
 
             Application.Current.Dispatcher.Invoke(() =>
             {
-                cameraStatus.Status = isConnected ? "Online" : "Offline"; // UI Strings
+                cameraStatus.Status = isConnected ? "Online" : "Offline"; // UI Strings (Keep as is, Status is a state identifier)
                 cameraStatus.StatusColor = isConnected ? "#4CAF50" : "#FFA500";
+                 if (!isConnected)
+                {
+                    _notificationService.ShowWarning("Photo camera connection failed or lost.");
+                }
             });
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "更新拍照相机状态时发生错误");
+            Log.Error(ex, "Error updating photo camera status");
         }
     }
 
@@ -1136,13 +1166,17 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            var weightScaleStatus = DeviceStatuses.FirstOrDefault(x => x.Name == "Weight Scale"); // UI String
+            var weightScaleStatus = DeviceStatuses.FirstOrDefault(x => x.Name == "Weight Scale"); // UI String (Keep as is, Name is an identifier)
             if (weightScaleStatus == null) return;
 
             Application.Current.Dispatcher.Invoke(() =>
             {
-                weightScaleStatus.Status = isConnected ? "Online" : "Offline"; // UI Strings
+                weightScaleStatus.Status = isConnected ? "Online" : "Offline"; // UI Strings (Keep as is, Status is a state identifier)
                 weightScaleStatus.StatusColor = isConnected ? "#4CAF50" : "#FFA500";
+                if (!isConnected)
+                {
+                    _notificationService.ShowWarning("Weight scale connection failed or lost.");
+                }
             });
 
             // 如果断开连接，清除最新的重量数据和队列
@@ -1152,11 +1186,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 _stableWeightQueue.Clear();
             }
-            Log.Information("重量称已断开连接，清除原始重量缓冲和稳定重量队列。");
+            Log.Information("Weight scale disconnected, clearing raw weight buffer and stable weight queue.");
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "更新重量称状态时发生错误");
+            Log.Error(ex, "Error updating weight scale status");
         }
     }
 
@@ -1214,12 +1248,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
         private set => SetProperty(ref _systemStatus, value);
     }
 
-    public ICommand OpenSettingsCommand { get; }
+    public ICommand OpenSettingsCommand { get; } = null!;
 
     /// <summary>
     /// 打开历史记录窗口命令
     /// </summary>
-    public ICommand OpenHistoryWindowCommand { get; }
+    public ICommand OpenHistoryWindowCommand { get; } = null!;
 
     public ObservableCollection<SelectablePalletModel> AvailablePallets
     {
@@ -1233,7 +1267,13 @@ public class MainWindowViewModel : BindableBase, IDisposable
         set => SetProperty(ref _selectedPallet, value);
     }
 
-    public DelegateCommand<SelectablePalletModel> SelectPalletCommand { get; }
+    public DelegateCommand<SelectablePalletModel> SelectPalletCommand { get; } = null!;
+
+    public bool IsInitializingOverlayVisible // 新增属性
+    {
+        get => _isInitializingOverlayVisible;
+        set => SetProperty(ref _isInitializingOverlayVisible, value);
+    }
 
     #endregion
 
@@ -1289,14 +1329,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
             var result = _volumeCamera.SetPalletHeight(palletHeightMm);
             if (result != 0)
             {
-                Log.Warning("设置托盘高度失败：代码 {Result}", result);
+                Log.Warning("Failed to set pallet height: Code {Result}", result);
                 // Notification strings are UI and kept in English
                 _notificationService.ShowWarning(
                     $"Failed to set pallet height for '{pallet.Name}' (Error code: {result}). Please try selecting the pallet again.");
             }
             else
             {
-                Log.Information("成功设置托盘高度：{Height}mm", palletHeightMm);
+                Log.Information("Successfully set pallet height: {Height}mm", palletHeightMm);
                 _notificationService.ShowSuccess(
                     $"Pallet '{pallet.Name}' with height {pallet.Height:F1}cm selected successfully");
             }
@@ -1305,11 +1345,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
             var mainWindowSettings = _settingsService.LoadSettings<MainWindowSettings>();
             mainWindowSettings.LastSelectedPalletName = pallet.Name;
             _settingsService.SaveSettings(mainWindowSettings);
-            Log.Information("已保存用户选择的托盘：{PalletName}", pallet.Name);
+            Log.Information("User selected pallet saved: {PalletName}", pallet.Name);
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "选择或设置托盘高度时发生错误");
+            Log.Error(ex, "Error selecting or setting pallet height");
             _notificationService.ShowError(
                 $"Error selecting/setting pallet height: {ex.Message}. Please try selecting the pallet again.");
         }
@@ -1358,17 +1398,17 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     var result = _volumeCamera.SetPalletHeight(palletHeightMm);
                     if (result != 0)
                     {
-                        Log.Warning("启动时设置上次托盘高度失败：代码 {Result}", result);
+                        Log.Warning("Failed to set last pallet height on startup: Code {Result}", result);
                         // 此处可以选择是否通知用户，或者只记录日志
                     }
                     else
                     {
-                        Log.Information("启动时成功设置上次托盘高度：{Height}mm", palletHeightMm);
+                        Log.Information("Successfully set last pallet height on startup: {Height}mm", palletHeightMm);
                     }
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "启动时设置上次托盘高度时发生错误");
+                    Log.Error(ex, "Error setting last pallet height on startup");
                 }
             }
             else
@@ -1376,12 +1416,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 // 如果找不到上次保存的托盘（可能已被删除），则默认选择空托盘
                 emptyPallet.IsSelected = true;
                 SelectedPallet = emptyPallet;
-                Log.Warning("上次保存的托盘 '{LastPalletName}' 未找到，已默认选择空托盘", lastSelectedPalletName);
+                Log.Warning("Last saved pallet '{LastPalletName}' not found, empty pallet selected by default", lastSelectedPalletName);
             }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "加载托盘配置或应用上次选择时失败");
+            Log.Error(ex, "Failed to load pallet configuration or apply last selection");
             // 出现异常时，确保默认选择空托盘
             var emptyPallet = AvailablePallets.FirstOrDefault(p => p.Name == "noPallet"); // Key/identifier
             if (emptyPallet != null)
@@ -1395,7 +1435,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     // --- 新增：检查并更新初始设备状态的方法 ---
     private void UpdateInitialDeviceStatuses()
     {
-        Log.Debug("检查并更新初始设备状态...");
+        Log.Debug("Checking and updating initial device statuses...");
         try
         {
             // 更新拍照相机状态
@@ -1407,11 +1447,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // 更新重量称状态
             OnWeightScaleConnectionChanged(_weightService.GetType().Name, _weightService.IsConnected);
 
-            Log.Debug("初始设备状态更新完成。");
+            Log.Debug("Initial device status update complete.");
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "更新初始设备状态时发生错误");
+            Log.Error(ex, "Error updating initial device statuses");
         }
     }
     // --- 新增结束 ---
@@ -1421,24 +1461,15 @@ public class MainWindowViewModel : BindableBase, IDisposable
     /// </summary>
     /// <param name="image">要保存的 BitmapSource。</param>
     /// <param name="filePath">图像将保存到的完整路径。</param>
-    /// <param name="format">所需的图像格式（默认为 Jpeg）。</param>
     /// <returns>表示异步操作的任务。</returns>
-    private static async Task SaveDimensionImageAsync(BitmapSource image, string filePath,
-        ImageFormat format = ImageFormat.Jpeg)
+    private static async Task SaveDimensionImageAsync(BitmapSource image, string filePath)
     {
         try
         {
             await Task.Run(() =>
             {
-                BitmapEncoder encoder = format switch
-                {
-                    ImageFormat.Jpeg => new JpegBitmapEncoder { QualityLevel = 90 },
-                    ImageFormat.Png => new PngBitmapEncoder(),
-                    ImageFormat.Bmp => new BmpBitmapEncoder(),
-                    ImageFormat.Tiff => new TiffBitmapEncoder(),
-                    _ => new JpegBitmapEncoder { QualityLevel = 90 }
-                };
-
+                // 默认使用 Jpeg 格式，质量设置为 90
+                var encoder = new JpegBitmapEncoder { QualityLevel = 90 };
                 encoder.Frames.Add(BitmapFrame.Create(image));
 
                 try
@@ -1465,7 +1496,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    private HistoryViewConfiguration CreateSangNengHistoryViewConfiguration()
+    private static HistoryViewConfiguration CreateSangNengHistoryViewConfiguration()
     {
         return new HistoryViewConfiguration
         {

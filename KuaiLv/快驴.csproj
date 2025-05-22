@@ -12,9 +12,9 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Common\基础服务.csproj" />
+        <ProjectReference Include="..\Common\基础模块.csproj" />
         <ProjectReference Include="..\DeviceService\设备服务.csproj" />
-        <ProjectReference Include="..\SharedUI\UI组件.csproj" />
+        <ProjectReference Include="..\SharedUI\公共模块.csproj" />
     </ItemGroup>
 
     <ItemGroup>

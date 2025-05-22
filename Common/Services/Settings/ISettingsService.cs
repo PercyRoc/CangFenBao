@@ -8,6 +8,16 @@ namespace Common.Services.Settings;
 public interface ISettingsService : IDisposable
 {
     /// <summary>
+    ///     等待设置服务初始化完成
+    /// </summary>
+    Task WaitForInitializationAsync();
+
+    /// <summary>
+    ///     设置服务初始化完成事件
+    /// </summary>
+    event EventHandler? InitializationCompleted;
+
+    /// <summary>
     ///     加载设置
     /// </summary>
     /// <typeparam name="T">设置类型</typeparam>

@@ -7,14 +7,17 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
         <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
-        <AssemblyName>仓分宝</AssemblyName>
+        <AssemblyName>仓分宝-中旭云仓</AssemblyName>
         <RootNamespace>FuzhouPolicyForce</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Common\基础服务.csproj"/>
+        <ProjectReference Include="..\BalanceSorting\摆轮分拣.csproj" />
+        <ProjectReference Include="..\Camera\相机模块.csproj" />
+        <ProjectReference Include="..\Common\基础模块.csproj" />
         <ProjectReference Include="..\DeviceService\设备服务.csproj"/>
-        <ProjectReference Include="..\SharedUI\UI组件.csproj"/>
+        <ProjectReference Include="..\History\历史模块.csproj" />
+        <ProjectReference Include="..\SharedUI\公共模块.csproj" />
         <ProjectReference Include="..\SortingServices\分拣服务.csproj"/>
     </ItemGroup>
 

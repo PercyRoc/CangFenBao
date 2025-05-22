@@ -272,8 +272,10 @@ public class RookieApiService(HttpClient httpClient, ISettingsService settingsSe
     /// <returns>图片URL或null</returns>
     public async Task<string?> UploadImageAsync(string filePath)
     {
+        // 中文注释：上传图片到OSS服务，返回图片URL或null
         var settings = LoadSettings();
-        var uploadUrl = settings.ImageUploadUrl;
+        // 拼接上传URL
+        var uploadUrl = settings.ImageUploadUrl?.TrimEnd('/') + "/receive/outer/dws/upload";
         var signId = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
         var sign = TraceSignUtil.Md5Sign(signId, TraceSignUtil.DwsSignSecretKey);
 
@@ -297,9 +299,11 @@ public class RookieApiService(HttpClient httpClient, ISettingsService settingsSe
         {
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
-            if (root.TryGetProperty("success", out var successProp) && successProp.GetBoolean() &&
-                root.TryGetProperty("data", out var dataProp) &&
-                dataProp.TryGetProperty("url", out var urlProp))
+            // 只判断data.errCode=="0"且有url即可，不依赖success字段
+            if (root.TryGetProperty("data", out var dataProp)
+                && dataProp.TryGetProperty("errCode", out var errCodeProp)
+                && errCodeProp.GetString() == "0"
+                && dataProp.TryGetProperty("url", out var urlProp))
             {
                 return urlProp.GetString();
             }

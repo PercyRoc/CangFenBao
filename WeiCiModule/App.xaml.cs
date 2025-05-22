@@ -7,14 +7,13 @@ using WeiCiModule.Views;
 using Serilog;
 using Common.Services.Settings;
 using SortingServices.Modules.Models;
-using Common.Extensions;
 using SharedUI.ViewModels.Settings;
 using SharedUI.Views.Settings;
 using Microsoft.Extensions.Configuration;
 using System.IO;
+using Camera.Services.Implementations.TCP;
 using WPFLocalizeExtension.Engine;
 using WPFLocalizeExtension.Providers;
-using Camera;
 using DeviceService.DataSourceDevices.Camera.TCP;
 
 namespace WeiCiModule;
@@ -96,7 +95,7 @@ public partial class App
 
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
-        containerRegistry.AddCommonServices();
+        // containerRegistry.AddCommonServices();
         containerRegistry.RegisterSingleton<TcpCameraService>();
         containerRegistry.RegisterSingleton<SettingsDialogViewModel>();
         containerRegistry.RegisterSingleton<ChuteSettingsViewModel>();

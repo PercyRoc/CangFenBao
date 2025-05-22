@@ -355,15 +355,17 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         Log.Warning("尝试 {Attempt}: 图片目录 {Directory} 不存在。", attempt, imageDirectory);
                     }
 
-                    // 如果未找到图片且未达到最大尝试次数，则等待后重试
-                    if (photoData.Count == 0 && attempt < maxAttempts)
+                    switch (photoData.Count)
                     {
-                        Log.Debug("尝试 {Attempt}: 未找到图片，将在 {Delay}ms 后重试...", attempt, delayBetweenAttemptsMs);
-                        await Task.Delay(delayBetweenAttemptsMs);
-                    }
-                    else if (photoData.Count == 0 && attempt == maxAttempts) // 最后一次尝试仍未找到
-                    {
-                        Log.Warning("已达到最大尝试次数 ({MaxAttempts})，仍未找到 Guid 为 {Guid} 的图片。", maxAttempts, package.Guid);
+                        // 如果未找到图片且未达到最大尝试次数，则等待后重试
+                        case 0 when attempt < maxAttempts:
+                            Log.Debug("尝试 {Attempt}: 未找到图片，将在 {Delay}ms 后重试...", attempt, delayBetweenAttemptsMs);
+                            await Task.Delay(delayBetweenAttemptsMs);
+                            break;
+                        // 最后一次尝试仍未找到
+                        case 0 when attempt == maxAttempts:
+                            Log.Warning("已达到最大尝试次数 ({MaxAttempts})，仍未找到 Guid 为 {Guid} 的图片。", maxAttempts, package.Guid);
+                            break;
                     }
                 }
 

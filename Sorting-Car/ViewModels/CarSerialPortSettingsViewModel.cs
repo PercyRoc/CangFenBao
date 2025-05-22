@@ -3,22 +3,18 @@ using Sorting_Car.Models;
 using System.IO.Ports;
 using System.Collections.ObjectModel;
 using Serilog;
-using Sorting_Car.Resources;
 
 namespace Sorting_Car.ViewModels
 {
     public class CarSerialPortSettingsViewModel : BindableBase
     {
         private readonly ISettingsService _settingsService;
-        private CarSerialPortSettings _settings;
-
-        public string Title => Strings.CarSerialPortSettings_Title;
-        public event Action<IDialogResult> RequestClose;
+        private readonly CarSerialPortSettings _settings = null!;
 
         public CarSerialPortSettings Settings
         {
             get => _settings;
-            set => SetProperty(ref _settings, value);
+            private init => SetProperty(ref _settings, value);
         }
 
         public ObservableCollection<string> AvailablePortNames { get; }
@@ -29,7 +25,6 @@ namespace Sorting_Car.ViewModels
 
 
         public DelegateCommand SaveCommand { get; }
-        public DelegateCommand CloseCommand { get; } // For closing dialog
 
 
         public CarSerialPortSettingsViewModel(ISettingsService settingsService)
@@ -70,7 +65,6 @@ namespace Sorting_Car.ViewModels
             AvailableDataBits = [7, 8];
 
             SaveCommand = new DelegateCommand(PerformSaveSettings);
-            CloseCommand = new DelegateCommand(PerformClose);
         }
 
         private void PerformSaveSettings()
@@ -84,15 +78,10 @@ namespace Sorting_Car.ViewModels
             catch (Exception ex)
             {
                 Log.Error(ex, "Failed to save CarSerialPortSettings");
-                // Optionally, inform the user via a dialog or message
+                // Optionally, inform the user via a dialog or message,
                 // For example, if IDialogService is available:
                 // _dialogService.ShowNotification("Failed to save settings: " + ex.Message);
             }
-        }
-        
-        private void PerformClose()
-        {
-            RequestClose?.Invoke(new DialogResult(ButtonResult.Cancel));
         }
     }
 } 

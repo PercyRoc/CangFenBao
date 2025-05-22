@@ -7,6 +7,10 @@
              xmlns:viewModels="clr-namespace:History.ViewModels.Dialogs"
              xmlns:hc="https://handyorg.github.io/handycontrol"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:lex="https://github.com/XAMLMarkupExtensions/WPFLocalizationExtension"
+             lex:LocalizeDictionary.DesignCulture="zh-CN"
+             lex:ResxLocalizationProvider.DefaultAssembly="History"
+             lex:ResxLocalizationProvider.DefaultDictionary="History.Resources.HistoryStrings"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance viewModels:PackageHistoryDialogViewModel, IsDesignTimeCreatable=True}"
              prism:ViewModelLocator.AutoWireViewModel="True">
@@ -25,20 +29,21 @@
         </Grid.RowDefinitions>
 
         <!-- 标题 -->
-        <TextBlock Grid.Row="0" Text="Package History Query" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,10"/>
+        <TextBlock Grid.Row="0" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,10"
+                   Text="{lex:Loc PackageHistory_Dialog_Title}"/>
         
         <!-- 过滤区域 -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,5,0,10" VerticalAlignment="Center">
-            <TextBlock Text="Start Date:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+            <TextBlock Text="{lex:Loc PackageHistory_Label_StartDate}" VerticalAlignment="Center" Margin="0,0,5,0"/>
             <DatePicker SelectedDate="{Binding StartDate}" Width="150" VerticalAlignment="Center" Margin="0,0,10,0"/>
 
-            <TextBlock Text="End Date:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+            <TextBlock Text="{lex:Loc PackageHistory_Label_EndDate}" VerticalAlignment="Center" Margin="0,0,5,0"/>
             <DatePicker SelectedDate="{Binding EndDate}" Width="150" VerticalAlignment="Center" Margin="0,0,10,0"/>
 
-            <TextBlock Text="Barcode:" VerticalAlignment="Center" Margin="10,0,5,0"/>
-            <TextBox Text="{Binding BarcodeFilter, UpdateSourceTrigger=PropertyChanged}" Width="200" VerticalAlignment="Center" Margin="0,0,10,0" hc:InfoElement.Placeholder="Enter barcode to filter"/>
+            <TextBlock Text="{lex:Loc PackageHistory_Label_Barcode}" VerticalAlignment="Center" Margin="10,0,5,0"/>
+            <TextBox Text="{Binding BarcodeFilter, UpdateSourceTrigger=PropertyChanged}" Width="200" VerticalAlignment="Center" Margin="0,0,10,0" hc:InfoElement.Placeholder="{lex:Loc PackageHistory_Placeholder_BarcodeFilter}"/>
 
-            <Button Content="Search" Command="{Binding SearchCommand}" Padding="10,5" VerticalAlignment="Center" MinWidth="80"/>
+            <Button Content="{lex:Loc PackageHistory_Button_Search}" Command="{Binding SearchCommand}" Padding="10,5" VerticalAlignment="Center" MinWidth="80"/>
         </StackPanel>
 
         <!-- 数据表格 -->
@@ -58,10 +63,10 @@
                 </Style>
             </ui:DataGrid.RowStyle>
             <ui:DataGrid.Columns>
-                <DataGridTextColumn Header="No." Binding="{Binding Index}" Width="Auto" Visibility="{Binding IsIndexColVisible, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" Width="Auto" Visibility="{Binding IsBarcodeColVisible, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                <DataGridTextColumn Header="Create Time" Binding="{Binding CreateTime, StringFormat=\'yyyy-MM-dd HH:mm:ss\'}" Width="Auto" Visibility="{Binding IsCreateTimeColVisible, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                <DataGridTextColumn Header="Status" Binding="{Binding StatusDisplay}" Width="Auto" Visibility="{Binding IsStatusDisplayColVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <DataGridTextColumn Header="{lex:Loc PackageHistory_DataGrid_Header_Index}" Binding="{Binding Index}" Width="Auto" Visibility="{Binding DataContext.IsIndexColVisible, RelativeSource={RelativeSource AncestorType=ui:DataGrid}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <DataGridTextColumn Header="{lex:Loc PackageHistory_DataGrid_Header_Barcode}" Binding="{Binding Barcode}" Width="Auto" Visibility="{Binding DataContext.IsBarcodeColVisible, RelativeSource={RelativeSource AncestorType=ui:DataGrid}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <DataGridTextColumn Header="{lex:Loc PackageHistory_DataGrid_Header_CreateTime}" Binding="{Binding CreateTime, StringFormat='yyyy-MM-dd HH:mm:ss'}" Width="Auto" Visibility="{Binding DataContext.IsCreateTimeColVisible, RelativeSource={RelativeSource AncestorType=ui:DataGrid}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <DataGridTextColumn Header="{lex:Loc PackageHistory_DataGrid_Header_Status}" Binding="{Binding StatusDisplay}" Width="Auto" Visibility="{Binding DataContext.IsStatusDisplayColVisible, RelativeSource={RelativeSource AncestorType=ui:DataGrid}, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <DataGridTextColumn.CellStyle>
                         <Style TargetType="DataGridCell">
                             <Setter Property="Foreground" Value="White" />
@@ -75,8 +80,6 @@
                                 <DataTrigger Binding="{Binding Status}" Value="Error">
                                     <Setter Property="Background" Value="Red" />
                                 </DataTrigger>
-                                <!-- Add other statuses here if they need specific colors or fall into a default -->
-                                <!-- Default for other non-Success/Failed/Error (if any) -->
                                 <DataTrigger Binding="{Binding Status}" Value="Unknown">
                                      <Setter Property="Background" Value="OrangeRed" />
                                 </DataTrigger>
@@ -87,50 +90,24 @@
                         </Style>
                     </DataGridTextColumn.CellStyle>
                 </DataGridTextColumn>
-                <DataGridTextColumn Header="Weight(kg)" Binding="{Binding Weight, StringFormat={}{0:F2}}" Width="Auto" Visibility="{Binding IsWeightColVisible, Converter={StaticResource BooleanToVisibilityConverter}}"></DataGridTextColumn>
-                <DataGridTextColumn Header="Chute No." Binding="{Binding ChuteNumber}" Width="Auto" Visibility="{Binding IsChuteNumberColVisible, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                <DataGridTextColumn Header="Length(cm)" Binding="{Binding Length, StringFormat={}{0:F1}}" Width="Auto" Visibility="{Binding IsLengthColVisible, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                <DataGridTextColumn Header="Width(cm)" Binding="{Binding Width, StringFormat={}{0:F1}}" Width="Auto" Visibility="{Binding IsWidthColVisible, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                <DataGridTextColumn Header="Height(cm)" Binding="{Binding Height, StringFormat={}{0:F1}}" Width="Auto" Visibility="{Binding IsHeightColVisible, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                <DataGridTextColumn Header="Pallet Name" Binding="{Binding PalletName}" Width="Auto" Visibility="{Binding IsPalletNameColVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
-                    <DataGridTextColumn.CellStyle>
-                        <Style TargetType="DataGridCell">
-                            <Setter Property="ToolTip">
-                                <Setter.Value>
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding PalletName, StringFormat=Pallet: {0}}" FontWeight="Bold" Margin="0,0,0,5" />
-                                        <TextBlock Text="{Binding PalletWeight, StringFormat=Weight: {0:F3} kg}" />
-                                        <TextBlock>
-                                            <TextBlock.Text>
-                                                <MultiBinding StringFormat="Size: {0:F1}×{1:F1}×{2:F1} cm">
-                                                    <Binding Path="PalletLength" />
-                                                    <Binding Path="PalletWidth" />
-                                                    <Binding Path="PalletHeight" />
-                                                </MultiBinding>
-                                            </TextBlock.Text>
-                                        </TextBlock>
-                                    </StackPanel>
-                                </Setter.Value>
-                            </Setter>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding PalletName}" Value="">
-                                    <Setter Property="ToolTip" Value="{x:Null}" /> <!-- No tooltip for empty pallet name -->
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding PalletName}" Value="{x:Null}">
-                                    <Setter Property="ToolTip" Value="{x:Null}" /> <!-- No tooltip for null pallet name -->
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </DataGridTextColumn.CellStyle>
+                <DataGridTextColumn Header="{lex:Loc PackageHistory_DataGrid_Header_Weight}" Binding="{Binding Weight, StringFormat={}{0:F2}}" Width="Auto" Visibility="{Binding DataContext.IsWeightColVisible, RelativeSource={RelativeSource AncestorType=ui:DataGrid}, Converter={StaticResource BooleanToVisibilityConverter}}"></DataGridTextColumn>
+                <DataGridTextColumn Header="{lex:Loc PackageHistory_DataGrid_Header_Chute}" Binding="{Binding ChuteNumber}" Width="Auto" Visibility="{Binding DataContext.IsChuteNumberColVisible, RelativeSource={RelativeSource AncestorType=ui:DataGrid}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <DataGridTextColumn Header="{lex:Loc PackageHistory_DataGrid_Header_Length}" Binding="{Binding Length, StringFormat={}{0:F1}}" Width="Auto" Visibility="{Binding DataContext.IsLengthColVisible, RelativeSource={RelativeSource AncestorType=ui:DataGrid}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <DataGridTextColumn Header="{lex:Loc PackageHistory_DataGrid_Header_Width}" Binding="{Binding Width, StringFormat={}{0:F1}}" Width="Auto" Visibility="{Binding DataContext.IsWidthColVisible, RelativeSource={RelativeSource AncestorType=ui:DataGrid}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <DataGridTextColumn Header="{lex:Loc PackageHistory_DataGrid_Header_Height}" Binding="{Binding Height, StringFormat={}{0:F1}}" Width="Auto" Visibility="{Binding DataContext.IsHeightColVisible, RelativeSource={RelativeSource AncestorType=ui:DataGrid}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <DataGridTextColumn Header="{lex:Loc PackageHistory_DataGrid_Header_PalletName}" Binding="{Binding PalletName}" Width="Auto" Visibility="{Binding DataContext.IsPalletNameColVisible, RelativeSource={RelativeSource AncestorType=ui:DataGrid}, Converter={StaticResource BooleanToVisibilityConverter}}">
                 </DataGridTextColumn>
-                <DataGridTextColumn Header="Pallet Weight(kg)" Binding="{Binding PalletWeight, StringFormat={}{0:F2}}" Width="Auto" Visibility="{Binding IsPalletWeightColVisible, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                <DataGridTemplateColumn Header="Image" Width="Auto" Visibility="{Binding IsImageColVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <DataGridTextColumn Header="{lex:Loc PackageHistory_DataGrid_Header_PalletWeight}" Binding="{Binding PalletWeight, StringFormat={}{0:F2}}" Width="Auto" Visibility="{Binding DataContext.IsPalletWeightColVisible, RelativeSource={RelativeSource AncestorType=ui:DataGrid}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <DataGridTemplateColumn Header="{lex:Loc PackageHistory_DataGrid_Header_Image}" Width="Auto" Visibility="{Binding DataContext.IsImageColVisible, RelativeSource={RelativeSource AncestorType=ui:DataGrid}, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <Button Content="View"
-                                    Command="{Binding DataContext.ViewImageCommand, RelativeSource={RelativeSource AncestorType=ui:DataGrid}}"
+                            <Button Command="{Binding DataContext.ViewImageCommand, RelativeSource={RelativeSource AncestorType=ui:DataGrid}}"
                                     CommandParameter="{Binding}"
-                                    Padding="5,2"/>
+                                    ToolTip="{lex:Loc PackageHistory_ToolTip_ViewImage}"
+                                    Background="Transparent"
+                                    BorderThickness="0">
+                                <ui:SymbolIcon Symbol="Image24" Filled="False" FontSize="16" Foreground="Gray"/>
+                            </Button>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
@@ -141,27 +118,27 @@
         <Border Grid.Row="2" Background="#7FDDDDDD" Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}" CornerRadius="5">
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                 <ProgressBar IsIndeterminate="True" Width="100" Height="15" Margin="0,0,0,5"/>
-                <TextBlock Text="Loading data..." FontSize="14"/>
+                <TextBlock Text="{lex:Loc PackageHistory_Text_Loading}" FontSize="14"/>
             </StackPanel>
         </Border>
 
         <!-- Paging Controls -->
         <DockPanel Grid.Row="3" Margin="0,5,0,5" LastChildFill="False" Visibility="Visible">
-            <Button DockPanel.Dock="Left" Command="{Binding PreviousPageCommand}" Content="Previous" Style="{StaticResource ButtonDefault}" Margin="0,0,5,0"/>
-            <Button DockPanel.Dock="Left" Command="{Binding NextPageCommand}" Content="Next" Style="{StaticResource ButtonDefault}" Margin="0,0,10,0"/>
+            <Button DockPanel.Dock="Left" Command="{Binding PreviousPageCommand}" Content="{lex:Loc PackageHistory_Button_PreviousPage}" Style="{StaticResource ButtonDefault}" Margin="0,0,5,0"/>
+            <Button DockPanel.Dock="Left" Command="{Binding NextPageCommand}" Content="{lex:Loc PackageHistory_Button_NextPage}" Style="{StaticResource ButtonDefault}" Margin="0,0,10,0"/>
             
             <TextBlock DockPanel.Dock="Left" Text="{Binding PagingInfo}" VerticalAlignment="Center" Margin="0,0,10,0"/>
             
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                <TextBlock Text="Page Size:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                <TextBlock Text="{lex:Loc PackageHistory_Label_PageSize}" VerticalAlignment="Center" Margin="0,0,5,0"/>
                 <hc:NumericUpDown Value="{Binding PageSize, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Minimum="10" Maximum="1000" Increment="10" Width="80"/>
             </StackPanel>
         </DockPanel>
 
         <!-- 底部按钮 -->
         <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
-            <Button Content="Export to Excel" Command="{Binding ExportToExcelCommand}" Padding="10,5" MinWidth="100" Margin="0,0,10,0"/>
-            <Button Content="Close" Command="{Binding CloseDialogCommand}" Padding="10,5" MinWidth="80"/>
+            <Button Content="{lex:Loc PackageHistory_Button_ExportExcel}" Command="{Binding ExportToExcelCommand}" Padding="10,5" MinWidth="100" Margin="0,0,10,0"/>
+            <Button Content="{lex:Loc PackageHistory_Button_Close}" Command="{Binding CloseDialogCommand}" Padding="10,5" MinWidth="80"/>
         </StackPanel>
 
     </Grid>

@@ -295,13 +295,20 @@ public class ApiService : IApiService
         {
             Log.Information("尝试提交商品尺寸: GoodsSticker={GoodsSticker}", goodsSticker);
 
+            // 将尺寸参数转换为整数（四舍五入），并以字符串上传
+            // 中文注释：确保上传的尺寸为整数格式
+            int intHeight = (int)Math.Round(double.TryParse(height, out var h) ? h : 0);
+            int intLength = (int)Math.Round(double.TryParse(length, out var l) ? l : 0);
+            int intWidth = (int)Math.Round(double.TryParse(width, out var w) ? w : 0);
+            int intWeight = (int)Math.Round(double.TryParse(weight, out var wt) ? wt : 0);
+
             using var formData = new MultipartFormDataContent();
-            // 添加基本数据
+            // 添加基本数据（以整数字符串上传）
             formData.Add(new StringContent(goodsSticker), "goods_sticker");
-            formData.Add(new StringContent(height), "height");
-            formData.Add(new StringContent(length), "length");
-            formData.Add(new StringContent(width), "width");
-            formData.Add(new StringContent(weight), "weight");
+            formData.Add(new StringContent(intHeight.ToString()), "height");
+            formData.Add(new StringContent(intLength.ToString()), "length");
+            formData.Add(new StringContent(intWidth.ToString()), "width");
+            formData.Add(new StringContent(intWeight.ToString()), "weight");
 
             // 添加图片数据
             if (photoData != null)

@@ -11,7 +11,6 @@ using Camera.Services.Implementations.Hikvision.Security;
 using Camera.Services.Implementations.Hikvision.Volume;
 using Common.Models.Package;
 using Common.Services.Settings;
-using Rookie.Models.Api;
 using Rookie.Services;
 using Serilog;
 using SharedUI.Models;
@@ -63,8 +62,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly List<double> _rawWeightBuffer = [];
     // StabilityCheckSamples, StabilityThresholdGrams 将从 LocalWeightSettings 加载
     // IntegrationTimeMs (from LocalWeightSettings) 将用作队列查询窗口
-
-    private (float Length, float Width, float Height, DateTime Timestamp)? _lastReceivedValidVolume;
 
     private readonly HikvisionSecurityCameraService _securityCameraService;
     private readonly HikvisionVolumeCameraService _volumeCameraService;
@@ -139,43 +136,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
                             Log.Error(ex, "从工业相机实时流更新UI线程上的EventPackageImage时出错。");
                         }
                     });
-                }
+                }   
                 catch (Exception ex)
                 {
                     Log.Error(ex, "处理工业相机实时流中的图像时出错。");
                 }
             }, ex => Log.Error(ex, "工业相机实时图像流订阅出错。")));
-
-        _subscriptions.Add(_volumeCameraService.VolumeDataWithVerticesStream
-            .Subscribe(volumeData =>
-            {
-                Application.Current?.Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
-                {
-                    var (length, width, height, timestamp, isValid, receivedImage) = volumeData;
-                    try
-                    {
-                        var dimensionsItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Dimensions");
-                        if (dimensionsItem != null)
-                        {
-                            if (isValid && length > 0 && width > 0 && height > 0)
-                            {
-                                dimensionsItem.Value = $"{length:F0}x{width:F0}x{height:F0}";
-                                _lastReceivedValidVolume = (length, width, height, timestamp);
-                            }
-                            else
-                            {
-                                dimensionsItem.Value = "-- x -- x --";
-                            }
-                        }
-                        CurrentImage = receivedImage;
-
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex, "更新实时包裹体积信息或主图像时出错。");
-                    }
-                });
-            }, ex => Log.Error(ex, "体积数据流订阅出错。")));
 
         // 订阅重量数据流 (用于UI实时显示)
         _subscriptions.Add(_weightService.WeightDataStream
@@ -208,7 +174,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                 // weightData.Value 是 double (kg), 稳定性判断通常用 g
                 double currentRawWeightGrams = weightData!.Value * 1000.0;
-                DateTime currentTimestamp = weightData.Timestamp;
+                var currentTimestamp = weightData.Timestamp;
 
                 _rawWeightBuffer.Add(currentRawWeightGrams);
                 if (_rawWeightBuffer.Count > stabilityCheckSamples)
@@ -216,33 +182,64 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     _rawWeightBuffer.RemoveAt(0);
                 }
 
-                if (_rawWeightBuffer.Count == stabilityCheckSamples)
+                if (_rawWeightBuffer.Count != stabilityCheckSamples) return;
+                double minWeightInWindow = _rawWeightBuffer.Min();
+                double maxWeightInWindow = _rawWeightBuffer.Max();
+
+                if (!((maxWeightInWindow - minWeightInWindow) < stabilityThresholdGrams)) return;
+                double stableAverageWeightGrams = _rawWeightBuffer.Average();
+                double stableWeightKg = stableAverageWeightGrams / 1000.0;
+
+                if (stableWeightKg <= 0) // 新增检查: 稳定重量必须大于0
                 {
-                    double minWeightInWindow = _rawWeightBuffer.Min();
-                    double maxWeightInWindow = _rawWeightBuffer.Max();
+                    return;
+                }
 
-                    if ((maxWeightInWindow - minWeightInWindow) < stabilityThresholdGrams)
+                var stableEntry = new StableWeightEntry(stableWeightKg, currentTimestamp);
+
+                lock (_stableWeightQueue)
+                {
+                    _stableWeightQueue.Enqueue(stableEntry);
+                    if (_stableWeightQueue.Count > MaxStableWeightQueueSize)
                     {
-                        double stableAverageWeightGrams = _rawWeightBuffer.Average();
-                        var stableEntry = new StableWeightEntry(stableAverageWeightGrams / 1000.0, currentTimestamp);
-
-                        lock (_stableWeightQueue)
-                        {
-                            _stableWeightQueue.Enqueue(stableEntry);
-                            if (_stableWeightQueue.Count > MaxStableWeightQueueSize)
-                            {
-                                _stableWeightQueue.Dequeue();
-                            }
-                        }
-                        Log.Debug("稳定的重量数据已添加到队列(菜鸟): {Weight}kg, 时间: {Timestamp}. 队列大小: {QueueSize}",
-                                  stableEntry.WeightKg, stableEntry.Timestamp, _stableWeightQueue.Count);
+                        _stableWeightQueue.Dequeue();
                     }
                 }
+                Log.Debug("稳定的重量数据已添加到队列(菜鸟): {Weight}kg, 时间: {Timestamp}. 队列大小: {QueueSize}",
+                    stableEntry.WeightKg, stableEntry.Timestamp, _stableWeightQueue.Count);
             }, ex => Log.Error(ex, "后台稳定重量处理数据流订阅出错。")));
 
-        // 移除了原有的 _logicOrientedWeightCache 订阅
+        _subscriptions.Add(_volumeCameraService.ImageStreamWithId
+            .ObserveOn(TaskPoolScheduler.Default)
+            .Subscribe(imageData =>
+            {
+                try
+                {
+                    imageData.Image.Freeze();
+                    Application.Current?.Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
+                    {
+                        try
+                        {
+                            CurrentImage = imageData.Image;
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error(ex, "从体积相机实时流更新UI线程上的CurrentImage时出错。");
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "处理体积相机实时流中的图像时出错。");
+                }
+            }, ex => Log.Error(ex, "体积相机实时图像流订阅出错。")));
 
         cameraDataProcessingService.PackageStream.Subscribe(async void (packageInfo) => await ProcessPackageAsync(packageInfo));
+
+        // 在构造函数末尾，主动查询并更新相机服务的初始连接状态
+        UpdateInitialDeviceStatus(_securityCameraService, "Hikvision Security");
+        UpdateInitialDeviceStatus(_volumeCameraService, "Hikvision Volume");
+        UpdateInitialDeviceStatus(_industrialCameraService, "Hikvision Industrial");
     }
 
     ~MainWindowViewModel()
@@ -290,7 +287,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     private void ExecuteOpenHistory()
     {
-        _dialogService.ShowDialog("HistoryDialogView", new DialogParameters(), _ => { });
+        _dialogService.ShowDialog("PackageHistoryDialogView", new DialogParameters(), _ => { });
     }
 
     private void Timer_Tick(object? sender, EventArgs e)
@@ -314,23 +311,17 @@ public class MainWindowViewModel : BindableBase, IDisposable
             DeviceStatuses.Add(new DeviceStatus
             {
                 Name = "Hikvision Security",
-                Status = "Disconnected",
                 Icon = "VideoSecurity24",
-                StatusColor = "#F44336"
             });
             DeviceStatuses.Add(new DeviceStatus
             {
                 Name = "Hikvision Volume",
-                Status = "Disconnected",
                 Icon = "CubeScan24",
-                StatusColor = "#F44336"
             });
             DeviceStatuses.Add(new DeviceStatus
             {
                 Name = "Hikvision Industrial",
-                Status = "Disconnected",
                 Icon = "Camera24",
-                StatusColor = "#F44336"
             });
             DeviceStatuses.Add(new DeviceStatus
             {
@@ -529,15 +520,13 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 weightScaleStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
                 Log.Information("称重模块连接状态已更新: {Status}", weightScaleStatus.Status);
 
-                if (!isConnected)
+                if (isConnected) return;
+                _rawWeightBuffer.Clear();
+                lock (_stableWeightQueue)
                 {
-                    _rawWeightBuffer.Clear();
-                    lock (_stableWeightQueue)
-                    {
-                        _stableWeightQueue.Clear();
-                    }
-                    Log.Information("称重服务已断开，原始重量缓冲和稳定重量队列已清空(菜鸟)。");
+                    _stableWeightQueue.Clear();
                 }
+                Log.Information("称重服务已断开，原始重量缓冲和稳定重量队列已清空(菜鸟)。");
             }
             catch (Exception ex)
             {
@@ -577,142 +566,176 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         _isProcessingPackage = true;
         var processingStopwatch = Stopwatch.StartNew(); // 记录总处理时间
+        // 新增：各阶段耗时统计
+        var swStage = Stopwatch.StartNew();
+        long elapsedParallel = 0, elapsedUpload = 0, elapsedDest = 0, elapsedCarSort = 0;
+        // 新增：并行阶段各子任务耗时
+        long elapsedWeight = 0, elapsedVolume = 0, elapsedImage = 0;
         try
         {
             Log.Information("开始处理包裹: {Barcode}, 触发时间: {CreateTime:HH:mm:ss.fff}", package.Barcode, package.CreateTime);
 
             // 定义并行获取重量和体积的本地异步函数
-            async Task FetchWeightAsync(PackageInfo pkg)
+            async Task<long> FetchWeightAsync(PackageInfo pkg)
             {
+                var sw = Stopwatch.StartNew();
                 if (pkg.Weight <= 0)
                 {
                     var weightSettings = _settingsService.LoadSettings<LocalWeightSettings>();
                     var weightFetchStartTime = DateTime.Now; // Timestamp for when weight fetching starts for this package
 
-                    // 1. Initial Look-back for stable weight
-                    var lookbackWindowSeconds = weightSettings.StableWeightQueryWindowSeconds > 0 ? weightSettings.StableWeightQueryWindowSeconds : 2;
-                    Log.Information("包裹 {Barcode}: 重量为0或无效，开始初始查找稳定重量 (回溯窗口: {LookbackSec}s)。获取开始时间: {FetchStartTime:HH:mm:ss.fff}", pkg.Barcode, lookbackWindowSeconds, weightFetchStartTime);
-                    StableWeightEntry? bestStableWeight;
-                    lock (_stableWeightQueue)
+                    // 只查找向前的稳定重量
+                    var maxWaitTimeForWeightMs = weightSettings.IntegrationTimeMs > 0 ? weightSettings.IntegrationTimeMs : 500;
+                    Log.Information("包裹 {Barcode}: 重量为0或无效，开始向前查找稳定重量 (最大等待 {MaxWaitMs}ms)。获取开始时间: {FetchStartTime:HH:mm:ss.fff}", pkg.Barcode, maxWaitTimeForWeightMs, weightFetchStartTime);
+                    StableWeightEntry? bestStableWeight = null;
+                    var swWait = Stopwatch.StartNew();
+                    while (swWait.ElapsedMilliseconds < maxWaitTimeForWeightMs)
                     {
-                        bestStableWeight = _stableWeightQueue
-                            .Where(entry => (weightFetchStartTime - entry.Timestamp).TotalSeconds < lookbackWindowSeconds &&
-                                            (weightFetchStartTime - entry.Timestamp).TotalSeconds >= 0)
-                            .OrderByDescending(entry => entry.Timestamp)
-                            .Cast<StableWeightEntry?>()
-                            .FirstOrDefault();
-                    }
-
-                    if (bestStableWeight.HasValue)
-                    {
-                        pkg.Weight = bestStableWeight.Value.WeightKg;
-                        Log.Information("包裹 {Barcode}: 初始查找获取到稳定重量: {Weight}kg (时间戳: {Timestamp:HH:mm:ss.fff})", pkg.Barcode, pkg.Weight, bestStableWeight.Value.Timestamp);
-                        return; // Found weight, exit
-                    }
-                    Log.Information("包裹 {Barcode}: 初始查找未能找到稳定重量，将开始等待和向前查找。", pkg.Barcode);
-
-                    // 2. Wait and Look-forward if initial look-back failed
-                    var maxWaitTimeForWeightMs = weightSettings.IntegrationTimeMs > 0 ? weightSettings.IntegrationTimeMs : 2000; // Use IntegrationTimeMs for forward look
-                    Log.Information("包裹 {Barcode}: 开始向前查找稳定重量 (最大等待 {MaxWaitMs}ms)。", pkg.Barcode, maxWaitTimeForWeightMs);
-                    
-                    var sw = Stopwatch.StartNew();
-                    while (sw.ElapsedMilliseconds < maxWaitTimeForWeightMs)
-                    {
-                        lock (_stableWeightQueue) // Ensure thread-safe access to the queue
+                        lock (_stableWeightQueue)
                         {
                             bestStableWeight = _stableWeightQueue
-                                .Where(entry => entry.Timestamp > weightFetchStartTime) // Look for weights after fetching started
-                                .OrderBy(entry => entry.Timestamp)      // Get the earliest one
+                                .Where(entry => entry.Timestamp > weightFetchStartTime)
+                                .OrderBy(entry => entry.Timestamp)
                                 .Cast<StableWeightEntry?>()
                                 .FirstOrDefault();
                         }
-
                         if (bestStableWeight.HasValue)
                         {
                             pkg.Weight = bestStableWeight.Value.WeightKg;
-                            Log.Information("包裹 {Barcode}: 向前查找获取到稳定重量: {Weight}kg (时间戳: {Timestamp:HH:mm:ss.fff})，耗时: {ElapsedMs}ms。", pkg.Barcode, pkg.Weight, bestStableWeight.Value.Timestamp, sw.ElapsedMilliseconds);
+                            Log.Information("包裹 {Barcode}: 向前查找获取到稳定重量: {Weight}kg (时间戳: {Timestamp:HH:mm:ss.fff})，耗时: {ElapsedMs}ms。", pkg.Barcode, pkg.Weight, bestStableWeight.Value.Timestamp, swWait.ElapsedMilliseconds);
+                            swWait.Stop();
                             sw.Stop();
-                            return; // Found weight, exit
+                            return sw.ElapsedMilliseconds;
                         }
-                        await Task.Delay(20); // Short delay before retrying
+                        await Task.Delay(10);
                     }
-                    sw.Stop();
+                    swWait.Stop();
                     Log.Warning("包裹 {Barcode}: 在最大等待 {MaxWaitMs}ms 内未能向前获取到稳定重量。", pkg.Barcode, maxWaitTimeForWeightMs);
                 }
                 else
                 {
                     Log.Information("包裹 {Barcode}: 重量 {Weight}kg 有效，跳过并行重量获取。", pkg.Barcode, pkg.Weight);
                 }
+                sw.Stop();
+                return sw.ElapsedMilliseconds;
             }
 
-            async Task FetchVolumeAsync(PackageInfo pkg)
+            async Task<long> FetchVolumeAsync(PackageInfo pkg)
             {
-                if (!pkg.Length.HasValue || pkg.Length.Value <= 0 ||
-                    !pkg.Width.HasValue || pkg.Width.Value <= 0 ||
-                    !pkg.Height.HasValue || pkg.Height.Value <= 0)
+                var sw = Stopwatch.StartNew();
+                if (pkg.Length.HasValue && pkg.Length.Value > 0 &&
+                    pkg.Width.HasValue && pkg.Width.Value > 0 &&
+                    pkg.Height.HasValue && pkg.Height.Value > 0)
                 {
-                    var cameraSettings = _settingsService.LoadSettings<CameraOverallSettings>();
-                    int fusionTimeMs = cameraSettings.VolumeCamera.FusionTimeMs > 0 ? cameraSettings.VolumeCamera.FusionTimeMs : 2000;
-                    DateTime packageCreateTime = pkg.CreateTime;
-                    Log.Information("包裹 {Barcode}: 尺寸无效，开始并行查找体积数据 (最大等待 {FusionMs}ms)。", pkg.Barcode, fusionTimeMs);
-                    Stopwatch sw = Stopwatch.StartNew();
-                    bool volumeSupplementedFromStream = false;
-                    while (sw.ElapsedMilliseconds < fusionTimeMs)
-                    {
-                        if (_lastReceivedValidVolume.HasValue)
-                        {
-                            var (l, w, h, tsVolume) = _lastReceivedValidVolume.Value;
-                            // 体积数据的时间戳应该在包裹创建时间之后，或者在一个非常小的时间窗口内，以避免使用过旧数据
-                            // 这里简单处理为大于包裹创建时间
-                            if (tsVolume > packageCreateTime && l > 0 && w > 0 && h > 0)
-                            {
-                                pkg.SetDimensions(l, w, h);
-                                Log.Information("包裹 {Barcode}: 并行从流中获取到体积数据: 长{L} 宽{W} 高{H} (体积时间: {tsVolume:HH:mm:ss.fff})，耗时: {ElapsedMs}ms。", pkg.Barcode, l, w, h, tsVolume, sw.ElapsedMilliseconds);
-                                volumeSupplementedFromStream = true;
-                                break;
-                            }
-                        }
-                        await Task.Delay(20); // 短暂等待后重试
-                    }
+                    Log.Information("包裹 {Barcode}: 尺寸 长{L} 宽{W} 高{H} 已有效，跳过体积流查询。", pkg.Barcode, pkg.Length, pkg.Width, pkg.Height);
                     sw.Stop();
+                    return sw.ElapsedMilliseconds;
+                }
 
-                    if (!volumeSupplementedFromStream)
+                var cameraSettings = _settingsService.LoadSettings<CameraOverallSettings>();
+                int forwardWaitMs = cameraSettings.VolumeCamera.FusionTimeMs > 0 ? cameraSettings.VolumeCamera.FusionTimeMs : 500;
+                var packageCreateTime = pkg.CreateTime;
+
+                Log.Information("包裹 {Barcode}: 尺寸无效，直接从体积数据流中等待新数据。包裹创建时间: {PkgCreateTime:HH:mm:ss.fff}", pkg.Barcode, packageCreateTime);
+
+                try
+                {
+                    var (Length, Width, Height, Timestamp, IsValid, Image) = await _volumeCameraService.VolumeDataWithVerticesStream
+                        .Where(vd => vd.IsValid && vd.Length > 0 && vd.Width > 0 && vd.Height > 0 && vd.Timestamp > packageCreateTime)
+                        .Take(1)
+                        .Timeout(TimeSpan.FromMilliseconds(forwardWaitMs))
+                        .FirstAsync();
+
+                    pkg.SetDimensions(Length, Width, Height);
+                    Log.Information("包裹 {Barcode}: 体积流中获取到体积: L{L:F0} W{W:F0} H{H:F0} (时间戳: {Timestamp:HH:mm:ss.fff})",
+                        pkg.Barcode, Length, Width, Height, Timestamp);
+
+                    if (Image != null)
                     {
-                        Log.Warning("包裹 {Barcode}: 在最大等待 {FusionMs}ms 内未能并行从流中获取到体积数据，尝试主动测量。", pkg.Barcode, fusionTimeMs);
-                        var (isSdkCallSuccess, l, w, h, isMeasurementValid, _, _, errorMsg) = _volumeCameraService.GetSingleMeasurement();
-                        if (isSdkCallSuccess && isMeasurementValid && l > 0 && w > 0 && h > 0)
+                        Application.Current?.Dispatcher.Invoke(() => { CurrentImage = Image; });
+                    }
+                }
+                catch (TimeoutException)
+                {
+                    Log.Warning("包裹 {Barcode}: 在{WaitMs}ms内体积流未推送到新体积数据。", pkg.Barcode, forwardWaitMs);
+                }
+                sw.Stop();
+                return sw.ElapsedMilliseconds;
+            }
+
+            async Task<(string? imageUrl, long captureMs, long uploadMs)> FetchSecurityImageAndUploadAsync(PackageInfo package)
+            {
+                var swCapture = Stopwatch.StartNew();
+                // 中文注释：安防相机抓图
+                var capturedImage = _securityCameraService.CaptureAndGetBitmapSource();
+                swCapture.Stop();
+                long elapsedCapture = swCapture.ElapsedMilliseconds;
+                string? imageUrl = null;
+                long elapsedUpload = 0;
+                if (capturedImage != null)
+                {
+                    string tempImageDirectory = Path.Combine(Path.GetTempPath(), "RookieParcelImages");
+                    string tempImageFileName = $"pkg_{package.Index}_{DateTime.UtcNow:yyyyMMddHHmmssfff}.jpg";
+                    string? tempImagePath = SaveBitmapSourceAsJpeg(capturedImage, tempImageDirectory, tempImageFileName);
+                    if (tempImagePath != null)
+                    {
+                        Log.Information("包裹 {Barcode}: 安防相机图片已保存到临时路径 {Path}", package.Barcode, tempImagePath);
+                        var swUpload = Stopwatch.StartNew();
+                        imageUrl = await _rookieApiService.UploadImageAsync(tempImagePath);
+                        swUpload.Stop();
+                        elapsedUpload = swUpload.ElapsedMilliseconds;
+                        // 不再删除本地图片
+                        if (!string.IsNullOrEmpty(imageUrl))
                         {
-                            pkg.SetDimensions(l, w, h);
-                            Log.Information("包裹 {Barcode}: 并行主动测量成功补充尺寸: 长{L} 宽{W} 高{H}", pkg.Barcode, l, w, h);
+                            Log.Information("包裹 {Barcode}: 图片上传到DCS成功: {ImageUrl}", package.Barcode, imageUrl);
                         }
                         else
                         {
-                            Log.Warning("包裹 {Barcode}: 并行主动测量尺寸失败或数据无效/为零。SDK调用成功: {SdkSuccess}, 测量有效: {MeasureValid}, LWH: {L},{W},{H}. 错误: {ErrorMsg}",
-                                pkg.Barcode, isSdkCallSuccess, isMeasurementValid, l, w, h, errorMsg ?? "N/A");
+                            Log.Warning("包裹 {Barcode}: 图片上传到DCS失败。", package.Barcode);
                         }
+                    }
+                    else
+                    {
+                        Log.Warning("包裹 {Barcode}: 保存安防相机抓图到临时文件失败。", package.Barcode);
                     }
                 }
                 else
                 {
-                    Log.Information("包裹 {Barcode}: 尺寸 长{L} 宽{W} 高{H} 有效，跳过并行体积获取。", pkg.Barcode, pkg.Length, pkg.Width, pkg.Height);
+                    Log.Information("包裹 {Barcode}: 未从安防相机抓取到图片，跳过图片上传。", package.Barcode);
                 }
+                Log.Information("包裹 {Barcode}: 安防相机抓图耗时: {CaptureMs}ms，上传OSS耗时: {UploadMs}ms", package.Barcode, elapsedCapture, elapsedUpload);
+                return (imageUrl, elapsedCapture, elapsedUpload);
             }
 
-            // 并行获取重量和体积
-            Log.Information("包裹 {Barcode}: 开始并行获取重量和体积数据。", package.Barcode);
+            // 并行获取重量、体积、安防相机图片上传
+            Log.Information("包裹 {Barcode}: 开始并行获取重量、体积和安防相机图片上传。", package.Barcode);
+            swStage.Restart();
             var fetchWeightTask = FetchWeightAsync(package);
             var fetchVolumeTask = FetchVolumeAsync(package);
-            await Task.WhenAll(fetchWeightTask, fetchVolumeTask);
-            Log.Information("包裹 {Barcode}: 重量和体积并行获取阶段完成。重量: {Weight}kg, 长宽高: {L}x{W}x{H}mm",
+            var fetchSecurityImageTask = FetchSecurityImageAndUploadAsync(package);
+            await Task.WhenAll(fetchWeightTask, fetchVolumeTask, fetchSecurityImageTask);
+            elapsedParallel = swStage.ElapsedMilliseconds;
+            elapsedWeight = fetchWeightTask.Result;
+            elapsedVolume = fetchVolumeTask.Result;
+            elapsedImage = fetchSecurityImageTask.Result.captureMs + fetchSecurityImageTask.Result.uploadMs;
+            package.ImagePath = fetchSecurityImageTask.Result.imageUrl; // 并行任务结果赋值
+            Log.Information("包裹 {Barcode}: 重量、体积和安防相机图片并行获取阶段完成。重量: {Weight}kg, 长宽高: {L}x{W}x{H}mm, 图片路径: {ImagePath}",
                 package.Barcode,
                 package.Weight,
                 package.Length.HasValue ? package.Length.Value.ToString("F0") : "N/A",
                 package.Width.HasValue ? package.Width.Value.ToString("F0") : "N/A",
-                package.Height.HasValue ? package.Height.Value.ToString("F0") : "N/A");
-
+                package.Height.HasValue ? package.Height.Value.ToString("F0") : "N/A",
+                package.ImagePath ?? "无");
+            Log.Information("包裹 {Barcode}: 并行阶段（重量、体积、图片）总耗时: {Elapsed}ms", package.Barcode, elapsedParallel);
+            Log.Information("包裹 {Barcode}: 重量获取耗时: {WeightMs}ms, 体积获取耗时: {VolumeMs}ms, 安防相机抓图耗时: {CaptureMs}ms, 上传OSS耗时: {UploadMs}ms", package.Barcode, elapsedWeight, elapsedVolume, fetchSecurityImageTask.Result.captureMs, fetchSecurityImageTask.Result.uploadMs);
+            var maxElapsed = Math.Max(elapsedWeight, Math.Max(elapsedVolume, elapsedImage));
+            string slowest = (maxElapsed == elapsedWeight) ? "重量获取" :
+                             (maxElapsed == elapsedVolume) ? "体积获取" : (maxElapsed == fetchSecurityImageTask.Result.captureMs ? "安防相机抓图" : "图片上传");
+            Log.Information("包裹 {Barcode}: 并行阶段最慢环节为: {Slowest}，耗时: {Elapsed}ms", package.Barcode, slowest, maxElapsed);
 
             Application.Current?.Dispatcher.InvokeAsync(() =>
             {
+                // CurrentImage = package.VolumeImage; // 不再需要
                 package.SetIndex((int)Interlocked.Increment(ref _globalPackageIndex));
                 CurrentBarcode = package.Barcode;
                 UpdatePackageInfoItems(package);
@@ -723,6 +746,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
             bool hasWeight = package.Weight > 0;
             bool hasDimensions = package is { Length: > 0, Width: > 0, Height: > 0 };
 
+            string dcsErrorMessage = string.Empty; // 用于存储DCS交互过程中的错误信息
+            bool isException = false;
+
             if (!hasWeight || !hasDimensions)
             {
                 string uiErrorMessage = hasWeight switch
@@ -731,7 +757,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     false => "Package weight information is missing",
                     _ => "Package volume information is missing"
                 };
-                string logMessage = hasWeight switch // 中文日志信息
+                string logMessage = hasWeight switch
                 {
                     false when !hasDimensions => "包裹重量和体积信息均缺失",
                     false => "包裹重量信息缺失",
@@ -740,58 +766,30 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                 Log.Warning("包裹 {Barcode}: {Reason}，处理终止。", package.Barcode, logMessage);
                 package.SetStatus(PackageStatus.Failed, uiErrorMessage); // UI相关的错误信息使用英文
-                // 注意：如果在这里终止，后续的小车分拣和DCS上报逻辑将不会执行。
-                // ReportSortResultAsync 仍然会在外层被调用，上报此处的Failed状态和无效格口。
-            }
-            else // 重量和尺寸有效，开始DCS交互和小车分拣流程
-            {
-                string dcsErrorMessage = string.Empty; // 用于存储DCS交互过程中的错误信息
 
-                // 1. DCS相关操作：尝试安防抓图并上传，上传包裹信息，获取目的地建议
-                // 这些操作的失败不应阻止后续的小车分拣（如果适用），但会影响最终状态和上报信息
-
-                // 1.1 安防相机抓图并上传
-                BitmapSource? capturedImage = _securityCameraService.CaptureAndGetBitmapSource();
-                if (capturedImage != null)
+                // 分配异常口
+                if (_carSequenceSettings.ExceptionChuteNumber > 0)
                 {
-                    string tempImageDirectory = Path.Combine(Path.GetTempPath(), "RookieParcelImages");
-                    string tempImageFileName = $"pkg_{package.Index}_{DateTime.UtcNow:yyyyMMddHHmmssfff}.jpg";
-                    string? tempImagePath = SaveBitmapSourceAsJpeg(capturedImage, tempImageDirectory, tempImageFileName);
-
-                    if (tempImagePath != null)
-                    {
-                        Log.Information("包裹 {Barcode}: 安防相机图片已保存到临时路径 {Path}", package.Barcode, tempImagePath);
-                        string? imageUrl = await _rookieApiService.UploadImageAsync(tempImagePath);
-                        if (!string.IsNullOrEmpty(imageUrl))
-                        {
-                            package.ImagePath = imageUrl;
-                            Log.Information("包裹 {Barcode}: 图片上传到DCS成功: {ImageUrl}", package.Barcode, imageUrl);
-                        }
-                        else
-                        {
-                            Log.Warning("包裹 {Barcode}: 图片上传到DCS失败。", package.Barcode);
-                            dcsErrorMessage = AppendError(dcsErrorMessage, "DCS image upload failed.");
-                            package.ImagePath = null;
-                        }
-                        try { File.Delete(tempImagePath); }
-                        catch (Exception ex) { Log.Warning(ex, "删除临时图片文件失败: {Path}", tempImagePath); }
-                    }
-                    else
-                    {
-                        Log.Warning("包裹 {Barcode}: 保存安防相机抓图到临时文件失败。", package.Barcode);
-                        dcsErrorMessage = AppendError(dcsErrorMessage, "Failed to save security camera image locally.");
-                        package.ImagePath = null;
-                    }
+                    package.SetChute(_carSequenceSettings.ExceptionChuteNumber);
+                    Log.Information("包裹 {Barcode}: 因重量或体积无效，已分配异常口: {ExceptionChute}", package.Barcode, _carSequenceSettings.ExceptionChuteNumber);
                 }
                 else
                 {
-                    Log.Information("包裹 {Barcode}: 未从安防相机抓取到图片，跳过图片上传。", package.Barcode);
-                    package.ImagePath = null; // 明确设置为null
+                    Log.Warning("包裹 {Barcode}: 未配置异常口，无法分配异常口。", package.Barcode);
                 }
+                isException = true;
+            }
+            else // 重量和尺寸有效，开始DCS交互和小车分拣流程
+            {
+                // 1. DCS相关操作：上传包裹信息，获取目的地建议
+                // 这些操作的失败不应阻止后续的小车分拣（如果适用），但会影响最终状态和上报信息
 
-                // 1.2 调用 sorter.parcel_info_upload
+                // 1.1 调用 sorter.parcel_info_upload
                 Log.Information("包裹 {Barcode}: 准备上传包裹基础信息到DCS。图片路径: {ImagePath}", package.Barcode, package.ImagePath ?? "无");
+                swStage.Restart();
                 bool parcelInfoUploaded = await _rookieApiService.UploadParcelInfoAsync(package);
+                elapsedUpload = swStage.ElapsedMilliseconds;
+                Log.Information("包裹 {Barcode}: 上传包裹信息接口耗时: {Elapsed}ms", package.Barcode, elapsedUpload);
                 if (!parcelInfoUploaded)
                 {
                     dcsErrorMessage = AppendError(dcsErrorMessage, "Parcel info upload to DCS failed.");
@@ -800,8 +798,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 else // 包裹基础信息上传DCS成功
                 {
                     Log.Information("包裹 {Barcode}: 包裹基础信息上传DCS成功。", package.Barcode);
-                    // 1.3 调用 sorter.dest_request (仅当 parcel_info_upload 成功)
-                    DestRequestResultParams? destResult = await _rookieApiService.RequestDestinationAsync(package.Barcode);
+                    // 1.2 调用 sorter.dest_request (仅当 parcel_info_upload 成功)
+                    swStage.Restart();
+                    var destResult = await _rookieApiService.RequestDestinationAsync(package.Barcode);
+                    elapsedDest = swStage.ElapsedMilliseconds;
+                    Log.Information("包裹 {Barcode}: 请求目的地接口耗时: {Elapsed}ms", package.Barcode, elapsedDest);
                     bool dcsDestinationSuccess = destResult?.ErrorCode == 0 && int.TryParse(destResult.ChuteCode, out int apiChute) && apiChute > 0;
 
                     if (dcsDestinationSuccess)
@@ -836,7 +837,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     }
                 }
                 // DCS请求目的地成功，使用循环格口覆盖API返回的格口
-                if (_nextCyclicChute <= 0 || _nextCyclicChute >= 4) // 如果是初始值或达到上限，则重置为1开始
+                if (_nextCyclicChute is <= 0 or >= 4) // 如果是初始值或达到上限，则重置为1开始
                 {
                     _nextCyclicChute = 1;
                 }
@@ -845,32 +846,42 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     _nextCyclicChute++;
                 }
                 package.SetChute(_nextCyclicChute);
-                // 3. 调用小车分拣服务
-                Log.Information("包裹 {Barcode}: 准备调用小车分拣服务。目标格口: {Chute}", package.Barcode, package.ChuteNumber > 0 ? package.ChuteNumber.ToString() : "未指定/异常");
-                var carSortResult = await _carSortService.ProcessPackageSortingAsync(package); // ProcessPackageSortingAsync 应该能够处理 package.ChuteNumber <= 0 的情况
+            }
 
-                string? carSortErrorMessage = null;
-                if (!carSortResult)
-                {
-                    carSortErrorMessage = "Car sorting failed."; // UI 英文
-                    Log.Warning("包裹 {Barcode}: 小车分拣服务处理失败。", package.Barcode);
-                }
-                else
-                {
-                    Log.Information("包裹 {Barcode}: 小车分拣服务处理成功。", package.Barcode);
-                }
+            // 无论是否异常，都调用小车分拣服务
+            Log.Information("包裹 {Barcode}: 准备调用小车分拣服务。目标格口: {Chute}", package.Barcode, package.ChuteNumber > 0 ? package.ChuteNumber.ToString() : "未指定/异常");
+            swStage.Restart();
+            var carSortResult = await _carSortService.ProcessPackageSortingAsync(package); // 应该能够处理 package.ChuteNumber <= 0 的情况
+            elapsedCarSort = swStage.ElapsedMilliseconds;
+            Log.Information("包裹 {Barcode}: 小车分拣服务耗时: {Elapsed}ms", package.Barcode, elapsedCarSort);
 
-                // 4. 根据小车分拣结果和DCS交互历史，设定最终状态和错误信息
-                string finalCombinedErrorMessage = dcsErrorMessage;
-                if (carSortErrorMessage != null)
-                {
-                    finalCombinedErrorMessage = AppendError(finalCombinedErrorMessage, carSortErrorMessage);
-                }
+            string? carSortErrorMessage = null;
+            if (!carSortResult)
+            {
+                carSortErrorMessage = "Car sorting failed."; // UI 英文
+                Log.Warning("包裹 {Barcode}: 小车分拣服务处理失败。", package.Barcode);
+            }
+            else
+            {
+                Log.Information("包裹 {Barcode}: 小车分拣服务处理成功。", package.Barcode);
+            }
 
-                // 小车分拣失败
-                // 即使DCS有错，但小车分拣成功了，整体认为是成功的，但错误信息会保留DCS的问题
-                package.SetStatus(carSortResult ? PackageStatus.Success : PackageStatus.Error, // 小车分拣成功是主要成功标准
-                    finalCombinedErrorMessage);
+            // 4. 根据小车分拣结果和DCS交互历史，设定最终状态和错误信息
+            string finalCombinedErrorMessage = dcsErrorMessage;
+            if (carSortErrorMessage != null)
+            {
+                finalCombinedErrorMessage = AppendError(finalCombinedErrorMessage, carSortErrorMessage);
+            }
+
+            // 小车分拣失败
+            // 即使DCS有错，但小车分拣成功了，整体认为是成功的，但错误信息会保留DCS的问题
+            if (isException)
+            {
+                package.SetStatus(carSortResult ? PackageStatus.Failed : PackageStatus.Error, finalCombinedErrorMessage);
+            }
+            else
+            {
+                package.SetStatus(carSortResult ? PackageStatus.Success : PackageStatus.Error, finalCombinedErrorMessage);
             }
 
             // 5. 上报分拣结果到DCS (无论之前发生什么，都尝试上报)
@@ -957,9 +968,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
         var dimensionsItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Dimensions");
         if (dimensionsItem != null)
         {
-            if (package.Length > 0 || package.Width > 0 || package.Height > 0)
+            if (package.Length.HasValue && package.Length.Value > 0 &&
+                package.Width.HasValue && package.Width.Value > 0 &&
+                package.Height.HasValue && package.Height.Value > 0)
             {
-                dimensionsItem.Value = $"{package.Length:F0}x{package.Width:F0}x{package.Height:F0}";
+                dimensionsItem.Value = $"{package.Length.Value:F0}x{package.Width.Value:F0}x{package.Height.Value:F0}";
             }
             else
             {
@@ -1118,5 +1131,31 @@ public class MainWindowViewModel : BindableBase, IDisposable
             Log.Error(ex, "保存 BitmapSource 到文件 {FilePath} 失败。", filePath);
             return null;
         }
+    }
+
+    // 新增辅助方法，用于主动更新设备状态
+    private void UpdateInitialDeviceStatus(ICameraService cameraService, string deviceName)
+    {
+        Application.Current?.Dispatcher.InvokeAsync(() =>
+        {
+            try
+            {
+                var deviceStatus = DeviceStatuses.FirstOrDefault(d => d.Name == deviceName);
+                if (deviceStatus == null)
+                {
+                    Log.Warning("在 DeviceStatuses 中未找到名为 {DeviceName} 的设备项。", deviceName);
+                    return;
+                }
+
+                bool isConnected = cameraService.IsConnected;
+                deviceStatus.Status = isConnected ? "Connected" : "Disconnected";
+                deviceStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
+                Log.Information("主动更新设备初始状态: {DeviceName} - {Status}", deviceName, deviceStatus.Status);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "在UI线程主动更新设备 {DeviceName} 初始状态时出错。", deviceName);
+            }
+        });
     }
 }

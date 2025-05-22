@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0-windows</TargetFramework>
+        <Nullable>enable</Nullable>
+        <UseWPF>true</UseWPF>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <RootNamespace>SowingSorting</RootNamespace>
+        <AssemblyName>SowingSorting</AssemblyName>
+    </PropertyGroup>
+
+
+    <ItemGroup>
+        <ProjectReference Include="..\Common\基础模块.csproj" />
+        <ProjectReference Include="..\SharedUI\公共模块.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="FluentFTP" />
+        <PackageReference Include="MahApps.Metro.IconPacks.Material" />
+        <PackageReference Include="Prism.Unity" />
+        <PackageReference Include="Prism.Wpf" />
+        <PackageReference Include="WPF-UI" />
+        <PackageReference Include="EasyModbusTCP" />
+    </ItemGroup>
+</Project>

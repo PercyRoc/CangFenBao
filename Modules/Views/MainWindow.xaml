@@ -342,7 +342,7 @@
             <!-- 右侧面板 -->
             <Grid Grid.Row="0" Grid.Column="1" Margin="16,0,0,0">
                 <!-- 历史包裹信息 -->
-                <Border  Margin="16"
+                <Border Margin="16"
                         Style="{StaticResource CardStyle}">
                     <Grid Margin="16">
                         <Grid.RowDefinitions>

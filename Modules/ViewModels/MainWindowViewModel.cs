@@ -5,11 +5,13 @@ using Common.Models.Package;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
+using Prism.Commands;
+using Prism.Mvvm;
+using Prism.Services.Dialogs;
 using Serilog;
 using ShanghaiModuleBelt.Models;
 using ShanghaiModuleBelt.Services;
 using SharedUI.Models;
-using SortingServices.Modules;
 using LockingService = ShanghaiModuleBelt.Services.LockingService;
 
 namespace ShanghaiModuleBelt.ViewModels;
@@ -160,72 +162,78 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private void InitializeStatisticsItems()
     {
-        StatisticsItems.Add(new StatisticsItem(
-            "总包裹数",
-            "0",
-            "个",
-            "累计处理包裹总数",
-            "BoxMultiple24"
-        ));
+        StatisticsItems.Add(new StatisticsItem
+        {
+            Label = "总包裹数",
+            Value = "0",
+            Unit = "个",
+            Description = "累计处理包裹总数",
+            Icon = "BoxMultiple24"
+        });
 
-        StatisticsItems.Add(new StatisticsItem(
-            "成功数",
-            "0",
-            "个",
-            "处理成功的包裹数量",
-            "CheckmarkCircle24"
-        ));
+        StatisticsItems.Add(new StatisticsItem
+        {
+            Label = "成功数",
+            Value = "0",
+            Unit = "个",
+            Description = "处理成功的包裹数量",
+            Icon = "CheckmarkCircle24"
+        });
 
-        StatisticsItems.Add(new StatisticsItem(
-            "失败数",
-            "0",
-            "个",
-            "处理失败的包裹数量",
-            "ErrorCircle24"
-        ));
+        StatisticsItems.Add(new StatisticsItem
+        {
+            Label = "失败数",
+            Value = "0",
+            Unit = "个",
+            Description = "处理失败的包裹数量",
+            Icon = "ErrorCircle24"
+        });
 
-        StatisticsItems.Add(new StatisticsItem(
-            "处理速率",
-            "0",
-            "个/小时",
-            "每小时处理包裹数量",
-            "ArrowTrendingLines24"
-        ));
+        StatisticsItems.Add(new StatisticsItem
+        {
+            Label = "处理速率",
+            Value = "0",
+            Unit = "个/小时",
+            Description = "每小时处理包裹数量",
+            Icon = "ArrowTrendingLines24"
+        });
     }
 
     private void InitializePackageInfoItems()
     {
-        PackageInfoItems.Add(new PackageInfoItem(
-            "重量",
-            "0.00",
-            "kg",
-            "包裹重量",
-            "Scale24"
-        ));
+        PackageInfoItems.Add(new PackageInfoItem
+        {
+            Label = "重量",
+            Value = "0.00",
+            Unit = "kg",
+            Description = "包裹重量",
+            Icon = "Scale24"
+        });
 
-        PackageInfoItems.Add(new PackageInfoItem(
-            "尺寸",
-            "0 × 0 × 0",
-            "mm",
-            "长 × 宽 × 高",
-            "Ruler24"
-        ));
+        PackageInfoItems.Add(new PackageInfoItem
+        {
+            Label = "尺寸",
+            Value = "0 × 0 × 0",
+            Unit = "mm",
+            Description = "长 × 宽 × 高",
+            Icon = "Ruler24"
+        });
 
-        PackageInfoItems.Add(new PackageInfoItem(
-            "时间",
-            "--:--:--",
-            "",
-            "处理时间",
-            "Timer24"
-        ));
+        PackageInfoItems.Add(new PackageInfoItem
+        {
+            Label = "时间",
+            Value = "--:--:--",
+            Description = "处理时间",
+            Icon = "Timer24"
+        });
 
-        PackageInfoItems.Add(new PackageInfoItem(
-            "状态",
-            "等待",
-            "",
-            "处理状态",
-            "AlertCircle24"
-        ));
+        PackageInfoItems.Add(new PackageInfoItem
+        {
+            Label = "状态",
+            Value = "等待",
+            Description = "处理状态",
+            Icon = "AlertCircle24"
+        });
     }
 
     private void OnCameraConnectionChanged(string? deviceId, bool isConnected)
@@ -266,16 +274,20 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    private async void OnPackageInfo(PackageInfo package)
+    private void OnPackageInfo(PackageInfo package)
     {
         try
         {
             Log.Information("收到包裹信息: {Barcode}, 序号={Index}", package.Barcode, package.Index);
 
             var config = _settingsService.LoadSettings<ModuleConfig>();
-            var chuteNumber = await _chuteMappingService.GetChuteNumberAsync(package);
+            // 注释掉原有的格口分配逻辑
+            // var chuteNumber = await _chuteMappingService.GetChuteNumberAsync(package);
 
-            if (chuteNumber == null)
+            // 添加循环分配格口的逻辑
+            int chuteNumber = (package.Index % 22) + 1; // 从1到22循环分配格口
+
+            if (chuteNumber == 0)
             {
                 Log.Warning("无法获取格口号，使用异常格口: {Barcode}", package.Barcode);
                 package.SetStatus(PackageStatus.Error, "格口分配失败");
@@ -283,18 +295,17 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             else
             {
                 // 检查分配的格口是否被锁定
-                if (IsChuteLocked(chuteNumber.Value))
+                if (IsChuteLocked(chuteNumber))
                 {
                     Log.Warning("分配的格口 {ChuteNumber} 已被锁定，重新分配到异常格口: {Barcode}",
-                        chuteNumber.Value, package.Barcode);
+                        chuteNumber, package.Barcode);
 
                     // 记录原始分配的格口号
-                    var originalChuteNumber = chuteNumber.Value;
-                    package.SetChute(config.ExceptionChute, originalChuteNumber);
+                    package.SetChute(config.ExceptionChute, chuteNumber);
 
                     // 设置为错误状态
                     package.SetStatus(PackageStatus.Error, "格口已锁定，使用异常格口");
-                    package.SetStatus(PackageStatus.Error,$"原格口 {originalChuteNumber} 已锁定");
+                    package.SetStatus(PackageStatus.Error,$"原格口 {chuteNumber} 已锁定");
                 }
             }
 

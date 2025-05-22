@@ -14,8 +14,7 @@
              lex:ResxLocalizationProvider.DefaultDictionary="Camera.Resources.CameraSettings"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
-             d:DataContext="{d:DesignInstance viewModels:CameraSettingsViewModel, IsDesignTimeCreatable=True}"
-             d:DesignHeight="900" d:DesignWidth="1000">
+             d:DataContext="{d:DesignInstance viewModels:CameraSettingsViewModel}">
     <UserControl.Resources>
         <Style TargetType="Expander" x:Key="CleanExpanderStyle">
             <Setter Property="BorderThickness" Value="0"/>
@@ -63,7 +62,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="{lex:Loc Label_SaveFolder}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                             <TextBox Grid.Column="1" Text="{Binding CameraSettings.ImageSave.SaveFolderPath, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Margin="0,0,5,0" MinWidth="200" HorizontalAlignment="Stretch"/>
-                            <ui:Button Grid.Column="2" Appearance="Secondary" Content="{lex:Loc Button_Browse}" Icon="{ui:SymbolIcon Folder24}" />
+                            <ui:Button Grid.Column="2" Appearance="Secondary" Content="{lex:Loc Button_Browse}" Icon="{ui:SymbolIcon Folder24}" Command="{Binding SelectImageSaveFolderPathCommand}"/>
                         </Grid>
                     </StackPanel>
                 </ui:CardControl>
@@ -105,7 +104,7 @@
                                                     <TextBlock Text="{lex:Loc Label_RuleGroupName}" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,5,0"/>
                                                     <TextBox Text="{Binding GroupName, UpdateSourceTrigger=PropertyChanged}" MinWidth="200" Margin="0,0,10,0" VerticalAlignment="Center" HorizontalAlignment="Stretch"/>
                                                     <ui:ToggleSwitch Content="{lex:Loc Toggle_EnableRuleGroup}" IsChecked="{Binding IsGroupEnabled}" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                                    <ui:Button Command="{Binding DataContext.RemoveFilterGroupCommand, RelativeSource={RelativeSource AncestorType={x:Type ItemsControl}}}"
+                                                    <ui:Button Command="{Binding DataContext.RemoveFilterGroupCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding}"
                                                             Appearance="Transparent" 
                                                             Icon="{ui:SymbolIcon Delete24}"
@@ -306,11 +305,11 @@
                                <RowDefinition Height="Auto"/>
                            </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="{lex:Loc Label_FusionTimeMs}" VerticalAlignment="Center" Margin="0,0,10,5"/>
-                            <hc:NumericUpDown Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="5000" Value="{Binding CameraSettings.VolumeCamera.FusionTimeMs, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,2" MinWidth="200" HorizontalAlignment="Stretch" VerticalAlignment="Center"/>
+                            <hc:NumericUpDown Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="50000" Value="{Binding CameraSettings.VolumeCamera.FusionTimeMs, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,2" MinWidth="200" HorizontalAlignment="Stretch" VerticalAlignment="Center"/>
 
                             <TextBlock Grid.Row="1" Grid.Column="0" Text="{lex:Loc Label_VolumeCameraImageSavePath}" VerticalAlignment="Center" Margin="0,0,10,5"/>
                             <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding CameraSettings.VolumeCamera.ImageSavePath, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Margin="0,0,5,0" MinWidth="200" HorizontalAlignment="Stretch"/>
-                            <ui:Button Grid.Row="1" Grid.Column="2" Appearance="Secondary" Content="{lex:Loc Button_Browse}" Icon="{ui:SymbolIcon Folder24}" VerticalAlignment="Center" Margin="0,2,0,2"/>
+                            <ui:Button Grid.Row="1" Grid.Column="2" Appearance="Secondary" Content="{lex:Loc Button_Browse}" Icon="{ui:SymbolIcon Folder24}" VerticalAlignment="Center" Margin="0,2,0,2" Command="{Binding SelectVolumeCameraImageSavePathCommand}"/>
 
                             <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,5,0,5">
                                 <CheckBox Content="{lex:Loc Toggle_SaveVerticalView}" IsChecked="{Binding CameraSettings.VolumeCamera.SaveVerticalView}" VerticalAlignment="Center" Margin="0,0,15,0"/>

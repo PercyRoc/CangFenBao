@@ -7,6 +7,7 @@
         <AssemblyName>Camera</AssemblyName>
         <RootNamespace>Camera</RootNamespace>
         <UseWPF>true</UseWPF>
+        <UseWindowsForms>true</UseWindowsForms>
         <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
     </PropertyGroup>
     
@@ -18,10 +19,12 @@
         <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
         <PackageReference Include="WPFLocalizeExtension" />
         <PackageReference Include="System.Reactive" />
+        <PackageReference Include="TurboJpegWrapper"/>
+        <PackageReference Include="Microsoft.Extensions.ObjectPool"/>
     </ItemGroup>
     
     <ItemGroup>
-      <ProjectReference Include="..\Common\基础服务.csproj" />
+      <ProjectReference Include="..\Common\基础模块.csproj" />
     </ItemGroup>
 
     <ItemGroup>
@@ -42,6 +45,9 @@
     </ItemGroup>
 
     <ItemGroup>
+      <Reference Include="LogisticsBaseCSharp">
+        <HintPath>Services\Implementations\HuaRay\LogisticsBaseCSharp.dll</HintPath>
+      </Reference>
       <Reference Include="MVIDCodeReader.Net">
         <HintPath>MVIDCodeReader.Net.dll</HintPath>
       </Reference>

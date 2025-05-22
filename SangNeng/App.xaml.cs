@@ -111,7 +111,7 @@ internal partial class App
         // 或者在这里进行一个简单的检查和配置。
         // 但基于现有代码，OnStartup 中配置 Logger，RegisterTypes 在那之后被框架调用以构建Shell。
         containerRegistry.RegisterInstance(Log.Logger);
-
+        
         // 使用扩展方法注册设备服务 (现在它们依赖的 Startup 服务已明确为 Singleton)
         containerRegistry.RegisterSingleton<ISangNengService, SangNengService>();
         containerRegistry.RegisterDialogWindow<HistoryDialogWindow>();
@@ -154,9 +154,9 @@ internal partial class App
             .CreateLogger();
 
         Log.Information("应用程序启动");
-        // 设置 WPFLocalizeExtension 的区域性
+        // 设置 WPFLocalizeExtension 的区域性为英文（如需中文改为 zh-CN）
         LocalizeDictionary.Instance.SetCurrentThreadCulture = true;
-        LocalizeDictionary.Instance.Culture = new CultureInfo("en-US");
+        LocalizeDictionary.Instance.Culture = new CultureInfo("en-us");
         // 先调用基类方法初始化容器
         base.OnStartup(e);
     }

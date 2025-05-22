@@ -23,6 +23,8 @@ using Camera.Services.Implementations.Hikvision.Volume;
 using Camera.Services.Implementations.Hikvision.Security;
 using Common.Services.Settings;
 using Common.Services.Ui;
+using History;
+using History.Data;
 
 namespace Rookie;
 
@@ -44,13 +46,10 @@ public partial class App
             if (createdNew || _mutex.WaitOne(TimeSpan.Zero, false))
             {
                 _ownsMutex = true;
-
-                // 确保模块已完全初始化, 这解决了之前的服务解析时序问题
                 var moduleManager = Container.Resolve<IModuleManager>();
                 moduleManager.Run(); 
-                Log.Information("模块已通过 moduleManager.Run() 显式初始化于 CreateShell 开头。");
+                Log.Information("模块已通过 moduleManager.Run() 显式初始化于 CreateShell 内部或之前。");
                 
-                // 现在可以安全地解析主窗口及其依赖
                 return Container.Resolve<MainWindow>();
             }
 
@@ -61,7 +60,6 @@ public partial class App
         }
         catch (Exception ex)
         {
-            // 保留这个顶层 catch 以处理 CreateShell 期间的意外故障
             Log.Fatal(ex, "创建 Shell 期间发生致命错误。");
             MessageBox.Show($"Fatal error during startup: {ex.Message}", "Startup Error", MessageBoxButton.OK,
                 MessageBoxImage.Error);
@@ -72,6 +70,9 @@ public partial class App
 
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
+        containerRegistry.RegisterInstance(Log.Logger); // Register the static Log.Logger instance
+        Log.Information("Serilog.ILogger instance registered in DI container.");
+
         var configuration = new ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)
             .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
@@ -79,10 +80,10 @@ public partial class App
         containerRegistry.RegisterInstance<IConfiguration>(configuration);
         containerRegistry.RegisterSingleton<ISettingsService, SettingsService>();
         containerRegistry.RegisterSingleton<INotificationService,NotificationService>();
-        containerRegistry.RegisterSingleton<BarcodeChuteSettingsViewModel>();
         
         containerRegistry.RegisterSingleton<IRookieApiService, RookieApiService>();
         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
+        containerRegistry.RegisterDialogWindow<HistoryDialogWindow>();
         containerRegistry.RegisterDialog<SettingsDialogs, SettingsDialogViewModel>();
         containerRegistry.RegisterForNavigation<RookieApiSettingsView, RookieApiSettingsViewModel>();
         
@@ -93,29 +94,45 @@ public partial class App
     {
         base.ConfigureModuleCatalog(moduleCatalog);
         moduleCatalog.AddModule<FullFeaturedCameraModule>();
-        // moduleCatalog.AddModule<IntegratedCameraModule>();
         moduleCatalog.AddModule<WeightModule>();
         moduleCatalog.AddModule<SortingCarModule>();
+        moduleCatalog.AddModule<HistoryModule>();
     }
 
     protected override void OnStartup(StartupEventArgs e)
     {
         var progressWindow =
-            // 显示启动进度窗口
             new ProgressIndicatorWindow("Initializing services, please wait...");
         progressWindow.Show();
 
+        // Logger configuration is one of the first things to do.
         ConfigureLoggerFromSettings();
-        Log.Information("Logger configured in OnStartup.");
+        Log.Information("Logger configured in OnStartup (or re-confirmed).");
 
         Log.Information("应用程序启动 (OnStartup)");
         RegisterGlobalExceptionHandling();
-        base.OnStartup(e);
+        base.OnStartup(e); // This will call RegisterTypes, ConfigureModuleCatalog etc.
 
-        // 设置 WPFLocalizeExtension 的区域性
         LocalizeDictionary.Instance.SetCurrentThreadCulture = true;
         LocalizeDictionary.Instance.Culture = new CultureInfo("en-US");
         progressWindow.Dispatcher.Invoke(progressWindow.Close);
+    }
+
+    protected override async void OnInitialized() // Override OnInitialized to initialize services after modules are loaded
+    {
+        base.OnInitialized();
+        Log.Information("Application OnInitialized: Shell and modules are initialized. Performing post-initialization tasks.");
+
+        // Initialize IPackageHistoryDataService as per history_module_guide.md
+        try
+        {
+            var historyService = Container.Resolve<IPackageHistoryDataService>();
+            await historyService.InitializeAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to initialize IPackageHistoryDataService in OnInitialized.");
+        }
     }
 
     protected override async void OnExit(ExitEventArgs e)
@@ -128,7 +145,6 @@ public partial class App
             progressWindow = new ProgressIndicatorWindow("Shutting down services, please wait...");
             progressWindow.Show();
 
-            // 服务关闭逻辑
             Log.Information("开始关闭应用程序服务...");
 
             TryDisposeService<ICameraService>("HikvisionIndustrialCameraService");
@@ -177,12 +193,7 @@ public partial class App
         }
         catch (Exception ex)
         {
-            Log.Logger = new LoggerConfiguration()
-                .MinimumLevel.Debug()
-                .WriteTo.Console()
-                .WriteTo.Debug()
-                .CreateLogger();
-            Log.Error(ex, "从 appsettings.json 配置 Serilog 失败. 使用基本备用日志记录器.");
+            Log.Error(ex, "从 appsettings.json 配置 Serilog 失败. 使用现有或基本备用日志记录器.");
         }
     }
 
@@ -212,24 +223,14 @@ public partial class App
     {
         try
         {
-            // 尝试解析服务。对于可选服务或根据条件注册的服务，这可能需要更复杂的逻辑
-            // (例如 TryResolve 或检查服务是否实际已激活)。
-            // 此处假设如果服务已注册，则应尝试处置。
             var service = Container.Resolve<TService>();
             
-            // Resolve<T> 在 Prism 中如果服务未注册通常会抛出异常。
-            // 如果服务可能未注册，应使用 Container.IsRegistered<TService>() 检查或 TryResolve。
-            // 为简化，此处假定如果我们要关闭它，它应该已被注册。
-            // 注意: Prism 的 Resolve<T>() 在某些配置下，如果找不到，可能返回 null，而不是抛出。
-            // 然而，更常见的行为是抛出 ResolutionFailedException。下面的 null 检查是为了以防万一。
-
             Log.Information("正在处置服务: {ServiceName}...", serviceName);
             service.Dispose();
             Log.Information("服务 {ServiceName} 的处置操作已发起或完成。", serviceName);
         }
-        catch (Exception ex) // 更具体的异常类型，如 ResolutionFailedException (取决于DI容器) 可能更合适
+        catch (Exception ex) 
         {
-            // 捕获解析服务或调用 Dispose 时可能发生的任何错误。
             Log.Warning(ex, "解析或处置服务 {ServiceName} 时发生错误。该服务可能未注册、已被处置或在处置过程中出错。", serviceName);
         }
     }

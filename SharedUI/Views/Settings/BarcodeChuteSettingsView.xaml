@@ -7,6 +7,9 @@
              xmlns:prism="http://prismlibrary.com/"
              xmlns:settings="clr-namespace:SharedUI.ViewModels.Settings"
              xmlns:lex="https://github.com/XAMLMarkupExtensions/WPFLocalizationExtension"
+             lex:LocalizeDictionary.DesignCulture="zh-CN"
+             lex:ResxLocalizationProvider.DefaultAssembly="SharedUI"
+             lex:ResxLocalizationProvider.DefaultDictionary="SharedUI.Resources.Strings"
              prism:ViewModelLocator.AutoWireViewModel="True"
              d:DataContext="{d:DesignInstance Type=settings:BarcodeChuteSettingsViewModel}"
              mc:Ignorable="d">

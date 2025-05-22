@@ -1,4 +1,6 @@
-﻿using Common.Services.Ui;
+﻿using BalanceSorting.ViewModels.Settings;
+using Camera.ViewModels;
+using Common.Services.Ui;
 using FuzhouPolicyForce.ViewModels.Settings;
 using Serilog;
 using SharedUI.ViewModels.Settings;
@@ -60,7 +62,7 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
         try
         {
             // 保存所有设置
-            _cameraSettingsViewModel.SaveConfigurationCommand.Execute();
+            _cameraSettingsViewModel.SaveSettingsCommand.Execute(null);
             _balanceSortSettingsViewModel.SaveConfigurationCommand.Execute();
             _barcodeChuteSettingsViewModel.SaveConfigurationCommand.Execute();
             _wangDianTongSettingsViewModel.SaveConfigurationCommand.Execute();

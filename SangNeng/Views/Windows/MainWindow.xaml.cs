@@ -14,6 +14,8 @@ namespace Sunnen.Views.Windows;
 /// </summary>
 public partial class MainWindow
 {
+    private bool _isFocusedByPreviewScanLogic = false; 
+
     public MainWindow(INotificationService notificationService)
     {
         InitializeComponent();
@@ -94,16 +96,17 @@ public partial class MainWindow
         if (e.Key != Key.Enter || sender is not HandyControl.Controls.TextBox textBox) return;
         var barcode = textBox.Text;
         if (string.IsNullOrWhiteSpace(barcode)) return;
-        if (barcode.StartsWith('\"'))
+        
+        if (barcode.StartsWith('"'))
         {
             barcode = barcode[1..];
         }
+
         if (DataContext is MainWindowViewModel viewModel)
         {
             await viewModel.ProcessBarcodeAsync(barcode);
         }
-        textBox.Clear(); 
-        Keyboard.Focus(this);
+        Keyboard.Focus(this); 
     }
 
     // 新增：全局文本输入事件处理，输入@时自动聚焦到输入框
@@ -111,7 +114,24 @@ public partial class MainWindow
     {
         if (e.Text == "\"")
         {
+            _isFocusedByPreviewScanLogic = true; 
+            ManualBarcodeTextBox.Clear(); 
             ManualBarcodeTextBox.Focus();
+            e.Handled = true; 
+        }
+    }
+
+    private void ManualBarcodeTextBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (_isFocusedByPreviewScanLogic)
+        {
+            _isFocusedByPreviewScanLogic = false; 
+            return; 
+        }
+
+        if (sender is HandyControl.Controls.TextBox textBox && !string.IsNullOrEmpty(textBox.Text))
+        {
+            textBox.Clear();
         }
     }
 }

@@ -10,6 +10,7 @@ using Application = System.Windows.Application;
 using Microsoft.Win32;
 using System.IO;
 using System.Text;
+using Camera.Services.Implementations.TCP;
 using WeiCiModule.Models;
 
 namespace WeiCiModule.ViewModels;

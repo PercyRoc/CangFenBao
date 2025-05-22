@@ -21,7 +21,6 @@ namespace History.ViewModels.Dialogs;
 public class PackageHistoryDialogViewModel : BindableBase, IDialogAware
 {
     private readonly IPackageHistoryDataService _packageHistoryDataService;
-    private readonly ILogger _logger;
     private readonly HistoryViewConfiguration? _configuration;
     private List<HistoryColumnSpec>? _effectiveColumnSpecs = new List<HistoryColumnSpec>();
 
@@ -143,10 +142,9 @@ public class PackageHistoryDialogViewModel : BindableBase, IDialogAware
 
     [UsedImplicitly] public DialogCloseListener RequestClose { get; }
 
-    public PackageHistoryDialogViewModel(IPackageHistoryDataService packageHistoryDataService, ILogger logger, HistoryViewConfiguration? viewConfiguration = null)
+    public PackageHistoryDialogViewModel(IPackageHistoryDataService packageHistoryDataService, HistoryViewConfiguration? viewConfiguration = null)
     {
         _packageHistoryDataService = packageHistoryDataService ?? throw new ArgumentNullException(nameof(packageHistoryDataService));
-        _logger = logger.ForContext<PackageHistoryDialogViewModel>();
         _configuration = viewConfiguration;
 
         _effectiveColumnSpecs = _configuration?.ColumnSpecs.Count > 0
@@ -316,65 +314,49 @@ public class PackageHistoryDialogViewModel : BindableBase, IDialogAware
 
     private async Task ExecuteSearchCommandAsync()
     {
-        _logger.Debug("ExecuteSearchCommandAsync: Starting search. Current IsLoading state: {IsLoadingState}", IsLoading);
+        Log.Information("ExecuteSearchCommandAsync called. StartDate: {StartDate}, EndDate: {EndDate}, BarcodeFilter: {BarcodeFilter}, Page: {CurrentPage}, PageSize: {PageSize}", 
+            StartDate, EndDate, BarcodeFilter, CurrentPage, PageSize);
         IsLoading = true;
-        _logger.Debug("ExecuteSearchCommandAsync: IsLoading set to true.");
-        HistoricalPackages.Clear();
         try
         {
-            _logger.Debug("ExecuteSearchCommandAsync: Calling _packageHistoryDataService.GetPackagesAsync with StartDate={StartDate}, EndDate={EndDate}, BarcodeFilter={BarcodeFilter}, Page={CurrentPage}, PageSize={PageSize}", 
-                StartDate, EndDate, BarcodeFilter, CurrentPage, PageSize);
-            var result = await _packageHistoryDataService.GetPackagesAsync(StartDate, EndDate, BarcodeFilter, CurrentPage, PageSize);
-            _logger.Debug("ExecuteSearchCommandAsync: GetPackagesAsync returned. TotalCount: {TotalCount}, Records Fetched: {RecordCount}", result.TotalCount, result.Records.Count());
+            var (enumerableRecords, totalRecordsCount) = await _packageHistoryDataService.GetPackagesAsync(StartDate, EndDate, BarcodeFilter, CurrentPage, PageSize);
+            var records = enumerableRecords.ToList(); // Explizit zu List<T> konvertieren
             
-            TotalItems = result.TotalCount;
+            TotalItems = totalRecordsCount;
             TotalPages = (int)Math.Ceiling((double)TotalItems / PageSize);
-            if (TotalPages == 0 && TotalItems > 0) TotalPages = 1;
-            // Ensure CurrentPage is within valid range after TotalPages is calculated
-            if (CurrentPage > TotalPages && TotalPages > 0) 
-            {
-                _logger.Debug("ExecuteSearchCommandAsync: CurrentPage {OldCurrentPage} was out of sync, resetting to TotalPages {NewTotalPages}", CurrentPage, TotalPages);
-                CurrentPage = TotalPages; // This might trigger another search if not handled carefully, but our command is manual.
-            } 
-            else if (CurrentPage == 0 && TotalPages > 0) // Handle case where current page might be 0 if total pages was 0 previously
-            {
-                _logger.Debug("ExecuteSearchCommandAsync: CurrentPage was 0, resetting to 1 as TotalPages is now {NewTotalPages}", TotalPages);
-                CurrentPage = 1;
-            }
+            if (TotalPages == 0) TotalPages = 1; // Ensure at least one page if no items
+            if (CurrentPage > TotalPages) CurrentPage = TotalPages; // Adjust current page if it's out of bounds
 
-            HistoricalPackages.Clear(); // Clearing again just to be safe if there was a re-entrant call somehow (should not happen with current logic)
-            foreach (var package in result.Records)
+            var viewModels = new ObservableCollection<PackageHistoryRecord>();
+            for (var i = 0; i < records.Count; i++) // records.Count ist jetzt gültig
             {
-                HistoricalPackages.Add(package);
+                var record = records[i]; // records[i] ist jetzt gültig
+                record.Index = TotalItems - ((CurrentPage - 1) * PageSize + i);
+                viewModels.Add(record);
             }
-            _logger.Debug("ExecuteSearchCommandAsync: Populated HistoricalPackages with {Count} items.", HistoricalPackages.Count);
+            HistoricalPackages = viewModels;
 
-            if (TotalItems > 0)
+            if (records.Count == 0) // records.Any() ist auch gültig für List<T>
             {
-                // Growl.SuccessGlobal(new GrowlInfo { Message = GetLocalizedString("Growl_Search_Success_Paged", TotalItems, CurrentPage, TotalPages), ShowDateTime = false, StaysOpen = false, WaitTime = 3 });
-                _logger.Information("Search successful. {TotalItems} records found. Displaying page {CurrentPage} of {TotalPages}.", TotalItems, CurrentPage, TotalPages);
+                Log.Information("No records found for the given criteria.");
             }
             else
             {
-                // Growl.InfoGlobal(new GrowlInfo { Message = GetLocalizedString("Growl_Search_NoData"), ShowDateTime = false, StaysOpen = false, WaitTime = 3 });
-                _logger.Information("No records found matching criteria.");
+                Log.Information("Found {Count} records for page {Page}. Total items: {TotalItems}", records.Count, CurrentPage, TotalItems);
             }
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "查询历史记录失败。StartDate={StartDate}, EndDate={EndDate}, BarcodeFilter={BarcodeFilter}, Page={CurrentPage}, PageSize={PageSize}", StartDate, EndDate, BarcodeFilter, CurrentPage, PageSize);
+            Log.Error(ex, "Error searching package history.");
+            Growl.Error(new GrowlInfo { Message = GetLocalizedString("PackageHistory_Growl_SearchError", ex.Message), ShowDateTime = false });
+            HistoricalPackages.Clear(); 
             TotalItems = 0;
-            TotalPages = 0;
-            CurrentPage = 1; // Reset to page 1 on error
-            // Growl.ErrorGlobal(new GrowlInfo { Message = GetLocalizedString("Growl_Search_Error", ex.Message), ShowDateTime = false, StaysOpen = false, WaitTime = 5 });
+            TotalPages = 1;
         }
         finally
         {
             IsLoading = false;
-            _logger.Debug("ExecuteSearchCommandAsync: IsLoading set to false in finally block.");
-            UpdatePagingCommandsAndInfo();
-            RaiseCanExecuteChangedForAllCommands();
-            _logger.Debug("ExecuteSearchCommandAsync: Search finished.");
+            UpdatePagingCommandsAndInfo(); 
         }
     }
 
@@ -410,7 +392,7 @@ public class PackageHistoryDialogViewModel : BindableBase, IDialogAware
 
     public void OnDialogClosed()
     {
-        _logger.Debug("历史记录对话框已关闭。");
+        Log.Debug("历史记录对话框已关闭。");
     }
 
     public void OnDialogOpened(IDialogParameters parameters)
@@ -433,7 +415,7 @@ public class PackageHistoryDialogViewModel : BindableBase, IDialogAware
             UpdateColumnVisibilityFromSpecs();
         }
 
-        _logger.Debug("历史记录对话框已打开。");
+        Log.Debug("历史记录对话框已打开。");
         _ = ExecuteSearchCommandAsync();
     }
 
@@ -459,13 +441,13 @@ public class PackageHistoryDialogViewModel : BindableBase, IDialogAware
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "无法打开图片文件: {ImagePath}", package.ImagePath);
+                Log.Error(ex, "无法打开图片文件: {ImagePath}", package.ImagePath);
                 Growl.ErrorGlobal(new GrowlInfo { Message = GetLocalizedString("Growl_OpenFile_Error", package.ImagePath, ex.Message), ShowDateTime = false, StaysOpen = false, WaitTime = 5 });
             }
         }
         else
         {
-            _logger.Warning("尝试查看的图片文件不存在: {ImagePath}", package.ImagePath);
+            Log.Warning("尝试查看的图片文件不存在: {ImagePath}", package.ImagePath);
             Growl.WarningGlobal(new GrowlInfo { Message = GetLocalizedString("Growl_ViewImage_FileNotFound", package.ImagePath), ShowDateTime = false, StaysOpen = false, WaitTime = 3 });
         }
     }
@@ -487,7 +469,7 @@ public class PackageHistoryDialogViewModel : BindableBase, IDialogAware
             var filePath = saveFileDialog.FileName;
             try
             {
-                _logger.Information("开始导出所有历史记录到Excel，查询条件 - 开始: {StartDate}, 结束: {EndDate}, 条码: {Barcode}", StartDate, EndDate, BarcodeFilter);
+                Log.Information("开始导出所有历史记录到Excel，查询条件 - 开始: {StartDate}, 结束: {EndDate}, 条码: {Barcode}", StartDate, EndDate, BarcodeFilter);
                 
                 List<PackageHistoryRecord> allPackagesToExport = new List<PackageHistoryRecord>();
                 int exportPageSize = 500;
@@ -501,7 +483,7 @@ public class PackageHistoryDialogViewModel : BindableBase, IDialogAware
                     currentExportPage++;
                 } while (allPackagesToExport.Count < exportResult.totalCount && exportResult.records.Any());
                 
-                _logger.Information("共获取到 {TotalCount} 条记录用于Excel导出。", allPackagesToExport.Count);
+                Log.Information("共获取到 {TotalCount} 条记录用于Excel导出。", allPackagesToExport.Count);
 
                 if (_effectiveColumnSpecs != null)
                 {
@@ -594,7 +576,7 @@ public class PackageHistoryDialogViewModel : BindableBase, IDialogAware
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "导出历史记录到Excel失败。路径: {FilePath}", filePath);
+                Log.Error(ex, "导出历史记录到Excel失败。路径: {FilePath}", filePath);
                 Growl.ErrorGlobal(new GrowlInfo{ Message = GetLocalizedString("Growl_Export_Error", ex.Message), ShowDateTime = false, StaysOpen = false, WaitTime = 5 });
             }
             finally
@@ -649,7 +631,7 @@ public class PackageHistoryDialogViewModel : BindableBase, IDialogAware
                 }
                 catch (FormatException ex)
                 {
-                    _logger.Error(ex, "Fallback English string format failed. Key: '{Key}', Format: '{Format}', Args: {Args}", key, englishValue, args);
+                    Log.Error(ex, "Fallback English string format failed. Key: '{Key}', Format: '{Format}', Args: {Args}", key, englishValue, args);
                     return englishValue; // 返回未格式化的英文值
                 }
             }
@@ -657,7 +639,7 @@ public class PackageHistoryDialogViewModel : BindableBase, IDialogAware
         }
 
         // 如果没有预定义的英文回退值，记录警告并返回键或带参数的键
-        _logger.Warning("No English default for key '{Key}' in GetLocalizedString. Returning key.", key);
+        Log.Warning("No English default for key '{Key}' in GetLocalizedString. Returning key.", key);
         if (args.Length <= 0) return key;
         try { return key + " (" + string.Join(", ", args.Select(a => a?.ToString() ?? "null")) + ")"; } catch { return key; }
     }

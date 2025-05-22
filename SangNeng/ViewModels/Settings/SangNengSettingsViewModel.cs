@@ -29,21 +29,27 @@ public class SangNengSettingsViewModel : BindableBase
     {
         try
         {
+            Log.Information("正在保存桑能设置: Username={Username}, Password={Password}, Sign={Sign}", 
+                Settings.Username, 
+                Settings.Password, 
+                Settings.Sign);
+
             var results = _settingsService.SaveSettings(Settings, true);
             if (results.Length > 0)
             {
                 var errorMessage = string.Join("\n", results.Select(r => r.ErrorMessage));
-                _notificationService.ShowError($"Failed to save settings：\n{errorMessage}");
+                Log.Error("保存桑能设置失败: {ErrorMessage}", errorMessage);
+                _notificationService.ShowError($"保存设置失败：\n{errorMessage}");
                 return;
             }
 
-            _notificationService.ShowSuccess("SangNeng server settings saved successfully");
-            Log.Information("SangNeng server settings saved");
+            _notificationService.ShowSuccess("桑能服务器设置已保存");
+            Log.Information("桑能服务器设置已保存");
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Error saving SangNeng server settings");
-            _notificationService.ShowError("Error saving SangNeng server settings");
+            Log.Error(ex, "保存桑能服务器设置时发生错误");
+            _notificationService.ShowError("保存桑能服务器设置时发生错误");
         }
     }
 }

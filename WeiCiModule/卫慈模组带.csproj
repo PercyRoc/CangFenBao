@@ -33,8 +33,8 @@
 
         <ProjectReference Include="..\Camera\相机模块.csproj" />
 
-        <ProjectReference Include="..\Common\基础服务.csproj"/>
-        <ProjectReference Include="..\SharedUI\UI组件.csproj"/>
+        <ProjectReference Include="..\Common\基础模块.csproj" />
+        <ProjectReference Include="..\SharedUI\公共模块.csproj" />
         <ProjectReference Include="..\SortingServices\分拣服务.csproj"/>
     </ItemGroup>
 
