@@ -41,7 +41,7 @@ public class ChuteMappingService(HttpClient httpClient, ISettingsService setting
         try
         {
             // 根据站点代码确定handlers
-            var handlers = config.SiteCode;
+            const string handlers = "上海收货组08";
 
             // 构建请求数据
             var requestData = new
