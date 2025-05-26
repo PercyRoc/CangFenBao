@@ -224,6 +224,10 @@ internal partial class App
             var service = Container.Resolve<TService>();
             
             Log.Information("正在处置服务: {ServiceName}...", serviceName);
+            if (service is RenJiaCameraService renJiaCamera)
+            {
+                renJiaCamera.Stop();
+            }
             service.Dispose(); // 调用 Dispose 方法进行清理
             Log.Information("服务 {ServiceName} 的处置操作已发起或完成。", serviceName);
         }
