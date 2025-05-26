@@ -8,31 +8,31 @@
         <UseWPF>true</UseWPF>
         <AssemblyName>仓分宝-新北洋</AssemblyName>
         <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
-		<RootNamespace>XinBeiYang</RootNamespace>
+        <RootNamespace>XinBeiYang</RootNamespace>
     </PropertyGroup>
     <ItemGroup>
         <!-- Prism -->
-        <PackageReference Include="Prism.Wpf" />
+        <PackageReference Include="Prism.Wpf"/>
 
         <!-- Serilog -->
-        <PackageReference Include="Serilog" />
-        <PackageReference Include="Serilog.Sinks.Console" />
-        <PackageReference Include="Serilog.Sinks.File" />
-        <PackageReference Include="Serilog.Sinks.Debug" />
-        <PackageReference Include="Serilog.Extensions.Logging" />
-        <PackageReference Include="Serilog.Settings.Configuration" />
+        <PackageReference Include="Serilog"/>
+        <PackageReference Include="Serilog.Sinks.Console"/>
+        <PackageReference Include="Serilog.Sinks.File"/>
+        <PackageReference Include="Serilog.Sinks.Debug"/>
+        <PackageReference Include="Serilog.Extensions.Logging"/>
+        <PackageReference Include="Serilog.Settings.Configuration"/>
 
         <!-- UI Framework -->
-        <PackageReference Include="MahApps.Metro.IconPacks.Material" />
-        <PackageReference Include="Microsoft.Extensions.Http" />
-        <PackageReference Include="WPF-UI" />
-        <PackageReference Include="HandyControl" />
+        <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
+        <PackageReference Include="Microsoft.Extensions.Http"/>
+        <PackageReference Include="WPF-UI"/>
+        <PackageReference Include="HandyControl"/>
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Common\基础服务.csproj" />
-        <ProjectReference Include="..\DeviceService\设备服务.csproj" />
-        <ProjectReference Include="..\SharedUI\UI组件.csproj" />
+        <ProjectReference Include="..\Common\基础服务.csproj"/>
+        <ProjectReference Include="..\DeviceService\设备服务.csproj"/>
+        <ProjectReference Include="..\SharedUI\UI组件.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -42,10 +42,14 @@
     </ItemGroup>
 
     <ItemGroup>
-      <None Update="appsettings.json">
-        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      </None>
+        <None Update="appsettings.json">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
 
-    <ProjectExtensions><VisualStudio><UserProperties appsettings_1json__JsonSchema="https://json.schemastore.org/appsettings.json" /></VisualStudio></ProjectExtensions>
+    <ProjectExtensions>
+        <VisualStudio>
+            <UserProperties appsettings_1json__JsonSchema="https://json.schemastore.org/appsettings.json"/>
+        </VisualStudio>
+    </ProjectExtensions>
 </Project>

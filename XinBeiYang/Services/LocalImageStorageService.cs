@@ -1,4 +1,7 @@
+using System;
 using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 using Serilog;
 
@@ -12,11 +15,13 @@ namespace XinBeiYang.Services;
 public class LocalImageStorageService : IImageStorageService
 {
     private readonly string _baseStoragePath;
+    // 添加磁盘空间阈值常量，例如 90%
+    private const double DiskUsageThreshold = 0.90;
 
     public LocalImageStorageService()
     {
         // 默认存储路径：应用程序基础目录\Images
-        _baseStoragePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Images");
+        _baseStoragePath = "E:/Images";
         Log.Information("本地图像存储路径设置为: {Path}", _baseStoragePath);
     }
 
@@ -33,6 +38,9 @@ public class LocalImageStorageService : IImageStorageService
     /// <inheritdoc />
     public async Task<string?> SaveImageAsync(BitmapSource? image, string barcode, DateTime createTime)
     {
+        // 在保存图像之前检查磁盘空间并进行清理
+        await CheckAndCleanupDiskSpaceAsync();
+
         if (image == null)
         {
             Log.Warning("尝试保存空图像，条码为 {Barcode}", barcode);
@@ -130,6 +138,85 @@ public class LocalImageStorageService : IImageStorageService
         {
             Log.Error(ex, "保存图像时发生错误，条码 {Barcode}: {Message}", barcode, ex.Message);
             return null;
+        }
+    }
+
+    /// <summary>
+    /// 检查磁盘使用率，如果超过阈值则删除最早的日期文件夹。
+    /// </summary>
+    private async Task CheckAndCleanupDiskSpaceAsync()
+    {
+        try
+        {
+            // 获取存储路径所在的驱动器信息
+            var drive = new DriveInfo(Path.GetPathRoot(_baseStoragePath)!);
+
+            if (!drive.IsReady)
+            {
+                Log.Warning("驱动器 {DriveName} 未准备好，无法检查磁盘空间。", drive.Name);
+                return;
+            }
+
+            var totalSpace = drive.TotalSize;
+            var freeSpace = drive.AvailableFreeSpace;
+            var usedSpace = totalSpace - freeSpace;
+            var usagePercentage = (double)usedSpace / totalSpace;
+
+            Log.Debug("检查磁盘空间: 总大小 {TotalSpace}B, 可用空间 {FreeSpace}B, 使用率 {UsagePercentage:P1}",
+                totalSpace, freeSpace, usagePercentage);
+
+            // 如果磁盘使用率超过阈值
+            while (usagePercentage > DiskUsageThreshold)
+            {
+                Log.Warning("磁盘使用率 ({UsagePercentage:P1}) 超过阈值 ({Threshold:P1})，开始清理旧图片文件夹。", usagePercentage, DiskUsageThreshold);
+
+                // 获取所有按 yyyy-MM-dd 格式命名的子目录
+                var dateDirectories = Directory.GetDirectories(_baseStoragePath)
+                                               .Where(dir => DateTime.TryParseExact(Path.GetFileName(dir), "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out _))
+                                               .OrderBy(dir => DateTime.ParseExact(Path.GetFileName(dir), "yyyy-MM-dd", null))
+                                               .ToList();
+
+                if (!dateDirectories.Any())
+                {
+                    Log.Information("没有找到按日期命名的文件夹可供清理。");
+                    break; // 没有可以删除的文件夹，停止清理
+                }
+
+                var oldestDirectory = dateDirectories.First();
+                Log.Information("删除最旧的图片文件夹: {DirectoryPath}", oldestDirectory);
+
+                try
+                {
+                    // 异步删除文件夹及其内容
+                    await Task.Run(() => Directory.Delete(oldestDirectory, recursive: true));
+                    Log.Information("已删除文件夹: {DirectoryPath}", oldestDirectory);
+
+                    // 删除后重新计算使用率
+                    drive = new DriveInfo(Path.GetPathRoot(_baseStoragePath)!); // 刷新驱动器信息
+                    totalSpace = drive.TotalSize;
+                    freeSpace = drive.AvailableFreeSpace;
+                    usedSpace = totalSpace - freeSpace;
+                    usagePercentage = (double)usedSpace / totalSpace;
+
+                    Log.Debug("删除文件夹后磁盘使用率: {UsagePercentage:P1}", usagePercentage);
+
+                }
+                catch (Exception deleteEx)
+                {
+                    Log.Error(deleteEx, "删除旧图片文件夹失败: {DirectoryPath}", oldestDirectory);
+                    // 如果删除失败，停止进一步清理以避免死循环
+                    break;
+                }
+            }
+
+            if (usagePercentage <= DiskUsageThreshold)
+            {
+                 Log.Information("磁盘使用率已在阈值 ({Threshold:P1}) 以下。", DiskUsageThreshold);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "检查或清理磁盘空间时发生错误。");
         }
     }
 
