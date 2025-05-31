@@ -19,8 +19,8 @@ namespace Sorting_Car.ViewModels
 
         public ObservableCollection<string> AvailablePortNames { get; }
         public ObservableCollection<int> AvailableBaudRates { get; }
-        public Array ParityValues => Enum.GetValues(typeof(SerialParity));
-        public Array StopBitsValues => Enum.GetValues(typeof(SerialStopBits));
+        public static Array ParityValues => Enum.GetValues(typeof(SerialParity));
+        public static Array StopBitsValues => Enum.GetValues(typeof(SerialStopBits));
         public ObservableCollection<int> AvailableDataBits { get; }
 
 

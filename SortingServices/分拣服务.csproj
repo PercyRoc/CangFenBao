@@ -17,7 +17,6 @@
 
     <ItemGroup>
         <ProjectReference Include="..\Common\基础模块.csproj" />
-        <ProjectReference Include="..\DeviceService\设备服务.csproj"/>
     </ItemGroup>
 
 </Project>

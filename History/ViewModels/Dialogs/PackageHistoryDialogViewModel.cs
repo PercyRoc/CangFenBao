@@ -11,7 +11,6 @@ using History.Configuration;
 using System.ComponentModel;
 using System.Globalization;
 using System.Reflection;
-using Common.Models.Package;
 using HandyControl.Controls;
 using HandyControl.Data;
 using JetBrains.Annotations;
@@ -22,7 +21,7 @@ public class PackageHistoryDialogViewModel : BindableBase, IDialogAware
 {
     private readonly IPackageHistoryDataService _packageHistoryDataService;
     private readonly HistoryViewConfiguration? _configuration;
-    private List<HistoryColumnSpec>? _effectiveColumnSpecs = new List<HistoryColumnSpec>();
+    private List<HistoryColumnSpec>? _effectiveColumnSpecs;
 
     private bool _isIndexColVisible;
     private bool _isBarcodeColVisible;
@@ -149,7 +148,7 @@ public class PackageHistoryDialogViewModel : BindableBase, IDialogAware
 
         _effectiveColumnSpecs = _configuration?.ColumnSpecs.Count > 0
             ? [.. _configuration.ColumnSpecs.OrderBy(c => c.DisplayOrderInGrid)]
-            : [.. GetDefaultColumnSpecs().OrderBy(c => c.DisplayOrderInGrid)];
+            : [.. global::History.ViewModels.Dialogs.PackageHistoryDialogViewModel.GetDefaultColumnSpecs().OrderBy(c => c.DisplayOrderInGrid)];
         UpdateColumnVisibilityFromSpecs();
 
         SearchCommand = new DelegateCommand(async void () => { CurrentPage = 1; await ExecuteSearchCommandAsync(); });
@@ -230,7 +229,7 @@ public class PackageHistoryDialogViewModel : BindableBase, IDialogAware
         IsImageColVisible = _effectiveColumnSpecs.Any(c => c.PropertyName == "ImageAction" && c.IsDisplayed);
     }
 
-    private List<HistoryColumnSpec> GetDefaultColumnSpecs()
+    private static List<HistoryColumnSpec> GetDefaultColumnSpecs()
     {
         return
         [
@@ -322,6 +321,15 @@ public class PackageHistoryDialogViewModel : BindableBase, IDialogAware
             var (enumerableRecords, totalRecordsCount) = await _packageHistoryDataService.GetPackagesAsync(StartDate, EndDate, BarcodeFilter, CurrentPage, PageSize);
             var records = enumerableRecords.ToList(); // Explizit zu List<T> konvertieren
             
+            // 添加日志输出前几条记录的状态信息
+            Log.Debug("PackageHistoryDialogViewModel: Loaded records sample:");
+            for (int i = 0; i < Math.Min(records.Count, 10); i++) // Log up to first 10 records
+            {
+                var record = records[i];
+                Log.Information("  - Record ID: {Id}, CreateTime: {CreateTime:yyyy-MM-dd HH:mm:ss.fff}, Status: '{Status}', StatusDisplay: '{StatusDisplay}'",
+                    record.Id, record.CreateTime, record.Status ?? "null", record.StatusDisplay);
+            }
+            
             TotalItems = totalRecordsCount;
             TotalPages = (int)Math.Ceiling((double)TotalItems / PageSize);
             if (TotalPages == 0) TotalPages = 1; // Ensure at least one page if no items
@@ -403,9 +411,9 @@ public class PackageHistoryDialogViewModel : BindableBase, IDialogAware
             Title = titleParam;
         }
 
-        if (parameters.TryGetValue<HistoryViewConfiguration>("customViewConfiguration", out var customConfigFromParams) && customConfigFromParams != null)
+        if (parameters.TryGetValue<HistoryViewConfiguration>("customViewConfiguration", out var customConfigFromParams))
         {
-            _effectiveColumnSpecs = customConfigFromParams.ColumnSpecs?.Count > 0
+            _effectiveColumnSpecs = customConfigFromParams.ColumnSpecs.Count > 0
                 ? customConfigFromParams.ColumnSpecs.OrderBy(c => c.DisplayOrderInGrid).ToList()
                 : GetDefaultColumnSpecs().OrderBy(c => c.DisplayOrderInGrid).ToList();
             UpdateColumnVisibilityFromSpecs();
@@ -554,12 +562,6 @@ public class PackageHistoryDialogViewModel : BindableBase, IDialogAware
                                 {
                                     cell.SetCellValue(Convert.ToDouble(value));
                                 }
-                                else if (property?.PropertyType == typeof(PackageStatus))
-                                {
-                                    var statusKey = $"PackageStatus_{value}";
-                                    var localizedStatus = LocalizeDictionary.Instance.GetLocalizedObject("Common", "Strings", statusKey, LocalizeDictionary.Instance.Culture) as string;
-                                    cell.SetCellValue(localizedStatus ?? value.ToString());
-                                }
                                 else
                                 {
                                     cell.SetCellValue(value.ToString());
@@ -623,24 +625,21 @@ public class PackageHistoryDialogViewModel : BindableBase, IDialogAware
 
         if (englishDefaults.TryGetValue(key, out var englishValue))
         {
-            if (args.Length > 0)
+            if (args.Length <= 0) return englishValue;
+            try
             {
-                try
-                {
-                    return string.Format(CultureInfo.InvariantCulture, englishValue, args);
-                }
-                catch (FormatException ex)
-                {
-                    Log.Error(ex, "Fallback English string format failed. Key: '{Key}', Format: '{Format}', Args: {Args}", key, englishValue, args);
-                    return englishValue; // 返回未格式化的英文值
-                }
+                return string.Format(CultureInfo.InvariantCulture, englishValue, args);
             }
-            return englishValue;
+            catch (FormatException ex)
+            {
+                Log.Error(ex, "Fallback English string format failed. Key: '{Key}', Format: '{Format}', Args: {Args}", key, englishValue, args);
+                return englishValue; // 返回未格式化的英文值
+            }
         }
 
         // 如果没有预定义的英文回退值，记录警告并返回键或带参数的键
         Log.Warning("No English default for key '{Key}' in GetLocalizedString. Returning key.", key);
         if (args.Length <= 0) return key;
-        try { return key + " (" + string.Join(", ", args.Select(a => a?.ToString() ?? "null")) + ")"; } catch { return key; }
+        try { return key + " (" + string.Join(", ", args.Select(a => a.ToString() ?? "null")) + ")"; } catch { return key; }
     }
 } 

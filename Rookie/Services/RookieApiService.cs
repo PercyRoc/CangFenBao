@@ -275,7 +275,7 @@ public class RookieApiService(HttpClient httpClient, ISettingsService settingsSe
         // 中文注释：上传图片到OSS服务，返回图片URL或null
         var settings = LoadSettings();
         // 拼接上传URL
-        var uploadUrl = settings.ImageUploadUrl?.TrimEnd('/') + "/receive/outer/dws/upload";
+        var uploadUrl = settings.ImageUploadUrl.TrimEnd('/') + "/receive/outer/dws/upload";
         var signId = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
         var sign = TraceSignUtil.Md5Sign(signId, TraceSignUtil.DwsSignSecretKey);
 

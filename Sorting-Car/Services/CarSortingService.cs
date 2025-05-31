@@ -3,14 +3,13 @@ using Common.Services.SerialPort;
 using Common.Services.Settings;
 using Serilog;
 using Sorting_Car.Models;
-using CarSequenceSettings = SortingServices.Car.Models.CarSequenceSettings;
 
 namespace Sorting_Car.Services
 {
     /// <summary>
     /// 小车分拣服务实现
     /// </summary>
-    public class CarSortingService : IAsyncDisposable
+    public class CarSortingService : ICarSortingDevice
     {
         private const byte DualFrameParamFrame = 0x95; // 双帧控制 - 参数设定帧 (无回码)
         private const byte DualFrameRunFrame = 0x8A; // 双帧控制 - 运行命令帧 (广播，无回码)
@@ -27,45 +26,49 @@ namespace Sorting_Car.Services
         private bool _isInitialized;
         private CancellationTokenSource? _serviceShutdownCts;
 
-        public event Action<bool>? ConnectionChanged;
+        public event EventHandler<(string DeviceName, bool IsConnected)>? ConnectionChanged;
 
         public CarSortingService(ISettingsService settingsService)
         {
             _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
-            Log.Information("CarSortingService 创建");
+            Log.Information("CarSortingService 已创建");
         }
 
         public bool IsConnected => _serialPortService?.IsConnected ?? false;
 
-        public bool Initialize(CancellationToken cancellationToken = default)
+        public Task<bool> StartAsync()
         {
             if (_isInitialized)
             {
                 Log.Information("CarSortingService 已初始化");
-                return true;
+                return Task.FromResult(true);
             }
-            _serviceShutdownCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+            if (_serviceShutdownCts == null || _serviceShutdownCts.IsCancellationRequested)
+            {
+                 _serviceShutdownCts = new CancellationTokenSource();
+            }
 
             Log.Information("CarSortingService 初始化开始...");
             try
             {
                 // 1. 加载配置
-                Log.Debug("加载 CarSerialPortSettings...");
+                Log.Debug("正在加载 CarSerialPortSettings...");
                 _serialPortSettings = _settingsService.LoadSettings<CarSerialPortSettings>();
-                Log.Debug("加载 CarConfigModel...");
+                Log.Debug("正在加载 CarConfigModel...");
                 _carConfigModel = _settingsService.LoadSettings<CarConfigModel>();
-                Log.Debug("加载 CarSequenceSettings...");
+                Log.Debug("正在加载 CarSequenceSettings...");
                 _carSequenceSettings = _settingsService.LoadSettings<CarSequenceSettings>();
 
                 if (_serialPortSettings == null || _carConfigModel == null || _carSequenceSettings == null)
                 {
                     Log.Error("初始化失败：必要的配置加载不完整");
-                    return false;
+                    return Task.FromResult(false);
                 }
 
                 Log.Information("配置加载完成。串口端口: {PortName}", _serialPortSettings.PortName);
-                Log.Information("{Count} 个小车配置已加载", _carConfigModel.CarConfigs?.Count ?? 0);
-                Log.Information("{Count} 个格口序列配置已加载", _carSequenceSettings.ChuteSequences.Count);
+                Log.Information("已加载 {Count} 个小车配置", _carConfigModel.CarConfigs?.Count ?? 0);
+                Log.Information("已加载 {Count} 个格口序列配置", _carSequenceSettings.ChuteSequences.Count);
                 if (_serialPortService != null)
                 {
                     _serialPortService.Dispose();
@@ -89,18 +92,18 @@ namespace Sorting_Car.Services
                         _serialPortService.Dispose();
                         _serialPortService = null;
                     }
-                    return false;
+                    return Task.FromResult(false);
                 }
 
                 _isInitialized = true;
                 Log.Information("CarSortingService 初始化成功，串口已连接");
-                return true;
+                return Task.FromResult(true);
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException)
             {
-                Log.Information("CarSortingService 初始化被取消。");
+                Log.Information("CarSortingService 初始化操作被取消。");
                 _isInitialized = false;
-                return false;
+                return Task.FromResult(false);
             }
             catch (Exception ex)
             {
@@ -113,13 +116,13 @@ namespace Sorting_Car.Services
                     _serialPortService = null;
                 }
                 _isInitialized = false;
-                return false;
+                return Task.FromResult(false);
             }
         }
 
         private static SerialPortParams ConvertToSerialPortParams(CarSerialPortSettings settings)
         {
-            Log.Debug("Converting CarSerialPortSettings to SerialPortParams");
+            Log.Debug("将 CarSerialPortSettings 转换为 SerialPortParams");
             return new SerialPortParams
             {
                 PortName = settings.PortName,
@@ -145,18 +148,7 @@ namespace Sorting_Car.Services
         private void OnConnectionChanged(bool isConnected)
         {
             Log.Information("串口连接状态变更: {Status}", isConnected ? "已连接" : "已断开");
-            ConnectionChanged?.Invoke(isConnected);
-
-            if (!isConnected)
-            {
-                if (_serialPortService != null)
-                {
-                    _serialPortService.ConnectionChanged -= OnConnectionChanged;
-                    _serialPortService.DataReceived -= OnDataReceived;
-                    _serialPortService.Dispose();
-                    _serialPortService = null;
-                }
-            }
+            ConnectionChanged?.Invoke(this, ("CarSorting", isConnected));
         }
 
         private void OnDataReceived(byte[] data)
@@ -239,7 +231,7 @@ namespace Sorting_Car.Services
                             }
                             else if (cancellationToken.IsCancellationRequested)
                             {
-                                Log.Debug("小车 {Address} 延迟期间被取消", carItem.CarAddress);
+                                Log.Debug("小车 {Address} 延迟期间被取消");
                                 overallSuccess = false; break;
                             }
                         }
@@ -355,7 +347,7 @@ namespace Sorting_Car.Services
             {
                 var cmd = new byte[16]; // 创建16字节数组
 
-                // --- Part 1: 0x95 参数设定帧 (cmd[0] - cmd[7]) ---
+                // --- 第1部分: 0x95 参数设定帧 (cmd[0] - cmd[7]) ---
                 const int piValue = 1; // 固定PI值为1
 
                 cmd[0] = DualFrameParamFrame; // 帧头 0x95
@@ -388,18 +380,18 @@ namespace Sorting_Car.Services
                 cmd[6] = 0x00;
 
                 // Byte 7: CRC校验 (0x95 帧)
-                cmd[7] = CalculateCrc(cmd, 1, 6); // CRC for bytes 1-6
+                cmd[7] = CalculateCrc(cmd, 1, 6); // 字节 1-6 的CRC
 
 
-                // --- Part 2: 0x8A 运行命令帧 (cmd[8] - cmd[15]) ---
+                // --- 第2部分: 0x8A 运行命令帧 (cmd[8] - cmd[15]) ---
                 cmd[8] = DualFrameRunFrame; // 帧头 0x8A
 
                 // Bytes 9-13: 根据地址 addr (1-32) 设置对应的位
-                cmd[9] = 0; // Reg 1: Cars 7-1
-                cmd[10] = 0; // Reg 2: Cars 15-9
-                cmd[11] = 0; // Reg 3: Cars 23-17
-                cmd[12] = 0; // Reg 4: Cars 31-25
-                cmd[13] = 0; // Reg 5: Cars 32,24,16,8
+                cmd[9] = 0; // Reg 1: 小车 7-1
+                cmd[10] = 0; // Reg 2: 小车 15-9
+                cmd[11] = 0; // Reg 3: 小车 23-17
+                cmd[12] = 0; // Reg 4: 小车 31-25
+                cmd[13] = 0; // Reg 5: 小车 32,24,16,8
 
                 if (addr <= 7) // Reg 1
                 {
@@ -434,7 +426,7 @@ namespace Sorting_Car.Services
                 }
 
                 // Byte 15: CRC校验 (0x8A 帧)
-                cmd[15] = CalculateCrc(cmd, 9, 14); // CRC for bytes 9-14
+                cmd[15] = CalculateCrc(cmd, 9, 14); // 字节 9-14 的CRC
 
                 Log.Debug("生成的组合双帧命令(16字节): {CommandHex}", BitConverter.ToString(cmd));
                 return cmd;
@@ -469,27 +461,65 @@ namespace Sorting_Car.Services
             return (byte)(crc & 0x7F); // 根据规范，最后与0x7F进行与操作
         }
 
-        public ValueTask DisposeAsync()
+        public Task<bool> StopAsync()
+        {
+            if (!_isInitialized)
+            {
+                Log.Information("CarSortingService 未运行或未初始化，无需停止。");
+                return Task.FromResult(true);
+            }
+
+            Log.Information("CarSortingService 正在停止...");
+            try
+            {
+                _serviceShutdownCts?.Cancel();
+
+                _serialPortService?.Disconnect();
+
+                if (_serialPortService != null)
+                {
+                    _serialPortService.ConnectionChanged -= OnConnectionChanged;
+                    _serialPortService.DataReceived -= OnDataReceived;
+                    _serialPortService.Dispose();
+                    _serialPortService = null;
+                    Log.Information("SerialPortService 已断开并释放。");
+                }
+
+                _isInitialized = false;
+                Log.Information("CarSortingService 已停止。");
+                return Task.FromResult(true);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "停止 CarSortingService 时发生异常");
+                _isInitialized = false;
+                return Task.FromResult(false);
+            }
+        }
+
+        public async ValueTask DisposeAsync()
         {
             Log.Information("正在释放 CarSortingService...");
-            _isInitialized = false;
+            
+            await StopAsync();
 
-            _serviceShutdownCts?.Cancel();
+            _serviceShutdownCts?.Dispose();
+            _serviceShutdownCts = null;
+            Log.Debug("CancellationTokenSource 已释放。");
 
             if (_serialPortService != null)
             {
+                Log.Warning("在 DisposeAsync 期间 SerialPortService 不为 null，现在执行释放。");
                 _serialPortService.ConnectionChanged -= OnConnectionChanged;
                 _serialPortService.DataReceived -= OnDataReceived;
                 _serialPortService.Dispose();
                 _serialPortService = null;
-                Log.Information("SerialPortService 已释放。");
             }
-            _serviceShutdownCts?.Dispose();
-            _serviceShutdownCts = null;
+
+            _isInitialized = false;
 
             Log.Information("CarSortingService 已释放。");
             GC.SuppressFinalize(this);
-            return ValueTask.CompletedTask;
         }
     }
 }

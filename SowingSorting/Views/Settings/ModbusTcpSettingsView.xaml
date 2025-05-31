@@ -6,19 +6,23 @@
              xmlns:prism="http://prismlibrary.com/"
              xmlns:viewModels="clr-namespace:SowingSorting.ViewModels.Settings"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:lex="https://github.com/XAMLMarkupExtensions/WPFLocalizationExtension"
+             lex:LocalizeDictionary.DesignCulture="zh-CN"
+             lex:ResxLocalizationProvider.DefaultAssembly="SowingSorting"
+             lex:ResxLocalizationProvider.DefaultDictionary="Strings"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d" 
              d:DataContext="{d:DesignInstance Type=viewModels:ModbusTcpSettingsViewModel, IsDesignTimeCreatable=False}">
     <Grid>
         <StackPanel MaxWidth="500" Margin="16" VerticalAlignment="Top">
-            <TextBlock Text="Modbus TCP 设置" 
+            <TextBlock Text="{lex:Loc ModbusTcpSettings_Title}" 
                        Style="{DynamicResource SubtitleTextBlockStyle}"
                        HorizontalAlignment="Center"
                        Margin="0,0,0,16" />
 
             <ui:Card Margin="0,0,0,16">
                 <StackPanel Margin="16">
-                    <TextBlock Text="连接参数"
+                    <TextBlock Text="{lex:Loc ModbusTcpSettings_ConnectionParams}"
                                Style="{DynamicResource SubtitleTextBlockStyle}"
                                Margin="0,0,0,16" />
 
@@ -28,7 +32,7 @@
                             <ColumnDefinition Width="150" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="IP 地址:" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"/>
+                        <TextBlock Text="{lex:Loc ModbusTcpSettings_IpAddress_Label}" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"/>
                         <ui:TextBox Grid.Column="1" 
                                     Text="{Binding Settings.IpAddress, UpdateSourceTrigger=PropertyChanged}" 
                                     Padding="5"/>
@@ -40,7 +44,7 @@
                             <ColumnDefinition Width="150" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="端口:" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"/>
+                        <TextBlock Text="{lex:Loc ModbusTcpSettings_Port_Label}" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"/>
                         <ui:NumberBox Grid.Column="1" HorizontalAlignment="Left"
                                       Value="{Binding Settings.Port, UpdateSourceTrigger=PropertyChanged}"
                                       SpinButtonPlacementMode="Inline"
@@ -53,7 +57,7 @@
                             <ColumnDefinition Width="150" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="连接超时 (ms):" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"/>
+                        <TextBlock Text="{lex:Loc ModbusTcpSettings_ConnectionTimeout_Label}" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"/>
                         <ui:NumberBox Grid.Column="1" HorizontalAlignment="Left"
                                       Value="{Binding Settings.ConnectionTimeout, UpdateSourceTrigger=PropertyChanged}" 
                                       SpinButtonPlacementMode="Inline"
@@ -64,7 +68,7 @@
             
             <ui:Card Margin="0,0,0,16">
                 <StackPanel Margin="16">
-                     <TextBlock Text="寄存器操作" 
+                     <TextBlock Text="{lex:Loc ModbusTcpSettings_RegisterOperations}" 
                                Style="{DynamicResource SubtitleTextBlockStyle}"
                                Margin="0,0,0,16" />
                     
@@ -74,7 +78,7 @@
                             <ColumnDefinition Width="150" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="默认寄存器地址:" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"/>
+                        <TextBlock Text="{lex:Loc ModbusTcpSettings_DefaultRegisterAddress_Label}" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"/>
                         <ui:NumberBox Grid.Column="1" HorizontalAlignment="Left"
                                       Value="{Binding Settings.DefaultRegisterAddress, UpdateSourceTrigger=PropertyChanged}"
                                       SpinButtonPlacementMode="Inline"
@@ -87,14 +91,14 @@
                             <ColumnDefinition Width="150" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="测试写入值:" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"/>
+                        <TextBlock Text="{lex:Loc ModbusTcpSettings_TestWriteValue_Label}" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"/>
                         <ui:NumberBox Grid.Column="1" HorizontalAlignment="Left"
                                       Value="{Binding TestRegisterValue, UpdateSourceTrigger=PropertyChanged}" 
                                       SpinButtonPlacementMode="Inline"
                                       SmallChange="1" LargeChange="10"/>
                     </Grid>
 
-                    <ui:Button Content="写入默认寄存器地址" Command="{Binding TestWriteRegisterCommand}" 
+                    <ui:Button Content="{lex:Loc ModbusTcpSettings_WriteDefaultRegister_Button}" Command="{Binding TestWriteRegisterCommand}" 
                                HorizontalAlignment="Right" Margin="0,15,0,5" Padding="10,5"/>
                 </StackPanel>
             </ui:Card>

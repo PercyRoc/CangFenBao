@@ -4,17 +4,16 @@ using System.Reactive.Linq;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
-using Common.Data;
+using BalanceSorting.Models;
+using BalanceSorting.Service;
+using Camera.Interface;
+using Common.Models;
 using Common.Models.Package;
 using Common.Models.Settings.ChuteRules;
-using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
 using Common.Services.Ui;
-using DeviceService.DataSourceDevices.Camera;
-using DeviceService.DataSourceDevices.Services;
+using History.Data;
 using Serilog;
-using SharedUI.Models;
-using SortingServices.Pendulum;
 using XinJuLi.Models.ASN;
 using XinJuLi.Services.ASN;
 using XinJuLi.Events;
@@ -26,10 +25,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
     private readonly INotificationService _notificationService;
-    private readonly IPackageDataService _packageDataService;
     private readonly ISettingsService _settingsService;
     private readonly IPendulumSortService _sortService;
     private readonly IAsnService _asnService;
+    private readonly IPackageHistoryDataService _packageHistoryDataService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
     private string _currentBarcode = string.Empty;
@@ -39,7 +38,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private bool _isRunning;
 
     // ASN订单相关
-    private List<AsnOrderItem> _asnOrderItems = new();
+    private List<AsnOrderItem> _asnOrderItems = [];
     private string _currentAsnOrderCode = string.Empty;
     private string _currentCarCode = string.Empty;
 
@@ -55,23 +54,26 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     private long _failedPackageCount;
 
+    // ===================== 临时格口循环分配逻辑开始 =====================
+    private int _currentChuteNumber = 1;
+    // ===================== 临时格口循环分配逻辑结束 =====================
+
     public MainWindowViewModel(IDialogService dialogService,
         ICameraService cameraService,
-        PackageTransferService packageTransferService,
         ISettingsService settingsService,
         IPendulumSortService sortService,
         INotificationService notificationService,
-        IPackageDataService packageDataService,
         IAsnService asnService,
-        IEventAggregator eventAggregator)
+        IEventAggregator eventAggregator,
+        IPackageHistoryDataService packageHistoryDataService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
         _settingsService = settingsService;
         _sortService = sortService;
         _notificationService = notificationService;
-        _packageDataService = packageDataService;
         _asnService = asnService;
+        _packageHistoryDataService = packageHistoryDataService;
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
         OpenHistoryCommand = new DelegateCommand(ExecuteOpenHistory);
         ToggleStartStopCommand = new DelegateCommand(ExecuteToggleStartStop);
@@ -97,7 +99,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _cameraService.ConnectionChanged += OnCameraConnectionChanged;
 
         // 订阅图像流
-        _subscriptions.Add(_cameraService.ImageStream
+        _subscriptions.Add(_cameraService.ImageStreamWithId
             .ObserveOn(TaskPoolScheduler.Default) // 使用任务池调度器
             .Subscribe(imageData =>
             {
@@ -110,7 +112,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         try
                         {
                             // 更新UI
-                            CurrentImage = bitmapSource;
+                            CurrentImage = bitmapSource.Image;
                         }
                         catch (Exception ex)
                         {
@@ -125,15 +127,15 @@ public class MainWindowViewModel : BindableBase, IDisposable
             }));
         _sortService.DeviceConnectionStatusChanged += OnDeviceConnectionStatusChanged;
         // 订阅包裹流
-        _subscriptions.Add(packageTransferService.PackageStream
+        _subscriptions.Add(_cameraService.PackageStream
             .Subscribe(package => { Application.Current.Dispatcher.BeginInvoke(() => OnPackageInfo(package)); }));
 
         // 订阅ASN订单接收事件
         _subscriptions.Add(eventAggregator.GetEvent<AsnOrderReceivedEvent>()
-            .Subscribe(asnInfo =>
-            {
-                Application.Current.Dispatcher.BeginInvoke(() => OnAsnOrderReceived(asnInfo));
-            }));
+            .Subscribe(asnInfo => { Application.Current.Dispatcher.BeginInvoke(() => OnAsnOrderReceived(asnInfo)); }));
+
+        // 主动查询一次相机和摆轮分拣设备状态
+        QueryAndUpdateDeviceStatuses();
     }
 
     public DelegateCommand OpenSettingsCommand { get; }
@@ -213,7 +215,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // 更新属性
             CurrentAsnOrderCode = asnOrderInfo.OrderCode;
             CurrentCarCode = asnOrderInfo.CarCode;
-            AsnOrderItems = new List<AsnOrderItem>(asnOrderInfo.Items);
+            AsnOrderItems = [.. asnOrderInfo.Items];
 
             Log.Information("已缓存ASN订单数据: {OrderCode}, 车牌: {CarCode}, 商品数量: {ItemsCount}",
                 asnOrderInfo.OrderCode, asnOrderInfo.CarCode, asnOrderInfo.Items.Count);
@@ -353,7 +355,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             if (string.IsNullOrEmpty(package.Barcode))
             {
                 // 无条码，设置为NoRead异常
-                package.SetStatus(PackageStatus.Error, "无条码");
+                package.SetStatus("无条码");
                 package.ErrorMessage = "无法读取条码";
                 package.SetChute(chuteSettings.NoReadChuteNumber);
 
@@ -364,117 +366,105 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 return;
             }
 
-            // 构建扫码复核请求
-            var reviewRequest = new MaterialReviewRequest
-            {
-                SystemCode = asnSettings.SystemCode,
-                HouseCode = asnSettings.HouseCode,
-                BoxCode = package.Barcode,
-                ExitArea = asnSettings.ReviewExitArea // 使用设置中的月台值
-            };
+            // // 构建扫码复核请求
+            // var reviewRequest = new MaterialReviewRequest
+            // {
+            //     SystemCode = asnSettings.SystemCode,
+            //     HouseCode = asnSettings.HouseCode,
+            //     BoxCode = package.Barcode,
+            //     ExitArea = asnSettings.ReviewExitArea // 使用设置中的月台值
+            // };
 
-            Log.Information("发送扫码复核请求: {@ReviewRequest}", reviewRequest);
+            // Log.Information("发送扫码复核请求: {@ReviewRequest}", reviewRequest);
 
-            // 调用扫码复核接口
-            var reviewResponse = await _asnService.ProcessMaterialReview(reviewRequest);
+            // // 调用扫码复核接口
+            // var reviewResponse = await _asnService.ProcessMaterialReview(reviewRequest);
 
-            // 根据接口返回处理包裹
-            if (reviewResponse.Success == false)
-            {
-                // 复核失败
-                Log.Warning("包裹 {Barcode} 扫码复核失败: {Message}", package.Barcode, reviewResponse.Message);
-                package.SetStatus(PackageStatus.Error, "复核失败");
-                package.ErrorMessage = $"复核失败: {reviewResponse.Message}";
-                package.SetChute(chuteSettings.ErrorChuteNumber);
+            // // 根据接口返回处理包裹
+            // if (reviewResponse.Success == false)
+            // {
+            //     // 复核失败
+            //     Log.Warning("包裹 {Barcode} 扫码复核失败: {Message}", package.Barcode, reviewResponse.Message);
+            //     package.SetStatus("复核失败");
+            //     package.ErrorMessage = $"复核失败: {reviewResponse.Message}";
+            //     package.SetChute(chuteSettings.ErrorChuteNumber);
 
-                ProcessPackageWithError(package, chuteSettings.ErrorChuteNumber, package.ErrorMessage);
-                SavePackage(package);
+            //     ProcessPackageWithError(package, chuteSettings.ErrorChuteNumber, package.ErrorMessage);
+            //     SavePackage(package);
 
-                // 计数更新
-                _totalPackageCount++;
-                _failedPackageCount++;
-                UpdateStatisticsItems();
-                return;
-            }
+            //     // 计数更新
+            //     _totalPackageCount++;
+            //     _failedPackageCount++;
+            //     UpdateStatisticsItems();
+            //     return;
+            // }
 
-            // 复核成功，继续执行原有的SKU匹配和分拣逻辑
-            Log.Information("包裹 {Barcode} 扫码复核成功，继续进行SKU匹配和分拣", package.Barcode);
+            // // 复核成功，继续执行原有的SKU匹配和分拣逻辑
+            // Log.Information("包裹 {Barcode} 扫码复核成功，继续进行SKU匹配和分拣", package.Barcode);
 
-            // 如果没有ASN订单缓存，无法匹配SKU
-            if (AsnOrderItems.Count == 0 || string.IsNullOrEmpty(CurrentAsnOrderCode))
-            {
-                Log.Warning("没有缓存的ASN订单数据，无法为包裹 {Barcode} 匹配SKU (复核已成功，但无ASN单)", package.Barcode);
-                package.SetStatus(PackageStatus.Error, "无ASN单数据"); // 即使复核成功，无ASN单也算异常
-                package.ErrorMessage = "无ASN单数据";
-                package.SetChute(chuteSettings.ErrorChuteNumber);
+            // // 如果没有ASN订单缓存，无法匹配SKU
+            // if (AsnOrderItems.Count == 0 || string.IsNullOrEmpty(CurrentAsnOrderCode))
+            // {
+            //     Log.Warning("没有缓存的ASN订单数据，无法为包裹 {Barcode} 匹配SKU (复核已成功，但无ASN单)", package.Barcode);
+            //     package.SetStatus("无ASN单数据"); // 即使复核成功，无ASN单也算异常
+            //     package.ErrorMessage = "无ASN单数据";
+            //     package.SetChute(chuteSettings.ErrorChuteNumber);
 
-                // 分拣操作 - 错误格口
-                ProcessPackageWithError(package, chuteSettings.ErrorChuteNumber, "无ASN单数据");
-                // 记录包裹
-                SavePackage(package);
+            //     // 分拣操作 - 错误格口
+            //     ProcessPackageWithError(package, chuteSettings.ErrorChuteNumber, "无ASN单数据");
+            //     // 记录包裹
+            //     SavePackage(package);
 
-                // 计数更新
-                _totalPackageCount++;
-                _failedPackageCount++;
-                UpdateStatisticsItems();
-                return;
-            }
+            //     // 计数更新
+            //     _totalPackageCount++;
+            //     _failedPackageCount++;
+            //     UpdateStatisticsItems();
+            //     return;
+            // }
 
-            // 查找对应的订单项，通常条码会与itemCode匹配
-            var matchedItem = AsnOrderItems.FirstOrDefault(item =>
-                item.ItemCode.Equals(package.Barcode, StringComparison.OrdinalIgnoreCase));
+            // // 查找对应的订单项，通常条码会与itemCode匹配
+            // var matchedItem = AsnOrderItems.FirstOrDefault(item =>
+            //     item.ItemCode.Equals(package.Barcode, StringComparison.OrdinalIgnoreCase));
 
-            if (matchedItem == null)
-            {
-                Log.Warning("包裹 {Barcode} 在ASN订单 {OrderCode} 中找不到匹配的货品 (复核已成功)",
-                    package.Barcode, CurrentAsnOrderCode);
-                package.SetStatus(PackageStatus.Error, "ASN单中无匹配"); // 即使复核成功，无匹配货品也算异常
-                package.ErrorMessage = "ASN单中无匹配";
-                package.SetChute(chuteSettings.ErrorChuteNumber);
+            // if (matchedItem == null)
+            // {
+            //     Log.Warning("包裹 {Barcode} 在ASN订单 {OrderCode} 中找不到匹配的货品 (复核已成功)",
+            //         package.Barcode, CurrentAsnOrderCode);
+            //     package.SetStatus("ASN单中无匹配"); // 即使复核成功，无匹配货品也算异常
+            //     package.ErrorMessage = "ASN单中无匹配";
+            //     package.SetChute(chuteSettings.ErrorChuteNumber);
 
-                // 分拣操作 - 错误格口
-                ProcessPackageWithError(package, chuteSettings.ErrorChuteNumber, "ASN单中无匹配");
-                // 记录包裹
-                SavePackage(package);
+            //     // 分拣操作 - 错误格口
+            //     ProcessPackageWithError(package, chuteSettings.ErrorChuteNumber, "ASN单中无匹配");
+            //     // 记录包裹
+            //     SavePackage(package);
 
-                // 计数更新
-                _totalPackageCount++;
-                _failedPackageCount++;
-                UpdateStatisticsItems();
-                return;
-            }
+            //     // 计数更新
+            //     _totalPackageCount++;
+            //     _failedPackageCount++;
+            //     UpdateStatisticsItems();
+            //     return;
+            // }
 
-            // 获取该SKU对应的格口
-            if (!_skuChuteMappings.TryGetValue(matchedItem.SkuCode, out var chuteNumber))
-            {
-                Log.Warning("SKU {Sku} 未分配格口 (复核已成功)", matchedItem.SkuCode);
-                package.SetStatus(PackageStatus.Error, "SKU未分配格口"); // 即使复核成功，未分配格口也算异常
-                package.ErrorMessage = "SKU未分配格口";
-                package.SetChute(chuteSettings.ErrorChuteNumber);
-
-                // 分拣操作 - 错误格口
-                ProcessPackageWithError(package, chuteSettings.ErrorChuteNumber, "SKU未分配格口");
-                // 记录包裹
-                SavePackage(package);
-
-                // 计数更新
-                _totalPackageCount++;
-                _failedPackageCount++;
-                UpdateStatisticsItems();
-                return;
-            }
+            // ===================== 临时格口循环分配逻辑开始 =====================
+            // 临时格口分配：1-6循环分配
+            if (_currentChuteNumber is < 1 or > 12)
+                _currentChuteNumber = 1;
+            int chuteNumber = _currentChuteNumber;
+            _currentChuteNumber++;
+            if (_currentChuteNumber > 12)
+                _currentChuteNumber = 1;
+            // ===================== 临时格口循环分配逻辑结束 =====================
 
             // 设置分拣格口
-            package.SetSegmentCode(chuteNumber.ToString());
             package.SetChute(chuteNumber);
-            package.SetStatus(PackageStatus.Success, "分拣成功");
-            package.ErrorMessage = $"SKU: {matchedItem.SkuCode}";
+            package.SetStatus("分拣成功");
+            package.ErrorMessage = $"分配到格口: {chuteNumber}";
 
-            Log.Information("包裹 {Barcode} 复核并匹配成功到SKU {Sku}，分配到格口 {Chute}",
-                package.Barcode, matchedItem.SkuCode, chuteNumber);
+            Log.Information("包裹 {Barcode} 分配到格口 {Chute}", package.Barcode, chuteNumber);
 
             // 更新UI显示
-            UpdatePackageInfoItemsWithSku(matchedItem, chuteNumber);
+            UpdatePackageInfoItems(package);
 
             // 分拣操作
             ProcessPackageSuccess(package);
@@ -485,8 +475,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // 计数更新
             _totalPackageCount++;
             _successPackageCount++;
-
-            // 更新统计数据
             UpdateStatisticsItems();
         }
         catch (Exception ex)
@@ -500,7 +488,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     // 再次加载配置以确保在异常处理中也使用最新值
                     var currentChuteSettings = _settingsService.LoadSettings<ChuteSettings>();
                     package.SetChute(currentChuteSettings.ErrorChuteNumber);
-                    package.SetStatus(PackageStatus.Error, "处理异常");
+                    package.SetStatus("处理异常");
                     package.ErrorMessage = $"处理发生异常: {ex.Message}";
 
                     // 分拣操作 - 异常格口
@@ -550,7 +538,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         {
             // 设置包裹的错误信息
             package.SetChute(errorChuteNumber);
-            package.SetStatus(PackageStatus.Error, errorReason);
+            package.SetStatus(errorReason);
 
             // 更新UI显示
             UpdatePackageInfoItemsWithError(errorChuteNumber, errorReason);
@@ -683,7 +671,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            await _packageDataService.AddPackageAsync(package);
+            var record = PackageHistoryRecord.FromPackageInfo(package);
+            await _packageHistoryDataService.AddPackageAsync(record);
             Log.Debug("包裹记录已保存: {Barcode}", package.Barcode);
 
             // 添加到历史记录列表
@@ -817,7 +806,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             unit: "个/小时",
             description: "最高处理速率",
             icon: "Trophy24"
-            ));
+        ));
     }
 
     private void InitializePackageInfoItems()
@@ -898,7 +887,40 @@ public class MainWindowViewModel : BindableBase, IDisposable
         CacheAsnOrderInfo(asnInfo);
     }
 
-    protected void Dispose(bool disposing)
+    /// <summary>
+    /// 主动查询一次相机和摆轮分拣设备状态，并更新DeviceStatuses
+    /// </summary>
+    private void QueryAndUpdateDeviceStatuses()
+    {
+        try
+        {
+            // 查询相机状态
+            var cameraStatus = DeviceStatuses.FirstOrDefault(x => x.Name == "相机");
+            if (cameraStatus != null)
+            {
+                cameraStatus.Status = _cameraService.IsConnected ? "已连接" : "已断开";
+                cameraStatus.StatusColor = _cameraService.IsConnected ? "#4CAF50" : "#F44336";
+            }
+
+            // 查询摆轮分拣设备状态
+            var deviceStates = _sortService.GetAllDeviceConnectionStates();
+            foreach (var deviceStatus in DeviceStatuses)
+            {
+                if (deviceStatus.Name == "相机") continue; // 相机已处理
+                if (deviceStates.TryGetValue(deviceStatus.Name, out var connected))
+                {
+                    deviceStatus.Status = connected ? "已连接" : "已断开";
+                    deviceStatus.StatusColor = connected ? "#4CAF50" : "#F44336";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "主动查询设备状态时发生错误");
+        }
+    }
+
+    private void Dispose(bool disposing)
     {
         if (_disposed) return;
 

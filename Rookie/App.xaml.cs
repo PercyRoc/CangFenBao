@@ -8,10 +8,6 @@ using Serilog;
 using Rookie.Services;
 using Rookie.ViewModels.Settings;
 using Rookie.Views.Settings;
-using SharedUI.Views.Settings;
-using SharedUI.ViewModels;
-using SharedUI.ViewModels.Settings;
-using SharedUI.Views.Windows;
 using System.Globalization;
 using WPFLocalizeExtension.Engine;
 using Camera;
@@ -21,6 +17,7 @@ using Weight;
 using Weight.Services;
 using Camera.Services.Implementations.Hikvision.Volume;
 using Camera.Services.Implementations.Hikvision.Security;
+using Common;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using History;
@@ -83,16 +80,14 @@ public partial class App
         
         containerRegistry.RegisterSingleton<IRookieApiService, RookieApiService>();
         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
-        containerRegistry.RegisterDialogWindow<HistoryDialogWindow>();
         containerRegistry.RegisterDialog<SettingsDialogs, SettingsDialogViewModel>();
         containerRegistry.RegisterForNavigation<RookieApiSettingsView, RookieApiSettingsViewModel>();
-        
-        containerRegistry.RegisterForNavigation<SerialPortSettingsView, SerialPortSettingsViewModel>();
     }
 
     protected override void ConfigureModuleCatalog(IModuleCatalog moduleCatalog)
     {
         base.ConfigureModuleCatalog(moduleCatalog);
+        moduleCatalog.AddModule<CommonServicesModule>();
         moduleCatalog.AddModule<FullFeaturedCameraModule>();
         moduleCatalog.AddModule<WeightModule>();
         moduleCatalog.AddModule<SortingCarModule>();
@@ -101,29 +96,18 @@ public partial class App
 
     protected override void OnStartup(StartupEventArgs e)
     {
-        var progressWindow =
-            new ProgressIndicatorWindow("Initializing services, please wait...");
-        progressWindow.Show();
-
-        // Logger configuration is one of the first things to do.
         ConfigureLoggerFromSettings();
-        Log.Information("Logger configured in OnStartup (or re-confirmed).");
-
         Log.Information("应用程序启动 (OnStartup)");
         RegisterGlobalExceptionHandling();
-        base.OnStartup(e); // This will call RegisterTypes, ConfigureModuleCatalog etc.
-
+        base.OnStartup(e);
         LocalizeDictionary.Instance.SetCurrentThreadCulture = true;
         LocalizeDictionary.Instance.Culture = new CultureInfo("en-US");
-        progressWindow.Dispatcher.Invoke(progressWindow.Close);
     }
 
-    protected override async void OnInitialized() // Override OnInitialized to initialize services after modules are loaded
+    protected override async void OnInitialized()
     {
         base.OnInitialized();
-        Log.Information("Application OnInitialized: Shell and modules are initialized. Performing post-initialization tasks.");
-
-        // Initialize IPackageHistoryDataService as per history_module_guide.md
+        
         try
         {
             var historyService = Container.Resolve<IPackageHistoryDataService>();
@@ -138,15 +122,9 @@ public partial class App
     protected override async void OnExit(ExitEventArgs e)
     {
         Log.Information("应用程序退出 (OnExit). 退出代码: {ExitCode}", e.ApplicationExitCode);
-
-        ProgressIndicatorWindow? progressWindow = null;
         try
         {
-            progressWindow = new ProgressIndicatorWindow("Shutting down services, please wait...");
-            progressWindow.Show();
-
             Log.Information("开始关闭应用程序服务...");
-
             TryDisposeService<ICameraService>("HikvisionIndustrialCameraService");
             TryDisposeService<HikvisionVolumeCameraService>("HikvisionVolumeCameraService");
             TryDisposeService<HikvisionSecurityCameraService>("HikvisionSecurityCameraService");
@@ -170,7 +148,6 @@ public partial class App
         }
         finally
         {
-            progressWindow?.Dispatcher.Invoke(() => progressWindow.Close());
             await Log.CloseAndFlushAsync();
             ReleaseMutex();
             base.OnExit(e);

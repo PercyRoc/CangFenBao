@@ -1,5 +1,5 @@
 using System.ComponentModel.DataAnnotations;
-using Common.Models.Package; // Assuming PackageStatus will be used from Common
+using Common.Models.Package;
 
 namespace History.Data;
 
@@ -74,7 +74,7 @@ public class PackageHistoryRecord
     /// <summary>
     ///     处理状态
     /// </summary>
-    public PackageStatus Status { get; set; }
+    public string? Status { get; set; }
 
     /// <summary>
     ///     状态显示文本
@@ -145,10 +145,6 @@ public class PackageHistoryRecord
             PalletLength = info.PalletLength,
             PalletWidth = info.PalletWidth,
             PalletHeight = info.PalletHeight
-            // 注意：PackageInfo中的PalletHeight是private set，但FromPackageInfo可以访问它
-            // 如果PackageInfo.PalletHeight改为public set，可以直接赋值。
-            // 此处假设PackageInfo的PalletHeight可以通过某种方式在创建时或通过方法设置，
-            // 并且此FromPackageInfo方法能访问到最终值。
         };
     }
 } 

@@ -1,7 +1,6 @@
 using Common.Services.Ui;
 using BenFly.ViewModels.Settings;
 using Serilog;
-using SharedUI.ViewModels.Settings;
 
 namespace BenFly.ViewModels.Dialogs;
 

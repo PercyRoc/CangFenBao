@@ -6,7 +6,6 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:settings="clr-namespace:BenFly.ViewModels.Settings"
              xmlns:prism="http://prismlibrary.com/"
-             xmlns:converters1="clr-namespace:SharedUI.Converters;assembly=SharedUI"
              prism:ViewModelLocator.AutoWireViewModel="True"
              d:DataContext="{d:DesignInstance Type=settings:UploadSettingsViewModel}"
              mc:Ignorable="d">

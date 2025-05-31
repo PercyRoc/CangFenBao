@@ -1,7 +1,6 @@
 ﻿using Common.Services.Ui;
 using Serilog;
 using ShanghaiModuleBelt.ViewModels.Settings;
-using SharedUI.ViewModels.Settings;
 
 namespace ShanghaiModuleBelt.ViewModels;
 

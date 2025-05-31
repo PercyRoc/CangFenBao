@@ -7,7 +7,7 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<UseWPF>true</UseWPF>
 		<RootNamespace>Rookie</RootNamespace>
-		<ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
+		<ApplicationIcon>logo.ico</ApplicationIcon>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -33,25 +33,13 @@
 		<ProjectReference Include="..\Camera\相机模块.csproj" />
 		<ProjectReference Include="..\Common\基础模块.csproj" />
 		<ProjectReference Include="..\History\历史模块.csproj" />
-		<ProjectReference Include="..\SharedUI\公共模块.csproj" />
 		<ProjectReference Include="..\Sorting-Car\小车模块.csproj" />
 		<ProjectReference Include="..\Weight\称重模块.csproj" />
 	</ItemGroup>
-
-	<ItemGroup>
-		<Resource Include="..\SharedUI\Resources\Icon\logo.ico">
-			<Link>logo.ico</Link>
-		</Resource>
-	</ItemGroup>
-
 	<ItemGroup>
 		<None Update="appsettings.json">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
-	</ItemGroup>
-
-	<ItemGroup>
-	  <Folder Include="Views\Settings\" />
 	</ItemGroup>
 
 </Project>

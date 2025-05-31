@@ -6,6 +6,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Common.Models;
 using Common.Models.Package;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
@@ -13,7 +14,6 @@ using DeviceService.DataSourceDevices.Services;
 using DongtaiFlippingBoardMachine.Models;
 using DongtaiFlippingBoardMachine.Services;
 using Serilog;
-using SharedUI.Models;
 
 namespace DongtaiFlippingBoardMachine.ViewModels;
 

@@ -1,10 +1,10 @@
 using System.Text;
 using Common.Services.Settings;
-using DeviceService.DataSourceDevices.TCP;
 using Serilog;
 using XinBa.Services.Models;
 using System.Globalization;
 using Common.Models.Package;
+using Common.Services.TCP;
 
 namespace XinBa.Services;
 

@@ -11,13 +11,13 @@ using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using Serilog;
-using SharedUI.Models;
 using SortingServices.Pendulum;
 using ZtCloudWarehous.Models;
 using ZtCloudWarehous.Services;
 using ZtCloudWarehous.ViewModels.Settings;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
+using Common.Models;
 using static Common.Models.Package.PackageStatus;
 using Serilog.Context;
 

@@ -36,9 +36,8 @@
 
     <ItemGroup>
         <ProjectReference Include="..\Common\基础模块.csproj" />
-        <ProjectReference Include="..\SharedUI\公共模块.csproj" />
-        <ProjectReference Include="..\DeviceService\设备服务.csproj" />
-        <ProjectReference Include="..\SortingServices\分拣服务.csproj" />
+        <ProjectReference Include="..\Camera\相机模块.csproj" />
+        <ProjectReference Include="..\BalanceSorting\摆轮分拣.csproj" />
     </ItemGroup>
 
     <ItemGroup>

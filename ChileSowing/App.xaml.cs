@@ -8,7 +8,9 @@ using ChileSowing.ViewModels;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using SowingSorting.Services;
-using SharedUI.Views.Windows;
+using WPFLocalizeExtension.Engine;
+using System.Globalization;
+using Common;
 
 namespace ChileSowing;
 
@@ -46,14 +48,25 @@ public partial class App
             Environment.Exit(0);
         }
 
+        // 设置WPFLocalizeExtension默认语言为英文
+        try
+        {
+            var culture = new CultureInfo("en-US");
+            LocalizeDictionary.Instance.Culture = culture;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "设置WPFLocalizeExtension默认语言时发生错误");
+        }
+
         base.OnStartup(e);
 
         // Set application culture to English
         try
         {
-            var culture = new System.Globalization.CultureInfo("en-US");
-            WPFLocalizeExtension.Engine.LocalizeDictionary.Instance.Culture = culture;
-            Log.Information($"Application culture set to {culture.Name}");
+            var culture = new CultureInfo("en-US");
+            LocalizeDictionary.Instance.Culture = culture;
+            Log.Information("Application culture set to {CultureName}", culture.Name);
         }
         catch (Exception ex)
         {
@@ -109,7 +122,6 @@ public partial class App
         containerRegistry.RegisterForNavigation<MainWindow, MainViewModel>();
         containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>();
         containerRegistry.RegisterDialog<ChuteDetailDialogView, ChuteDetailDialogViewModel>();
-        containerRegistry.RegisterDialogWindow<HistoryDialogWindow>();
 
         containerRegistry.RegisterSingleton<ISettingsService, SettingsService>();
         containerRegistry.RegisterSingleton<INotificationService, NotificationService>();
@@ -119,6 +131,7 @@ public partial class App
     protected override void ConfigureModuleCatalog(IModuleCatalog moduleCatalog)
     {
         base.ConfigureModuleCatalog(moduleCatalog);
+        moduleCatalog.AddModule<CommonServicesModule>();
         // 注册历史模块
         moduleCatalog.AddModule<HistoryModule>();
         // 注册播种分拣模块
@@ -128,7 +141,6 @@ public partial class App
     protected override async void OnInitialized()
     {
         base.OnInitialized();
-        // 初始化历史数据库服务（必须，见history_module_guide）
         var historyService = Container.Resolve<History.Data.IPackageHistoryDataService>();
         await historyService.InitializeAsync();
     }

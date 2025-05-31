@@ -1,6 +1,5 @@
 ﻿using Common.Services.Ui;
 using Serilog;
-using SharedUI.ViewModels.Settings;
 using XinBeiYang.ViewModels.Settings;
 
 namespace XinBeiYang.ViewModels;

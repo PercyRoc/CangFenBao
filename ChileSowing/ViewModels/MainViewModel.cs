@@ -1,15 +1,14 @@
 ﻿using System.Collections.ObjectModel;
 using System.Windows.Threading;
-using SharedUI.Models;
 using Serilog;
 using System.Windows.Input;
 using SowingSorting.Services;
 using SowingSorting.Models.Settings;
 using Common.Services.Settings;
 using History.Data;
-using Common.Models.Package;
 using Common.Services.Ui;
 using System.Diagnostics;
+using Common.Models;
 
 namespace ChileSowing.ViewModels;
 
@@ -22,11 +21,6 @@ public class MainViewModel : BindableBase, IDisposable
     private readonly INotificationService _notificationService;
     private readonly DispatcherTimer _timer;
     private bool _disposed;
-    private readonly Random _random = new();
-
-    private string _systemStatus = "Normal";
-    private string _networkStatus = "Connected";
-    private string _activeWaveNumber = "N/A";
     private string _currentSkuInput = string.Empty;
     private string _currentWaveInput = string.Empty;
     private string _operationStatusText = "Ready...";
@@ -40,10 +34,12 @@ public class MainViewModel : BindableBase, IDisposable
     private const int MaxProcessingTimesToKeep = 100; // 存储最近100个处理时长
 
     // 新增字段用于顺序分配格口
-    private int _lastAssignedChuteNumber = 0;
 
     // 新增字段用于跟踪当前高亮的格口
     private ChuteViewModel? _currentlyHighlightedChute;
+
+    // 新增字段用于存储SKU与格口的映射，以及优先格口分配的索引
+    private readonly Dictionary<string, int> _skuChuteMapping = new();
 
     // 颜色常量
     private const string DefaultChuteColor = "#FFFFFF"; // 白色
@@ -185,26 +181,64 @@ public class MainViewModel : BindableBase, IDisposable
     private async void ProcessSkuInput(string sku)
     {
         var stopwatch = Stopwatch.StartNew(); // 开始计时
+        int chuteNumber; // 初始化为无效值
+
         try
         {
             if (!_modbusTcpService.IsConnected)
             {
                 OperationStatusText = "PLC not connected";
                 _notificationService.ShowError("PLC 未连接");
-                // 不计入成功处理，但也不计入异常，因为它是一个前置检查失败
                 return;
             }
 
-            // 顺序循环分配格口
-            _lastAssignedChuteNumber++;
-            if (_lastAssignedChuteNumber > 80)
+            // 每次用到配置都获取最新
+            var chuteSettings = _settingsService.LoadSettings<Common.Models.Settings.ChuteRules.ChuteSettings>();
+            if (chuteSettings == null)
             {
-                _lastAssignedChuteNumber = 1;
+                OperationStatusText = "未找到格口规则配置";
+                _notificationService.ShowError("未找到格口规则配置");
+                return;
             }
-            int chuteNumber = _lastAssignedChuteNumber;
+
+            // 检查SKU是否已分配过格口
+            if (_skuChuteMapping.TryGetValue(sku, out int assignedChute))
+            {
+                chuteNumber = assignedChute;
+                Log.Information("SKU {Sku} 已分配过格口 {ChuteNumber}，直接使用。", sku, chuteNumber);
+            }
+            else
+            {
+                // 规则匹配分配
+                var matchedChute = chuteSettings.FindMatchingChute(sku);
+                if (matchedChute.HasValue)
+                {
+                    chuteNumber = matchedChute.Value;
+                    _skuChuteMapping[sku] = chuteNumber;
+                    Log.Information("SKU {Sku} 规则匹配分配到格口 {ChuteNumber}", sku, chuteNumber);
+                }
+                else
+                {
+                    // 未匹配到，优先NoReadChuteNumber，其次ErrorChuteNumber
+                    chuteNumber = chuteSettings.NoReadChuteNumber > 0 ? chuteSettings.NoReadChuteNumber : chuteSettings.ErrorChuteNumber;
+                    _skuChuteMapping[sku] = chuteNumber;
+                    OperationStatusText = $"SKU {sku} 未匹配任何规则，分配到兜底格口 {chuteNumber}";
+                    _notificationService.ShowWarning($"SKU {sku} 未匹配任何规则，分配到兜底格口 {chuteNumber}");
+                    Log.Warning("SKU {Sku} 未匹配任何规则，分配到兜底格口 {ChuteNumber}", sku, chuteNumber);
+                }
+            }
+
+            // 确保 chuteNumber 已经被赋值
+            if (chuteNumber <= 0 || chuteNumber > Chutes.Count)
+            {
+                OperationStatusText = "格口分配逻辑错误。";
+                _notificationService.ShowError("格口分配失败，请检查规则配置和格口数量。");
+                stopwatch.Stop();
+                return;
+            }
 
             var selectedChute = Chutes[chuteNumber - 1];
-            
+
             // 在分配新包裹前重置上一个高亮格口的颜色
             if (_currentlyHighlightedChute != null && _currentlyHighlightedChute != selectedChute)
             {
@@ -235,7 +269,6 @@ public class MainViewModel : BindableBase, IDisposable
 
                 // 记录处理时长
                 _processingTimes.Add(stopwatch.Elapsed);
-                // 保持列表大小，只保留最新的处理时长
                 if (_processingTimes.Count > MaxProcessingTimesToKeep)
                 {
                     _processingTimes.RemoveAt(0);
@@ -247,9 +280,7 @@ public class MainViewModel : BindableBase, IDisposable
                     Barcode = sku,
                     ChuteNumber = chuteNumber,
                     CreateTime = DateTime.Now,
-                    Status = PackageStatus.Success,
-                    StatusDisplay = "已分拣"
-                    // 其他字段在此上下文中不可用，保持默认值
+                    Status = "Sorted",
                 };
                 await _historyService.AddPackageAsync(historyRecord);
                 Log.Information("SKU {Sku} 已添加到历史记录，格口 {ChuteNumber}", sku, chuteNumber);
@@ -262,26 +293,23 @@ public class MainViewModel : BindableBase, IDisposable
             }
             else
             {
-                stopwatch.Stop(); // 如果写入PLC失败，也停止计时（如果之前没停）
+                stopwatch.Stop();
                 OperationStatusText = $"Failed to write to PLC for chute {chuteNumber}";
                 _notificationService.ShowError($"写入PLC失败，格口：{chuteNumber}");
-                _errorCount++; // 写入失败，计入异常（或其他错误处理）
+                _errorCount++;
             }
         }
         catch (Exception ex)
         {
-            stopwatch.Stop(); // 如果发生异常，也停止计时
+            stopwatch.Stop();
             Log.Error(ex, "处理SKU输入时发生错误: {Sku}", sku);
             OperationStatusText = "Error processing SKU";
             _notificationService.ShowError("处理SKU时发生异常");
-            _errorCount++; // 发生异常，异常数加一
+            _errorCount++;
         }
         finally
         {
-            // 清空输入框
             CurrentSkuInput = string.Empty;
-            // Note: 统计信息的更新在 Timer_Tick 中统一进行，无需在此处调用 UpdateStatistics
-            // 更新统计信息
             UpdateStatistics();
         }
     }
@@ -295,34 +323,25 @@ public class MainViewModel : BindableBase, IDisposable
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
             var plcStatus = DeviceStatuses.FirstOrDefault(d => d.Name == "PLC");
-            if (plcStatus != null)
+            if (plcStatus == null) return;
+            if (isConnected)
             {
-                if (isConnected)
-                {
-                    plcStatus.Status = "Connected";
-                    plcStatus.StatusColor = "#4CAF50"; // Green
-                }
-                else
-                {
-                    plcStatus.Status = "Disconnected";
-                    plcStatus.StatusColor = "#F44336"; // Red
-                }
+                plcStatus.Status = "Connected";
+                plcStatus.StatusColor = "#4CAF50"; // Green
+            }
+            else
+            {
+                plcStatus.Status = "Disconnected";
+                plcStatus.StatusColor = "#F44336"; // Red
             }
         });
     }
 
     private void InitializeChutes()
     {
-        for (int i = 1; i <= 80; i++)
+        for (int i = 1; i <= 60; i++)
         {
             var chute = new ChuteViewModel(i);
-            if (i == 1)
-            {
-                // 添加模拟数据到格口1
-                chute.AddSku("SAMPLE-SKU-001");
-                chute.AddSku("SAMPLE-SKU-002");
-                chute.AddSku("SAMPLE-SKU-003");
-            }
             Chutes.Add(chute);
         }
 
@@ -389,7 +408,7 @@ public class MainViewModel : BindableBase, IDisposable
     {
         try
         {
-            SystemStatusObj = SharedUI.Models.SystemStatus.GetCurrentStatus();
+            SystemStatusObj = SystemStatus.GetCurrentStatus();
         }
         catch (Exception ex)
         {

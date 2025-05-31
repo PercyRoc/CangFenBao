@@ -490,7 +490,7 @@ namespace Camera.Services.Implementations.Hikvision.Industrial
 
                         var package = PackageInfo.Create();
                         package.SetBarcode(combinedBarcode);
-                        package.SetStatus(PackageStatus.Success);
+                        package.SetStatus("Success");
                         package.TriggerTimestamp = DateTime.Now; // 注意：这里的时间戳是当前时间
                         if (finalBitmapSource != null)
                         {
@@ -665,7 +665,7 @@ namespace Camera.Services.Implementations.Hikvision.Industrial
         /// <returns>带有绘制边框的新 BitmapSource，如果失败则返回 null。</returns>
         private static BitmapSource? DrawBarcodeBordersOnImage(BitmapSource originalImage, IEnumerable<MVIDCodeReader.MVID_CODE_INFO> codeInfos)
         {
-            var mvidCodeInfos = codeInfos as MVIDCodeReader.MVID_CODE_INFO[] ?? codeInfos.ToArray();
+            var mvidCodeInfos = codeInfos as MVIDCodeReader.MVID_CODE_INFO[] ?? [.. codeInfos];
             if (mvidCodeInfos.Length == 0)
             {
                 return originalImage; // 如果没有原始图像或没有条码信息，则返回原始图像

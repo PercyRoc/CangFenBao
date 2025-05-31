@@ -4,13 +4,13 @@ using Common.Models.Package;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera.TCP;
 using Serilog;
-using SharedUI.Models;
 using SortingServices.Modules;
 using Application = System.Windows.Application;
 using Microsoft.Win32;
 using System.IO;
 using System.Text;
 using Camera.Services.Implementations.TCP;
+using Common.Models;
 using WeiCiModule.Models;
 
 namespace WeiCiModule.ViewModels;

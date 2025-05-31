@@ -252,7 +252,7 @@ public class TcpCameraService : IDisposable
         }
 
         // The packet data is the content before the '@' delimiter.
-        string potentialPacketData = bufferContent.Substring(0, endOfPacketIndex);
+        string potentialPacketData = bufferContent[..endOfPacketIndex];
         // We will consume data up to and including the '@' delimiter.
         int processedLength = endOfPacketIndex + 1;
 
@@ -327,7 +327,6 @@ public class TcpCameraService : IDisposable
             var package = PackageInfo.Create();
             package.SetGuid(guid); // 设置 GUID
             package.SetBarcode(code); // Use 'code' (parts[1])
-            package.TriggerTimestamp = timestamp;
 
             double? length = null, width = null, height = null, volume = null;
 
@@ -355,7 +354,7 @@ public class TcpCameraService : IDisposable
 
             if (isNoRead)
             {
-                package.SetStatus(PackageStatus.Failed, "无法识别条码");
+                package.SetStatus("无法识别条码");
                 Log.Information("收到无法识别条码的包裹: GUID={Guid}, 时间={Time}, 重量={称重模块:F2}kg, 长={Length:F2}cm, 宽={Width:F2}cm, 高={Height:F2}cm, 体积={Volume:F3}m³ (按提供值)",
                     guid, timestamp, package.Weight, package.Length, package.Width, package.Height, package.Volume);
             }

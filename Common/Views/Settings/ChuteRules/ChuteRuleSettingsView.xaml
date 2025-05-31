@@ -1,0 +1,163 @@
+<UserControl x:Class="Common.Views.Settings.ChuteRules.ChuteRuleSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:prism="http://prismlibrary.com/"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:viewModels="clr-namespace:Common.ViewModels.Settings.ChuteRules"
+             xmlns:lex="https://github.com/XAMLMarkupExtensions/WPFLocalizationExtension"
+             lex:LocalizeDictionary.DesignCulture="zh-CN"
+             lex:ResxLocalizationProvider.DefaultAssembly="Common"
+             lex:ResxLocalizationProvider.DefaultDictionary="Strings"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=viewModels:ChuteRuleSettingsViewModel}"
+             prism:ViewModelLocator.AutoWireViewModel="True">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="20">
+            <!-- 页面标题 -->
+            <TextBlock Text="{lex:Loc ChuteRuleSettings_Title}" FontSize="24" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,30"/>
+
+            <!-- 基础设置 -->
+            <GroupBox Header="{lex:Loc ChuteRuleSettings_Basic}" Margin="0,0,0,20" Padding="15">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="200"/>
+                        <ColumnDefinition Width="50"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="200"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="50"/>
+                        <RowDefinition Height="50"/>
+                        <RowDefinition Height="50"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- 第一行 -->
+                    <TextBlock Text="{lex:Loc ChuteRuleSettings_ChuteCount}" VerticalAlignment="Center" Margin="0,0,15,0" Grid.Row="0" Grid.Column="0"/>
+                    <ui:NumberBox Grid.Row="0" Grid.Column="1" VerticalAlignment="Center" Height="40"
+                                  Value="{Binding ChuteSettings.ChuteCount, UpdateSourceTrigger=PropertyChanged}" 
+                                  Minimum="1" Maximum="100" SmallChange="1" LargeChange="10"/>
+
+                    <TextBlock Text="{lex:Loc ChuteRuleSettings_ErrorChute}" VerticalAlignment="Center" Margin="0,0,15,0" Grid.Row="0" Grid.Column="3"/>
+                    <ui:NumberBox Grid.Row="0" Grid.Column="4" VerticalAlignment="Center" Height="40"
+                                  Value="{Binding ChuteSettings.ErrorChuteNumber, UpdateSourceTrigger=PropertyChanged}" 
+                                  Minimum="0" Maximum="100" SmallChange="1"/>
+
+                    <!-- 第二行 -->
+                    <TextBlock Text="{lex:Loc ChuteRuleSettings_TimeoutChute}" VerticalAlignment="Center" Margin="0,0,15,0" Grid.Row="1" Grid.Column="0"/>
+                    <ui:NumberBox Grid.Row="1" Grid.Column="1" VerticalAlignment="Center" Height="40"
+                                  Value="{Binding ChuteSettings.TimeoutChuteNumber, UpdateSourceTrigger=PropertyChanged}" 
+                                  Minimum="0" Maximum="100" SmallChange="1"/>
+
+                    <TextBlock Text="{lex:Loc ChuteRuleSettings_NoReadChute}" VerticalAlignment="Center" Margin="0,0,15,0" Grid.Row="1" Grid.Column="3"/>
+                    <ui:NumberBox Grid.Row="1" Grid.Column="4" VerticalAlignment="Center" Height="40"
+                                  Value="{Binding ChuteSettings.NoReadChuteNumber, UpdateSourceTrigger=PropertyChanged}" 
+                                  Minimum="0" Maximum="100" SmallChange="1"/>
+
+                    <!-- 第三行 -->
+                    <TextBlock Text="{lex:Loc ChuteRuleSettings_WeightMismatchChute}" VerticalAlignment="Center" Margin="0,0,15,0" Grid.Row="2" Grid.Column="0"/>
+                    <ui:NumberBox Grid.Row="2" Grid.Column="1" VerticalAlignment="Center" Height="40"
+                                  Value="{Binding ChuteSettings.WeightMismatchChuteNumber, UpdateSourceTrigger=PropertyChanged}" 
+                                  Minimum="0" Maximum="100" SmallChange="1"/>
+                </Grid>
+            </GroupBox>
+
+            <!-- 规则设置 -->
+            <GroupBox Header="{lex:Loc ChuteRuleSettings_Rule}" Padding="15">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="200"/>
+                        <ColumnDefinition Width="50"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="200"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="50"/>
+                        <RowDefinition Height="50"/>
+                        <RowDefinition Height="50"/>
+                        <RowDefinition Height="50"/>
+                        <RowDefinition Height="50"/>
+                        <RowDefinition Height="50"/>
+                        <RowDefinition Height="50"/>
+                        <RowDefinition Height="40"/>
+                        <RowDefinition Height="40"/>
+                        <RowDefinition />
+                    </Grid.RowDefinitions>
+
+                    <!-- 当前格口 -->
+                    <TextBlock Text="{lex:Loc ChuteRuleSettings_CurrentChute}" VerticalAlignment="Center" Margin="0,0,15,0" Grid.Row="0" Grid.Column="0"/>
+                    <ComboBox Grid.Row="0" Grid.Column="1" VerticalAlignment="Center" Height="40"
+                              ItemsSource="{Binding ChuteNumberOptions}"
+                              SelectedValue="{Binding CurrentChuteNumber, UpdateSourceTrigger=PropertyChanged}"/>
+
+                    <!-- 字符类型 -->
+                    <TextBlock Text="{lex:Loc ChuteRuleSettings_CharType}" VerticalAlignment="Center" Margin="0,0,15,0" Grid.Row="1" Grid.Column="0"/>
+                    <StackPanel Orientation="Horizontal" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="4" VerticalAlignment="Center">
+                        <RadioButton Content="{lex:Loc ChuteRuleSettings_DigitOnly}" Margin="0,0,20,0" 
+                                     IsChecked="{Binding CurrentRule.IsDigitOnly, UpdateSourceTrigger=PropertyChanged}"/>
+                        <RadioButton Content="{lex:Loc ChuteRuleSettings_LetterOnly}" Margin="0,0,20,0" 
+                                     IsChecked="{Binding CurrentRule.IsLetterOnly, UpdateSourceTrigger=PropertyChanged}"/>
+                        <RadioButton Content="{lex:Loc ChuteRuleSettings_Alphanumeric}" 
+                                     IsChecked="{Binding CurrentRule.IsAlphanumeric, UpdateSourceTrigger=PropertyChanged}"/>
+                    </StackPanel>
+
+                    <!-- 长度范围 -->
+                    <TextBlock Text="{lex:Loc ChuteRuleSettings_LengthRange}" VerticalAlignment="Center" Margin="0,0,15,0" Grid.Row="2" Grid.Column="0"/>
+                    <StackPanel Orientation="Horizontal" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="4" VerticalAlignment="Center">
+                        <ui:NumberBox Width="120" Height="40" ClearButtonEnabled="False"
+                                      Value="{Binding CurrentRule.MinLength, UpdateSourceTrigger=PropertyChanged}"/>
+                        <TextBlock Text=" - " VerticalAlignment="Center" Margin="10,0"/>
+                        <ui:NumberBox Width="120" Height="40" ClearButtonEnabled="False"
+                                      Value="{Binding CurrentRule.MaxLength, UpdateSourceTrigger=PropertyChanged}"/>
+                    </StackPanel>
+
+                    <!-- 起始字符 -->
+                    <TextBlock Text="{lex:Loc ChuteRuleSettings_StartsWith}" VerticalAlignment="Center" Margin="0,0,15,0" Grid.Row="3" Grid.Column="0"/>
+                    <TextBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="4" VerticalAlignment="Center" Height="40"
+                             Text="{Binding CurrentRule.StartsWith, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="{lex:Loc CommaSeparatedTooltip}"/>
+
+                    <!-- 结束字符 -->
+                    <TextBlock Text="{lex:Loc ChuteRuleSettings_EndsWith}" VerticalAlignment="Center" Margin="0,0,15,0" Grid.Row="4" Grid.Column="0"/>
+                    <TextBox Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="4" VerticalAlignment="Center" Height="40"
+                             Text="{Binding CurrentRule.EndsWith, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="{lex:Loc CommaSeparatedTooltip}"/>
+
+                    <!-- 起始非 -->
+                    <TextBlock Text="{lex:Loc ChuteRuleSettings_NotStartsWith}" VerticalAlignment="Center" Margin="0,0,15,0" Grid.Row="5" Grid.Column="0"/>
+                    <TextBox Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="4" VerticalAlignment="Center" Height="40"
+                             Text="{Binding CurrentRule.NotStartsWith, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="{lex:Loc CommaSeparatedTooltip}"/>
+
+                    <!-- 结束非 -->
+                    <TextBlock Text="{lex:Loc ChuteRuleSettings_NotEndsWith}" VerticalAlignment="Center" Margin="0,0,15,0" Grid.Row="6" Grid.Column="0"/>
+                    <TextBox Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="4" VerticalAlignment="Center" Height="40"
+                             Text="{Binding CurrentRule.NotEndsWith, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="{lex:Loc CommaSeparatedTooltip}"/>
+
+                    <!-- 内容包含 -->
+                    <TextBlock Text="{lex:Loc ChuteRuleSettings_Contains}" VerticalAlignment="Center" Margin="0,0,15,0" Grid.Row="7" Grid.Column="0"/>
+                    <TextBox Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="4" VerticalAlignment="Center" Height="40"
+                             Text="{Binding CurrentRule.Contains, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="{lex:Loc CommaSeparatedTooltip}"/>
+
+                    <!-- 内容不包含 -->
+                    <TextBlock Text="{lex:Loc ChuteRuleSettings_NotContains}" VerticalAlignment="Center" Margin="0,0,15,0" Grid.Row="8" Grid.Column="0"/>
+                    <TextBox Grid.Row="8" Grid.Column="1" Grid.ColumnSpan="4" VerticalAlignment="Center" Height="40"
+                             Text="{Binding CurrentRule.NotContains, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="{lex:Loc CommaSeparatedTooltip}"/>
+
+                    <!-- 正则表达式 -->
+                    <TextBlock Text="{lex:Loc ChuteRuleSettings_RegexPattern}" VerticalAlignment="Center" Margin="0,0,15,0" Grid.Row="9" Grid.Column="0"/>
+                    <TextBox Grid.Row="9" Grid.Column="1" Grid.ColumnSpan="4" VerticalAlignment="Center" Height="40"
+                             Text="{Binding CurrentRule.RegexPattern, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="{lex:Loc RegexPatternTooltip}"/>
+                </Grid>
+            </GroupBox>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl> 

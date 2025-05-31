@@ -4,7 +4,7 @@
                          xmlns:dryIoc="http://prismlibrary.com/"
                          xmlns:hc="https://handyorg.github.io/handycontrol"
                          xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-                         xmlns:converters="clr-namespace:SharedUI.Converters;assembly=SharedUI">
+                         xmlns:converters="clr-namespace:Common.Converters;assembly=Common">
     <dryIoc:PrismApplication.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>

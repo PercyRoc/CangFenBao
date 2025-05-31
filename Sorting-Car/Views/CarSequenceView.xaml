@@ -12,7 +12,7 @@
              mc:Ignorable="d"
              xmlns:prism="http://prismlibrary.com/"
              xmlns:viewModels="clr-namespace:Sorting_Car.ViewModels"
-             xmlns:converters="clr-namespace:SharedUI.Converters;assembly=SharedUI"
+             xmlns:converters="clr-namespace:Common.Converters;assembly=Common"
              prism:ViewModelLocator.AutoWireViewModel="True"
              d:DesignHeight="600" d:DesignWidth="800"
              d:DataContext="{d:DesignInstance viewModels:CarSequenceViewModel}">

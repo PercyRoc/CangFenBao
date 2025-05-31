@@ -22,7 +22,6 @@
 
     <ItemGroup>
       <ProjectReference Include="..\Common\基础模块.csproj" />
-      <ProjectReference Include="..\SharedUI\公共模块.csproj" />
     </ItemGroup>
 
     <ItemGroup>

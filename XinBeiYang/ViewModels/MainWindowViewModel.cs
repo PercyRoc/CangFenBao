@@ -13,11 +13,11 @@ using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Weight;
 using Serilog;
-using SharedUI.Models;
 using XinBeiYang.Models;
 using XinBeiYang.Models.Communication;
 using XinBeiYang.Services;
 using System.Collections.Concurrent;
+using Common.Models;
 using Serilog.Context; // 添加 Serilog.Context 命名空间
 
 // Added for CancellationTokenSource

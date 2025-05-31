@@ -1,6 +1,4 @@
 using System.Windows.Media.Imaging;
-using System.Globalization;
-using WPFLocalizeExtension.Engine;
 
 namespace Common.Models.Package;
 
@@ -31,29 +29,29 @@ public class PackageInfo : IDisposable
         {
             Index = newIndex
         };
-        package.SetStatus(PackageStatus.Created);
+        package.SetStatus("Created");
         return package;
     }
 
     /// <summary>
     ///     序号
     /// </summary>
-    public int Index { get; private set; }
+    public int Index { get; set; }
 
     /// <summary>
     ///     唯一标识符 (来自TCP数据)
     /// </summary>
-    public string Guid { get; private set; } = string.Empty;
+    public string Guid { get; set; } = string.Empty;
 
     /// <summary>
     ///     条码
     /// </summary>
-    public string Barcode { get; private set; } = string.Empty;
+    public string Barcode { get; set; } = string.Empty;
 
     /// <summary>
     ///     段码
     /// </summary>
-    public string SegmentCode { get; private set; } = string.Empty;
+    public string SegmentCode { get; set; } = string.Empty;
 
     /// <summary>
     ///     重量（千克）
@@ -80,7 +78,7 @@ public class PackageInfo : IDisposable
     /// <summary>
     ///     状态显示
     /// </summary>
-    public string StatusDisplay { get; private set; } = string.Empty;
+    public string StatusDisplay { get; set; } = string.Empty;
 
     /// <summary>
     ///     处理时间（毫秒）
@@ -90,7 +88,7 @@ public class PackageInfo : IDisposable
     /// <summary>
     ///     创建时间
     /// </summary>
-    public DateTime CreateTime { get; private set; }
+    public DateTime CreateTime { get; set; }
 
     /// <summary>
     ///     错误信息
@@ -105,17 +103,17 @@ public class PackageInfo : IDisposable
     /// <summary>
     ///     长度（厘米）
     /// </summary>
-    public double? Length { get; private set; }
+    public double? Length { get; set; }
 
     /// <summary>
     ///     宽度（厘米）
     /// </summary>
-    public double? Width { get; private set; }
+    public double? Width { get; set; }
 
     /// <summary>
     ///     高度（厘米）
     /// </summary>
-    public double? Height { get; private set; }
+    public double? Height { get; set; }
 
     /// <summary>
     ///     体积（立方厘米）
@@ -125,7 +123,7 @@ public class PackageInfo : IDisposable
     /// <summary>
     ///     图像 (WPF BitmapSource format)
     /// </summary>
-    public BitmapSource? Image { get; private set; }
+    public BitmapSource? Image { get; set; }
 
     /// <summary>
     ///     图片路径
@@ -135,7 +133,7 @@ public class PackageInfo : IDisposable
     /// <summary>
     ///     处理状态
     /// </summary>
-    public PackageStatus Status { get; private set; }
+    public string Status { get; set; } = string.Empty;
 
     /// <summary>
     ///     包裹计数
@@ -150,27 +148,27 @@ public class PackageInfo : IDisposable
     /// <summary>
     ///     托盘名称 (Sunnen项目专用)
     /// </summary>
-    public string? PalletName { get; private set; }
+    public string? PalletName { get; set; }
 
     /// <summary>
     ///     托盘重量，单位kg (Sunnen项目专用)
     /// </summary>
-    public double PalletWeight { get; private set; }
+    public double PalletWeight { get; set; }
 
     /// <summary>
     ///     托盘长度，单位cm (Sunnen项目专用)
     /// </summary>
-    public double PalletLength { get; private set; }
+    public double PalletLength { get; set; }
 
     /// <summary>
     ///     托盘宽度，单位cm (Sunnen项目专用)
     /// </summary>
-    public double PalletWidth { get; private set; }
+    public double PalletWidth { get; set; }
 
     /// <summary>
     ///     托盘高度，单位cm (Sunnen项目专用)
     /// </summary>
-    public double PalletHeight { get; private set; }
+    public double PalletHeight { get; set; }
 
     /// <summary>
     ///     释放资源
@@ -229,39 +227,13 @@ public class PackageInfo : IDisposable
     }
 
     /// <summary>
-    ///     设置处理状态。如果未提供 statusDisplay，则使用默认值。
+    ///     设置处理状态。
     /// </summary>
-    /// <param name="status">新的状态</param>
-    /// <param name="statusDisplay">状态的显示文本 (可选)</param>
-    public void SetStatus(PackageStatus status, string? statusDisplay = null)
+    /// <param name="statusDisplay">状态的显示文本</param>
+    public void SetStatus(string statusDisplay)
     {
-        Status = status;
-        if (!string.IsNullOrEmpty(statusDisplay))
-        {
-            StatusDisplay = statusDisplay;
-        }
-        else
-        {
-            string resourceKey = $"PackageStatus_{status}";
-            object? localizedValue = LocalizeDictionary.Instance.GetLocalizedObject(
-                resourceKey,
-                null,
-                CultureInfo.CurrentUICulture);
-
-            if (localizedValue is string localizedString && !string.IsNullOrEmpty(localizedString))
-            {
-                StatusDisplay = localizedString;
-            }
-            else
-            {
-                StatusDisplay = status.ToString();
-            }
-        }
-
-        if (status == PackageStatus.Error && string.IsNullOrEmpty(ErrorMessage))
-        {
-            ErrorMessage = StatusDisplay;
-        }
+        Status = statusDisplay;
+        StatusDisplay = statusDisplay;
     }
 
     /// <summary>

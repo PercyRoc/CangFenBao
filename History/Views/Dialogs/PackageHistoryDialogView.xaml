@@ -70,21 +70,16 @@
                     <DataGridTextColumn.CellStyle>
                         <Style TargetType="DataGridCell">
                             <Setter Property="Foreground" Value="White" />
+                            <Setter Property="Background" Value="#F44336" />
                             <Style.Triggers>
+                                <DataTrigger Binding="{Binding Status}" Value="Complete">
+                                    <Setter Property="Background" Value="#4CAF50" />
+                                </DataTrigger>
                                 <DataTrigger Binding="{Binding Status}" Value="Success">
-                                    <Setter Property="Background" Value="DodgerBlue" />
+                                    <Setter Property="Background" Value="#4CAF50" />
                                 </DataTrigger>
-                                <DataTrigger Binding="{Binding Status}" Value="Failed">
-                                    <Setter Property="Background" Value="Red" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding Status}" Value="Error">
-                                    <Setter Property="Background" Value="Red" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding Status}" Value="Unknown">
-                                     <Setter Property="Background" Value="OrangeRed" />
-                                </DataTrigger>
-                                 <DataTrigger Binding="{Binding Status}" Value="Created">
-                                     <Setter Property="Background" Value="Gray" />
+                                <DataTrigger Binding="{Binding Status}" Value="1">
+                                    <Setter Property="Background" Value="#4CAF50" />
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>

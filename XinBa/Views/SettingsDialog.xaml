@@ -1,0 +1,121 @@
+﻿<UserControl x:Class="XinBa.Views.SettingsDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:prism="http://prismlibrary.com/"
+             xmlns:hc="https://handyorg.github.io/handycontrol"
+             xmlns:viewModels="clr-namespace:XinBa.ViewModels"
+             xmlns:local="clr-namespace:XinBa.Views.Settings"
+             prism:ViewModelLocator.AutoWireViewModel="True"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}"
+             Width="1280"
+             Height="720">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="32" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Title Bar -->
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- App Icon -->
+            <Border Grid.Column="0"
+                    Width="48"
+                    Height="32" />
+
+            <!-- Title -->
+            <TextBlock Grid.Column="1"
+                       Text="System Settings"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Margin="0,0,8,0"
+                       FontSize="20"
+                       FontWeight="SemiBold"
+                       TextOptions.TextFormattingMode="Display"
+                       Foreground="black"
+                       TextOptions.TextRenderingMode="ClearType">
+                <TextBlock.Effect>
+                    <DropShadowEffect BlurRadius="4"
+                                      Opacity="0.2"
+                                      Direction="270"
+                                      ShadowDepth="1" />
+                </TextBlock.Effect>
+            </TextBlock>
+
+            <Border Grid.Column="0"
+                    Grid.ColumnSpan="2"
+                    Height="1"
+                    VerticalAlignment="Bottom"
+                    Background="#20008080"
+                    BorderBrush="#40FFFFFF"
+                    BorderThickness="0,0,0,1" />
+        </Grid>
+
+        <!-- Navigation Area -->
+        <Border Grid.Row="1">
+            <Grid>
+                <ui:NavigationView IsPaneOpen="True"
+                                   IsPaneVisible="True"
+                                   PaneDisplayMode="Left"
+                                   OpenPaneLength="200"
+                                   Margin="0"
+                                   Padding="0"
+                                   FrameMargin="0"
+                                   Name="RootNavigation">
+                    <ui:NavigationView.MenuItems>
+                        <ui:NavigationViewItem Content="Volume Settings"
+                                               Icon="{ui:SymbolIcon Cube24}"
+                                               TargetPageTag="VolumeSettings" />
+                    </ui:NavigationView.MenuItems>
+
+                    <ui:NavigationView.ContentOverlay>
+                        <Grid Name="ContentArea">
+                            <!-- 默认显示体积设置 -->
+                            <local:VolumeSettingsView />
+                        </Grid>
+                    </ui:NavigationView.ContentOverlay>
+                </ui:NavigationView>
+
+                <!-- Button Area -->
+                <StackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Bottom"
+                            Margin="16">
+                    <ui:Button Appearance="Primary"
+                               Command="{Binding SaveCommand}"
+                               Margin="0,0,8,0">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Save24" Margin="0,0,8,0" />
+                            <TextBlock Text="Save" />
+                        </StackPanel>
+                    </ui:Button>
+                    <ui:Button Appearance="Secondary"
+                               Command="{Binding CancelCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Dismiss24" Margin="0,0,8,0" />
+                            <TextBlock Text="Cancel" />
+                        </StackPanel>
+                    </ui:Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Growl Message Container -->
+        <StackPanel Name="GrowlPanel"
+                    Grid.Row="1"
+                    hc:Growl.GrowlParent="True"
+                    hc:Growl.Token="SettingWindowGrowl"
+                    VerticalAlignment="Top"
+                    HorizontalAlignment="Right"
+                    Margin="0,10,10,0"
+                    Panel.ZIndex="1000" />
+    </Grid>
+</UserControl>

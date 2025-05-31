@@ -1,6 +1,5 @@
 ﻿using System.Windows;
 using Common.Services.Ui;
-using SharedUI.Views.Settings;
 
 namespace XinJuLi.Views;
 
@@ -18,6 +17,6 @@ public partial class SettingsDialog
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         // 导航到相机设置页面
-        RootNavigation?.Navigate(typeof(CameraSettingsView));
+        // RootNavigation?.Navigate(typeof(CameraSettingsView));
     }
 }

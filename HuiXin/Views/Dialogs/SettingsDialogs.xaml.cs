@@ -1,5 +1,4 @@
 ﻿using Common.Services.Ui;
-using SharedUI.Views.Settings;
 using System.Windows;
 
 namespace HuiXin.Views.Dialogs;

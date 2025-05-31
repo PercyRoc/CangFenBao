@@ -6,7 +6,7 @@ using Weight.ViewModels.Settings;
 
 namespace Sunnen.ViewModels.Dialogs;
 
-public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
+public class SettingsDialogViewModel : BindableBase, IDialogAware
 {
     // 保存各个设置页面的ViewModel实例
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
@@ -48,8 +48,6 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
 
     public void OnDialogClosed()
     {
-        // 对话框关闭时释放资源
-        Dispose();
     }
 
     public void OnDialogOpened(IDialogParameters parameters)
@@ -82,11 +80,5 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
     {
         // 更新调用方式
         RequestClose.Invoke(new DialogResult(ButtonResult.Cancel));
-    }
-
-    // 实现 IDisposable 接口
-    public void Dispose()
-    {
-        GC.SuppressFinalize(this);
     }
 }

@@ -1,7 +1,7 @@
 using Common.Services.Settings;
 using Common.Services.Ui;
 using Serilog;
-using SortingServices.Servers.Models;
+using Server.JuShuiTan.Models;
 
 namespace Server.JuShuiTan.ViewModels;
 

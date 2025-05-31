@@ -11,10 +11,10 @@ using KuaiLv.Models.Settings.App;
 using KuaiLv.Services.DWS;
 using KuaiLv.Services.Warning;
 using Serilog;
-using SharedUI.Models;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using Common.Data;
+using Common.Models;
 
 namespace KuaiLv.ViewModels;
 

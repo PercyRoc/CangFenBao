@@ -39,7 +39,6 @@ namespace SowingSorting.ViewModels.Settings
         }
 
         public DelegateCommand SaveCommand { get; }
-        public DelegateCommand LoadCommand { get; }
         public DelegateCommand TestWriteRegisterCommand { get; }
 
         public ModbusTcpSettingsViewModel(IModbusTcpService modbusTcpService, ISettingsService settingsService)
@@ -48,7 +47,6 @@ namespace SowingSorting.ViewModels.Settings
             _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
             
             SaveCommand = new DelegateCommand(OnSave, CanSaveSettings);
-            LoadCommand = new DelegateCommand(OnLoad);
             TestWriteRegisterCommand = new DelegateCommand(async void () => await TestWriteRegisterAsync(), CanTestWriteRegister);
             
             OnLoad();
@@ -56,15 +54,13 @@ namespace SowingSorting.ViewModels.Settings
         
         private bool CanSaveSettings()
         {
-            return Settings != null &&
-                   !string.IsNullOrWhiteSpace(Settings.IpAddress) && 
+            return !string.IsNullOrWhiteSpace(Settings.IpAddress) && 
                    Settings.Port is > 0 and <= 65535;
         }
 
         private bool CanTestWriteRegister()
         {
-            return Settings != null &&
-                   !string.IsNullOrWhiteSpace(Settings.IpAddress) && 
+            return !string.IsNullOrWhiteSpace(Settings.IpAddress) && 
                    Settings.Port is > 0 and <= 65535 &&
                    _modbusTcpService.IsConnected;
         }
@@ -72,20 +68,11 @@ namespace SowingSorting.ViewModels.Settings
         private void OnLoad()
         {
             Log.Information("尝试从 ISettingsService 加载 Modbus TCP 设置 (Key: {Key})。", SettingsKey);
-            ModbusTcpSettings? loadedSettings = null;
             try
             {
-                loadedSettings = _settingsService.LoadSettings<ModbusTcpSettings>(SettingsKey);
-                if (loadedSettings == null)
-                {
-                    Log.Warning("从 ISettingsService 加载的 Modbus TCP 设置为 null (Key: {Key})。将使用默认设置。", SettingsKey);
-                    Settings = new ModbusTcpSettings();
-                }
-                else
-                {
-                    Settings = loadedSettings;
-                    Log.Information("Modbus TCP 设置已从 ISettingsService 加载 (Key: {Key})。", SettingsKey);
-                }
+                var loadedSettings = _settingsService.LoadSettings<ModbusTcpSettings>(SettingsKey);
+                Settings = loadedSettings;
+                Log.Information("Modbus TCP 设置已从 ISettingsService 加载 (Key: {Key})。", SettingsKey);
             }
             catch (Exception ex)
             {
@@ -119,12 +106,6 @@ namespace SowingSorting.ViewModels.Settings
 
         private async Task TestWriteRegisterAsync()
         {
-            if (Settings == null)
-            {
-                OperationStatusMessage = "设置未加载，无法测试。";
-                return;
-            }
-
             if (!_modbusTcpService.IsConnected)
             {
                 OperationStatusMessage = $"Modbus 服务未连接。尝试自动连接到 {Settings.IpAddress}:{Settings.Port}...";

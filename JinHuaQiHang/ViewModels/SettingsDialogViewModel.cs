@@ -1,15 +1,12 @@
-﻿using Common.Services.Ui;
-using Serilog;
+﻿using Serilog;
 using Server.JuShuiTan.ViewModels;
-using SharedUI.ViewModels.Settings;
-
 using BalanceSorting.ViewModels.Settings;
+using Common.Services.Ui;
 
 namespace JinHuaQiHang.ViewModels;
 
 public class SettingsDialogViewModel :BindableBase,IDialogAware
 {
-    private readonly BarcodeChuteSettingsViewModel  _barcodeChuteSettingsViewModel;
     private readonly JushuitanSettingsViewModel _jushuitanSettingsViewModel;
     private readonly INotificationService _notificationService;
     private readonly BalanceSortSettingsViewModel _balanceSortSettingsViewModel;
@@ -18,7 +15,6 @@ public class SettingsDialogViewModel :BindableBase,IDialogAware
         INotificationService notificationService)
     {
         _notificationService = notificationService;
-        _barcodeChuteSettingsViewModel = containerProvider.Resolve<BarcodeChuteSettingsViewModel>();
         _jushuitanSettingsViewModel = containerProvider.Resolve<JushuitanSettingsViewModel>();
         _balanceSortSettingsViewModel = containerProvider.Resolve<BalanceSortSettingsViewModel>();
         SaveCommand = new DelegateCommand(ExecuteSave);
@@ -40,7 +36,6 @@ public class SettingsDialogViewModel :BindableBase,IDialogAware
     {
         try
         {
-            _barcodeChuteSettingsViewModel.SaveConfigurationCommand.Execute();
             _jushuitanSettingsViewModel.SaveConfigurationCommand.Execute();
             _balanceSortSettingsViewModel.SaveConfigurationCommand.Execute();
             Log.Information("所有设置已保存");

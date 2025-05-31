@@ -8,8 +8,11 @@
              xmlns:hc="https://handyorg.github.io/handycontrol"
              xmlns:viewModels="clr-namespace:ChileSowing.ViewModels"
              xmlns:settings="clr-namespace:SowingSorting.Views.Settings;assembly=SowingSorting"
+             xmlns:commonViews="clr-namespace:Common.Views.Settings.ChuteRules;assembly=Common"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
+             d:DesignWidth="1280"
+             d:DesignHeight="720"
              d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}">
    <Grid>
         <Grid.RowDefinitions>
@@ -34,6 +37,13 @@
                                                Icon="{ui:SymbolIcon NetworkCheck24}">
                             <ui:NavigationViewItem.TargetPageType>
                                 <x:Type Type="settings:ModbusTcpSettingsView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
+                        <ui:NavigationViewItem Content="Chute Rule Settings"
+                                               Tag="ChuteRuleSettingsView"
+                                               Icon="{ui:SymbolIcon Filter24}">
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="commonViews:ChuteRuleSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>

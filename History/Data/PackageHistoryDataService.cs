@@ -398,7 +398,7 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
                   "\"Width\" REAL NULL, " +
                   "\"Height\" REAL NULL, " +
                   "\"Volume\" REAL NULL, " +
-                  "\"Status\" INTEGER NOT NULL, " +
+                  "\"Status\" TEXT NULL, " +
                   "\"StatusDisplay\" TEXT NULL, " +
                   "\"ImagePath\" TEXT NULL, " +
                   "\"PalletName\" TEXT NULL, " +
@@ -538,7 +538,6 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
                         SegmentCode = reader.IsDBNull(3) ? null : reader.GetString(3),
                         Weight = reader.IsDBNull(4) ? 0 : reader.GetDouble(4),
                         ChuteNumber = reader.IsDBNull(5) ? null : reader.GetInt32(5),
-                        Status = reader.IsDBNull(6) ? Common.Models.Package.PackageStatus.Error : (Common.Models.Package.PackageStatus)reader.GetInt32(6),
                         StatusDisplay = reader.IsDBNull(7) ? string.Empty : reader.GetString(7),
                         Length = reader.IsDBNull(9) ? null : reader.GetDouble(9),
                         Width = reader.IsDBNull(10) ? null : reader.GetDouble(10),
@@ -568,6 +567,20 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
                         Log.Warning("MigrateLegacyDataIfNeededAsync: 无法解析旧表 {LegacyTable} 条码 {Barcode} 的 CreateTime '{CtStr}'，使用 DateTime.MinValue(UTC)", legacyTableName, record.Barcode, createTimeString);
                         record.CreateTime = DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Utc);
                     }
+                    
+                    if (!reader.IsDBNull(7) && !string.IsNullOrEmpty(reader.GetString(7)))
+                    {
+                        record.Status = reader.GetString(7);
+                    }
+                    else if (!reader.IsDBNull(6))
+                    {
+                        record.Status = reader.GetInt32(6).ToString();
+                    }
+                    else
+                    {
+                        record.Status = "Error";
+                    }
+
                     recordsToMigrate.Add(record);
                 }
                 Log.Information("MigrateLegacyDataIfNeededAsync: 从旧库 {LegacyDbFile} 的表 {LegacyTable} 读取了 {Count} 条记录。", legacyDbFilePath, legacyTableName, rowCount);

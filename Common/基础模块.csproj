@@ -26,6 +26,11 @@
       </Compile>
     </ItemGroup>
 
+    <ItemGroup>
+        <!-- Folders for new Chute Rule settings UI -->
+        <Folder Include="ViewModels\Settings\ChuteRules\" />
+        <Folder Include="Views\Settings\ChuteRules\" />
+    </ItemGroup>
 
     <ItemGroup>
         <PackageReference Include="MahApps.Metro.IconPacks.Material" />
@@ -43,5 +48,20 @@
         <PackageReference Include="HandyControl" />
         <PackageReference Include="WPF-UI" />
         <PackageReference Include="WPFLocalizeExtension"/>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Page Update="Views\Settings\ChuteRules\ChuteRuleSettingsView.xaml">
+        <XamlRuntime>Wpf</XamlRuntime>
+        <SubType>Designer</SubType>
+        <Generator>MSBuild:Compile</Generator>
+      </Page>
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Remove="logo.ico" />
+      <Resource Include="logo.ico">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </Resource>
     </ItemGroup>
 </Project>

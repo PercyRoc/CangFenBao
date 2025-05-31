@@ -2,6 +2,7 @@ using Sorting_Car.ViewModels;
 using Sorting_Car.Views;
 using Sorting_Car.Services;
 using Serilog;
+using Common.Services.Settings;
 
 namespace Sorting_Car
 {
@@ -17,22 +18,27 @@ namespace Sorting_Car
             containerRegistry.RegisterForNavigation<CarSequenceView, CarSequenceViewModel>();
 
             // 注册服务为单例
-            containerRegistry.RegisterSingleton<CarSortingService>();
+            containerRegistry.RegisterSingleton<ICarSortingDevice, CarSortingService>();
             containerRegistry.RegisterSingleton<CarSortService>();
         }
 
-        public void OnInitialized(IContainerProvider containerProvider)
+        public async void OnInitialized(IContainerProvider containerProvider)
         {
-            // 模块初始化后启动分拣服务
-            var sortService = containerProvider.Resolve<CarSortService>();
-            if (sortService.InitializeAsync().Result)
+            try
             {
-                sortService.StartAsync();
-                Log.Information("小车分拣服务已自动启动。");
+                var sortService = containerProvider.Resolve<CarSortService>();
+                if (await sortService.StartAsync())
+                {
+                    Log.Information("小车分拣服务已自动启动。");
+                }
+                else
+                {
+                    Log.Error("小车分拣服务未能自动启动。");
+                }
             }
-            else
+            catch (Exception ex)
             {
-                Log.Error("小车分拣服务初始化失败，未能自动启动。");
+                Log.Error(ex, "在 SortingCarModule 初始化时启动 CarSortService 失败。");
             }
         }
     }

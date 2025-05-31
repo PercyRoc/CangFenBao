@@ -8,9 +8,7 @@
                  xmlns:local="clr-namespace:ChileSowing.ViewModels"
                  xmlns:mvvm="http://prismlibrary.com/"
                  d:DataContext="{d:DesignInstance local:ChuteDetailDialogViewModel}"
-                 mvvm:ViewModelLocator.AutoWireViewModel="True"
-                 d:DesignHeight="500"
-                 d:DesignWidth="400">
+                 mvvm:ViewModelLocator.AutoWireViewModel="True">
     
     <Grid Margin="12">
         <Grid.RowDefinitions>

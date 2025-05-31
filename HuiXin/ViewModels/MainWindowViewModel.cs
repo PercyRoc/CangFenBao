@@ -3,7 +3,6 @@ using Common.Models.Package;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
-using SharedUI.Models;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Windows;
@@ -13,6 +12,7 @@ using Serilog;
 using Common.Models.Settings.ChuteRules;
 using System.Collections.ObjectModel;
 using System.Globalization;
+using Common.Models;
 using SortingServices.Car.Service;
 using SortingServices.Servers.Services.JuShuiTan;
 

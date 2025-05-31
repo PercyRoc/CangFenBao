@@ -1,7 +1,6 @@
 ﻿using Common.Services.Ui;
 using DongtaiFlippingBoardMachine.ViewModels.Settings;
 using Serilog;
-using SharedUI.ViewModels.Settings;
 
 namespace DongtaiFlippingBoardMachine.ViewModels;
 

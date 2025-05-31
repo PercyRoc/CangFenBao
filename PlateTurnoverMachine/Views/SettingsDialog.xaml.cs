@@ -1,5 +1,4 @@
 ﻿using System.Windows;
-using SharedUI.Views.Settings;
 
 namespace DongtaiFlippingBoardMachine.Views;
 

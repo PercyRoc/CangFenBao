@@ -8,13 +8,13 @@ using System.Windows.Threading;
 using BalanceSorting.Models;
 using BalanceSorting.Service;
 using Camera.Interface;
+using Common.Models;
 using Common.Models.Package;
 using Common.Models.Settings.ChuteRules;
 using Common.Services.Settings;
 using FuzhouPolicyForce.Models;
 using FuzhouPolicyForce.WangDianTong;
 using Serilog;
-using SharedUI.Models;
 using History.Data;
 
 namespace FuzhouPolicyForce.ViewModels;

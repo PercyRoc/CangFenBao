@@ -36,7 +36,6 @@ public class VolumeSettingsViewModel : BindableBase
         {
             // 直接加载并赋值给 Settings 属性
             Settings = _settingsService.LoadSettings<VolumeCameraSettings>();
-            Log.Information("VolumeCameraSettings loaded successfully.");
         }
         catch (Exception ex)
         {   

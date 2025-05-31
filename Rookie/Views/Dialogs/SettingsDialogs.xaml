@@ -6,7 +6,6 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:prism="http://prismlibrary.com/"
              xmlns:hc="https://handyorg.github.io/handycontrol"
-             xmlns:settings="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
              xmlns:dialogs="clr-namespace:Rookie.ViewModels.Windows.Dialogs"
              xmlns:settings1="clr-namespace:Rookie.Views.Settings"
              xmlns:views="clr-namespace:Camera.Views;assembly=Camera"

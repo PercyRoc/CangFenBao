@@ -4,5 +4,8 @@
 .vs/
 bin/
 obj/
-**/bin/
-**/obj/
+**/bin
+**/obj
+/.run
+/.idea
+/.vs

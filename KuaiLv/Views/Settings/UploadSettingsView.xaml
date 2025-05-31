@@ -7,7 +7,6 @@
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       xmlns:prism="http://prismlibrary.com/"
-      xmlns:converters1="clr-namespace:SharedUI.Converters;assembly=SharedUI"
       xmlns:settings1="clr-namespace:KuaiLv.ViewModels.Settings"
       prism:ViewModelLocator.AutoWireViewModel="True"
       d:DataContext="{d:DesignInstance Type=settings1:UploadSettingsViewModel}"

@@ -8,8 +8,9 @@ using XinBa.Services;
 using XinBa.ViewModels;
 using XinBa.Views;
 using System.ComponentModel;
-using SharedUI.Views.Windows;
-using DeviceService.DataSourceDevices.Camera.TCP;
+using Camera.Services.Implementations.TCP;
+using Camera;
+using Common;
 
 namespace XinBa;
 
@@ -37,6 +38,10 @@ public partial class App
             return null!;
         }
 
+        // 在创建主窗口前，显式初始化所有模块
+        var moduleManager = Container.Resolve<IModuleManager>();
+        moduleManager.Run();
+
         Log.Information("创建应用程序主窗口 (Shell)... ");
         return Container.Resolve<MainWindow>();
     }
@@ -56,7 +61,6 @@ public partial class App
         // 注册视图和ViewModel
         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
         containerRegistry.RegisterSingleton<MainWindowViewModel>();
-        containerRegistry.RegisterSingleton<TcpCameraService>();
         containerRegistry.RegisterDialog<LoginDialog, LoginViewModel>("LoginDialog");
 
         // 注册其他服务
@@ -112,9 +116,6 @@ public partial class App
                 {
                     Log.Warning("无法获取 MainWindowViewModel 实例来更新员工信息或订阅事件。 ");
                 }
-
-                // 手动启动后台服务
-                StartBackgroundServices();
             }
             else
             {
@@ -187,14 +188,10 @@ public partial class App
                             Log.Information("重新登录成功，显示主窗口并重启后台服务。 ");
                             // 重新显示主窗口
                             currentMainWindow?.Show();
-                            if (currentMainWindow?.DataContext is MainWindowViewModel newMainVm)
-                            {
-                                _ = newMainVm.UpdateCurrentEmployeeInfo();
-                                // 重新订阅事件
-                                newMainVm.LogoutRequested += OnLogoutRequested;
-                            }
-                            // 重启后台服务
-                            StartBackgroundServices(); 
+                            if (currentMainWindow?.DataContext is not MainWindowViewModel newMainVm) return;
+                            _ = newMainVm.UpdateCurrentEmployeeInfo();
+                            // 重新订阅事件
+                            newMainVm.LogoutRequested += OnLogoutRequested;
                         }
                         else
                         {
@@ -231,21 +228,8 @@ public partial class App
         _isShuttingDown = true;
         e.Cancel = true;
         Log.Information("取消默认关闭，开始执行清理并显示等待窗口... ");
-
-        ProgressIndicatorWindow? progressWindow = null;
         try
         {
-            await Current.Dispatcher.InvokeAsync(() =>
-            {
-                Log.Debug("在 UI 线程上创建并显示 ProgressIndicatorWindow...");
-                progressWindow = new ProgressIndicatorWindow("Closing application, please wait...")
-                {
-                    Owner = Current.MainWindow
-                };
-                progressWindow.Show();
-                Log.Debug("ProgressIndicatorWindow 已显示。 ");
-            });
-
             Log.Information("开始后台清理任务... ");
             await Task.Run(async () =>
             {
@@ -260,10 +244,6 @@ public partial class App
         }
         finally
         {
-            Log.Information("准备关闭等待窗口并真正关闭应用程序... ");
-            await Current.Dispatcher.InvokeAsync(() => progressWindow?.Close());
-            Log.Debug("ProgressIndicatorWindow 已关闭 (如果存在)。 ");
-
             await Current.Dispatcher.InvokeAsync(() =>
             {
                 Log.Information("调用 Application.Current.Shutdown()...");
@@ -339,16 +319,6 @@ public partial class App
         MessageBox.Show($"发生未处理的错误: {e.Exception.Message}\n\n应用程序可能不稳定。 ", "应用程序错误", MessageBoxButton.OK, MessageBoxImage.Error);
         e.Handled = true;
     }
-
-    /// <summary>
-    /// 手动启动已注册的后台服务。
-    /// </summary>
-    private void StartBackgroundServices()
-    {
-        var tcpCameraService = Container.Resolve<TcpCameraService>();
-        tcpCameraService.Start();
-    }
-
     /// <summary>
     /// 手动停止已注册的后台服务。
     /// </summary>
@@ -356,5 +326,15 @@ public partial class App
     {
         var tcpCameraService = Container.Resolve<TcpCameraService>();
         tcpCameraService.Stop();
+    }
+
+    /// <summary>
+    /// 注册模块
+    /// </summary>
+    protected override void ConfigureModuleCatalog(IModuleCatalog moduleCatalog)
+    {
+        base.ConfigureModuleCatalog(moduleCatalog);
+        moduleCatalog.AddModule<CommonServicesModule>();
+        moduleCatalog.AddModule<TcpCameraModule>();
     }
 }

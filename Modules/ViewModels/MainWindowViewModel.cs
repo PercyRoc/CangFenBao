@@ -1,6 +1,7 @@
 ﻿using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Threading;
+using Common.Models;
 using Common.Models.Package;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
@@ -11,7 +12,6 @@ using Prism.Services.Dialogs;
 using Serilog;
 using ShanghaiModuleBelt.Models;
 using ShanghaiModuleBelt.Services;
-using SharedUI.Models;
 using LockingService = ShanghaiModuleBelt.Services.LockingService;
 
 namespace ShanghaiModuleBelt.ViewModels;

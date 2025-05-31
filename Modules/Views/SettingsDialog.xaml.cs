@@ -1,7 +1,6 @@
 ﻿using System.Windows;
 using Common.Services.Ui;
 using Serilog;
-using SharedUI.Views.Settings;
 
 namespace ShanghaiModuleBelt.Views;
 

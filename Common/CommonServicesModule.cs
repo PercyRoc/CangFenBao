@@ -1,6 +1,9 @@
 using Common.Services.Audio;
 using Common.Services.Settings;
 using Common.Services.Ui;
+using Common.ViewModels.Settings.ChuteRules;
+using Common.Views.Settings.ChuteRules;
+using Serilog;
 
 namespace Common;
 
@@ -15,8 +18,15 @@ public class CommonServicesModule : IModule
     /// <param name="containerProvider">容器提供者。</param>
     public async void OnInitialized(IContainerProvider containerProvider)
     {
-        var settingsService = containerProvider.Resolve<ISettingsService>();
-        await settingsService.WaitForInitializationAsync();
+        try
+        {
+            var settingsService = containerProvider.Resolve<ISettingsService>();
+            await settingsService.WaitForInitializationAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[CommonServicesModule] OnInitialized 期间解析或等待 ISettingsService 时发生错误.");
+        }
     }
 
     /// <summary>
@@ -25,11 +35,25 @@ public class CommonServicesModule : IModule
     /// <param name="containerRegistry">容器注册表。</param>
     public void RegisterTypes(IContainerRegistry containerRegistry)
     {
-        // 注册设置服务为单例
-        containerRegistry.RegisterSingleton<ISettingsService, SettingsService>();
-        // 注册音频服务为单例
-        containerRegistry.RegisterSingleton<IAudioService, AudioService>();
-        // 注册通知服务为单例
-        containerRegistry.RegisterSingleton<INotificationService, NotificationService>();
+        try
+        {
+            // 注册设置服务为单例
+            containerRegistry.RegisterSingleton<ISettingsService, SettingsService>();
+
+            // 注册音频服务为单例
+            containerRegistry.RegisterSingleton<IAudioService, AudioService>();
+
+            // 注册通知服务为单例
+            containerRegistry.RegisterSingleton<INotificationService, NotificationService>();
+
+            containerRegistry.RegisterForNavigation<ChuteRuleSettingsView, ChuteRuleSettingsViewModel>();
+
+            // containerRegistry.RegisterDialogWindow<CustomDialogWindow>();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[CommonServicesModule] RegisterTypes 期间发生错误.");
+            throw;
+        }
     }
 } 

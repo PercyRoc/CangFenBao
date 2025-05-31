@@ -1,50 +1,51 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <UseWPF>true</UseWPF>
-    <AssemblyName>仓分宝-新聚力</AssemblyName>
-    <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
-    <RootNamespace>XinJuLi</RootNamespace>
-  </PropertyGroup>
+    <PropertyGroup>
+        <OutputType>WinExe</OutputType>
+        <TargetFramework>net8.0-windows</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <UseWPF>true</UseWPF>
+        <AssemblyName>仓分宝-新聚力</AssemblyName>
+        <ApplicationIcon>logo.ico</ApplicationIcon>
+        <RootNamespace>XinJuLi</RootNamespace>
+    </PropertyGroup>
 
 
-  <ItemGroup>
-    <ProjectReference Include="..\Common\基础模块.csproj" />
-    <ProjectReference Include="..\DeviceService\设备服务.csproj" />
-    <ProjectReference Include="..\SharedUI\公共模块.csproj" />
-    <ProjectReference Include="..\SortingServices\分拣服务.csproj" />
-</ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\BalanceSorting\摆轮分拣.csproj" />
+        <ProjectReference Include="..\Camera\相机模块.csproj" />
+        <ProjectReference Include="..\Common\基础模块.csproj"/>
+        <ProjectReference Include="..\History\历史模块.csproj" />
+    </ItemGroup>
 
-<ItemGroup>
-    <!-- Prism -->
-    <PackageReference Include="Prism.Wpf" />
+    <ItemGroup>
+        <!-- Prism -->
+        <PackageReference Include="Prism.Wpf"/>
 
-    <!-- Serilog -->
-    <PackageReference Include="Serilog" />
-    <PackageReference Include="Serilog.Sinks.Console" />
-    <PackageReference Include="Serilog.Sinks.File" />
-    <PackageReference Include="Serilog.Sinks.Debug" />
-    <PackageReference Include="Serilog.Extensions.Logging" />
+        <!-- Serilog -->
+        <PackageReference Include="Serilog"/>
+        <PackageReference Include="Serilog.Sinks.Console"/>
+        <PackageReference Include="Serilog.Sinks.File"/>
+        <PackageReference Include="Serilog.Sinks.Debug"/>
+        <PackageReference Include="Serilog.Extensions.Logging"/>
 
-    <!-- UI Framework -->
-    <PackageReference Include="MahApps.Metro.IconPacks.Material" />
-    <PackageReference Include="Microsoft.Extensions.Http" />
-    <PackageReference Include="FluentFTP" />
-    <PackageReference Include="WPF-UI" />
-    <PackageReference Include="HandyControl" />
-    <PackageReference Include="System.Reactive" />
+        <!-- UI Framework -->
+        <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
+        <PackageReference Include="Microsoft.Extensions.Http"/>
+        <PackageReference Include="FluentFTP"/>
+        <PackageReference Include="WPF-UI"/>
+        <PackageReference Include="HandyControl"/>
+        <PackageReference Include="System.Reactive"/>
 
-    <!-- WebSocket -->
-    <PackageReference Include="WebSocketSharp-netstandard" />
-</ItemGroup>
+        <!-- WebSocket -->
+        <PackageReference Include="WebSocketSharp-netstandard"/>
+    </ItemGroup>
 
-<ItemGroup>
-    <Resource Include="..\SharedUI\Resources\Icon\logo.ico">
-        <Link>logo.ico</Link>
-    </Resource>
-</ItemGroup>
+    <ItemGroup>
+      <None Remove="logo.ico" />
+      <Resource Include="logo.ico">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </Resource>
+    </ItemGroup>
 </Project>

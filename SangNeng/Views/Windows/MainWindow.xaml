@@ -168,7 +168,7 @@
                                             VerticalAlignment="Center"
                                             Padding="10,0"
                                             KeyDown="ManualBarcodeTextBox_KeyDown"
-                                            GotKeyboardFocus="ManualBarcodeTextBox_GotKeyboardFocus" />
+                                            TextChanged="ManualBarcodeTextBox_TextChanged"/>
                             </Grid>
                         </StackPanel>
 
@@ -530,13 +530,11 @@
                                     <Border Grid.Row="1"
                                             Margin="8"
                                             Background="Black">
-                                        <Image Source="{Binding VolumeImage}"
-                                               RenderOptions.BitmapScalingMode="HighQuality"
-                                               RenderOptions.EdgeMode="Aliased"
-                                               Stretch="Uniform"
-                                               StretchDirection="Both"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center" />
+                                        <Viewbox Stretch="Uniform">
+                                            <Image Source="{Binding VolumeImage}"
+                                                   RenderOptions.BitmapScalingMode="HighQuality"
+                                                   RenderOptions.EdgeMode="Aliased" />
+                                        </Viewbox>
                                     </Border>
                                 </Grid>
                             </Border>
@@ -628,15 +626,20 @@
                                                     Width="Auto">
                                     <DataGridTextColumn.CellStyle>
                                         <Style TargetType="DataGridCell">
-                                            <!-- Default to Red for non-Success states -->
+                                            <!-- Default to Red -->
                                             <Setter Property="Background" Value="#F44336" />
                                             <Setter Property="Foreground" Value="White" />
                                             <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Status}" Value="Success">
-                                                    <!-- Blue for Success/Complete -->
-                                                    <Setter Property="Background" Value="DodgerBlue" />
+                                                <!-- 将 Complete 和 Success 状态设置为绿色 -->
+                                                <DataTrigger Binding="{Binding Status}" Value="Complete">
+                                                    <Setter Property="Background" Value="#4CAF50" /> <!-- Green -->
                                                     <Setter Property="Foreground" Value="White" />
                                                 </DataTrigger>
+                                                <DataTrigger Binding="{Binding Status}" Value="Success">
+                                                    <Setter Property="Background" Value="#4CAF50" /> <!-- Green -->
+                                                    <Setter Property="Foreground" Value="White" />
+                                                </DataTrigger>
+                                                <!-- 其他状态（包括 Missing Weight 和 Missing Volume）将使用默认的红色 -->
                                             </Style.Triggers>
                                         </Style>
                                     </DataGridTextColumn.CellStyle>
@@ -649,21 +652,21 @@
                     </Grid>
                 </Border>
             </Grid>
-
-            <!-- Full Screen Initializing Overlay -->
-            <Border Grid.ColumnSpan="2" Grid.Column="0"
-                    Background="#CC000000"
-                    Visibility="{Binding IsInitializingOverlayVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
-                    Panel.ZIndex="999"> <!-- Ensure it's on top -->
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <ui:ProgressRing IsIndeterminate="True" Width="60" Height="60" Margin="0,0,0,20"/>
-                    <TextBlock Text="Initializing devices, please wait..."
-                               Foreground="White"
-                               FontSize="24"
-                               FontWeight="SemiBold"/>
-                </StackPanel>
-            </Border>
         </Grid>
+
+        <!-- Full Screen Initializing Overlay -->
+        <Border Grid.Row="1"
+                Background="#CC000000"
+                Visibility="{Binding IsInitializingOverlayVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
+                Panel.ZIndex="999"> <!-- Ensure it's on top -->
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <ui:ProgressRing IsIndeterminate="True" Width="60" Height="60" Margin="0,0,0,20"/>
+                <TextBlock Text="Initializing devices, please wait..."
+                           Foreground="White"
+                           FontSize="24"
+                           FontWeight="SemiBold"/>
+            </StackPanel>
+        </Border>
 
         <!-- Status Bar -->
         <Border Grid.Row="2"

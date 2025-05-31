@@ -7,7 +7,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
         <RootNamespace>JinHuaQiHang</RootNamespace>
-        <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
+        <ApplicationIcon>..\Common\logo.ico</ApplicationIcon>
     </PropertyGroup>
 
     <ItemGroup>
@@ -43,11 +43,10 @@
         <ProjectReference Include="..\Common\基础模块.csproj" />
         <ProjectReference Include="..\History\历史模块.csproj" />
         <ProjectReference Include="..\Server\系统服务.csproj" />
-        <ProjectReference Include="..\SharedUI\公共模块.csproj" />
     </ItemGroup>
 
     <ItemGroup>
-        <Resource Include="..\SharedUI\Resources\Icon\logo.ico">
+        <Resource Include="..\Common\logo.ico">
             <Link>logo.ico</Link>
         </Resource>
     </ItemGroup>

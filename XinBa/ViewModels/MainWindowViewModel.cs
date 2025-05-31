@@ -1,5 +1,4 @@
 ﻿using System.Collections.ObjectModel;
-using System.Globalization;
 using System.IO;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
@@ -7,13 +6,22 @@ using System.Windows;
 using System.Windows.Threading;
 using Common.Models.Package;
 using Serilog;
-using SharedUI.Models;
 using XinBa.Services;
 using MessageBox = HandyControl.Controls.MessageBox;
 using MessageBoxImage = System.Windows.MessageBoxImage;
-using System.Windows.Media.Imaging;
-using System.Windows.Media;
-using DeviceService.DataSourceDevices.Camera.TCP;
+using Camera.Services.Implementations.TCP;
+using Common.Models;
+using SixLabors.Fonts;
+using SixLabors.ImageSharp.Drawing;
+using SixLabors.ImageSharp.Processing;
+using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Drawing.Processing;
+using Color = SixLabors.ImageSharp.Color;
+using Font = SixLabors.Fonts.Font;
+using Image = SixLabors.ImageSharp.Image;
+using Path = System.IO.Path;
+using PointF = SixLabors.ImageSharp.PointF;
 
 namespace XinBa.ViewModels;
 
@@ -35,8 +43,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private int _processingRate;
     private int _successPackages;
     private int _totalPackages;
-    private BitmapSource? _currentImage;
-    private TcpCameraService _tcpCameraService;
+    private readonly TcpCameraService _tcpCameraService;
 
     public MainWindowViewModel(
         IDialogService dialogService,
@@ -325,7 +332,22 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                 var extension = Path.GetExtension(imageFile).ToLowerInvariant();
                                 if (extension is ".jpg" or ".jpeg" or ".png" or ".bmp")
                                 {
-                                    photoData.Add(File.ReadAllBytes(imageFile));
+                                    byte[] imageBytes;
+                                    try
+                                    {
+                                        // 读取原始字节
+                                        var originalBytes = File.ReadAllBytes(imageFile);
+                                        // 在图片上绘制白色比例尺水印
+                                        imageBytes = DrawWhiteScaleWatermark(originalBytes, package);
+                                        Log.Information("尝试 {Attempt}: 已在图片 {File} 上绘制白色比例尺水印。", attempt, imageFile);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Log.Error(ex, "尝试 {Attempt}: 在图片 {File} 上绘制白色比例尺水印失败，将使用原图。 {ex}", attempt, imageFile, ex);
+                                        // 如果处理失败，仍然加载原始图片
+                                        imageBytes = File.ReadAllBytes(imageFile);
+                                    }
+                                    photoData.Add(imageBytes);
                                     Log.Information("尝试 {Attempt}: 已加载图片 {File} 到 photoData。", attempt, imageFile);
                                 }
                                 else
@@ -400,6 +422,83 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
+    /// 在图片上绘制白色比例尺水印（线条 + 尺寸文本）
+    /// </summary>
+    private byte[] DrawWhiteScaleWatermark(byte[] imageBytes, PackageInfo package)
+    {
+        using var image = Image.Load<Rgba32>(imageBytes);
+
+        // 设置比例尺线条参数
+        const int scaleLineLength = 150; // 线条长度 (像素)
+        const int scaleLineHeight = 5;   // 线条高度 (像素)
+        const int margin = 15;           // 边距
+
+        // 设置文本参数
+        // 动态计算字体大小，根据图片高度调整
+        float fontSize = Math.Clamp(image.Height / 40f, 12, 30);
+        // 使用 SixLabors.Fonts 加载字体
+        var fontCollection = new FontCollection();
+        fontCollection.AddSystemFonts(); // 添加系统字体
+        Font font;
+        if (fontCollection.TryGet("Arial", out var fontFamily))
+        {
+            font = fontFamily.CreateFont(fontSize);
+        }
+        else
+        {
+             // 如果找不到 Arial 字体，可以使用一个备用字体或者抛出异常
+             // 为了不中断流程，这里使用集合中的第一个字体作为备用
+             Log.Warning("未找到 Arial 字体，使用备用字体。");
+             font = fontCollection.Families.First().CreateFont(fontSize);
+        }
+        var text = $"参考尺寸: {package.Length:F0}×{package.Width:F0}×{package.Height:F0} mm";
+        var textColor = Color.White;
+        var textBackgroundColor = Color.Black.WithAlpha(0.4f); // 半透明背景
+
+        // 计算比例尺线条位置 (左下角)
+        var scaleLinePosition = new PointF(margin, image.Height - scaleLineHeight - margin);
+        var scaleLineEndPosition = new PointF(margin + scaleLineLength, image.Height - scaleLineHeight - margin);
+
+        // 计算文本位置 (比例尺线条上方居中)
+        var textOptions = new TextOptions(font) { Dpi = 72 };
+        var textSize = TextMeasurer.MeasureSize(text, textOptions);
+        var textPositionX = scaleLinePosition.X + (scaleLineLength / 2f) - (textSize.Width / 2f);
+        var textPositionY = scaleLinePosition.Y - textSize.Height - 5; // 上方留白 5px
+        var textPosition = new PointF(textPositionX, textPositionY);
+
+        // 确保文本和线条都在图片范围内
+        textPosition.X = Math.Max(margin, textPosition.X);
+        textPosition.Y = Math.Max(margin, textPosition.Y);
+        scaleLinePosition.X = Math.Max(margin, scaleLinePosition.X);
+        scaleLinePosition.Y = Math.Max(margin, scaleLinePosition.Y);
+
+
+        // 绘制背景矩形 for text
+        var textBgRect = new RectangularPolygon(
+            textPosition.X - 3,
+            textPosition.Y - 2,
+            textSize.Width + 6,
+            textSize.Height + 4
+        );
+
+
+        image.Mutate(ctx =>
+        {
+            // 绘制文本背景
+            ctx.Fill(textBackgroundColor, textBgRect);
+            // 绘制文本
+            ctx.DrawText(text, font, textColor, textPosition);
+            // 绘制比例尺线条
+            ctx.DrawLine(Color.White, scaleLineHeight, new[] { scaleLinePosition, scaleLineEndPosition });
+        });
+
+        // 保存为JPEG格式
+        using var ms = new MemoryStream();
+        image.Save(ms, new JpegEncoder { Quality = 90 });
+        return ms.ToArray();
+    }
+
+    /// <summary>
     ///     更新包裹信息项
     /// </summary>
     /// <param name="package">包裹信息</param>
@@ -461,10 +560,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 totalItem.Value = _totalPackages.ToString();
             }
 
-            // 更新成功/失败数量 (基于 PackageStatus.Success 和 PackageStatus.Error)
-            var isSuccess = package.Status == PackageStatus.Success;
-            var isFailure = package.Status == PackageStatus.Error || package.Status == PackageStatus.Failed ||
-                            package.Status == PackageStatus.Timeout; // 假设这些都算失败
+            // 新统计逻辑：根据状态字符串判断
+            var status = package.StatusDisplay.ToLowerInvariant();
+            var isSuccess = status == "success";
+            var isFailure = status.Contains("fail") || status.Contains("error") || status.Contains("timeout");
 
             if (isSuccess)
             {
@@ -475,7 +574,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     successItem.Value = _successPackages.ToString();
                 }
             }
-            else if (isFailure) // 如果不是成功，且是明确的失败状态
+            else if (isFailure)
             {
                 _failedPackages++;
                 var failureItem = StatisticsItems.FirstOrDefault(static s => s.Label == "Failure Count");
@@ -484,7 +583,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     failureItem.Value = _failedPackages.ToString();
                 }
             }
-            // 注意：如果状态既不是 Success 也不是明确的 Failure (例如 Created)，则不计入成功或失败
+            // 其他状态不计入成功或失败
 
             // 更新处理速率计算
             _packagesInLastHour++;
@@ -622,34 +721,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    /// <summary>
-    /// 绘制单个比例尺及其标签
-    /// </summary>
-    private static void DrawRuler(DrawingContext dc, Pen pen, Brush textBrush, Typeface typeface, double fontSize, double pixelsPerDip,
-                           Point startPoint, double length, double tickHeight, string label)
-    {
-        // 绘制主线
-        dc.DrawLine(pen, startPoint, new Point(startPoint.X + length, startPoint.Y));
-
-        // 绘制开始刻度
-        dc.DrawLine(pen, new Point(startPoint.X, startPoint.Y - tickHeight / 2), new Point(startPoint.X, startPoint.Y + tickHeight / 2));
-
-        // 绘制结束刻度
-        dc.DrawLine(pen, new Point(startPoint.X + length, startPoint.Y - tickHeight / 2), new Point(startPoint.X + length, startPoint.Y + tickHeight / 2));
-
-        // 绘制标签 (在比例尺右侧)
-        var formattedLabel = new FormattedText(
-            label,
-            CultureInfo.CurrentCulture,
-            FlowDirection.LeftToRight,
-            typeface,
-            fontSize,
-            textBrush,
-            pixelsPerDip
-        );
-        dc.DrawText(formattedLabel, new Point(startPoint.X + length + 5, startPoint.Y - formattedLabel.Height / 2)); // 垂直居中对齐
-    }
-
     #region Properties
 
     public DelegateCommand OpenSettingsCommand { get; }
@@ -660,12 +731,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         get => _currentBarcode;
         private set => SetProperty(ref _currentBarcode, value);
-    }
-
-    public BitmapSource? CurrentImage
-    {
-        get => _currentImage;
-        private set => SetProperty(ref _currentImage, value);
     }
 
     private SystemStatus _systemStatus = new();

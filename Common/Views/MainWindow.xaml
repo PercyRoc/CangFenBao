@@ -1,0 +1,959 @@
+<Window x:Class="Common.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        xmlns:converters="clr-namespace:Common.Converters"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="快递智能分拣控制系统 V2.0" 
+        Height="900" Width="1600"
+        WindowState="Maximized"
+        WindowStyle="None"
+        AllowsTransparency="False"
+        ResizeMode="CanResize"
+        Background="#1E1F29"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
+        TextOptions.TextHintingMode="Fixed"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
+    
+    <Window.Resources>
+        <converters:StatusToBrushConverter x:Key="StatusToBrushConverter"/>
+        <converters:StatusToTextColorConverter x:Key="StatusToTextColorConverter"/>
+        <converters:RecognitionStatusToBrushConverter x:Key="RecognitionStatusToBrushConverter"/>
+        
+        <!-- 卡片样式 -->
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="#2C2D3A"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="20"/>
+            <Setter Property="Margin" Value="7.5"/>
+            <Setter Property="UseLayoutRounding" Value="True"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect ShadowDepth="4" BlurRadius="8" Color="Black" Opacity="0.1"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        
+        <!-- 按钮样式 -->
+        <Style x:Key="ModernButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#2A5CAA"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#1a2a4f"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="Margin" Value="7.5,0"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="UseLayoutRounding" Value="True"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" 
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}"
+                                UseLayoutRounding="True"
+                                SnapsToDevicePixels="True">
+                            <Border.Effect>
+                                <DropShadowEffect ShadowDepth="2" BlurRadius="5" Color="Black" Opacity="0.2"/>
+                            </Border.Effect>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBlock x:Name="icon" Text="{TemplateBinding Tag}" 
+                                          FontFamily="Segoe MDL2 Assets" 
+                                          FontSize="16" 
+                                          Margin="0,0,6,0"
+                                          VerticalAlignment="Center"/>
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect ShadowDepth="4" BlurRadius="8" Color="Black" Opacity="0.3"/>
+                                    </Setter.Value>
+                                </Setter>
+                                <Setter TargetName="border" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <TranslateTransform Y="-2"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <TranslateTransform Y="0"/>
+                                    </Setter.Value>
+                                </Setter>
+                                <Setter TargetName="border" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect ShadowDepth="1" BlurRadius="3" Color="Black" Opacity="0.2"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        
+        <!-- 危险按钮样式 -->
+        <Style x:Key="DangerButtonStyle" BasedOn="{StaticResource ModernButtonStyle}" TargetType="Button">
+            <Setter Property="Background" Value="#E74C3C"/>
+            <Setter Property="BorderBrush" Value="#7a1c13"/>
+        </Style>
+        
+        <!-- 警告按钮样式 -->
+        <Style x:Key="WarningButtonStyle" BasedOn="{StaticResource ModernButtonStyle}" TargetType="Button">
+            <Setter Property="Background" Value="#F39C12"/>
+            <Setter Property="BorderBrush" Value="#8c5007"/>
+        </Style>
+        
+        <!-- 指标卡片样式 -->
+        <Style x:Key="MetricCardStyle" TargetType="Border">
+            <Setter Property="Background">
+                <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#2d2e3b" Offset="0"/>
+                        <GradientStop Color="#272834" Offset="1"/>
+                    </LinearGradientBrush>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="15"/>
+            <Setter Property="BorderBrush" Value="#2A5CAA"/>
+            <Setter Property="BorderThickness" Value="3,0,0,0"/>
+            <Setter Property="UseLayoutRounding" Value="True"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect ShadowDepth="3" BlurRadius="6" Color="Black" Opacity="0.1"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        
+        <!-- 文本块样式 - 提高对比度 -->
+        <Style x:Key="HeaderTextStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="UseLayoutRounding" Value="True"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+        </Style>
+        
+        <Style x:Key="BodyTextStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#F0F0F0"/>
+            <Setter Property="UseLayoutRounding" Value="True"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+        </Style>
+        
+        <Style x:Key="SecondaryTextStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#CCCCCC"/>
+            <Setter Property="UseLayoutRounding" Value="True"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+        </Style>
+    </Window.Resources>
+    
+    <Grid Margin="0">
+        <!-- 自定义标题栏 -->
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        
+        <!-- 自定义标题栏 -->
+        <Border Grid.Row="0" Grid.ColumnSpan="2" Background="#1E1F29" Height="35">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <!-- 拖拽区域 -->
+                <Border Grid.ColumnSpan="3" Background="Transparent" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown"/>
+                
+                <!-- 程序图标和标题 -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0">
+                    <TextBlock Text="&#xE9F1;" FontFamily="Segoe MDL2 Assets" FontSize="16" 
+                              Foreground="#4A90E2" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="快递智能分拣控制系统 V2.0" FontSize="14" FontWeight="Medium" 
+                              Style="{StaticResource HeaderTextStyle}" VerticalAlignment="Center"/>
+                </StackPanel>
+                
+                <!-- 窗口控制按钮 -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button x:Name="MinimizeButton" Content="&#xE921;" FontFamily="Segoe MDL2 Assets" 
+                           Width="45" Height="35" Background="Transparent" Foreground="#CCCCCC" 
+                           BorderThickness="0" Click="MinimizeButton_Click"
+                           Style="{x:Null}">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#404040"/>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter Property="Background" Value="#606060"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    
+                    <Button x:Name="MaximizeButton" Content="&#xE922;" FontFamily="Segoe MDL2 Assets" 
+                           Width="45" Height="35" Background="Transparent" Foreground="#CCCCCC" 
+                           BorderThickness="0" Click="MaximizeButton_Click"
+                           Style="{x:Null}">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#404040"/>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter Property="Background" Value="#606060"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    
+                    <Button x:Name="CloseButton" Content="&#xE8BB;" FontFamily="Segoe MDL2 Assets" 
+                           Width="45" Height="35" Background="Transparent" Foreground="#CCCCCC" 
+                           BorderThickness="0" Click="CloseButton_Click"
+                           Style="{x:Null}">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#E74C3C"/>
+                                        <Setter Property="Foreground" Value="White"/>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter Property="Background" Value="#C0392B"/>
+                                        <Setter Property="Foreground" Value="White"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+        
+        <!-- 头部区域 -->
+        <Border Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource CardStyle}" Margin="15,15,15,15">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                    <GradientStop Color="#1a2a4f" Offset="0"/>
+                    <GradientStop Color="#2A5CAA" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.Background>
+            <Border.Effect>
+                <DropShadowEffect ShadowDepth="4" BlurRadius="12" Color="Black" Opacity="0.2"/>
+            </Border.Effect>
+            
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <!-- Logo和标题 -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE9F1;" FontFamily="Segoe MDL2 Assets" FontSize="32" 
+                              Foreground="#4A90E2" Margin="0,0,15,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="快递智能分拣控制系统 V2.0" FontSize="18" FontWeight="SemiBold" 
+                              Foreground="White" VerticalAlignment="Center"
+                              UseLayoutRounding="True" SnapsToDevicePixels="True"/>
+                    
+                    <!-- 运行状态指示器 -->
+                    <Border Background="#27AE6015" BorderBrush="#27AE604D" BorderThickness="1" 
+                           CornerRadius="20" Padding="12,5" Margin="15,0,0,0">
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="10" Height="10" Fill="#27AE60" Margin="0,0,8,0">
+                                <Ellipse.RenderTransform>
+                                    <ScaleTransform x:Name="PulseTransform" CenterX="5" CenterY="5"/>
+                                </Ellipse.RenderTransform>
+                                <Ellipse.Triggers>
+                                    <EventTrigger RoutedEvent="Loaded">
+                                        <BeginStoryboard>
+                                            <Storyboard RepeatBehavior="Forever">
+                                                <DoubleAnimation Storyboard.TargetName="PulseTransform"
+                                                               Storyboard.TargetProperty="ScaleX"
+                                                               From="1" To="1.2" Duration="0:0:0.75"
+                                                               AutoReverse="True"/>
+                                                <DoubleAnimation Storyboard.TargetName="PulseTransform"
+                                                               Storyboard.TargetProperty="ScaleY"
+                                                               From="1" To="1.2" Duration="0:0:0.75"
+                                                               AutoReverse="True"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </EventTrigger>
+                                </Ellipse.Triggers>
+                            </Ellipse>
+                            <TextBlock Text="运行中" FontSize="14" Foreground="White" FontWeight="Medium"
+                                      UseLayoutRounding="True" SnapsToDevicePixels="True"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+                
+                <!-- 控制按钮 -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button Style="{StaticResource ModernButtonStyle}" 
+                           Tag="&#xE72C;" Content="刷新数据"
+                           Command="{Binding RefreshCommand}"/>
+                    <Button Style="{StaticResource WarningButtonStyle}" 
+                           Tag="&#xE769;" Content="暂停分拣"
+                           Command="{Binding PauseSortingCommand}"/>
+                    <Button Style="{StaticResource DangerButtonStyle}" 
+                           Tag="&#xE71A;" Content="紧急停止"
+                           Command="{Binding EmergencyStopCommand}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+        
+        <!-- 实时监控区域 -->
+        <Border Grid.Row="2" Grid.Column="0" Style="{StaticResource CardStyle}">
+            <StackPanel>
+                <!-- 标题栏 -->
+                <Grid Margin="0,0,0,15">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <TextBlock Text="&#xE9D9;" FontFamily="Segoe MDL2 Assets" FontSize="16" 
+                                  Foreground="#F0F0F0" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="实时监控" FontSize="16" FontWeight="Medium" 
+                                  Style="{StaticResource BodyTextStyle}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    
+                    <Button Grid.Column="2" Style="{StaticResource ModernButtonStyle}" 
+                           Tag="&#xE713;" Content="设置" FontSize="12" Padding="12,6"
+                           Command="{Binding SettingsCommand}"/>
+                    
+                    <Rectangle Grid.Column="0" Grid.ColumnSpan="3" Height="1" Fill="#3A3B4A" 
+                              VerticalAlignment="Bottom" Margin="0,10,0,0"/>
+                </Grid>
+                
+                <!-- 指标网格 -->
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <!-- 分拣速度 -->
+                    <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource MetricCardStyle}" Margin="0,0,7.5,7.5">
+                        <StackPanel>
+                            <TextBlock Text="当前分拣速度" FontSize="12" Style="{StaticResource SecondaryTextStyle}" Margin="0,0,0,8"/>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding CurrentSortingSpeed, StringFormat='{}{0:N0}'}" 
+                                          FontSize="24" FontWeight="SemiBold" Style="{StaticResource BodyTextStyle}"/>
+                                <TextBlock Text="件/小时" FontSize="13" Style="{StaticResource BodyTextStyle}" 
+                                          VerticalAlignment="Bottom" Margin="5,0,0,3"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                                <TextBlock Text="&#xE70E;" FontFamily="Segoe MDL2 Assets" FontSize="11" 
+                                          Foreground="#27AE60" Margin="0,0,4,0"/>
+                                <TextBlock Text="12.5% 较昨日" FontSize="11" Foreground="#27AE60"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- 本班次分拣量 -->
+                    <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource MetricCardStyle}" Margin="7.5,0,0,7.5">
+                        <StackPanel>
+                            <TextBlock Text="本班次分拣量" FontSize="12" Style="{StaticResource SecondaryTextStyle}" Margin="0,0,0,8"/>
+                            <TextBlock Text="{Binding CurrentShiftCount, StringFormat='{}{0:N0}'}" 
+                                      FontSize="24" FontWeight="SemiBold" Style="{StaticResource BodyTextStyle}"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                                <TextBlock Text="&#xE70E;" FontFamily="Segoe MDL2 Assets" FontSize="11" 
+                                          Foreground="#27AE60" Margin="0,0,4,0"/>
+                                <TextBlock Text="8.3% 较上一班" FontSize="11" Foreground="#27AE60"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- 异常包裹 -->
+                    <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource MetricCardStyle}" Margin="0,7.5,7.5,7.5">
+                        <StackPanel>
+                            <TextBlock Text="异常包裹" FontSize="12" Style="{StaticResource SecondaryTextStyle}" Margin="0,0,0,8"/>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding ErrorPackageCount}" 
+                                          FontSize="24" FontWeight="SemiBold" Style="{StaticResource BodyTextStyle}"/>
+                                <TextBlock Text="件" FontSize="13" Style="{StaticResource BodyTextStyle}" 
+                                          VerticalAlignment="Bottom" Margin="5,0,0,3"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                                <TextBlock Text="&#xE70D;" FontFamily="Segoe MDL2 Assets" FontSize="11" 
+                                          Foreground="#E74C3C" Margin="0,0,4,0"/>
+                                <TextBlock Text="{Binding ErrorRate, StringFormat='{}{0:F2}% 异常率'}" 
+                                          FontSize="11" Foreground="#E74C3C"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- 设备运行时间 -->
+                    <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource MetricCardStyle}" Margin="7.5,7.5,0,7.5">
+                        <StackPanel>
+                            <TextBlock Text="设备运行时间" FontSize="12" Style="{StaticResource SecondaryTextStyle}" Margin="0,0,0,8"/>
+                            <TextBlock Text="{Binding RunningTime}" 
+                                      FontSize="24" FontWeight="SemiBold" Style="{StaticResource BodyTextStyle}"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                                <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="11" 
+                                          Foreground="#27AE60" Margin="0,0,4,0"/>
+                                <TextBlock Text="状态正常" FontSize="11" Foreground="#27AE60"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- 传送带模拟 -->
+                    <Border Grid.Row="2" Grid.ColumnSpan="2" Background="#1a1b24" CornerRadius="8" 
+                           Margin="0,7.5,0,0" Height="120" BorderBrush="#3A3B4A" BorderThickness="1">
+                        <Canvas ClipToBounds="True">
+                            <!-- 传送带背景 -->
+                            <Rectangle Width="800" Height="30" Canvas.Top="45" Canvas.Left="0">
+                                <Rectangle.Fill>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                        <LinearGradientBrush.Transform>
+                                            <SkewTransform AngleX="-45"/>
+                                        </LinearGradientBrush.Transform>
+                                        <GradientStop Color="#33354a" Offset="0"/>
+                                        <GradientStop Color="#2a2c3d" Offset="0.5"/>
+                                        <GradientStop Color="#33354a" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Rectangle.Fill>
+                                <Rectangle.RenderTransform>
+                                    <TranslateTransform x:Name="BeltTransform"/>
+                                </Rectangle.RenderTransform>
+                                <Rectangle.Triggers>
+                                    <EventTrigger RoutedEvent="Loaded">
+                                        <BeginStoryboard>
+                                            <Storyboard RepeatBehavior="Forever">
+                                                <DoubleAnimation Storyboard.TargetName="BeltTransform"
+                                                               Storyboard.TargetProperty="X"
+                                                               From="0" To="-20" Duration="0:0:2"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </EventTrigger>
+                                </Rectangle.Triggers>
+                            </Rectangle>
+                            
+                            <!-- 移动的包裹 -->
+                            <Border x:Name="Package1" Background="#2A5CAA" CornerRadius="4" 
+                                   Width="50" Height="30" Canvas.Top="45">
+                                <Border.Effect>
+                                    <DropShadowEffect ShadowDepth="2" BlurRadius="4" Color="Black" Opacity="0.3"/>
+                                </Border.Effect>
+                                <TextBlock Text="SF1234" FontSize="10" HorizontalAlignment="Center" 
+                                          VerticalAlignment="Center" Foreground="White"/>
+                                <Border.RenderTransform>
+                                    <TranslateTransform x:Name="Package1Transform"/>
+                                </Border.RenderTransform>
+                                <Border.Triggers>
+                                    <EventTrigger RoutedEvent="Loaded">
+                                        <BeginStoryboard>
+                                            <Storyboard RepeatBehavior="Forever">
+                                                <DoubleAnimation Storyboard.TargetName="Package1Transform"
+                                                               Storyboard.TargetProperty="X"
+                                                               From="500" To="-60" Duration="0:0:15"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </EventTrigger>
+                                </Border.Triggers>
+                            </Border>
+                            
+                            <Border x:Name="Package2" Background="#27AE60" CornerRadius="4" 
+                                   Width="50" Height="30" Canvas.Top="45">
+                                <Border.Effect>
+                                    <DropShadowEffect ShadowDepth="2" BlurRadius="4" Color="Black" Opacity="0.3"/>
+                                </Border.Effect>
+                                <TextBlock Text="JD5678" FontSize="10" HorizontalAlignment="Center" 
+                                          VerticalAlignment="Center" Foreground="White"/>
+                                <Border.RenderTransform>
+                                    <TranslateTransform x:Name="Package2Transform"/>
+                                </Border.RenderTransform>
+                                <Border.Triggers>
+                                    <EventTrigger RoutedEvent="Loaded">
+                                        <BeginStoryboard>
+                                            <Storyboard RepeatBehavior="Forever">
+                                                <DoubleAnimation Storyboard.TargetName="Package2Transform"
+                                                               Storyboard.TargetProperty="X"
+                                                               From="350" To="-60" Duration="0:0:15"
+                                                               BeginTime="0:0:3"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </EventTrigger>
+                                </Border.Triggers>
+                            </Border>
+                            
+                            <Border x:Name="Package3" Background="#E74C3C" CornerRadius="4" 
+                                   Width="50" Height="30" Canvas.Top="45">
+                                <Border.Effect>
+                                    <DropShadowEffect ShadowDepth="2" BlurRadius="4" Color="Black" Opacity="0.3"/>
+                                </Border.Effect>
+                                <TextBlock Text="ERR01" FontSize="10" HorizontalAlignment="Center" 
+                                          VerticalAlignment="Center" Foreground="White"/>
+                                <Border.RenderTransform>
+                                    <TranslateTransform x:Name="Package3Transform"/>
+                                </Border.RenderTransform>
+                                <Border.Triggers>
+                                    <EventTrigger RoutedEvent="Loaded">
+                                        <BeginStoryboard>
+                                            <Storyboard RepeatBehavior="Forever">
+                                                <DoubleAnimation Storyboard.TargetName="Package3Transform"
+                                                               Storyboard.TargetProperty="X"
+                                                               From="200" To="-60" Duration="0:0:15"
+                                                               BeginTime="0:0:6"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </EventTrigger>
+                                </Border.Triggers>
+                            </Border>
+                        </Canvas>
+                    </Border>
+                </Grid>
+            </StackPanel>
+        </Border>
+        
+        <!-- 包裹详细信息区域 -->
+        <Border Grid.Row="3" Grid.Column="0" Style="{StaticResource CardStyle}">
+            <StackPanel>
+                <!-- 标题栏 -->
+                <Grid Margin="0,0,0,15">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <TextBlock Text="&#xE7B8;" FontFamily="Segoe MDL2 Assets" FontSize="16" 
+                                  Foreground="#F0F0F0" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="当前包裹详情" FontSize="16" FontWeight="Medium" 
+                                  Style="{StaticResource BodyTextStyle}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    
+                    <Button Grid.Column="2" Style="{StaticResource ModernButtonStyle}" 
+                           Tag="&#xE81C;" Content="历史记录" FontSize="12" Padding="12,6"
+                           Command="{Binding HistoryCommand}"/>
+                    
+                    <Rectangle Grid.Column="0" Grid.ColumnSpan="3" Height="1" Fill="#3A3B4A" 
+                              VerticalAlignment="Bottom" Margin="0,10,0,0"/>
+                </Grid>
+                
+                <!-- 包裹信息网格 -->
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <!-- 基本信息卡片 -->
+                    <Border Grid.Row="0" Grid.Column="0" Background="#252632" CornerRadius="8" 
+                           Padding="15" Margin="0,0,7.5,7.5" BorderBrush="#3A3B4A" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="条码信息" FontSize="12" Style="{StaticResource SecondaryTextStyle}" Margin="0,0,0,8"/>
+                            <TextBlock Text="{Binding CurrentPackageId}" FontSize="16" FontWeight="SemiBold" 
+                                      Style="{StaticResource BodyTextStyle}"/>
+                        </StackPanel>
+                    </Border>
+                    
+                    <Border Grid.Row="0" Grid.Column="1" Background="#252632" CornerRadius="8" 
+                           Padding="15" Margin="7.5,0,0,7.5" BorderBrush="#3A3B4A" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="重量" FontSize="12" Style="{StaticResource SecondaryTextStyle}" Margin="0,0,0,8"/>
+                            <TextBlock Text="{Binding CurrentWeight, StringFormat='{}{0} kg'}" 
+                                      FontSize="16" FontWeight="SemiBold" Style="{StaticResource BodyTextStyle}"/>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- 详细信息表格 -->
+                    <Border Grid.Row="1" Grid.ColumnSpan="2" Background="#252632" CornerRadius="8" 
+                           Padding="15" Margin="0,7.5,0,0" BorderBrush="#3A3B4A" BorderThickness="1">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Hidden">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <!-- 包裹信息行 -->
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="包裹ID" FontSize="12" 
+                                          Style="{StaticResource SecondaryTextStyle}" Padding="0,10,15,10"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding CurrentPackageId}" 
+                                          FontSize="12" Style="{StaticResource BodyTextStyle}" Padding="0,10,15,10"/>
+                                <TextBlock Grid.Row="0" Grid.Column="2" Text="扫描时间" FontSize="12" 
+                                          Style="{StaticResource SecondaryTextStyle}" Padding="0,10,15,10"/>
+                                <TextBlock Grid.Row="0" Grid.Column="3" Text="{Binding ScanTime, StringFormat='yyyy-MM-dd HH:mm:ss'}" 
+                                          FontSize="12" Style="{StaticResource BodyTextStyle}" Padding="0,10,0,10"/>
+                                
+                                <!-- 分隔线 -->
+                                <Rectangle Grid.Row="0" Grid.ColumnSpan="4" Height="1" Fill="#3A3B4A" 
+                                          VerticalAlignment="Bottom"/>
+                                
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="重量" FontSize="12" 
+                                          Style="{StaticResource SecondaryTextStyle}" Padding="0,10,15,10"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding CurrentWeight, StringFormat='{}{0} kg'}" 
+                                          FontSize="12" Style="{StaticResource BodyTextStyle}" Padding="0,10,15,10"/>
+                                <TextBlock Grid.Row="1" Grid.Column="2" Text="尺寸" FontSize="12" 
+                                          Style="{StaticResource SecondaryTextStyle}" Padding="0,10,15,10"/>
+                                <TextBlock Grid.Row="1" Grid.Column="3" Text="{Binding CurrentSize}" 
+                                          FontSize="12" Style="{StaticResource BodyTextStyle}" Padding="0,10,0,10"/>
+                                
+                                <Rectangle Grid.Row="1" Grid.ColumnSpan="4" Height="1" Fill="#3A3B4A" 
+                                          VerticalAlignment="Bottom"/>
+                                
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="目的地" FontSize="12" 
+                                          Style="{StaticResource SecondaryTextStyle}" Padding="0,10,15,10"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding CurrentDestination}" 
+                                          FontSize="12" Style="{StaticResource BodyTextStyle}" Padding="0,10,15,10"/>
+                                <TextBlock Grid.Row="2" Grid.Column="2" Text="目标分拣口" FontSize="12" 
+                                          Style="{StaticResource SecondaryTextStyle}" Padding="0,10,15,10"/>
+                                <TextBlock Grid.Row="2" Grid.Column="3" Text="{Binding TargetSlot}" 
+                                          FontSize="12" Style="{StaticResource BodyTextStyle}" Padding="0,10,0,10"/>
+                                
+                                <Rectangle Grid.Row="2" Grid.ColumnSpan="4" Height="1" Fill="#3A3B4A" 
+                                          VerticalAlignment="Bottom"/>
+                                
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="发货地" FontSize="12" 
+                                          Style="{StaticResource SecondaryTextStyle}" Padding="0,10,15,10"/>
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Sender}" 
+                                          FontSize="12" Style="{StaticResource BodyTextStyle}" Padding="0,10,15,10"/>
+                                <TextBlock Grid.Row="3" Grid.Column="2" Text="快递公司" FontSize="12" 
+                                          Style="{StaticResource SecondaryTextStyle}" Padding="0,10,15,10"/>
+                                <TextBlock Grid.Row="3" Grid.Column="3" Text="{Binding Courier}" 
+                                          FontSize="12" Style="{StaticResource BodyTextStyle}" Padding="0,10,0,10"/>
+                                
+                                <Rectangle Grid.Row="3" Grid.ColumnSpan="4" Height="1" Fill="#3A3B4A" 
+                                          VerticalAlignment="Bottom"/>
+                                
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="处理状态" FontSize="12" 
+                                          Style="{StaticResource SecondaryTextStyle}" Padding="0,10,15,10"/>
+                                <Border Grid.Row="4" Grid.Column="1" Background="{Binding PackageStatus, Converter={StaticResource StatusToBrushConverter}}" 
+                                       CornerRadius="4" Padding="8,4" Margin="0,8,15,8" HorizontalAlignment="Left">
+                                    <TextBlock Text="{Binding PackageStatus}" FontSize="11" FontWeight="Medium" 
+                                              Foreground="White"/>
+                                </Border>
+                                <TextBlock Grid.Row="4" Grid.Column="2" Text="预计到达" FontSize="12" 
+                                          Style="{StaticResource SecondaryTextStyle}" Padding="0,10,15,10"/>
+                                <TextBlock Grid.Row="4" Grid.Column="3" Text="{Binding ExpectedArrival}" 
+                                          FontSize="12" Style="{StaticResource BodyTextStyle}" Padding="0,10,0,10"/>
+                            </Grid>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </StackPanel>
+        </Border>
+        
+        <!-- 图像展示区域 - 移到右侧 -->
+        <Border Grid.Row="2" Grid.RowSpan="2" Grid.Column="1" Style="{StaticResource CardStyle}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                
+                <!-- 标题栏 -->
+                <Grid Grid.Row="0" Margin="0,0,0,15">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <TextBlock Text="&#xE722;" FontFamily="Segoe MDL2 Assets" FontSize="16" 
+                                  Foreground="#F0F0F0" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="图像识别" FontSize="16" FontWeight="Medium" 
+                                  Style="{StaticResource BodyTextStyle}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    
+                    <Button Grid.Column="2" Style="{StaticResource ModernButtonStyle}" 
+                           Tag="&#xE740;" Content="全屏" FontSize="12" Padding="12,6"
+                           Command="{Binding FullScreenCommand}"/>
+                    
+                    <Rectangle Grid.Column="0" Grid.ColumnSpan="3" Height="1" Fill="#3A3B4A" 
+                              VerticalAlignment="Bottom" Margin="0,10,0,0"/>
+                </Grid>
+                
+                <!-- 相机画面 -->
+                <Border Grid.Row="1" Background="#1a1b24" CornerRadius="8" BorderBrush="#3A3B4A" BorderThickness="1" 
+                       Margin="0,0,0,15">
+                    <Grid>
+                        <Rectangle Fill="#1a1b24"/>
+                        <!-- 暂时移除图像源，可以后续添加本地图片 -->
+                        <Rectangle Fill="#2a2c3d" Opacity="0.5"/>
+                        <TextBlock Text="相机画面" FontSize="24" Foreground="#666" 
+                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        
+                        <!-- 异常标识 -->
+                        <Border Background="#E74C3CB3" CornerRadius="4" Padding="10,5" 
+                               HorizontalAlignment="Left" VerticalAlignment="Top" Margin="20,30">
+                            <TextBlock Text="异常：地址无法识别" FontSize="12" FontWeight="Medium" 
+                                      Foreground="White"/>
+                        </Border>
+                        
+                        <!-- 识别准确率 -->
+                        <Border Background="#27AE60B3" CornerRadius="4" Padding="10,5" 
+                               HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,20,20">
+                            <TextBlock Text="{Binding RecognitionAccuracy, StringFormat='识别中: {0} 准确率'}" 
+                                      FontSize="12" FontWeight="Medium" Foreground="White"/>
+                        </Border>
+                    </Grid>
+                </Border>
+                
+                <!-- 识别结果 -->
+                <Border Grid.Row="2" Background="#252632" CornerRadius="8" BorderBrush="#3A3B4A" BorderThickness="1" 
+                       Padding="15">
+                    <StackPanel>
+                        <TextBlock Text="识别结果" FontSize="14" FontWeight="Medium" 
+                                  Style="{StaticResource BodyTextStyle}" Margin="0,0,0,15"/>
+                        
+                        <!-- 结果项 -->
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="包裹ID" FontSize="12" Style="{StaticResource SecondaryTextStyle}" 
+                                      Margin="0,0,15,0"/>
+                            <TextBlock Grid.Column="1" Text="{Binding CurrentPackageId}" FontSize="12" 
+                                      Style="{StaticResource BodyTextStyle}"/>
+                            <Rectangle Grid.ColumnSpan="2" Height="1" Fill="#3A3B4A" 
+                                      VerticalAlignment="Bottom" Margin="0,10,0,0"/>
+                        </Grid>
+                        
+                        <Grid Margin="0,10,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="识别状态" FontSize="12" Style="{StaticResource SecondaryTextStyle}" 
+                                      Margin="0,0,15,0"/>
+                            <TextBlock Grid.Column="1" Text="{Binding RecognitionStatus}" FontSize="12" 
+                                      Foreground="{Binding RecognitionStatus, Converter={StaticResource RecognitionStatusToBrushConverter}}"/>
+                            <Rectangle Grid.ColumnSpan="2" Height="1" Fill="#3A3B4A" 
+                                      VerticalAlignment="Bottom" Margin="0,10,0,0"/>
+                        </Grid>
+                        
+                        <Grid Margin="0,10,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="条码识别" FontSize="12" Style="{StaticResource SecondaryTextStyle}" 
+                                      Margin="0,0,15,0"/>
+                            <TextBlock Grid.Column="1" Text="{Binding BarcodeRecognition}" FontSize="12" 
+                                      Foreground="{Binding BarcodeRecognition, Converter={StaticResource RecognitionStatusToBrushConverter}}"/>
+                            <Rectangle Grid.ColumnSpan="2" Height="1" Fill="#3A3B4A" 
+                                      VerticalAlignment="Bottom" Margin="0,10,0,0"/>
+                        </Grid>
+                        
+                        <Grid Margin="0,10,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="重量检测" FontSize="12" Style="{StaticResource SecondaryTextStyle}" 
+                                      Margin="0,0,15,0"/>
+                            <TextBlock Grid.Column="1" Text="{Binding WeightDetection}" FontSize="12" 
+                                      Foreground="#27AE60"/>
+                            <Rectangle Grid.ColumnSpan="2" Height="1" Fill="#3A3B4A" 
+                                      VerticalAlignment="Bottom" Margin="0,10,0,0"/>
+                        </Grid>
+                        
+                        <Grid Margin="0,10,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="尺寸检测" FontSize="12" Style="{StaticResource SecondaryTextStyle}" 
+                                      Margin="0,0,15,0"/>
+                            <TextBlock Grid.Column="1" Text="{Binding SizeDetection}" FontSize="12" 
+                                      Foreground="#27AE60"/>
+                            <Rectangle Grid.ColumnSpan="2" Height="1" Fill="#3A3B4A" 
+                                      VerticalAlignment="Bottom" Margin="0,10,0,0"/>
+                        </Grid>
+                        
+                        <Grid Margin="0,10,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="目标分拣口" FontSize="12" Style="{StaticResource SecondaryTextStyle}" 
+                                      Margin="0,0,15,0"/>
+                            <TextBlock Grid.Column="1" Text="{Binding TargetSlotResult}" FontSize="12" 
+                                      Style="{StaticResource BodyTextStyle}"/>
+                            <Rectangle Grid.ColumnSpan="2" Height="1" Fill="#3A3B4A" 
+                                      VerticalAlignment="Bottom" Margin="0,10,0,0"/>
+                        </Grid>
+                        
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="处理建议" FontSize="12" Style="{StaticResource SecondaryTextStyle}" 
+                                      Margin="0,0,15,0"/>
+                            <TextBlock Grid.Column="1" Text="{Binding ProcessingAdvice}" FontSize="12" 
+                                      Style="{StaticResource BodyTextStyle}"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+        
+        <!-- 历史记录区域 - 移到底部 -->
+        <Border Grid.Row="4" Grid.ColumnSpan="2" Style="{StaticResource CardStyle}">
+            <StackPanel>
+                <!-- 标题栏 -->
+                <Grid Margin="0,0,0,15">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <TextBlock Text="&#xE81C;" FontFamily="Segoe MDL2 Assets" FontSize="16" 
+                                  Foreground="#F0F0F0" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="分拣历史记录" FontSize="16" FontWeight="Medium" 
+                                  Style="{StaticResource BodyTextStyle}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    
+                    <Button Grid.Column="2" Style="{StaticResource ModernButtonStyle}" 
+                           Tag="&#xE74E;" Content="导出数据" FontSize="12" Padding="12,6"
+                           Command="{Binding ExportDataCommand}"/>
+                    
+                    <Rectangle Grid.Column="0" Grid.ColumnSpan="3" Height="1" Fill="#3A3B4A" 
+                              VerticalAlignment="Bottom" Margin="0,10,0,0"/>
+                </Grid>
+                
+                <!-- 历史记录表格 -->
+                <Border Background="#252632" CornerRadius="8" BorderBrush="#3A3B4A" BorderThickness="1"
+                       Height="300">
+                    <DataGrid ItemsSource="{Binding HistoryRecords}" 
+                             AutoGenerateColumns="False"
+                             GridLinesVisibility="None"
+                             HeadersVisibility="Column"
+                             CanUserResizeColumns="True"
+                             CanUserSortColumns="False"
+                             IsReadOnly="True"
+                             Background="Transparent"
+                             Foreground="#F0F0F0"
+                             FontSize="12"
+                             RowHeight="35">
+                        <DataGrid.Resources>
+                            <Style TargetType="DataGridColumnHeader">
+                                <Setter Property="Background" Value="#2a2b38"/>
+                                <Setter Property="Foreground" Value="#CCCCCC"/>
+                                <Setter Property="FontWeight" Value="Medium"/>
+                                <Setter Property="FontSize" Value="12"/>
+                                <Setter Property="Padding" Value="12,8"/>
+                                <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                                <Setter Property="BorderBrush" Value="#3A3B4A"/>
+                            </Style>
+                            <Style TargetType="DataGridRow">
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#2A5CAA1A"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                            <Style TargetType="DataGridCell">
+                                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                                <Setter Property="BorderBrush" Value="#3A3B4A"/>
+                                <Setter Property="Padding" Value="12,8"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="DataGridCell">
+                                            <Border Background="{TemplateBinding Background}"
+                                                   BorderBrush="{TemplateBinding BorderBrush}"
+                                                   BorderThickness="{TemplateBinding BorderThickness}"
+                                                   Padding="{TemplateBinding Padding}">
+                                                <ContentPresenter VerticalAlignment="Center"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </DataGrid.Resources>
+                        
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="时间" Binding="{Binding Time}" Width="140"/>
+                            <DataGridTextColumn Header="包裹ID" Binding="{Binding PackageId}" Width="120"/>
+                            <DataGridTextColumn Header="条码" Binding="{Binding Barcode}" Width="100"/>
+                            <DataGridTextColumn Header="重量" Binding="{Binding Weight}" Width="80"/>
+                            <DataGridTextColumn Header="尺寸" Binding="{Binding Size}" Width="100"/>
+                            <DataGridTextColumn Header="目的地" Binding="{Binding Destination}" Width="150"/>
+                            <DataGridTextColumn Header="分拣口" Binding="{Binding Slot}" Width="80"/>
+                            <DataGridTemplateColumn Header="状态" Width="80">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{Binding Status, Converter={StaticResource StatusToBrushConverter}}" 
+                                               CornerRadius="4" Padding="8,4" HorizontalAlignment="Center">
+                                            <TextBlock Text="{Binding Status}" FontSize="11" FontWeight="Medium" 
+                                                      Foreground="White"/>
+                                        </Border>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Border>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window> 

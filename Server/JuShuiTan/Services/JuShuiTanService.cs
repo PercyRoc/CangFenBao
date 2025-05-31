@@ -6,8 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Common.Services.Settings;
 using Serilog;
-using SortingServices.Servers.Models;
-using SortingServices.Servers.Services.JuShuiTan;
+using Server.JuShuiTan.Models;
 
 namespace Server.JuShuiTan.Services;
 

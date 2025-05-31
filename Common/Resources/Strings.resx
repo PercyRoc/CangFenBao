@@ -48,4 +48,73 @@
     <data name="PackageStatus_LoadingTimeout" xml:space="preserve">
         <value>加载超时</value>
     </data>
+    <data name="ChuteRuleSettings_Title" xml:space="preserve">
+        <value>条码格口规则设置</value>
+    </data>
+    <data name="ChuteRuleSettings_Basic" xml:space="preserve">
+        <value>基础设置</value>
+    </data>
+    <data name="ChuteRuleSettings_ChuteCount" xml:space="preserve">
+        <value>格口数量</value>
+    </data>
+    <data name="ChuteRuleSettings_ErrorChute" xml:space="preserve">
+        <value>异常格口</value>
+    </data>
+    <data name="ChuteRuleSettings_TimeoutChute" xml:space="preserve">
+        <value>超时格口</value>
+    </data>
+    <data name="ChuteRuleSettings_NoReadChute" xml:space="preserve">
+        <value>NoRead格口</value>
+    </data>
+    <data name="ChuteRuleSettings_WeightMismatchChute" xml:space="preserve">
+        <value>重量不匹配格口</value>
+    </data>
+    <data name="ChuteRuleSettings_Rule" xml:space="preserve">
+        <value>规则设置</value>
+    </data>
+    <data name="ChuteRuleSettings_CurrentChute" xml:space="preserve">
+        <value>当前格口</value>
+    </data>
+    <data name="ChuteRuleSettings_CharType" xml:space="preserve">
+        <value>字符类型</value>
+    </data>
+    <data name="ChuteRuleSettings_DigitOnly" xml:space="preserve">
+        <value>仅数字</value>
+    </data>
+    <data name="ChuteRuleSettings_LetterOnly" xml:space="preserve">
+        <value>仅字母</value>
+    </data>
+    <data name="ChuteRuleSettings_Alphanumeric" xml:space="preserve">
+        <value>字母+数字</value>
+    </data>
+    <data name="ChuteRuleSettings_LengthRange" xml:space="preserve">
+        <value>长度范围</value>
+    </data>
+    <data name="ChuteRuleSettings_StartsWith" xml:space="preserve">
+        <value>起始字符</value>
+    </data>
+    <data name="ChuteRuleSettings_EndsWith" xml:space="preserve">
+        <value>结束字符</value>
+    </data>
+    <data name="ChuteRuleSettings_NotStartsWith" xml:space="preserve">
+        <value>起始非</value>
+    </data>
+    <data name="ChuteRuleSettings_NotEndsWith" xml:space="preserve">
+        <value>结束非</value>
+    </data>
+    <data name="ChuteRuleSettings_Contains" xml:space="preserve">
+        <value>内容包含</value>
+    </data>
+    <data name="ChuteRuleSettings_NotContains" xml:space="preserve">
+        <value>内容不包含</value>
+    </data>
+    <data name="ChuteRuleSettings_RegexPattern" xml:space="preserve">
+        <value>正则表达式</value>
+    </data>
+    <data name="CommaSeparatedTooltip" xml:space="preserve">
+        <value>多个用英文逗号分隔</value>
+    </data>
+    <data name="RegexPatternTooltip" xml:space="preserve">
+        <value>高级用户可使用正则表达式进行匹配</value>
+    </data>
 </root>

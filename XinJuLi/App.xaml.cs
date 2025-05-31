@@ -1,20 +1,19 @@
 ﻿using System.Diagnostics;
 using System.Windows;
-using Common.Extensions;
-using Common.Models.Settings.Sort.PendulumSort;
-using DeviceService.DataSourceDevices.Camera;
-using DeviceService.Extensions;
 using Microsoft.Extensions.Hosting;
 using Serilog;
-using SharedUI.Extensions;
-using SharedUI.ViewModels.Settings;
-using SharedUI.Views.Settings;
-using SortingServices.Pendulum;
-using SortingServices.Pendulum.Extensions;
 using XinJuLi.Services.ASN;
 using XinJuLi.ViewModels;
 using XinJuLi.Views;
 using XinJuLi.Views.Settings;
+using Prism.Modularity;
+using Camera;
+using BalanceSorting;
+using BalanceSorting.Modules;
+using Common;
+using History;
+using Camera.Interface;
+using BalanceSorting.Service;
 
 // 添加 Timer 引用
 
@@ -45,29 +44,6 @@ namespace XinJuLi
 
             Log.Information("应用程序启动");
             base.OnStartup(e);
-
-            try
-            {
-                // 启动相机托管服务
-                var cameraStartupService = Container.Resolve<CameraStartupService>();
-                cameraStartupService.StartAsync(CancellationToken.None).Wait();
-                Log.Information("相机托管服务启动成功");
-
-                // 启动摆轮分拣托管服务
-                var pendulumHostedService = Container.Resolve<PendulumSortHostedService>();
-                pendulumHostedService.StartAsync(CancellationToken.None).Wait();
-                Log.Information("摆轮分拣托管服务启动成功");
-                
-                // 启动ASN HTTP服务
-                var asnHttpServer = Container.Resolve<AsnHttpServer>();
-                asnHttpServer.StartAsync(CancellationToken.None).Wait();
-                Log.Information("ASN HTTP服务启动成功");
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "启动托管服务时发生错误");
-                throw;
-            }
         }
 
         protected override Window CreateShell()
@@ -89,6 +65,8 @@ namespace XinJuLi
                 if (createdNew)
                 {
                     Log.Information("成功获取Mutex，应用程序首次启动");
+                    var moduleManager = Container.Resolve<IModuleManager>();
+                    moduleManager.Run();
                     return Container.Resolve<MainWindow>();
                 }
 
@@ -127,23 +105,26 @@ namespace XinJuLi
             containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>();
             // 新增对话框注册
             containerRegistry.RegisterDialog<AsnOrderConfirmDialog, AsnOrderConfirmDialogViewModel>("AsnOrderConfirmDialog");
-            
-            // 注册公共服务
-            containerRegistry.AddCommonServices();
-            containerRegistry.AddShardUi();
-            containerRegistry.AddPhotoCamera();
-            containerRegistry.RegisterForNavigation<BalanceSortSettingsView, BalanceSortSettingsViewModel>();
-            containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
-            containerRegistry.RegisterPendulumSortService(PendulumServiceType.Multi);
-            containerRegistry.RegisterSingleton<IHostedService, PendulumSortHostedService>();
-            
+
             // 先注册MainWindowViewModel以便ASN服务可以引用
             containerRegistry.RegisterSingleton<MainWindowViewModel>();
-            
+
             // 注册ASN服务和设置视图
             containerRegistry.RegisterSingleton<IAsnService, AsnService>();
             containerRegistry.RegisterSingleton<AsnHttpServer>();
             containerRegistry.RegisterForNavigation<AsnHttpSettingsView, AsnHttpSettingsViewModel>();
+        }
+
+        protected override void ConfigureModuleCatalog(IModuleCatalog moduleCatalog)
+        {
+            base.ConfigureModuleCatalog(moduleCatalog);
+            moduleCatalog.AddModule<CommonServicesModule>();
+            moduleCatalog.AddModule<HistoryModule>();
+            // 注册华睿相机模块
+            moduleCatalog.AddModule<HuaRayCameraModule>();
+
+            // 注册多光电多摆轮分拣模块
+            moduleCatalog.AddModule<MultiPendulumSortModule>();
         }
 
         protected override void OnExit(ExitEventArgs e)
@@ -163,45 +144,62 @@ namespace XinJuLi
                         asnHttpServer.StopAsync(CancellationToken.None).Wait();
                         Log.Information("ASN HTTP服务已停止");
                     }
-
-                    // 停止摆轮分拣托管服务
-                    var pendulumHostedService = Container.Resolve<PendulumSortHostedService>();
-                    pendulumHostedService.StopAsync(CancellationToken.None).Wait();
-                    Log.Information("摆轮分拣托管服务已停止");
-
-                    // 停止相机托管服务
-                    var cameraStartupService = Container.Resolve<CameraStartupService>();
-                    cameraStartupService.StopAsync(CancellationToken.None).Wait();
-                    Log.Information("相机托管服务已停止");
                 }
                 catch (Exception ex)
                 {
                     Log.Error(ex, "停止托管服务时发生错误");
                 }
 
-                // 释放资源
+                // 停止相机服务 (如果需要显式停止方法，这里调用，否则依赖 Dispose)
                 try
                 {
-                    // 释放相机工厂
-                    var cameraFactory = Container.Resolve<CameraFactory>();
-                    cameraFactory.Dispose();
-                    Log.Information("相机工厂已释放");
-
-                    // 释放相机服务
-                    var cameraService = Container.Resolve<ICameraService>();
-                    cameraService.Dispose();
-                    Log.Information("相机服务已释放");
-
-                    // 释放摆轮分拣服务
-                    if (Container.Resolve<IPendulumSortService>() is IDisposable pendulumService)
+                    if (Container.IsRegistered<ICameraService>())
                     {
-                        pendulumService.Dispose();
-                        Log.Information("摆轮分拣服务已释放");
+                        var cameraService = Container.Resolve<ICameraService>();
+                        // 如果 ICameraService 有特定的 Stop 方法，在这里调用，例如：
+                        cameraService.Stop(); // 调用同步的Stop方法
+                        // 或者确保 Dispose 方法执行清理
+                        if (cameraService is IDisposable disposableCameraService)
+                        {
+                            // 在UI线程上停止可能导致死锁，最好服务本身支持异步停止或在后台线程停止
+                            // 为了安全起见，这里仅记录，实际停止依赖Dispose
+                            Log.Information("相机服务正在通过Dispose清理...");
+                        }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "释放资源时发生错误");
+                    Log.Error(ex, "停止相机服务时发生错误");
+                }
+
+                // 停止摆轮分拣服务
+                try
+                {
+                    if (Container.IsRegistered<IPendulumSortService>())
+                    {
+                        var sortService = Container.Resolve<IPendulumSortService>();
+                        if (sortService.IsRunning())
+                        {
+                            // 使用超时避免无限等待
+                            var stopTask = sortService.StopAsync();
+                            var timeoutTask = Task.Delay(TimeSpan.FromSeconds(5)); // 设置超时时间，例如5秒
+                            var completedTask = Task.WhenAny(stopTask, timeoutTask).Result; // 同步等待结果以确保在应用退出前完成
+
+                            if (completedTask == stopTask)
+                                Log.Information("摆轮分拣服务已停止");
+                            else
+                                Log.Warning("摆轮分拣服务停止超时");
+                        }
+                        if (sortService is IDisposable disposableSortService)
+                        {
+                            disposableSortService.Dispose();
+                            Log.Information("摆轮分拣服务资源已释放");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "停止摆轮分拣服务时发生错误");
                 }
 
                 // 等待所有日志写入完成

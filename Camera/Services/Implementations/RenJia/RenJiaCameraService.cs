@@ -8,6 +8,7 @@ using Camera.Models;    // 从 DeviceService... 更改为 Camera.Models
 using Serilog;
 using System.Windows.Media.Imaging;
 using System.IO;
+using System.Diagnostics;
 
 namespace Camera.Services.Implementations.RenJia; // 更改的命名空间
 
@@ -241,38 +242,50 @@ public class RenJiaCameraService : ICameraService // 实现 ICameraService 接�
 
         try
         {
-            var startTime = DateTime.Now;
+            var swTotal = Stopwatch.StartNew();
+
+            var state = new int[1];
+            var stateResult = NativeMethods.GetSystemState(state);
+            if (stateResult != 0)
+            {
+                Log.Warning("获取系统状态失败：{Result}", stateResult);
+                return new MeasureResult(false, $"获取系统状态失败: {stateResult}");
+            }
+
+            if (state[0] != 1) 
+            {
+                Log.Warning("设备状态异常，当前状态：{State}，依然尝试获取图像", state[0]);
+            }
 
             var measureTask = Task.Run(() =>
             {
+                var sw = Stopwatch.StartNew();
                 try
                 {
-                    var state = new int[1];
-                    var stateResult = NativeMethods.GetSystemState(state);
-                    if (stateResult != 0)
-                    {
-                        Log.Warning("触发测量前获取设备状态失败：{Result}", stateResult);
-                    }
-
-                    if (state[0] != 1) 
-                    {
-                        Log.Warning("设备状态异常，当前状态：{State}，依然尝试获取图像", state[0]);
-                    }
-
+                    // 2. ComputeOnce
+                    sw.Restart();
                     var computeResult = NativeMethods.ComputeOnce();
+                    sw.Stop();
+                    Log.Information("[RenJia] ComputeOnce耗时: {Elapsed}ms, Result={Result}", sw.ElapsedMilliseconds, computeResult);
                     if (computeResult != 0)
                     {
                         Log.Warning("触发测量失败：{Result}", computeResult);
                     }
 
+                    // 3. GetDmsResult
+                    sw.Restart();
                     var dimensionData = new float[3];
                     var imageDataBuffer = new byte[10 * 1024 * 1024]; // 10MB 缓冲区
                     var len = NativeMethods.GetDmsResult(dimensionData, imageDataBuffer);
+                    sw.Stop();
+                    Log.Information("[RenJia] GetDmsResult耗时: {Elapsed}ms, 长度: {Len}", sw.ElapsedMilliseconds, len);
 
                     BitmapSource? measuredBitmapImage = null; // 用于存储转换后的图像
 
                     if (len > 0)
                     {
+                        // 4. 图像解码
+                        var swImg = Stopwatch.StartNew();
                         try
                         {
                             using var memoryStream = new MemoryStream(imageDataBuffer, 0, len);
@@ -303,6 +316,11 @@ public class RenJiaCameraService : ICameraService // 实现 ICameraService 接�
                         {
                             Log.Error(ex, "处理测量图像数据时发生错误 (大小: {Size})", len);
                         }
+                        finally
+                        {
+                            swImg.Stop();
+                            Log.Information("[RenJia] 图像解码耗时: {Elapsed}ms", swImg.ElapsedMilliseconds);
+                        }
                     }
                     else
                     {
@@ -318,13 +336,9 @@ public class RenJiaCameraService : ICameraService // 实现 ICameraService 接�
                         return new MeasureResult(false, error, MeasuredImage: null);
                     }
 
-                    var duration = (DateTime.Now - startTime).TotalMilliseconds;
-                    Log.Information("测量成功：{Length}x{Width}x{Height}mm，耗时：{Duration:F2}ms",
-                        dimensionData[0], dimensionData[1], dimensionData[2], duration);
-                    
-                    // 根据请求，PackageInfo 的创建和 _packageSubject.OnNext() 已移除。
-                    // 该方法现在仅通过 MeasureResult 返回数据。
-                    // ImageStreamWithId 仍将接收图像。
+                    swTotal.Stop();
+                    Log.Information("测量成功：{Length}x{Width}x{Height}mm，总耗时：{SwTotal}ms",
+                        dimensionData[0], dimensionData[1], dimensionData[2], swTotal.ElapsedMilliseconds);
 
                     return new MeasureResult(
                         true,
@@ -480,70 +494,69 @@ public class RenJiaCameraService : ICameraService // 实现 ICameraService 接�
 
     private static BitmapSource? ConvertBytesToBitmapSource(byte[] buffer, string imageNameForLogging)
     {
-        if (buffer.Length < 4)
-        {
-            Log.Warning("缓冲区太小，无法读取 {ImageName} 图像大小 (Length: {Length})", imageNameForLogging, buffer.Length);
-            return null;
-        }
-
-        var imageSize = BitConverter.ToInt32(buffer, 0);
-        const int headerSize = 4;
-        var remainingBufferSize = buffer.Length - headerSize;
-
-        if (imageSize <= 0 || imageSize > remainingBufferSize)
-        {
-            const int pngSignatureOffset = headerSize; 
-            var signatureBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47 }; 
-            if (buffer.Length >= pngSignatureOffset + signatureBytes.Length &&
-                buffer.Skip(pngSignatureOffset).Take(signatureBytes.Length).SequenceEqual(signatureBytes))
-            {
-                Log.Warning("读取的 {ImageName} 图像大小无效 ({Size}), 但在偏移量 {Offset} 处找到PNG签名。尝试直接从签名开始解码整个剩余缓冲区。",
-                    imageNameForLogging, imageSize, pngSignatureOffset);
-                imageSize = remainingBufferSize; 
-            }
-            else
-            {
-                Log.Warning(
-                    "读取的 {ImageName} 图像大小无效或超出缓冲区范围 (Size: {Size}, Buffer Remaining: {Remaining}), 且未找到PNG签名。无法解码。",
-                    imageNameForLogging, imageSize, remainingBufferSize);
-                return null;
-            }
-        }
-
+        // 1. 更健壮的大小检测
+        int imageSize;
         try
         {
-            using var stream = new MemoryStream(buffer, headerSize, imageSize);
+            imageSize = BitConverter.ToInt32(buffer, 0);
+            // 添加大小合理性检查
+            if (imageSize <= 0 || imageSize > buffer.Length - 4)
+            {
+                Log.Warning("{ImageName} 图像大小无效: {Size}，尝试检测实际图像大小", 
+                            imageNameForLogging, imageSize);
+                
+                // 尝试通过查找图像结束标记确定实际大小
+                imageSize = FindActualImageSize(buffer, 4);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "{ImageName} 解析图像大小时出错", imageNameForLogging);
+            imageSize = buffer.Length - 4; // 使用最大可能大小
+        }
+
+        // 2. 使用更安全的解码方式
+        try
+        {
+            // 仅使用有效范围内的数据
+            var validData = buffer.Skip(4).Take(imageSize).ToArray();
+            
+            using var stream = new MemoryStream(validData);
             var bitmap = new BitmapImage();
             bitmap.BeginInit();
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
             bitmap.StreamSource = stream;
             bitmap.EndInit();
-            bitmap.Freeze(); 
-            Log.Debug("成功解码 {ImageName} 图像 (大小: {Size} bytes)", imageNameForLogging, imageSize);
+            bitmap.Freeze();
             return bitmap;
-        }
-        catch (NotSupportedException nex) 
-        {
-            var prefix = string.Empty;
-            const int prefixLength = 32; 
-            if (imageSize > 0)
-            {
-                try
-                {
-                    prefix = Convert.ToBase64String(buffer, headerSize, Math.Min(imageSize, prefixLength));
-                }
-                catch { /* Ignore */ }
-            }
-            Log.Warning(nex,
-                "转换 {ImageName} 图像数据失败 (在偏移量 {Offset}, 尝试长度 {Length})，可能格式无效或数据损坏。Segment Prefix (Base64): {Prefix}",
-                imageNameForLogging, headerSize, imageSize, prefix);
-            return null;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "将 {ImageName} 字节数组转换为 BitmapSource 时发生错误 (Size: {Size})", imageNameForLogging, imageSize);
+            Log.Error(ex, "{ImageName} 图像解码失败", imageNameForLogging);
             return null;
         }
+    }
+
+    // 新增辅助方法：通过查找JPEG/PNG结束标记确定实际图像大小
+    private static int FindActualImageSize(byte[] buffer, int startIndex)
+    {
+        // JPEG结束标记: 0xFF, 0xD9
+        for (int i = startIndex; i < buffer.Length - 1; i++)
+        {
+            if (buffer[i] == 0xFF && buffer[i + 1] == 0xD9)
+                return i - startIndex + 2; // 包含结束标记
+        }
+        
+        // PNG结束标记: IEND块
+        byte[] pngEnd = [0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82];
+        for (int i = startIndex; i < buffer.Length - pngEnd.Length; i++)
+        {
+            if (buffer.Skip(i).Take(pngEnd.Length).SequenceEqual(pngEnd))
+                return i - startIndex + pngEnd.Length;
+        }
+        
+        // 未找到结束标记，返回最大可能大小
+        return buffer.Length - startIndex;
     }
     
     // 此重载是人加相机特有的，并非 ICameraService 接口的一部分。

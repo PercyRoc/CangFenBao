@@ -57,7 +57,9 @@ public class PackageHistoryDbContext : DbContext
             entity.Property(e => e.Barcode).IsRequired(); 
             // 添加其他属性配置，例如字符串长度、IsRequired 等。
             // 例如：entity.Property(e => e.Barcode).HasMaxLength(100).IsRequired();
-            // entity.Property(e => e.CreateTime).HasColumnType("TEXT"); // SQLite 特定，EF Core 通常处理它
+            // 明确配置 Status 属性为字符串，避免与同名枚举混淆
+            entity.Property(e => e.Status).HasColumnType("TEXT"); // 根据需要指定 SQLite 列类型
+            entity.Property(e => e.StatusDisplay).HasColumnType("TEXT"); // 根据需要指定 SQLite 列类型
             
             // 确保 PackageHistoryRecord 中的所有属性都被考虑。
             // 如果 CreateMonthlyTableAsync 有 PackageHistoryRecord 中没有的列，它们不会被 EF 管理。

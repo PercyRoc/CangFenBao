@@ -1,7 +1,6 @@
 using Common.Services.Ui;
 using KuaiLv.ViewModels.Settings;
 using Serilog;
-using SharedUI.ViewModels.Settings;
 
 namespace KuaiLv.ViewModels.Dialogs;
 

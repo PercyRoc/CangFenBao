@@ -3,15 +3,16 @@ using Common.Models.Package;
 using Common.Services.Settings;
 using Serilog;
 using Sorting_Car.Models;
+using Common.Services.Devices;
 
 namespace Sorting_Car.Services;
 
 /// <summary>
 /// 小车分拣服务实现
 /// </summary>
-public class CarSortService : IDisposable
+public class CarSortService : IDevice // 实现 IDevice，隐式实现 IAsyncDisposable
 {
-    private readonly CarSortingService _carSortingService;
+    private readonly ICarSortingDevice _carSortingService;
     private readonly ISettingsService _settingsService;
     private readonly ConcurrentQueue<PackageInfo> _sortingQueue = new();
     private readonly ConcurrentDictionary<int, PackageInfo> _processingPackages = new();
@@ -20,117 +21,172 @@ public class CarSortService : IDisposable
     private readonly CancellationTokenSource _disposeCancellationTokenSource = new();
 
     private bool _isRunning;
-    private bool _isInitialized;
     private Task? _processingTask;
     private CarSerialPortSettings? _serialPortSettings;
     private const int MaxConcurrentSorting = 5;
-    private bool _disposedValue; // To detect redundant calls
 
     /// <summary>
     /// 初始化小车分拣服务
     /// </summary>
     /// <param name="carSortingService">底层小车命令发送服务</param>
     /// <param name="settingsService">设置服务</param>
-    public CarSortService(CarSortingService carSortingService, ISettingsService settingsService)
+    public CarSortService(ICarSortingDevice carSortingService, ISettingsService settingsService)
     {
         _carSortingService = carSortingService ?? throw new ArgumentNullException(nameof(carSortingService));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
         _processSemaphore = new SemaphoreSlim(MaxConcurrentSorting);
         Log.Information("CarSortService 创建成功，最大并行处理数: {MaxConcurrent}", MaxConcurrentSorting);
+
+        // 订阅底层设备的连接状态变更事件
+        _carSortingService.ConnectionChanged += OnUnderlyingConnectionChanged;
     }
 
+    // 实现 IDevice.IsConnected
     public bool IsConnected => _carSortingService.IsConnected;
 
-    public Task<bool> InitializeAsync()
+    // 实现 IDevice.ConnectionChanged (从底层设备转发)
+    public event EventHandler<(string DeviceName, bool IsConnected)>? ConnectionChanged;
+
+    private void OnUnderlyingConnectionChanged(object? sender, (string DeviceName, bool IsConnected) e)
     {
-        if (_isInitialized)
+        var (deviceName, isConnected) = e;
+        Log.Information("底层小车设备连接状态变更: {Status}", isConnected ? "已连接" : "已断开");
+        // 转发事件
+        ConnectionChanged?.Invoke(this, (deviceName, isConnected));
+    }
+
+    // 实现 IDevice.StartAsync (合并 InitializeAsync 逻辑)
+    public async Task<bool> StartAsync()
+    {
+        if (_isRunning) // 检查 _isRunning 而不是 _isInitialized 以便公开 Start/Stop
         {
-            Log.Information("CarSortService 已初始化");
-            return Task.FromResult(true);
+            Log.Information("CarSortService 已在运行中");
+            return true;
         }
+
+        if (_disposeCancellationTokenSource.IsCancellationRequested)
+        {
+             Log.Warning("CarSortService 已请求释放，无法启动。");
+             return false; // 如果已请求释放则无法启动
+        }
+
+        Log.Information("CarSortService 启动开始...");
 
         try
         {
-            // 加载配置
-            // 确保使用正确的模型命名空间
-            _serialPortSettings = _settingsService.LoadSettings<CarSerialPortSettings>();
-            if (_serialPortSettings == null)
+            // 1. 加载配置 (如果同步，则保留在此处或移至构造函数)
+            // 看起来是同步的，所以保留在此处或构造函数中。
+             _serialPortSettings = _settingsService.LoadSettings<CarSerialPortSettings>();
+             if (_serialPortSettings == null)
+             {
+                 Log.Error("启动失败：无法加载串口设置 (CarSerialPortSettings)");
+                 _isRunning = false; // 确保失败时状态为 false
+                 return false;
+             }
+
+            // 启动底层设备
+            Log.Information("正在启动底层小车设备...");
+            var underlyingStarted = await _carSortingService.StartAsync();
+            if (!underlyingStarted)
             {
-                Log.Error("初始化失败：无法加载串口设置 (CarSerialPortSettings)");
-                return Task.FromResult(false);
+                Log.Error("启动底层小车分拣设备失败");
+                _isRunning = false;
+                return false;
             }
 
-            // 初始化底层服务
-            // 传递 _disposeCancellationTokenSource.Token 以便底层服务也可以响应全局的停止信号
-            var result = _carSortingService.Initialize(_disposeCancellationTokenSource.Token);
-            if (!result)
+            // 启动内部分拣处理任务
+            if (_processingTask == null || _processingTask.IsCompleted)
             {
-                Log.Error("初始化底层小车分拣服务失败");
-                return Task.FromResult(false);
+                _processingTask = Task.Run(() => ProcessSortingQueueAsync(_disposeCancellationTokenSource.Token),
+                    _disposeCancellationTokenSource.Token);
+                 Log.Information("分拣队列处理任务已启动");
             }
 
-            _isInitialized = true;
-            Log.Information("CarSortService 初始化成功");
-            return Task.FromResult(true);
+            _isRunning = true; // 设置运行状态
+            Log.Information("CarSortService 启动成功");
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            Log.Information("CarSortService 启动操作被取消。");
+            _isRunning = false;
+            return false;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "初始化 CarSortService 时发生异常");
-            return Task.FromResult(false);
+            Log.Error(ex, "启动 CarSortService 时发生异常");
+            // 如果底层设备已启动，则尝试停止它
+            try { _ = _carSortingService.StopAsync().ConfigureAwait(false).GetAwaiter().GetResult(); } catch { /* 忽略 */ }
+            _isRunning = false;
+            return false; // 表示失败
         }
     }
 
-    public Task<bool> StartAsync()
+    // 实现 IDevice.StopAsync
+    public async Task<bool> StopAsync()
     {
-        if (_disposedValue)
+        if (!_isRunning) // 检查 _isRunning
         {
-            Log.Warning("CarSortService 已被释放，无法启动。");
-            return Task.FromResult(false);
+            Log.Information("CarSortService 未运行，无需停止。");
+            return true; // 已停止
         }
 
-        if (!_isInitialized)
-        {
-            Log.Error("分拣服务尚未初始化，无法启动");
-            return Task.FromResult(false);
-        }
-
-        if (_isRunning)
-        {
-            Log.Information("分拣服务已在运行中");
-            return Task.FromResult(true);
-        }
+        Log.Information("CarSortService 正在停止...");
+        _isRunning = false; // 立即设置状态
 
         try
         {
-            // 启动处理线程，使用 _disposeCancellationTokenSource.Token
-            _processingTask = Task.Run(() => ProcessSortingQueueAsync(_disposeCancellationTokenSource.Token),
-                _disposeCancellationTokenSource.Token);
+            // 向内部分拣处理任务发送取消信号
+            await _disposeCancellationTokenSource.CancelAsync();
+            Log.Debug("已发出取消信号给分拣队列处理任务。");
 
-            _isRunning = true;
-            Log.Information("小车分拣服务已启动");
-            return Task.FromResult(true);
+            // 等待处理任务完成 (带超时)
+            if (_processingTask is { IsCompleted: false })
+            {
+                Log.Debug("等待分拣队列处理任务完成...");
+                try
+                {
+                    // 使用合理的关闭超时时间
+                    await _processingTask.ConfigureAwait(false);
+                    Log.Debug("分拣队列处理任务已完成。");
+                }
+                catch (OperationCanceledException) // 关闭期间预期发生
+                {
+                    Log.Debug("分拣队列处理任务因取消而终止。");
+                }
+                catch (Exception ex) // 记录任务等待期间的意外异常
+                {
+                    Log.Warning(ex, "等待分拣队列处理任务完成时发生异常。");
+                }
+                finally
+                {
+                    _processingTask = null; // 清除任务引用
+                }
+            }
+
+            // 停止底层设备
+            Log.Information("正在停止底层小车设备...");
+            var underlyingStopped = await _carSortingService.StopAsync();
+            if (!underlyingStopped)
+            {
+                Log.Warning("停止底层小车分拣设备失败。");
+            }
+
+            Log.Information("CarSortService 已停止。");
+            return true; // 表示成功 (即使底层停止操作发出警告)
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "启动小车分拣服务时发生异常");
-            _isRunning = false; // 确保状态正确
-            return Task.FromResult(false);
+            Log.Error(ex, "停止 CarSortService 时发生异常");
+            return false; // 表示失败
         }
     }
-
-    // 将 StopAsync 变为私有，主要由 Dispose 调用
 
     public Task<bool> ProcessPackageSortingAsync(PackageInfo package)
     {
-        if (_disposedValue)
+        if (!_isRunning)
         {
-            Log.Warning("CarSortService 已被释放，无法处理包裹: {Barcode}", package.Barcode);
-            return Task.FromResult(false);
-        }
-
-        if (!_isInitialized || !_isRunning)
-        {
-            Log.Error("分拣服务未初始化或未运行，无法处理包裹: {Barcode}", package.Barcode);
+            Log.Warning("CarSortService 未运行或已停止，无法处理包裹: {Barcode}", package.Barcode);
             return Task.FromResult(false);
         }
 
@@ -159,9 +215,9 @@ public class CarSortService : IDisposable
 
     public Task<bool> ResetCarAsync()
     {
-        if (_disposedValue)
+        if (!_isRunning)
         {
-            Log.Warning("CarSortService 已被释放，无法重置。");
+            Log.Warning("CarSortService 未运行，无法重置。");
             return Task.FromResult(false);
         }
 
@@ -216,12 +272,12 @@ public class CarSortService : IDisposable
                 await _processSemaphore.WaitAsync(cancellationToken);
 
                 // 启动一个新任务处理该包裹
-                // 将cancellationToken传递给内部任务，以便它们也能被取消
+                // 将 cancellationToken 传递给内部任务，以便它们也能被取消
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        if (cancellationToken.IsCancellationRequested) return; // 早退出
+                        if (cancellationToken.IsCancellationRequested) return; // 提前退出
                         _processingPackages[package.Index] = package;
                         await ProcessSinglePackageAsync(package, cancellationToken);
                     }
@@ -238,7 +294,7 @@ public class CarSortService : IDisposable
                         _processingPackages.TryRemove(package.Index, out _);
                         _processSemaphore.Release();
                     }
-                }, cancellationToken); // 传递cancellationToken
+                }, cancellationToken); // 传递 cancellationToken
             }
         }
         catch (OperationCanceledException)
@@ -257,7 +313,7 @@ public class CarSortService : IDisposable
     /// 处理单个包裹的分拣命令
     /// </summary>
     private async Task
-        ProcessSinglePackageAsync(PackageInfo package, CancellationToken cancellationToken) // 添加CancellationToken
+        ProcessSinglePackageAsync(PackageInfo package, CancellationToken cancellationToken) // 添加 CancellationToken
     {
         try
         {
@@ -269,12 +325,12 @@ public class CarSortService : IDisposable
             }
 
             // 应用命令延迟
-            var delayMs = _serialPortSettings.CommandDelayMs; // 假设CarSerialPortSettings有此属性
+            var delayMs = _serialPortSettings.CommandDelayMs; // 假设 CarSerialPortSettings 有此属性
             if (delayMs > 0)
             {
                 Log.Debug("延迟 {Delay}ms 后发送格口 {ChuteNumber} 的分拣命令",
                     delayMs, package.ChuteNumber);
-                await Task.Delay(delayMs, cancellationToken); // 使用cancellationToken
+                await Task.Delay(delayMs, cancellationToken); // 使用 cancellationToken
             }
 
             if (cancellationToken.IsCancellationRequested)
@@ -304,69 +360,33 @@ public class CarSortService : IDisposable
         }
     }
 
-    private void Dispose(bool disposing)
+    // 实现 IAsyncDisposable.DisposeAsync (主要清理方法)
+    public async ValueTask DisposeAsync()
     {
-        if (_disposedValue) return;
-        if (disposing)
-        {
-            Log.Information("正在释放 CarSortService...");
-            // 停止服务并等待完成
-            // StopInternalAsync 是异步的，但 Dispose 不是。需要处理这种情况。
-            // 可以在这里调用 StopInternalAsync().Wait() 或 StopInternalAsync().GetAwaiter().GetResult()
-            // 但这可能导致死锁，特别是在UI线程或有同步上下文的情况下。
-            // 更好的方法是让 StopInternalAsync 尽可能快地发出取消信号，并让后台任务自行终止。
-            // Dispose 主要负责发出停止信号和释放托管/非托管资源。
+        // 清理逻辑已从 Dispose(bool disposing) 移至此处
+        Log.Information("正在释放 CarSortService...");
 
-            if (!_disposeCancellationTokenSource.IsCancellationRequested)
-            {
-                _disposeCancellationTokenSource.Cancel(); // 发出取消信号
-            }
+        // 首先正常停止服务
+        await StopAsync();
 
-            // 尝试等待任务完成，但不阻塞太久
-            try
-            {
-                _processingTask?.Wait(TimeSpan.FromMilliseconds(500)); // 短暂等待
-            }
-            catch (AggregateException ae) when (ae.InnerExceptions.All(e =>
-                                                    e is TaskCanceledException || e is OperationCanceledException))
-            {
-                Log.Debug("在Dispose中，处理任务已取消。");
-            }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "在Dispose中等待处理任务完成时发生异常。");
-            }
-            finally
-            {
-                _processingTask = null; // 清理任务引用
-            }
+        // 释放内部 CTS
+        _disposeCancellationTokenSource.Dispose();
+        Log.Debug("CancellationTokenSource 已释放。");
 
-            _isRunning = false; // 确保状态更新
+        // 释放 SemaphoreSlim
+        _processSemaphore.Dispose();
+        Log.Debug("SemaphoreSlim 已释放。");
 
-            // 释放 SemaphoreSlim
-            _processSemaphore.Dispose();
-            Log.Debug("SemaphoreSlim 已释放。");
+        // 底层设备的 DisposeAsync 由 StopAsync 调用，
+        // 或者其生命周期由注入的 DI 容器管理。
+        // 如果 CarSortService *拥有* 该设备，则会在此处调用 await device.DisposeAsync()。
+        // 假设 DI 拥有它，我们不在这里释放它。
 
-            // 释放 CancellationTokenSource
-            _disposeCancellationTokenSource.Dispose();
-            Log.Debug("CancellationTokenSource 已释放。");
+        // _isInitialized 和 _isRunning 在 StopAsync 后应为 false
 
-            // 底层服务的 DisposeAsync 应该由其自身的管理者（如DI容器）调用，
-            // 或者如果 CarSortService 完全拥有 CarSortingService 实例且没有共享，则可以在这里调用。
-            // 假设 CarSortingService 是注入的，不由 CarSortService 直接释放。
-            // (_carSortingService as IDisposable)?.Dispose(); // 如果需要且它是 IDisposable
-            // await _carSortingService.DisposeAsync(); // 如果是 IAsyncDisposable 并且这里可以异步
+        Log.Information("CarSortService 已释放。");
 
-            Log.Information("CarSortService 已释放。");
-        }
-
-        _disposedValue = true;
-    }
-
-    public void Dispose()
-    {
-        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
-        Dispose(disposing: true);
+        // 由于我们使用 DisposeAsync 模式，因此禁止终结操作
         GC.SuppressFinalize(this);
     }
 }

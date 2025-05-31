@@ -4,122 +4,131 @@ using BalanceSorting.Service;
 using Camera;
 using Camera.Services.Implementations.TCP;
 using Common;
-using Common.Services.Settings;
 using Common.Services.Ui;
 using History;
-using History.Data;
 using JinHuaQiHang.ViewModels;
 using JinHuaQiHang.Views;
 using Microsoft.Extensions.Configuration;
+using Prism.Ioc;
+using Prism.Modularity;
 using Serilog;
 using Server.JuShuiTan;
-using SharedUI.ViewModels.Settings;
-using SharedUI.Views.Windows;
 
 namespace JinHuaQiHang;
 
 /// <summary>
 /// Interaction logic for App.xaml
 /// </summary>
-public partial class App 
+public partial class App : PrismApplication
 {
     private static Mutex? _mutex;
     private const string MutexName = @"Global\JinHuaQiHang_App_Mutex";
     private bool _ownsMutex;
-
-    protected override Window CreateShell()
-    {
-        try
-        {
-            _mutex = new Mutex(true, MutexName, out var createdNew);
-            _ownsMutex = createdNew;
-
-            if (createdNew || _mutex.WaitOne(TimeSpan.Zero, false))
-            {
-                _ownsMutex = true;
-                var moduleManager = Container.Resolve<IModuleManager>();
-                moduleManager.Run(); 
-                
-                return Container.Resolve<MainWindow>();
-            }
-
-            MessageBox.Show("应用已运行", "Information", MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            Environment.Exit(0);
-            return null!;
-        }
-        catch (Exception ex)
-        {
-            Log.Fatal(ex, "创建 Shell 期间发生致命错误。");
-            MessageBox.Show($"启动期间发生致命错误: {ex.Message}", "启动错误", MessageBoxButton.OK,
-                MessageBoxImage.Error);
-            Environment.Exit(1);
-            return null!;
-        }
-    }
-
-    protected override void RegisterTypes(IContainerRegistry containerRegistry)
-    {
-        containerRegistry.RegisterInstance(Log.Logger);
-
-        var configuration = new ConfigurationBuilder()
-            .SetBasePath(AppContext.BaseDirectory)
-            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-            .Build();
-        containerRegistry.RegisterInstance<IConfiguration>(configuration);
-        containerRegistry.RegisterSingleton<ISettingsService, SettingsService>();
-        containerRegistry.RegisterSingleton<INotificationService,NotificationService>();
-        containerRegistry.RegisterSingleton<BarcodeChuteSettingsViewModel>();
-        
-        containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
-        containerRegistry.RegisterDialogWindow<HistoryDialogWindow>();
-        containerRegistry.RegisterDialog<SettingsDialogs, SettingsDialogViewModel>();
-    }
-
-
-    protected override void ConfigureModuleCatalog(IModuleCatalog moduleCatalog)
-    {
-        base.ConfigureModuleCatalog(moduleCatalog);
-        moduleCatalog.AddModule<CommonServicesModule>();
-        moduleCatalog.AddModule<TcpCameraModule>();
-        moduleCatalog.AddModule<MultiPendulumSortModule>();
-        moduleCatalog.AddModule<HistoryModule>();
-        moduleCatalog.AddModule<JuShuiTanModule>();
-    }
 
     protected override void OnStartup(StartupEventArgs e)
     {
         ConfigureLoggerFromSettings();
         RegisterGlobalExceptionHandling();
 
-        // 单实例互斥体
         _mutex = new Mutex(true, MutexName, out var createdNew);
-        if (!createdNew)
+        _ownsMutex = createdNew;
+
+        if (!_ownsMutex)
         {
-            Log.Warning("已有实例在运行，程序即将退出。");
-            MessageBox.Show("智利播种墙已在运行。", "已启动", MessageBoxButton.OK, MessageBoxImage.Information);
-            Environment.Exit(0);
+            Log.Warning("[App] 检测到重复实例，应用程序将退出。");
+            MessageBox.Show("程序已在运行，请勿重复启动！", "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Current.Shutdown();
+            return;
         }
-
-        // 关键：确保模块先初始化
-        var moduleManager = Container.Resolve<IModuleManager>();
-        moduleManager.Run();
-
+        
         base.OnStartup(e);
     }
 
-    protected override async void OnInitialized()
+    protected override Window CreateShell()
     {
-        base.OnInitialized();
         try
         {
-            var historyService = Container.Resolve<IPackageHistoryDataService>();
-            await historyService.InitializeAsync();
+            var moduleManager = Container.Resolve<IModuleManager>();
+            if (moduleManager != null)
+            {
+                moduleManager.Run();
+            }
+            else
+            {
+                Log.Warning("[App] CreateShell: IModuleManager was null, cannot explicitly run modules. This might be an issue.");
+            }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "初始化 IPackageHistoryDataService 期间发生错误.");
+            Log.Error(ex, "[App] CreateShell: Error during explicit moduleManager.Run().");
         }
+
+        try
+        {
+            var shell = Container.Resolve<MainWindow>();
+            return shell;
+        }
+        catch (Exception ex)
+        {
+            Log.Fatal(ex, "[App] CreateShell 失败 (解析 MainWindow 时出错).");
+            try
+            {
+                MessageBox.Show($"创建主窗口失败: {ex.Message}\n请检查日志获取详细信息。", "严重错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            catch
+            {
+                // 如果连消息框都显示不了，只能记录日志然后退出
+            }
+            Current.Shutdown(-1);
+            return null!;
+        }
+    }
+
+    protected override void RegisterTypes(IContainerRegistry containerRegistry)
+    {
+        try
+        {
+            containerRegistry.RegisterInstance(Log.Logger);
+
+            var configuration = new ConfigurationBuilder()
+                .SetBasePath(AppContext.BaseDirectory)
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .Build();
+            containerRegistry.RegisterInstance<IConfiguration>(configuration);
+            
+            containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
+            containerRegistry.RegisterDialog<SettingsDialogs, SettingsDialogViewModel>();
+            containerRegistry.RegisterSingleton<INotificationService, NotificationService>();
+            containerRegistry.RegisterDialog<History.Views.Dialogs.PackageHistoryDialogView, History.ViewModels.Dialogs.PackageHistoryDialogViewModel>();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[App] RegisterTypes (App) 期间发生错误.");
+            throw;
+        }
+    }
+
+    protected override void ConfigureModuleCatalog(IModuleCatalog moduleCatalog)
+    {
+        try
+        {
+            base.ConfigureModuleCatalog(moduleCatalog);
+            moduleCatalog.AddModule<CommonServicesModule>();
+            moduleCatalog.AddModule<TcpCameraModule>();
+            moduleCatalog.AddModule<MultiPendulumSortModule>();
+            moduleCatalog.AddModule<HistoryModule>();
+            moduleCatalog.AddModule<JuShuiTanModule>();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[App] ConfigureModuleCatalog 期间发生错误.");
+            throw;
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
     }
 
     protected override async void OnExit(ExitEventArgs e)
@@ -132,20 +141,10 @@ public partial class App
             TryDisposeService<IPendulumSortService>("MultiPendulumSortService");
             
             Log.Information("应用程序服务关闭完成或已发起。");
-
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        }
-        catch (OperationCanceledException)
-        {
-            Log.Warning("服务关闭因超时而被取消 (OperationCanceledException).");
-        }
-        catch (AggregateException ae) when (ae.InnerExceptions.Any(ex => ex is OperationCanceledException))
-        {
-            Log.Warning("服务关闭因超时而被取消 (AggregateException).");
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "等待服务关闭期间出错.");
+            Log.Error(ex, "处置服务或记录日志期间出错 (OnExit).");
         }
         finally
         {
@@ -171,7 +170,8 @@ public partial class App
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "从 appsettings.json 配置 Serilog 失败. 使用现有或基本备用日志记录器.");
+            Log.Logger = new LoggerConfiguration().WriteTo.Debug().WriteTo.File("logs/fallback-log-.txt", rollingInterval: RollingInterval.Day).CreateLogger();
+            Log.Error(ex, "从 appsettings.json 配置 Serilog 失败. 使用备用日志记录器.");
         }
     }
 
@@ -180,7 +180,9 @@ public partial class App
         DispatcherUnhandledException += (_, args) =>
         {
             Log.Fatal(args.Exception, "捕获到未处理的调度程序异常");
+            MessageBox.Show($"发生严重错误，应用即将关闭: {args.Exception.Message}", "未处理异常", MessageBoxButton.OK, MessageBoxImage.Error);
             args.Handled = true;
+            Current.Shutdown(-1);
         };
 
         TaskScheduler.UnobservedTaskException += (_, args) =>
@@ -193,24 +195,48 @@ public partial class App
         {
             Log.Fatal(args.ExceptionObject as Exception, "捕获到未处理的 AppDomain 异常. IsTerminating: {IsTerminating}",
                 args.IsTerminating);
+            if (args.IsTerminating)
+            {
+                MessageBox.Show($"发生致命的非UI线程错误，应用即将关闭: {(args.ExceptionObject as Exception)?.Message}", "未处理的AppDomain异常", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         };
         Log.Information("全局异常处理程序已注册");
     }
 
-    private void TryDisposeService<TService>(string serviceName) where TService : class, IDisposable
+    private void TryDisposeService<TService>(string serviceName) where TService : class
     {
         try
         {
+            if (!Container.IsRegistered<TService>()) 
+            {
+                Log.Debug("服务 {ServiceName} 未注册，跳过处置。", serviceName);
+                return;
+            }
+
             var service = Container.Resolve<TService>();
+            
             if (service is IPendulumSortService pendulumSortService)
             {
-                pendulumSortService.StopAsync();
+                Task.Run(pendulumSortService.StopAsync).Wait(TimeSpan.FromSeconds(5));
             }
-            service.Dispose();
+            
+            if (service is IAsyncDisposable asyncDisposableService)
+            {
+                ValueTask vt = asyncDisposableService.DisposeAsync();
+                if (!vt.IsCompletedSuccessfully)
+                {
+                    vt.AsTask().Wait(TimeSpan.FromSeconds(5));
+                }
+            }
+            else if (service is IDisposable disposableService)
+            {
+                disposableService.Dispose();
+            }
+            Log.Information("服务 {ServiceName} 已成功处置。", serviceName);
         }
         catch (Exception ex) 
         {
-            Log.Warning(ex, "解析或处置服务 {ServiceName} 时发生错误。该服务可能未注册、已被处置或在处置过程中出错。", serviceName);
+            Log.Warning(ex, "解析或处置服务 {ServiceName} 时发生错误。该服务可能已被处置或在处置过程中出错。", serviceName);
         }
     }
 
@@ -228,18 +254,22 @@ public partial class App
                 }
                 catch (ApplicationException ex)
                 {
-                    Log.Warning(ex, "释放 Mutex 失败 (已释放?)");
+                    Log.Warning(ex, "释放 Mutex 失败 (当前线程可能不拥有它，或已释放)。");
+                }
+                catch (ObjectDisposedException ex)
+                {
+                    Log.Warning(ex, "释放 Mutex 失败 (Mutex 可能已被处置)。");
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "释放 Mutex 出错");
+                    Log.Error(ex, "释放 Mutex 时发生未知错误。");
                 }
             }
-
+            _mutex.Close();
             _mutex.Dispose();
             _mutex = null;
             _ownsMutex = false;
-            Log.Debug("Mutex 已处置");
+            Log.Debug("Mutex 已处置并标记。");
         }
         catch (Exception ex)
         {

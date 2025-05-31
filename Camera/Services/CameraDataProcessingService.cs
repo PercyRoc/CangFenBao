@@ -55,9 +55,9 @@ namespace Camera.Services
             _imageSubscription = _actualCameraService.ImageStreamWithId
                 .ObserveOn(TaskPoolScheduler.Default)
                 .Subscribe(
-                    rawImageTuple => _processedImageWithIdSubject.OnNext(rawImageTuple), 
-                    OnStreamError, 
-                    () => _processedImageWithIdSubject.OnCompleted()
+                    _processedImageWithIdSubject.OnNext, 
+                    OnStreamError,
+                    _processedImageWithIdSubject.OnCompleted
                 );
             
             Log.Information("[相机数据处理服务] 已订阅实际相机流。");
@@ -71,7 +71,7 @@ namespace Camera.Services
             if (settings.IsBarcodeFilterEnabled && !IsBarcodeValid(package, settings.BarcodeFilter))
             {
                 Log.Information("[相机数据处理服务] 条码 '{Barcode}' 被规则过滤.", package.Barcode);
-                package.SetStatus(PackageStatus.Filtered);
+                package.SetStatus("Filtered");
                 package.Dispose(); 
                 return;
             }
@@ -80,7 +80,7 @@ namespace Camera.Services
             {
                 // 日志已在 IsBarcodeDuplicateAndFilter 方法内部记录，如果它被过滤。
                 // 此处不需要额外日志，除非要标记为重复状态。
-                package.SetStatus(PackageStatus.Duplicate); 
+                package.SetStatus("Duplicate"); 
                 package.Dispose();
                 return;
             }
@@ -226,7 +226,7 @@ namespace Camera.Services
                     }
 
                     string timeStampForFile = DateTime.Now.ToString("HHmmss_fff");
-                    string sanitizedBarcode = new string(barcode.Where(ch => !Path.GetInvalidFileNameChars().Contains(ch)).ToArray());
+                    string sanitizedBarcode = new([.. barcode.Where(ch => !Path.GetInvalidFileNameChars().Contains(ch))]);
                     if (string.IsNullOrWhiteSpace(sanitizedBarcode)) sanitizedBarcode = "NoBarcode";
                     
                     string fileName = $"{sanitizedBarcode}_{timeStampForFile}.png";

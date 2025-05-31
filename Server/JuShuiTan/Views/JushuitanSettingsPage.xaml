@@ -6,16 +6,14 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:prism="http://prismlibrary.com/"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-    xmlns:viewModels="clr-namespace:SharedUI.ViewModels"
-    xmlns:converters="clr-namespace:SharedUI.Converters"
-    xmlns:converters1="clr-namespace:SharedUI.Converters;assembly=SharedUI"
     xmlns:viewModels1="clr-namespace:Server.JuShuiTan.ViewModels"
+    xmlns:converters="clr-namespace:Common.Converters;assembly=Common"
     mc:Ignorable="d"
     d:DataContext="{d:DesignInstance Type=viewModels1:JushuitanSettingsViewModel}"
     prism:ViewModelLocator.AutoWireViewModel="True">
 
     <UserControl.Resources>
-        <converters1:InverseBooleanConverter x:Key="InverseBooleanConverter" />
+        <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
     </UserControl.Resources>
 
     <Grid>

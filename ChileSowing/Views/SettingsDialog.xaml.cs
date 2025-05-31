@@ -1,4 +1,5 @@
 ﻿using Common.Services.Ui;
+using Serilog;
 
 namespace ChileSowing.Views;
 
@@ -9,5 +10,21 @@ public partial class SettingsDialog
         InitializeComponent();
 
         notificationService.Register("SettingWindowGrowl", GrowlPanel);
+
+        // 在控件加载完成后导航到第一个页面
+        Loaded += OnLoaded;
+    }
+
+    private void OnLoaded(object sender, System.Windows.RoutedEventArgs e)
+    {
+        try
+        {
+            // 默认导航到TCP Modbus Settings页面
+            RootNavigation?.Navigate(typeof(SowingSorting.Views.Settings.ModbusTcpSettingsView));
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "导航到设置页面时发生错误");
+        }
     }
 }

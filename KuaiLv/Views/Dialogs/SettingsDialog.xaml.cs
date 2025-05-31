@@ -1,6 +1,5 @@
 using System.Windows;
 using Common.Services.Ui;
-using SharedUI.Views.Settings;
 
 namespace KuaiLv.Views.Dialogs;
 

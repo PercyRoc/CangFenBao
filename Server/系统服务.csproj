@@ -22,18 +22,5 @@
 
     <ItemGroup>
         <ProjectReference Include="..\Common\基础模块.csproj" />
-        <ProjectReference Include="..\SharedUI\公共模块.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <Folder Include="JuShuiTan\Models\" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <Page Update="JuShuiTan\Views\JushuitanSettingsPage.xaml">
-        <Generator>MSBuild:Compile</Generator>
-        <XamlRuntime>Wpf</XamlRuntime>
-        <SubType>Designer</SubType>
-      </Page>
     </ItemGroup>
 </Project>

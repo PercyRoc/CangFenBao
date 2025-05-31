@@ -1,4 +1,5 @@
 ﻿using Common.Services.Ui;
+using Common.ViewModels.Settings.ChuteRules;
 using Serilog;
 using SowingSorting.ViewModels.Settings;
 
@@ -10,6 +11,8 @@ public class SettingsDialogViewModel: BindableBase, IDialogAware, IDisposable
 
     private readonly ModbusTcpSettingsViewModel _modbusTcpSettingsViewModel;
     
+    private readonly ChuteRuleSettingsViewModel  _chuteRuleSettingsViewModel;
+    
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
         INotificationService notificationService)
@@ -17,6 +20,7 @@ public class SettingsDialogViewModel: BindableBase, IDialogAware, IDisposable
         _notificationService = notificationService;
         RequestClose = new DialogCloseListener();
         _modbusTcpSettingsViewModel = containerProvider.Resolve<ModbusTcpSettingsViewModel>();
+        _chuteRuleSettingsViewModel = containerProvider.Resolve<ChuteRuleSettingsViewModel>();
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
     }
@@ -47,6 +51,7 @@ public class SettingsDialogViewModel: BindableBase, IDialogAware, IDisposable
         try
         {
             _modbusTcpSettingsViewModel.SaveCommand.Execute();
+            _chuteRuleSettingsViewModel.SaveSettingsCommand.Execute(null);
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");
             // 更新调用方式

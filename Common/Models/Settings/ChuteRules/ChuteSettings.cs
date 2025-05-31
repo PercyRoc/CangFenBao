@@ -65,7 +65,7 @@ public class ChuteSettings : BindableBase
     {
         if (string.IsNullOrEmpty(barcode)) return null;
 
-        foreach (var chuteNumber in from rule in ChuteRules let chuteNumber = rule.Key let chuteRule = rule.Value where chuteRule.IsMatching(barcode) select chuteNumber)
+        foreach (var chuteNumber in from rule in ChuteRules let chuteNumber = rule.Key let chuteRule = rule.Value where !chuteRule.IsEmptyRule() && chuteRule.IsMatching(barcode) select chuteNumber)
         {
             return chuteNumber;
         }
@@ -252,5 +252,19 @@ public class BarcodeMatchRule : BindableBase
 
         // 所有规则都匹配
         return true;
+    }
+
+    /// <summary>
+    ///     检查当前规则是否为空规则（即所有条件都未设置或为默认值）
+    /// </summary>
+    /// <returns>是否为空规则</returns>
+    internal bool IsEmptyRule()
+    {
+        return !IsDigitOnly && !IsLetterOnly && !IsAlphanumeric &&
+               MinLength == 0 && MaxLength == 0 &&
+               string.IsNullOrEmpty(StartsWith) && string.IsNullOrEmpty(EndsWith) &&
+               string.IsNullOrEmpty(NotStartsWith) && string.IsNullOrEmpty(NotEndsWith) &&
+               string.IsNullOrEmpty(Contains) && string.IsNullOrEmpty(NotContains) &&
+               (string.IsNullOrEmpty(RegexPattern) || RegexPattern == "(?=.*(?))");
     }
 }

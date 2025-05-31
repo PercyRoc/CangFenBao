@@ -6,12 +6,14 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:prism="http://prismlibrary.com/"
              xmlns:hc="https://handyorg.github.io/handycontrol"
-             xmlns:settings="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
              xmlns:viewModels="clr-namespace:JinHuaQiHang.ViewModels"
              xmlns:views1="clr-namespace:Server.JuShuiTan.Views;assembly=Server"
              xmlns:balanceSortingViews="clr-namespace:BalanceSorting.Views.Settings;assembly=BalanceSorting"
+             xmlns:chuteRules="clr-namespace:Common.Views.Settings.ChuteRules;assembly=Common"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
+             Width="1600"
+             Height="900"
              d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}">
     <Grid>
         <Grid.RowDefinitions>
@@ -96,7 +98,7 @@
                                 <ui:SymbolIcon Symbol="Table24" />
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="settings:BarcodeChuteSettingsView" />
+                                <x:Type Type="chuteRules:ChuteRuleSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
 

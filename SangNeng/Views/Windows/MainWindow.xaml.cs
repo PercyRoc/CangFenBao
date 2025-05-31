@@ -6,6 +6,7 @@ using Serilog;
 using Sunnen.ViewModels.Windows;
 using MessageBoxResult = System.Windows.MessageBoxResult;
 using MessageBoxButton = System.Windows.MessageBoxButton;
+using System.Windows.Controls;
 
 namespace Sunnen.Views.Windows;
 
@@ -14,8 +15,6 @@ namespace Sunnen.Views.Windows;
 /// </summary>
 public partial class MainWindow
 {
-    private bool _isFocusedByPreviewScanLogic = false; 
-
     public MainWindow(INotificationService notificationService)
     {
         InitializeComponent();
@@ -26,6 +25,47 @@ public partial class MainWindow
         MouseDown += OnWindowMouseDown;
         // 注册全局文本输入事件
         PreviewTextInput += MainWindow_PreviewTextInput;
+        
+        // 订阅ViewModel的UI请求事件
+        DataContextChanged += OnDataContextChanged;
+    }
+
+    private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        // 取消订阅旧的ViewModel事件
+        if (e.OldValue is MainWindowViewModel oldViewModel)
+        {
+            oldViewModel.RequestClearBarcodeInput -= OnRequestClearBarcodeInput;
+            oldViewModel.RequestFocusBarcodeInput -= OnRequestFocusBarcodeInput;
+            oldViewModel.RequestFocusToWindow -= OnRequestFocusToWindow;
+        }
+        
+        // 订阅新的ViewModel事件
+        if (e.NewValue is not MainWindowViewModel newViewModel) return;
+        newViewModel.RequestClearBarcodeInput += OnRequestClearBarcodeInput;
+        newViewModel.RequestFocusBarcodeInput += OnRequestFocusBarcodeInput;
+        newViewModel.RequestFocusToWindow += OnRequestFocusToWindow;
+    }
+
+    private void OnRequestClearBarcodeInput()
+    {
+        Dispatcher.Invoke(ManualBarcodeTextBox.Clear);
+    }
+
+    private void OnRequestFocusBarcodeInput()
+    {
+        Dispatcher.Invoke(() =>
+        {
+            ManualBarcodeTextBox.Focus();
+        });
+    }
+
+    private void OnRequestFocusToWindow()
+    {
+        Dispatcher.Invoke(() =>
+        {
+            Keyboard.Focus(this);
+        });
     }
 
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -67,6 +107,10 @@ public partial class MainWindow
             // 释放资源
             if (DataContext is MainWindowViewModel viewModel)
             {
+                // 取消订阅事件
+                viewModel.RequestClearBarcodeInput -= OnRequestClearBarcodeInput;
+                viewModel.RequestFocusBarcodeInput -= OnRequestFocusBarcodeInput;
+                viewModel.RequestFocusToWindow -= OnRequestFocusToWindow;
                 viewModel.Dispose();
             }
             
@@ -90,48 +134,52 @@ public partial class MainWindow
             DragMove();
     }
     
-    // Add the new handler for the manual input TextBox
+    // 重构：条码扫描处理 - MVVM模式
     private async void ManualBarcodeTextBox_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter || sender is not HandyControl.Controls.TextBox textBox) return;
-        var barcode = textBox.Text;
-        if (string.IsNullOrWhiteSpace(barcode)) return;
-        
-        if (barcode.StartsWith('"'))
-        {
-            barcode = barcode[1..];
-        }
 
+        // 等待一小段时间，确保所有字符都已输入到文本框
+        await Task.Delay(50);
+
+        // 委托给ViewModel处理条码完成
         if (DataContext is MainWindowViewModel viewModel)
         {
-            await viewModel.ProcessBarcodeAsync(barcode);
+            // 通过统一的条码完成处理入口，确保新条码覆盖逻辑生效
+            viewModel.HandleBarcodeCompleteCommand.Execute();
         }
+        
         Keyboard.Focus(this); 
     }
 
-    // 新增：全局文本输入事件处理，输入@时自动聚焦到输入框
-    private void MainWindow_PreviewTextInput(object sender, TextCompositionEventArgs e)
+    // 新增：处理文本框内容变化，用于手动清空时的缓存清空
+    private void ManualBarcodeTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        if (e.Text == "\"")
+        if (DataContext is MainWindowViewModel viewModel && ManualBarcodeTextBox.Text.Length == 0)
         {
-            _isFocusedByPreviewScanLogic = true; 
-            ManualBarcodeTextBox.Clear(); 
-            ManualBarcodeTextBox.Focus();
-            e.Handled = true; 
+            // 当用户手动删除输入框内容时，清空缓存
+            viewModel.ClearBarcodeBuffer();
         }
     }
 
-    private void ManualBarcodeTextBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    // 重构：全局文本输入事件处理 - MVVM模式
+    private void MainWindow_PreviewTextInput(object sender, TextCompositionEventArgs e)
     {
-        if (_isFocusedByPreviewScanLogic)
-        {
-            _isFocusedByPreviewScanLogic = false; 
-            return; 
-        }
+        if (DataContext is not MainWindowViewModel viewModel) return;
 
-        if (sender is HandyControl.Controls.TextBox textBox && !string.IsNullOrEmpty(textBox.Text))
+        switch (e.Text)
         {
-            textBox.Clear();
+            case "@":
+                // 扫码枪输入开始
+                viewModel.HandleScanStartCommand.Execute();
+                e.Handled = true;
+                break;
+            case "\r":
+            case "\n":
+                // 扫码枪输入结束
+                viewModel.HandleBarcodeCompleteCommand.Execute();
+                e.Handled = true;
+                break;
         }
     }
 }

@@ -41,4 +41,73 @@
     <data name="PackageStatus_WaitingForLoading" xml:space="preserve">
         <value>Waiting for Load</value>
     </data>
+    <data name="ChuteRuleSettings_Title" xml:space="preserve">
+        <value>Chute Rule Settings</value>
+    </data>
+    <data name="ChuteRuleSettings_Basic" xml:space="preserve">
+        <value>Basic Settings</value>
+    </data>
+    <data name="ChuteRuleSettings_ChuteCount" xml:space="preserve">
+        <value>Chute Count</value>
+    </data>
+    <data name="ChuteRuleSettings_ErrorChute" xml:space="preserve">
+        <value>Error Chute</value>
+    </data>
+    <data name="ChuteRuleSettings_TimeoutChute" xml:space="preserve">
+        <value>Timeout Chute</value>
+    </data>
+    <data name="ChuteRuleSettings_NoReadChute" xml:space="preserve">
+        <value>NoRead Chute</value>
+    </data>
+    <data name="ChuteRuleSettings_WeightMismatchChute" xml:space="preserve">
+        <value>Weight Mismatch Chute</value>
+    </data>
+    <data name="ChuteRuleSettings_Rule" xml:space="preserve">
+        <value>Rule Settings</value>
+    </data>
+    <data name="ChuteRuleSettings_CurrentChute" xml:space="preserve">
+        <value>Current Chute</value>
+    </data>
+    <data name="ChuteRuleSettings_CharType" xml:space="preserve">
+        <value>Character Type</value>
+    </data>
+    <data name="ChuteRuleSettings_DigitOnly" xml:space="preserve">
+        <value>Digits Only</value>
+    </data>
+    <data name="ChuteRuleSettings_LetterOnly" xml:space="preserve">
+        <value>Letters Only</value>
+    </data>
+    <data name="ChuteRuleSettings_Alphanumeric" xml:space="preserve">
+        <value>Alphanumeric</value>
+    </data>
+    <data name="ChuteRuleSettings_LengthRange" xml:space="preserve">
+        <value>Length Range</value>
+    </data>
+    <data name="ChuteRuleSettings_StartsWith" xml:space="preserve">
+        <value>Starts With</value>
+    </data>
+    <data name="ChuteRuleSettings_EndsWith" xml:space="preserve">
+        <value>Ends With</value>
+    </data>
+    <data name="ChuteRuleSettings_NotStartsWith" xml:space="preserve">
+        <value>Not Starts With</value>
+    </data>
+    <data name="ChuteRuleSettings_NotEndsWith" xml:space="preserve">
+        <value>Not Ends With</value>
+    </data>
+    <data name="ChuteRuleSettings_Contains" xml:space="preserve">
+        <value>Contains</value>
+    </data>
+    <data name="ChuteRuleSettings_NotContains" xml:space="preserve">
+        <value>Not Contains</value>
+    </data>
+    <data name="ChuteRuleSettings_RegexPattern" xml:space="preserve">
+        <value>Regex Pattern</value>
+    </data>
+    <data name="CommaSeparatedTooltip" xml:space="preserve">
+        <value>Multiple values separated by commas</value>
+    </data>
+    <data name="RegexPatternTooltip" xml:space="preserve">
+        <value>Advanced users can use regular expressions for matching</value>
+    </data>
 </root>

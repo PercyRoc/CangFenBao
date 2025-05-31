@@ -203,14 +203,9 @@ namespace Sorting_Car.ViewModels
 
             if (ChuteSequences.Any())
             {
-                if (selectedIndex >= ChuteSequences.Count) // 如果删除了最后一个
-                {
-                    SelectedChute = ChuteSequences.Last();
-                }
-                else // 选择相同索引或新的最后一个
-                {
-                    SelectedChute = ChuteSequences[selectedIndex];
-                }
+                SelectedChute = selectedIndex >= ChuteSequences.Count ? ChuteSequences.Last() : // 如果删除了最后一个
+                    // 选择相同索引或新的最后一个
+                    ChuteSequences[selectedIndex];
             }
             else
             {

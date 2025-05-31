@@ -18,7 +18,6 @@ using Weight.Services;
 using WPFLocalizeExtension.Engine;
 using Window = System.Windows.Window;
 using History;
-using SharedUI.Views.Windows;
 
 namespace Sunnen;
 
@@ -114,7 +113,6 @@ internal partial class App
         
         // 使用扩展方法注册设备服务 (现在它们依赖的 Startup 服务已明确为 Singleton)
         containerRegistry.RegisterSingleton<ISangNengService, SangNengService>();
-        containerRegistry.RegisterDialogWindow<HistoryDialogWindow>();
         // 注册窗口和ViewModel
         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
         

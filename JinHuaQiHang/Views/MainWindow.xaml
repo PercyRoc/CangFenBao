@@ -381,7 +381,7 @@
                                                     Width="SizeToCells" />
                                 <DataGridTextColumn Header="条码" Binding="{Binding Barcode}" MinWidth="120"
                                                     Width="SizeToCells" />
-                                <DataGridTextColumn Header="重量" Binding="{Binding WeightDisplay}" MinWidth="60"
+                                <DataGridTextColumn Header="重量" Binding="{Binding Weight}" MinWidth="60"
                                                     Width="SizeToCells" />
                                 <DataGridTextColumn Header="尺寸" Binding="{Binding VolumeDisplay}" MinWidth="100"
                                                     Width="SizeToCells" />

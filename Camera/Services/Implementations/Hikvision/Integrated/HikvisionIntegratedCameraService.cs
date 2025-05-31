@@ -4,11 +4,10 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Media.Imaging;
 using Camera.Interface;
-using Camera.Models;
 using Common.Models.Package;
-using MvLogisticsSDKNet; 
+using MvLogisticsSDKNet;
 using Serilog;
-using System.IO; 
+using System.IO;
 
 namespace Camera.Services.Implementations.Hikvision.Integrated
 {
@@ -241,7 +240,7 @@ namespace Camera.Services.Implementations.Hikvision.Integrated
                     packageInfo.Weight = stPackageInfoEx.fWeight;
                     Log.Debug("[HikvisionIntegratedCameraService] 重量: {Weight}", packageInfo.Weight);
                 }
-                packageInfo.SetStatus(PackageStatus.Created, "包裹已创建/检测到");
+                packageInfo.SetStatus("包裹已创建");
                 _packageSubject.OnNext(packageInfo);
             }
             catch (Exception ex)
@@ -299,7 +298,7 @@ namespace Camera.Services.Implementations.Hikvision.Integrated
                 // 为 NoRead 事件创建一个 PackageInfo 对象并通过 _packageSubject 推送
                 var noReadPackageInfo = PackageInfo.Create();
                 noReadPackageInfo.SetBarcode("NOREAD");
-                noReadPackageInfo.SetStatus(PackageStatus.NoRead, "NoRead event from camera");
+                noReadPackageInfo.SetStatus("NoRead event from camera");
                 noReadPackageInfo.TriggerTimestamp = DateTime.Now; // 或者尝试从 stNoReadInfo 获取更精确的时间
                 if (bitmapSource != null)
                 {

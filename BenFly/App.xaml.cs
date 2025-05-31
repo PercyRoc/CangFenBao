@@ -1,8 +1,6 @@
 ﻿using System.Net.Http;
 using System.Windows;
 using Common.Extensions;
-using DeviceService.DataSourceDevices.Camera;
-using DeviceService.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using BenFly.Services;
@@ -17,8 +15,6 @@ using Serilog;
 using SharedUI.Extensions;
 using SharedUI.ViewModels.Settings;
 using SharedUI.Views.Settings;
-using SortingServices.Pendulum;
-using SortingServices.Pendulum.Extensions;
 using System.IO;
 using System.Diagnostics;
 using DeviceService.DataSourceDevices.Belt;
@@ -29,6 +25,15 @@ using System.Globalization;
 using SharedUI.Views.Windows;
 using WPFLocalizeExtension.Engine;
 using WPFLocalizeExtension.Providers;
+using Camera;
+using BalanceSorting.Modules;
+using Camera.Interface;
+using BalanceSorting.Service;
+using BalanceSorting.Models;
+using Common.Services.Settings;
+using Camera.Views.Settings;
+using Camera.ViewModels.Settings;
+using Prism.Modularity;
 
 namespace BenFly;
 
@@ -51,7 +56,10 @@ public partial class App
         // 注册公共服务
         containerRegistry.AddCommonServices();
         containerRegistry.AddShardUi();
-        containerRegistry.AddPhotoCamera();
+
+        // Register new modules
+        containerRegistry.RegisterModule<HuaRayCameraModule>(); // Assuming HuaRayCameraModule
+        containerRegistry.RegisterModule<SinglePendulumSortModule>();
 
         // 注册设置页面和ViewModel
         containerRegistry.RegisterForNavigation<CameraSettingsView, CameraSettingsViewModel>();
@@ -76,9 +84,6 @@ public partial class App
 
         // 注册包裹回传服务
         containerRegistry.RegisterSingleton<BenNiaoPackageService>();
-        // 注册单摆轮分拣服务
-        containerRegistry.RegisterPendulumSortService(PendulumServiceType.Single);
-        containerRegistry.RegisterSingleton<IHostedService, PendulumSortHostedService>();
     }
 
     protected override Window CreateShell()
@@ -320,17 +325,6 @@ public partial class App
                 Log.Debug("启动进度窗口已显示。");
             });
             
-            // --- 启动服务逻辑 (保持不变) ---
-            // 启动相机托管服务
-            var cameraStartupService = Container.Resolve<CameraStartupService>();
-            _ = Task.Run(() => cameraStartupService.StartAsync(CancellationToken.None))
-                   .ContinueWith(t => Log.Error(t.Exception, "启动 CameraStartupService 时出错"), TaskContinuationOptions.OnlyOnFaulted);
-
-            // 启动摆轮分拣托管服务
-            var pendulumHostedService = Container.Resolve<PendulumSortHostedService>();
-            _ = Task.Run(() => pendulumHostedService.StartAsync(CancellationToken.None))
-                   .ContinueWith(t => Log.Error(t.Exception, "启动 PendulumSortHostedService 时出错"), TaskContinuationOptions.OnlyOnFaulted);
-
             // 获取皮带设置并启动串口托管服务（如果启用）
             var settingsService = Container.Resolve<Common.Services.Settings.ISettingsService>();
             var beltSettings = settingsService.LoadSettings<BeltSerialParams>();
@@ -452,22 +446,6 @@ public partial class App
         var tasks = new List<Task>();
         try
         {
-            // 停止摆轮分拣托管服务
-            var pendulumHostedService = Container?.Resolve<PendulumSortHostedService>();
-            if (pendulumHostedService != null)
-            {
-                tasks.Add(Task.Run(() => pendulumHostedService.StopAsync(CancellationToken.None))
-                           .ContinueWith(t => Log.Error(t.Exception, "停止 PendulumSortHostedService 时出错"), TaskContinuationOptions.OnlyOnFaulted));
-            }
-
-            // 停止相机托管服务
-            var cameraStartupService = Container?.Resolve<CameraStartupService>();
-            if (cameraStartupService != null)
-            {
-                tasks.Add(Task.Run(() => cameraStartupService.StopAsync(CancellationToken.None))
-                           .ContinueWith(t => Log.Error(t.Exception, "停止 CameraStartupService 时出错"), TaskContinuationOptions.OnlyOnFaulted));
-            }
-
             // 获取皮带设置并停止串口托管服务（如果启用）
             var settingsService = Container?.Resolve<Common.Services.Settings.ISettingsService>();
             var beltSettings = settingsService?.LoadSettings<BeltSerialParams>(); // Use null-conditional
@@ -483,26 +461,6 @@ public partial class App
                 Log.Information("皮带控制已禁用或服务不可用，跳过串口停止");
             }
             
-            // 清理相机相关资源 (移到这里确保在服务停止后执行)
-            try
-            {
-                var cameraFactory = Container?.Resolve<CameraFactory>();
-                cameraFactory?.Dispose();
-                Log.Information("相机工厂已释放");
-
-                var cameraService = Container?.Resolve<ICameraService>();
-                cameraService?.Dispose();
-                Log.Information("相机服务已释放");
-                
-                var beltService = Container?.Resolve<BeltSerialService>();
-                beltService?.Dispose(); 
-                Log.Information("串口服务已释放 (Dispose)");
-            }
-            catch(Exception ex) 
-            { 
-                Log.Error(ex, "清理相机或串口资源时出错"); 
-            }
-
             if (tasks.Count != 0 && waitForCompletion)
             {
                 Log.Debug("等待 {Count} 个后台服务停止任务完成...", tasks.Count);

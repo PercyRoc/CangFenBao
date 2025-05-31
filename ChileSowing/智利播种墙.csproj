@@ -7,7 +7,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
         <RootNamespace>ChileSowing</RootNamespace>
-        <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
+        <ApplicationIcon>..\Common\logo.ico</ApplicationIcon>
         <AssemblyName>ChileSowing</AssemblyName>
     </PropertyGroup>
 
@@ -42,21 +42,23 @@
         <PackageReference Include="Microsoft.Extensions.Http"/>
         <PackageReference Include="WPF-UI"/>
         <PackageReference Include="HandyControl"/>
+        <PackageReference Include="WPFLocalizeExtension"/>
 
     </ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\History\历史模块.csproj"/>
         <ProjectReference Include="..\SowingSorting\播种分拣.csproj"/>
+        <ProjectReference Include="..\Common\基础模块.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
         <None Update="appsettings.json">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
-        <Resource Include="..\SharedUI\Resources\Icon\logo.ico">
-            <Link>logo.ico</Link>
-        </Resource>
+        <None Include="..\Common\logo.ico">
+          <Link>logo.ico</Link>
+        </None>
     </ItemGroup>
 
 </Project>

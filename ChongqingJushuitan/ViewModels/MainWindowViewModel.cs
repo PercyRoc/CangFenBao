@@ -5,6 +5,7 @@ using System.Reactive.Linq;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Common.Models;
 using Common.Models.Package;
 using Common.Models.Settings.ChuteRules;
 using Common.Models.Settings.Sort.PendulumSort;
@@ -13,7 +14,6 @@ using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Scanner;
 using DeviceService.DataSourceDevices.Services;
 using Serilog;
-using SharedUI.Models;
 using SortingServices.Pendulum;
 using SortingServices.Servers.Services.JuShuiTan;
 
