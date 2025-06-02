@@ -9,12 +9,9 @@
              xmlns:settings1="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
              xmlns:viewModels="clr-namespace:ShanghaiModuleBelt.ViewModels"
              xmlns:settings="clr-namespace:ShanghaiModuleBelt.Views.Settings"
-             xmlns:views1="clr-namespace:ShanghaiModuleBelt.Views"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
-             d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}"
-             Height="720"
-             Width="1280">
+             d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}">
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -58,11 +55,11 @@
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
 
-                        <ui:NavigationViewItem Content="锁格设置"
+                        <ui:NavigationViewItem Content="格口规则设置"
                                                Tag="TcpSettingsView"
-                                               Icon="{ui:SymbolIcon LockClosed24}">
+                                               Icon="{ui:SymbolIcon Box24}">
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="views1:TcpSettingsView" />
+                                <x:Type Type="settings1:BarcodeChuteSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>

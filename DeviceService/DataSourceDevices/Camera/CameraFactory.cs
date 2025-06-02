@@ -96,7 +96,7 @@ public class CameraFactory : IDisposable
                 //     new HikvisionIndustrialCameraService(),
                 // CameraManufacturer.Hikvision when cameraType == CameraType.Smart =>
                 //     new HikvisionSmartCameraService(),
-                // CameraManufacturer.Tcp => new TcpCameraService(),
+                CameraManufacturer.Tcp => new TcpCameraService(),
                 _ => throw new ArgumentException($"不支持的相机厂商和类型组合: {manufacturer} - {cameraType}")
             };
             Log.Information("创建 {Manufacturer} {Type} 相机服务成功", manufacturer, cameraType);

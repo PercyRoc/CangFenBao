@@ -399,6 +399,6 @@ internal class TcpCameraService : ICameraService
                 new() { Id = $"TCP_{_host}_{_port}", Name = "TCP 数据源" }
             };
         }
-        return Enumerable.Empty<CameraBasicInfo>();
+        return [];
     }
 }

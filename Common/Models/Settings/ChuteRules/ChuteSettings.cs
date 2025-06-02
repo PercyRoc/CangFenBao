@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Text.RegularExpressions;
 using Common.Services.Settings;
 using Serilog;
+using System.Linq;
 
 namespace Common.Models.Settings.ChuteRules;
 
@@ -65,9 +66,26 @@ public class ChuteSettings : BindableBase
     {
         if (string.IsNullOrEmpty(barcode)) return null;
 
-        foreach (var chuteNumber in from rule in ChuteRules let chuteNumber = rule.Key let chuteRule = rule.Value where chuteRule.IsMatching(barcode) select chuteNumber)
+        foreach (var rule in ChuteRules.OrderBy(r => r.Value.IsEffectivelyDefault())) // 优先处理非默认规则
         {
-            return chuteNumber;
+            var chuteNumber = rule.Key;
+            var chuteRule = rule.Value;
+
+            if (chuteRule.IsMatching(barcode))
+            {
+                // 如果规则是默认规则，并且不是唯一的匹配，则跳过继续寻找更具体的规则。
+                // 如果只有默认规则匹配，或者该格口是唯一的匹配，则返回它。
+                if (chuteRule.IsEffectivelyDefault())
+                {
+                    // 检查是否存在其他非默认规则也匹配
+                    var hasSpecificMatch = ChuteRules.Any(r => r.Key != chuteNumber && r.Value.IsMatching(barcode) && !r.Value.IsEffectivelyDefault());
+                    if (hasSpecificMatch)
+                    {
+                        continue; // 存在更具体的匹配，跳过此默认规则
+                    }
+                }
+                return chuteNumber; // 返回第一个匹配的非默认规则，或者唯一的默认规则
+            }
         }
 
         return null;
@@ -161,6 +179,26 @@ public class BarcodeMatchRule : BindableBase
     {
         get => _regexPattern;
         set => SetProperty(ref _regexPattern, value);
+    }
+
+    /// <summary>
+    ///     检查当前规则是否是"默认"规则，即在没有其他特定条件的情况下会匹配任何条码。
+    /// </summary>
+    internal bool IsEffectivelyDefault()
+    {
+        // 如果所有条件都是其默认/空值，则认为该规则是"默认"规则
+        return MinLength == 0 &&
+               MaxLength == 0 &&
+               !IsDigitOnly &&
+               !IsLetterOnly &&
+               !IsAlphanumeric &&
+               string.IsNullOrEmpty(StartsWith) &&
+               string.IsNullOrEmpty(EndsWith) &&
+               string.IsNullOrEmpty(NotStartsWith) &&
+               string.IsNullOrEmpty(NotEndsWith) &&
+               string.IsNullOrEmpty(Contains) &&
+               string.IsNullOrEmpty(NotContains) &&
+               (string.IsNullOrEmpty(RegexPattern) || RegexPattern == "(?=.*(?))");
     }
 
     /// <summary>

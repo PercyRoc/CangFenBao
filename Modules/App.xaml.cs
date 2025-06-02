@@ -12,7 +12,8 @@ using ShanghaiModuleBelt.ViewModels.Settings;
 using ShanghaiModuleBelt.Views;
 using ShanghaiModuleBelt.Views.Settings;
 using SharedUI.Extensions;
-using LockingService = ShanghaiModuleBelt.Services.LockingService;
+using SharedUI.ViewModels.Settings;
+using SharedUI.Views.Settings;
 
 namespace ShanghaiModuleBelt;
 
@@ -108,21 +109,23 @@ public partial class App
 
         // 注册格口映射服务
         containerRegistry.RegisterSingleton<ChuteMappingService>();
+        containerRegistry.RegisterSingleton<BarcodeChuteSettingsViewModel>();
 
         // 注册模组连接服务
         containerRegistry.RegisterSingleton<IModuleConnectionService, ModuleConnectionService>();
         containerRegistry.RegisterSingleton<ModuleConnectionHostedService>();
         containerRegistry.Register<ModuleConnectionHostedService>();
 
-        // 注册锁格服务
-        containerRegistry.RegisterSingleton<LockingService>();
-        containerRegistry.RegisterSingleton<LockingHostedService>();
+        // // 注册锁格服务
+        // containerRegistry.RegisterSingleton<LockingService>();
+        // containerRegistry.RegisterSingleton<LockingHostedService>();
 
         // 注册格口包裹记录服务
         containerRegistry.RegisterSingleton<ChutePackageRecordService>();
 
         containerRegistry.RegisterForNavigation<ModuleConfigView, ModuleConfigViewModel>();
-        containerRegistry.RegisterForNavigation<TcpSettingsView, TcpSettingsViewModel>();
+        // containerRegistry.RegisterForNavigation<TcpSettingsView, TcpSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
 
         // 注册设置窗口
         containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>("SettingsDialog");
@@ -165,17 +168,17 @@ public partial class App
                 Log.Information("模组连接托管服务启动成功");
             });
 
-            // 启动锁格托管服务
-            var lockingHostedService = Container.Resolve<LockingHostedService>();
-            _ = Task.Run(async () =>
-            {
-                await lockingHostedService.StartAsync();
-                Log.Information("锁格托管服务启动成功");
-            });
+            // // 启动锁格托管服务
+            // var lockingHostedService = Container.Resolve<LockingHostedService>();
+            // _ = Task.Run(async () =>
+            // {
+            //     await lockingHostedService.StartAsync();
+            //     Log.Information("锁格托管服务启动成功");
+            // });
 
             // 初始化锁格服务
-            _ = Container.Resolve<LockingService>();
-            Log.Information("锁格服务初始化成功");
+            // _ = Container.Resolve<LockingService>();
+            // Log.Information("锁格服务初始化成功");
         }
         catch (Exception ex)
         {
@@ -207,17 +210,17 @@ public partial class App
                 Task.Run(async () => await moduleConnectionHostedService.StopAsync(CancellationToken.None)).Wait(2000);
                 Log.Information("模组连接托管服务已停止");
 
-                // 停止锁格托管服务
-                var lockingHostedService = Container.Resolve<LockingHostedService>();
-                Task.Run(lockingHostedService.StopAsync).Wait(2000);
-                Log.Information("锁格托管服务已停止");
-
-                // 释放锁格服务
-                if (Container.Resolve<LockingService>() is IDisposable lockingService)
-                {
-                    lockingService.Dispose();
-                    Log.Information("锁格服务已释放");
-                }
+                // // 停止锁格托管服务
+                // var lockingHostedService = Container.Resolve<LockingHostedService>();
+                // Task.Run(lockingHostedService.StopAsync).Wait(2000);
+                // Log.Information("锁格托管服务已停止");
+                //
+                // // 释放锁格服务
+                // if (Container.Resolve<LockingService>() is IDisposable lockingService)
+                // {
+                //     lockingService.Dispose();
+                //     Log.Information("锁格服务已释放");
+                // }
             }
             catch (Exception ex)
             {

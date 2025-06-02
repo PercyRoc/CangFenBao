@@ -11,7 +11,8 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
     private readonly ModuleConfigViewModel _moduleConfigViewModel;
     private readonly INotificationService _notificationService;
-    private readonly TcpSettingsViewModel _tcpSettingsViewModel;
+    // private readonly TcpSettingsViewModel _tcpSettingsViewModel;
+    private readonly BarcodeChuteSettingsViewModel  _barcodeChuteSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
@@ -24,7 +25,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
         // 创建各个设置页面的ViewModel实例
         _cameraSettingsViewModel = containerProvider.Resolve<CameraSettingsViewModel>();
         _moduleConfigViewModel = containerProvider.Resolve<ModuleConfigViewModel>();
-        _tcpSettingsViewModel = containerProvider.Resolve<TcpSettingsViewModel>();
+        _barcodeChuteSettingsViewModel = containerProvider.Resolve<BarcodeChuteSettingsViewModel>();
 
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
@@ -60,7 +61,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
             // 保存所有设置
             _cameraSettingsViewModel.SaveConfigurationCommand.Execute();
             _moduleConfigViewModel.SaveConfigurationCommand.Execute();
-            _tcpSettingsViewModel.SaveConfigurationCommand.Execute();
+            _barcodeChuteSettingsViewModel.SaveConfigurationCommand.Execute();
 
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");

@@ -6,10 +6,9 @@ using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using Serilog;
-using ShanghaiModuleBelt.Models;
 using ShanghaiModuleBelt.Services;
 using SharedUI.Models;
-using LockingService = ShanghaiModuleBelt.Services.LockingService;
+// using LockingService = ShanghaiModuleBelt.Services.LockingService;
 
 namespace ShanghaiModuleBelt.ViewModels;
 
@@ -19,10 +18,10 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     // 格口锁定状态字典
     private readonly Dictionary<int, bool> _chuteLockStatus = [];
-    private readonly ChuteMappingService _chuteMappingService;
+    // private readonly ChuteMappingService _chuteMappingService;
     private readonly ChutePackageRecordService _chutePackageRecordService;
     private readonly IDialogService _dialogService;
-    private readonly LockingService _lockingService;
+    // private readonly LockingService _lockingService;
     private readonly IModuleConnectionService _moduleConnectionService;
     private readonly ISettingsService _settingsService;
     private readonly List<IDisposable> _subscriptions = [];
@@ -36,15 +35,15 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         PackageTransferService packageTransferService, ISettingsService settingsService,
         IModuleConnectionService moduleConnectionService,
         ChuteMappingService chuteMappingService,
-        LockingService lockingService,
+        // LockingService lockingService,
         ChutePackageRecordService chutePackageRecordService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
         _settingsService = settingsService;
         _moduleConnectionService = moduleConnectionService;
-        _chuteMappingService = chuteMappingService;
-        _lockingService = lockingService;
+        // _chuteMappingService = chuteMappingService;
+        // _lockingService = lockingService;
         _chutePackageRecordService = chutePackageRecordService;
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
 
@@ -71,17 +70,17 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         // 订阅模组带连接状态事件
         _moduleConnectionService.ConnectionStateChanged += OnModuleConnectionChanged;
 
-        // 订阅锁格状态变更事件
-        _lockingService.ChuteLockStatusChanged += OnChuteLockStatusChanged;
-
-        // 订阅锁格设备连接状态变更事件
-        _lockingService.ConnectionStatusChanged += OnLockingDeviceConnectionChanged;
+        // // 订阅锁格状态变更事件
+        // _lockingService.ChuteLockStatusChanged += OnChuteLockStatusChanged;
+        //
+        // // 订阅锁格设备连接状态变更事件
+        // _lockingService.ConnectionStatusChanged += OnLockingDeviceConnectionChanged;
         // 订阅包裹流
         _subscriptions.Add(packageTransferService.PackageStream
             .Subscribe(package => { Application.Current.Dispatcher.BeginInvoke(() => OnPackageInfo(package)); }));
 
         // 初始检查锁格设备状态
-        UpdateLockingDeviceStatus(_lockingService.IsConnected());
+        // UpdateLockingDeviceStatus(_lockingService.IsConnected());
     }
     
     public DelegateCommand OpenSettingsCommand { get; }
@@ -141,15 +140,15 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 Icon = "ArrowSort24",
                 StatusColor = "#F44336" // 红色表示未连接
             });
-
-            // 添加锁格设备状态
-            DeviceStatuses.Add(new DeviceStatus
-            {
-                Name = "锁格设备",
-                Status = "未连接",
-                Icon = "Lock24",
-                StatusColor = "#F44336" // 红色表示未连接
-            });
+            //
+            // // 添加锁格设备状态
+            // DeviceStatuses.Add(new DeviceStatus
+            // {
+            //     Name = "锁格设备",
+            //     Status = "未连接",
+            //     Icon = "Lock24",
+            //     StatusColor = "#F44336" // 红色表示未连接
+            // });
         }
         catch (Exception ex)
         {
@@ -271,30 +270,22 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         {
             Log.Information("收到包裹信息: {Barcode}, 序号={Index}", package.Barcode, package.Index);
 
-            var config = _settingsService.LoadSettings<ModuleConfig>();
-            var chuteNumber = await _chuteMappingService.GetChuteNumberAsync(package);
+            // 从 ChuteSettings 获取格口配置
+            var chuteSettings = _settingsService.LoadSettings<Common.Models.Settings.ChuteRules.ChuteSettings>();
+
+            // 根据条码查找匹配的格口
+            var chuteNumber = chuteSettings.FindMatchingChute(package.Barcode);
 
             if (chuteNumber == null)
             {
                 Log.Warning("无法获取格口号，使用异常格口: {Barcode}", package.Barcode);
+                package.SetChute(chuteSettings.ErrorChuteNumber, null); // 使用 ChuteSettings 中的异常格口
                 package.SetStatus(PackageStatus.Error, "格口分配失败");
             }
             else
             {
-                // 检查分配的格口是否被锁定
-                if (IsChuteLocked(chuteNumber.Value))
-                {
-                    Log.Warning("分配的格口 {ChuteNumber} 已被锁定，重新分配到异常格口: {Barcode}",
-                        chuteNumber.Value, package.Barcode);
-
-                    // 记录原始分配的格口号
-                    var originalChuteNumber = chuteNumber.Value;
-                    package.SetChute(config.ExceptionChute, originalChuteNumber);
-
-                    // 设置为错误状态
-                    package.SetStatus(PackageStatus.Error, "格口已锁定，使用异常格口");
-                    package.SetStatus(PackageStatus.Error,$"原格口 {originalChuteNumber} 已锁定");
-                }
+                // 设置包裹的格口
+                package.SetChute(chuteNumber.Value, null); // 不再有原始格口的概念，因为直接匹配规则
             }
 
             // 通知模组带服务处理包裹
@@ -494,8 +485,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 // 取消事件订阅
                 _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
                 _moduleConnectionService.ConnectionStateChanged -= OnModuleConnectionChanged;
-                _lockingService.ChuteLockStatusChanged -= OnChuteLockStatusChanged;
-                _lockingService.ConnectionStatusChanged -= OnLockingDeviceConnectionChanged;
+                // _lockingService.ChuteLockStatusChanged -= OnChuteLockStatusChanged;
+                // _lockingService.ConnectionStatusChanged -= OnLockingDeviceConnectionChanged;
 
                 // 释放订阅
                 foreach (var subscription in _subscriptions) subscription.Dispose();
