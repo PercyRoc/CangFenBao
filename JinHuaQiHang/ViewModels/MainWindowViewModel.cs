@@ -9,7 +9,6 @@ using BalanceSorting.Service;
 using Camera.Services.Implementations.TCP;
 using Common.Models;
 using Common.Models.Package;
-using Common.Services.Audio;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using Serilog;
@@ -17,6 +16,7 @@ using Server.JuShuiTan.Services;
 using History.Data;
 using Server.JuShuiTan.Models;
 using Common.Models.Settings.ChuteRules;
+using JinHuaQiHang.Services;
 
 namespace JinHuaQiHang.ViewModels;
 
@@ -35,6 +35,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private DateTime? _firstPackageTime;
     private readonly IJuShuiTanService _juShuiTanService;
     private readonly IPackageHistoryDataService _packageHistoryDataService;
+    private readonly IYunDaUploadService _yunDaUploadService;
 
     public MainWindowViewModel(
             IDialogService dialogService,
@@ -42,9 +43,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
             ISettingsService settingsService,
             IPendulumSortService sortService,
             INotificationService notificationService,
-            IAudioService audioService,
             IJuShuiTanService juShuiTanService,
-            IPackageHistoryDataService packageHistoryDataService)
+            IPackageHistoryDataService packageHistoryDataService,
+            IYunDaUploadService yunDaUploadService)
     {
         try
         {
@@ -55,6 +56,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             _notificationService = notificationService;
             _juShuiTanService = juShuiTanService;
             _packageHistoryDataService = packageHistoryDataService;
+            _yunDaUploadService = yunDaUploadService;
 
             OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
             OpenHistoryCommand = new DelegateCommand(ExecuteOpenHistory);
@@ -320,11 +322,32 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 Weight = package.Weight,
                 IsUnLid = false,
                 Type = 5,
-                FVolume = package.Volume.HasValue ? (package.Volume.Value / 1000000.0) : null,
+                FVolume = package.Volume / 1000000.0,
                 Channel = "自动分拣"
             };
             var response = await _juShuiTanService.WeightAndSendAsync(request);
             
+            // 异步将43、46、32开头的条码上传到韵达揽收
+            if (!string.IsNullOrEmpty(package.Barcode) && 
+                (package.Barcode.StartsWith("43") || package.Barcode.StartsWith("46") || package.Barcode.StartsWith("32")))
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var yunDaResult = await _yunDaUploadService.UploadPackageInfoAsync(package);
+                        if (yunDaResult.Code != "0")
+                        {
+                            Log.Warning("韵达揽收上传失败：{{Barcode: {PackageBarcode}, Message: {Message}}}", package.Barcode, yunDaResult.Message);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "异步上传韵达揽收包裹信息时发生错误：{{Barcode: {PackageBarcode}}}", package.Barcode);
+                    }
+                });
+            }
+
             var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
 
             if (response.Code != 0)

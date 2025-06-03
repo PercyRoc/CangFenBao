@@ -9,8 +9,6 @@ using History;
 using JinHuaQiHang.ViewModels;
 using JinHuaQiHang.Views;
 using Microsoft.Extensions.Configuration;
-using Prism.Ioc;
-using Prism.Modularity;
 using Serilog;
 using Server.JuShuiTan;
 
@@ -118,17 +116,13 @@ public partial class App : PrismApplication
             moduleCatalog.AddModule<MultiPendulumSortModule>();
             moduleCatalog.AddModule<HistoryModule>();
             moduleCatalog.AddModule<JuShuiTanModule>();
+            moduleCatalog.AddModule<JinHuaQiHangModule>();
         }
         catch (Exception ex)
         {
             Log.Error(ex, "[App] ConfigureModuleCatalog 期间发生错误.");
             throw;
         }
-    }
-
-    protected override void OnInitialized()
-    {
-        base.OnInitialized();
     }
 
     protected override async void OnExit(ExitEventArgs e)
