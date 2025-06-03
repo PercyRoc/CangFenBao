@@ -8,12 +8,15 @@ using DeviceService.Extensions;
 using Serilog;
 using ShanghaiModuleBelt.Services;
 using ShanghaiModuleBelt.Services.Sto;
+using ShanghaiModuleBelt.Services.Yunda;
 using ShanghaiModuleBelt.ViewModels;
 using ShanghaiModuleBelt.ViewModels.Settings;
 using ShanghaiModuleBelt.ViewModels.Sto.Settings;
+using ShanghaiModuleBelt.ViewModels.Yunda.Settings;
 using ShanghaiModuleBelt.Views;
 using ShanghaiModuleBelt.Views.Settings;
 using ShanghaiModuleBelt.Views.Sto.Settings;
+using ShanghaiModuleBelt.Views.Yunda.Settings;
 using SharedUI.Extensions;
 using SharedUI.ViewModels.Settings;
 using SharedUI.Views.Settings;
@@ -124,11 +127,15 @@ public partial class App
 
         // 注册申通自动揽收服务
         containerRegistry.RegisterSingleton<IStoAutoReceiveService, StoAutoReceiveService>();
+        
+        // 注册韵达上传重量服务
+        containerRegistry.RegisterSingleton<IYundaUploadWeightService, YundaUploadWeightService>();
 
         containerRegistry.RegisterForNavigation<ModuleConfigView, ModuleConfigViewModel>();
         // containerRegistry.RegisterForNavigation<TcpSettingsView, TcpSettingsViewModel>();
         containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
         containerRegistry.RegisterForNavigation<StoApiSettingsView, StoApiSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<YundaApiSettingsView, YundaApiSettingsViewModel>();
 
         // 注册设置窗口
         containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>("SettingsDialog");

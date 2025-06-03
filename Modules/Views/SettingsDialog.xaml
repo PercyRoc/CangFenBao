@@ -10,6 +10,7 @@
              xmlns:viewModels="clr-namespace:ShanghaiModuleBelt.ViewModels"
              xmlns:settings="clr-namespace:ShanghaiModuleBelt.Views.Settings"
              xmlns:stoSettings="clr-namespace:ShanghaiModuleBelt.Views.Sto.Settings"
+             xmlns:yundaSettings="clr-namespace:ShanghaiModuleBelt.Views.Yunda.Settings"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}">
@@ -69,6 +70,14 @@
                                                Icon="{ui:SymbolIcon Cube24}">
                             <ui:NavigationViewItem.TargetPageType>
                                 <x:Type Type="stoSettings:StoApiSettingsView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
+
+                        <ui:NavigationViewItem Content="韵达API设置"
+                                               Tag="YundaApiSettingsView"
+                                               Icon="{ui:SymbolIcon Cube24}">
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="yundaSettings:YundaApiSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>

@@ -5,10 +5,16 @@ using Common.Models.Package;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
+using Prism.Commands;
+using Prism.Mvvm;
 using Serilog;
 using ShanghaiModuleBelt.Models.Sto;
+using ShanghaiModuleBelt.Models.Sto.Settings;
+using ShanghaiModuleBelt.Models.Yunda;
+using ShanghaiModuleBelt.Models.Yunda.Settings;
 using ShanghaiModuleBelt.Services;
 using ShanghaiModuleBelt.Services.Sto;
+using ShanghaiModuleBelt.Services.Yunda;
 using SharedUI.Models;
 // using LockingService = ShanghaiModuleBelt.Services.LockingService;
 
@@ -25,6 +31,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private readonly IModuleConnectionService _moduleConnectionService;
     private readonly ISettingsService _settingsService;
     private readonly IStoAutoReceiveService _stoAutoReceiveService;
+    private readonly IYundaUploadWeightService _yundaUploadWeightService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
     private string _currentBarcode = string.Empty;
@@ -35,7 +42,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         ICameraService cameraService,
         PackageTransferService packageTransferService, ISettingsService settingsService,
         IModuleConnectionService moduleConnectionService,
-        IStoAutoReceiveService stoAutoReceiveService)
+        IStoAutoReceiveService stoAutoReceiveService,
+        IYundaUploadWeightService yundaUploadWeightService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
@@ -44,6 +52,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         // _chuteMappingService = chuteMappingService;
         // _lockingService = lockingService;
         _stoAutoReceiveService = stoAutoReceiveService;
+        _yundaUploadWeightService = yundaUploadWeightService;
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
 
         // 初始化系统状态更新定时器
@@ -330,7 +339,52 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 }
                 else
                 {
-                    Log.Information("包裹 {Barcode} 条码不以'7'开头，跳过申通自动揽收。", package.Barcode);
+                    Log.Information("包裹 {Barcode} 条码不以'7'开头，跳过申通自动揽收。");
+                }
+
+                // 只有条码开头为43、46或32才上传韵达重量
+                if (package.Barcode.StartsWith("43") || package.Barcode.StartsWith("46") || package.Barcode.StartsWith("32"))
+                {
+                    var yundaApiSettings = _settingsService.LoadSettings<YundaApiSettings>();
+
+                    var yundaRequest = new YundaUploadWeightRequest
+                    {
+                        PartnerId = yundaApiSettings.PartnerId,
+                        Password = yundaApiSettings.Password,
+                        Rc4Key = yundaApiSettings.Rc4Key,
+                        Orders = new YundaOrders
+                        {
+                            GunId = yundaApiSettings.GunId,
+                            RequestTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                            OrderList = new List<YundaOrder>
+                            {
+                                new YundaOrder
+                                {
+                                    Id = long.Parse(package.Barcode.Substring(0,13)), // 示例：取条码前13位作为唯一标志，实际可能需要更可靠的生成方式
+                                    DocId = long.Parse(package.Barcode.Substring(0,13)), // 示例：取条码前13位作为面单号，实际可能需要更可靠的生成方式
+                                    ScanSite = yundaApiSettings.ScanSite,
+                                    ScanTime = package.CreateTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                                    ScanMan = yundaApiSettings.ScanMan,
+                                    ObjWei = (decimal)package.Weight
+                                }
+                            }
+                        }
+                    };
+
+                    var yundaResponse = await _yundaUploadWeightService.SendUploadWeightRequestAsync(yundaRequest);
+                    if (yundaResponse is { Result: true, Code: "0000" })
+                    {
+                        Log.Information("韵达上传重量请求成功: {Barcode}", package.Barcode);
+                    }
+                    else
+                    {
+                        Log.Error("韵达上传重量请求失败: {Barcode}, 错误: {Message}, {ErrorCode}-{ErrorMsg}",
+                            package.Barcode, yundaResponse?.Message, yundaResponse?.Data?.ErrorCode, yundaResponse?.Data?.ErrorMsg);
+                    }
+                }
+                else
+                {
+                    Log.Information("包裹 {Barcode} 条码不以'43','46'或'32'开头，跳过韵达上传重量。");
                 }
             }
 

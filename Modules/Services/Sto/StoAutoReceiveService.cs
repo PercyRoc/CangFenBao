@@ -1,11 +1,11 @@
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
-using Common.Services.Settings;
 using Newtonsoft.Json;
 using Serilog;
 using ShanghaiModuleBelt.Models.Sto;
 using ShanghaiModuleBelt.Models.Sto.Settings;
+using Common.Services.Settings;
 
 namespace ShanghaiModuleBelt.Services.Sto;
 
@@ -79,7 +79,7 @@ public class StoAutoReceiveService(
                 ErrorMsg = $"网络请求失败：{ex.Message}"
             };
         }
-        catch (JsonException ex)
+        catch (Newtonsoft.Json.JsonException ex)
         {
             Log.Error(ex, "解析申通自动揽收响应失败：{Message}", ex.Message);
             return new StoAutoReceiveResponse

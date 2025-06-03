@@ -2,6 +2,7 @@
 using Serilog;
 using ShanghaiModuleBelt.ViewModels.Settings;
 using ShanghaiModuleBelt.ViewModels.Sto.Settings;
+using ShanghaiModuleBelt.ViewModels.Yunda.Settings;
 using SharedUI.ViewModels.Settings;
 
 namespace ShanghaiModuleBelt.ViewModels;
@@ -15,11 +16,11 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
     // private readonly TcpSettingsViewModel _tcpSettingsViewModel;
     private readonly BarcodeChuteSettingsViewModel  _barcodeChuteSettingsViewModel;
     private readonly StoApiSettingsViewModel _stoApiSettingsViewModel;
+    private readonly YundaApiSettingsViewModel _yundaApiSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
-        INotificationService notificationService,
-        StoApiSettingsViewModel stoApiSettingsViewModel)
+        INotificationService notificationService)
     {
         _notificationService = notificationService;
         // 初始化 RequestClose 属性
@@ -30,6 +31,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
         _moduleConfigViewModel = containerProvider.Resolve<ModuleConfigViewModel>();
         _barcodeChuteSettingsViewModel = containerProvider.Resolve<BarcodeChuteSettingsViewModel>();
         _stoApiSettingsViewModel = containerProvider.Resolve<StoApiSettingsViewModel>();
+        _yundaApiSettingsViewModel = containerProvider.Resolve<YundaApiSettingsViewModel>();
 
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
@@ -67,6 +69,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
             _moduleConfigViewModel.SaveConfigurationCommand.Execute();
             _barcodeChuteSettingsViewModel.SaveConfigurationCommand.Execute();
             _stoApiSettingsViewModel.SaveCommand.Execute();
+            _yundaApiSettingsViewModel.SaveSettingsCommand.Execute();
 
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");

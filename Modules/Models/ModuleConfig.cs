@@ -1,4 +1,5 @@
 using Common.Services.Settings;
+using Prism.Mvvm;
 
 namespace ShanghaiModuleBelt.Models;
 
