@@ -6,7 +6,9 @@ using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using Serilog;
+using ShanghaiModuleBelt.Models.Sto;
 using ShanghaiModuleBelt.Services;
+using ShanghaiModuleBelt.Services.Sto;
 using SharedUI.Models;
 // using LockingService = ShanghaiModuleBelt.Services.LockingService;
 
@@ -17,13 +19,12 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private readonly ICameraService _cameraService;
 
     // 格口锁定状态字典
-    private readonly Dictionary<int, bool> _chuteLockStatus = [];
     // private readonly ChuteMappingService _chuteMappingService;
-    private readonly ChutePackageRecordService _chutePackageRecordService;
     private readonly IDialogService _dialogService;
     // private readonly LockingService _lockingService;
     private readonly IModuleConnectionService _moduleConnectionService;
     private readonly ISettingsService _settingsService;
+    private readonly IStoAutoReceiveService _stoAutoReceiveService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
     private string _currentBarcode = string.Empty;
@@ -34,9 +35,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         ICameraService cameraService,
         PackageTransferService packageTransferService, ISettingsService settingsService,
         IModuleConnectionService moduleConnectionService,
-        ChuteMappingService chuteMappingService,
-        // LockingService lockingService,
-        ChutePackageRecordService chutePackageRecordService)
+        IStoAutoReceiveService stoAutoReceiveService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
@@ -44,7 +43,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         _moduleConnectionService = moduleConnectionService;
         // _chuteMappingService = chuteMappingService;
         // _lockingService = lockingService;
-        _chutePackageRecordService = chutePackageRecordService;
+        _stoAutoReceiveService = stoAutoReceiveService;
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
 
         // 初始化系统状态更新定时器
@@ -279,13 +278,13 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             if (chuteNumber == null)
             {
                 Log.Warning("无法获取格口号，使用异常格口: {Barcode}", package.Barcode);
-                package.SetChute(chuteSettings.ErrorChuteNumber, null); // 使用 ChuteSettings 中的异常格口
+                package.SetChute(chuteSettings.ErrorChuteNumber); // 使用 ChuteSettings 中的异常格口
                 package.SetStatus(PackageStatus.Error, "格口分配失败");
             }
             else
             {
                 // 设置包裹的格口
-                package.SetChute(chuteNumber.Value, null); // 不再有原始格口的概念，因为直接匹配规则
+                package.SetChute(chuteNumber.Value); // 不再有原始格口的概念，因为直接匹配规则
             }
 
             // 通知模组带服务处理包裹
@@ -295,6 +294,44 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             if (string.IsNullOrEmpty(package.ErrorMessage))
             {
                 package.SetStatus(PackageStatus.Success, "正常");
+
+                // 只有条码开头为7才上传申通自动揽收
+                if (package.Barcode.StartsWith('7'))
+                {
+                    // 获取申通API配置
+                    var stoApiSettings = _settingsService.LoadSettings<Models.Sto.Settings.StoApiSettings>();
+
+                    // 发送申通自动揽收请求
+                    var stoRequest = new StoAutoReceiveRequest
+                    {
+                        WhCode = stoApiSettings.WhCode, // 从配置获取
+                        OrgCode = stoApiSettings.OrgCode, // 从配置获取
+                        UserCode = stoApiSettings.UserCode, // 从配置获取
+                        Packages =
+                        [
+                            new Package()
+                            {
+                                WaybillNo = package.Barcode,
+                                Weight = package.Weight.ToString("F2"),
+                                OpTime = package.CreateTime.ToString("yyyy-MM-dd HH:mm:ss")
+                            }
+                        ]
+                    };
+
+                    var stoResponse = await _stoAutoReceiveService.SendAutoReceiveRequestAsync(stoRequest);
+                    if (stoResponse is { Success: true })
+                    {
+                        Log.Information("申通自动揽收请求成功: {Barcode}", package.Barcode);
+                    }
+                    else
+                    {
+                        Log.Error("申通自动揽收请求失败: {Barcode}, 错误: {ErrorMessage}", package.Barcode, stoResponse?.ErrorMsg);
+                    }
+                }
+                else
+                {
+                    Log.Information("包裹 {Barcode} 条码不以'7'开头，跳过申通自动揽收。", package.Barcode);
+                }
             }
 
             // 更新UI
@@ -402,77 +439,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    /// <summary>
-    ///     处理锁格状态变更事件
-    /// </summary>
-    /// <param name="chuteNumber">格口号</param>
-    /// <param name="isLocked">是否锁定</param>
-    private async void OnChuteLockStatusChanged(int chuteNumber, bool isLocked)
-    {
-        try
-        {
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                // 更新格口锁定状态字典
-                _chuteLockStatus[chuteNumber] = isLocked;
-
-                // 记录状态变更
-                Log.Information("格口 {ChuteNumber} 锁定状态变更为: {Status}",
-                    chuteNumber, isLocked ? "锁定" : "解锁");
-            });
-
-            // 更新格口包裹记录服务中的锁定状态
-            await _chutePackageRecordService.SetChuteLockStatusAsync(chuteNumber, isLocked);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "处理锁格状态变更事件时出错");
-        }
-    }
-
-    /// <summary>
-    ///     获取格口锁定状态
-    /// </summary>
-    /// <param name="chuteNumber">格口号</param>
-    /// <returns>是否锁定</returns>
-    private bool IsChuteLocked(int chuteNumber)
-    {
-        return _chuteLockStatus.TryGetValue(chuteNumber, out var isLocked) && isLocked;
-    }
-
-    /// <summary>
-    ///     处理锁格设备连接状态变更事件
-    /// </summary>
-    /// <param name="isConnected">是否已连接</param>
-    private void OnLockingDeviceConnectionChanged(bool isConnected)
-    {
-        UpdateLockingDeviceStatus(isConnected);
-    }
-
-    /// <summary>
-    ///     更新锁格设备状态
-    /// </summary>
-    /// <param name="isConnected">是否已连接</param>
-    private void UpdateLockingDeviceStatus(bool isConnected)
-    {
-        try
-        {
-            var lockingDeviceStatus = DeviceStatuses.FirstOrDefault(static x => x.Name == "锁格设备");
-            if (lockingDeviceStatus == null) return;
-
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                lockingDeviceStatus.Status = isConnected ? "已连接" : "已断开";
-                lockingDeviceStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
-            });
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "更新锁格设备状态时发生错误");
-        }
-    }
-
-    protected virtual void Dispose(bool disposing)
+    private void Dispose(bool disposing)
     {
         if (_disposed) return;
 
@@ -485,8 +452,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 // 取消事件订阅
                 _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
                 _moduleConnectionService.ConnectionStateChanged -= OnModuleConnectionChanged;
-                // _lockingService.ChuteLockStatusChanged -= OnChuteLockStatusChanged;
-                // _lockingService.ConnectionStatusChanged -= OnLockingDeviceConnectionChanged;
 
                 // 释放订阅
                 foreach (var subscription in _subscriptions) subscription.Dispose();

@@ -1,0 +1,4 @@
+{
+    "dotnet.defaultSolution": "CangFenBao.sln",
+    "dotnet.server.useOmnisharp": true
+}

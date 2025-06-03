@@ -7,10 +7,13 @@ using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
 using Serilog;
 using ShanghaiModuleBelt.Services;
+using ShanghaiModuleBelt.Services.Sto;
 using ShanghaiModuleBelt.ViewModels;
 using ShanghaiModuleBelt.ViewModels.Settings;
+using ShanghaiModuleBelt.ViewModels.Sto.Settings;
 using ShanghaiModuleBelt.Views;
 using ShanghaiModuleBelt.Views.Settings;
+using ShanghaiModuleBelt.Views.Sto.Settings;
 using SharedUI.Extensions;
 using SharedUI.ViewModels.Settings;
 using SharedUI.Views.Settings;
@@ -116,16 +119,16 @@ public partial class App
         containerRegistry.RegisterSingleton<ModuleConnectionHostedService>();
         containerRegistry.Register<ModuleConnectionHostedService>();
 
-        // // 注册锁格服务
-        // containerRegistry.RegisterSingleton<LockingService>();
-        // containerRegistry.RegisterSingleton<LockingHostedService>();
-
         // 注册格口包裹记录服务
         containerRegistry.RegisterSingleton<ChutePackageRecordService>();
+
+        // 注册申通自动揽收服务
+        containerRegistry.RegisterSingleton<IStoAutoReceiveService, StoAutoReceiveService>();
 
         containerRegistry.RegisterForNavigation<ModuleConfigView, ModuleConfigViewModel>();
         // containerRegistry.RegisterForNavigation<TcpSettingsView, TcpSettingsViewModel>();
         containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<StoApiSettingsView, StoApiSettingsViewModel>();
 
         // 注册设置窗口
         containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>("SettingsDialog");

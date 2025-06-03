@@ -1,6 +1,7 @@
 ﻿using Common.Services.Ui;
 using Serilog;
 using ShanghaiModuleBelt.ViewModels.Settings;
+using ShanghaiModuleBelt.ViewModels.Sto.Settings;
 using SharedUI.ViewModels.Settings;
 
 namespace ShanghaiModuleBelt.ViewModels;
@@ -13,10 +14,12 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
     private readonly INotificationService _notificationService;
     // private readonly TcpSettingsViewModel _tcpSettingsViewModel;
     private readonly BarcodeChuteSettingsViewModel  _barcodeChuteSettingsViewModel;
+    private readonly StoApiSettingsViewModel _stoApiSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
-        INotificationService notificationService)
+        INotificationService notificationService,
+        StoApiSettingsViewModel stoApiSettingsViewModel)
     {
         _notificationService = notificationService;
         // 初始化 RequestClose 属性
@@ -26,6 +29,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
         _cameraSettingsViewModel = containerProvider.Resolve<CameraSettingsViewModel>();
         _moduleConfigViewModel = containerProvider.Resolve<ModuleConfigViewModel>();
         _barcodeChuteSettingsViewModel = containerProvider.Resolve<BarcodeChuteSettingsViewModel>();
+        _stoApiSettingsViewModel = containerProvider.Resolve<StoApiSettingsViewModel>();
 
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
@@ -62,6 +66,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
             _cameraSettingsViewModel.SaveConfigurationCommand.Execute();
             _moduleConfigViewModel.SaveConfigurationCommand.Execute();
             _barcodeChuteSettingsViewModel.SaveConfigurationCommand.Execute();
+            _stoApiSettingsViewModel.SaveCommand.Execute();
 
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");
