@@ -356,18 +356,19 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                         {
                             GunId = yundaApiSettings.GunId,
                             RequestTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
-                            OrderList = new List<YundaOrder>
-                            {
+                            OrderList =
+                            [
                                 new YundaOrder
                                 {
-                                    Id = long.Parse(package.Barcode.Substring(0,13)), // 示例：取条码前13位作为唯一标志，实际可能需要更可靠的生成方式
-                                    DocId = long.Parse(package.Barcode.Substring(0,13)), // 示例：取条码前13位作为面单号，实际可能需要更可靠的生成方式
+                                    // 随机生成一个19位数字作为唯一标志
+                                    Id = Random.Shared.NextInt64(1_000_000_000_000_000_000L, long.MaxValue),
+                                    DocId = long.Parse(package.Barcode), // 将DocId设置为Barcode
                                     ScanSite = yundaApiSettings.ScanSite,
                                     ScanTime = package.CreateTime.ToString("yyyy-MM-dd HH:mm:ss"),
                                     ScanMan = yundaApiSettings.ScanMan,
                                     ObjWei = (decimal)package.Weight
                                 }
-                            }
+                            ]
                         }
                     };
 
