@@ -210,9 +210,9 @@ public class PackageHistoryDialogViewModel : BindableBase, IDialogAware
 
     private void UpdateColumnVisibilityFromSpecs()
     {
-        if (_effectiveColumnSpecs == null || !_effectiveColumnSpecs.Any())
+        if (_effectiveColumnSpecs == null || _effectiveColumnSpecs.Count == 0)
         {
-            _effectiveColumnSpecs = GetDefaultColumnSpecs().OrderBy(c => c.DisplayOrderInGrid).ToList();
+            _effectiveColumnSpecs = [.. GetDefaultColumnSpecs().OrderBy(c => c.DisplayOrderInGrid)];
         }
 
         IsIndexColVisible = _effectiveColumnSpecs.Any(c => c.PropertyName == nameof(PackageHistoryRecord.Index) && c.IsDisplayed);

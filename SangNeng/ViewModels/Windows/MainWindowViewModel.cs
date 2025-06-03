@@ -54,7 +54,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private PackageInfo _currentPackage = null!;
     private ObservableCollection<DeviceStatus> _deviceStatuses = [];
     private bool _disposed;
-    private bool _hasPlayedErrorSound;
     private ObservableCollection<PackageInfo> _packageHistory = [];
     private ObservableCollection<PackageInfoItem> _packageInfoItems = [];
     private SelectablePalletModel? _selectedPallet;
@@ -89,7 +88,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly IDisposable? _cameraServiceImageSubscription;
     private readonly IDisposable? _palletSettingsChangedSubscription;
 
-    private BitmapSource? _lastVolumeMeasuredImage; // 新增字段，用于暂存体积相机测量图像
     private bool _isInitializingOverlayVisible = true; // 新增：控制初始化遮罩的可见性
 
     /// <summary>
@@ -207,18 +205,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 try
                 {
-                    // 直接赋值给VolumeImage
                     VolumeImage = imageData;
-
-                    // 新增：记录图像尺寸到日志
-                    if (imageData != null)
-                    {
-                        Log.Information("体积相机图像已更新，尺寸：{Width}x{Height}", imageData.PixelWidth, imageData.PixelHeight);
-                    }
-                    else
-                    {
-                        Log.Information("体积相机图像更新为 null");
-                    }
                 }
                 catch (Exception ex)
                 {
@@ -306,7 +293,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         items[0].Value = PackageHistory.Count.ToString();
 
         // 更新成功数
-        var successCount = PackageHistory.Count(p => p.Status == "Success");
+        var successCount = PackageHistory.Count(p => p.Status == "Complete");
         items[1].Value = successCount.ToString();
 
         // 更新失败数
@@ -609,10 +596,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
                             var dimensionImagesResult = await _volumeCamera.GetDimensionImagesAsync();
 
                             string barcodeSpecificPath = string.Empty; // 在外部声明以便后续使用
-                            if (dimensionImagesResult.IsSuccess ||
-                                volSettings.ImageSaveMode.HasFlag(DimensionImageSaveMode.Original))
+                            // 无论 GetDimensionImagesAsync 是否成功，只要需要保存任何尺寸图像，就创建路径
+                            if (volSettings.ImageSaveMode != DimensionImageSaveMode.None)
                             {
-                                // 即使 GetDimensionImagesAsync 失败，如果需要保存原图，仍需构建路径
                                 var baseSavePath = volSettings.ImageSavePath;
                                 var dateFolder = DateTime.Now.ToString("yyyy-MM-dd");
                                 var sanitizedBarcode = string.Join("_",
@@ -621,46 +607,42 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                 Directory.CreateDirectory(barcodeSpecificPath);
                             }
 
-                            if (dimensionImagesResult.IsSuccess)
+                            if (volSettings.ImageSaveMode.HasFlag(DimensionImageSaveMode.Vertical) &&
+                                dimensionImagesResult.VerticalViewImage != null)
                             {
-                                // 保存俯视图
-                                if (volSettings.ImageSaveMode.HasFlag(DimensionImageSaveMode.Vertical) &&
-                                    dimensionImagesResult.VerticalViewImage != null)
-                                {
-                                    const string fileName = "Vertical.jpg";
-                                    var filePath = Path.Combine(barcodeSpecificPath, fileName);
-                                    await SaveDimensionImageAsync(dimensionImagesResult.VerticalViewImage, filePath);
-                                    Log.Information("俯视图已保存: {FilePath}", filePath);
-                                }
-
-                                // 保存侧视图
-                                if (volSettings.ImageSaveMode.HasFlag(DimensionImageSaveMode.Side) &&
-                                    dimensionImagesResult.SideViewImage != null)
-                                {
-                                    const string fileName = "Side.jpg";
-                                    var filePath = Path.Combine(barcodeSpecificPath, fileName);
-                                    await SaveDimensionImageAsync(dimensionImagesResult.SideViewImage, filePath);
-                                    Log.Information("侧视图已保存: {FilePath}", filePath);
-                                }
-
+                                const string fileName = "Vertical.jpg";
+                                var filePath = Path.Combine(barcodeSpecificPath, fileName);
+                                await SaveDimensionImageAsync(dimensionImagesResult.VerticalViewImage, filePath);
+                                Log.Information("俯视图已保存: {FilePath}", filePath);
                             }
-                            else if (volSettings.ImageSaveMode.HasFlag(DimensionImageSaveMode.Vertical) ||
-                                     volSettings.ImageSaveMode.HasFlag(DimensionImageSaveMode.Side))
+
+                            if (volSettings.ImageSaveMode.HasFlag(DimensionImageSaveMode.Side) &&
+                                dimensionImagesResult.SideViewImage != null)
                             {
-                                Log.Warning("未能获取尺寸刻度图像: {Error}", dimensionImagesResult.ErrorMessage);
+                                const string fileName = "Side.jpg";
+                                var filePath = Path.Combine(barcodeSpecificPath, fileName);
+                                await SaveDimensionImageAsync(dimensionImagesResult.SideViewImage, filePath);
+                                Log.Information("侧视图已保存: {FilePath}", filePath);
+                            }
+
+                            if (!dimensionImagesResult.IsSuccess &&
+                                (volSettings.ImageSaveMode.HasFlag(DimensionImageSaveMode.Vertical) ||
+                                 volSettings.ImageSaveMode.HasFlag(DimensionImageSaveMode.Side)))
+                            {
+                                Log.Warning("未能获取尺寸刻度图像的完整成功：{Error}", dimensionImagesResult.ErrorMessage);
                             }
 
                             // 保存体积相机原图 (如果已配置)
                             if (volSettings.ImageSaveMode.HasFlag(DimensionImageSaveMode.Original))
                             {
-                                if (_lastVolumeMeasuredImage != null)
+                                if (VolumeImage != null) // 直接使用 VolumeImage
                                 {
                                     BitmapSource? frozenClone = null;
                                     await Application.Current.Dispatcher.InvokeAsync(() =>
                                     {
                                         try
                                         {
-                                            frozenClone = _lastVolumeMeasuredImage.Clone();
+                                            frozenClone = (BitmapSource)VolumeImage.Clone(); // 克隆 VolumeImage
                                             frozenClone.Freeze();
                                         }
                                         catch (Exception uiEx)
@@ -690,7 +672,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                 }
                                 else
                                 {
-                                    Log.Warning("未能从测量流程获取原始体积相机图像 (_lastVolumeMeasuredImage 为 null)。");
+                                    Log.Warning("未能从测量流程获取原始体积相机图像 (VolumeImage 为 null)。");
                                 }
                             }
                         }
@@ -713,28 +695,30 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                           (_currentPackage.Height ?? 0) <= 0;
 
                     var isComplete = !isBarcodeMissing && !isWeightMissing && !isVolumeMissing;
-                    var completionMessage = "Complete"; // UI String: 成功时的默认消息 (保持英文)
+                    string completionMessage = "Complete"; // Default success message for UI, will be overridden for failures
 
                     if (!isComplete)
                     {
                         Log.Warning("包裹信息不完整。条码缺失: {BarcodeMissing}, 重量缺失: {WeightMissing}, 体积缺失: {VolumeMissing}",
                             isBarcodeMissing, isWeightMissing, isVolumeMissing);
 
-                        // 确定具体的错误消息 (UI Strings: 保持英文)
+                        // Determine the specific error message for UI display and ErrorMessage property
                         if (isBarcodeMissing) completionMessage = "Missing Barcode";
-                        else if (isWeightMissing) completionMessage = "Missing Weight"; // 保持英文
+                        else if (isWeightMissing) completionMessage = "Missing Weight";
                         else if (isVolumeMissing) completionMessage = "Missing Volume";
-                        else completionMessage = "Data Incomplete"; // 后备，理论上不会发生
+                        else completionMessage = "Data Incomplete"; // Fallback, theoretically should not happen
 
-                        _currentPackage.SetStatus(completionMessage);
-                        PlayErrorSound();
+                        _currentPackage.ErrorMessage = completionMessage; // Store detailed error message
+                        _ = _audioService.PlayPresetAsync(AudioType.SystemError);
                         // 移除立即更新UI的调用，保留音效播放
                     }
                     else
                     {
-                        _currentPackage.SetStatus(completionMessage); // 使用默认的 "Complete" 消息
+                        _currentPackage.SetStatus("Complete"); // Set primary status to "Complete"
+                        _currentPackage.ErrorMessage = string.Empty; // Clear any previous error message on success
                         _ = _audioService.PlayPresetAsync(AudioType.Success); // 播放成功音效
-                        // 移除立即更新UI的调用，保留音效播放
+                        // 处理完成，统一更新时间
+                        _currentPackage.CreateTime = DateTime.Now;
                     }
                     // 处理完成，统一更新时间
                     _currentPackage.CreateTime = DateTime.Now;
@@ -842,16 +826,18 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 catch (Exception ex) // 捕获包裹处理过程中的其他通用异常
                 {
                     Log.Error(ex, "处理条码信息时发生未预期的错误: {Barcode}", barcode);
-                    _currentPackage.SetStatus("Processing Error"); // UI String
-                    PlayErrorSound();
+                    _currentPackage.SetStatus("Failed"); // Set primary status to "Failed"
+                    _currentPackage.ErrorMessage = "Processing Error: " + ex.Message; // Store detailed error message
+                    _ = _audioService.PlayPresetAsync(AudioType.SystemError);
                 }
             }
             catch (Exception ex) // 捕获包裹处理过程中的其他通用异常
             {
                 Log.Error(ex, "处理条码信息时发生未预期的错误: {Barcode}", barcode);
 
-                _currentPackage.SetStatus("Processing Error"); // UI String
-                PlayErrorSound();
+                _currentPackage.SetStatus("Failed"); // Set primary status to "Failed"
+                _currentPackage.ErrorMessage = "Processing Error: " + ex.Message; // Store detailed error message
+                _ = _audioService.PlayPresetAsync(AudioType.SystemError);
             }
             // --- 原始逻辑结束 ---
 
@@ -863,7 +849,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 // 1. 先更新实时区域显示
                 try
                 {
-                    UpdateCurrentPackageUiDisplay(_currentPackage.StatusDisplay);
+                    // Pass the detailed error message for UI display if available, otherwise use StatusDisplay
+                    UpdateCurrentPackageUiDisplay(_currentPackage.Status == "Failed" ? _currentPackage.ErrorMessage : _currentPackage.StatusDisplay);
                     Log.Debug("实时区域显示更新成功");
                 }
                 catch (Exception ex)
@@ -900,23 +887,15 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    private void PlayErrorSound()
-    {
-        if (_hasPlayedErrorSound) return;
-        _hasPlayedErrorSound = true;
-        _ = _audioService.PlayPresetAsync(AudioType.SystemError);
-    }
-
     private async Task TriggerVolumeCamera()
     {
-        _lastVolumeMeasuredImage = null; // 重置暂存的图像
         try
         {
             // 使用信号量确保同一时间只有一个测量任务在进行
             if (!await _measurementLock.WaitAsync(TimeSpan.FromSeconds(1)))
             {
                 Log.Warning("上次测量未完成，跳过本次测量");
-                PlayErrorSound();
+                _ = _audioService.PlayPresetAsync(AudioType.SystemError);
                 return;
             }
 
@@ -926,21 +905,20 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                 // 触发测量
                 var result = _volumeCamera.TriggerMeasure();
+
                 if (!result.IsSuccess)
                 {
                     Log.Error("体积测量失败：{Error}", result.ErrorMessage);
                     _currentPackage.SetDimensions(0, 0, 0);
-                    _currentPackage.SetStatus(result
-                        .ErrorMessage!); // ErrorMessage from service is likely English or technical
-                    PlayErrorSound();
+                    _currentPackage.SetStatus("Failed"); // Set primary status to "Failed" for statistics
+                    _currentPackage.ErrorMessage = result.ErrorMessage; // Store detailed error message
+                    _ = _audioService.PlayPresetAsync(AudioType.SystemError);
                     return;
                 }
 
-                _lastVolumeMeasuredImage = result.MeasuredImage; // <--- 暂存测量到的图像
-
                 // 更新测量结果（将毫米转换为厘米）
                 _currentPackage.SetDimensions(result.Length / 10.0, result.Width / 10.0, result.Height / 10.0);
-                _currentPackage.SetStatus("Success"); // UI String
+                _currentPackage.SetStatus("Complete"); // Set primary status to "Complete"
             }
             finally
             {
@@ -950,8 +928,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             Log.Error(ex, "体积测量过程发生错误");
-            _currentPackage.SetStatus(ex.Message); // ex.Message is likely English or technical
-            PlayErrorSound();
+            _currentPackage.SetDimensions(0, 0, 0);
+            _currentPackage.SetStatus("Failed"); // Set primary status to "Failed"
+            _currentPackage.ErrorMessage = "Volume Measurement Error: " + ex.Message; // Store detailed error message
+            _ = _audioService.PlayPresetAsync(AudioType.SystemError);
         }
     }
 
@@ -1125,6 +1105,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         switch (customDisplay)
         {
             case "Complete":
+            case "Success": // 新增：处理成功状态
                 displayText = "Complete"; // UI String
                 color = "#4CAF50"; // Green
                 break;

@@ -41,8 +41,8 @@
         <PackageReference Include="Microsoft.Extensions.Options" />
         <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
         <PackageReference Include="Prism.Wpf" />
-        <PackageReference Include="Prism.Unity" />
-        <PackageReference Include="Serilog" />
+        <PackageReference Include="Prism.Unity"/>
+        <PackageReference Include="Serilog"/>
         <PackageReference Include="SixLabors.ImageSharp" />
         <PackageReference Include="System.IO.Ports" />
         <PackageReference Include="HandyControl" />

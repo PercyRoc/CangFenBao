@@ -71,25 +71,79 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
 
     public async Task AddPackageAsync(PackageHistoryRecord record)
     {
+        Log.Information("PackageHistoryDataService: 调用 AddPackageAsync. 当前系统时间: {SystemTime:yyyy-MM-dd HH:mm:ss.fff}. 初始记录创建时间: {RecordCreateTime:yyyy-MM-dd HH:mm:ss.fff}", DateTime.Now, record.CreateTime);
         try
         {
-            if (record.CreateTime == DateTime.MinValue)
-            { record.CreateTime = DateTime.Now; }
-            else if (record.CreateTime > DateTime.Now.AddHours(1) || record.CreateTime < DateTime.Now.AddYears(-10))
-            { record.CreateTime = DateTime.Now; }
+            // 根据用户要求，只使用 record.CreateTime 的原始值来确定表名，不再进行时间校验和修正。
+            // 移除以下被注释掉的逻辑，以确保 CreateTime 不会被修改：
+            // if (record.CreateTime == DateTime.MinValue)
+            // {
+            //     Log.Warning("PackageHistoryDataService: 记录创建时间为 DateTime.MinValue, 设置为当前系统时间.");
+            //     record.CreateTime = DateTime.Now;
+            // }
+            // else if (record.CreateTime > DateTime.Now.AddHours(1) || record.CreateTime < DateTime.Now.AddYears(-10))
+            // {
+            //     Log.Warning("PackageHistoryDataService: 记录创建时间 {RecordCreateTime:yyyy-MM-dd HH:mm:ss.fff} 被认为无效 (过远未来或过去), 设置为当前系统时间 ({SystemTime:yyyy-MM-dd HH:mm:ss.fff}).", record.CreateTime, DateTime.Now);
+            //     record.CreateTime = DateTime.Now;
+            // }
+            Log.Information("PackageHistoryDataService: 最终用于确定表的记录创建时间: {FinalRecordCreateTime:yyyyMM} - {FinalRecordCreateTime:yyyy-MM-dd HH:mm:ss.fff}", record.CreateTime, record.CreateTime);
 
-            GetTableName(record.CreateTime);
+            var targetTableName = GetTableName(record.CreateTime);
+            Log.Information("PackageHistoryDataService: AddPackageAsync: 条码 {Barcode} (创建时间 {CreateTime:yyyy-MM-dd HH:mm:ss.fff}) 的数据将被写入表 {TargetTableName}.", record.Barcode, record.CreateTime, targetTableName);
+
             await EnsureMonthlyTableExistsInternal(record.CreateTime);
-            await using var dbContext = CreateDbContext(record.CreateTime);
-            var existingRecord = await dbContext.Set<PackageHistoryRecord>().AsNoTracking().FirstOrDefaultAsync(r => r.Barcode == record.Barcode && r.CreateTime == record.CreateTime);
-            if (existingRecord != null)
-            { return; }
-            dbContext.Add(record);
-            await dbContext.SaveChangesAsync();
+            
+            // 使用原生 SQL 进行插入操作
+            await using var connection = new SqliteConnection(_options.FindExtension<Microsoft.EntityFrameworkCore.Sqlite.Infrastructure.Internal.SqliteOptionsExtension>()?.ConnectionString);
+            await connection.OpenAsync();
+
+            // 检查记录是否已存在，如果存在则不重复添加
+            // 注意：这里需要精确匹配条码和创建时间，因为 CreateTime 现在是去重的唯一标识
+            string checkSql = $"SELECT COUNT(*) FROM \"{targetTableName}\" WHERE Barcode = @Barcode AND CreateTime = @CreateTime;";
+            await using var checkCommand = connection.CreateCommand();
+            checkCommand.CommandText = checkSql;
+            checkCommand.Parameters.Add(new SqliteParameter("@Barcode", record.Barcode));
+            checkCommand.Parameters.Add(new SqliteParameter("@CreateTime", record.CreateTime.ToString("yyyy-MM-dd HH:mm:ss.fff")));
+            long count = (long)await checkCommand.ExecuteScalarAsync();
+
+            if (count > 0)
+            {
+                Log.Information("PackageHistoryDataService: AddPackageAsync: 记录 (Barcode: {Barcode}, CreateTime: {CreateTime:yyyy-MM-dd HH:mm:ss.fff}) 已存在于表 {TargetTableName}, 跳过插入.", record.Barcode, record.CreateTime, targetTableName);
+                return; // 记录已存在，不重复添加
+            }
+
+            string insertSql = $"INSERT INTO \"{targetTableName}\" (" +
+                               "\"Index\", Barcode, SegmentCode, Weight, ChuteNumber, Status, StatusDisplay, CreateTime, ErrorMessage, Length, Width, Height, Volume, ImagePath, PalletName, PalletWeight, PalletLength, PalletWidth, PalletHeight) VALUES (" +
+                               "@Index, @Barcode, @SegmentCode, @Weight, @ChuteNumber, @Status, @StatusDisplay, @CreateTime, @ErrorMessage, @Length, @Width, @Height, @Volume, @ImagePath, @PalletName, @PalletWeight, @PalletLength, @PalletWidth, @PalletHeight)";
+
+            await using var insertCommand = connection.CreateCommand();
+            insertCommand.CommandText = insertSql;
+            insertCommand.Parameters.Add(new SqliteParameter("@Index", record.Index));
+            insertCommand.Parameters.Add(new SqliteParameter("@Barcode", record.Barcode));
+            insertCommand.Parameters.Add(new SqliteParameter("@SegmentCode", (object?)record.SegmentCode ?? DBNull.Value));
+            insertCommand.Parameters.Add(new SqliteParameter("@Weight", record.Weight));
+            insertCommand.Parameters.Add(new SqliteParameter("@ChuteNumber", (object?)record.ChuteNumber ?? DBNull.Value));
+            insertCommand.Parameters.Add(new SqliteParameter("@Status", (object?)record.Status ?? DBNull.Value));
+            insertCommand.Parameters.Add(new SqliteParameter("@StatusDisplay", record.StatusDisplay));
+            insertCommand.Parameters.Add(new SqliteParameter("@CreateTime", record.CreateTime.ToString("yyyy-MM-dd HH:mm:ss.fff")));
+            insertCommand.Parameters.Add(new SqliteParameter("@ErrorMessage", (object?)record.ErrorMessage ?? DBNull.Value));
+            insertCommand.Parameters.Add(new SqliteParameter("@Length", (object?)record.Length ?? DBNull.Value));
+            insertCommand.Parameters.Add(new SqliteParameter("@Width", (object?)record.Width ?? DBNull.Value));
+            insertCommand.Parameters.Add(new SqliteParameter("@Height", (object?)record.Height ?? DBNull.Value));
+            insertCommand.Parameters.Add(new SqliteParameter("@Volume", (object?)record.Volume ?? DBNull.Value));
+            insertCommand.Parameters.Add(new SqliteParameter("@ImagePath", (object?)record.ImagePath ?? DBNull.Value));
+            insertCommand.Parameters.Add(new SqliteParameter("@PalletName", (object?)record.PalletName ?? DBNull.Value));
+            insertCommand.Parameters.Add(new SqliteParameter("@PalletWeight", (object?)record.PalletWeight ?? DBNull.Value));
+            insertCommand.Parameters.Add(new SqliteParameter("@PalletLength", (object?)record.PalletLength ?? DBNull.Value));
+            insertCommand.Parameters.Add(new SqliteParameter("@PalletWidth", (object?)record.PalletWidth ?? DBNull.Value));
+            insertCommand.Parameters.Add(new SqliteParameter("@PalletHeight", (object?)record.PalletHeight ?? DBNull.Value));
+
+            await insertCommand.ExecuteNonQueryAsync();
+            Log.Information("PackageHistoryDataService: 成功将条码 {Barcode} (创建时间 {CreateTime:yyyy-MM-dd HH:mm:ss.fff}) 的数据插入到表 {TargetTableName}.", record.Barcode, record.CreateTime, targetTableName);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // ignored
+            Log.Error(ex, "PackageHistoryDataService: 添加包裹历史记录时出错。", record.Barcode, record.CreateTime);
         }
     }
 
@@ -113,8 +167,9 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
         if (pageNumber <= 0) pageNumber = 1;
         if (pageSize <= 0) pageSize = 1000;
         
-        var allMatchingRecords = new List<PackageHistoryRecord>();
+        var allMatchingRecords = new Dictionary<DateTime, PackageHistoryRecord>();
         var relevantTableNames = GetTableNamesForDateRange(startDate, endDate);
+        Log.Information("PackageHistoryDataService: 查询时间范围 {StartDate} - {EndDate} 对应的数据表: {TableNames}", startDate, endDate, string.Join(", ", relevantTableNames));
 
         if (relevantTableNames.Count == 0)
         { 
@@ -127,45 +182,111 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
             {
                 if (!TryParseDateFromTableName(tableName, out var tableDate)) 
                 { 
+                    Log.Warning("PackageHistoryDataService: 无法从表名 {TableName} 解析日期，跳过此表查询。", tableName);
                     continue; 
                 }
 
-                await using var context = CreateDbContext(tableDate);
-                if (!await TableExistsAsync(context, tableName)) 
+                // 现在直接使用 SqliteConnection 和 SqliteCommand
+                await using var connection = new SqliteConnection(_options.FindExtension<Microsoft.EntityFrameworkCore.Sqlite.Infrastructure.Internal.SqliteOptionsExtension>()?.ConnectionString);
+                await connection.OpenAsync();
+
+                var tableExists = await TableExistsAsync(null, tableName, connection); // 传递连接，不再创建新的 DbContext
+                Log.Information("PackageHistoryDataService: 检查表 {TableName} 是否存在: {TableExists}", tableName, tableExists);
+                if (!tableExists) 
                 { 
                     continue; 
                 }
                 
-                var query = context.Set<PackageHistoryRecord>().AsNoTracking();
+                var sqlBuilder = new System.Text.StringBuilder($"SELECT Id, \"Index\", Barcode, SegmentCode, Weight, ChuteNumber, Status, StatusDisplay, CreateTime, ErrorMessage, Length, Width, Height, Volume, ImagePath, PalletName, PalletWeight, PalletLength, PalletWidth, PalletHeight FROM \"{tableName}\" WHERE 1=1");
+                var parameters = new List<SqliteParameter>();
 
-                if (startDate.HasValue) query = query.Where(p => p.CreateTime >= startDate.Value);
+                if (startDate.HasValue)
+                {
+                    sqlBuilder.Append(" AND CreateTime >= @startDate");
+                    parameters.Add(new SqliteParameter("@startDate", startDate.Value.ToString("yyyy-MM-dd HH:mm:ss.fff")));
+                }
                 if (endDate.HasValue) 
-                { 
+                {
                     var endOfDay = endDate.Value.Date.AddDays(1).AddTicks(-1);
-                    query = query.Where(p => p.CreateTime <= endOfDay); 
+                    sqlBuilder.Append(" AND CreateTime <= @endDate");
+                    parameters.Add(new SqliteParameter("@endDate", endOfDay.ToString("yyyy-MM-dd HH:mm:ss.fff")));
                 }
                 if (!string.IsNullOrWhiteSpace(barcodeFilter)) 
-                { 
-                    string upperBarcodeFilter = barcodeFilter.ToUpperInvariant(); 
-                    query = query.Where(p => p.Barcode.ToUpper().Contains(upperBarcodeFilter)); 
+                {
+                    // 注意：SQLite 的 LIKE 默认是大小写不敏感的，但为了明确，我们仍使用 ToUpper/ToLower 进行匹配。
+                    // 考虑到性能，如果确定数据库配置是大小写不敏感，可以移除 ToUpper/ToLower。
+                    sqlBuilder.Append(" AND Barcode LIKE @barcodeFilter");
+                    parameters.Add(new SqliteParameter("@barcodeFilter", $"%{barcodeFilter.Replace("[", "[[").Replace("_", "[_]").Replace("%", "[%]")}%" )); // Escape for LIKE
                 }
                 
                 try 
-                { 
-                    allMatchingRecords.AddRange(await query.ToListAsync()); 
-                }
-                catch (Exception)
                 {
+                    await using var command = connection.CreateCommand();
+                    command.CommandText = sqlBuilder.ToString();
+                    command.Parameters.AddRange(parameters.ToArray());
+                    
+                    var recordsFromTable = new List<PackageHistoryRecord>();
+                    await using var reader = await command.ExecuteReaderAsync();
+                    while (await reader.ReadAsync())
+                    {
+                        recordsFromTable.Add(new PackageHistoryRecord
+                        {
+                            Id = reader.GetInt64(reader.GetOrdinal("Id")),
+                            Index = reader.GetInt32(reader.GetOrdinal("Index")),
+                            Barcode = reader.GetString(reader.GetOrdinal("Barcode")),
+                            SegmentCode = reader.IsDBNull(reader.GetOrdinal("SegmentCode")) ? null : reader.GetString(reader.GetOrdinal("SegmentCode")),
+                            Weight = reader.GetDouble(reader.GetOrdinal("Weight")),
+                            ChuteNumber = reader.IsDBNull(reader.GetOrdinal("ChuteNumber")) ? null : reader.GetInt32(reader.GetOrdinal("ChuteNumber")),
+                            CreateTime = reader.GetDateTime(reader.GetOrdinal("CreateTime")),
+                            ErrorMessage = reader.IsDBNull(reader.GetOrdinal("ErrorMessage")) ? null : reader.GetString(reader.GetOrdinal("ErrorMessage")),
+                            Length = reader.IsDBNull(reader.GetOrdinal("Length")) ? null : reader.GetDouble(reader.GetOrdinal("Length")),
+                            Width = reader.IsDBNull(reader.GetOrdinal("Width")) ? null : reader.GetDouble(reader.GetOrdinal("Width")),
+                            Height = reader.IsDBNull(reader.GetOrdinal("Height")) ? null : reader.GetDouble(reader.GetOrdinal("Height")),
+                            Volume = reader.IsDBNull(reader.GetOrdinal("Volume")) ? null : reader.GetDouble(reader.GetOrdinal("Volume")),
+                            Status = reader.IsDBNull(reader.GetOrdinal("Status")) ? null : reader.GetString(reader.GetOrdinal("Status")),
+                            StatusDisplay = reader.GetString(reader.GetOrdinal("StatusDisplay")),
+                            ImagePath = reader.IsDBNull(reader.GetOrdinal("ImagePath")) ? null : reader.GetString(reader.GetOrdinal("ImagePath")),
+                            PalletName = reader.IsDBNull(reader.GetOrdinal("PalletName")) ? null : reader.GetString(reader.GetOrdinal("PalletName")),
+                            PalletWeight = reader.IsDBNull(reader.GetOrdinal("PalletWeight")) ? null : reader.GetDouble(reader.GetOrdinal("PalletWeight")),
+                            PalletLength = reader.IsDBNull(reader.GetOrdinal("PalletLength")) ? null : reader.GetDouble(reader.GetOrdinal("PalletLength")),
+                            PalletWidth = reader.IsDBNull(reader.GetOrdinal("PalletWidth")) ? null : reader.GetDouble(reader.GetOrdinal("PalletWidth")),
+                            PalletHeight = reader.IsDBNull(reader.GetOrdinal("PalletHeight")) ? null : reader.GetDouble(reader.GetOrdinal("PalletHeight"))
+                        });
+                    }
+                    Log.Information("PackageHistoryDataService: 从表 {TableName} 查询到 {RecordCount} 条记录 (过滤后).", tableName, recordsFromTable.Count);
+                    
+                    if (recordsFromTable.Count > 0)
+                    {
+                        Log.Information("PackageHistoryDataService: 表 {TableName} 查询结果示例 (前 {Count} 条记录的创建时间):", tableName, Math.Min(recordsFromTable.Count, 5));
+                        for (int i = 0; i < Math.Min(recordsFromTable.Count, 5); i++)
+                        {
+                            Log.Information("  - Record {Index} CreateTime: {CreateTime:yyyy-MM-dd HH:mm:ss.fff}", i + 1, recordsFromTable[i].CreateTime);
+                        }
+                    }
+
+                    foreach (var record in recordsFromTable)
+                    {
+                        var key = record.CreateTime;
+                        if (!allMatchingRecords.ContainsKey(key))
+                        {
+                            allMatchingRecords[key] = record;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "PackageHistoryDataService: 从表 {TableName} 查询数据时出错。", tableName);
                     // ignored
                 }
             }
         }
-        catch (Exception) 
+        catch (Exception ex) 
         { 
+            Log.Error(ex, "PackageHistoryDataService: 查询包裹历史记录时发生总错误。");
             return ([], 0); 
         }
         
-        var sortedRecordsList = allMatchingRecords.OrderByDescending(p => p.CreateTime).ToList();
+        var sortedRecordsList = allMatchingRecords.Values.OrderByDescending(p => p.CreateTime).ToList();
 
         var totalCount = sortedRecordsList.Count;
         var pagedRecords = sortedRecordsList.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToList();
@@ -182,23 +303,66 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
         try
         {
             await EnsureMonthlyTableExistsInternal(package.CreateTime);
-            await using var context = CreateDbContext(package.CreateTime);
+            
+            // 使用原生 SQL 进行更新操作
+            await using var connection = new SqliteConnection(_options.FindExtension<Microsoft.EntityFrameworkCore.Sqlite.Infrastructure.Internal.SqliteOptionsExtension>()?.ConnectionString);
+            await connection.OpenAsync();
 
-            if (!await TableExistsAsync(context, tableName)) 
+            var tableExists = await TableExistsAsync(null, tableName, connection); // 传递连接
+            if (!tableExists) 
             { 
+                Log.Warning("PackageHistoryDataService: UpdatePackageAsync: 目标表 {TableName} 不存在，无法更新记录 Id: {Id}.", tableName, package.Id);
                 return; 
             }
-            
-            var existingRecord = await context.Set<PackageHistoryRecord>().FirstOrDefaultAsync(r => r.Id == package.Id);
-            if (existingRecord != null)
-            { 
-                context.Entry(existingRecord).CurrentValues.SetValues(package); 
-                await context.SaveChangesAsync(); 
+
+            // 检查记录是否确实存在
+            string checkSql = $"SELECT COUNT(*) FROM \"{tableName}\" WHERE Id = @Id AND CreateTime = @CreateTime;";
+            await using var checkCommand = connection.CreateCommand();
+            checkCommand.CommandText = checkSql;
+            checkCommand.Parameters.Add(new SqliteParameter("@Id", package.Id));
+            checkCommand.Parameters.Add(new SqliteParameter("@CreateTime", package.CreateTime.ToString("yyyy-MM-dd HH:mm:ss.fff")));
+            long count = (long)await checkCommand.ExecuteScalarAsync();
+
+            if (count == 0)
+            {
+                Log.Warning("PackageHistoryDataService: UpdatePackageAsync: 表 {TableName} 中未找到记录 Id: {Id} (创建时间 {CreateTime:yyyy-MM-dd HH:mm:ss.fff})，跳过更新.", tableName, package.Id, package.CreateTime);
+                return; // 记录不存在，无法更新
             }
+            
+            string updateSql = $"UPDATE \"{tableName}\" SET " +
+                               "Index = @Index, Barcode = @Barcode, SegmentCode = @SegmentCode, Weight = @Weight, ChuteNumber = @ChuteNumber, Status = @Status, StatusDisplay = @StatusDisplay, ErrorMessage = @ErrorMessage, Length = @Length, Width = @Width, Height = @Height, Volume = @Volume, ImagePath = @ImagePath, PalletName = @PalletName, PalletWeight = @PalletWeight, PalletLength = @PalletLength, PalletWidth = @PalletWidth, PalletHeight = @PalletHeight " +
+                               "WHERE Id = @Id AND CreateTime = @CreateTime;";
+
+            await using var updateCommand = connection.CreateCommand();
+            updateCommand.CommandText = updateSql;
+            updateCommand.Parameters.Add(new SqliteParameter("@Index", package.Index));
+            updateCommand.Parameters.Add(new SqliteParameter("@Barcode", package.Barcode));
+            updateCommand.Parameters.Add(new SqliteParameter("@SegmentCode", (object?)package.SegmentCode ?? DBNull.Value));
+            updateCommand.Parameters.Add(new SqliteParameter("@Weight", package.Weight));
+            updateCommand.Parameters.Add(new SqliteParameter("@ChuteNumber", (object?)package.ChuteNumber ?? DBNull.Value));
+            updateCommand.Parameters.Add(new SqliteParameter("@Status", (object?)package.Status ?? DBNull.Value));
+            updateCommand.Parameters.Add(new SqliteParameter("@StatusDisplay", package.StatusDisplay));
+            updateCommand.Parameters.Add(new SqliteParameter("@ErrorMessage", (object?)package.ErrorMessage ?? DBNull.Value));
+            updateCommand.Parameters.Add(new SqliteParameter("@Length", (object?)package.Length ?? DBNull.Value));
+            updateCommand.Parameters.Add(new SqliteParameter("@Width", (object?)package.Width ?? DBNull.Value));
+            updateCommand.Parameters.Add(new SqliteParameter("@Height", (object?)package.Height ?? DBNull.Value));
+            updateCommand.Parameters.Add(new SqliteParameter("@Volume", (object?)package.Volume ?? DBNull.Value));
+            updateCommand.Parameters.Add(new SqliteParameter("@ImagePath", (object?)package.ImagePath ?? DBNull.Value));
+            updateCommand.Parameters.Add(new SqliteParameter("@PalletName", (object?)package.PalletName ?? DBNull.Value));
+            updateCommand.Parameters.Add(new SqliteParameter("@PalletWeight", (object?)package.PalletWeight ?? DBNull.Value));
+            updateCommand.Parameters.Add(new SqliteParameter("@PalletLength", (object?)package.PalletLength ?? DBNull.Value));
+            updateCommand.Parameters.Add(new SqliteParameter("@PalletWidth", (object?)package.PalletWidth ?? DBNull.Value));
+            updateCommand.Parameters.Add(new SqliteParameter("@PalletHeight", (object?)package.PalletHeight ?? DBNull.Value));
+            // WHERE 子句参数
+            updateCommand.Parameters.Add(new SqliteParameter("@Id", package.Id));
+            updateCommand.Parameters.Add(new SqliteParameter("@CreateTime", package.CreateTime.ToString("yyyy-MM-dd HH:mm:ss.fff")));
+
+            await updateCommand.ExecuteNonQueryAsync();
+            Log.Information("PackageHistoryDataService: 成功更新表 {TableName} 中的记录 Id: {Id} (创建时间 {CreateTime:yyyy-MM-dd HH:mm:ss.fff}).", tableName, package.Id, package.CreateTime);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // ignored
+            Log.Error(ex, "PackageHistoryDataService: 更新包裹历史记录 Id: {Id} 时出错。", package.Id);
         }
         finally { _semaphore.Release(); }
     }
@@ -212,23 +376,45 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
         try
         {
             await EnsureMonthlyTableExistsInternal(createTime);
-            await using var context = CreateDbContext(createTime);
+            
+            // 使用原生 SQL 进行删除操作
+            await using var connection = new SqliteConnection(_options.FindExtension<Microsoft.EntityFrameworkCore.Sqlite.Infrastructure.Internal.SqliteOptionsExtension>()?.ConnectionString);
+            await connection.OpenAsync();
 
-            if (!await TableExistsAsync(context, tableName)) 
-            { 
+            var tableExists = await TableExistsAsync(null, tableName, connection); // 传递连接
+            if (!tableExists) 
+            {
+                Log.Warning("PackageHistoryDataService: DeletePackageAsync: 目标表 {TableName} 不存在，无法删除记录 Id: {Id}.", tableName, id);
                 return; 
             }
-            
-            var recordToDelete = await context.Set<PackageHistoryRecord>().FirstOrDefaultAsync(r => r.Id == id); 
-            if (recordToDelete != null)
-            { 
-                context.Remove(recordToDelete); 
-                await context.SaveChangesAsync(); 
+
+            // 检查记录是否确实存在
+            string checkSql = $"SELECT COUNT(*) FROM \"{tableName}\" WHERE Id = @Id AND CreateTime = @CreateTime;";
+            await using var checkCommand = connection.CreateCommand();
+            checkCommand.CommandText = checkSql;
+            checkCommand.Parameters.Add(new SqliteParameter("@Id", id));
+            checkCommand.Parameters.Add(new SqliteParameter("@CreateTime", createTime.ToString("yyyy-MM-dd HH:mm:ss.fff")));
+            long count = (long)await checkCommand.ExecuteScalarAsync();
+
+            if (count == 0)
+            {
+                Log.Warning("PackageHistoryDataService: DeletePackageAsync: 表 {TableName} 中未找到记录 Id: {Id} (创建时间 {CreateTime:yyyy-MM-dd HH:mm:ss.fff})，跳过删除.", tableName, id, createTime);
+                return; // 记录不存在，无法删除
             }
+
+            string deleteSql = $"DELETE FROM \"{tableName}\" WHERE Id = @Id AND CreateTime = @CreateTime;";
+
+            await using var deleteCommand = connection.CreateCommand();
+            deleteCommand.CommandText = deleteSql;
+            deleteCommand.Parameters.Add(new SqliteParameter("@Id", id));
+            deleteCommand.Parameters.Add(new SqliteParameter("@CreateTime", createTime.ToString("yyyy-MM-dd HH:mm:ss.fff")));
+
+            await deleteCommand.ExecuteNonQueryAsync();
+            Log.Information("PackageHistoryDataService: 成功删除表 {TableName} 中的记录 Id: {Id} (创建时间 {CreateTime:yyyy-MM-dd HH:mm:ss.fff}).", tableName, id, createTime);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // ignored
+            Log.Error(ex, "PackageHistoryDataService: 删除包裹历史记录 Id: {Id} 时出错。", id);
         }
         finally { _semaphore.Release(); }
     }
@@ -285,7 +471,7 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
                 { 
                     await using var context = CreateDbContext(); 
                     var esc = tableName.Replace("`", "``"); 
-                    await context.Database.ExecuteSqlAsync($"DROP TABLE IF EXISTS `{esc}`"); 
+                    await context.Database.ExecuteSqlAsync($"DROP TABLE IF EXISTS `{esc}`");
                     _tableExistsCache.TryRemove(tableName, out _);
                 }
                 catch (Exception)
@@ -419,15 +605,40 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
         await dbContext.Database.ExecuteSqlRawAsync(indexStatusSql);
     }
 
-    private async Task<bool> TableExistsAsync(PackageHistoryDbContext context, string tableName)
+    private async Task<bool> TableExistsAsync(PackageHistoryDbContext? context, string tableName, SqliteConnection? connection = null)
     {
         if (_tableExistsCache.TryGetValue(tableName, out var exists) && exists) return true;
+
+        SqliteConnection connToUse;
+        bool disposeConnection = false;
+
+        if (connection != null && connection.State == System.Data.ConnectionState.Open)
+        {
+            connToUse = connection;
+        }
+        else if (context != null && context.Database.GetDbConnection().State == System.Data.ConnectionState.Open)
+        {
+            connToUse = (SqliteConnection)context.Database.GetDbConnection();
+        }
+        else
+        {
+            // 获取连接字符串并创建新连接
+            var connectionString = _options.FindExtension<Microsoft.EntityFrameworkCore.Sqlite.Infrastructure.Internal.SqliteOptionsExtension>()?.ConnectionString;
+            if (string.IsNullOrEmpty(connectionString))
+            {
+                Log.Error("PackageHistoryDataService: 无法获取数据库连接字符串。");
+                _tableExistsCache.TryRemove(tableName, out _);
+                return false;
+            }
+            connToUse = new SqliteConnection(connectionString);
+            disposeConnection = true;
+            await connToUse.OpenAsync();
+        }
+
         try
         {
-            var connection = context.Database.GetDbConnection();
-            if (connection.State != System.Data.ConnectionState.Open) await connection.OpenAsync();
             var escapedTableName = tableName.Replace("'", "''");
-            var command = connection.CreateCommand();
+            var command = connToUse.CreateCommand();
             command.CommandText = $"SELECT name FROM sqlite_master WHERE type='table' AND name='{escapedTableName}';";
             var result = await command.ExecuteScalarAsync();
             exists = result != null && result != DBNull.Value;
@@ -435,7 +646,20 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
             else _tableExistsCache.TryRemove(tableName, out _);
             return exists;
         }
-        catch (Exception) { _tableExistsCache.TryRemove(tableName, out _); return false; }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "PackageHistoryDataService: 检查表 {TableName} 是否存在时出错。", tableName);
+            _tableExistsCache.TryRemove(tableName, out _); 
+            return false; 
+        }
+        finally
+        {
+            if (disposeConnection && connToUse.State == System.Data.ConnectionState.Open)
+            {
+                await connToUse.CloseAsync();
+                await connToUse.DisposeAsync();
+            }
+        }
     }
 
     private async Task<List<string>> GetAllHistoricalTableNamesAsync(bool useSemaphore = true)
