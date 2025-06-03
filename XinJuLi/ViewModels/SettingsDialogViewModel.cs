@@ -1,6 +1,7 @@
 ﻿using BalanceSorting.ViewModels.Settings;
 using Common.Services.Ui;
 using Serilog;
+using Common.ViewModels.Settings.ChuteRules;
 
 namespace XinJuLi.ViewModels;
 
@@ -9,6 +10,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
     private readonly INotificationService _notificationService;
     private readonly BalanceSortSettingsViewModel _sortSettingsViewModel;
     private readonly AsnHttpSettingsViewModel _asnHttpSettingsViewModel;
+    private readonly ChuteRuleSettingsViewModel _chuteRuleSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
@@ -19,6 +21,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
 
         _sortSettingsViewModel = containerProvider.Resolve<BalanceSortSettingsViewModel>();
         _asnHttpSettingsViewModel = containerProvider.Resolve<AsnHttpSettingsViewModel>();
+        _chuteRuleSettingsViewModel = containerProvider.Resolve<ChuteRuleSettingsViewModel>();
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
     }
@@ -49,6 +52,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
         {
             _sortSettingsViewModel.SaveConfigurationCommand.Execute();
             _asnHttpSettingsViewModel.SaveConfigurationCommand.Execute();
+            _chuteRuleSettingsViewModel.SaveSettingsCommand.Execute(null);
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");
             RequestClose.Invoke(new DialogResult(ButtonResult.OK));

@@ -339,7 +339,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            // 在方法开始时加载一次配置，避免重复加载
             var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
             var asnSettings = _settingsService.LoadSettings<AsnSettings>(); // 加载ASN设置
 
@@ -450,31 +449,32 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // 临时格口分配：1-6循环分配
             if (_currentChuteNumber is < 1 or > 12)
                 _currentChuteNumber = 1;
-            int chuteNumber = _currentChuteNumber;
+            var chuteNumber = _currentChuteNumber;
             _currentChuteNumber++;
             if (_currentChuteNumber > 12)
                 _currentChuteNumber = 1;
             // ===================== 临时格口循环分配逻辑结束 =====================
 
+            // var chuteNumber = chuteSettings.ErrorChuteNumber;
             // 设置分拣格口
             package.SetChute(chuteNumber);
-            package.SetStatus("分拣成功");
-            package.ErrorMessage = $"分配到格口: {chuteNumber}";
+            package.SetStatus("处理异常");
+            package.ErrorMessage = "所有包裹强制分配到异常格口";
 
-            Log.Information("包裹 {Barcode} 分配到格口 {Chute}", package.Barcode, chuteNumber);
+            Log.Information("包裹 {Barcode} 强制分配到异常格口 {Chute}", package.Barcode, chuteNumber);
 
             // 更新UI显示
             UpdatePackageInfoItems(package);
 
             // 分拣操作
-            ProcessPackageSuccess(package);
+            ProcessPackageWithError(package, chuteNumber, package.ErrorMessage); // 调用错误处理方法
 
             // 记录包裹
             SavePackage(package);
 
             // 计数更新
             _totalPackageCount++;
-            _successPackageCount++;
+            _failedPackageCount++; // 强制为异常，所以只增加异常数
             UpdateStatisticsItems();
         }
         catch (Exception ex)

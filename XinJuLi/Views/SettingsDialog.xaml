@@ -9,6 +9,7 @@
              xmlns:local="clr-namespace:XinJuLi.Views.Settings"
              xmlns:viewModels="clr-namespace:XinJuLi.ViewModels"
              xmlns:balanceSortingViews="clr-namespace:BalanceSorting.Views.Settings;assembly=BalanceSorting"
+             xmlns:commonViews="clr-namespace:Common.Views.Settings.ChuteRules;assembly=Common"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}">
@@ -108,6 +109,17 @@
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
                                 <x:Type Type="balanceSortingViews:BalanceSortSettingsView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
+
+                        <!-- 格口规则设置 -->
+                        <ui:NavigationViewItem Content="格口规则设置"
+                                               Tag="ChuteRuleSettings">
+                            <ui:NavigationViewItem.Icon>
+                                <ui:SymbolIcon Symbol="Flowchart24" />
+                            </ui:NavigationViewItem.Icon>
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="commonViews:ChuteRuleSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>
