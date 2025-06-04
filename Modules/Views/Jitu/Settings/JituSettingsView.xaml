@@ -1,0 +1,57 @@
+<Page
+    x:Class="ShanghaiModuleBelt.Views.Jitu.Settings.JituSettingsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:mvvm="http://prismlibrary.com/"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:viewmodels="clr-namespace:Modules.ViewModels.Jitu.Settings"
+    d:DataContext="{d:DesignInstance viewmodels:JituSettingsViewModel}"
+    mvvm:ViewModelLocator.AutoWireViewModel="True"
+    mc:Ignorable="d">
+    <Grid>
+        <StackPanel
+            MaxWidth="800"
+            Margin="16"
+            HorizontalAlignment="Center">
+            <TextBlock
+                Margin="0,0,0,16"
+                FontSize="24"
+                FontWeight="Medium"
+                Text="极兔API配置" />
+
+            <ui:Card Margin="0,0,0,16">
+                <StackPanel Margin="16">
+                    <TextBlock Margin="0,0,0,5" Text="OpScan URL:" />
+                    <ui:TextBox
+                        Margin="0,0,0,16"
+                        Icon="Web24"
+                        PlaceholderText="请输入极兔 OpScan 接口地址"
+                        Text="{Binding OpScanUrl, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Margin="0,0,0,5" Text="设备编号:" />
+                    <ui:TextBox
+                        Margin="0,0,0,16"
+                        Icon="BarcodeScanner24"
+                        PlaceholderText="请输入设备编号"
+                        Text="{Binding DeviceCode, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Margin="0,0,0,5" Text="设备名称:" />
+                    <ui:TextBox
+                        Margin="0,0,0,16"
+                        Icon="DeviceLaptop24"
+                        PlaceholderText="请输入设备名称"
+                        Text="{Binding DeviceName, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Margin="0,0,0,5" Text="条码前缀 (分号分隔):" />
+                    <ui:TextBox
+                        Margin="0,0,0,16"
+                        Icon="BarcodeScanner24"
+                        PlaceholderText="请输入极兔条码前缀，多个用分号分隔"
+                        Text="{Binding BarcodePrefixes, UpdateSourceTrigger=PropertyChanged}" />
+                </StackPanel>
+            </ui:Card>
+        </StackPanel>
+    </Grid>
+</Page>

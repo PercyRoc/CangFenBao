@@ -1,0 +1,49 @@
+<Page x:Class="ShanghaiModuleBelt.Views.Zto.Settings.ZtoApiSettingsView"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:settings="clr-namespace:ShanghaiModuleBelt.ViewModels.Zto.Settings"
+      xmlns:prism="http://prismlibrary.com/"
+      mc:Ignorable="d" d:DataContext="{d:DesignInstance settings:ZtoApiSettingsViewModel}"
+      prism:ViewModelLocator.AutoWireViewModel="True">
+    <Grid>
+        <StackPanel MaxWidth="800" Margin="16" HorizontalAlignment="Center">
+            <TextBlock Margin="0,0,0,16" FontSize="24" FontWeight="Medium" Text="中通API配置" />
+
+            <ui:Card Margin="0,0,0,16">
+                <StackPanel Margin="16">
+                    <TextBlock Text="App Key:" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="Key24" PlaceholderText="请输入App Key"
+                                Text="{Binding Settings.AppKey, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
+
+                    <TextBlock Text="App Secret:" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="ShieldKeyhole24" PlaceholderText="请输入App Secret"
+                                Text="{Binding Settings.Secret, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
+
+                    <TextBlock Text="测试环境接口地址:" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="Web24" PlaceholderText="请输入测试环境接口地址"
+                                Text="{Binding Settings.TestApiUrl, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
+
+                    <TextBlock Text="正式环境接口地址:" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="Web24" PlaceholderText="请输入正式环境接口地址"
+                                Text="{Binding Settings.FormalApiUrl, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
+
+                    <ui:ToggleSwitch Content="使用测试环境"
+                                     IsChecked="{Binding Settings.UseTestEnvironment, UpdateSourceTrigger=PropertyChanged}"
+                                     Margin="0,0,0,16" />
+
+                    <TextBlock Text="条码前缀 (分号分隔):" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="BarcodeScanner24" PlaceholderText="请输入中通条码前缀，多个用分号分隔"
+                                Text="{Binding Settings.BarcodePrefixes, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
+                </StackPanel>
+            </ui:Card>
+        </StackPanel>
+    </Grid>
+</Page>

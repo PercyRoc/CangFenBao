@@ -3,7 +3,9 @@ using Serilog;
 using ShanghaiModuleBelt.ViewModels.Settings;
 using ShanghaiModuleBelt.ViewModels.Sto.Settings;
 using ShanghaiModuleBelt.ViewModels.Yunda.Settings;
+using ShanghaiModuleBelt.ViewModels.Zto.Settings;
 using SharedUI.ViewModels.Settings;
+using Modules.ViewModels.Jitu.Settings;
 
 namespace ShanghaiModuleBelt.ViewModels;
 
@@ -17,6 +19,8 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
     private readonly BarcodeChuteSettingsViewModel  _barcodeChuteSettingsViewModel;
     private readonly StoApiSettingsViewModel _stoApiSettingsViewModel;
     private readonly YundaApiSettingsViewModel _yundaApiSettingsViewModel;
+    private readonly ZtoApiSettingsViewModel _ztoApiSettingsViewModel;
+    private readonly JituSettingsViewModel _jituSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
@@ -32,6 +36,8 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
         _barcodeChuteSettingsViewModel = containerProvider.Resolve<BarcodeChuteSettingsViewModel>();
         _stoApiSettingsViewModel = containerProvider.Resolve<StoApiSettingsViewModel>();
         _yundaApiSettingsViewModel = containerProvider.Resolve<YundaApiSettingsViewModel>();
+        _ztoApiSettingsViewModel = containerProvider.Resolve<ZtoApiSettingsViewModel>();
+        _jituSettingsViewModel = containerProvider.Resolve<JituSettingsViewModel>();
 
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
@@ -70,6 +76,8 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
             _barcodeChuteSettingsViewModel.SaveConfigurationCommand.Execute();
             _stoApiSettingsViewModel.SaveCommand.Execute();
             _yundaApiSettingsViewModel.SaveSettingsCommand.Execute();
+            _ztoApiSettingsViewModel.SaveCommand.Execute();
+            _jituSettingsViewModel.SaveCommand.Execute();
 
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");

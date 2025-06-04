@@ -17,27 +17,28 @@ public class StoAutoReceiveResponse
     [JsonProperty("errorMsg")]
     public string ErrorMsg { get; set; }
 
-    [JsonProperty("data")]
-    public StoResponseData Data { get; set; }
+    // 根据申通文档，data节点可能不存在或为空，暂时注释掉或者根据实际情况调整
+    // [JsonProperty("data")]
+    // public StoResponseData Data { get; set; }
 }
 
-public class StoResponseData
-{
-    [JsonProperty("respCode")]
-    public string RespCode { get; set; }
+// public class StoResponseData
+// {
+//     [JsonProperty("respCode")]
+//     public string RespCode { get; set; }
+//
+//     [JsonProperty("resMessage")]
+//     public string ResMessage { get; set; }
+//
+//     [JsonProperty("data")]
+//     public List<RecordError> Data { get; set; }
+// }
 
-    [JsonProperty("resMessage")]
-    public string ResMessage { get; set; }
-
-    [JsonProperty("data")]
-    public List<RecordError> Data { get; set; }
-}
-
-public class RecordError
-{
-    [JsonProperty("waybillNo")]
-    public string WaybillNo { get; set; }
-
-    [JsonProperty("errorDescription")]
-    public string ErrorDescription { get; set; }
-} 
+// public class RecordError
+// {
+//     [JsonProperty("waybillNo")]
+//     public string WaybillNo { get; set; }
+//
+//     [JsonProperty("errorDescription")]
+//     public string ErrorDescription { get; set; }
+// } 

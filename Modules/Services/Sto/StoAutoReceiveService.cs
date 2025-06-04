@@ -6,6 +6,7 @@ using Serilog;
 using ShanghaiModuleBelt.Models.Sto;
 using ShanghaiModuleBelt.Models.Sto.Settings;
 using Common.Services.Settings;
+using System.Web;
 
 namespace ShanghaiModuleBelt.Services.Sto;
 
@@ -39,35 +40,34 @@ public class StoAutoReceiveService(
 
         var contentJson = JsonConvert.SerializeObject(request);
 
-        // TODO: 根据申通文档补充 data_digest 签名逻辑
-        // 通常签名会涉及：公共参数 + 业务报文体 + app_secret 组成的字符串进行 MD5 或 SHA256 签名
+        // 计算 data_digest 签名，使用官方文档的算法
         var dataDigest = CalculateDataDigest(contentJson, settings.AppSecret);
-
-        var apiRequest = new
-        {
-            api_name = settings.ApiName,
-            content = contentJson,
-            from_appkey = settings.FromAppkey,
-            from_code = settings.FromCode,
-            to_appkey = settings.ToAppkey,
-            to_code = settings.ToCode,
-            data_digest = dataDigest
-        };
-
-        var requestJson = JsonConvert.SerializeObject(apiRequest);
 
         try
         {
-            Log.Information("发送申通自动揽收请求到 {ApiUrl}，请求内容：{RequestJson}", settings.ApiUrl, requestJson);
+            Log.Information("发送申通自动揽收请求到 {ApiUrl}，content内容：{Content}", settings.ApiUrl, contentJson);
 
-            var httpContent = new StringContent(requestJson, Encoding.UTF8, "application/json");
-            var response = await httpClient.PostAsync(settings.ApiUrl, httpContent);
+            // 将所有公共参数和content一起作为表单数据发送
+            var formContent = new FormUrlEncodedContent(
+            [
+                new KeyValuePair<string, string>("api_name", settings.ApiName),
+                new KeyValuePair<string, string>("content", contentJson),
+                new KeyValuePair<string, string>("from_appkey", settings.FromAppkey),
+                new KeyValuePair<string, string>("from_code", settings.FromCode),
+                new KeyValuePair<string, string>("to_appkey", settings.ToAppkey),
+                new KeyValuePair<string, string>("to_code", settings.ToCode),
+                new KeyValuePair<string, string>("data_digest", dataDigest)
+            ]);
+
+            var response = await httpClient.PostAsync(settings.ApiUrl, formContent);
             response.EnsureSuccessStatusCode(); // 确保HTTP状态码是成功的
 
             var responseContent = await response.Content.ReadAsStringAsync();
             Log.Information("收到申通自动揽收响应：{ResponseContent}", responseContent);
 
+            // 使用 JsonConvert 反序列化JSON响应
             var stoResponse = JsonConvert.DeserializeObject<StoAutoReceiveResponse>(responseContent);
+
             return stoResponse;
         }
         catch (HttpRequestException ex)
@@ -79,7 +79,7 @@ public class StoAutoReceiveService(
                 ErrorMsg = $"网络请求失败：{ex.Message}"
             };
         }
-        catch (Newtonsoft.Json.JsonException ex)
+        catch (JsonException ex)
         {
             Log.Error(ex, "解析申通自动揽收响应失败：{Message}", ex.Message);
             return new StoAutoReceiveResponse
@@ -101,18 +101,23 @@ public class StoAutoReceiveService(
 
     /// <summary>
     /// 计算 data_digest 签名
-    /// TODO: 详细签名规则待申通文档确认
+    /// 根据申通官方文档：content + secretKey 的 MD5 哈希后进行 Base64 编码
     /// </summary>
     /// <param name="content">业务报文体JSON字符串</param>
     /// <param name="appSecret">AppSecret</param>
     /// <returns>签名字符串</returns>
     private static string CalculateDataDigest(string content, string appSecret)
     {
-        // 示例：这里只是一个简单的占位符，实际签名可能更复杂
-        // 假设签名为 content + appSecret 的 MD5 哈希
-        var signSource = $"{content}{appSecret}";
-        using var md5 = MD5.Create();
-        var hashBytes = md5.ComputeHash(Encoding.UTF8.GetBytes(signSource));
-        return Convert.ToBase64String(hashBytes);
+        // 按照申通官方文档的签名算法：content + secretKey
+        var toSignContent = content + appSecret;
+        
+        Log.Information("申通签名原始字符串：{SignSource}", toSignContent);
+        
+        var hashBytes = MD5.HashData(Encoding.UTF8.GetBytes(toSignContent));
+        var base64String = Convert.ToBase64String(hashBytes);
+        
+        Log.Information("申通签名结果：Base64={Base64}", base64String);
+        
+        return base64String; // 不进行 URL 编码，让 HttpClient 自动处理
     }
 } 

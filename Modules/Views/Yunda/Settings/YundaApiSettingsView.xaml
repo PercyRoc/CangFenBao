@@ -15,59 +15,62 @@
 
     </Page.Resources>
     <Grid>
-        <ScrollViewer>
-            <StackPanel MaxWidth="800" Margin="16" HorizontalAlignment="Center">
-                <TextBlock Margin="0,0,0,16" FontSize="24" FontWeight="Medium" Text="韵达API配置" />
+        <StackPanel MaxWidth="800" Margin="16" HorizontalAlignment="Center">
+            <TextBlock Margin="0,0,0,16" FontSize="24" FontWeight="Medium" Text="韵达API配置" />
 
-                <ui:Card Margin="0,0,0,16">
-                    <StackPanel Margin="16">
-                        <TextBlock Text="API地址:" Margin="0,0,0,5" />
-                        <ui:TextBox Icon="Web24" PlaceholderText="请输入韵达API网关地址"
-                                    Text="{Binding Settings.ApiUrl, UpdateSourceTrigger=PropertyChanged}"
-                                    Margin="0,0,0,16" />
+            <ui:Card Margin="0,0,0,16">
+                <StackPanel Margin="16">
+                    <TextBlock Text="API地址:" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="Web24" PlaceholderText="请输入韵达API网关地址"
+                                Text="{Binding Settings.ApiUrl, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
 
-                        <TextBlock Text="App Key:" Margin="0,0,0,5" />
-                        <ui:TextBox Icon="Key24" PlaceholderText="请输入开放平台发放的app-key"
-                                    Text="{Binding Settings.AppKey, UpdateSourceTrigger=PropertyChanged}"
-                                    Margin="0,0,0,16" />
+                    <TextBlock Text="App Key:" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="Key24" PlaceholderText="请输入开放平台发放的app-key"
+                                Text="{Binding Settings.AppKey, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
 
-                        <TextBlock Text="App Secret:" Margin="0,0,0,5" />
-                        <ui:TextBox Icon="ShieldKeyhole24" PlaceholderText="请输入开放平台发放的app-secret"
-                                    Text="{Binding Settings.AppSecret, UpdateSourceTrigger=PropertyChanged}"
-                                    Margin="0,0,0,16" />
+                    <TextBlock Text="App Secret:" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="ShieldKeyhole24" PlaceholderText="请输入开放平台发放的app-secret"
+                                Text="{Binding Settings.AppSecret, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
 
-                        <TextBlock Text="合作商 ID:" Margin="0,0,0,5" />
-                        <ui:TextBox Icon="Person24" PlaceholderText="请输入合作商id"
-                                    Text="{Binding Settings.PartnerId, UpdateSourceTrigger=PropertyChanged}"
-                                    Margin="0,0,0,16" />
+                    <TextBlock Text="合作商 ID:" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="Person24" PlaceholderText="请输入合作商id"
+                                Text="{Binding Settings.PartnerId, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
 
-                        <TextBlock Text="合作商密码:" Margin="0,0,0,5" />
-                        <ui:TextBox Icon="Password24" PlaceholderText="请输入合作商密码"
-                                    Text="{Binding Settings.Password, UpdateSourceTrigger=PropertyChanged}"
-                                    Margin="0,0,0,16" />
+                    <TextBlock Text="合作商密码:" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="Password24" PlaceholderText="请输入合作商密码"
+                                Text="{Binding Settings.Password, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
 
-                        <TextBlock Text="密钥(RC4):" Margin="0,0,0,5" />
-                        <ui:TextBox Icon="Key24" PlaceholderText="请输入密钥(RC4)"
-                                    Text="{Binding Settings.Rc4Key, UpdateSourceTrigger=PropertyChanged}"
-                                    Margin="0,0,0,16" />
+                    <TextBlock Text="密钥(RC4):" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="Key24" PlaceholderText="请输入密钥(RC4)"
+                                Text="{Binding Settings.Rc4Key, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
 
-                        <TextBlock Text="称重机器序列号:" Margin="0,0,0,5" />
-                        <ui:TextBox Icon="BarcodeScanner24" PlaceholderText="请输入称重机器序列号"
-                                    Text="{Binding Settings.GunId, UpdateSourceTrigger=PropertyChanged}"
-                                    Margin="0,0,0,16" />
+                    <TextBlock Text="称重机器序列号:" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="BarcodeScanner24" PlaceholderText="请输入称重机器序列号"
+                                Text="{Binding Settings.GunId, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
 
-                        <TextBlock Text="扫描站点:" Margin="0,0,0,5" />
-                        <ui:TextBox Icon="MapPin24" PlaceholderText="请输入扫描站点"
-                                    Text="{Binding Settings.ScanSite, UpdateSourceTrigger=PropertyChanged}"
-                                    Margin="0,0,0,16" />
+                    <TextBlock Text="扫描站点:" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="MapPin24" PlaceholderText="请输入扫描站点"
+                                Text="{Binding Settings.ScanSite, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
 
-                        <TextBlock Text="扫描员编码:" Margin="0,0,0,5" />
-                        <ui:TextBox Icon="Person24" PlaceholderText="请输入扫描员编码"
-                                    Text="{Binding Settings.ScanMan, UpdateSourceTrigger=PropertyChanged}"
-                                    Margin="0,0,0,16" />
-                    </StackPanel>
-                </ui:Card>
-            </StackPanel>
-        </ScrollViewer>
+                    <TextBlock Text="扫描员编码:" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="Person24" PlaceholderText="请输入扫描员编码"
+                                Text="{Binding Settings.ScanMan, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
+
+                    <TextBlock Text="条码前缀 (分号分隔):" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="BarcodeScanner24" PlaceholderText="请输入韵达条码前缀，多个用分号分隔"
+                                Text="{Binding Settings.BarcodePrefixes, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
+                </StackPanel>
+            </ui:Card>
+        </StackPanel>
     </Grid>
-</Page> 
+</Page>

@@ -9,6 +9,7 @@ using Serilog;
 using ShanghaiModuleBelt.Services;
 using ShanghaiModuleBelt.Services.Sto;
 using ShanghaiModuleBelt.Services.Yunda;
+using ShanghaiModuleBelt.Services.Zto;
 using ShanghaiModuleBelt.ViewModels;
 using ShanghaiModuleBelt.ViewModels.Settings;
 using ShanghaiModuleBelt.ViewModels.Sto.Settings;
@@ -17,9 +18,14 @@ using ShanghaiModuleBelt.Views;
 using ShanghaiModuleBelt.Views.Settings;
 using ShanghaiModuleBelt.Views.Sto.Settings;
 using ShanghaiModuleBelt.Views.Yunda.Settings;
+using ShanghaiModuleBelt.ViewModels.Zto.Settings;
+using ShanghaiModuleBelt.Views.Zto.Settings;
 using SharedUI.Extensions;
 using SharedUI.ViewModels.Settings;
 using SharedUI.Views.Settings;
+using Modules.Services.Jitu;
+using Modules.ViewModels.Jitu.Settings;
+using ShanghaiModuleBelt.Views.Jitu.Settings;
 
 namespace ShanghaiModuleBelt;
 
@@ -131,11 +137,21 @@ public partial class App
         // 注册韵达上传重量服务
         containerRegistry.RegisterSingleton<IYundaUploadWeightService, YundaUploadWeightService>();
 
+        // 注册中通API服务
+        containerRegistry.RegisterSingleton<IZtoApiService, ZtoApiService>();
+
+        // 注册极兔API服务
+        containerRegistry.RegisterSingleton<IJituService, JituService>();
+
         containerRegistry.RegisterForNavigation<ModuleConfigView, ModuleConfigViewModel>();
         // containerRegistry.RegisterForNavigation<TcpSettingsView, TcpSettingsViewModel>();
         containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
         containerRegistry.RegisterForNavigation<StoApiSettingsView, StoApiSettingsViewModel>();
         containerRegistry.RegisterForNavigation<YundaApiSettingsView, YundaApiSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<ZtoApiSettingsView, ZtoApiSettingsViewModel>();
+
+        // 注册极兔设置界面
+        containerRegistry.RegisterForNavigation<JituSettingsView, JituSettingsViewModel>();
 
         // 注册设置窗口
         containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>("SettingsDialog");
@@ -148,7 +164,7 @@ public partial class App
     {
         // 配置Serilog
         Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Debug()
+            .MinimumLevel.Information()
             .WriteTo.Console()
             .WriteTo.Debug()
             .WriteTo.File("logs/app-.log",

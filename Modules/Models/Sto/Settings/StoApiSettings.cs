@@ -1,4 +1,5 @@
 using Common.Services.Settings;
+using Newtonsoft.Json;
 
 namespace ShanghaiModuleBelt.Models.Sto.Settings;
 
@@ -56,5 +57,12 @@ public class StoApiSettings
     /// <summary>
     /// 揽收员编码
     /// </summary>
+    [JsonProperty("UserCode")]
     public string UserCode { get; set; } = "your_user_code";
+
+    /// <summary>
+    /// 申通揽收的条码前缀，多个用分号分隔
+    /// </summary>
+    [JsonProperty("BarcodePrefixes")]
+    public string BarcodePrefixes { get; set; } = "7"; // 默认值
 } 

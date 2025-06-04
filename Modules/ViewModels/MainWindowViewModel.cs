@@ -5,17 +5,15 @@ using Common.Models.Package;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
-using Prism.Commands;
-using Prism.Mvvm;
 using Serilog;
 using ShanghaiModuleBelt.Models.Sto;
 using ShanghaiModuleBelt.Models.Sto.Settings;
 using ShanghaiModuleBelt.Models.Yunda;
-using ShanghaiModuleBelt.Models.Yunda.Settings;
 using ShanghaiModuleBelt.Services;
 using ShanghaiModuleBelt.Services.Sto;
 using ShanghaiModuleBelt.Services.Yunda;
 using SharedUI.Models;
+using Modules.Services.Jitu;
 // using LockingService = ShanghaiModuleBelt.Services.LockingService;
 
 namespace ShanghaiModuleBelt.ViewModels;
@@ -32,6 +30,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private readonly ISettingsService _settingsService;
     private readonly IStoAutoReceiveService _stoAutoReceiveService;
     private readonly IYundaUploadWeightService _yundaUploadWeightService;
+    private readonly Services.Zto.IZtoApiService _ztoApiService;
+    private readonly IJituService _jituService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
     private string _currentBarcode = string.Empty;
@@ -43,7 +43,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         PackageTransferService packageTransferService, ISettingsService settingsService,
         IModuleConnectionService moduleConnectionService,
         IStoAutoReceiveService stoAutoReceiveService,
-        IYundaUploadWeightService yundaUploadWeightService)
+        IYundaUploadWeightService yundaUploadWeightService,
+        Services.Zto.IZtoApiService ztoApiService,
+        IJituService jituService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
@@ -53,6 +55,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         // _lockingService = lockingService;
         _stoAutoReceiveService = stoAutoReceiveService;
         _yundaUploadWeightService = yundaUploadWeightService;
+        _ztoApiService = ztoApiService;
+        _jituService = jituService;
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
 
         // 初始化系统状态更新定时器
@@ -303,90 +307,165 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             if (string.IsNullOrEmpty(package.ErrorMessage))
             {
                 package.SetStatus(PackageStatus.Success, "正常");
+            }
 
-                // 只有条码开头为7才上传申通自动揽收
-                if (package.Barcode.StartsWith('7'))
+            // 获取申通API配置
+            var stoApiSettings = _settingsService.LoadSettings<StoApiSettings>();
+            var stoPrefixes = stoApiSettings.BarcodePrefixes.Split(';', StringSplitOptions.RemoveEmptyEntries).ToList();
+
+            // 根据配置的条码前缀上传申通自动揽收
+            if (stoPrefixes.Any(prefix => package.Barcode.StartsWith(prefix)))
+            {
+                // 发送申通自动揽收请求
+                var stoRequest = new StoAutoReceiveRequest
                 {
-                    // 获取申通API配置
-                    var stoApiSettings = _settingsService.LoadSettings<Models.Sto.Settings.StoApiSettings>();
+                    WhCode = stoApiSettings.WhCode, // 从配置获取
+                    OrgCode = stoApiSettings.OrgCode, // 从配置获取
+                    UserCode = stoApiSettings.UserCode, // 从配置获取
+                    Packages =
+                    [
+                        new Package()
+                        {
+                            WaybillNo = package.Barcode,
+                            Weight = package.Weight.ToString("F2"),
+                            OpTime = package.CreateTime.ToString("yyyy-MM-dd HH:mm:ss")
+                        }
+                    ]
+                };
 
-                    // 发送申通自动揽收请求
-                    var stoRequest = new StoAutoReceiveRequest
+                var stoResponse = await _stoAutoReceiveService.SendAutoReceiveRequestAsync(stoRequest);
+                if (stoResponse is { Success: true })
+                {
+                    Log.Information("申通自动揽收请求成功: {Barcode}", package.Barcode);
+                }
+                else
+                {
+                    Log.Error("申通自动揽收请求失败: {Barcode}, 错误: {ErrorMessage}", package.Barcode, stoResponse?.ErrorMsg);
+                }
+            }
+            else
+            {
+                Log.Information("包裹 {Barcode} 条码不符合申通自动揽收前缀，跳过申通自动揽收。");
+            }
+
+            // 获取韵达API配置
+            var yundaApiSettings = _settingsService.LoadSettings<Models.Yunda.Settings.YundaApiSettings>();
+            var yundaPrefixes = yundaApiSettings.BarcodePrefixes.Split(';', StringSplitOptions.RemoveEmptyEntries).ToList();
+
+            // 根据配置的条码前缀上传韵达重量
+            if (yundaPrefixes.Any(prefix => package.Barcode.StartsWith(prefix)))
+            {
+                var yundaRequest = new YundaUploadWeightRequest
+                {
+                    PartnerId = yundaApiSettings.PartnerId,
+                    Password = yundaApiSettings.Password,
+                    Rc4Key = yundaApiSettings.Rc4Key,
+                    Orders = new YundaOrders
                     {
-                        WhCode = stoApiSettings.WhCode, // 从配置获取
-                        OrgCode = stoApiSettings.OrgCode, // 从配置获取
-                        UserCode = stoApiSettings.UserCode, // 从配置获取
-                        Packages =
+                        GunId = yundaApiSettings.GunId,
+                        RequestTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                        OrderList =
                         [
-                            new Package()
+                            new YundaOrder
                             {
-                                WaybillNo = package.Barcode,
-                                Weight = package.Weight.ToString("F2"),
-                                OpTime = package.CreateTime.ToString("yyyy-MM-dd HH:mm:ss")
+                                // 随机生成一个19位数字作为唯一标志
+                                Id = Random.Shared.NextInt64(1_000_000_000_000_000_000L, long.MaxValue),
+                                DocId = long.Parse(package.Barcode), // 将DocId设置为Barcode
+                                ScanSite = yundaApiSettings.ScanSite,
+                                ScanTime = package.CreateTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                                ScanMan = yundaApiSettings.ScanMan,
+                                ObjWei = (decimal)package.Weight
                             }
                         ]
-                    };
+                    }
+                };
 
-                    var stoResponse = await _stoAutoReceiveService.SendAutoReceiveRequestAsync(stoRequest);
-                    if (stoResponse is { Success: true })
-                    {
-                        Log.Information("申通自动揽收请求成功: {Barcode}", package.Barcode);
-                    }
-                    else
-                    {
-                        Log.Error("申通自动揽收请求失败: {Barcode}, 错误: {ErrorMessage}", package.Barcode, stoResponse?.ErrorMsg);
-                    }
+                var yundaResponse = await _yundaUploadWeightService.SendUploadWeightRequestAsync(yundaRequest);
+                if (yundaResponse is { Result: true, Code: "0000" })
+                {
+                    Log.Information("韵达上传重量请求成功: {Barcode}", package.Barcode);
                 }
                 else
                 {
-                    Log.Information("包裹 {Barcode} 条码不以'7'开头，跳过申通自动揽收。");
+                    Log.Error("韵达上传重量请求失败: {Barcode}, 错误: {Message}, {ErrorCode}-{ErrorMsg}",
+                        package.Barcode, yundaResponse?.Message, yundaResponse?.Data?.ErrorCode, yundaResponse?.Data?.ErrorMsg);
                 }
+            }
+            else
+            {
+                Log.Information("包裹 {Barcode} 条码不符合韵达上传重量前缀，跳过韵达上传重量。");
+            }
 
-                // 只有条码开头为43、46或32才上传韵达重量
-                if (package.Barcode.StartsWith("43") || package.Barcode.StartsWith("46") || package.Barcode.StartsWith("32"))
+            // 获取中通API配置
+            var ztoApiSettings = _settingsService.LoadSettings<ShanghaiModuleBelt.Models.Zto.Settings.ZtoApiSettings>();
+            var ztoPrefixes = ztoApiSettings.BarcodePrefixes.Split(';', StringSplitOptions.RemoveEmptyEntries).ToList();
+
+            // 根据配置的条码前缀上传中通揽收
+            if (ztoPrefixes.Any(package.Barcode.StartsWith))
+            {
+                var ztoRequest = new Models.Zto.CollectUploadRequest
                 {
-                    var yundaApiSettings = _settingsService.LoadSettings<YundaApiSettings>();
-
-                    var yundaRequest = new YundaUploadWeightRequest
-                    {
-                        PartnerId = yundaApiSettings.PartnerId,
-                        Password = yundaApiSettings.Password,
-                        Rc4Key = yundaApiSettings.Rc4Key,
-                        Orders = new YundaOrders
+                    CollectUploadDTOS =
+                    [
+                        new Models.Zto.CollectUploadDTO
                         {
-                            GunId = yundaApiSettings.GunId,
-                            RequestTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
-                            OrderList =
-                            [
-                                new YundaOrder
-                                {
-                                    // 随机生成一个19位数字作为唯一标志
-                                    Id = Random.Shared.NextInt64(1_000_000_000_000_000_000L, long.MaxValue),
-                                    DocId = long.Parse(package.Barcode), // 将DocId设置为Barcode
-                                    ScanSite = yundaApiSettings.ScanSite,
-                                    ScanTime = package.CreateTime.ToString("yyyy-MM-dd HH:mm:ss"),
-                                    ScanMan = yundaApiSettings.ScanMan,
-                                    ObjWei = (decimal)package.Weight
-                                }
-                            ]
+                            BillCode = package.Barcode,
+                            Weight = (decimal)package.Weight,
                         }
-                    };
+                    ]
+                };
 
-                    var yundaResponse = await _yundaUploadWeightService.SendUploadWeightRequestAsync(yundaRequest);
-                    if (yundaResponse is { Result: true, Code: "0000" })
-                    {
-                        Log.Information("韵达上传重量请求成功: {Barcode}", package.Barcode);
-                    }
-                    else
-                    {
-                        Log.Error("韵达上传重量请求失败: {Barcode}, 错误: {Message}, {ErrorCode}-{ErrorMsg}",
-                            package.Barcode, yundaResponse?.Message, yundaResponse?.Data?.ErrorCode, yundaResponse?.Data?.ErrorMsg);
-                    }
+                var ztoResponse = await _ztoApiService.UploadCollectTraceAsync(ztoRequest);
+
+                if (ztoResponse is { Status: true })
+                {
+                    Log.Information("中通揽收上传请求成功: {Barcode}", package.Barcode);
                 }
                 else
                 {
-                    Log.Information("包裹 {Barcode} 条码不以'43','46'或'32'开头，跳过韵达上传重量。");
+                    Log.Error("中通揽收上传请求失败: {Barcode}, 错误: {Message}, Code={Code}",
+                        package.Barcode, ztoResponse.Message, ztoResponse.Code);
                 }
+            }
+            else
+            {
+                Log.Information("包裹 {Barcode} 条码不符合中通揽收前缀，跳过中通揽收。");
+            }
+
+            // 获取极兔API配置
+            var jituApiSettings = _settingsService.LoadSettings<Modules.Models.Jitu.Settings.JituApiSettings>();
+            var jituPrefixes = jituApiSettings.BarcodePrefixes.Split(';', StringSplitOptions.RemoveEmptyEntries).ToList();
+
+            // 根据配置的条码前缀上传极兔OpScan
+            if (jituPrefixes.Any(prefix => package.Barcode.StartsWith(prefix)))
+            {
+                var jituRequest = new Modules.Models.Jitu.JituOpScanRequest
+                {
+                    Billcode = package.Barcode,
+                    Weight = package.Weight,
+                    Length = package.Length ?? 0,
+                    Width = package.Width ?? 0,
+                    Height = package.Height ?? 0,
+                    Devicecode = jituApiSettings.DeviceCode,
+                    Devicename = jituApiSettings.DeviceName,
+                    Imgpath = package.ImagePath ?? string.Empty
+                };
+
+                var jituResponse = await _jituService.SendOpScanRequestAsync(jituRequest);
+
+                if (jituResponse is { Success: true, Code: 200 })
+                {
+                    Log.Information("极兔OpScan上传请求成功: {Barcode}", package.Barcode);
+                }
+                else
+                {
+                    Log.Error("极兔OpScan上传请求失败: {Barcode}, 错误: {Message}, Code={Code}",
+                        package.Barcode, jituResponse.Message, jituResponse.Code);
+                }
+            }
+            else
+            {
+                Log.Information("包裹 {Barcode} 条码不符合极兔OpScan上传前缀，跳过极兔OpScan上传。");
             }
 
             // 更新UI

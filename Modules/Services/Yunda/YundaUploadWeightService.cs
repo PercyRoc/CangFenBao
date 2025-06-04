@@ -47,9 +47,6 @@ public class YundaUploadWeightService(
         // 韵达鉴权说明：所有报文体（包括公共参数、业务参数、sign）都拼接成一个字符串（JSON），
         // 然后使用 partnerid+password+rc4Key 对该字符串进行RC4加密。
         // 鉴于RC4在.NET Core中需要额外实现或库，此处暂用MD5+Base64占位
-        var sign = CalculateSign(contentJson, settings.AppSecret);
-        var reqTime = DateTimeOffset.Now.ToUnixTimeMilliseconds();
-
         var requestBody = new
         {
             partnerid = request.PartnerId,
@@ -59,6 +56,9 @@ public class YundaUploadWeightService(
         };
 
         var requestJson = JsonConvert.SerializeObject(requestBody);
+
+        var sign = CalculateSign(requestJson, settings.AppSecret); // 使用完整的请求体JSON进行签名
+        var reqTime = DateTimeOffset.Now.ToUnixTimeMilliseconds();
 
         try
         {

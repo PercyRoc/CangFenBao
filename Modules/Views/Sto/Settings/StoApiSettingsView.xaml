@@ -9,64 +9,67 @@
       mc:Ignorable="d" d:DataContext="{d:DesignInstance settings:StoApiSettingsViewModel}"
       mvvm:ViewModelLocator.AutoWireViewModel="True">
     <Grid>
-        <ScrollViewer>
-            <StackPanel MaxWidth="800" Margin="16" HorizontalAlignment="Center">
-                <TextBlock Margin="0,0,0,16" FontSize="24" FontWeight="Medium" Text="申通API配置" />
+        <StackPanel MaxWidth="800" Margin="16" HorizontalAlignment="Center">
+            <TextBlock Margin="0,0,0,16" FontSize="24" FontWeight="Medium" Text="申通API配置" />
 
-                <ui:Card Margin="0,0,0,16">
-                    <StackPanel Margin="16">
-                        <TextBlock Text="申通API网关地址:" Margin="0,0,0,5" />
-                        <ui:TextBox Icon="Web24" PlaceholderText="请输入申通API网关地址"
-                                    Text="{Binding Settings.ApiUrl, UpdateSourceTrigger=PropertyChanged}"
-                                    Margin="0,0,0,16" />
+            <ui:Card Margin="0,0,0,16">
+                <StackPanel Margin="16">
+                    <TextBlock Text="申通API网关地址:" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="Web24" PlaceholderText="请输入申通API网关地址"
+                                Text="{Binding Settings.ApiUrl, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
 
-                        <TextBlock Text="订阅方应用Key:" Margin="0,0,0,5" />
-                        <ui:TextBox Icon="Key24" PlaceholderText="请输入订阅方应用key"
-                                    Text="{Binding Settings.FromAppkey, UpdateSourceTrigger=PropertyChanged}"
-                                    Margin="0,0,0,16" />
+                    <TextBlock Text="订阅方应用Key:" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="Key24" PlaceholderText="请输入订阅方应用key"
+                                Text="{Binding Settings.FromAppkey, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
 
-                        <TextBlock Text="订阅方应用资源Code:" Margin="0,0,0,5" />
-                        <ui:TextBox Icon="Code24" PlaceholderText="请输入订阅方应用资源code"
-                                    Text="{Binding Settings.FromCode, UpdateSourceTrigger=PropertyChanged}"
-                                    Margin="0,0,0,16" />
+                    <TextBlock Text="订阅方应用资源Code:" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="Code24" PlaceholderText="请输入订阅方应用资源code"
+                                Text="{Binding Settings.FromCode, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
 
-                        <TextBlock Text="申通API密钥:" Margin="0,0,0,5" />
-                        <ui:TextBox Icon="ShieldKeyhole24" PlaceholderText="请输入申通API密钥"
-                                    Text="{Binding Settings.AppSecret, UpdateSourceTrigger=PropertyChanged}"
-                                    Margin="0,0,0,16" />
+                    <TextBlock Text="申通API密钥:" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="ShieldKeyhole24" PlaceholderText="请输入申通API密钥"
+                                Text="{Binding Settings.AppSecret, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
 
-                        <TextBlock Text="接口名称 (api_name):" Margin="0,0,0,5" />
-                        <ui:TextBox Icon="Tag24" PlaceholderText="请输入接口名称 (api_name)"
-                                    Text="{Binding Settings.ApiName, UpdateSourceTrigger=PropertyChanged}"
-                                    Margin="0,0,0,16" />
+                    <TextBlock Text="接口名称 (api_name):" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="Tag24" PlaceholderText="请输入接口名称 (api_name)"
+                                Text="{Binding Settings.ApiName, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
 
-                        <TextBlock Text="接收方应用Key (to_appkey):" Margin="0,0,0,5" />
-                        <ui:TextBox Icon="Key24" PlaceholderText="请输入接收方应用key (to_appkey)"
-                                    Text="{Binding Settings.ToAppkey, UpdateSourceTrigger=PropertyChanged}"
-                                    Margin="0,0,0,16" />
+                    <TextBlock Text="接收方应用Key (to_appkey):" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="Key24" PlaceholderText="请输入接收方应用key (to_appkey)"
+                                Text="{Binding Settings.ToAppkey, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
 
-                        <TextBlock Text="接收方应用资源Code (to_code):" Margin="0,0,0,5" />
-                        <ui:TextBox Icon="Code24" PlaceholderText="请输入接收方应用资源code (to_code)"
-                                    Text="{Binding Settings.ToCode, UpdateSourceTrigger=PropertyChanged}"
-                                    Margin="0,0,0,16" />
+                    <TextBlock Text="接收方应用资源Code (to_code):" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="Code24" PlaceholderText="请输入接收方应用资源code (to_code)"
+                                Text="{Binding Settings.ToCode, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
 
-                        <TextBlock Text="仓编码 (whCode):" Margin="0,0,0,5" />
-                        <ui:TextBox Icon="BuildingFactory24" PlaceholderText="请输入仓编码 (whCode)"
-                                    Text="{Binding Settings.WhCode, UpdateSourceTrigger=PropertyChanged}"
-                                    Margin="0,0,0,16" />
+                    <TextBlock Text="仓编码 (whCode):" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="BuildingFactory24" PlaceholderText="请输入仓编码 (whCode)"
+                                Text="{Binding Settings.WhCode, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
 
-                        <TextBlock Text="揽收网点编码 (orgCode):" Margin="0,0,0,5" />
-                        <ui:TextBox Icon="MapPin24" PlaceholderText="请输入揽收网点编码 (orgCode)"
-                                    Text="{Binding Settings.OrgCode, UpdateSourceTrigger=PropertyChanged}"
-                                    Margin="0,0,0,16" />
+                    <TextBlock Text="揽收网点编码 (orgCode):" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="MapPin24" PlaceholderText="请输入揽收网点编码 (orgCode)"
+                                Text="{Binding Settings.OrgCode, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
 
-                        <TextBlock Text="揽收员编码 (userCode):" Margin="0,0,0,5" />
-                        <ui:TextBox Icon="Person24" PlaceholderText="请输入揽收员编码 (userCode)"
-                                    Text="{Binding Settings.UserCode, UpdateSourceTrigger=PropertyChanged}"
-                                    Margin="0,0,0,16" />
-                    </StackPanel>
-                </ui:Card>
-            </StackPanel>
-        </ScrollViewer>
+                    <TextBlock Text="揽收员编码 (userCode):" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="Person24" PlaceholderText="请输入揽收员编码 (userCode)"
+                                Text="{Binding Settings.UserCode, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
+
+                    <TextBlock Text="条码前缀 (分号分隔):" Margin="0,0,0,5" />
+                    <ui:TextBox Icon="BarcodeScanner24" PlaceholderText="请输入申通条码前缀，多个用分号分隔"
+                                Text="{Binding Settings.BarcodePrefixes, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,16" />
+                </StackPanel>
+            </ui:Card>
+        </StackPanel>
     </Grid>
 </Page>
