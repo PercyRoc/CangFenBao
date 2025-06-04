@@ -784,8 +784,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                         try
                         {
                             var tempImagePath =
-                                BenNiaoPackageService.SaveImageToTempFileAsync(originalImage, package.Barcode,
-                                    uploadTime);
+                                _benNiaoService.SaveImageToTempFileAsync(originalImage, package.Barcode,
+                                    uploadTime, package);
                             if (!string.IsNullOrWhiteSpace(tempImagePath))
                             {
                                 _ = Task.Run(async () =>

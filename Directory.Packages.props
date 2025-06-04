@@ -43,5 +43,7 @@
     <PackageVersion Include="System.IO.Ports" Version="9.0.0" />
     <!-- WebSocket -->
     <PackageVersion Include="WebSocketSharp-netstandard" Version="1.0.1" />
+    <!-- 用于图片水印功能 -->
+    <PackageVersion Include="System.Drawing.Common" Version="9.0.0" />
   </ItemGroup>
 </Project>
