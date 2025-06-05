@@ -418,15 +418,27 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             try
             {
                 var response = await _wangDianTongApiService.PushWeightAsync(package.Barcode, (decimal)package.Weight);
-                if (!response.IsSuccess)
+
+                // 如果旺店通回传的错误信息中包含"申请退款"或"已退款"，则分配到格口3
+                if (response.Message.Contains("申请退款", StringComparison.OrdinalIgnoreCase) ||
+                    response.Message.Contains("已退款", StringComparison.OrdinalIgnoreCase))
                 {
+                    package.SetChute(3); // 分配到格口3
+                    package.SetStatus(PackageStatus.Success, response.Message); // 设置状态为成功，并带上回传信息
+                    Log.Information("包裹 {Barcode} 因旺店通消息包含退款信息，已分配到格口3并视为成功：{Message}", package.Barcode, response.Message);
+                }
+                else if (!response.IsSuccess)
+                {
+                    var errorMessage = $"{response.Message}";
+                    Log.Error("网店通重量回传失败：{Barcode} - {Message}", package.Barcode, errorMessage); // 修复linter错误，移除未定义的ex
                     package.SetChute(_settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber);
-                    package.SetStatus(PackageStatus.Error, response.Message);
+                    package.SetStatus(PackageStatus.Error, errorMessage);
                     Interlocked.Increment(ref _errorPackageCount);
                 }
-                else
+                else // response.IsSuccess is true, 且不包含退款信息
                 {
                     package.SetStatus(PackageStatus.Success, response.Message);
+                    Log.Information("包裹 {Barcode} 旺店通回传成功：{Message}", package.Barcode, response.Message);
                 }
             }
             catch (Exception ex)
@@ -436,18 +448,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 package.SetChute(_settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber);
                 package.SetStatus(PackageStatus.Error, errorMessage);
                 Interlocked.Increment(ref _errorPackageCount);
-            }
-
-            if (package.Status != PackageStatus.Error && package.Status != PackageStatus.Failed)
-            {
-                package.SetStatus(PackageStatus.Success);
-            }
-            else if (package.Status is PackageStatus.Error or PackageStatus.Failed)
-            {
-                // 可以在这里再确认一次，如果已经是Error或Failed状态，也增加异常计数，防止遗漏
-                // 注意：上面已经在可能导致Error/Failed的地方增加了计数，这里可能重复，需要根据具体逻辑判断是否需要
-                // 如果前面已经确保所有Error/Failed情况都计数了，这行可以不要。
-                // Interlocked.Increment(ref _errorPackageCount);
             }
 
             _sortService.ProcessPackage(package);
