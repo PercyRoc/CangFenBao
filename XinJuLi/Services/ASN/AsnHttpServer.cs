@@ -12,7 +12,7 @@ namespace XinJuLi.Services.ASN
     /// <summary>
     /// ASN HTTP服务器，提供接口供WMS调用
     /// </summary>
-    public class AsnHttpServer(IAsnService asnService, ISettingsService settingsService) : IHostedService, IDisposable
+    public class AsnHttpServer(IAsnService asnService, ISettingsService settingsService, IHttpForwardService forwardService) : IHostedService, IDisposable
     {
         private HttpListener? _listener;
         private CancellationTokenSource? _cts;
@@ -202,11 +202,30 @@ namespace XinJuLi.Services.ASN
                     return;
                 }
 
-                // 处理业务逻辑 - 同步调用
-                var result = asnService.ProcessAsnOrderInfo(asnInfo);
+                // 并行处理：本地业务逻辑 + 请求转发
+                var settings = settingsService.LoadSettings<AsnSettings>();
+                var localTask = Task.Run(() => asnService.ProcessAsnOrderInfo(asnInfo));
+                var forwardTask = forwardService.ForwardRequestAsync("send_asn_order_info", requestBody);
+
+                // 等待本地处理完成
+                var localResult = await localTask;
+
+                // 检查转发结果（不阻塞本地处理结果）
+                var forwardSuccess = await forwardTask;
+                if (!forwardSuccess && !settings.ContinueOnForwardFailure)
+                {
+                    Log.Warning("请求转发失败且配置为不继续处理，返回错误响应");
+                    await SendResponseAsync(response, 500, Response.CreateFailed("请求转发失败", "FORWARD_FAILED"));
+                    return;
+                }
+
+                if (!forwardSuccess)
+                {
+                    Log.Warning("请求转发失败，但继续返回本地处理结果");
+                }
                 
-                // 返回处理结果
-                await SendResponseAsync(response, 200, result);
+                // 返回本地处理结果
+                await SendResponseAsync(response, 200, localResult);
             }
             catch (JsonException ex)
             {
@@ -257,11 +276,30 @@ namespace XinJuLi.Services.ASN
                     return;
                 }
 
-                // 处理业务逻辑 - 同步调用
-                var result = asnService.ProcessMaterialReview(reviewRequest);
+                // 并行处理：本地业务逻辑 + 请求转发
+                var settings = settingsService.LoadSettings<AsnSettings>();
+                var localTask = Task.Run(() => asnService.ProcessMaterialReview(reviewRequest));
+                var forwardTask = forwardService.ForwardRequestAsync("material_review", requestBody);
+
+                // 等待本地处理完成
+                var localResult = await localTask;
+
+                // 检查转发结果（不阻塞本地处理结果）
+                var forwardSuccess = await forwardTask;
+                if (!forwardSuccess && !settings.ContinueOnForwardFailure)
+                {
+                    Log.Warning("请求转发失败且配置为不继续处理，返回错误响应");
+                    await SendResponseAsync(response, 500, Response.CreateFailed("请求转发失败", "FORWARD_FAILED"));
+                    return;
+                }
+
+                if (!forwardSuccess)
+                {
+                    Log.Warning("请求转发失败，但继续返回本地处理结果");
+                }
                 
-                // 返回处理结果
-                await SendResponseAsync(response, 200, result);
+                // 返回本地处理结果
+                await SendResponseAsync(response, 200, localResult);
             }
             catch (JsonException ex)
             {

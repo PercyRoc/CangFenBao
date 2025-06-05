@@ -29,6 +29,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly IPendulumSortService _sortService;
     private readonly IAsnService _asnService;
     private readonly IPackageHistoryDataService _packageHistoryDataService;
+    private readonly IAsnCacheService _asnCacheService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
     private string _currentBarcode = string.Empty;
@@ -42,10 +43,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private string _currentCarCode = string.Empty;
 
     // SKU分配表，Key是SKU代码，Value是分配的格口编号
-    private readonly Dictionary<string, int> _skuChuteMappings = new();
+    private readonly Dictionary<string, int> _skuChuteMappings = [];
 
     // 每个格口分配的SKU数量
-    private readonly Dictionary<int, int> _chuteSkuCount = new();
+    private readonly Dictionary<int, int> _chuteSkuCount = [];
 
     // Add persistent counters
     private long _totalPackageCount;
@@ -61,7 +62,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
         INotificationService notificationService,
         IAsnService asnService,
         IEventAggregator eventAggregator,
-        IPackageHistoryDataService packageHistoryDataService)
+        IPackageHistoryDataService packageHistoryDataService,
+        IAsnCacheService asnCacheService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
@@ -70,6 +72,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _notificationService = notificationService;
         _asnService = asnService;
         _packageHistoryDataService = packageHistoryDataService;
+        _asnCacheService = asnCacheService;
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
         OpenHistoryCommand = new DelegateCommand(ExecuteOpenHistory);
 
@@ -125,12 +128,15 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _subscriptions.Add(_cameraService.PackageStream
             .Subscribe(package => { Application.Current.Dispatcher.BeginInvoke(() => OnPackageInfo(package)); }));
 
-        // 订阅ASN订单接收事件
+        // 订阅ASN订单接收事件（现在用于处理用户选择的ASN单）
         _subscriptions.Add(eventAggregator.GetEvent<AsnOrderReceivedEvent>()
             .Subscribe(asnInfo => { Application.Current.Dispatcher.BeginInvoke(() => OnAsnOrderReceived(asnInfo)); }));
 
         // 主动查询一次相机和摆轮分拣设备状态
         QueryAndUpdateDeviceStatuses();
+
+        // 订阅ASN缓存变更事件
+        _asnCacheService.CacheChanged += OnAsnCacheChanged;
     }
 
     public DelegateCommand OpenSettingsCommand { get; }
@@ -181,22 +187,27 @@ public class MainWindowViewModel : BindableBase, IDisposable
         private set => SetProperty(ref _asnOrderItems, value);
     }
 
+    /// <summary>
+    /// 缓存的ASN单数量
+    /// </summary>
+    public int CachedAsnOrderCount => _asnCacheService.Count;
+
     public ObservableCollection<PackageInfo> PackageHistory { get; } = [];
     public ObservableCollection<StatisticsItem> StatisticsItems { get; } = [];
     public ObservableCollection<DeviceStatus> DeviceStatuses { get; } = [];
     public ObservableCollection<PackageInfoItem> PackageInfoItems { get; } = [];
 
     /// <summary>
-    /// 缓存ASN订单数据
+    /// 加载并应用ASN订单数据用于分拣
     /// </summary>
     /// <param name="asnOrderInfo">ASN订单信息</param>
-    public void CacheAsnOrderInfo(AsnOrderInfo asnOrderInfo)
+    public void LoadAsnOrderInfo(AsnOrderInfo asnOrderInfo)
     {
         try
         {
             if (asnOrderInfo.Items.Count == 0)
             {
-                Log.Warning("无法缓存ASN订单数据：数据为空或无商品项");
+                Log.Warning("无法加载ASN订单数据：数据为空或无商品项");
                 return;
             }
 
@@ -205,15 +216,19 @@ public class MainWindowViewModel : BindableBase, IDisposable
             CurrentCarCode = asnOrderInfo.CarCode;
             AsnOrderItems = [.. asnOrderInfo.Items];
 
-            Log.Information("已缓存ASN订单数据: {OrderCode}, 车牌: {CarCode}, 商品数量: {ItemsCount}",
+            Log.Information("已加载ASN订单数据用于分拣: {OrderCode}, 车牌: {CarCode}, 商品数量: {ItemsCount}",
                 asnOrderInfo.OrderCode, asnOrderInfo.CarCode, asnOrderInfo.Items.Count);
 
-            // 清空之前的SKU-格口映射
+            // 记录所有商品项到日志
+            foreach (var item in asnOrderInfo.Items)
+            {
+                Log.Debug("ASN订单商品项: ItemCode={ItemCode}, SkuCode={SkuCode}, SkuName={SkuName}",
+                    item.ItemCode, item.SkuCode, item.SkuName);
+            }
+
+            // 清空之前的SKU-格口映射，不预先分配格口
             _skuChuteMappings.Clear();
             _chuteSkuCount.Clear();
-
-            // 为每个SKU分配格口
-            AllocateChutesForSkus();
 
             // 通知UI更新
             RaisePropertyChanged(nameof(CurrentAsnOrderCode));
@@ -224,60 +239,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "缓存ASN订单数据时发生错误");
-            _notificationService.ShowError("缓存ASN订单数据失败：" + ex.Message);
+            Log.Error(ex, "加载ASN订单数据时发生错误");
+            _notificationService.ShowError("加载ASN订单数据失败：" + ex.Message);
         }
     }
 
-    /// <summary>
-    /// 为每个SKU分配格口
-    /// </summary>
-    private void AllocateChutesForSkus()
-    {
-        try
-        {
-            // 按需加载配置
-            var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
-            if (chuteSettings.ChuteCount <= 0 || AsnOrderItems.Count == 0)
-            {
-                Log.Warning("无法分配格口：格口数量为0或没有SKU项");
-                return;
-            }
 
-            // 获取所有不重复的SKU代码
-            var distinctSkus = AsnOrderItems.Select(item => item.SkuCode).Distinct().ToList();
-            Log.Information("发现{Count}个不同的SKU", distinctSkus.Count);
-
-            foreach (var sku in distinctSkus)
-            {
-                // 先检查是否已经分配过
-                if (_skuChuteMappings.ContainsKey(sku))
-                    continue;
-
-                // 查找当前SKU数量少于2的格口
-                var availableChute = FindAvailableChute();
-                if (availableChute > 0)
-                {
-                    _skuChuteMappings[sku] = availableChute;
-                    // 增加该格口的SKU数量
-                    _chuteSkuCount.TryAdd(availableChute, 0);
-                    _chuteSkuCount[availableChute]++;
-
-                    Log.Information("SKU {Sku} 分配到格口 {Chute}", sku, availableChute);
-                }
-                else
-                {
-                    Log.Warning("没有可用格口给SKU {Sku}分配", sku);
-                }
-            }
-
-            Log.Information("SKU格口分配完成，共分配{Count}个SKU", _skuChuteMappings.Count);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "分配SKU格口时发生错误");
-        }
-    }
 
     /// <summary>
     /// 查找可用的格口（SKU数量少于2的）
@@ -287,15 +254,15 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         // 按需加载配置
         var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
-        // 从2开始循环到格口数量，每次增加2以只分配偶数格口
-        for (var i = 2; i <= chuteSettings.ChuteCount; i += 2)
+        // 从1开始循环到格口数量，每次增加2以只分配奇数格口
+        for (var i = 1; i <= chuteSettings.ChuteCount; i += 2)
         {
             // 如果格口不存在或者SKU数量小于2，则可用
             if (!_chuteSkuCount.TryGetValue(i, out var value) || value < 2)
                 return i;
         }
 
-        // 没有可用偶数格口
+        // 没有可用奇数格口
         return -1;
     }
 
@@ -332,6 +299,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 return;
             }
 
+            // 暂时注释掉复核接口调用
+            /*
             // 构建扫码复核请求
             var reviewRequest = new MaterialReviewRequest
             {
@@ -367,12 +336,16 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
             // 复核成功，继续执行原有的SKU匹配和分拣逻辑
             Log.Information("包裹 {Barcode} 扫码复核成功，继续进行SKU匹配和分拣", package.Barcode);
+            */
+
+            // 跳过复核，直接进行SKU匹配和分拣逻辑
+            Log.Information("包裹 {Barcode} 跳过复核，直接进行SKU匹配和分拣", package.Barcode);
 
             // 如果没有ASN订单缓存，无法匹配SKU
             if (AsnOrderItems.Count == 0 || string.IsNullOrEmpty(CurrentAsnOrderCode))
             {
-                Log.Warning("没有缓存的ASN订单数据，无法为包裹 {Barcode} 匹配SKU (复核已成功，但无ASN单)", package.Barcode);
-                package.SetStatus("无ASN单数据"); // 即使复核成功，无ASN单也算异常
+                Log.Warning("没有加载的ASN订单数据，无法为包裹 {Barcode} 匹配SKU", package.Barcode);
+                package.SetStatus("无ASN单数据");
                 package.ErrorMessage = "无ASN单数据";
                 package.SetChute(chuteSettings.ErrorChuteNumber);
 
@@ -389,14 +362,15 @@ public class MainWindowViewModel : BindableBase, IDisposable
             }
 
             // 查找对应的订单项，通常条码会与itemCode匹配
+            // 更正：根据日志显示，包裹条码与SkuCode匹配更为合理
             var matchedItem = AsnOrderItems.FirstOrDefault(item =>
-                item.ItemCode.Equals(package.Barcode, StringComparison.OrdinalIgnoreCase));
+                item.SkuCode.Equals(package.Barcode, StringComparison.OrdinalIgnoreCase));
 
             if (matchedItem == null)
             {
-                Log.Warning("包裹 {Barcode} 在ASN订单 {OrderCode} 中找不到匹配的货品 (复核已成功)",
+                Log.Warning("包裹 {Barcode} 在ASN订单 {OrderCode} 中找不到匹配的货品",
                     package.Barcode, CurrentAsnOrderCode);
-                package.SetStatus("ASN单中无匹配"); // 即使复核成功，无匹配货品也算异常
+                package.SetStatus("ASN单中无匹配");
                 package.ErrorMessage = "ASN单中无匹配";
                 package.SetChute(chuteSettings.ErrorChuteNumber);
 
@@ -412,21 +386,38 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 return;
             }
 
-            // 如果到达此处，表示复核成功，ASN数据存在，且匹配到了货品
-            // 现在，根据SKU映射确定格口
+            // 如果到达此处，表示ASN数据存在，且匹配到了货品
+            // 现在，根据SKU映射确定格口，如果未分配则动态分配
             if (!_skuChuteMappings.TryGetValue(matchedItem.SkuCode, out var chuteNumber))
             {
-                // 如果SKU未分配格口，尽管不应该发生，但仍进行防御性处理
-                Log.Warning("SKU {SkuCode} 未分配格口，将分配到错误格口", matchedItem.SkuCode);
-                package.SetStatus("SKU未分配格口");
-                package.ErrorMessage = $"SKU {matchedItem.SkuCode} 未分配格口";
-                package.SetChute(chuteSettings.ErrorChuteNumber);
-                ProcessPackageWithError(package, chuteSettings.ErrorChuteNumber, package.ErrorMessage);
-                _totalPackageCount++;
-                _failedPackageCount++;
-                UpdateStatisticsItems();
-                SavePackage(package);
-                return;
+                // SKU未分配格口，尝试动态分配
+                Log.Information("SKU {SkuCode} 未分配格口，开始动态分配", matchedItem.SkuCode);
+                
+                var availableChute = FindAvailableChute();
+                if (availableChute > 0)
+                {
+                    // 分配格口给该SKU
+                    _skuChuteMappings[matchedItem.SkuCode] = availableChute;
+                    _chuteSkuCount.TryAdd(availableChute, 0);
+                    _chuteSkuCount[availableChute]++;
+                    
+                    chuteNumber = availableChute;
+                    Log.Information("SKU {SkuCode} 动态分配到格口 {Chute}", matchedItem.SkuCode, availableChute);
+                }
+                else
+                {
+                    // 没有可用格口
+                    Log.Warning("没有可用格口分配给SKU {SkuCode}，将分配到错误格口", matchedItem.SkuCode);
+                    package.SetStatus("无可用格口");
+                    package.ErrorMessage = $"SKU {matchedItem.SkuCode} 无可用格口";
+                    package.SetChute(chuteSettings.ErrorChuteNumber);
+                    ProcessPackageWithError(package, chuteSettings.ErrorChuteNumber, package.ErrorMessage);
+                    _totalPackageCount++;
+                    _failedPackageCount++;
+                    UpdateStatisticsItems();
+                    SavePackage(package);
+                    return;
+                }
             }
 
             package.SetChute(chuteNumber);
@@ -678,6 +669,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _dialogService.ShowDialog("PackageHistoryDialogView", null, (Action<IDialogResult>?)null);
     }
 
+
+
     private void Timer_Tick(object? sender, EventArgs e)
     {
         SystemStatus = SystemStatus.GetCurrentStatus();
@@ -844,12 +837,29 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 处理ASN订单接收事件
+    /// 处理ASN订单接收事件（用户选择后的处理）
     /// </summary>
     private void OnAsnOrderReceived(AsnOrderInfo asnInfo)
     {
-        Log.Information("MainWindowViewModel收到ASN订单接收事件: {OrderCode}", asnInfo.OrderCode);
-        CacheAsnOrderInfo(asnInfo);
+        Log.Information("MainWindowViewModel收到ASN订单选择事件: {OrderCode}", asnInfo.OrderCode);
+        
+        // 加载选择的ASN单信息并清空格口映射
+        LoadAsnOrderInfo(asnInfo);
+        
+        // 从缓存中移除已选择的ASN单
+        _asnCacheService.RemoveAsnOrder(asnInfo.OrderCode);
+    }
+
+    /// <summary>
+    /// 处理ASN缓存变更事件
+    /// </summary>
+    private void OnAsnCacheChanged(object? sender, AsnCacheChangedEventArgs e)
+    {
+        // 在UI线程中更新缓存数量
+        Application.Current.Dispatcher.BeginInvoke(() =>
+        {
+            RaisePropertyChanged(nameof(CachedAsnOrderCount));
+        });
     }
 
     /// <summary>
@@ -925,6 +935,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 // 取消订阅事件
                 _sortService.DeviceConnectionStatusChanged -= OnDeviceConnectionStatusChanged;
                 _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
+                _asnCacheService.CacheChanged -= OnAsnCacheChanged;
 
                 // 释放订阅
                 foreach (var subscription in _subscriptions)

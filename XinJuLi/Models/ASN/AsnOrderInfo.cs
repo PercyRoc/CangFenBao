@@ -60,6 +60,12 @@ namespace XinJuLi.Models.ASN
         /// </summary>
         [JsonPropertyName("extra")]
         public Dictionary<string, object>? Extra { get; set; }
+
+        /// <summary>
+        /// 是否是新收到的ASN单（用于UI高亮，不参与JSON序列化）
+        /// </summary>
+        [JsonIgnore]
+        public bool IsNewReceived { get; set; }
     }
 
     /// <summary>

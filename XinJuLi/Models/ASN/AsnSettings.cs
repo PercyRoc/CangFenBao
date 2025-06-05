@@ -77,5 +77,55 @@ namespace XinJuLi.Models.ASN
             get => _reviewExitArea;
             set => SetProperty(ref _reviewExitArea, value);
         }
+
+        private bool _enableForwarding = false;
+        /// <summary>
+        /// 是否启用请求转发
+        /// </summary>
+        public bool EnableForwarding
+        {
+            get => _enableForwarding;
+            set => SetProperty(ref _enableForwarding, value);
+        }
+
+        private string _forwardServerUrl = "";
+        /// <summary>
+        /// 转发目标服务器地址（包含协议和端口，如：http://192.168.1.100:8080）
+        /// </summary>
+        public string ForwardServerUrl
+        {
+            get => _forwardServerUrl;
+            set => SetProperty(ref _forwardServerUrl, value);
+        }
+
+        private string _forwardApplicationName = "api";
+        /// <summary>
+        /// 转发目标应用名称
+        /// </summary>
+        public string ForwardApplicationName
+        {
+            get => _forwardApplicationName;
+            set => SetProperty(ref _forwardApplicationName, value);
+        }
+
+        private int _forwardTimeoutSeconds = 30;
+        /// <summary>
+        /// 转发请求超时时间（秒）
+        /// </summary>
+        public int ForwardTimeoutSeconds
+        {
+            get => _forwardTimeoutSeconds;
+            set => SetProperty(ref _forwardTimeoutSeconds, value);
+        }
+
+        private bool _continueOnForwardFailure = true;
+        /// <summary>
+        /// 转发失败时是否继续本地处理
+        /// </summary>
+        public bool ContinueOnForwardFailure
+        {
+            get => _continueOnForwardFailure;
+            set => SetProperty(ref _continueOnForwardFailure, value);
+        }
     }
 } 

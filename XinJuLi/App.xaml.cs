@@ -4,7 +4,9 @@ using Microsoft.Extensions.Hosting;
 using Serilog;
 using XinJuLi.Services.ASN;
 using XinJuLi.ViewModels;
+using XinJuLi.ViewModels.Dialogs;
 using XinJuLi.Views;
+using XinJuLi.Views.Dialogs;
 using XinJuLi.Views.Settings;
 using Camera;
 using BalanceSorting.Modules;
@@ -21,7 +23,7 @@ namespace XinJuLi
     /// <summary>
     /// Interaction logic for App.xaml
     /// </summary>
-    public partial class App: PrismApplication
+    public partial class App
     {
         private static Mutex? _mutex;
 
@@ -66,6 +68,10 @@ namespace XinJuLi
                     Log.Information("成功获取Mutex，应用程序首次启动");
                     var moduleManager = Container.Resolve<IModuleManager>();
                     moduleManager.Run();
+                    // 启动 AsnHttpServer
+                    var asnHttpServer = Container.Resolve<AsnHttpServer>();
+                    _ = asnHttpServer.StartAsync(CancellationToken.None);
+                    Log.Information("ASN HTTP服务已启动 (OnStartup)");
                     return Container.Resolve<MainWindow>();
                 }
 
@@ -79,13 +85,11 @@ namespace XinJuLi
                     Environment.Exit(0); // 直接退出进程
                     return null!;
                 }
-                else
-                {
-                    // 可以获取Mutex，说明前一个实例可能异常退出但Mutex已被释放或从未正确获取
-                    Log.Warning("成功获取已存在的Mutex，可能是上一个实例异常退出");
-                    _ownsMutex = true; // 明确拥有权
-                    return Container.Resolve<MainWindow>();
-                }
+
+                // 可以获取Mutex，说明前一个实例可能异常退出但Mutex已被释放或从未正确获取
+                Log.Warning("成功获取已存在的Mutex，可能是上一个实例异常退出");
+                _ownsMutex = true; // 明确拥有权
+                return Container.Resolve<MainWindow>();
             }
             catch (Exception ex)
             {
@@ -102,16 +106,18 @@ namespace XinJuLi
             // 注册视图和ViewModel
             containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
             containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>();
-            // 新增对话框注册
-            containerRegistry.RegisterDialog<AsnOrderConfirmDialog, AsnOrderConfirmDialogViewModel>("AsnOrderConfirmDialog");
+
 
             // 先注册MainWindowViewModel以便ASN服务可以引用
             containerRegistry.RegisterSingleton<MainWindowViewModel>();
 
             // 注册ASN服务和设置视图
             containerRegistry.RegisterSingleton<IAsnService, AsnService>();
+            containerRegistry.RegisterSingleton<IAsnCacheService, AsnCacheService>();
+            containerRegistry.RegisterSingleton<IHttpForwardService, HttpForwardService>();
             containerRegistry.RegisterSingleton<AsnHttpServer>();
             containerRegistry.RegisterForNavigation<AsnHttpSettingsView, AsnHttpSettingsViewModel>();
+            containerRegistry.RegisterDialog<AsnOrderSelectionDialogView, AsnOrderSelectionDialogViewModel>("AsnOrderSelectionDialog");
             containerRegistry.RegisterDialogWindow<CustomDialogWindow>();
         }
 
@@ -156,15 +162,7 @@ namespace XinJuLi
                     if (Container.IsRegistered<ICameraService>())
                     {
                         var cameraService = Container.Resolve<ICameraService>();
-                        // 如果 ICameraService 有特定的 Stop 方法，在这里调用，例如：
-                        cameraService.Stop(); // 调用同步的Stop方法
-                        // 或者确保 Dispose 方法执行清理
-                        if (cameraService is IDisposable disposableCameraService)
-                        {
-                            // 在UI线程上停止可能导致死锁，最好服务本身支持异步停止或在后台线程停止
-                            // 为了安全起见，这里仅记录，实际停止依赖Dispose
-                            Log.Information("相机服务正在通过Dispose清理...");
-                        }
+                        cameraService.Stop();
                     }
                 }
                 catch (Exception ex)

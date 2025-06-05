@@ -17,7 +17,8 @@ namespace XinJuLi.Services.ASN
         IDialogService dialogService,
         INotificationService notificationService,
         ISettingsService settingsService,
-        IEventAggregator eventAggregator)
+        IEventAggregator eventAggregator,
+        IAsnCacheService asnCacheService)
         : IAsnService
     {
         private static readonly JsonSerializerOptions CaseInsensitiveOptions =
@@ -37,30 +38,39 @@ namespace XinJuLi.Services.ASN
                 {
                     asnInfo.OrderCode,
                     asnInfo.CarCode,
-                    ItemsCount = asnInfo.Items
+                    ItemsCount = asnInfo.Items.Count
                 });
 
-                // 必须在UI线程上弹出对话框
+                // 将ASN单添加到缓存
+                asnCacheService.AddAsnOrder(asnInfo);
+
+                // 在UI线程中弹出选择对话框
                 Application.Current.Dispatcher.Invoke(() =>
                 {
-                    // 显示确认对话框
                     var parameters = new DialogParameters
                     {
-                        { "AsnOrderInfo", asnInfo }
+                        { "NewAsnOrderCode", asnInfo.OrderCode } // 传递新收到的ASN单编码，用于高亮显示
                     };
 
-                    dialogService.ShowDialog("AsnOrderConfirmDialog", parameters, result =>
+                    dialogService.ShowDialog("AsnOrderSelectionDialog", parameters, result =>
                     {
                         if (result.Result == ButtonResult.OK)
                         {
-                            // 确认后发布事件通知ViewModel缓存数据
-                            eventAggregator.GetEvent<AsnOrderReceivedEvent>().Publish(asnInfo);
-                            notificationService.ShowSuccess($"已确认ASN单：{asnInfo.OrderCode}");
+                            var selectedAsnOrder = result.Parameters.GetValue<AsnOrderInfo>("SelectedAsnOrder");
+                            if (selectedAsnOrder != null)
+                            {
+                                Log.Information("用户选择ASN单: {OrderCode}", selectedAsnOrder.OrderCode);
+                                
+                                // 发布ASN订单选择事件
+                                eventAggregator.GetEvent<AsnOrderReceivedEvent>().Publish(selectedAsnOrder);
+                                
+                                notificationService.ShowSuccess($"已选择ASN单：{selectedAsnOrder.OrderCode}");
+                            }
                         }
                         else
                         {
-                            // 取消
-                            notificationService.ShowWarning($"已取消ASN单：{asnInfo.OrderCode}");
+                            Log.Information("用户取消选择ASN单");
+                            notificationService.ShowError("未选择ASN单");
                         }
                     });
                 });
@@ -69,8 +79,8 @@ namespace XinJuLi.Services.ASN
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "处理ASN单数据失败: {OrderCode}", asnInfo.OrderCode);
-                return Response.CreateFailed($"处理ASN单数据失败: {ex.Message}");
+                Log.Error(ex, "处理ASN单数据时发生异常: {OrderCode}", asnInfo.OrderCode);
+                return Response.CreateFailed($"处理失败: {ex.Message}", "INTERNAL_ERROR");
             }
         }
 
