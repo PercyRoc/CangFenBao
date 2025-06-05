@@ -25,6 +25,8 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Row="1" Grid.Column="1" Margin="20" HorizontalAlignment="Center" VerticalAlignment="Center">
                     <ui:TextBlock Margin="0,0,0,10" FontSize="16" FontWeight="Bold" Text="申通仓库自动揽收接口设置" />
+                    <ui:TextBlock Margin="0,0,0,15" FontSize="12" Foreground="Gray" TextWrapping="Wrap" Width="450"
+                                  Text="申通仓客户出库自动揽收接口配置。条码以'7'开头的包裹将自动调用此接口进行揽收操作。" />
                     <StackPanel Margin="0,5" Orientation="Horizontal">
                         <ui:TextBlock Width="100" Text="API地址：" />
                         <ui:TextBox Width="350" Text="{Binding Config.ApiUrl, UpdateSourceTrigger=PropertyChanged}" />
@@ -52,6 +54,11 @@
                     <StackPanel Margin="0,5" Orientation="Horizontal">
                         <ui:TextBlock Width="100" Text="揽收员编码：" />
                         <ui:TextBox Width="350" Text="{Binding Config.UserCode, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+                    
+                    <!-- 保存按钮 -->
+                    <StackPanel Margin="0,20,0,0" HorizontalAlignment="Center">
+                        <ui:Button Content="保存配置" Command="{Binding SaveCommand}" />
                     </StackPanel>
                 </StackPanel>
             </Grid>

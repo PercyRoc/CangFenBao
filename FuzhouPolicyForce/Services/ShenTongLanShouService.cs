@@ -24,24 +24,32 @@ namespace FuzhouPolicyForce.Services
         {
             var settings = settingsService.LoadSettings<ShenTongLanShouConfig>();
 
-            // if (string.IsNullOrEmpty(settings.ApiUrl) || string.IsNullOrEmpty(settings.FromAppKey) ||
-            //     string.IsNullOrEmpty(settings.FromCode) || string.IsNullOrEmpty(settings.AppSecret) ||
-            //     string.IsNullOrEmpty(settings.ApiName) || string.IsNullOrEmpty(settings.ToAppkey) ||
-            //     string.IsNullOrEmpty(settings.ToCode))
-            // {
-            //     Log.Error("申通API配置不完整，请检查ApiUrl, FromAppKey, FromCode, AppSecret, ApiName, ToAppkey, ToCode。");
-            //     return new ShenTongLanShouResponse
-            //     {
-            //         Success = false,
-            //         ErrorMsg = "申通API配置不完整"
-            //     };
-            // }
+            // 验证必填配置
+            if (string.IsNullOrEmpty(settings.ApiUrl) || string.IsNullOrEmpty(settings.FromAppKey) ||
+                string.IsNullOrEmpty(settings.FromCode) || string.IsNullOrEmpty(settings.AppSecret) ||
+                string.IsNullOrEmpty(settings.WhCode) || string.IsNullOrEmpty(settings.OrgCode) ||
+                string.IsNullOrEmpty(settings.UserCode))
+            {
+                Log.Error("申通API配置不完整，请检查ApiUrl, FromAppKey, FromCode, AppSecret, WhCode, OrgCode, UserCode。");
+                return new ShenTongLanShouResponse
+                {
+                    Success = false,
+                    ErrorMsg = "申通API配置不完整"
+                };
+            }
+
+            // 设置配置中的必填字段到请求对象
+            request.WhCode = settings.WhCode;
+            request.OrgCode = settings.OrgCode;
+            request.UserCode = settings.UserCode;
 
             var contentJson = JsonSerializer.Serialize(request);
+            Log.Debug("申通请求Content内容：{Content}", contentJson);
 
             // 计算 data_digest 签名，使用官方文档的算法
             var dataDigest = CalculateDataDigest(contentJson, settings.AppSecret);
 
+            string? responseContent = null;
             try
             {
                 Log.Information("发送申通自动揽收请求到 {ApiUrl}，content内容：{Content}", settings.ApiUrl, contentJson);
@@ -51,21 +59,24 @@ namespace FuzhouPolicyForce.Services
                 [
                     new KeyValuePair<string, string>("api_name", "GALAXY_CANGKU_AUTO_NEW"),
                     new KeyValuePair<string, string>("content", contentJson),
-                    new KeyValuePair<string, string>("from_appkey", "CAKICjlKTbfAmYc"),
-                    new KeyValuePair<string, string>("from_code", "CAKICjlKTbfAmYc"),
+                    new KeyValuePair<string, string>("from_appkey", settings.FromAppKey),
+                    new KeyValuePair<string, string>("from_code", settings.FromCode),
                     new KeyValuePair<string, string>("to_appkey", "galaxy_receive"),
-                    new KeyValuePair<string, string>("to_code", "galaxy_receive"!),
+                    new KeyValuePair<string, string>("to_code", "galaxy_receive"),
                     new KeyValuePair<string, string>("data_digest", dataDigest)
                 ]);
 
                 var response = await httpClient.PostAsync(settings.ApiUrl, formContent);
                 response.EnsureSuccessStatusCode(); // 确保HTTP状态码是成功的
 
-                var responseContent = await response.Content.ReadAsStringAsync();
+                responseContent = await response.Content.ReadAsStringAsync();
                 Log.Information("收到申通自动揽收响应：{ResponseContent}", responseContent);
 
                 // 使用 JsonSerializer 反序列化JSON响应
                 var stoResponse = JsonSerializer.Deserialize<ShenTongLanShouResponse>(responseContent);
+                
+                Log.Debug("申通响应反序列化结果：Success={Success}, ErrorMsg={ErrorMsg}, ErrorCode={ErrorCode}", 
+                    stoResponse?.Success, stoResponse?.ErrorMsg, stoResponse?.ErrorCode);
 
                 return stoResponse;
             }
@@ -80,7 +91,7 @@ namespace FuzhouPolicyForce.Services
             }
             catch (System.Text.Json.JsonException ex)
             {
-                Log.Error(ex, "解析申通自动揽收响应失败：{Message}", ex.Message);
+                Log.Error(ex, "解析申通自动揽收响应失败：{Message}, 原始响应内容：{ResponseContent}", ex.Message, responseContent ?? "未获取到响应内容");
                 return new ShenTongLanShouResponse
                 {
                     Success = false,

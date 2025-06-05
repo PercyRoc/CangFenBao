@@ -459,16 +459,13 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 {
                     try
                     {
-                        var stConfig = _settingsService.LoadSettings<ShenTongLanShouConfig>();
                         var lanShouService = new Services.ShenTongLanShouService(new HttpClient(), _settingsService);
                         var stResponse = await lanShouService.UploadCangKuAutoAsync(new ShenTongLanShouRequest
                         {
-                            StorehouseCode = "453500", // WhCode 对应 StorehouseCode
-                            OrgCode = "453500",
-                            UserCode = "4535001111",
-                            Records =
+                            // WhCode、OrgCode、UserCode 会在服务中从配置自动设置
+                            Packages =
                             [
-                                new ShenTongLanShouRecordDto
+                                new ShenTongPackageDto
                                 {
                                     WaybillNo = package.Barcode,
                                     Weight = package.Weight.ToString("F2"),
