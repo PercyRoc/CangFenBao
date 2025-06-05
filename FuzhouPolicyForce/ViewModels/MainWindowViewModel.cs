@@ -17,6 +17,7 @@ using FuzhouPolicyForce.Models;
 using FuzhouPolicyForce.WangDianTong;
 using Serilog;
 using History.Data;
+using System.Net.Http;
 
 namespace FuzhouPolicyForce.ViewModels;
 
@@ -460,23 +461,22 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     try
                     {
                         var stConfig = _settingsService.LoadSettings<ShenTongLanShouConfig>();
-                        var cangKuRequest = new CangKuAutoRequest
+                        var lanShouService = new Services.ShenTongLanShouService(new HttpClient(), _settingsService);
+                        var stResponse = await lanShouService.UploadCangKuAutoAsync(new ShenTongLanShouRequest
                         {
-                            WhCode = stConfig.WhCode,
+                            StorehouseCode = stConfig.WhCode, // WhCode 对应 StorehouseCode
                             OrgCode = stConfig.OrgCode,
                             UserCode = stConfig.UserCode,
-                            Packages =
+                            Records =
                             [
-                                new CangKuAutoPackageDto
+                                new ShenTongLanShouRecordDto
                                 {
                                     WaybillNo = package.Barcode,
-                                    Weight = package.Weight.ToString("F2"), // 保留F2格式
+                                    Weight = package.Weight.ToString("F2"),
                                     OpTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
                                 }
                             ]
-                        };
-                        var lanShouService = new Services.ShenTongLanShouService(_settingsService);
-                        var stResponse = await lanShouService.UploadCangKuAutoAsync(cangKuRequest);
+                        });
                         Log.Information("包裹 {Barcode}: 申通揽收接口异步调用尝试完成。响应详情: {@StResponse}", package.Barcode,
                             stResponse);
                     }

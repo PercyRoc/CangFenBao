@@ -279,22 +279,20 @@ namespace Camera.Services
 
         private void Dispose(bool disposing)
         {
-            if (!_disposedValue)
+            if (_disposedValue) return;
+            if (disposing)
             {
-                if (disposing)
-                {
-                    Log.Debug("[相机数据处理服务] 正在释放托管资源。");
-                    Stop(); 
+                Log.Debug("[相机数据处理服务] 正在释放托管资源。");
+                Stop(); 
                     
-                    _processedPackageSubject.OnCompleted(); 
-                    _processedPackageSubject.Dispose();
-                    _processedImageWithIdSubject.OnCompleted();
-                    _processedImageWithIdSubject.Dispose();
+                _processedPackageSubject.OnCompleted(); 
+                _processedPackageSubject.Dispose();
+                _processedImageWithIdSubject.OnCompleted();
+                _processedImageWithIdSubject.Dispose();
 
-                }
-                _disposedValue = true;
-                Log.Debug("[相机数据处理服务] 已释放。");
             }
+            _disposedValue = true;
+            Log.Debug("[相机数据处理服务] 已释放。");
         }
 
         ~CameraDataProcessingService()
