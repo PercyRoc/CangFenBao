@@ -66,26 +66,19 @@ public class ChuteSettings : BindableBase
     {
         if (string.IsNullOrEmpty(barcode)) return null;
 
-        foreach (var rule in ChuteRules.OrderBy(r => r.Value.IsEffectivelyDefault())) // 优先处理非默认规则
+        foreach (var (chuteNumber, chuteRule) in ChuteRules.OrderBy(r => r.Value.IsEffectivelyDefault())) // 优先处理非默认规则
         {
-            var chuteNumber = rule.Key;
-            var chuteRule = rule.Value;
-
-            if (chuteRule.IsMatching(barcode))
+            if (!chuteRule.IsMatching(barcode)) continue;
+            // 如果规则是默认规则，并且不是唯一的匹配，则跳过继续寻找更具体的规则。
+            // 如果只有默认规则匹配，或者该格口是唯一的匹配，则返回它。
+            if (!chuteRule.IsEffectivelyDefault()) return chuteNumber; // 返回第一个匹配的非默认规则，或者唯一的默认规则
+            // 检查是否存在其他非默认规则也匹配
+            var hasSpecificMatch = ChuteRules.Any(r => r.Key != chuteNumber && r.Value.IsMatching(barcode) && !r.Value.IsEffectivelyDefault());
+            if (hasSpecificMatch)
             {
-                // 如果规则是默认规则，并且不是唯一的匹配，则跳过继续寻找更具体的规则。
-                // 如果只有默认规则匹配，或者该格口是唯一的匹配，则返回它。
-                if (chuteRule.IsEffectivelyDefault())
-                {
-                    // 检查是否存在其他非默认规则也匹配
-                    var hasSpecificMatch = ChuteRules.Any(r => r.Key != chuteNumber && r.Value.IsMatching(barcode) && !r.Value.IsEffectivelyDefault());
-                    if (hasSpecificMatch)
-                    {
-                        continue; // 存在更具体的匹配，跳过此默认规则
-                    }
-                }
-                return chuteNumber; // 返回第一个匹配的非默认规则，或者唯一的默认规则
+                continue; // 存在更具体的匹配，跳过此默认规则
             }
+            return chuteNumber; // 返回第一个匹配的非默认规则，或者唯一的默认规则
         }
 
         return null;
@@ -199,6 +192,23 @@ public class BarcodeMatchRule : BindableBase
                string.IsNullOrEmpty(Contains) &&
                string.IsNullOrEmpty(NotContains) &&
                (string.IsNullOrEmpty(RegexPattern) || RegexPattern == "(?=.*(?))");
+    } 
+
+    /// <summary>
+    ///     检查当前规则是否为"仅字符类型"的规则（只设置了字符类型条件，其他都是默认值）
+    /// </summary>
+    private bool IsCharacterTypeOnlyRule()
+    {
+        return (IsDigitOnly || IsLetterOnly || IsAlphanumeric) &&
+               MinLength == 0 &&
+               MaxLength == 0 &&
+               string.IsNullOrEmpty(StartsWith) &&
+               string.IsNullOrEmpty(EndsWith) &&
+               string.IsNullOrEmpty(NotStartsWith) &&
+               string.IsNullOrEmpty(NotEndsWith) &&
+               string.IsNullOrEmpty(Contains) &&
+               string.IsNullOrEmpty(NotContains) &&
+               (string.IsNullOrEmpty(RegexPattern) || RegexPattern == "(?=.*(?))");
     }
 
     /// <summary>
@@ -208,6 +218,12 @@ public class BarcodeMatchRule : BindableBase
     /// <returns>是否匹配</returns>
     internal bool IsMatching(string barcode)
     {
+        // 检查是否为"仅字符类型"的默认规则，如果是则不匹配
+        if (IsCharacterTypeOnlyRule())
+        {
+            return false; // 不匹配仅字符类型的默认规则
+        }
+
         // 检查长度限制
         if (MinLength > 0 && barcode.Length < MinLength) return false;
         if (MaxLength > 0 && barcode.Length > MaxLength) return false;
