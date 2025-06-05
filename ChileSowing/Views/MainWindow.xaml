@@ -10,7 +10,7 @@
                  xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=viewModels:MainViewModel, IsDesignTimeCreatable=True}"
-                 Title="Chile Sowing Wall"
+                 Title="Sowing Wall"
                  WindowStartupLocation="CenterScreen">
     <ui:FluentWindow.Resources>
         <ResourceDictionary>
@@ -65,7 +65,7 @@
             </ui:Button>
 
             <!-- Title -->
-            <TextBlock Grid.Column="3" Text="Chile Sowing Wall" HorizontalAlignment="Center" VerticalAlignment="Center"
+            <TextBlock Grid.Column="3" Text="Sowing Wall" HorizontalAlignment="Center" VerticalAlignment="Center"
                        Margin="0,0,8,0" FontSize="20" FontFamily="Microsoft YaHei" FontWeight="SemiBold"
                        TextOptions.TextFormattingMode="Display" Foreground="black"
                        TextOptions.TextRenderingMode="ClearType">

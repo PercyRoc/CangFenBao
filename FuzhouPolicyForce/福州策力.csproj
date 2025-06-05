@@ -6,46 +6,44 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
-        <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
+        <ApplicationIcon>logo.ico</ApplicationIcon>
         <AssemblyName>仓分宝-中旭云仓</AssemblyName>
         <RootNamespace>FuzhouPolicyForce</RootNamespace>
     </PropertyGroup>
+
+    <ItemGroup>
+      <Content Include="logo.ico">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\BalanceSorting\摆轮分拣.csproj" />
         <ProjectReference Include="..\Camera\相机模块.csproj" />
         <ProjectReference Include="..\Common\基础模块.csproj" />
         <ProjectReference Include="..\History\历史模块.csproj" />
-        <ProjectReference Include="..\SortingServices\分拣服务.csproj"/>
+        <ProjectReference Include="..\SortingServices\分拣服务.csproj" />
     </ItemGroup>
 
     <ItemGroup>
         <!-- Prism -->
         <PackageReference Include="JetBrains.Annotations" />
-        <PackageReference Include="Prism.Wpf"/>
-        <PackageReference Include="Prism.Unity"/>
+        <PackageReference Include="Prism.Wpf" />
+        <PackageReference Include="Prism.Unity" />
 
         <!-- Serilog -->
-        <PackageReference Include="Serilog"/>
-        <PackageReference Include="Serilog.Sinks.Console"/>
-        <PackageReference Include="Serilog.Sinks.File"/>
-        <PackageReference Include="Serilog.Sinks.Debug"/>
-        <PackageReference Include="Serilog.Extensions.Logging"/>
+        <PackageReference Include="Serilog" />
+        <PackageReference Include="Serilog.Sinks.Console" />
+        <PackageReference Include="Serilog.Sinks.File" />
+        <PackageReference Include="Serilog.Sinks.Debug" />
+        <PackageReference Include="Serilog.Extensions.Logging" />
 
         <!-- UI Framework -->
-        <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
-        <PackageReference Include="Microsoft.Extensions.Http"/>
-        <PackageReference Include="FluentFTP"/>
-        <PackageReference Include="WPF-UI"/>
-        <PackageReference Include="HandyControl"/>
-        <PackageReference Include="WPFLocalizeExtension"/>
-    </ItemGroup>
-    <ItemGroup>
-        <Resource Include="Resources\favicon.ico">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </Resource>
-        <Resource Include="..\SharedUI\Resources\Icon\logo.ico">
-            <Link>logo.ico</Link>
-        </Resource>
+        <PackageReference Include="MahApps.Metro.IconPacks.Material" />
+        <PackageReference Include="Microsoft.Extensions.Http" />
+        <PackageReference Include="FluentFTP" />
+        <PackageReference Include="WPF-UI" />
+        <PackageReference Include="HandyControl" />
+        <PackageReference Include="WPFLocalizeExtension" />
     </ItemGroup>
 </Project>

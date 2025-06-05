@@ -7,10 +7,10 @@
                  xmlns:prism="http://prismlibrary.com/"
                  xmlns:viewModels="clr-namespace:FuzhouPolicyForce.ViewModels"
                  xmlns:hc="https://handyorg.github.io/handycontrol"
-                 xmlns:settings="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
                  xmlns:settings1="clr-namespace:FuzhouPolicyForce.Views.Settings"
                  xmlns:views="clr-namespace:Camera.Views;assembly=Camera"
                  xmlns:settings2="clr-namespace:BalanceSorting.Views.Settings;assembly=BalanceSorting"
+                 xmlns:chuteRules="clr-namespace:Common.Views.Settings.ChuteRules;assembly=Common"
                  prism:ViewModelLocator.AutoWireViewModel="True"
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}">
@@ -118,7 +118,7 @@
                                 <ui:SymbolIcon Symbol="Grid24" />
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="settings:BarcodeChuteSettingsView" />
+                                <x:Type Type="chuteRules:ChuteRuleSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
 

@@ -7,15 +7,12 @@ using FuzhouPolicyForce.ViewModels;
 using FuzhouPolicyForce.Views;
 using FuzhouPolicyForce.Views.Settings;
 using Serilog;
-using SharedUI.ViewModels.Settings;
 using Timer = System.Timers.Timer;
 using System.Diagnostics;
 using FuzhouPolicyForce.ViewModels.Settings;
 using FuzhouPolicyForce.WangDianTong;
-using SharedUI.Views.Settings;
 using System.Globalization;
 using System.Net.Http;
-using SharedUI.Views.Windows;
 using WPFLocalizeExtension.Engine;
 using WPFLocalizeExtension.Providers;
 using History; // 新增引用
@@ -23,7 +20,8 @@ using Camera; // 注册相机模块需要
 using BalanceSorting.Modules;
 using BalanceSorting.Service;
 using Camera.Interface;
-using Common; // 注册多摆轮模块需要
+using Common;
+using Common.Views.Settings.ChuteRules; // 注册多摆轮模块需要
 
 namespace FuzhouPolicyForce;
 
@@ -45,12 +43,11 @@ internal partial class App
         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
 
         containerRegistry.RegisterSingleton<ILicenseService, LicenseService>();
-        containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
         containerRegistry.RegisterForNavigation<WangDianTongSettingsView, WangDianTongSettingsViewModel>();
         containerRegistry.RegisterForNavigation<ShenTongLanShouSettingsView, ShenTongLanShouSettingsViewModel>();
-        containerRegistry.RegisterDialogWindow<HistoryDialogWindow>();
         containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>();
         containerRegistry.RegisterSingleton<IWangDianTongApiService, WangDianTongApiService>();
+        containerRegistry.RegisterDialogWindow<CustomDialogWindow>();
 
         // 注册旺店通API服务 V2
         // 注册 HttpClient

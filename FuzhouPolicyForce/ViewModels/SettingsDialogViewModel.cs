@@ -1,9 +1,13 @@
 ﻿using BalanceSorting.ViewModels.Settings;
+
 using Camera.ViewModels;
+
 using Common.Services.Ui;
+using Common.ViewModels.Settings.ChuteRules;
+
 using FuzhouPolicyForce.ViewModels.Settings;
+
 using Serilog;
-using SharedUI.ViewModels.Settings;
 
 namespace FuzhouPolicyForce.ViewModels;
 
@@ -11,7 +15,7 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
 {
     private readonly BalanceSortSettingsViewModel _balanceSortSettingsViewModel;
 
-    private readonly BarcodeChuteSettingsViewModel _barcodeChuteSettingsViewModel;
+    private readonly ChuteRuleSettingsViewModel _chuteRuleSettingsViewModel;
 
     private readonly ShenTongLanShouSettingsViewModel _shenTongLanShouSettingsViewModel;
 
@@ -31,7 +35,7 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
         // 创建各个设置页面的ViewModel实例
         _cameraSettingsViewModel = containerProvider.Resolve<CameraSettingsViewModel>();
         _balanceSortSettingsViewModel = containerProvider.Resolve<BalanceSortSettingsViewModel>();
-        _barcodeChuteSettingsViewModel = containerProvider.Resolve<BarcodeChuteSettingsViewModel>();
+        _chuteRuleSettingsViewModel = containerProvider.Resolve<ChuteRuleSettingsViewModel>();
         _wangDianTongSettingsViewModel = containerProvider.Resolve<WangDianTongSettingsViewModel>();
         _shenTongLanShouSettingsViewModel = containerProvider.Resolve<ShenTongLanShouSettingsViewModel>();
         SaveCommand = new DelegateCommand(ExecuteSave);
@@ -64,7 +68,7 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
             // 保存所有设置
             _cameraSettingsViewModel.SaveSettingsCommand.Execute(null);
             _balanceSortSettingsViewModel.SaveConfigurationCommand.Execute();
-            _barcodeChuteSettingsViewModel.SaveConfigurationCommand.Execute();
+            _chuteRuleSettingsViewModel.SaveSettingsCommand.Execute(null);
             _wangDianTongSettingsViewModel.SaveConfigurationCommand.Execute();
             _shenTongLanShouSettingsViewModel.SaveCommand.Execute();
             Log.Information("所有设置已保存");

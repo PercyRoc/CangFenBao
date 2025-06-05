@@ -108,7 +108,7 @@ namespace Camera.Services
             {
                 if (group.LengthRule.IsEnabled)
                 {
-                    int barcodeLength = package.Barcode.Length;
+                    var barcodeLength = package.Barcode.Length;
                     if ((group.LengthRule.MinLength.HasValue && barcodeLength < group.LengthRule.MinLength.Value) ||
                         (group.LengthRule.MaxLength.HasValue && barcodeLength > group.LengthRule.MaxLength.Value))
                     {
@@ -147,7 +147,7 @@ namespace Camera.Services
 
                 if (group.CharTypeRule.IsEnabled)
                 {
-                    bool charRulePassed = group.CharTypeRule.CharacterType switch
+                    var charRulePassed = group.CharTypeRule.CharacterType switch
                     {
                         BarcodeCharacterType.AllDigits => package.Barcode.All(char.IsDigit),
                         BarcodeCharacterType.AllLetters => package.Barcode.All(char.IsLetter),
@@ -161,20 +161,17 @@ namespace Camera.Services
                     }
                 }
 
-                if (group.CustomRegexRule.IsEnabled && !string.IsNullOrEmpty(group.CustomRegexRule.RegexPattern))
+                if (!group.CustomRegexRule.IsEnabled ||
+                    string.IsNullOrEmpty(group.CustomRegexRule.RegexPattern)) continue;
+                try
                 {
-                    try
-                    {
-                        if (!Regex.IsMatch(package.Barcode, group.CustomRegexRule.RegexPattern))
-                        {
-                            Log.Verbose("条码 '{Barcode}' 因 Regex 规则 ('{Pattern}') 在组 '{GroupName}' 中验证失败.", package.Barcode, group.CustomRegexRule.RegexPattern, group.GroupName);
-                            return false;
-                        }
-                    }
-                    catch (ArgumentException ex) 
-                    {
-                        Log.Warning(ex, "无效的 Regex 表达式 '{Pattern}' 在条码过滤组 '{GroupName}' 中. 此规则已跳过.", group.CustomRegexRule.RegexPattern, group.GroupName);
-                    }
+                    if (Regex.IsMatch(package.Barcode, group.CustomRegexRule.RegexPattern)) continue;
+                    Log.Verbose("条码 '{Barcode}' 因 Regex 规则 ('{Pattern}') 在组 '{GroupName}' 中验证失败.", package.Barcode, group.CustomRegexRule.RegexPattern, group.GroupName);
+                    return false;
+                }
+                catch (ArgumentException ex) 
+                {
+                    Log.Warning(ex, "无效的 Regex 表达式 '{Pattern}' 在条码过滤组 '{GroupName}' 中. 此规则已跳过.", group.CustomRegexRule.RegexPattern, group.GroupName);
                 }
             }
             return true; 
@@ -187,7 +184,7 @@ namespace Camera.Services
         {
             if (string.IsNullOrEmpty(package.Barcode)) return false; // 空条码不参与重复过滤
 
-            string currentBarcode = package.Barcode;
+            var currentBarcode = package.Barcode;
 
             lock (_nBackFilterLock)
             {
@@ -217,20 +214,20 @@ namespace Camera.Services
             {
                 try
                 {
-                    string dateFolder = DateTime.Now.ToString("yyyyMMdd");
-                    string dailyFolderPath = Path.Combine(saveSettings.SaveFolderPath, dateFolder);
+                    var dateFolder = DateTime.Now.ToString("yyyyMMdd");
+                    var dailyFolderPath = Path.Combine(saveSettings.SaveFolderPath, dateFolder);
 
                     if (!Directory.Exists(dailyFolderPath))
                     {
                         Directory.CreateDirectory(dailyFolderPath);
                     }
 
-                    string timeStampForFile = DateTime.Now.ToString("HHmmss_fff");
+                    var timeStampForFile = DateTime.Now.ToString("HHmmss_fff");
                     string sanitizedBarcode = new([.. barcode.Where(ch => !Path.GetInvalidFileNameChars().Contains(ch))]);
                     if (string.IsNullOrWhiteSpace(sanitizedBarcode)) sanitizedBarcode = "NoBarcode";
                     
-                    string fileName = $"{sanitizedBarcode}_{timeStampForFile}.png";
-                    string filePath = Path.Combine(dailyFolderPath, fileName);
+                    var fileName = $"{sanitizedBarcode}_{timeStampForFile}.png";
+                    var filePath = Path.Combine(dailyFolderPath, fileName);
 
                     BitmapEncoder encoder = new PngBitmapEncoder();
                     encoder.Frames.Add(BitmapFrame.Create(image));
