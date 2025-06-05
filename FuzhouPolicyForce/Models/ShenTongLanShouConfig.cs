@@ -3,7 +3,7 @@ using Common.Services.Settings;
 namespace FuzhouPolicyForce.Models
 {
     [Configuration("ShenTongLanShou")]
-    public class ShenTongLanShouConfig
+    public class ShenTongLanShouConfig : BindableBase
     {
         public string? ApiUrl { get; set; }
         public string? ApiName { get; set; }

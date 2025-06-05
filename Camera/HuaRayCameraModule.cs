@@ -18,7 +18,6 @@ namespace Camera
         /// <param name="containerRegistry">依赖注入容器注册表。</param>
         public void RegisterTypes(IContainerRegistry containerRegistry)
         {
-            containerRegistry.RegisterSingleton<CameraDataProcessingService>();
             containerRegistry.RegisterSingleton<ICameraService, HuaRayCameraService>();
         }
 

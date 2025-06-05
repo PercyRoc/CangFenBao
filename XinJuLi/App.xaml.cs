@@ -6,14 +6,13 @@ using XinJuLi.Services.ASN;
 using XinJuLi.ViewModels;
 using XinJuLi.Views;
 using XinJuLi.Views.Settings;
-using Prism.Modularity;
 using Camera;
-using BalanceSorting;
 using BalanceSorting.Modules;
 using Common;
 using History;
 using Camera.Interface;
 using BalanceSorting.Service;
+using Common.Views.Settings.ChuteRules;
 
 // 添加 Timer 引用
 
@@ -22,7 +21,7 @@ namespace XinJuLi
     /// <summary>
     /// Interaction logic for App.xaml
     /// </summary>
-    public partial class App
+    public partial class App: PrismApplication
     {
         private static Mutex? _mutex;
 
@@ -113,6 +112,7 @@ namespace XinJuLi
             containerRegistry.RegisterSingleton<IAsnService, AsnService>();
             containerRegistry.RegisterSingleton<AsnHttpServer>();
             containerRegistry.RegisterForNavigation<AsnHttpSettingsView, AsnHttpSettingsViewModel>();
+            containerRegistry.RegisterDialogWindow<CustomDialogWindow>();
         }
 
         protected override void ConfigureModuleCatalog(IModuleCatalog moduleCatalog)

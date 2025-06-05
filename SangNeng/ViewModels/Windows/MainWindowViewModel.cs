@@ -595,7 +595,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                             Log.Information("根据配置获取尺寸刻度图像，模式: {Mode}", volSettings.ImageSaveMode);
                             var dimensionImagesResult = await _volumeCamera.GetDimensionImagesAsync();
 
-                            string barcodeSpecificPath = string.Empty; // 在外部声明以便后续使用
+                            var barcodeSpecificPath = string.Empty; // 在外部声明以便后续使用
                             // 无论 GetDimensionImagesAsync 是否成功，只要需要保存任何尺寸图像，就创建路径
                             if (volSettings.ImageSaveMode != DimensionImageSaveMode.None)
                             {
@@ -695,7 +695,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                           (_currentPackage.Height ?? 0) <= 0;
 
                     var isComplete = !isBarcodeMissing && !isWeightMissing && !isVolumeMissing;
-                    string completionMessage = "Complete"; // Default success message for UI, will be overridden for failures
 
                     if (!isComplete)
                     {
@@ -703,12 +702,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
                             isBarcodeMissing, isWeightMissing, isVolumeMissing);
 
                         // Determine the specific error message for UI display and ErrorMessage property
+                        string completionMessage; // Default success message for UI, will be overridden for failures
                         if (isBarcodeMissing) completionMessage = "Missing Barcode";
                         else if (isWeightMissing) completionMessage = "Missing Weight";
                         else if (isVolumeMissing) completionMessage = "Missing Volume";
                         else completionMessage = "Data Incomplete"; // Fallback, theoretically should not happen
 
                         _currentPackage.ErrorMessage = completionMessage; // Store detailed error message
+                        _currentPackage.SetStatus(completionMessage); // 直接设置具体的缺失状态
                         _ = _audioService.PlayPresetAsync(AudioType.SystemError);
                         // 移除立即更新UI的调用，保留音效播放
                     }
@@ -910,7 +911,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 {
                     Log.Error("体积测量失败：{Error}", result.ErrorMessage);
                     _currentPackage.SetDimensions(0, 0, 0);
-                    _currentPackage.SetStatus("Failed"); // Set primary status to "Failed" for statistics
+                    _currentPackage.SetStatus("Failed"); // Set primary status to "Failed"
                     _currentPackage.ErrorMessage = result.ErrorMessage; // Store detailed error message
                     _ = _audioService.PlayPresetAsync(AudioType.SystemError);
                     return;

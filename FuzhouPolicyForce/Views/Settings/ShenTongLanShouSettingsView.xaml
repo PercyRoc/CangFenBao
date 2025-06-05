@@ -39,7 +39,7 @@
                     </StackPanel>
                     <StackPanel Margin="0,5" Orientation="Horizontal">
                         <ui:TextBlock Width="100" Text="密钥：" />
-                        <ui:TextBox Width="350" Text="{Binding Config.SecretKey, UpdateSourceTrigger=PropertyChanged}" />
+                        <ui:TextBox Width="350" Text="{Binding Config.AppSecret, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
                     <StackPanel Margin="0,5" Orientation="Horizontal">
                         <ui:TextBlock Width="100" Text="仓编码：" />

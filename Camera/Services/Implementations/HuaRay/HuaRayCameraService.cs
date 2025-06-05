@@ -14,6 +14,8 @@ using Microsoft.Extensions.ObjectPool;
 using Serilog;
 using Serilog.Context;
 using TurboJpegWrapper;
+using Common.Services.Settings;
+using Camera.Models.Settings;
 
 namespace Camera.Services.Implementations.HuaRay;
 
@@ -74,6 +76,8 @@ public class HuaRayCameraService : ICameraService
     private Task? _consumerTask;
     private const int ChannelCapacity = 100; // Configurable capacity for the bounded channel
 
+    private readonly ISettingsService _settingsService;
+
     #endregion
 
     #region 公共属性
@@ -111,9 +115,10 @@ public class HuaRayCameraService : ICameraService
     /// <summary>
     /// 构造函数
     /// </summary>
-    internal HuaRayCameraService()
+    internal HuaRayCameraService(ISettingsService settingsService)
     {
         _huaRayWrapper = HuaRayWrapper.Instance;
+        _settingsService = settingsService;
     }
 
     #endregion
@@ -197,6 +202,66 @@ public class HuaRayCameraService : ICameraService
 
     #endregion
 
+    #region 图像清理
+
+    /// <summary>
+    /// 清理旧图像文件，只保留最近两个月的图像。
+    /// </summary>
+    private void CleanOldImages()
+    {
+        var cameraSettings = _settingsService.LoadSettings<CameraOverallSettings>();
+        if (!cameraSettings.IsImageSaveEnabled) return; // 如果图像保存未启用，则不执行清理
+
+        var saveFolderPath = cameraSettings.ImageSave.SaveFolderPath;
+        if (!Directory.Exists(saveFolderPath))
+        {
+            Log.Information("图像保存根目录 {SaveFolderPath} 不存在，跳过清理。", saveFolderPath);
+            return;
+        }
+
+        Log.Information("开始清理旧图像文件，保留最近两个月的图像...");
+        var now = DateTime.Now;
+
+        try
+        {
+            foreach (var yearDir in Directory.GetDirectories(saveFolderPath))
+            {
+                if (!int.TryParse(Path.GetFileName(yearDir), out var year) || year < 2000 || year > 2100) continue;
+
+                foreach (var monthDir in Directory.GetDirectories(yearDir))
+                {
+                    if (!int.TryParse(Path.GetFileName(monthDir), out var month) || month < 1 || month > 12) continue;
+
+                    var folderDate = new DateTime(year, month, 1);
+
+                    // 计算要保留的最小日期（当前月份的前两个月，例如如果是3月，就保留1月、2月、3月）
+                    // 简单起见，我们保留当前月和上一个月的数据，即删除所有早于上上个月1号的文件夹。
+                    var twoMonthsAgo = now.AddMonths(-2);
+
+                    if (folderDate < new DateTime(twoMonthsAgo.Year, twoMonthsAgo.Month, 1))
+                    {
+                        try
+                        {
+                            Directory.Delete(monthDir, true);
+                            Log.Information("已删除旧图像文件夹: {MonthDir}", monthDir);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error(ex, "删除旧图像文件夹失败: {MonthDir}", monthDir);
+                        }
+                    }
+                }
+            }
+            Log.Information("旧图像文件清理完成。");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "清理旧图像文件时发生错误。");
+        }
+    }
+
+    #endregion
+
     #region 私有方法
 
     /// <summary>
@@ -254,6 +319,7 @@ public class HuaRayCameraService : ICameraService
             _huaRayWrapper.AttachCameraDisconnectCb();
             IsConnected = true;
             Log.Information("华睿相机服务启动成功.");
+            CleanOldImages();
 
             ServiceStarted?.Invoke();
             ConnectionChanged?.Invoke(string.Empty, true);
@@ -559,6 +625,43 @@ public class HuaRayCameraService : ICameraService
                     {
                         packageInfo.SetImage(processedBitmapSource, null); // Set the processed image
                         Log.Debug("已设置包裹图像"); // 使用 Debug 级别
+
+                        // 异步保存图像到本地
+                        var cameraSettings = _settingsService.LoadSettings<CameraOverallSettings>();
+                        if (cameraSettings.IsImageSaveEnabled)
+                        {
+                            var saveFolderPath = cameraSettings.ImageSave.SaveFolderPath;
+                            var today = DateTime.Now;
+                            var yearFolder = today.ToString("yyyy");
+                            var monthFolder = today.ToString("MM");
+                            var dayFolder = today.ToString("dd");
+
+                            var dailyFolderPath = Path.Combine(saveFolderPath, yearFolder, monthFolder, dayFolder);
+                            var fileName = $"{packageInfo.Barcode}_{today:yyyyMMddHHmmssfff}.jpg";
+                            var fullPath = Path.Combine(dailyFolderPath, fileName);
+
+                            _ = Task.Run(() =>
+                            {
+                                try
+                                {
+                                    if (!Directory.Exists(dailyFolderPath))
+                                    {
+                                        Directory.CreateDirectory(dailyFolderPath);
+                                    }
+
+                                    using var fileStream = new FileStream(fullPath, FileMode.Create);
+                                    var encoder = new JpegBitmapEncoder();
+                                    encoder.Frames.Add(BitmapFrame.Create(processedBitmapSource));
+                                    encoder.Save(fileStream);
+                                    packageInfo.ImagePath = fullPath; // 设置包裹图片路径
+                                    Log.Information("包裹 {PackageBarcode} 图像已保存到: {ImagePath}", packageInfo.Barcode, fullPath);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Log.Error(ex, "保存包裹 {PackageBarcode} 图像失败到: {ImagePath}", packageInfo.Barcode, fullPath);
+                                }
+                            });
+                        }
                     }
                     else
                     {

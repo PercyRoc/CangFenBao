@@ -41,7 +41,6 @@ public partial class App
     {
         // 注册视图和ViewModel
         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
-
         containerRegistry.RegisterSingleton<ILicenseService, LicenseService>();
         containerRegistry.RegisterForNavigation<WangDianTongSettingsView, WangDianTongSettingsViewModel>();
         containerRegistry.RegisterForNavigation<ShenTongLanShouSettingsView, ShenTongLanShouSettingsViewModel>();

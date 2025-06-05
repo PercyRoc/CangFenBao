@@ -332,33 +332,6 @@
                         </ItemsControl>
                     </Grid>
                 </Border>
-
-                <!-- 启动/停止按钮区域 -->
-                <Border Grid.Row="2" Margin="16,8,16,16" Padding="0">
-                    <ui:Button Command="{Binding ToggleStartStopCommand}"
-                               HorizontalAlignment="Stretch"
-                               Height="50"
-                               Padding="10,8">
-                        <ui:Button.Style>
-                            <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type Button}}">
-                                <Setter Property="Content" Value="启动" />
-                                <Setter Property="Icon" Value="{ui:SymbolIcon Play24}" />
-                                <Setter Property="Appearance" Value="Success" />
-                                <Setter Property="Background" Value="#4CAF50" />
-                                <Setter Property="FontSize" Value="20" />
-                                <Setter Property="FontWeight" Value="Bold" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsRunning}" Value="True">
-                                        <Setter Property="Content" Value="停止" />
-                                        <Setter Property="Icon" Value="{ui:SymbolIcon Stop24}" />
-                                        <Setter Property="Appearance" Value="Danger" />
-                                        <Setter Property="Background" Value="#F44336" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </ui:Button.Style>
-                    </ui:Button>
-                </Border>
             </Grid>
 
             <!-- 右侧面板 -->

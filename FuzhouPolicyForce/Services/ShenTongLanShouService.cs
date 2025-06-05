@@ -24,16 +24,18 @@ namespace FuzhouPolicyForce.Services
         {
             var settings = settingsService.LoadSettings<ShenTongLanShouConfig>();
 
-            if (string.IsNullOrEmpty(settings.ApiUrl) || string.IsNullOrEmpty(settings.FromAppKey) ||
-                string.IsNullOrEmpty(settings.FromCode) || string.IsNullOrEmpty(settings.AppSecret))
-            {
-                Log.Error("申通API配置不完整，请检查ApiUrl, FromAppKey, FromCode, AppSecret。");
-                return new ShenTongLanShouResponse
-                {
-                    Success = false,
-                    ErrorMsg = "申通API配置不完整"
-                };
-            }
+            // if (string.IsNullOrEmpty(settings.ApiUrl) || string.IsNullOrEmpty(settings.FromAppKey) ||
+            //     string.IsNullOrEmpty(settings.FromCode) || string.IsNullOrEmpty(settings.AppSecret) ||
+            //     string.IsNullOrEmpty(settings.ApiName) || string.IsNullOrEmpty(settings.ToAppkey) ||
+            //     string.IsNullOrEmpty(settings.ToCode))
+            // {
+            //     Log.Error("申通API配置不完整，请检查ApiUrl, FromAppKey, FromCode, AppSecret, ApiName, ToAppkey, ToCode。");
+            //     return new ShenTongLanShouResponse
+            //     {
+            //         Success = false,
+            //         ErrorMsg = "申通API配置不完整"
+            //     };
+            // }
 
             var contentJson = JsonSerializer.Serialize(request);
 
@@ -47,12 +49,12 @@ namespace FuzhouPolicyForce.Services
                 // 将所有公共参数和content一起作为表单数据发送
                 var formContent = new FormUrlEncodedContent(
                 [
-                    new KeyValuePair<string, string>("api_name", settings.ApiName!),
+                    new KeyValuePair<string, string>("api_name", "GALAXY_CANGKU_AUTO_NEW"),
                     new KeyValuePair<string, string>("content", contentJson),
-                    new KeyValuePair<string, string>("from_appkey", settings.FromAppKey!),
-                    new KeyValuePair<string, string>("from_code", settings.FromCode!),
-                    new KeyValuePair<string, string>("to_appkey", settings.ToAppkey!),
-                    new KeyValuePair<string, string>("to_code", settings.ToCode!),
+                    new KeyValuePair<string, string>("from_appkey", "CAKICjlKTbfAmYc"),
+                    new KeyValuePair<string, string>("from_code", "CAKICjlKTbfAmYc"),
+                    new KeyValuePair<string, string>("to_appkey", "galaxy_receive"),
+                    new KeyValuePair<string, string>("to_code", "galaxy_receive"!),
                     new KeyValuePair<string, string>("data_digest", dataDigest)
                 ]);
 

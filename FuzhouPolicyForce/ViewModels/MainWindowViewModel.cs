@@ -8,7 +8,6 @@ using System.Windows.Threading;
 using BalanceSorting.Models;
 using BalanceSorting.Service;
 using Camera.Interface;
-using Camera.Services;
 using Common.Models;
 using Common.Models.Package;
 using Common.Models.Settings.ChuteRules;
@@ -52,7 +51,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         ISettingsService settingsService,
         IPendulumSortService sortService,
         IWangDianTongApiServiceV2 wangDianTongApiServiceV2,
-        IPackageHistoryDataService packageHistoryDataService, CameraDataProcessingService cameraDataProcessingService)
+        IPackageHistoryDataService packageHistoryDataService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
@@ -89,7 +88,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         _cameraService.ConnectionChanged += OnCameraConnectionChanged;
 
         // 订阅包裹流
-        _subscriptions.Add(cameraDataProcessingService.PackageStream
+        _subscriptions.Add(_cameraService.PackageStream
             .ObserveOn(Scheduler.CurrentThread)
             .Subscribe(OnPackageInfo));
 
@@ -464,9 +463,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                         var lanShouService = new Services.ShenTongLanShouService(new HttpClient(), _settingsService);
                         var stResponse = await lanShouService.UploadCangKuAutoAsync(new ShenTongLanShouRequest
                         {
-                            StorehouseCode = stConfig.WhCode, // WhCode 对应 StorehouseCode
-                            OrgCode = stConfig.OrgCode,
-                            UserCode = stConfig.UserCode,
+                            StorehouseCode = "453500", // WhCode 对应 StorehouseCode
+                            OrgCode = "453500",
+                            UserCode = "4535001111",
                             Records =
                             [
                                 new ShenTongLanShouRecordDto
