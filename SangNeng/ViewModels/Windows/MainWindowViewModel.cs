@@ -138,6 +138,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _weightService.ConnectionChanged += OnWeightScaleConnectionChanged;
 
         // 订阅重量数据流
+        var minWeightInWindow = _rawWeightBuffer.Any() ? _rawWeightBuffer.Min() : 0.0;
         _weightDataSubscription = _weightService.WeightDataStream.Subscribe(streamTuple =>
         {
             // 在事件处理中按需加载配置
@@ -146,7 +147,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 weightSettings.StabilityCheckSamples > 0 ? weightSettings.StabilityCheckSamples : 5;
             var stabilityThresholdGrams = weightSettings.StabilityThresholdGrams > 0
                 ? weightSettings.StabilityThresholdGrams
-                : 20.0;
+                : 100;
             // 将阈值从克转换为千克，以便与缓冲区中的千克值比较
             var stabilityThresholdKg = stabilityThresholdGrams / 1000.0;
 
@@ -172,14 +173,13 @@ public class MainWindowViewModel : BindableBase, IDisposable
             }
             // 如果缓冲区已满，则检查稳定性
             if (_rawWeightBuffer.Count != stabilityCheckSamples) return;
-            double minWeightInWindow = _rawWeightBuffer.Min();
-            double maxWeightInWindow = _rawWeightBuffer.Max();
+            var maxWeightInWindow = _rawWeightBuffer.Max();
 
             // 使用转换后的 stabilityThresholdKg 进行比较
             if (!((maxWeightInWindow - minWeightInWindow) < stabilityThresholdKg)) return;
             // 数据稳定
             // _rawWeightBuffer 中的数据已经是 kg，所以 Average() 也是 kg
-            double stableAverageWeightKg = _rawWeightBuffer.Average();
+            var stableAverageWeightKg = _rawWeightBuffer.Average();
             // 使用稳定窗口中最后一个样本的时间戳
             // stableAverageWeightKg 已经是 kg，直接使用
             var stableEntry = new StableWeightEntry(stableAverageWeightKg, currentTimestamp);
@@ -603,7 +603,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                 var dateFolder = DateTime.Now.ToString("yyyy-MM-dd");
                                 var sanitizedBarcode = string.Join("_",
                                     _currentPackage.Barcode.Split(Path.GetInvalidFileNameChars()));
-                                barcodeSpecificPath = Path.Combine(baseSavePath, dateFolder, sanitizedBarcode);
+                                var timestamp = _currentPackage.CreateTime.ToString("HHmmss"); // 获取时分秒
+
+                                // 新的路径：基础路径/日期/条码_时分秒
+                                barcodeSpecificPath = Path.Combine(baseSavePath, dateFolder, $"{sanitizedBarcode}_{timestamp}");
                                 Directory.CreateDirectory(barcodeSpecificPath);
                             }
 
@@ -956,9 +959,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     var basePhotoSavePath = settings.ImageSave.SaveFolderPath;
                     var dateFolder = DateTime.Now.ToString("yyyy-MM-dd");
                     var sanitizedBarcode = string.Join("_", package.Barcode.Split(Path.GetInvalidFileNameChars()));
+                    var timestamp = package.CreateTime.ToString("HHmmss"); // 获取时分秒
 
-                    // 新的路径：基础路径/日期/条码
-                    var barcodeSpecificPhotoPath = Path.Combine(basePhotoSavePath, dateFolder, sanitizedBarcode);
+                    // 新的路径：基础路径/日期/条码_时分秒
+                    var barcodeSpecificPhotoPath = Path.Combine(basePhotoSavePath, dateFolder, $"{sanitizedBarcode}_{timestamp}");
                     Directory.CreateDirectory(barcodeSpecificPhotoPath); // 确保条码级别目录存在
 
                     // 文件名可以简化，因为条码和日期已在路径中，或者保留时间戳以防万一（例如同一条码多次快照）

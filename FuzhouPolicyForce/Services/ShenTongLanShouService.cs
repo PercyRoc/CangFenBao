@@ -1,6 +1,7 @@
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
+using System.Xml.Linq;
 using Serilog;
 using Common.Services.Settings;
 using FuzhouPolicyForce.Models;
@@ -38,6 +39,9 @@ namespace FuzhouPolicyForce.Services
                 };
             }
 
+            Log.Debug("申通配置参数：FromAppKey={FromAppKey}, FromCode={FromCode}, ToAppkey={ToAppkey}, ToCode={ToCode}", 
+                settings.FromAppKey, settings.FromCode, settings.ToAppkey, settings.ToCode);
+
             // 设置配置中的必填字段到请求对象
             request.WhCode = settings.WhCode;
             request.OrgCode = settings.OrgCode;
@@ -54,34 +58,32 @@ namespace FuzhouPolicyForce.Services
             {
                 Log.Information("发送申通自动揽收请求到 {ApiUrl}，content内容：{Content}", settings.ApiUrl, contentJson);
 
-                // 将所有公共参数和content一起作为JSON数据发送
-                var requestBody = new
-                {
-                    api_name = "GALAXY_CANGKU_AUTO_NEW",
-                    content = contentJson,
-                    from_appkey = settings.FromAppKey,
-                    from_code = settings.FromCode,
-                    to_appkey = "galaxy_receive",
-                    to_code = "galaxy_receive",
-                    data_digest = dataDigest
-                };
+                // 将所有公共参数和content一起作为表单数据发送（不是JSON）
+                var formContent = new FormUrlEncodedContent(
+                [
+                    new KeyValuePair<string, string>("api_name", "GALAXY_CANGKU_AUTO_NEW"),
+                    new KeyValuePair<string, string>("content", contentJson),
+                    new KeyValuePair<string, string>("from_appkey", settings.FromAppKey),
+                    new KeyValuePair<string, string>("from_code", settings.FromCode),
+                    new KeyValuePair<string, string>("to_appkey", settings.ToAppkey ?? "galaxy_receive"),
+                    new KeyValuePair<string, string>("to_code", settings.ToCode ?? "galaxy_receive"),
+                    new KeyValuePair<string, string>("data_digest", dataDigest)
+                ]);
 
-                var requestBodyJson = JsonSerializer.Serialize(requestBody);
-                Log.Debug("申通最终请求Body内容：{RequestBody}", requestBodyJson);
+                Log.Debug("申通请求参数：api_name=GALAXY_CANGKU_AUTO_NEW, from_appkey={FromAppKey}, to_appkey={ToAppkey}", 
+                    settings.FromAppKey, settings.ToAppkey ?? "galaxy_receive");
 
-                var stringContent = new StringContent(requestBodyJson, Encoding.UTF8, "application/json");
-
-                var response = await httpClient.PostAsync(settings.ApiUrl, stringContent);
+                var response = await httpClient.PostAsync(settings.ApiUrl, formContent);
                 response.EnsureSuccessStatusCode(); // 确保HTTP状态码是成功的
 
                 responseContent = await response.Content.ReadAsStringAsync();
                 Log.Information("收到申通自动揽收响应：{ResponseContent}", responseContent);
 
-                // 使用 JsonSerializer 反序列化JSON响应
-                var stoResponse = JsonSerializer.Deserialize<ShenTongLanShouResponse>(responseContent);
+                // 尝试解析响应（可能是JSON或XML格式）
+                var stoResponse = ParseResponse(responseContent);
                 
-                Log.Debug("申通响应反序列化结果：Success={Success}, ErrorMsg={ErrorMsg}, ErrorCode={ErrorCode}", 
-                    stoResponse?.Success, stoResponse?.ErrorMsg, stoResponse?.ErrorCode);
+                Log.Debug("申通响应解析结果：Success={Success}, ErrorMsg={ErrorMsg}, ErrorCode={ErrorCode}, RespCode={RespCode}, ResMessage={ResMessage}", 
+                    stoResponse?.Success, stoResponse?.ErrorMsg, stoResponse?.ErrorCode, stoResponse?.Data?.RespCode, stoResponse?.Data?.ResMessage);
 
                 return stoResponse;
             }
@@ -135,5 +137,92 @@ namespace FuzhouPolicyForce.Services
             
             return base64String; // 不进行 URL 编码，让 HttpClient 自动处理
         }
+
+        /// <summary>
+        /// 解析响应（可能是JSON或XML格式）
+        /// </summary>
+        /// <param name="responseContent">响应内容</param>
+        /// <returns>解析后的响应对象</returns>
+        private ShenTongLanShouResponse? ParseResponse(string responseContent)
+        {
+            if (string.IsNullOrWhiteSpace(responseContent))
+            {
+                Log.Warning("申通响应内容为空");
+                return new ShenTongLanShouResponse
+                {
+                    Success = false,
+                    ErrorMsg = "响应内容为空"
+                };
+            }
+
+            try
+            {
+                // 首先尝试作为JSON解析
+                if (responseContent.TrimStart().StartsWith("{"))
+                {
+                    Log.Debug("尝试解析JSON格式响应");
+                    return JsonSerializer.Deserialize<ShenTongLanShouResponse>(responseContent);
+                }
+                // 尝试作为XML解析
+                else if (responseContent.TrimStart().StartsWith("<"))
+                {
+                    Log.Debug("尝试解析XML格式响应");
+                    return ParseXmlResponse(responseContent);
+                }
+                else
+                {
+                    Log.Warning("无法识别的响应格式：{ResponseContent}", responseContent);
+                    return new ShenTongLanShouResponse
+                    {
+                        Success = false,
+                        ErrorMsg = "无法识别的响应格式"
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "解析申通响应失败：{Message}", ex.Message);
+                return new ShenTongLanShouResponse
+                {
+                    Success = false,
+                    ErrorMsg = $"解析响应失败：{ex.Message}"
+                };
+            }
+        }
+
+        /// <summary>
+        /// 解析XML格式的响应
+        /// </summary>
+        /// <param name="xmlContent">XML响应内容</param>
+        /// <returns>解析后的响应对象</returns>  
+        private ShenTongLanShouResponse ParseXmlResponse(string xmlContent)
+        {
+            var xDoc = XDocument.Parse(xmlContent);
+            var responseElement = xDoc.Root;
+
+            if (responseElement == null)
+            {
+                return new ShenTongLanShouResponse
+                {
+                    Success = false,
+                    ErrorMsg = "XML响应根元素为空"
+                };
+            }
+
+            var successElement = responseElement.Element("success");
+            var errorCodeElement = responseElement.Element("errorCode");
+            var errorMsgElement = responseElement.Element("errorMsg");
+
+            var success = successElement?.Value?.ToLower() == "true";
+            var errorCode = errorCodeElement?.Value ?? "";
+            var errorMsg = errorMsgElement?.Value ?? "";
+
+            return new ShenTongLanShouResponse
+            {
+                Success = success,
+                ErrorCode = errorCode,
+                ErrorMsg = errorMsg
+            };
+        }
     }
-} 
+}

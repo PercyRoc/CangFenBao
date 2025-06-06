@@ -56,6 +56,16 @@
                         <ui:TextBox Width="350" Text="{Binding Config.UserCode, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
                     
+                    <!-- 测试功能 -->
+                    <ui:TextBlock Margin="0,20,0,10" FontSize="14" FontWeight="Bold" Text="接口测试" />
+                    <StackPanel Margin="0,5" Orientation="Horizontal">
+                        <ui:TextBlock Width="100" Text="测试条码：" />
+                        <ui:TextBox Width="250" Text="{Binding TestWaybillNo, UpdateSourceTrigger=PropertyChanged}" />
+                        <ui:Button Margin="10,0,0,0" Content="发送测试" Command="{Binding TestCommand}" IsEnabled="{Binding IsTestEnabled}" />
+                    </StackPanel>
+                    <ui:TextBlock Margin="0,5" FontSize="12" Foreground="Gray" TextWrapping="Wrap" Width="450"
+                                  Text="{Binding TestResult}" />
+                    
                     <!-- 保存按钮 -->
                     <StackPanel Margin="0,20,0,0" HorizontalAlignment="Center">
                         <ui:Button Content="保存配置" Command="{Binding SaveCommand}" />

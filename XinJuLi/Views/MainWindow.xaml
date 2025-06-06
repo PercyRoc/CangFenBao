@@ -124,9 +124,9 @@
             <!-- 左侧面板 -->
             <Grid Grid.Column="0">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="2*" />
+                    <RowDefinition Height="2*" />
+                    <RowDefinition Height="1*" />
                 </Grid.RowDefinitions>
 
                 <!-- 实时包裹信息 -->
@@ -239,7 +239,7 @@
                 </Border>
 
                 <!-- 统计信息区域 -->
-                <Border Grid.Row="1" Margin="16,8,16,8">
+                <Border Grid.Row="1" Margin="16,8,16,4">
                     <Grid Margin="16">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -330,6 +330,132 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                    </Grid>
+                </Border>
+
+                <!-- 格口状态区域 -->
+                <Border Grid.Row="2" Margin="16,4,16,8">
+                    <Grid Margin="16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!-- 标题 -->
+                        <DockPanel Grid.Row="0" Margin="0,0,0,12">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Grid24"
+                                               Width="24"
+                                               Height="24"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                               VerticalAlignment="Center" />
+                                <TextBlock Text="格口状态"
+                                           Margin="8,0,0,0"
+                                           FontSize="16"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource AccentBrush}"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </DockPanel>
+
+                        <!-- 格口状态网格 -->
+                        <ScrollViewer Grid.Row="1" 
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding ChuteStatuses}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Margin="4"
+                                                Width="120"
+                                                Height="80"
+                                                Command="{Binding DataContext.ClearChuteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}"
+                                                Cursor="Hand"
+                                                ToolTip="{Binding Description}">
+                                            <Button.Style>
+                                                <Style TargetType="Button">
+                                                    <Setter Property="Background" Value="LightGray" />
+                                                    <Setter Property="BorderBrush" Value="Gray" />
+                                                    <Setter Property="BorderThickness" Value="1" />
+                                                    <Setter Property="Margin" Value="4" />
+                                                    <Setter Property="Padding" Value="8" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsAssigned}" Value="True">
+                                                            <Setter Property="Background" Value="LightBlue" />
+                                                            <Setter Property="BorderBrush" Value="Blue" />
+                                                            <Setter Property="BorderThickness" Value="2" />
+                                                        </DataTrigger>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter Property="Background" Value="LightYellow" />
+                                                        </Trigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                            
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="*" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
+
+                                                <!-- 格口编号 -->
+                                                <TextBlock Grid.Row="0"
+                                                           Text="{Binding ChuteNumber, StringFormat=格口 {0}}"
+                                                           FontSize="14"
+                                                           FontWeight="SemiBold"
+                                                           HorizontalAlignment="Center"
+                                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+
+                                                <!-- 分配的类别 -->
+                                                <TextBlock Grid.Row="1"
+                                                           Text="{Binding Category}"
+                                                           FontSize="20"
+                                                           FontWeight="Bold"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource AccentBrush}">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsAssigned}" Value="False">
+                                                                    <Setter Property="Text" Value="空闲" />
+                                                                    <Setter Property="FontSize" Value="12" />
+                                                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+
+                                                <!-- 状态图标 -->
+                                                <ui:SymbolIcon Grid.Row="2"
+                                                               Symbol="Checkmark24"
+                                                               Width="16"
+                                                               Height="16"
+                                                               HorizontalAlignment="Center"
+                                                               Foreground="Green">
+                                                    <ui:SymbolIcon.Style>
+                                                        <Style TargetType="ui:SymbolIcon">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsAssigned}" Value="False">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </ui:SymbolIcon.Style>
+                                                </ui:SymbolIcon>
+                                            </Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
                     </Grid>
                 </Border>
             </Grid>

@@ -291,3 +291,71 @@ public class PackageInfo : IDisposable
         PalletHeight = palletHeight;
     }
 }
+
+/// <summary>
+/// 格口状态项
+/// </summary>
+public class ChuteStatusItem : BindableBase
+{
+    private int _chuteNumber;
+    private string _category = string.Empty;
+    private string _description = string.Empty;
+    private bool _isAssigned;
+
+    /// <summary>
+    /// 格口编号
+    /// </summary>
+    public int ChuteNumber
+    {
+        get => _chuteNumber;
+        set => SetProperty(ref _chuteNumber, value);
+    }
+
+    /// <summary>
+    /// 分配的类别
+    /// </summary>
+    public string Category
+    {
+        get => _category;
+        set => SetProperty(ref _category, value);
+    }
+
+    /// <summary>
+    /// 描述信息
+    /// </summary>
+    public string Description
+    {
+        get => _description;
+        set => SetProperty(ref _description, value);
+    }
+
+    /// <summary>
+    /// 是否已分配
+    /// </summary>
+    public bool IsAssigned
+    {
+        get => _isAssigned;
+        set => SetProperty(ref _isAssigned, value);
+    }
+
+    public ChuteStatusItem(int chuteNumber)
+    {
+        ChuteNumber = chuteNumber;
+        IsAssigned = false;
+        Description = "空闲";
+    }
+
+    public void AssignCategory(string category)
+    {
+        Category = category;
+        IsAssigned = true;
+        Description = $"已分配给类别: {category}";
+    }
+
+    public void Clear()
+    {
+        Category = string.Empty;
+        IsAssigned = false;
+        Description = "空闲";
+    }
+}

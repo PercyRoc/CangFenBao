@@ -59,6 +59,42 @@ namespace FuzhouPolicyForce.Models
         public string? ErrorCode { get; set; }
 
         [JsonPropertyName("data")]
-        public string? Data { get; set; }
+        public ShenTongResponseData? Data { get; set; }
+    }
+
+    /// <summary>
+    /// 申通响应数据部分
+    /// </summary>
+    public class ShenTongResponseData
+    {
+        [JsonPropertyName("respCode")]
+        public string? RespCode { get; set; }
+
+        [JsonPropertyName("resMessage")]
+        public string? ResMessage { get; set; }
+
+        [JsonPropertyName("data")]
+        public JsonElement? Data { get; set; }  // 使用JsonElement来处理可能的数组或对象
+    }
+
+    /// <summary>
+    /// 申通业务数据部分
+    /// </summary>
+    public class ShenTongBusinessData
+    {
+        [JsonPropertyName("record")]
+        public ShenTongRecord? Record { get; set; }
+    }
+
+    /// <summary>
+    /// 申通记录数据
+    /// </summary>
+    public class ShenTongRecord
+    {
+        [JsonPropertyName("waybillNo")]
+        public string? WaybillNo { get; set; }
+
+        [JsonPropertyName("errorDescription")]
+        public string? ErrorDescription { get; set; }
     }
 } 

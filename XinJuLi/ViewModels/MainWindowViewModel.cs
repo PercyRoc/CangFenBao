@@ -27,7 +27,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly INotificationService _notificationService;
     private readonly ISettingsService _settingsService;
     private readonly IPendulumSortService _sortService;
-    private readonly IAsnService _asnService;
     private readonly IPackageHistoryDataService _packageHistoryDataService;
     private readonly IAsnCacheService _asnCacheService;
     private readonly List<IDisposable> _subscriptions = [];
@@ -63,7 +62,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
         ISettingsService settingsService,
         IPendulumSortService sortService,
         INotificationService notificationService,
-        IAsnService asnService,
         IEventAggregator eventAggregator,
         IPackageHistoryDataService packageHistoryDataService,
         IAsnCacheService asnCacheService)
@@ -73,13 +71,13 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _settingsService = settingsService;
         _sortService = sortService;
         _notificationService = notificationService;
-        _asnService = asnService;
         _packageHistoryDataService = packageHistoryDataService;
         _asnCacheService = asnCacheService;
         _eventAggregator = eventAggregator;
 
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
         OpenHistoryCommand = new DelegateCommand(ExecuteOpenHistory);
+        ClearChuteCommand = new DelegateCommand<ChuteStatusItem>(ExecuteClearChute);
 
         // 初始化系统状态更新定时器
         _timer = new DispatcherTimer
@@ -97,6 +95,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         // 初始化包裹信息
         InitializePackageInfoItems();
+
+        // 初始化格口状态
+        InitializeChuteStatuses();
 
         // 订阅相机连接状态事件
         _cameraService.ConnectionChanged += OnCameraConnectionChanged;
@@ -146,10 +147,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         // 订阅ASN缓存变更事件
         _asnCacheService.CacheChanged += OnAsnCacheChanged;
+
+        // 测试：分配一个格口用于验证UI显示
+        TestAssignChute();
     }
 
     public DelegateCommand OpenSettingsCommand { get; }
     public DelegateCommand OpenHistoryCommand { get; }
+    public DelegateCommand<ChuteStatusItem> ClearChuteCommand { get; }
 
     public string CurrentBarcode
     {
@@ -205,6 +210,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     public ObservableCollection<StatisticsItem> StatisticsItems { get; } = [];
     public ObservableCollection<DeviceStatus> DeviceStatuses { get; } = [];
     public ObservableCollection<PackageInfoItem> PackageInfoItems { get; } = [];
+    public ObservableCollection<ChuteStatusItem> ChuteStatuses { get; } = [];
 
     /// <summary>
     /// 加载并应用ASN订单数据用于分拣
@@ -235,9 +241,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     item.ItemCode, item.SkuCode, item.SkuName);
             }
 
-            // 清空之前的SKU-格口映射，不预先分配格口
+            // 清空之前的类别-格口映射
             _skuChuteMappings.Clear();
-            _chuteSkuCount.Clear();
+            
+            // 清空所有格口状态
+            foreach (var chuteStatus in ChuteStatuses)
+            {
+                chuteStatus.Clear();
+            }
 
             // 通知UI更新
             RaisePropertyChanged(nameof(CurrentAsnOrderCode));
@@ -256,36 +267,34 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
 
     /// <summary>
-    /// 查找可用的格口（SKU数量少于2的）
+    /// 查找可用的格口（未分配的偶数格口）
     /// </summary>
     /// <returns>可用格口号，如果没有则返回-1</returns>
     private int FindAvailableChute()
     {
         // 按需加载配置
         var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
-        // 从1开始循环到格口数量，每次增加2以只分配奇数格口
-        for (var i = 1; i <= chuteSettings.ChuteCount; i += 2)
+        for (var i = 2; i <= chuteSettings.ChuteCount; i += 2)
         {
-            // 如果格口不存在或者SKU数量小于2，则可用
-            if (!_chuteSkuCount.TryGetValue(i, out var value) || value < 2)
+            // 如果格口还未被分配，则可用
+            if (!_skuChuteMappings.ContainsValue(i))
                 return i;
         }
 
-        // 没有可用奇数格口
+        // 没有可用的偶数格口
         return -1;
     }
 
     /// <summary>
     /// 处理接收到的包裹信息
     /// </summary>
-    private async void OnPackageInfo(PackageInfo package)
+    private void OnPackageInfo(PackageInfo package)
     {
         try
         {
             var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
-            var asnSettings = _settingsService.LoadSettings<AsnSettings>(); // 加载ASN设置
 
-            Log.Information("接收到包裹信息: {Barcode}, 重量: {称重模块}kg", package.Barcode, package.Weight);
+            Log.Information("接收到包裹信息: {Barcode}, 重量: {Weight}kg", package.Barcode, package.Weight);
 
             // 更新当前条码
             CurrentBarcode = package.Barcode;
@@ -308,122 +317,67 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 return;
             }
 
-            // 暂时注释掉复核接口调用
-            /*
-            // 构建扫码复核请求
-            var reviewRequest = new MaterialReviewRequest
+            // 解析条码，获取第二个字符
+            var barcodeParts = package.Barcode.Split('-');
+            if (barcodeParts.Length < 2)
             {
-                SystemCode = asnSettings.SystemCode,
-                HouseCode = asnSettings.HouseCode,
-                BoxCode = package.Barcode,
-                ExitArea = asnSettings.ReviewExitArea // 使用设置中的月台值
-            };
-
-            Log.Information("发送扫码复核请求: {@ReviewRequest}", reviewRequest);
-
-            // 调用扫码复核接口
-            var reviewResponse = await _asnService.ProcessMaterialReview(reviewRequest);
-
-            // 根据接口返回处理包裹
-            if (reviewResponse.Success == false)
-            {
-                // 复核失败
-                Log.Warning("包裹 {Barcode} 扫码复核失败: {Message}", package.Barcode, reviewResponse.Message);
-                package.SetStatus("复核失败");
-                package.ErrorMessage = $"复核失败: {reviewResponse.Message}";
+                Log.Warning("包裹条码格式不正确: {Barcode}", package.Barcode);
+                package.SetStatus("条码格式错误");
+                package.ErrorMessage = "条码格式不正确";
                 package.SetChute(chuteSettings.ErrorChuteNumber);
-
-                ProcessPackageWithError(package, chuteSettings.ErrorChuteNumber, package.ErrorMessage);
+                ProcessPackageWithError(package, chuteSettings.ErrorChuteNumber, "条码格式错误");
                 SavePackage(package);
-
-                // 计数更新
-                _totalPackageCount++;
-                _failedPackageCount++;
-                UpdateStatisticsItems();
                 return;
             }
 
-            // 复核成功，继续执行原有的SKU匹配和分拣逻辑
-            Log.Information("包裹 {Barcode} 扫码复核成功，继续进行SKU匹配和分拣", package.Barcode);
-            */
-
-            // 跳过复核，直接进行SKU匹配和分拣逻辑
-            Log.Information("包裹 {Barcode} 跳过复核，直接进行SKU匹配和分拣", package.Barcode);
-
-            // 如果没有ASN订单缓存，无法匹配SKU
-            if (AsnOrderItems.Count == 0 || string.IsNullOrEmpty(CurrentAsnOrderCode))
+            var category = barcodeParts[1];
+            if (string.IsNullOrEmpty(category))
             {
-                Log.Warning("没有加载的ASN订单数据，无法为包裹 {Barcode} 匹配SKU", package.Barcode);
-                package.SetStatus("无ASN单数据");
-                package.ErrorMessage = "无ASN单数据";
+                Log.Warning("包裹条码类别为空: {Barcode}", package.Barcode);
+                package.SetStatus("条码类别为空");
+                package.ErrorMessage = "条码类别为空";
                 package.SetChute(chuteSettings.ErrorChuteNumber);
-
-                // 分拣操作 - 错误格口
-                ProcessPackageWithError(package, chuteSettings.ErrorChuteNumber, "无ASN单数据");
-                // 记录包裹
+                ProcessPackageWithError(package, chuteSettings.ErrorChuteNumber, "条码类别为空");
                 SavePackage(package);
-
-                // 计数更新
-                _totalPackageCount++;
-                _failedPackageCount++;
-                UpdateStatisticsItems();
                 return;
             }
 
-            // 查找对应的订单项，通常条码会与itemCode匹配
-            // 更正：根据日志显示，包裹条码与SkuCode匹配更为合理
-            var matchedItem = AsnOrderItems.FirstOrDefault(item =>
-                item.SkuCode.Equals(package.Barcode, StringComparison.OrdinalIgnoreCase));
-
-            if (matchedItem == null)
+            // 检查该类别是否已分配格口
+            if (!_skuChuteMappings.TryGetValue(category, out var chuteNumber))
             {
-                Log.Warning("包裹 {Barcode} 在ASN订单 {OrderCode} 中找不到匹配的货品",
-                    package.Barcode, CurrentAsnOrderCode);
-                package.SetStatus("ASN单中无匹配");
-                package.ErrorMessage = "ASN单中无匹配";
-                package.SetChute(chuteSettings.ErrorChuteNumber);
-
-                // 分拣操作 - 错误格口
-                ProcessPackageWithError(package, chuteSettings.ErrorChuteNumber, "ASN单中无匹配");
-                // 记录包裹
-                SavePackage(package);
-
-                // 计数更新
-                _totalPackageCount++;
-                _failedPackageCount++;
-                UpdateStatisticsItems();
-                return;
-            }
-
-            // 如果到达此处，表示ASN数据存在，且匹配到了货品
-            // 现在，根据SKU映射确定格口，如果未分配则动态分配
-            if (!_skuChuteMappings.TryGetValue(matchedItem.SkuCode, out var chuteNumber))
-            {
-                // SKU未分配格口，尝试动态分配
-                Log.Information("SKU {SkuCode} 未分配格口，开始动态分配", matchedItem.SkuCode);
-                
+                // 类别未分配格口，查找下一个可用的偶数格口
                 var availableChute = FindAvailableChute();
                 if (availableChute > 0)
                 {
-                    // 分配格口给该SKU
-                    _skuChuteMappings[matchedItem.SkuCode] = availableChute;
-                    _chuteSkuCount.TryAdd(availableChute, 0);
-                    _chuteSkuCount[availableChute]++;
+                    // 分配格口给该类别
+                    _skuChuteMappings[category] = availableChute;
+                    
+                    // 更新格口状态显示
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        var chuteStatus = ChuteStatuses.FirstOrDefault(x => x.ChuteNumber == availableChute);
+                        if (chuteStatus != null)
+                        {
+                            chuteStatus.AssignCategory(category);
+                            Log.Debug("格口状态已更新: 格口 {ChuteNumber} 分配给类别 {Category}", availableChute, category);
+                        }
+                        else
+                        {
+                            Log.Warning("未找到格口 {ChuteNumber} 的状态对象", availableChute);
+                        }
+                    });
                     
                     chuteNumber = availableChute;
-                    Log.Information("SKU {SkuCode} 动态分配到格口 {Chute}", matchedItem.SkuCode, availableChute);
+                    Log.Information("类别 {Category} 分配到格口 {Chute}", category, availableChute);
                 }
                 else
                 {
                     // 没有可用格口
-                    Log.Warning("没有可用格口分配给SKU {SkuCode}，将分配到错误格口", matchedItem.SkuCode);
+                    Log.Warning("没有可用格口分配给类别 {Category}，将分配到错误格口", category);
                     package.SetStatus("无可用格口");
-                    package.ErrorMessage = $"SKU {matchedItem.SkuCode} 无可用格口";
+                    package.ErrorMessage = $"类别 {category} 无可用格口";
                     package.SetChute(chuteSettings.ErrorChuteNumber);
                     ProcessPackageWithError(package, chuteSettings.ErrorChuteNumber, package.ErrorMessage);
-                    _totalPackageCount++;
-                    _failedPackageCount++;
-                    UpdateStatisticsItems();
                     SavePackage(package);
                     return;
                 }
@@ -431,10 +385,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
             package.SetChute(chuteNumber);
             package.SetStatus("成功");
-            package.ErrorMessage = string.Empty; // 清除任何之前的错误信息
+            package.ErrorMessage = string.Empty;
 
             // 更新UI显示（成功状态）
-            UpdatePackageInfoItemsWithSku(matchedItem, chuteNumber);
+            UpdatePackageInfoItemsWithCategory(category, chuteNumber);
 
             // 分拣操作 - 成功格口
             ProcessPackageSuccess(package);
@@ -455,23 +409,16 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 // 发生异常，分配到异常格口
                 {
-                    // 再次加载配置以确保在异常处理中也使用最新值
                     var currentChuteSettings = _settingsService.LoadSettings<ChuteSettings>();
                     package.SetChute(currentChuteSettings.ErrorChuteNumber);
                     package.SetStatus("处理异常");
                     package.ErrorMessage = $"处理发生异常: {ex.Message}";
 
-                    // 分拣操作 - 异常格口
                     ProcessPackageWithError(package, currentChuteSettings.ErrorChuteNumber, "处理异常");
-
-                    // 记录包裹
                     SavePackage(package);
 
-                    // 计数更新
                     _totalPackageCount++;
                     _failedPackageCount++;
-
-                    // 更新统计数据
                     UpdateStatisticsItems();
                 }
             }
@@ -479,6 +426,32 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 Log.Error(innerEx, "处理包裹异常时发生二次错误");
             }
+        }
+    }
+
+    /// <summary>
+    /// 使用类别信息更新包裹显示
+    /// </summary>
+    private void UpdatePackageInfoItemsWithCategory(string category, int chuteNumber)
+    {
+        try
+        {
+            // 更新格口显示
+            var chuteItem = PackageInfoItems.FirstOrDefault(x => x.Label == "格口");
+            if (chuteItem != null)
+            {
+                chuteItem.Value = chuteNumber.ToString();
+                chuteItem.Description = $"类别: {category}";
+            }
+
+            // 更新状态显示
+            var statusItem = PackageInfoItems.FirstOrDefault(x => x.Label == "状态");
+            if (statusItem != null)
+                statusItem.Value = "成功";
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "使用类别信息更新包裹显示时发生错误");
         }
     }
 
@@ -549,32 +522,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "更新包裹信息显示时发生错误");
-        }
-    }
-
-    /// <summary>
-    /// 使用SKU信息更新包裹显示
-    /// </summary>
-    private void UpdatePackageInfoItemsWithSku(AsnOrderItem item, int chuteNumber)
-    {
-        try
-        {
-            // 更新格口显示
-            var chuteItem = PackageInfoItems.FirstOrDefault(x => x.Label == "格口");
-            if (chuteItem != null)
-            {
-                chuteItem.Value = chuteNumber.ToString();
-                chuteItem.Description = $"{item.SkuName} ({item.SkuCode})";
-            }
-
-            // 更新状态显示
-            var statusItem = PackageInfoItems.FirstOrDefault(x => x.Label == "状态");
-            if (statusItem != null)
-                statusItem.Value = "成功";
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "使用SKU信息更新包裹显示时发生错误");
         }
     }
 
@@ -676,6 +623,35 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private void ExecuteOpenHistory()
     {
         _dialogService.ShowDialog("PackageHistoryDialogView", null, (Action<IDialogResult>?)null);
+    }
+
+    private void ExecuteClearChute(ChuteStatusItem? chuteStatusItem)
+    {
+        if (chuteStatusItem == null || !chuteStatusItem.IsAssigned)
+            return;
+
+        try
+        {
+            // 从映射中移除该格口的分配
+            var categoryToRemove = _skuChuteMappings.FirstOrDefault(x => x.Value == chuteStatusItem.ChuteNumber).Key;
+            if (!string.IsNullOrEmpty(categoryToRemove))
+            {
+                _skuChuteMappings.Remove(categoryToRemove);
+                
+                Log.Information("已清空格口 {ChuteNumber} 的分配，原分配类别: {Category}", 
+                    chuteStatusItem.ChuteNumber, categoryToRemove);
+                
+                // 更新UI状态
+                chuteStatusItem.Clear();
+                
+                _notificationService.ShowSuccess($"已清空格口 {chuteStatusItem.ChuteNumber} 的分配");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "清空格口分配时发生错误");
+            _notificationService.ShowError("清空格口分配失败：" + ex.Message);
+        }
     }
 
 
@@ -807,6 +783,58 @@ public class MainWindowViewModel : BindableBase, IDisposable
         ));
     }
 
+    private void InitializeChuteStatuses()
+    {
+        try
+        {
+            var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
+            
+            // 初始化偶数格口状态（从2开始，步长为2）
+            for (var i = 2; i <= chuteSettings.ChuteCount; i += 2)
+            {
+                ChuteStatuses.Add(new ChuteStatusItem(i));
+            }
+            
+            Log.Information("已初始化 {Count} 个格口状态", ChuteStatuses.Count);
+            
+            // 调试：输出所有初始化的格口
+            foreach (var chute in ChuteStatuses)
+            {
+                Log.Debug("初始化格口: {ChuteNumber}, 状态: {IsAssigned}", chute.ChuteNumber, chute.IsAssigned);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "初始化格口状态时发生错误");
+        }
+    }
+
+    private void TestAssignChute()
+    {
+        try
+        {
+            // 延迟执行，确保UI已经初始化完成
+            Task.Delay(1000).ContinueWith(_ =>
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    if (ChuteStatuses.Count > 0)
+                    {
+                        var testChute = ChuteStatuses.First();
+                        testChute.AssignCategory("A");
+                        _skuChuteMappings["A"] = testChute.ChuteNumber;
+                        
+                        Log.Information("测试分配格口 {ChuteNumber} 给类别 A", testChute.ChuteNumber);
+                    }
+                });
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "测试分配格口时发生错误");
+        }
+    }
+
     private void OnCameraConnectionChanged(string? deviceId, bool isConnected)
     {
         try
@@ -878,15 +906,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 if (result.Result == ButtonResult.OK)
                 {
                     var selectedAsnOrder = result.Parameters.GetValue<AsnOrderInfo>("SelectedAsnOrder");
-                    if (selectedAsnOrder != null)
-                    {
-                        Log.Information("用户在选择对话框中选择ASN单: {OrderCode}", selectedAsnOrder.OrderCode);
+                    Log.Information("用户在选择对话框中选择ASN单: {OrderCode}", selectedAsnOrder.OrderCode);
                         
-                        // 发布ASN订单选择事件，由 OnAsnOrderSelected 方法处理
-                        _eventAggregator.GetEvent<AsnOrderReceivedEvent>().Publish(selectedAsnOrder);
+                    // 发布ASN订单选择事件，由 OnAsnOrderSelected 方法处理
+                    _eventAggregator.GetEvent<AsnOrderReceivedEvent>().Publish(selectedAsnOrder);
                         
-                        _notificationService.ShowSuccess($"已选择ASN单：{selectedAsnOrder.OrderCode}");
-                    }
+                    _notificationService.ShowSuccess($"已选择ASN单：{selectedAsnOrder.OrderCode}");
                 }
                 else
                 {
