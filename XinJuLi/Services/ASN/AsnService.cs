@@ -44,36 +44,8 @@ namespace XinJuLi.Services.ASN
                 // 将ASN单添加到缓存
                 asnCacheService.AddAsnOrder(asnInfo);
 
-                // 在UI线程中弹出选择对话框
-                Application.Current.Dispatcher.Invoke(() =>
-                {
-                    var parameters = new DialogParameters
-                    {
-                        { "NewAsnOrderCode", asnInfo.OrderCode } // 传递新收到的ASN单编码，用于高亮显示
-                    };
-
-                    dialogService.ShowDialog("AsnOrderSelectionDialog", parameters, result =>
-                    {
-                        if (result.Result == ButtonResult.OK)
-                        {
-                            var selectedAsnOrder = result.Parameters.GetValue<AsnOrderInfo>("SelectedAsnOrder");
-                            if (selectedAsnOrder != null)
-                            {
-                                Log.Information("用户选择ASN单: {OrderCode}", selectedAsnOrder.OrderCode);
-                                
-                                // 发布ASN订单选择事件
-                                eventAggregator.GetEvent<AsnOrderReceivedEvent>().Publish(selectedAsnOrder);
-                                
-                                notificationService.ShowSuccess($"已选择ASN单：{selectedAsnOrder.OrderCode}");
-                            }
-                        }
-                        else
-                        {
-                            Log.Information("用户取消选择ASN单");
-                            notificationService.ShowError("未选择ASN单");
-                        }
-                    });
-                });
+                // 发布ASN单已添加到缓存事件
+                eventAggregator.GetEvent<AsnOrderAddedToCacheEvent>().Publish(asnInfo);
 
                 return Response.CreateSuccess();
             }

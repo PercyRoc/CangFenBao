@@ -210,6 +210,9 @@ namespace XinJuLi.Services.ASN
                 // 等待本地处理完成
                 var localResult = await localTask;
 
+                // 返回本地处理结果
+                await SendResponseAsync(response, 200, localResult);
+
                 // 检查转发结果（不阻塞本地处理结果）
                 var forwardSuccess = await forwardTask;
                 if (!forwardSuccess && !settings.ContinueOnForwardFailure)
@@ -223,9 +226,6 @@ namespace XinJuLi.Services.ASN
                 {
                     Log.Warning("请求转发失败，但继续返回本地处理结果");
                 }
-                
-                // 返回本地处理结果
-                await SendResponseAsync(response, 200, localResult);
             }
             catch (JsonException ex)
             {
@@ -284,6 +284,9 @@ namespace XinJuLi.Services.ASN
                 // 等待本地处理完成
                 var localResult = await localTask;
 
+                // 返回本地处理结果
+                await SendResponseAsync(response, 200, localResult);
+
                 // 检查转发结果（不阻塞本地处理结果）
                 var forwardSuccess = await forwardTask;
                 if (!forwardSuccess && !settings.ContinueOnForwardFailure)
@@ -297,9 +300,6 @@ namespace XinJuLi.Services.ASN
                 {
                     Log.Warning("请求转发失败，但继续返回本地处理结果");
                 }
-                
-                // 返回本地处理结果
-                await SendResponseAsync(response, 200, localResult);
             }
             catch (JsonException ex)
             {

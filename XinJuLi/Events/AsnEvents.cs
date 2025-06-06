@@ -8,4 +8,11 @@ namespace XinJuLi.Events
     public class AsnOrderReceivedEvent : PubSubEvent<AsnOrderInfo>
     {
     }
+
+    /// <summary>
+    /// 当ASN单数据被添加到缓存时发布此事件。
+    /// </summary>
+    public class AsnOrderAddedToCacheEvent : PubSubEvent<AsnOrderInfo>
+    {
+    }
 } 

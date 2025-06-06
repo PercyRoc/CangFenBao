@@ -54,19 +54,24 @@ namespace FuzhouPolicyForce.Services
             {
                 Log.Information("发送申通自动揽收请求到 {ApiUrl}，content内容：{Content}", settings.ApiUrl, contentJson);
 
-                // 将所有公共参数和content一起作为表单数据发送
-                var formContent = new FormUrlEncodedContent(
-                [
-                    new KeyValuePair<string, string>("api_name", "GALAXY_CANGKU_AUTO_NEW"),
-                    new KeyValuePair<string, string>("content", contentJson),
-                    new KeyValuePair<string, string>("from_appkey", settings.FromAppKey),
-                    new KeyValuePair<string, string>("from_code", settings.FromCode),
-                    new KeyValuePair<string, string>("to_appkey", "galaxy_receive"),
-                    new KeyValuePair<string, string>("to_code", "galaxy_receive"),
-                    new KeyValuePair<string, string>("data_digest", dataDigest)
-                ]);
+                // 将所有公共参数和content一起作为JSON数据发送
+                var requestBody = new
+                {
+                    api_name = "GALAXY_CANGKU_AUTO_NEW",
+                    content = contentJson,
+                    from_appkey = settings.FromAppKey,
+                    from_code = settings.FromCode,
+                    to_appkey = "galaxy_receive",
+                    to_code = "galaxy_receive",
+                    data_digest = dataDigest
+                };
 
-                var response = await httpClient.PostAsync(settings.ApiUrl, formContent);
+                var requestBodyJson = JsonSerializer.Serialize(requestBody);
+                Log.Debug("申通最终请求Body内容：{RequestBody}", requestBodyJson);
+
+                var stringContent = new StringContent(requestBodyJson, Encoding.UTF8, "application/json");
+
+                var response = await httpClient.PostAsync(settings.ApiUrl, stringContent);
                 response.EnsureSuccessStatusCode(); // 确保HTTP状态码是成功的
 
                 responseContent = await response.Content.ReadAsStringAsync();
@@ -89,7 +94,7 @@ namespace FuzhouPolicyForce.Services
                     ErrorMsg = $"网络请求失败：{ex.Message}"
                 };
             }
-            catch (System.Text.Json.JsonException ex)
+            catch (JsonException ex)
             {
                 Log.Error(ex, "解析申通自动揽收响应失败：{Message}, 原始响应内容：{ResponseContent}", ex.Message, responseContent ?? "未获取到响应内容");
                 return new ShenTongLanShouResponse

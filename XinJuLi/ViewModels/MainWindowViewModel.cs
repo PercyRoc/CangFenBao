@@ -37,6 +37,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private bool _disposed;
     private SystemStatus _systemStatus = new();
 
+    // Event Aggregator
+    private readonly IEventAggregator _eventAggregator;
+
     // ASN订单相关
     private List<AsnOrderItem> _asnOrderItems = [];
     private string _currentAsnOrderCode = string.Empty;
@@ -73,6 +76,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _asnService = asnService;
         _packageHistoryDataService = packageHistoryDataService;
         _asnCacheService = asnCacheService;
+        _eventAggregator = eventAggregator;
+
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
         OpenHistoryCommand = new DelegateCommand(ExecuteOpenHistory);
 
@@ -130,7 +135,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         // 订阅ASN订单接收事件（现在用于处理用户选择的ASN单）
         _subscriptions.Add(eventAggregator.GetEvent<AsnOrderReceivedEvent>()
-            .Subscribe(asnInfo => { Application.Current.Dispatcher.BeginInvoke(() => OnAsnOrderReceived(asnInfo)); }));
+            .Subscribe(asnInfo => { Application.Current.Dispatcher.BeginInvoke(() => OnAsnOrderSelected(asnInfo)); }));
+
+        // 订阅ASN单已添加到缓存事件，用于弹出选择对话框
+        _subscriptions.Add(eventAggregator.GetEvent<AsnOrderAddedToCacheEvent>()
+            .Subscribe(asnInfo => { Application.Current.Dispatcher.BeginInvoke(() => OnAsnOrderAddedToCache(asnInfo)); }));
 
         // 主动查询一次相机和摆轮分拣设备状态
         QueryAndUpdateDeviceStatuses();
@@ -837,9 +846,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 处理ASN订单接收事件（用户选择后的处理）
+    /// 处理ASN订单接收事件（用户从选择对话框中选择后的处理）
     /// </summary>
-    private void OnAsnOrderReceived(AsnOrderInfo asnInfo)
+    private void OnAsnOrderSelected(AsnOrderInfo asnInfo)
     {
         Log.Information("MainWindowViewModel收到ASN订单选择事件: {OrderCode}", asnInfo.OrderCode);
         
@@ -848,6 +857,44 @@ public class MainWindowViewModel : BindableBase, IDisposable
         
         // 从缓存中移除已选择的ASN单
         _asnCacheService.RemoveAsnOrder(asnInfo.OrderCode);
+    }
+
+    /// <summary>
+    /// 处理ASN单已添加到缓存事件（用于弹出选择对话框）
+    /// </summary>
+    private void OnAsnOrderAddedToCache(AsnOrderInfo asnInfo)
+    {
+        Log.Information("MainWindowViewModel收到ASN单已添加到缓存事件: {OrderCode}，准备弹出选择对话框", asnInfo.OrderCode);
+
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            var parameters = new DialogParameters
+            {
+                { "NewAsnOrderCode", asnInfo.OrderCode } // 传递新收到的ASN单编码，用于高亮显示
+            };
+
+            _dialogService.ShowDialog("AsnOrderSelectionDialog", parameters, result =>
+            {
+                if (result.Result == ButtonResult.OK)
+                {
+                    var selectedAsnOrder = result.Parameters.GetValue<AsnOrderInfo>("SelectedAsnOrder");
+                    if (selectedAsnOrder != null)
+                    {
+                        Log.Information("用户在选择对话框中选择ASN单: {OrderCode}", selectedAsnOrder.OrderCode);
+                        
+                        // 发布ASN订单选择事件，由 OnAsnOrderSelected 方法处理
+                        _eventAggregator.GetEvent<AsnOrderReceivedEvent>().Publish(selectedAsnOrder);
+                        
+                        _notificationService.ShowSuccess($"已选择ASN单：{selectedAsnOrder.OrderCode}");
+                    }
+                }
+                else
+                {
+                    Log.Information("用户取消选择ASN单");
+                    _notificationService.ShowError("未选择ASN单");
+                }
+            });
+        });
     }
 
     /// <summary>
