@@ -16,7 +16,7 @@ public class SerialPortWeightService : IDisposable
     // 常量定义
     private const int MaxCacheSize = 100;
     private const int MaxCacheAgeMinutes = 2;
-    private const double StableThreshold = 0.001;
+    private const double StableThreshold = 0.01;  // 0.01kg = 10g
     private const int ProcessInterval = 100;
 
     private readonly object _lock = new();
@@ -284,12 +284,12 @@ public class SerialPortWeightService : IDisposable
         try
         {
             var receivedString = Encoding.ASCII.GetString(data);
-            // Log.Verbose("SerialPortWeightService - 收到原始数据片段: {Data}", receivedString);
+            Log.Information("SerialPortWeightService - 收到原始数据: {Data}, 长度: {Length}", receivedString, data.Length);
 
             lock (_lock)
             {
                 _receiveBuffer.Append(receivedString);
-                // Log.Verbose("当前接收缓冲区内容: {BufferContent}", _receiveBuffer.ToString());
+                Log.Debug("当前接收缓冲区内容: {BufferContent}, 长度: {Length}", _receiveBuffer.ToString(), _receiveBuffer.Length);
 
                 const int maxInternalBufferSize = 4096; // 定义一个合适的缓冲区大小
                 if (_receiveBuffer.Length > maxInternalBufferSize)
@@ -408,10 +408,21 @@ public class SerialPortWeightService : IDisposable
     private void ProcessStaticWeight(double weightG, DateTime timestamp)
     {
         _weightSamples.Add(weightG);
+        Log.Debug("添加重量样本: {Weight:F2}g, 当前样本数: {Count}", weightG, _weightSamples.Count);
 
-        while (_weightSamples.Count > _settingsService.LoadSettings<WeightSettings>().StableCheckCount) _weightSamples.RemoveAt(0);
+        while (_weightSamples.Count > _settingsService.LoadSettings<WeightSettings>().StableCheckCount) 
+        {
+            _weightSamples.RemoveAt(0);
+            Log.Debug("移除最旧样本，当前样本数: {Count}", _weightSamples.Count);
+        }
 
-        if (_weightSamples.Count < _settingsService.LoadSettings<WeightSettings>().StableCheckCount) return;
+        if (_weightSamples.Count < _settingsService.LoadSettings<WeightSettings>().StableCheckCount)
+        {
+            Log.Debug("样本数量不足，需要 {Required} 个样本，当前: {Current}", 
+                _settingsService.LoadSettings<WeightSettings>().StableCheckCount, 
+                _weightSamples.Count);
+            return;
+        }
 
         var average = _weightSamples.Average();
         const double stableThresholdG = StableThreshold * 1000;
@@ -420,9 +431,12 @@ public class SerialPortWeightService : IDisposable
         if (!isStable)
         {
             var samplesString = string.Join(", ", _weightSamples.Select(w => w.ToString("F2")));
-            Log.Verbose("重量样本不稳定: Avg={Avg:F2}g, Samples=[{Samples}]", average, samplesString);
+            Log.Debug("重量样本不稳定: Avg={Avg:F2}g, 阈值={Threshold:F2}g, Samples=[{Samples}]", 
+                average, stableThresholdG, samplesString);
             return;
         }
+
+        Log.Information("重量稳定: {Weight:F2}g, 样本数: {Count}", average, _weightSamples.Count);
 
         lock (_lock)
         {
