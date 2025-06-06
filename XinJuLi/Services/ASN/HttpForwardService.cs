@@ -27,12 +27,10 @@ namespace XinJuLi.Services.ASN
     public class HttpForwardService : IHttpForwardService, IDisposable
     {
         private readonly ISettingsService _settingsService;
-        private readonly HttpClient _httpClient;
 
         public HttpForwardService(ISettingsService settingsService)
         {
             _settingsService = settingsService;
-            _httpClient = new HttpClient();
         }
 
         /// <summary>
@@ -67,14 +65,17 @@ namespace XinJuLi.Services.ASN
 
                 Log.Information("转发请求到目标服务器: {TargetUrl}", targetUrl);
 
-                // 设置超时
-                _httpClient.Timeout = TimeSpan.FromSeconds(settings.ForwardTimeoutSeconds);
+                // 为每个请求创建新的HttpClient实例
+                using var httpClient = new HttpClient
+                {
+                    Timeout = TimeSpan.FromSeconds(settings.ForwardTimeoutSeconds)
+                };
 
                 // 创建请求内容
                 using var content = new StringContent(requestBody, Encoding.UTF8, "application/json");
 
                 // 发送POST请求
-                using var response = await _httpClient.PostAsync(targetUrl, content);
+                using var response = await httpClient.PostAsync(targetUrl, content);
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -113,7 +114,6 @@ namespace XinJuLi.Services.ASN
         /// </summary>
         public void Dispose()
         {
-            _httpClient?.Dispose();
             GC.SuppressFinalize(this);
         }
     }

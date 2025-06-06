@@ -41,13 +41,13 @@
         <PackageReference Include="Microsoft.Extensions.Options" />
         <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
         <PackageReference Include="Prism.Wpf" />
-        <PackageReference Include="Prism.Unity"/>
-        <PackageReference Include="Serilog"/>
+        <PackageReference Include="Prism.Unity" />
+        <PackageReference Include="Serilog" />
         <PackageReference Include="SixLabors.ImageSharp" />
         <PackageReference Include="System.IO.Ports" />
         <PackageReference Include="HandyControl" />
         <PackageReference Include="WPF-UI" />
-        <PackageReference Include="WPFLocalizeExtension"/>
+        <PackageReference Include="WPFLocalizeExtension" />
     </ItemGroup>
 
     <ItemGroup>
@@ -60,6 +60,9 @@
 
     <ItemGroup>
       <None Remove="logo.ico" />
+      <Reference Include="WPFLocalizeExtension">
+        <HintPath>..\..\..\NugetPackages\wpflocalizeextension\3.10.0\lib\netcoreapp3.1\WPFLocalizeExtension.dll</HintPath>
+      </Reference>
       <Resource Include="logo.ico">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </Resource>
