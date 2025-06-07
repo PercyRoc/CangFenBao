@@ -18,7 +18,8 @@ namespace XinJuLi.Services.ASN
         INotificationService notificationService,
         ISettingsService settingsService,
         IEventAggregator eventAggregator,
-        IAsnCacheService asnCacheService)
+        IAsnCacheService asnCacheService,
+        IAsnStorageService asnStorageService)
         : IAsnService
     {
         private static readonly JsonSerializerOptions CaseInsensitiveOptions =
@@ -43,6 +44,9 @@ namespace XinJuLi.Services.ASN
 
                 // 将ASN单添加到缓存
                 asnCacheService.AddAsnOrder(asnInfo);
+
+                // 保存ASN单到存储
+                asnStorageService.SaveAsnOrder(asnInfo);
 
                 // 发布ASN单已添加到缓存事件
                 eventAggregator.GetEvent<AsnOrderAddedToCacheEvent>().Publish(asnInfo);

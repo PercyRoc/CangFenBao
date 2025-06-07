@@ -138,7 +138,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _weightService.ConnectionChanged += OnWeightScaleConnectionChanged;
 
         // 订阅重量数据流
-        var minWeightInWindow = _rawWeightBuffer.Any() ? _rawWeightBuffer.Min() : 0.0;
         _weightDataSubscription = _weightService.WeightDataStream.Subscribe(streamTuple =>
         {
             // 在事件处理中按需加载配置
@@ -169,14 +168,31 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 {
                     _rawWeightBuffer.RemoveAt(0); // 保持缓冲区大小固定（滑动窗口）
                 }
-
+                Log.Debug("重量数据已添加到缓冲区: {Weight}kg, 缓冲区大小: {BufferSize}/{RequiredSize}", 
+                    currentRawWeightKg, _rawWeightBuffer.Count, stabilityCheckSamples);
             }
+            else
+            {
+                Log.Debug("忽略零重量或负重量: {Weight}kg", currentRawWeightKg);
+            }
+            
             // 如果缓冲区已满，则检查稳定性
             if (_rawWeightBuffer.Count != stabilityCheckSamples) return;
+            
+            // 在稳定性检查时计算当前窗口的最小值和最大值
+            var minWeightInWindow = _rawWeightBuffer.Min();
             var maxWeightInWindow = _rawWeightBuffer.Max();
+            var weightDifference = maxWeightInWindow - minWeightInWindow;
+
+            Log.Debug("稳定性检查: 最小值={Min}kg, 最大值={Max}kg, 差值={Diff}kg, 阈值={Threshold}kg", 
+                minWeightInWindow, maxWeightInWindow, weightDifference, stabilityThresholdKg);
 
             // 使用转换后的 stabilityThresholdKg 进行比较
-            if (!((maxWeightInWindow - minWeightInWindow) < stabilityThresholdKg)) return;
+            if (!(weightDifference < stabilityThresholdKg)) 
+            {
+                Log.Debug("重量不稳定，差值 {Diff}kg 超过阈值 {Threshold}kg", weightDifference, stabilityThresholdKg);
+                return;
+            }
             // 数据稳定
             // _rawWeightBuffer 中的数据已经是 kg，所以 Average() 也是 kg
             var stableAverageWeightKg = _rawWeightBuffer.Average();
@@ -191,6 +207,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 {
                     _stableWeightQueue.Dequeue();
                 }
+                Log.Information("稳定重量已添加到队列: {Weight}kg, 时间戳: {Timestamp:HH:mm:ss.fff}, 队列大小: {QueueSize}", 
+                    stableAverageWeightKg, currentTimestamp, _stableWeightQueue.Count);
             }
         });
 

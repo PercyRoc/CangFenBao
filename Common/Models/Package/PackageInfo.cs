@@ -1,4 +1,5 @@
 using System.Windows.Media.Imaging;
+using Prism.Mvvm;
 
 namespace Common.Models.Package;
 
@@ -298,12 +299,14 @@ public class PackageInfo : IDisposable
 public class ChuteStatusItem : BindableBase
 {
     private int _chuteNumber;
+    private int _actualChuteNumber;
     private string _category = string.Empty;
     private string _description = string.Empty;
     private bool _isAssigned;
+    private readonly List<string> _categories = [];
 
     /// <summary>
-    /// 格口编号
+    /// 格口编号（显示用的配置格口号）
     /// </summary>
     public int ChuteNumber
     {
@@ -312,13 +315,27 @@ public class ChuteStatusItem : BindableBase
     }
 
     /// <summary>
-    /// 分配的类别
+    /// 实际格口编号（用于分拣的系统格口号）
+    /// </summary>
+    public int ActualChuteNumber
+    {
+        get => _actualChuteNumber;
+        set => SetProperty(ref _actualChuteNumber, value);
+    }
+
+    /// <summary>
+    /// 分配的类别（显示第一个类别，如果有多个则显示"多类别"）
     /// </summary>
     public string Category
     {
         get => _category;
         set => SetProperty(ref _category, value);
     }
+
+    /// <summary>
+    /// 所有分配的类别列表
+    /// </summary>
+    public List<string> Categories => _categories;
 
     /// <summary>
     /// 描述信息
@@ -338,24 +355,99 @@ public class ChuteStatusItem : BindableBase
         set => SetProperty(ref _isAssigned, value);
     }
 
+    /// <summary>
+    /// 显示文本（用于UI绑定）
+    /// </summary>
+    public string DisplayText => _categories.Count == 0 ? "空闲" : 
+                                _categories.Count == 1 ? _categories[0] : 
+                                $"多区域({_categories.Count})";
+
     public ChuteStatusItem(int chuteNumber)
     {
         ChuteNumber = chuteNumber;
+        ActualChuteNumber = 2 * chuteNumber - 1; // 新的映射关系: 1->1, 2->3, 3->5
         IsAssigned = false;
         Description = "空闲";
+        // 触发初始化时的属性变更通知
+        RaisePropertyChanged(nameof(DisplayText));
     }
 
+    /// <summary>
+    /// 构造函数，指定显示格口号和实际格口号
+    /// </summary>
+    /// <param name="displayChuteNumber">显示的格口号</param>
+    /// <param name="actualChuteNumber">实际的格口号</param>
+    public ChuteStatusItem(int displayChuteNumber, int actualChuteNumber)
+    {
+        ChuteNumber = displayChuteNumber;
+        ActualChuteNumber = actualChuteNumber;
+        IsAssigned = false;
+        Description = "空闲";
+        // 触发初始化时的属性变更通知
+        RaisePropertyChanged(nameof(DisplayText));
+    }
+
+    /// <summary>
+    /// 分配单个类别
+    /// </summary>
+    /// <param name="category">类别名称</param>
     public void AssignCategory(string category)
     {
-        Category = category;
-        IsAssigned = true;
-        Description = $"已分配给类别: {category}";
+        if (!_categories.Contains(category))
+        {
+            _categories.Add(category);
+            UpdateDisplayInfo();
+        }
     }
 
+    /// <summary>
+    /// 移除指定类别
+    /// </summary>
+    /// <param name="category">要移除的类别</param>
+    public void RemoveCategory(string category)
+    {
+        if (_categories.Remove(category))
+        {
+            UpdateDisplayInfo();
+        }
+    }
+
+    /// <summary>
+    /// 清空所有分配
+    /// </summary>
     public void Clear()
     {
+        _categories.Clear();
         Category = string.Empty;
         IsAssigned = false;
         Description = "空闲";
+    }
+
+    /// <summary>
+    /// 更新显示信息
+    /// </summary>
+    private void UpdateDisplayInfo()
+    {
+        if (_categories.Count == 0)
+        {
+            Category = string.Empty;
+            IsAssigned = false;
+            Description = "空闲";
+        }
+        else if (_categories.Count == 1)
+        {
+            Category = _categories[0];
+            IsAssigned = true;
+            Description = $"已分配给大区: {_categories[0]}";
+        }
+        else
+        {
+            Category = $"多大区({_categories.Count})";
+            IsAssigned = true;
+            Description = $"已分配给 {_categories.Count} 个大区: {string.Join(", ", _categories)}";
+        }
+        
+        // 通知DisplayText属性变更
+        RaisePropertyChanged(nameof(DisplayText));
     }
 }

@@ -28,6 +28,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
@@ -78,18 +79,46 @@
                 </StackPanel>
             </ui:Button>
 
-            <!-- 标题 -->
-            <TextBlock Grid.Column="3"
+            <!-- 选择ASN单按钮 -->
+            <ui:Button Grid.Column="3"
+                       Appearance="Primary"
+                       Command="{Binding OpenAsnSelectionCommand}"
+                       Margin="0,0,8,0"
+                       Padding="8,6"
+                       ToolTip="选择ASN单">
+                <StackPanel Orientation="Horizontal">
+                    <ui:SymbolIcon Symbol="DocumentSearch24" Margin="0,0,8,0" />
+                    <TextBlock Text="选择ASN单" VerticalAlignment="Center" />
+                </StackPanel>
+            </ui:Button>
+
+            <!-- 导入配置按钮 (已注释)
+            <ui:Button Grid.Column="4"
+                       Appearance="Secondary"
+                       Command="{Binding ImportConfigCommand}"
+                       Margin="0,0,8,0"
+                       Padding="8,6"
+                       ToolTip="导入配置">
+                <StackPanel Orientation="Horizontal">
+                    <ui:SymbolIcon Symbol="Document24" Margin="0,0,8,0" />
+                    <TextBlock Text="导入配置" VerticalAlignment="Center" />
+                </StackPanel>
+            </ui:Button>
+            -->
+
+            <!-- 标题 - 居中显示 -->
+            <TextBlock Grid.Column="0"
+                       Grid.ColumnSpan="6"
                        Text="仓分宝"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
-                       Margin="0,0,8,0"
                        FontSize="20"
                        FontFamily="微软雅黑"
                        FontWeight="SemiBold"
                        TextOptions.TextFormattingMode="Display"
                        Foreground="black"
-                       TextOptions.TextRenderingMode="ClearType">
+                       TextOptions.TextRenderingMode="ClearType"
+                       IsHitTestVisible="False">
                 <TextBlock.Effect>
                     <DropShadowEffect BlurRadius="4"
                                       Opacity="0.2"
@@ -99,7 +128,7 @@
             </TextBlock>
 
             <!-- TitleBar -->
-            <ui:TitleBar Grid.Column="4"
+            <ui:TitleBar Grid.Column="5"
                          Title=""
                          ButtonsForeground="#FF008891"
                          ShowMaximize="True"
@@ -107,14 +136,14 @@
                          ShowClose="True" />
 
             <Border Grid.Column="0"
-                    Grid.ColumnSpan="5"
+                    Grid.ColumnSpan="6"
                     Height="1"
                     VerticalAlignment="Bottom"
                     Background="#20008080"
                     BorderBrush="#40FFFFFF"
                     BorderThickness="0,0,0,1" />
         </Grid>
-    <!-- 主要内容区域 -->
+        <!-- 主要内容区域 -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="2*" />
@@ -124,9 +153,9 @@
             <!-- 左侧面板 -->
             <Grid Grid.Column="0">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="2*" />
-                    <RowDefinition Height="2*" />
-                    <RowDefinition Height="1*" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
                 <!-- 实时包裹信息 -->
@@ -239,7 +268,7 @@
                 </Border>
 
                 <!-- 统计信息区域 -->
-                <Border Grid.Row="1" Margin="16,8,16,4">
+                <Border Grid.Row="1" Margin="16,8,16,8">
                     <Grid Margin="16">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -333,23 +362,23 @@
                     </Grid>
                 </Border>
 
-                <!-- 格口状态区域 -->
-                <Border Grid.Row="2" Margin="16,4,16,8">
+                <!-- 当前ASN单信息 -->
+                <Border Grid.Row="2" Margin="16,8,16,16">
                     <Grid Margin="16">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
                         <!-- 标题 -->
                         <DockPanel Grid.Row="0" Margin="0,0,0,12">
                             <StackPanel Orientation="Horizontal">
-                                <ui:SymbolIcon Symbol="Grid24"
+                                <ui:SymbolIcon Symbol="DocumentText24"
                                                Width="24"
                                                Height="24"
                                                Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                                VerticalAlignment="Center" />
-                                <TextBlock Text="格口状态"
+                                <TextBlock Text="当前ASN单信息"
                                            Margin="8,0,0,0"
                                            FontSize="16"
                                            FontWeight="SemiBold"
@@ -358,104 +387,24 @@
                             </StackPanel>
                         </DockPanel>
 
-                        <!-- 格口状态网格 -->
-                        <ScrollViewer Grid.Row="1" 
-                                      VerticalScrollBarVisibility="Auto"
-                                      HorizontalScrollBarVisibility="Disabled">
-                            <ItemsControl ItemsSource="{Binding ChuteStatuses}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <WrapPanel Orientation="Horizontal" />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Button Margin="4"
-                                                Width="120"
-                                                Height="80"
-                                                Command="{Binding DataContext.ClearChuteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                CommandParameter="{Binding}"
-                                                Cursor="Hand"
-                                                ToolTip="{Binding Description}">
-                                            <Button.Style>
-                                                <Style TargetType="Button">
-                                                    <Setter Property="Background" Value="LightGray" />
-                                                    <Setter Property="BorderBrush" Value="Gray" />
-                                                    <Setter Property="BorderThickness" Value="1" />
-                                                    <Setter Property="Margin" Value="4" />
-                                                    <Setter Property="Padding" Value="8" />
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsAssigned}" Value="True">
-                                                            <Setter Property="Background" Value="LightBlue" />
-                                                            <Setter Property="BorderBrush" Value="Blue" />
-                                                            <Setter Property="BorderThickness" Value="2" />
-                                                        </DataTrigger>
-                                                        <Trigger Property="IsMouseOver" Value="True">
-                                                            <Setter Property="Background" Value="LightYellow" />
-                                                        </Trigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Button.Style>
-                                            
-                                            <Grid>
-                                                <Grid.RowDefinitions>
-                                                    <RowDefinition Height="Auto" />
-                                                    <RowDefinition Height="*" />
-                                                    <RowDefinition Height="Auto" />
-                                                </Grid.RowDefinitions>
-
-                                                <!-- 格口编号 -->
-                                                <TextBlock Grid.Row="0"
-                                                           Text="{Binding ChuteNumber, StringFormat=格口 {0}}"
-                                                           FontSize="14"
-                                                           FontWeight="SemiBold"
-                                                           HorizontalAlignment="Center"
-                                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-
-                                                <!-- 分配的类别 -->
-                                                <TextBlock Grid.Row="1"
-                                                           Text="{Binding Category}"
-                                                           FontSize="20"
-                                                           FontWeight="Bold"
-                                                           HorizontalAlignment="Center"
-                                                           VerticalAlignment="Center"
-                                                           Foreground="{DynamicResource AccentBrush}">
-                                                    <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding IsAssigned}" Value="False">
-                                                                    <Setter Property="Text" Value="空闲" />
-                                                                    <Setter Property="FontSize" Value="12" />
-                                                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBlock.Style>
-                                                </TextBlock>
-
-                                                <!-- 状态图标 -->
-                                                <ui:SymbolIcon Grid.Row="2"
-                                                               Symbol="Checkmark24"
-                                                               Width="16"
-                                                               Height="16"
-                                                               HorizontalAlignment="Center"
-                                                               Foreground="Green">
-                                                    <ui:SymbolIcon.Style>
-                                                        <Style TargetType="ui:SymbolIcon">
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding IsAssigned}" Value="False">
-                                                                    <Setter Property="Visibility" Value="Collapsed" />
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </ui:SymbolIcon.Style>
-                                                </ui:SymbolIcon>
-                                            </Grid>
-                                        </Button>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
+                        <!-- ASN信息显示 -->
+                        <StackPanel Grid.Row="1">
+                            <TextBlock Text="{Binding CurrentAsnOrderCode, StringFormat=单号: {0}}"
+                                       FontSize="14"
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,0,8"
+                                       Foreground="{DynamicResource AccentBrush}" />
+                            
+                            <TextBlock Text="{Binding CurrentCarCode, StringFormat=车号: {0}}"
+                                       FontSize="12"
+                                       Margin="0,0,0,8"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            
+                            <TextBlock Text="{Binding CachedAsnOrderCount, StringFormat=缓存ASN单数: {0}}"
+                                       FontSize="12"
+                                       Margin="0,0,0,8"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
                     </Grid>
                 </Border>
             </Grid>

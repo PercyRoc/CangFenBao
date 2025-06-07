@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Windows;
 using Serilog;
 using XinJuLi.Models.ASN;
 using XinJuLi.Services.ASN;
@@ -12,26 +11,35 @@ namespace XinJuLi.ViewModels.Dialogs
     public class AsnOrderSelectionDialogViewModel : BindableBase, IDialogAware
     {
         private readonly IAsnCacheService _asnCacheService;
+        private readonly IAsnStorageService _asnStorageService;
         private AsnOrderInfo? _selectedAsnOrder;
         private string _searchText = string.Empty;
         private string _newAsnOrderCode = string.Empty;
+        private bool _isLoading;
+        private string _title = "选择ASN单";
 
         /// <summary>
         /// 构造函数
         /// </summary>
-        public AsnOrderSelectionDialogViewModel(IAsnCacheService asnCacheService)
+        public AsnOrderSelectionDialogViewModel(
+            IAsnCacheService asnCacheService,
+            IAsnStorageService asnStorageService)
         {
             _asnCacheService = asnCacheService;
+            _asnStorageService = asnStorageService;
+
+            AsnOrders = [];
+
+            // 初始化命令
             ConfirmCommand = new DelegateCommand(ExecuteConfirm, CanExecuteConfirm);
             CancelCommand = new DelegateCommand(ExecuteCancel);
             RefreshCommand = new DelegateCommand(ExecuteRefresh);
             RemoveSelectedCommand = new DelegateCommand(ExecuteRemoveSelected, CanExecuteRemoveSelected);
-            
-            AsnOrders = new ObservableCollection<AsnOrderInfo>();
-            
+
             // 订阅缓存变更事件
             _asnCacheService.CacheChanged += OnCacheChanged;
-            
+
+            // 加载ASN单
             LoadAsnOrders();
         }
 
@@ -48,9 +56,11 @@ namespace XinJuLi.ViewModels.Dialogs
             get => _selectedAsnOrder;
             set
             {
-                SetProperty(ref _selectedAsnOrder, value);
-                ConfirmCommand.RaiseCanExecuteChanged();
-                RemoveSelectedCommand.RaiseCanExecuteChanged();
+                if (SetProperty(ref _selectedAsnOrder, value))
+                {
+                    ConfirmCommand.RaiseCanExecuteChanged();
+                    RemoveSelectedCommand.RaiseCanExecuteChanged();
+                }
             }
         }
 
@@ -62,8 +72,10 @@ namespace XinJuLi.ViewModels.Dialogs
             get => _searchText;
             set
             {
-                SetProperty(ref _searchText, value);
-                FilterAsnOrders();
+                if (SetProperty(ref _searchText, value))
+                {
+                    FilterAsnOrders();
+                }
             }
         }
 
@@ -73,7 +85,16 @@ namespace XinJuLi.ViewModels.Dialogs
         public string NewAsnOrderCode
         {
             get => _newAsnOrderCode;
-            private set => SetProperty(ref _newAsnOrderCode, value);
+            set => SetProperty(ref _newAsnOrderCode, value);
+        }
+
+        /// <summary>
+        /// 是否正在加载
+        /// </summary>
+        public bool IsLoading
+        {
+            get => _isLoading;
+            set => SetProperty(ref _isLoading, value);
         }
 
         /// <summary>
@@ -99,7 +120,11 @@ namespace XinJuLi.ViewModels.Dialogs
         /// <summary>
         /// 对话框标题
         /// </summary>
-        public string Title => "选择ASN单";
+        public string Title 
+        {
+            get => _title;
+            set => SetProperty(ref _title, value);
+        }
 
         /// <summary>
         /// 请求关闭事件
@@ -128,29 +153,18 @@ namespace XinJuLi.ViewModels.Dialogs
         /// </summary>
         public void OnDialogOpened(IDialogParameters parameters)
         {
-            // 获取新收到的ASN单编码
-            if (parameters.ContainsKey("NewAsnOrderCode"))
+            if (parameters.TryGetValue<string>("title", out var title))
             {
-                NewAsnOrderCode = parameters.GetValue<string>("NewAsnOrderCode");
-                Log.Information("收到新的ASN单编码用于高亮显示: {OrderCode}", NewAsnOrderCode);
+                Title = title;
             }
-            
+
+            if (parameters.TryGetValue<string>("NewAsnOrderCode", out var newAsnOrderCode))
+            {
+                NewAsnOrderCode = newAsnOrderCode;
+            }
+
+            // 加载ASN单
             LoadAsnOrders();
-            
-            // 标记新收到的ASN单并自动选中
-            if (!string.IsNullOrEmpty(NewAsnOrderCode))
-            {
-                foreach (var order in AsnOrders)
-                {
-                    order.IsNewReceived = order.OrderCode == NewAsnOrderCode;
-                }
-                
-                var newAsnOrder = AsnOrders.FirstOrDefault(x => x.OrderCode == NewAsnOrderCode);
-                if (newAsnOrder != null)
-                {
-                    SelectedAsnOrder = newAsnOrder;
-                }
-            }
         }
 
         /// <summary>
@@ -160,19 +174,34 @@ namespace XinJuLi.ViewModels.Dialogs
         {
             try
             {
-                var asnOrders = _asnCacheService.GetAllAsnOrders();
-                
+                IsLoading = true;
                 AsnOrders.Clear();
-                foreach (var asnOrder in asnOrders)
+
+                // 从缓存加载
+                var cachedOrders = _asnCacheService.GetAllAsnOrders();
+                foreach (var order in cachedOrders)
                 {
-                    AsnOrders.Add(asnOrder);
+                    order.IsNewReceived = true;
+                    AsnOrders.Add(order);
                 }
 
-                Log.Information("已加载{Count}个缓存的ASN单", AsnOrders.Count);
+                // 从存储加载
+                var storedOrders = _asnStorageService.GetAllAsnOrders();
+                foreach (var order in storedOrders.Where(order => cachedOrders.All(x => x.OrderCode != order.OrderCode)))
+                {
+                    AsnOrders.Add(order);
+                }
+
+                // 应用搜索过滤
+                FilterAsnOrders();
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "加载ASN单列表时发生错误");
+                Log.Error(ex, "加载ASN单列表失败");
+            }
+            finally
+            {
+                IsLoading = false;
             }
         }
 
@@ -181,26 +210,23 @@ namespace XinJuLi.ViewModels.Dialogs
         /// </summary>
         private void FilterAsnOrders()
         {
-            try
+            if (string.IsNullOrWhiteSpace(SearchText))
             {
-                var allOrders = _asnCacheService.GetAllAsnOrders();
-                
-                var filteredOrders = string.IsNullOrWhiteSpace(SearchText)
-                    ? allOrders
-                    : allOrders.Where(x => 
-                        x.OrderCode.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ||
-                        x.CarCode.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-
-                AsnOrders.Clear();
-                foreach (var order in filteredOrders)
+                // 显示所有ASN单
+                foreach (var order in AsnOrders)
                 {
-                    AsnOrders.Add(order);
+                    order.IsVisible = true;
                 }
             }
-            catch (Exception ex)
+            else
             {
-                Log.Error(ex, "过滤ASN单时发生错误");
+                // 根据搜索文本过滤
+                var searchText = SearchText.ToLowerInvariant();
+                foreach (var order in AsnOrders)
+                {
+                    order.IsVisible = order.OrderCode.Contains(searchText, StringComparison.InvariantCultureIgnoreCase) ||
+                                    order.CarCode.Contains(searchText, StringComparison.InvariantCultureIgnoreCase);
+                }
             }
         }
 
@@ -209,11 +235,33 @@ namespace XinJuLi.ViewModels.Dialogs
         /// </summary>
         private void OnCacheChanged(object? sender, AsnCacheChangedEventArgs e)
         {
-            // 在UI线程中更新
-            Application.Current.Dispatcher.BeginInvoke(() =>
+            switch (e.Action)
             {
-                LoadAsnOrders();
-            });
+                case "Added":
+                    if (e.AsnOrderInfo != null)
+                    {
+                        e.AsnOrderInfo.IsNewReceived = true;
+                        AsnOrders.Insert(0, e.AsnOrderInfo);
+                        NewAsnOrderCode = e.AsnOrderInfo.OrderCode;
+                    }
+                    break;
+
+                case "Removed":
+                    if (e.AsnOrderInfo != null)
+                    {
+                        var order = AsnOrders.FirstOrDefault(x => x.OrderCode == e.AsnOrderInfo.OrderCode);
+                        if (order != null)
+                        {
+                            AsnOrders.Remove(order);
+                        }
+                    }
+                    break;
+
+                case "Cleared":
+                    AsnOrders.Clear();
+                    LoadAsnOrders();
+                    break;
+            }
         }
 
         /// <summary>
@@ -222,13 +270,16 @@ namespace XinJuLi.ViewModels.Dialogs
         private void ExecuteConfirm()
         {
             if (SelectedAsnOrder == null) return;
-
             var parameters = new DialogParameters
             {
-                { "SelectedAsnOrder", SelectedAsnOrder }
+                { "selectedAsnOrder", SelectedAsnOrder }
             };
 
-            RequestClose.Invoke(new DialogResult(ButtonResult.OK) { Parameters = parameters });
+            var result = new DialogResult(ButtonResult.OK)
+            {
+                Parameters = parameters
+            };
+            RequestClose.Invoke(result);
         }
 
         /// <summary>
@@ -261,9 +312,14 @@ namespace XinJuLi.ViewModels.Dialogs
         private void ExecuteRemoveSelected()
         {
             if (SelectedAsnOrder == null) return;
-
+            // 从缓存中移除
             _asnCacheService.RemoveAsnOrder(SelectedAsnOrder.OrderCode);
-            SelectedAsnOrder = null;
+
+            // 从存储中移除
+            _asnStorageService.DeleteAsnOrder(SelectedAsnOrder.OrderCode);
+
+            // 从列表中移除
+            AsnOrders.Remove(SelectedAsnOrder);
         }
 
         /// <summary>

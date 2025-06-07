@@ -111,10 +111,12 @@ namespace XinJuLi
             // 先注册MainWindowViewModel以便ASN服务可以引用
             containerRegistry.RegisterSingleton<MainWindowViewModel>();
 
-            // 注册ASN服务和设置视图
+            // 注册ASN服务
             containerRegistry.RegisterSingleton<IAsnService, AsnService>();
             containerRegistry.RegisterSingleton<IAsnCacheService, AsnCacheService>();
+            containerRegistry.RegisterSingleton<IAsnStorageService, AsnStorageService>();
             containerRegistry.RegisterSingleton<IHttpForwardService, HttpForwardService>();
+            containerRegistry.RegisterSingleton<IExcelImportService, ExcelImportService>();
             containerRegistry.RegisterSingleton<AsnHttpServer>();
             containerRegistry.RegisterForNavigation<AsnHttpSettingsView, AsnHttpSettingsViewModel>();
             containerRegistry.RegisterDialog<AsnOrderSelectionDialogView, AsnOrderSelectionDialogViewModel>("AsnOrderSelectionDialog");

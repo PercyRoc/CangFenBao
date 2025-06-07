@@ -66,6 +66,12 @@ namespace XinJuLi.Models.ASN
         /// </summary>
         [JsonIgnore]
         public bool IsNewReceived { get; set; }
+
+        /// <summary>
+        /// 是否在UI中显示（用于过滤，不参与JSON序列化）
+        /// </summary>
+        [JsonIgnore]
+        public bool IsVisible { get; set; } = true;
     }
 
     /// <summary>
