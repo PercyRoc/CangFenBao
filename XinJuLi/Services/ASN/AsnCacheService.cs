@@ -66,7 +66,7 @@ namespace XinJuLi.Services.ASN
             catch (Exception ex)
             {
                 Log.Error(ex, "获取所有ASN单时发生错误");
-                return new List<AsnOrderInfo>();
+                return [];
             }
         }
 

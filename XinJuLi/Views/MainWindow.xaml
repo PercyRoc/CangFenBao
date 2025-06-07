@@ -79,7 +79,7 @@
                 </StackPanel>
             </ui:Button>
 
-            <!-- 选择ASN单按钮 -->
+            <!-- 选择ASN单按钮 (已注释，改为扫码复核模式)
             <ui:Button Grid.Column="3"
                        Appearance="Primary"
                        Command="{Binding OpenAsnSelectionCommand}"
@@ -91,6 +91,7 @@
                     <TextBlock Text="选择ASN单" VerticalAlignment="Center" />
                 </StackPanel>
             </ui:Button>
+            -->
 
             <!-- 导入配置按钮 (已注释)
             <ui:Button Grid.Column="4"
@@ -359,52 +360,6 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                    </Grid>
-                </Border>
-
-                <!-- 当前ASN单信息 -->
-                <Border Grid.Row="2" Margin="16,8,16,16">
-                    <Grid Margin="16">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-
-                        <!-- 标题 -->
-                        <DockPanel Grid.Row="0" Margin="0,0,0,12">
-                            <StackPanel Orientation="Horizontal">
-                                <ui:SymbolIcon Symbol="DocumentText24"
-                                               Width="24"
-                                               Height="24"
-                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                               VerticalAlignment="Center" />
-                                <TextBlock Text="当前ASN单信息"
-                                           Margin="8,0,0,0"
-                                           FontSize="16"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource AccentBrush}"
-                                           VerticalAlignment="Center" />
-                            </StackPanel>
-                        </DockPanel>
-
-                        <!-- ASN信息显示 -->
-                        <StackPanel Grid.Row="1">
-                            <TextBlock Text="{Binding CurrentAsnOrderCode, StringFormat=单号: {0}}"
-                                       FontSize="14"
-                                       FontWeight="SemiBold"
-                                       Margin="0,0,0,8"
-                                       Foreground="{DynamicResource AccentBrush}" />
-                            
-                            <TextBlock Text="{Binding CurrentCarCode, StringFormat=车号: {0}}"
-                                       FontSize="12"
-                                       Margin="0,0,0,8"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                            
-                            <TextBlock Text="{Binding CachedAsnOrderCount, StringFormat=缓存ASN单数: {0}}"
-                                       FontSize="12"
-                                       Margin="0,0,0,8"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                        </StackPanel>
                     </Grid>
                 </Border>
             </Grid>

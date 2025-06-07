@@ -34,6 +34,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly IExcelImportService _excelImportService;
     private readonly IAsnCacheService _asnCacheService;
     private readonly IAsnStorageService _asnStorageService;
+    private readonly IAsnService _asnService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
     private string _currentBarcode = string.Empty;
@@ -83,7 +84,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
         IPackageHistoryDataService packageHistoryDataService,
         IAsnCacheService asnCacheService,
         IAsnStorageService asnStorageService,
-        IExcelImportService excelImportService)
+        IExcelImportService excelImportService,
+        IAsnService asnService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
@@ -94,6 +96,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _asnCacheService = asnCacheService;
         _asnStorageService = asnStorageService;
         _excelImportService = excelImportService;
+        _asnService = asnService;
         _eventAggregator = eventAggregator;
 
         // 初始化会话开始时间
@@ -101,7 +104,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
         OpenHistoryCommand = new DelegateCommand(ExecuteOpenHistory);
-        OpenAsnSelectionCommand = new DelegateCommand(ExecuteOpenAsnSelection);
+        // 注释掉ASN选择命令
+        // OpenAsnSelectionCommand = new DelegateCommand(ExecuteOpenAsnSelection);
         ImportConfigCommand = new DelegateCommand(ExecuteImportConfig);
         ClearChuteCommand = new DelegateCommand<ChuteStatusItem>(ExecuteClearChute);
 
@@ -160,6 +164,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _subscriptions.Add(_cameraService.PackageStream
             .Subscribe(package => { Application.Current.Dispatcher.BeginInvoke(() => OnPackageInfo(package)); }));
 
+        // 注释掉ASN相关订阅
+        /*
         // 订阅ASN订单接收事件（现在用于处理用户选择的ASN单）
         _subscriptions.Add(eventAggregator.GetEvent<AsnOrderReceivedEvent>()
             .Subscribe(asnInfo => { Application.Current.Dispatcher.BeginInvoke(() => OnAsnOrderSelected(asnInfo)); }));
@@ -168,24 +174,28 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _subscriptions.Add(eventAggregator.GetEvent<AsnOrderAddedToCacheEvent>()
             .Subscribe(asnInfo => { Application.Current.Dispatcher.BeginInvoke(() => OnAsnOrderAddedToCache(asnInfo)); }));
 
-        // 主动查询一次相机和摆轮分拣设备状态
-        QueryAndUpdateDeviceStatuses();
-
         // 订阅ASN缓存变更事件
         _asnCacheService.CacheChanged += OnAsnCacheChanged;
+        */
+
+        // 主动查询一次相机和摆轮分拣设备状态
+        QueryAndUpdateDeviceStatuses();
 
         // 测试：分配一个格口用于验证UI显示
         TestAssignChute();
 
+        // 注释掉ASN相关初始化
+        /*
         // 初始化ASN相关信息
         InitializeAsnInfo();
+        */
 
         // 加载现有的格口大区编码配置（已注释，改为SKU分拣模式）
         // LoadExistingAreaCodeConfig();
     }
 
     /// <summary>
-    /// 初始化ASN相关信息
+    /// 初始化ASN相关信息 (已注释)
     /// </summary>
     private void InitializeAsnInfo()
     {
@@ -193,13 +203,16 @@ public class MainWindowViewModel : BindableBase, IDisposable
         {
             Log.Information("开始初始化ASN相关信息");
 
+            // 注释掉ASN属性初始化
+            /*
             // 初始化ASN属性
             CurrentAsnOrderCode = "未选择";
             CurrentCarCode = "未选择";
             CachedAsnOrderCount = 0; // 暂时设为0，后续通过事件更新
+            */
 
-            // 加载上次保存的SKU格口映射
-            LoadSkuChuteMappingFromPersistence();
+            // 加载上次保存的SKU格口映射 (已注释，改为扫码复核模式)
+            // LoadSkuChuteMappingFromPersistence();
 
             Log.Information("ASN信息初始化完成");
         }
@@ -347,8 +360,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                     // 更新配置信息
                     _skuChuteMappingConfig = savedMapping;
-                    CurrentAsnOrderCode = string.IsNullOrEmpty(savedMapping.AsnOrderCode) ? "未选择" : savedMapping.AsnOrderCode;
-                    CurrentCarCode = string.IsNullOrEmpty(savedMapping.CarCode) ? "未选择" : savedMapping.CarCode;
+                    // 注释掉ASN属性设置
+                    // CurrentAsnOrderCode = string.IsNullOrEmpty(savedMapping.AsnOrderCode) ? "未选择" : savedMapping.AsnOrderCode;
+                    // CurrentCarCode = string.IsNullOrEmpty(savedMapping.CarCode) ? "未选择" : savedMapping.CarCode;
 
                     Log.Information("成功加载SKU格口映射: {Count}个映射项，ASN单号: {AsnCode}, 保存时间: {SaveTime}", 
                         validItems.Count, savedMapping.AsnOrderCode, savedMapping.SaveTime);
@@ -437,8 +451,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 _skuChuteMappingConfig.AddOrUpdateItem(mapping.Key, mapping.Value);
             }
 
-            _skuChuteMappingConfig.AsnOrderCode = CurrentAsnOrderCode;
-            _skuChuteMappingConfig.CarCode = CurrentCarCode;
+            // 注释掉ASN相关属性设置
+            // _skuChuteMappingConfig.AsnOrderCode = CurrentAsnOrderCode;
+            // _skuChuteMappingConfig.CarCode = CurrentCarCode;
             _skuChuteMappingConfig.SaveTime = DateTime.Now;
 
             // 保存到文件
@@ -472,7 +487,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     public DelegateCommand OpenSettingsCommand { get; }
     public DelegateCommand OpenHistoryCommand { get; }
-    public DelegateCommand OpenAsnSelectionCommand { get; }
+    // 注释掉ASN选择命令属性
+    // public DelegateCommand OpenAsnSelectionCommand { get; }
     public DelegateCommand ImportConfigCommand { get; }
     public DelegateCommand<ChuteStatusItem> ClearChuteCommand { get; }
 
@@ -502,6 +518,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
     public ObservableCollection<PackageInfoItem> PackageInfoItems { get; } = [];
     public ObservableCollection<ChuteStatusItem> ChuteStatuses { get; } = [];
 
+    // 注释掉ASN相关属性
+    /*
     // ASN相关属性
     private string _currentAsnOrderCode = "未选择";
     private string _currentCarCode = "未选择";
@@ -524,6 +542,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         get => _cachedAsnOrderCount;
         private set => SetProperty(ref _cachedAsnOrderCount, value);
     }
+    */
 
 
 
@@ -677,6 +696,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
     /// <returns>true表示在ASN单中，false表示不在</returns>
     private bool IsSkuInCurrentAsn(string sku)
     {
+        // 扫码复核模式下不再需要ASN验证，直接返回true
+        return true;
+        
+        /*
         try
         {
             // 如果没有选择ASN单，则允许所有SKU（兼容模式）
@@ -709,6 +732,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             Log.Error(ex, "检查SKU {Sku} 是否在ASN单 {AsnOrderCode} 中时发生错误", sku, CurrentAsnOrderCode);
             return true; // 发生错误时允许通过，避免误拦截
         }
+        */
     }
 
     /// <summary>
@@ -745,7 +769,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     /// <summary>
     /// 处理接收到的包裹信息（SKU分拣模式）
     /// </summary>
-    private void OnPackageInfo(PackageInfo package)
+    private async void OnPackageInfo(PackageInfo package)
     {
         try
         {
@@ -765,14 +789,13 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // 检查条码是否为空或NoRead标识
             if (IsNoReadBarcode(package.Barcode))
             {
-                // 无条码，设置为NoRead异常
+                // 无条码，分配到异常格口
                 package.SetStatus("无条码");
                 package.ErrorMessage = "无法读取条码";
-                package.SetChute(chuteSettings.NoReadChuteNumber);
+                package.SetChute(1); // 异常分到格口2
 
-                Log.Warning("包裹条码为NoRead标识 '{Barcode}'，分配到NoRead格口: {ChuteNumber}", 
-                    package.Barcode, chuteSettings.NoReadChuteNumber);
-                ProcessPackageWithError(package, chuteSettings.NoReadChuteNumber, "无条码");
+                Log.Warning("包裹条码为NoRead标识 '{Barcode}'，分配到异常格口: 1", package.Barcode);
+                ProcessPackageWithError(package, 1, "无条码");
                 SavePackage(package);
                 
                 _totalPackageCount++;
@@ -781,6 +804,72 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 return;
             }
 
+            // 调用扫码复核接口
+            Log.Information("开始调用扫码复核接口: {Barcode}", package.Barcode);
+            
+            var reviewRequest = new MaterialReviewRequest
+            {
+                BoxCode = package.Barcode,
+                SystemCode = "CangFenBao", // 可以从设置中获取
+                HouseCode = "DEFAULT" // 可以从设置中获取
+            };
+
+            var reviewResult = await _asnService.ProcessMaterialReview(reviewRequest);
+            
+            int targetChute;
+            bool isSuccess = reviewResult.Success ?? false;
+            if (isSuccess)
+            {
+                // 复核成功，分配到格口3
+                targetChute = 3;
+                package.SetStatus("复核成功");
+                package.ErrorMessage = string.Empty;
+                Log.Information("包裹 {Barcode} 复核成功，分配到格口3", package.Barcode);
+                
+                // 更新成功统计
+                _totalPackageCount++;
+                _successPackageCount++;
+            }
+            else
+            {
+                // 复核异常，分配到格口1
+                targetChute = 1;
+                package.SetStatus("复核异常");
+                package.ErrorMessage = reviewResult.Message;
+                Log.Warning("包裹 {Barcode} 复核异常，分配到格口2，原因: {Message}", package.Barcode, reviewResult.Message);
+                
+                // 更新失败统计
+                _totalPackageCount++;
+                _failedPackageCount++;
+            }
+
+            // 设置包裹格口
+            package.SetChute(targetChute);
+
+            // 更新UI显示
+            UpdatePackageInfoItemsWithChute(targetChute, isSuccess ? "复核成功" : "复核异常");
+
+            // 执行分拣操作
+            if (isSuccess)
+            {
+                ProcessPackageSuccess(package);
+            }
+            else
+            {
+                ProcessPackageWithError(package, targetChute, "复核异常");
+            }
+
+            // 记录包裹
+            SavePackage(package);
+
+            // 更新统计信息
+            UpdateStatisticsItems();
+
+            Log.Information("包裹 {Barcode} 处理完成，分配到格口 {ChuteNumber}，状态: {Status}", 
+                package.Barcode, targetChute, package.Status);
+
+            #region 注释掉的ASN分拣相关代码
+            /*
             // 查找或创建SKU的分拣规则
             var sku = package.Barcode; // 使用条码作为SKU
             
@@ -855,6 +944,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
             Log.Information("包裹 {Barcode} 成功分配到格口 {ChuteNumber}，SKU: {Sku}", 
                 package.Barcode, targetChute, sku);
+            */
+            #endregion
         }
         catch (Exception ex)
         {
@@ -863,12 +954,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
             try
             {
                 // 发生异常，分配到异常格口
-                var currentChuteSettings = _settingsService.LoadSettings<ChuteSettings>();
-                package.SetChute(currentChuteSettings.ErrorChuteNumber);
+                package.SetChute(1);
                 package.SetStatus("处理异常");
                 package.ErrorMessage = $"处理发生异常: {ex.Message}";
 
-                ProcessPackageWithError(package, currentChuteSettings.ErrorChuteNumber, "处理异常");
+                ProcessPackageWithError(package, 1, "处理异常");
                 SavePackage(package);
 
                 _totalPackageCount++;
@@ -975,6 +1065,32 @@ public class MainWindowViewModel : BindableBase, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "更新包裹信息显示时发生错误");
+        }
+    }
+
+    /// <summary>
+    /// 使用格口和状态信息更新包裹显示
+    /// </summary>
+    private void UpdatePackageInfoItemsWithChute(int chuteNumber, string status)
+    {
+        try
+        {
+            // 更新格口显示
+            var chuteItem = PackageInfoItems.FirstOrDefault(x => x.Label == "格口");
+            if (chuteItem != null)
+            {
+                chuteItem.Value = chuteNumber.ToString();
+                chuteItem.Description = $"格口: {chuteNumber}";
+            }
+
+            // 更新状态显示
+            var statusItem = PackageInfoItems.FirstOrDefault(x => x.Label == "状态");
+            if (statusItem != null)
+                statusItem.Value = status;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "更新包裹格口显示时发生错误");
         }
     }
 
@@ -1942,10 +2058,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 处理ASN订单接收事件（选择新ASN单时清空旧映射）
+    /// 处理ASN订单接收事件（选择新ASN单时清空旧映射）- 已注释
     /// </summary>
     private void OnAsnOrderSelected(AsnOrderInfo asnInfo)
     {
+        // 扫码复核模式下不再需要ASN订单选择功能
+        Log.Information("OnAsnOrderSelected方法已被注释，当前为扫码复核模式");
+        
+        /*
         try
         {
             Log.Information("处理ASN订单选择事件: {OrderCode}", asnInfo.OrderCode);
@@ -1993,6 +2113,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             Log.Error(ex, "处理ASN订单选择时发生错误: {OrderCode}", asnInfo.OrderCode);
             _notificationService.ShowError("处理ASN单选择失败：" + ex.Message);
         }
+        */
     }
 
     /// <summary>
@@ -2134,7 +2255,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 // 取消订阅事件
                 _sortService.DeviceConnectionStatusChanged -= OnDeviceConnectionStatusChanged;
                 _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
-                _asnCacheService.CacheChanged -= OnAsnCacheChanged;
+                // 注释掉ASN缓存事件取消订阅
+                // _asnCacheService.CacheChanged -= OnAsnCacheChanged;
 
                 // 释放订阅
                 foreach (var subscription in _subscriptions)
