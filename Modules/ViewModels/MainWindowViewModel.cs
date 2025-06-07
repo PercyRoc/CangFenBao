@@ -38,6 +38,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private bool _disposed;
     private SystemStatus _systemStatus = new();
 
+    // 格口统计计数器 - 维护完整的统计数据
+    private readonly Dictionary<int, int> _chutePackageCount = new();
+
     public MainWindowViewModel(IDialogService dialogService,
         ICameraService cameraService,
         PackageTransferService packageTransferService, ISettingsService settingsService,
@@ -58,6 +61,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         _ztoApiService = ztoApiService;
         _jituService = jituService;
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
+        ShowChuteStatisticsCommand = new DelegateCommand(ExecuteShowChuteStatistics);
 
         // 初始化系统状态更新定时器
         _timer = new DispatcherTimer
@@ -96,6 +100,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     }
     
     public DelegateCommand OpenSettingsCommand { get; }
+    public DelegateCommand ShowChuteStatisticsCommand { get; }
     public string CurrentBarcode
     {
         get => _currentBarcode;
@@ -122,6 +127,38 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private void ExecuteOpenSettings()
     {
         _dialogService.ShowDialog("SettingsDialog");
+    }
+
+    private void ExecuteShowChuteStatistics()
+    {
+        try
+        {
+            var dialog = new Views.ChuteStatisticsDialog();
+            var viewModel = new ChuteStatisticsDialogViewModel();
+            
+            // 更新统计数据
+            viewModel.UpdateStatistics(_chutePackageCount);
+            
+            // 设置数据上下文
+            dialog.DataContext = viewModel;
+            
+            // 设置刷新动作的处理逻辑
+            viewModel.RefreshAction = () =>
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    viewModel.UpdateStatistics(_chutePackageCount);
+                });
+            };
+            
+            // 设置父窗口并显示对话框
+            dialog.Owner = Application.Current.MainWindow;
+            dialog.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "显示格口统计对话框时发生错误");
+        }
     }
 
     private void Timer_Tick(object? sender, EventArgs e)
@@ -210,7 +247,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             "0.00",
             "kg",
             "包裹重量",
-            "Scale24"
+            "Scales24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
@@ -285,23 +322,43 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             // 从 ChuteSettings 获取格口配置
             var chuteSettings = _settingsService.LoadSettings<Common.Models.Settings.ChuteRules.ChuteSettings>();
 
-            // 根据条码查找匹配的格口
-            var chuteNumber = chuteSettings.FindMatchingChute(package.Barcode);
-
-            if (chuteNumber == null)
+            // 检查条码是否包含异常字符（|或逗号）
+            if (package.Barcode.Contains('|') || package.Barcode.Contains(','))
             {
-                Log.Warning("无法获取格口号，使用异常格口: {Barcode}", package.Barcode);
-                package.SetChute(chuteSettings.ErrorChuteNumber); // 使用 ChuteSettings 中的异常格口
-                package.SetStatus(PackageStatus.Error, "格口分配失败");
+                Log.Warning("条码包含异常字符（|或,），分到异常格口: {Barcode}", package.Barcode);
+                package.SetChute(chuteSettings.ErrorChuteNumber);
+                package.SetStatus(PackageStatus.Error, "条码包含异常字符");
             }
             else
             {
-                // 设置包裹的格口
-                package.SetChute(chuteNumber.Value); // 不再有原始格口的概念，因为直接匹配规则
+                // 根据条码查找匹配的格口
+                var chuteNumber = chuteSettings.FindMatchingChute(package.Barcode);
+
+                if (chuteNumber == null)
+                {
+                    Log.Warning("无法获取格口号，使用异常格口: {Barcode}", package.Barcode);
+                    package.SetChute(chuteSettings.ErrorChuteNumber); // 使用 ChuteSettings 中的异常格口
+                    package.SetStatus(PackageStatus.Error, "格口分配失败");
+                }
+                else
+                {
+                    // 设置包裹的格口
+                    package.SetChute(chuteNumber.Value); // 不再有原始格口的概念，因为直接匹配规则
+                }
             }
 
             // 通知模组带服务处理包裹
             _moduleConnectionService.OnPackageReceived(package);
+
+            // 更新格口统计计数器
+            if (_chutePackageCount.ContainsKey(package.ChuteNumber))
+            {
+                _chutePackageCount[package.ChuteNumber]++;
+            }
+            else
+            {
+                _chutePackageCount[package.ChuteNumber] = 1;
+            }
 
             // 如果没有错误，设置为正常状态
             if (string.IsNullOrEmpty(package.ErrorMessage))

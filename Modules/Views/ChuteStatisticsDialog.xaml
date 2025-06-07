@@ -1,0 +1,111 @@
+<ui:FluentWindow x:Class="ShanghaiModuleBelt.Views.ChuteStatisticsDialog"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:viewModels="clr-namespace:ShanghaiModuleBelt.ViewModels"
+                 mc:Ignorable="d"
+                 d:DataContext="{d:DesignInstance Type=viewModels:ChuteStatisticsDialogViewModel}"
+                 Title="格口统计信息"
+                 Height="500"
+                 Width="500"
+                 WindowStartupLocation="CenterOwner"
+                 ResizeMode="CanResize"
+                 x:ClassModifier="internal">
+    <ui:FluentWindow.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/SharedUI;component/Resources/Styles/DataGridStyles.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/SharedUI;component/Resources/Styles/ColorStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </ui:FluentWindow.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 标题 -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,20">
+            <ui:SymbolIcon Symbol="ChartMultiple24"
+                           Width="32"
+                           Height="32"
+                           Foreground="{DynamicResource AccentBrush}"
+                           VerticalAlignment="Center" />
+            <TextBlock Text="格口包裹统计"
+                       Margin="12,0,0,0"
+                       FontSize="24"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource AccentBrush}"
+                       VerticalAlignment="Center" />
+        </StackPanel>
+
+        <!-- 操作按钮 -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,16">
+            <ui:Button Command="{Binding RefreshCommand}"
+                       Appearance="Primary"
+                       Icon="ArrowSync24"
+                       Content="刷新数据"
+                       Margin="0,0,8,0" />
+        </StackPanel>
+
+        <!-- 统计表格 -->
+        <Border Grid.Row="2"
+                Style="{StaticResource CardStyle}">
+            <DataGrid Style="{DynamicResource DefaultDataGridStyle}"
+                      ColumnHeaderStyle="{DynamicResource DefaultDataGridColumnHeaderStyle}"
+                      CellStyle="{DynamicResource DefaultDataGridCellStyle}"
+                      RowStyle="{DynamicResource DefaultDataGridRowStyle}"
+                      ItemsSource="{Binding ChuteStatistics}"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      GridLinesVisibility="Horizontal"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="格口号" 
+                                        Binding="{Binding ChuteNumber}" 
+                                        Width="*">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="HorizontalAlignment" Value="Center"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter Property="FontSize" Value="18"/>
+                                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    
+                    <DataGridTextColumn Header="包裹总数" 
+                                        Binding="{Binding PackageCount}" 
+                                        Width="*">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="HorizontalAlignment" Value="Center"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter Property="FontSize" Value="18"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+
+        <!-- 底部按钮 -->
+        <StackPanel Grid.Row="3" 
+                    Orientation="Horizontal" 
+                    HorizontalAlignment="Right" 
+                    Margin="0,16,0,0">
+            <ui:Button Content="关闭"
+                       Click="CloseButton_Click"
+                       Appearance="Secondary"
+                       Padding="20,8" />
+        </StackPanel>
+    </Grid>
+</ui:FluentWindow> 

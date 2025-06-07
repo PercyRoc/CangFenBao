@@ -246,6 +246,7 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
                         <!-- 标题 -->
@@ -335,6 +336,19 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+
+                        <!-- 格口统计按钮 -->
+                        <StackPanel Grid.Row="2" 
+                                    Orientation="Horizontal" 
+                                    HorizontalAlignment="Center" 
+                                    Margin="0,16,0,0">
+                            <ui:Button Command="{Binding ShowChuteStatisticsCommand}"
+                                       Appearance="Primary"
+                                       Icon="ChartMultiple24"
+                                       Content="格口统计"
+                                       Padding="16,8"
+                                       ToolTip="查看每个格口的包裹统计信息" />
+                        </StackPanel>
                     </Grid>
                 </Border>
             </Grid>

@@ -4,6 +4,8 @@ using Common.Services.Settings;
 using DeviceService.DataSourceDevices.SerialPort; // 引入新服务的命名空间
 using Serilog;
 using System.Timers;
+using Microsoft.VisualBasic;
+using Timer = System.Timers.Timer;
 
 // 如果尚未存在，添加LINQ命名空间
 
@@ -329,7 +331,7 @@ public class SerialPortWeightService : IDisposable
         {
             var receivedString = Encoding.ASCII.GetString(data);
             Log.Information("SerialPortWeightService - 收到原始数据: {Data}, 长度: {Length}, 连接状态: {Connected}, 时间: {Time}", 
-                receivedString, data.Length, _serialPortService.IsConnected, DateTime.Now:HH:mm:ss.fff);
+                receivedString, data.Length, _serialPortService.IsConnected,DateAndTime.Now);
 
             // 更新最后接收数据的时间
             _lastDataReceiveTime = DateTime.Now;
