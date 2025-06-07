@@ -3,6 +3,7 @@ using System.Text;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.SerialPort; // 引入新服务的命名空间
 using Serilog;
+using System.Timers;
 
 // 如果尚未存在，添加LINQ命名空间
 
@@ -26,16 +27,23 @@ public class SerialPortWeightService : IDisposable
     private readonly StringBuilder _receiveBuffer = new();
     private readonly SerialPortService _serialPortService;
     private readonly ISettingsService _settingsService;
+    private readonly Timer _statusCheckTimer;
 
     private bool _disposed;
     private bool _isConnected;
     private DateTime _lastProcessTime = DateTime.MinValue;
+    private DateTime _lastDataReceiveTime = DateTime.MinValue;
 
     public SerialPortWeightService(ISettingsService settingsService)
     {
         _settingsService = settingsService;
         var weightSettings = _settingsService.LoadSettings<WeightSettings>();
         _serialPortService = new SerialPortService("WeightScale", weightSettings.SerialPortParams);
+        
+        // 初始化状态检查定时器，每10秒检查一次
+        _statusCheckTimer = new Timer(10000); // 10秒
+        _statusCheckTimer.Elapsed += OnStatusCheck;
+        _statusCheckTimer.AutoReset = true;
     }
 
     public bool IsConnected
@@ -69,7 +77,11 @@ public class SerialPortWeightService : IDisposable
             _serialPortService.DataReceived += HandleDataReceived;
 
             var connectResult = _serialPortService.Connect();
-            if (connectResult) return connectResult;
+            if (connectResult) 
+            {
+                _statusCheckTimer.Start(); // 启动状态检查定时器
+                return connectResult;
+            }
             Log.Error("串口连接失败");
             _serialPortService.ConnectionChanged -= HandleConnectionStatusChanged;
             _serialPortService.DataReceived -= HandleDataReceived;
@@ -97,6 +109,8 @@ public class SerialPortWeightService : IDisposable
     {
         try
         {
+            _statusCheckTimer.Stop(); // 停止状态检查定时器
+            
             _serialPortService.ConnectionChanged -= HandleConnectionStatusChanged;
             _serialPortService.DataReceived -= HandleDataReceived;
 
@@ -119,6 +133,26 @@ public class SerialPortWeightService : IDisposable
 
     public double? FindNearestWeight(DateTime targetTime)
     {
+        // 在方法开始时记录连接状态
+        Log.Debug("FindNearestWeight 开始 - 本地状态: {LocalConnected}, 底层状态: {ServiceConnected}, 目标时间: {TargetTime}", 
+            IsConnected, _serialPortService.IsConnected, targetTime);
+            
+        // 主动检查连接状态，如果发现不一致则尝试同步
+        if (IsConnected != _serialPortService.IsConnected)
+        {
+            Log.Warning("发现连接状态不一致，同步状态 - 本地: {Local}, 底层: {Service}", 
+                IsConnected, _serialPortService.IsConnected);
+            IsConnected = _serialPortService.IsConnected;
+        }
+        
+        // 如果连接断开，尝试重连一次
+        if (!_serialPortService.IsConnected)
+        {
+            Log.Warning("发现串口连接断开，尝试重连...");
+            var reconnectResult = _serialPortService.Connect();
+            Log.Information("重连结果: {Result}", reconnectResult);
+        }
+            
         lock (_lock)
         {
             var lowerBound = targetTime.AddMilliseconds(_settingsService.LoadSettings<WeightSettings>().TimeRangeLower);
@@ -170,7 +204,7 @@ public class SerialPortWeightService : IDisposable
 
             // 如果初始找到了非零值，上面已经 return 了，能走到这里说明要么没找到，要么找到的是0
 
-            if (!IsConnected && DateTime.Now > upperBound)
+            if (!_serialPortService.IsConnected && DateTime.Now > upperBound)
             {
                 Log.Debug("串口未连接且当前时间已超过上限，不再等待新数据");
                 // 如果之前找到了0，则返回0，否则返回null
@@ -240,9 +274,10 @@ public class SerialPortWeightService : IDisposable
                     Log.Debug("收到信号但新数据不符合时间范围或仍为零，继续等待");
                 }
 
-                if (!IsConnected)
+                if (!_serialPortService.IsConnected)
                 {
-                    Log.Warning("等待重量数据期间串口连接断开，停止等待");
+                    Log.Warning("等待重量数据期间串口连接断开，停止等待 - 本地状态: {LocalConnected}, 底层状态: {ServiceConnected}", 
+                        IsConnected, _serialPortService.IsConnected);
                     break; // 退出 while 循环
                 }
 
@@ -265,7 +300,16 @@ public class SerialPortWeightService : IDisposable
 
     private void HandleConnectionStatusChanged(bool isConnected)
     {
-        Log.Debug("SerialPortWeightService - 收到连接状态变更: {IsConnected}", isConnected);
+        Log.Debug("SerialPortWeightService - 收到连接状态变更: {IsConnected}, 当前本地状态: {LocalConnected}, 底层服务状态: {ServiceConnected}", 
+            isConnected, IsConnected, _serialPortService.IsConnected);
+        
+        // 验证状态一致性
+        if (isConnected != _serialPortService.IsConnected)
+        {
+            Log.Warning("连接状态不一致 - 事件参数: {EventConnected}, 底层服务: {ServiceConnected}", 
+                isConnected, _serialPortService.IsConnected);
+        }
+        
         IsConnected = isConnected;
         if (isConnected) return;
         lock (_lock)
@@ -284,7 +328,17 @@ public class SerialPortWeightService : IDisposable
         try
         {
             var receivedString = Encoding.ASCII.GetString(data);
-            Log.Information("SerialPortWeightService - 收到原始数据: {Data}, 长度: {Length}", receivedString, data.Length);
+            Log.Information("SerialPortWeightService - 收到原始数据: {Data}, 长度: {Length}, 连接状态: {Connected}, 时间: {Time}", 
+                receivedString, data.Length, _serialPortService.IsConnected, DateTime.Now:HH:mm:ss.fff);
+
+            // 更新最后接收数据的时间
+            _lastDataReceiveTime = DateTime.Now;
+
+            // 如果收到数据但连接状态显示断开，这是异常情况
+            if (!_serialPortService.IsConnected)
+            {
+                Log.Warning("收到数据但连接状态显示断开，这可能是状态同步问题");
+            }
 
             lock (_lock)
             {
@@ -407,6 +461,13 @@ public class SerialPortWeightService : IDisposable
 
     private void ProcessStaticWeight(double weightG, DateTime timestamp)
     {
+        // 在静态称重模式下，零重量通常表示没有包裹或称重异常，不应参与稳定性判断
+        if (weightG <= 0)
+        {
+            Log.Debug("静态称重模式下忽略零重量或负重量: {Weight:F2}g", weightG);
+            return;
+        }
+
         _weightSamples.Add(weightG);
         Log.Debug("添加重量样本: {Weight:F2}g, 当前样本数: {Count}", weightG, _weightSamples.Count);
 
@@ -486,14 +547,45 @@ public class SerialPortWeightService : IDisposable
         return new string(chars);
     }
 
+    /// <summary>
+    /// 定期状态检查方法
+    /// </summary>
+    private void OnStatusCheck(object? sender, ElapsedEventArgs e)
+    {
+        try
+        {
+            var now = DateTime.Now;
+            var timeSinceLastData = _lastDataReceiveTime == DateTime.MinValue ? 
+                TimeSpan.Zero : now - _lastDataReceiveTime;
+                
+            Log.Information("串口状态检查 - 连接状态: {Connected}, 最后接收数据: {LastReceive}, 距离上次: {TimeSince:F1}秒, 缓存数量: {CacheCount}", 
+                _serialPortService.IsConnected, 
+                _lastDataReceiveTime == DateTime.MinValue ? "从未接收" : _lastDataReceiveTime.ToString("HH:mm:ss.fff"),
+                timeSinceLastData.TotalSeconds,
+                _weightCache.Count);
+                
+            // 如果超过30秒没有收到数据且连接状态显示正常，发出警告
+            if (_serialPortService.IsConnected && timeSinceLastData.TotalSeconds > 30 && _lastDataReceiveTime != DateTime.MinValue)
+            {
+                Log.Warning("串口连接正常但超过30秒未收到数据，可能存在通信问题");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "状态检查时发生错误");
+        }
+    }
+
     private void Dispose(bool disposing)
     {
         if (_disposed) return;
 
-
         if (disposing)
         {
             Stop();
+            
+            _statusCheckTimer?.Stop();
+            _statusCheckTimer?.Dispose();
 
             _serialPortService.Dispose();
 
