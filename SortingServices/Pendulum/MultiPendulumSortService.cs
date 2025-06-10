@@ -10,24 +10,18 @@ namespace SortingServices.Pendulum;
 /// <summary>
 ///     多光电多摆轮分拣服务实现
 /// </summary>
-public class MultiPendulumSortService : BasePendulumSortService
+public class MultiPendulumSortService(ISettingsService settingsService) : BasePendulumSortService(settingsService)
 {
     private readonly ConcurrentDictionary<string, TcpClientService> _sortingClients = new();
     private readonly SemaphoreSlim _initializationLock = new(1, 1);
     private bool _isInitialized;
-    private readonly ISettingsService _settingsService;
+    private readonly ISettingsService _settingsService = settingsService;
 
     // 记录光电信号状态的字典，true 表示高电平，false 表示低电平
     private readonly ConcurrentDictionary<string, bool> _photoelectricSignalStates = new();
 
     // 记录上一次信号状态的字典
     private readonly ConcurrentDictionary<string, bool> _previousPhotoelectricSignalStates = new();
-
-    public MultiPendulumSortService(ISettingsService settingsService) 
-        : base(settingsService)
-    {
-        _settingsService = settingsService;
-    }
 
     public override async Task InitializeAsync(PendulumSortConfig configuration)
     {
@@ -354,10 +348,26 @@ public class MultiPendulumSortService : BasePendulumSortService
         // 获取上一次的信号状态
         _previousPhotoelectricSignalStates.TryGetValue(photoelectricName, out var previousState);
 
-        // 如果当前是低电平，且上一次也是低电平，记录警告 (改为 Debug)
+        // 如果当前是低电平，且上一次也是低电平，将第二次低电平视为高电平处理
         if (!isHighLevel && !previousState)
         {
-            Log.Debug("光电 {Name} 连续低电平信号.", photoelectricName);
+            Log.Warning("光电 {Name} 连续收到两个低电平信号，将第二次低电平视为一次高电平处理", photoelectricName);
+            
+            try
+            {
+                // 构造一个模拟的高电平信号数据
+                var fakeHighLevelMsg = "OCCH1:1";
+                var fakeHighLevelData = Encoding.ASCII.GetBytes(fakeHighLevelMsg);
+                
+                Log.Information("光电 {Name} 模拟高电平信号: {Signal}", photoelectricName, fakeHighLevelMsg);
+                
+                // 调用分拣数据处理逻辑，模拟高电平触发
+                ProcessSortingData(fakeHighLevelData, photoelectricName);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "光电 {Name} 处理模拟高电平信号失败", photoelectricName);
+            }
         }
 
         // 记录当前信号状态
@@ -453,27 +463,6 @@ public class MultiPendulumSortService : BasePendulumSortService
     protected override TcpClientService? GetSortingClient(string photoelectricName)
     {
         return _sortingClients.TryGetValue(photoelectricName, out var client) ? client : null;
-    }
-
-    protected virtual void CheckSortingPhotoelectricChanges(PendulumSortConfig oldConfig, PendulumSortConfig newConfig)
-    {
-        // 检查是否有分拣光电的连接参数发生变化
-        var hasChanges = newConfig.SortingPhotoelectrics.Any(newPhotoelectric =>
-        {
-            var oldPhotoelectric = oldConfig.SortingPhotoelectrics.FirstOrDefault(p => p.Name == newPhotoelectric.Name);
-            if (oldPhotoelectric == null) return false;
-
-            if (oldPhotoelectric.IpAddress == newPhotoelectric.IpAddress &&
-                oldPhotoelectric.Port == newPhotoelectric.Port) return false;
-
-            Log.Information("分拣光电 {Name} 连接参数已变更，准备重新连接", newPhotoelectric.Name);
-            return true;
-        });
-
-        if (hasChanges)
-        {
-            _ = ReconnectAsync();
-        }
     }
 
     protected override string? GetPhotoelectricNameBySlot(int slot)

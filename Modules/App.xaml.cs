@@ -5,7 +5,9 @@ using Common.Extensions;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
+using ShanghaiModuleBelt.Data;
 using ShanghaiModuleBelt.Services;
 using ShanghaiModuleBelt.Services.Sto;
 using ShanghaiModuleBelt.Services.Yunda;
@@ -114,6 +116,12 @@ public partial class App
         containerRegistry.AddCommonServices();
         containerRegistry.AddShardUi();
         containerRegistry.AddPhotoCamera();
+
+        // 注册 SQLite 数据库上下文
+        containerRegistry.RegisterSingleton<ApplicationDbContext>();
+
+        // 注册重传服务
+        containerRegistry.RegisterSingleton<RetryService>();
 
         containerRegistry.RegisterSingleton<HttpClient>();
         // 注册包裹中转服务
@@ -236,17 +244,19 @@ public partial class App
                 Task.Run(async () => await moduleConnectionHostedService.StopAsync(CancellationToken.None)).Wait(2000);
                 Log.Information("模组连接托管服务已停止");
 
-                // // 停止锁格托管服务
-                // var lockingHostedService = Container.Resolve<LockingHostedService>();
-                // Task.Run(lockingHostedService.StopAsync).Wait(2000);
-                // Log.Information("锁格托管服务已停止");
-                //
-                // // 释放锁格服务
-                // if (Container.Resolve<LockingService>() is IDisposable lockingService)
-                // {
-                //     lockingService.Dispose();
-                //     Log.Information("锁格服务已释放");
-                // }
+                // 停止重传服务
+                if (Container.Resolve<RetryService>() is IDisposable retryService)
+                {
+                    retryService.Dispose();
+                    Log.Information("重传服务已停止");
+                }
+
+                // 释放数据库上下文
+                if (Container.Resolve<ApplicationDbContext>() is IDisposable dbContext)
+                {
+                    dbContext.Dispose();
+                    Log.Information("数据库上下文已释放");
+                }
             }
             catch (Exception ex)
             {

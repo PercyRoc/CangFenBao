@@ -43,9 +43,12 @@ namespace ShanghaiModuleBelt.Services.Zto
             var jsonContent = JsonConvert.SerializeObject(request);
             Log.Information("ZTO揽收上传请求数据: {JsonContent}", jsonContent);
 
-            var dataDigest = GenerateDataDigest(jsonContent, _ztoApiSettings.Secret);
-            _httpClient.DefaultRequestHeaders.Remove("x-dataDigest"); // 确保每次更新
-            _httpClient.DefaultRequestHeaders.Add("x-dataDigest", dataDigest);
+            if (_ztoApiSettings.Secret != null)
+            {
+                var dataDigest = GenerateDataDigest(jsonContent, _ztoApiSettings.Secret);
+                _httpClient.DefaultRequestHeaders.Remove("x-dataDigest"); // 确保每次更新
+                _httpClient.DefaultRequestHeaders.Add("x-dataDigest", dataDigest);
+            }
 
             try
             {
@@ -58,7 +61,7 @@ namespace ShanghaiModuleBelt.Services.Zto
                 if (response.IsSuccessStatusCode)
                 {
                     var successResponse = JsonConvert.DeserializeObject<CollectUploadResponse>(responseContent);
-                    if (successResponse != null && successResponse.Status)
+                    if (successResponse is { Status: true })
                     {
                         Log.Information("ZTO揽收上传成功: {Message}", successResponse.Message);
                         return successResponse;

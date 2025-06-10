@@ -14,7 +14,6 @@ using ShanghaiModuleBelt.Services.Sto;
 using ShanghaiModuleBelt.Services.Yunda;
 using SharedUI.Models;
 using Modules.Services.Jitu;
-// using LockingService = ShanghaiModuleBelt.Services.LockingService;
 
 namespace ShanghaiModuleBelt.ViewModels;
 
@@ -32,6 +31,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private readonly IYundaUploadWeightService _yundaUploadWeightService;
     private readonly Services.Zto.IZtoApiService _ztoApiService;
     private readonly IJituService _jituService;
+    private readonly RetryService _retryService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
     private string _currentBarcode = string.Empty;
@@ -48,7 +48,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         IStoAutoReceiveService stoAutoReceiveService,
         IYundaUploadWeightService yundaUploadWeightService,
         Services.Zto.IZtoApiService ztoApiService,
-        IJituService jituService)
+        IJituService jituService,
+        RetryService retryService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
@@ -60,6 +61,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         _yundaUploadWeightService = yundaUploadWeightService;
         _ztoApiService = ztoApiService;
         _jituService = jituService;
+        _retryService = retryService;
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
         ShowChuteStatisticsCommand = new DelegateCommand(ExecuteShowChuteStatistics);
 
@@ -376,9 +378,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 // 发送申通自动揽收请求
                 var stoRequest = new StoAutoReceiveRequest
                 {
-                    WhCode = stoApiSettings.WhCode, // 从配置获取
-                    OrgCode = stoApiSettings.OrgCode, // 从配置获取
-                    UserCode = stoApiSettings.UserCode, // 从配置获取
+                    WhCode = stoApiSettings.WhCode,
+                    OrgCode = stoApiSettings.OrgCode,
+                    UserCode = stoApiSettings.UserCode,
                     Packages =
                     [
                         new Package()
@@ -398,6 +400,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 else
                 {
                     Log.Error("申通自动揽收请求失败: {Barcode}, 错误: {ErrorMessage}", package.Barcode, stoResponse?.ErrorMsg);
+                    // 添加到重传记录
+                    await _retryService.AddRetryRecordAsync(package.Barcode, "申通", stoRequest, stoResponse?.ErrorMsg);
                 }
             }
             else
@@ -425,9 +429,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                         [
                             new YundaOrder
                             {
-                                // 随机生成一个19位数字作为唯一标志
                                 Id = Random.Shared.NextInt64(1_000_000_000_000_000_000L, long.MaxValue),
-                                DocId = long.Parse(package.Barcode), // 将DocId设置为Barcode
+                                DocId = long.Parse(package.Barcode),
                                 ScanSite = yundaApiSettings.ScanSite,
                                 ScanTime = package.CreateTime.ToString("yyyy-MM-dd HH:mm:ss"),
                                 ScanMan = yundaApiSettings.ScanMan,
@@ -446,6 +449,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 {
                     Log.Error("韵达上传重量请求失败: {Barcode}, 错误: {Message}, {ErrorCode}-{ErrorMsg}",
                         package.Barcode, yundaResponse?.Message, yundaResponse?.Data?.ErrorCode, yundaResponse?.Data?.ErrorMsg);
+                    // 添加到重传记录
+                    await _retryService.AddRetryRecordAsync(package.Barcode, "韵达", yundaRequest, 
+                        $"{yundaResponse?.Message}, {yundaResponse?.Data?.ErrorCode}-{yundaResponse?.Data?.ErrorMsg}");
                 }
             }
             else
@@ -482,6 +488,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 {
                     Log.Error("中通揽收上传请求失败: {Barcode}, 错误: {Message}, Code={Code}",
                         package.Barcode, ztoResponse.Message, ztoResponse.Code);
+                    // 添加到重传记录
+                    await _retryService.AddRetryRecordAsync(package.Barcode, "中通", ztoRequest, 
+                        $"{ztoResponse.Message}, Code={ztoResponse.Code}");
                 }
             }
             else
@@ -518,6 +527,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 {
                     Log.Error("极兔OpScan上传请求失败: {Barcode}, 错误: {Message}, Code={Code}",
                         package.Barcode, jituResponse.Message, jituResponse.Code);
+                    // 添加到重传记录
+                    await _retryService.AddRetryRecordAsync(package.Barcode, "极兔", jituRequest, 
+                        $"{jituResponse.Message}, Code={jituResponse.Code}");
                 }
             }
             else

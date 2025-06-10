@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text;
 using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
@@ -12,6 +13,12 @@ namespace SortingServices.Pendulum;
 public class SinglePendulumSortService(ISettingsService settingsService) : BasePendulumSortService(settingsService)
 {
     private readonly ISettingsService _settingsService = settingsService;
+
+    // 记录光电信号状态的字典，true 表示高电平，false 表示低电平
+    private readonly ConcurrentDictionary<string, bool> _photoelectricSignalStates = new();
+
+    // 记录上一次信号状态的字典
+    private readonly ConcurrentDictionary<string, bool> _previousPhotoelectricSignalStates = new();
 
     public override Task InitializeAsync(PendulumSortConfig configuration)
     {
@@ -36,6 +43,10 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
 
         // 初始化摆轮状态
         PendulumStates["默认"] = new PendulumState();
+
+        // 初始化光电信号状态
+        _photoelectricSignalStates["触发光电"] = false;
+        _previousPhotoelectricSignalStates["触发光电"] = false;
 
         Log.Information("单光电单摆轮分拣服务初始化完成");
         return Task.CompletedTask;
@@ -179,6 +190,18 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
             var message = Encoding.ASCII.GetString(data);
             Log.Debug("收到触发光电数据: {Message}", message);
 
+            // 更新触发光电信号状态
+            if (message.Contains("OCCH2:1"))
+            {
+                // 高电平
+                UpdatePhotoelectricSignalState("触发光电", true);
+            }
+            else if (message.Contains("OCCH2:0"))
+            {
+                // 低电平
+                UpdatePhotoelectricSignalState("触发光电", false);
+            }
+
             // 使用基类的信号处理方法
             HandlePhotoelectricSignal(message);
         }
@@ -259,5 +282,45 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
     {
         // 单摆轮只处理1、2号格口，使用默认光电
         return slot is 1 or 2 ? "默认" : null;
+    }
+
+    /// <summary>
+    /// 更新光电信号状态并检测异常情况
+    /// </summary>
+    /// <param name="photoelectricName">光电名称</param>
+    /// <param name="isHighLevel">是否为高电平</param>
+    private void UpdatePhotoelectricSignalState(string photoelectricName, bool isHighLevel)
+    {
+        // 获取上一次的信号状态
+        _previousPhotoelectricSignalStates.TryGetValue(photoelectricName, out var previousState);
+
+        // 如果当前是低电平，且上一次也是低电平，将第二次低电平视为高电平处理
+        if (!isHighLevel && !previousState)
+        {
+            Log.Warning("光电 {Name} 连续收到两个低电平信号，将第二次低电平视为一次高电平处理", photoelectricName);
+            
+            try
+            {
+                // 构造一个模拟的高电平信号数据
+                var fakeHighLevelMsg = "OCCH2:1"; // 单摆轮使用OCCH2:1作为分拣信号
+                var fakeHighLevelData = Encoding.ASCII.GetBytes(fakeHighLevelMsg);
+                
+                Log.Information("光电 {Name} 模拟高电平信号: {Signal}", photoelectricName, fakeHighLevelMsg);
+                
+                // 调用数据处理逻辑，模拟高电平触发
+                ProcessTriggerData(fakeHighLevelData);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "光电 {Name} 处理模拟高电平信号失败", photoelectricName);
+            }
+        }
+
+        // 记录当前信号状态
+        Log.Debug("光电 {Name} 信号状态: {State}", photoelectricName, isHighLevel ? "高电平" : "低电平");
+
+        // 更新状态记录
+        _previousPhotoelectricSignalStates[photoelectricName] = _photoelectricSignalStates[photoelectricName];
+        _photoelectricSignalStates[photoelectricName] = isHighLevel;
     }
 }

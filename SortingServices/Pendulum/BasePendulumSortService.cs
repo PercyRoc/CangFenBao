@@ -387,7 +387,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// <summary>
     ///     处理触发光电信号
     /// </summary>
-    private void HandleTriggerPhotoelectric(string data)
+    protected void HandleTriggerPhotoelectric(string data)
     {
         var triggerTime = DateTime.Now;
         Log.Debug("收到触发信号: {Signal}，记录触发时间: {TriggerTime:HH:mm:ss.fff}", data, triggerTime);
@@ -416,6 +416,11 @@ public abstract class BasePendulumSortService : IPendulumSortService
     protected abstract void HandleSecondPhotoelectric(string data);
 
     /// <summary>
+    ///     分拣信号事件
+    /// </summary>
+    protected event EventHandler<string>? SortingSignalReceived;
+
+    /// <summary>
     ///     处理光电信号
     /// </summary>
     protected void HandlePhotoelectricSignal(string data)
@@ -431,6 +436,8 @@ public abstract class BasePendulumSortService : IPendulumSortService
             }
             else if (line.Contains("OCCH2:1"))
             {
+                // 触发分拣信号事件
+                SortingSignalReceived?.Invoke(this, line);
                 HandleSecondPhotoelectric(line);
             }
         }
@@ -683,9 +690,154 @@ public abstract class BasePendulumSortService : IPendulumSortService
                     Log.Debug("分拣动作完成，将在 {ResetDelay}ms 后执行回正检查.", resetDelay);
 
                     var resetTimer = new Timer { Interval = resetDelay, AutoReset = false };
+                    var resetTimerCancellationSource = new CancellationTokenSource();
+                    var eventHandlerRemoved = false;
+                    var lockObject = new object();
+                    
+                    // 注册分拣信号处理
+                    void OnSortingSignal(object? sender, string signal)
+                    {
+                        lock (lockObject)
+                        {
+                            // 如果定时器已经被取消或事件处理器已移除，直接返回
+                            if (resetTimerCancellationSource.Token.IsCancellationRequested || eventHandlerRemoved)
+                                return;
+
+                            try
+                            {
+                                Log.Debug("延迟回正期间收到新分拣信号: {Signal}", signal);
+                                
+                                // 找到当前匹配的包裹（通过分拣信号匹配）
+                                var matchedPackage = MatchPackageForSorting(photoelectricName);
+                                if (matchedPackage == null)
+                                {
+                                    Log.Debug("延迟回正期间收到新分拣信号，但未匹配到包裹");
+                                    return;
+                                }
+
+                                Log.Information("延迟回正期间匹配到新包裹 {NewIndex}|{NewBarcode} (格口: {NewChute})", 
+                                    matchedPackage.Index, matchedPackage.Barcode, matchedPackage.ChuteNumber);
+
+                                // 检查包裹索引连续性
+                                var isIndexContinuous = matchedPackage.Index == package.Index + 1;
+                                if (!isIndexContinuous)
+                                {
+                                    Log.Warning("检测到包裹索引不连续 (当前: {CurrentIndex}, 新包裹: {NewIndex})，需要回正", 
+                                        package.Index, matchedPackage.Index);
+                                    
+                                    resetTimer.Stop();
+                                    resetTimerCancellationSource.Cancel();
+                                    
+                                    // 执行立即回正
+                                    _ = Task.Run(async () =>
+                                    {
+                                        try
+                                        {
+                                            await ExecuteImmediateReset(client, pendulumState, photoelectricName, packageContext);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            Log.Error(ex, "执行索引不连续回正时发生错误");
+                                        }
+                                    });
+                                    return;
+                                }
+
+                                // 检查格口关系
+                                if (matchedPackage.ChuteNumber == targetSlot)
+                                {
+                                    // 相同格口，终止当前计时器，开始新包裹的计时器
+                                    Log.Information("新包裹与当前包裹格口相同 ({Chute})，终止当前计时器，开始新包裹的延迟回正计时器", targetSlot);
+                                    
+                                    resetTimer.Stop();
+                                    resetTimerCancellationSource.Cancel();
+                                    
+                                    // 开始新包裹的延迟回正
+                                    _ = Task.Run(async () =>
+                                    {
+                                        try
+                                        {
+                                            await StartNewPackageDelayedReset(client, pendulumState, photoelectricName, 
+                                                matchedPackage, packageContext);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            Log.Error(ex, "开始新包裹延迟回正时发生错误");
+                                        }
+                                    });
+                                    return;
+                                }
+
+                                // 不同格口，检查是否属于同一个摆轮
+                                var belongsToSamePendulum = SlotBelongsToPhotoelectric(matchedPackage.ChuteNumber, photoelectricName);
+                                
+                                if (belongsToSamePendulum)
+                                {
+                                    // 属于同一个摆轮的不同格口，回正后延迟20ms发送摆动命令
+                                    Log.Information("新包裹属于同一摆轮的不同格口 (当前: {CurrentChute}, 新: {NewChute})，回正后延迟摆动", 
+                                        targetSlot, matchedPackage.ChuteNumber);
+                                    
+                                    resetTimer.Stop();
+                                    resetTimerCancellationSource.Cancel();
+                                    
+                                    // 执行回正并延迟摆动
+                                    _ = Task.Run(async () =>
+                                    {
+                                        try
+                                        {
+                                            await ExecuteResetAndDelayedSwing(client, pendulumState, photoelectricName, 
+                                                matchedPackage, packageContext);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            Log.Error(ex, "执行回正并延迟摆动时发生错误");
+                                        }
+                                    });
+                                }
+                                else
+                                {
+                                    // 不属于同一个摆轮，立即回正
+                                    Log.Information("新包裹不属于同一摆轮 (当前摆轮: {CurrentPendulum}, 新格口: {NewChute})，立即回正", 
+                                        photoelectricName, matchedPackage.ChuteNumber);
+                                    
+                                    resetTimer.Stop();
+                                    resetTimerCancellationSource.Cancel();
+                                    
+                                    // 执行立即回正
+                                    _ = Task.Run(async () =>
+                                    {
+                                        try
+                                        {
+                                            await ExecuteImmediateReset(client, pendulumState, photoelectricName, packageContext);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            Log.Error(ex, "执行不同摆轮立即回正时发生错误");
+                                        }
+                                    });
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.Error(ex, "处理延迟回正期间的新分拣信号时发生错误");
+                            }
+                        }
+                    }
+
+                    // 订阅分拣信号事件
+                    SortingSignalReceived += OnSortingSignal;
+                    
                     resetTimer.Elapsed += async (_, _) =>
                     {
+                        lock (lockObject)
+                        {
+                            if (eventHandlerRemoved) return;
+                            eventHandlerRemoved = true;
+                            SortingSignalReceived -= OnSortingSignal;
+                        }
+                        
                         resetTimer.Stop();
+                        
                         using (LogContext.PushProperty("PackageContext", packageContext))
                         {
                             Log.Debug("回正定时器触发.");
@@ -698,56 +850,49 @@ public abstract class BasePendulumSortService : IPendulumSortService
                                     return;
                                 }
 
-                                // 检查下一个包裹是否需要跳过回正
-                                var nextPackageIndex = package.Index + 1;
-                                var skipReset = PendingSortPackages.TryGetValue(nextPackageIndex, out var nextPackage) &&
-                                              nextPackage.ChuteNumber == targetSlot &&
-                                              SlotBelongsToPhotoelectric(nextPackage.ChuteNumber, photoelectricName);
-
-                                if (skipReset)
+                                // 检查是否有相同格口且索引连续的待处理包裹，如果有则跳过回正
+                                var skipReset = false;
+                                PackageInfo? sameSlotPackage = null;
+                                
+                                foreach (var pendingPackage in PendingSortPackages.Values.OrderBy(p => p.Index))
                                 {
-                                    Log.Information("检测到下一个包裹 {NextIndex}|{NextBarcode} 目标格口 ({NextChute}) 与当前相同，跳过回正.",
-                                        nextPackage!.Index, nextPackage.Barcode, nextPackage.ChuteNumber);
-                                    return;
+                                    // 跳过当前包裹
+                                    if (pendingPackage.Index <= package.Index) continue;
+                                    
+                                    // 检查是否属于同一个光电
+                                    if (SlotBelongsToPhotoelectric(pendingPackage.ChuteNumber, photoelectricName))
+                                    {
+                                        // 检查索引连续性
+                                        var isIndexContinuous = pendingPackage.Index == package.Index + 1;
+                                        
+                                        if (pendingPackage.ChuteNumber == targetSlot && isIndexContinuous)
+                                        {
+                                            skipReset = true;
+                                            sameSlotPackage = pendingPackage;
+                                            break;
+                                        }
+                                        else
+                                        {
+                                            // 发现不同格口的包裹或索引不连续，需要回正
+                                            if (!isIndexContinuous)
+                                            {
+                                                Log.Debug("发现索引不连续的包裹 {PkgIndex} (当前: {CurrentIndex})，需要回正", 
+                                                    pendingPackage.Index, package.Index);
+                                            }
+                                            break;
+                                        }
+                                    }
                                 }
 
-                                // 再次检查当前状态，避免重复发送回正命令
-                                if (pendulumState.CurrentDirection == PendulumDirection.Reset)
+                                if (skipReset && sameSlotPackage != null)
                                 {
-                                    Log.Debug("摆轮已经处于复位状态，无需发送回正命令");
+                                    Log.Information("检测到相同格口且索引连续的待处理包裹 {NextIndex}|{NextBarcode} (格口: {NextChute})，跳过回正.",
+                                        sameSlotPackage.Index, sameSlotPackage.Barcode, sameSlotPackage.ChuteNumber);
                                     return;
                                 }
 
                                 // 执行回正
-                                var resetCommand = pendulumState.CurrentDirection == PendulumDirection.SwingingLeft
-                                    ? PendulumCommands.Module2.ResetLeft
-                                    : PendulumCommands.Module2.ResetRight;
-                                var resetCmdBytes = GetCommandBytes(resetCommand);
-                                var resetDir = pendulumState.CurrentDirection == PendulumDirection.SwingingLeft ? "左" : "右";
-
-                                Log.Debug("准备发送第一次 {ResetDir} 回正命令 ({ResetCommand})...", resetDir, resetCommand);
-                                if (await SendCommandWithRetryAsync(client, resetCmdBytes, photoelectricName))
-                                {
-                                    Log.Information("第一次 {ResetDir} 回正命令 ({ResetCommand}) 发送成功.", resetDir, resetCommand);
-                                    pendulumState.SetReset();
-
-                                    await Task.Delay(10);
-
-                                    Log.Debug("准备发送第二次 {ResetDir} 回正命令 ({ResetCommand})...", resetDir, resetCommand);
-                                    if (await SendCommandWithRetryAsync(client, resetCmdBytes, photoelectricName, maxRetries: 1))
-                                    {
-                                        Log.Information("第二次 {ResetDir} 回正命令 ({ResetCommand}) 发送成功.", resetDir, resetCommand);
-                                    }
-                                    else
-                                    {
-                                        Log.Warning("第二次 {ResetDir} 回正命令 ({ResetCommand}) 发送失败.", resetDir, resetCommand);
-                                    }
-                                }
-                                else
-                                {
-                                    Log.Error("第一次发送 {ResetDir} 回正命令 ({ResetCommand}) 失败，强制复位状态.", resetDir, resetCommand);
-                                    pendulumState.ForceReset();
-                                }
+                                await ExecuteDelayedReset(client, pendulumState, photoelectricName);
                             }
                             catch (Exception ex)
                             {
@@ -757,6 +902,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
                             finally
                             {
                                 resetTimer.Dispose();
+                                resetTimerCancellationSource.Dispose();
                             }
                         }
                     };
@@ -790,6 +936,71 @@ public abstract class BasePendulumSortService : IPendulumSortService
                 {
                     Log.Warning("尝试从处理中状态移除失败 (可能已被移除).");
                 }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 开始新包裹的延迟回正计时器
+    /// </summary>
+    private async Task StartNewPackageDelayedReset(TcpClientService? client, PendulumState pendulumState, 
+        string photoelectricName, PackageInfo newPackage, string packageContext)
+    {
+        using (LogContext.PushProperty("PackageContext", $"[包裹{newPackage.Index}|{newPackage.Barcode}]"))
+        {
+            Log.Debug("开始新包裹的延迟回正计时器 (格口: {Chute}).", newPackage.ChuteNumber);
+            
+            if (client == null || !client.IsConnected())
+            {
+                Log.Warning("开始新包裹延迟回正时客户端 '{Name}' 未连接.", photoelectricName);
+                pendulumState.ForceReset();
+                return;
+            }
+
+            try
+            {
+                // 获取新包裹的光电配置和回正延迟时间
+                var photoelectricConfig = GetPhotoelectricConfig(photoelectricName);
+                var resetDelay = photoelectricConfig.ResetDelay;
+                
+                Log.Debug("新包裹延迟回正时间: {ResetDelay}ms", resetDelay);
+
+                // 等待延迟时间
+                await Task.Delay(resetDelay);
+
+                // 检查是否还有更新的相同格口包裹
+                var hasNewerSameSlotPackage = false;
+                foreach (var pendingPackage in PendingSortPackages.Values.OrderBy(p => p.Index))
+                {
+                    // 跳过当前及之前的包裹
+                    if (pendingPackage.Index <= newPackage.Index) continue;
+                    
+                    // 检查是否属于同一个光电且相同格口
+                    if (SlotBelongsToPhotoelectric(pendingPackage.ChuteNumber, photoelectricName) &&
+                        pendingPackage.ChuteNumber == newPackage.ChuteNumber)
+                    {
+                        // 检查索引连续性
+                        var isIndexContinuous = pendingPackage.Index == newPackage.Index + 1;
+                        if (isIndexContinuous)
+                        {
+                            hasNewerSameSlotPackage = true;
+                            Log.Information("检测到更新的相同格口且索引连续的包裹 {NewerIndex}|{NewerBarcode} (格口: {Chute})，跳过回正.",
+                                pendingPackage.Index, pendingPackage.Barcode, pendingPackage.ChuteNumber);
+                            break;
+                        }
+                    }
+                }
+
+                if (!hasNewerSameSlotPackage)
+                {
+                    // 执行延迟回正
+                    await ExecuteDelayedReset(client, pendulumState, photoelectricName);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "新包裹延迟回正过程中发生错误 (光电: {Name}).", photoelectricName);
+                pendulumState.ForceReset();
             }
         }
     }
@@ -968,5 +1179,183 @@ public abstract class BasePendulumSortService : IPendulumSortService
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// 执行立即回正
+    /// </summary>
+    private async Task ExecuteImmediateReset(TcpClientService? client, PendulumState pendulumState, 
+        string photoelectricName, string packageContext)
+    {
+        using (LogContext.PushProperty("PackageContext", packageContext))
+        {
+            Log.Debug("执行立即回正.");
+            
+            if (client == null || !client.IsConnected())
+            {
+                Log.Warning("立即回正时客户端 '{Name}' 未连接.", photoelectricName);
+                pendulumState.ForceReset();
+                return;
+            }
+
+            // 检查当前状态，避免重复发送回正命令
+            if (pendulumState.CurrentDirection == PendulumDirection.Reset)
+            {
+                Log.Debug("摆轮已经处于复位状态，无需发送立即回正命令");
+                return;
+            }
+
+            // 执行回正
+            var resetCommand = pendulumState.CurrentDirection == PendulumDirection.SwingingLeft
+                ? PendulumCommands.Module2.ResetLeft
+                : PendulumCommands.Module2.ResetRight;
+            var resetCmdBytes = GetCommandBytes(resetCommand);
+            var resetDir = pendulumState.CurrentDirection == PendulumDirection.SwingingLeft ? "左" : "右";
+
+            Log.Debug("准备发送立即 {ResetDir} 回正命令 ({ResetCommand})...", resetDir, resetCommand);
+            if (await SendCommandWithRetryAsync(client, resetCmdBytes, photoelectricName))
+            {
+                Log.Information("立即 {ResetDir} 回正命令 ({ResetCommand}) 发送成功.", resetDir, resetCommand);
+                pendulumState.SetReset();
+            }
+            else
+            {
+                Log.Error("发送立即 {ResetDir} 回正命令 ({ResetCommand}) 失败，强制复位状态.", resetDir, resetCommand);
+                pendulumState.ForceReset();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 执行延迟回正
+    /// </summary>
+    private async Task ExecuteDelayedReset(TcpClientService? client, PendulumState pendulumState, string photoelectricName)
+    {
+        Log.Debug("执行延迟回正.");
+        
+        if (client == null || !client.IsConnected())
+        {
+            Log.Warning("延迟回正时客户端 '{Name}' 未连接.", photoelectricName);
+            pendulumState.ForceReset();
+            return;
+        }
+
+        // 检查当前状态，避免重复发送回正命令
+        if (pendulumState.CurrentDirection == PendulumDirection.Reset)
+        {
+            Log.Debug("摆轮已经处于复位状态，无需发送延迟回正命令");
+            return;
+        }
+
+        // 执行回正
+        var resetCommand = pendulumState.CurrentDirection == PendulumDirection.SwingingLeft
+            ? PendulumCommands.Module2.ResetLeft
+            : PendulumCommands.Module2.ResetRight;
+        var resetCmdBytes = GetCommandBytes(resetCommand);
+        var resetDir = pendulumState.CurrentDirection == PendulumDirection.SwingingLeft ? "左" : "右";
+
+        Log.Debug("准备发送第一次延迟 {ResetDir} 回正命令 ({ResetCommand})...", resetDir, resetCommand);
+        if (await SendCommandWithRetryAsync(client, resetCmdBytes, photoelectricName))
+        {
+            Log.Information("第一次延迟 {ResetDir} 回正命令 ({ResetCommand}) 发送成功.", resetDir, resetCommand);
+            pendulumState.SetReset();
+
+            await Task.Delay(10);
+
+            Log.Debug("准备发送第二次延迟 {ResetDir} 回正命令 ({ResetCommand})...", resetDir, resetCommand);
+            if (await SendCommandWithRetryAsync(client, resetCmdBytes, photoelectricName, maxRetries: 1))
+            {
+                Log.Information("第二次延迟 {ResetDir} 回正命令 ({ResetCommand}) 发送成功.", resetDir, resetCommand);
+            }
+            else
+            {
+                Log.Warning("第二次延迟 {ResetDir} 回正命令 ({ResetCommand}) 发送失败.", resetDir, resetCommand);
+            }
+        }
+        else
+        {
+            Log.Error("第一次发送延迟 {ResetDir} 回正命令 ({ResetCommand}) 失败，强制复位状态.", resetDir, resetCommand);
+            pendulumState.ForceReset();
+        }
+    }
+
+    /// <summary>
+    /// 执行回正并延迟摆动
+    /// </summary>
+    private async Task ExecuteResetAndDelayedSwing(TcpClientService? client, PendulumState pendulumState, 
+        string photoelectricName, PackageInfo newPackage, string packageContext)
+    {
+        using (LogContext.PushProperty("PackageContext", packageContext))
+        {
+            Log.Debug("执行回正并延迟摆动 (新包裹: {NewIndex}|{NewBarcode}, 格口: {NewChute}).", 
+                newPackage.Index, newPackage.Barcode, newPackage.ChuteNumber);
+            
+            if (client == null || !client.IsConnected())
+            {
+                Log.Warning("回正并延迟摆动时客户端 '{Name}' 未连接.", photoelectricName);
+                pendulumState.ForceReset();
+                return;
+            }
+
+            // 1. 先执行回正
+            if (pendulumState.CurrentDirection != PendulumDirection.Reset)
+            {
+                var resetCommand = pendulumState.CurrentDirection == PendulumDirection.SwingingLeft
+                    ? PendulumCommands.Module2.ResetLeft
+                    : PendulumCommands.Module2.ResetRight;
+                var resetCmdBytes = GetCommandBytes(resetCommand);
+                var resetDir = pendulumState.CurrentDirection == PendulumDirection.SwingingLeft ? "左" : "右";
+
+                Log.Debug("准备发送 {ResetDir} 回正命令 ({ResetCommand})...", resetDir, resetCommand);
+                if (await SendCommandWithRetryAsync(client, resetCmdBytes, photoelectricName))
+                {
+                    Log.Information("{ResetDir} 回正命令 ({ResetCommand}) 发送成功.", resetDir, resetCommand);
+                    pendulumState.SetReset();
+                }
+                else
+                {
+                    Log.Error("发送 {ResetDir} 回正命令 ({ResetCommand}) 失败，强制复位状态.", resetDir, resetCommand);
+                    pendulumState.ForceReset();
+                    return;
+                }
+            }
+            else
+            {
+                Log.Debug("摆轮已经处于复位状态，跳过回正步骤");
+            }
+
+            // 2. 延迟20ms
+            Log.Debug("回正完成，延迟20ms后发送摆动命令...");
+            await Task.Delay(20);
+
+            // 3. 发送新包裹的摆动命令
+            var targetSlot = newPackage.ChuteNumber;
+            var swingLeft = ShouldSwingLeft(targetSlot);
+            var swingRight = ShouldSwingRight(targetSlot);
+
+            if (swingLeft || swingRight)
+            {
+                var swingCommand = swingLeft ? PendulumCommands.Module2.SwingLeft : PendulumCommands.Module2.SwingRight;
+                var swingCmdBytes = GetCommandBytes(swingCommand);
+                var swingDir = swingLeft ? "左摆" : "右摆";
+
+                Log.Debug("准备发送延迟摆动命令: {SwingDir} ({SwingCommand})...", swingDir, swingCommand);
+                if (await SendCommandWithRetryAsync(client, swingCmdBytes, photoelectricName))
+                {
+                    Log.Information("延迟摆动命令 {SwingDir} ({SwingCommand}) 发送成功.", swingDir, swingCommand);
+                    pendulumState.SetSwinging(swingLeft);
+                    PendulumState.UpdateLastSlot(targetSlot);
+                }
+                else
+                {
+                    Log.Error("发送延迟摆动命令 {SwingDir} ({SwingCommand}) 失败.", swingDir, swingCommand);
+                    pendulumState.ForceReset();
+                }
+            }
+            else
+            {
+                Log.Debug("新包裹格口 {Chute} 无需摆动", targetSlot);
+            }
+        }
     }
 }

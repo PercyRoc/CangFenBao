@@ -11,4 +11,4 @@ public partial class StoApiSettingsView : Page
     {
         InitializeComponent();
     }
-} 
+}
