@@ -373,9 +373,13 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 Log.Information("开始创建包裹对象: {Barcode}", barcode);
 
+                // 确定统一的处理时间戳，在整个处理过程中使用
+                var processingTimestamp = DateTime.Now;
+
                 // 创建新的包裹对象
                 _currentPackage = PackageInfo.Create();
                 _currentPackage.SetBarcode(barcode); // 使用一致的条码
+                _currentPackage.CreateTime = processingTimestamp; // 设置统一的处理时间
 
                 // 设置当前选中的托盘信息到包裹实例
                 if (SelectedPallet != null)
@@ -618,13 +622,13 @@ public class MainWindowViewModel : BindableBase, IDisposable
                             if (volSettings.ImageSaveMode != DimensionImageSaveMode.None)
                             {
                                 var baseSavePath = volSettings.ImageSavePath;
-                                var dateFolder = DateTime.Now.ToString("yyyy-MM-dd");
+                                var dateFolder = _currentPackage.CreateTime.ToString("yyyy-MM-dd");
                                 var sanitizedBarcode = string.Join("_",
                                     _currentPackage.Barcode.Split(Path.GetInvalidFileNameChars()));
                                 var timestamp = _currentPackage.CreateTime.ToString("HHmmss"); // 获取时分秒
 
                                 // 新的路径：基础路径/日期/条码_时分秒
-                                barcodeSpecificPath = Path.Combine(baseSavePath, dateFolder, $"{sanitizedBarcode}_{timestamp}");
+                                barcodeSpecificPath = Path.Combine(baseSavePath, dateFolder, $"{timestamp}.{sanitizedBarcode}");
                                 Directory.CreateDirectory(barcodeSpecificPath);
                             }
 
@@ -677,11 +681,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                         if (string.IsNullOrEmpty(barcodeSpecificPath)) // 双重检查，理论上前面已创建
                                         {
                                             var baseSavePath = volSettings.ImageSavePath;
-                                            var dateFolder = DateTime.Now.ToString("yyyy-MM-dd");
+                                            var dateFolder = _currentPackage.CreateTime.ToString("yyyy-MM-dd");
                                             var sanitizedBarcode = string.Join("_",
                                                 _currentPackage.Barcode.Split(Path.GetInvalidFileNameChars()));
+                                            var timestamp = _currentPackage.CreateTime.ToString("HHmmss"); // 获取时分秒
                                             barcodeSpecificPath = Path.Combine(baseSavePath, dateFolder,
-                                                sanitizedBarcode);
+                                                $"{timestamp}.{sanitizedBarcode}");
                                             Directory.CreateDirectory(barcodeSpecificPath);
                                         }
 
@@ -739,11 +744,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         _currentPackage.SetStatus("Complete"); // Set primary status to "Complete"
                         _currentPackage.ErrorMessage = string.Empty; // Clear any previous error message on success
                         _ = _audioService.PlayPresetAsync(AudioType.Success); // 播放成功音效
-                        // 处理完成，统一更新时间
-                        _currentPackage.CreateTime = DateTime.Now;
                     }
-                    // 处理完成，统一更新时间
-                    _currentPackage.CreateTime = DateTime.Now;
+                    // 注意：不再重新设置CreateTime，使用处理开始时设置的统一时间戳
 
                     // 保存捕获的图像（总是执行，如果已捕获，即使包裹不完整也可能保存）
                     BitmapSource? imageToProcess = null;
@@ -975,21 +977,21 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 try
                 {
                     var basePhotoSavePath = settings.ImageSave.SaveFolderPath;
-                    var dateFolder = DateTime.Now.ToString("yyyy-MM-dd");
+                    var dateFolder = package.CreateTime.ToString("yyyy-MM-dd");
                     var sanitizedBarcode = string.Join("_", package.Barcode.Split(Path.GetInvalidFileNameChars()));
                     var timestamp = package.CreateTime.ToString("HHmmss"); // 获取时分秒
 
                     // 新的路径：基础路径/日期/条码_时分秒
-                    var barcodeSpecificPhotoPath = Path.Combine(basePhotoSavePath, dateFolder, $"{sanitizedBarcode}_{timestamp}");
+                    var barcodeSpecificPhotoPath = Path.Combine(basePhotoSavePath, dateFolder, $"{timestamp}.{sanitizedBarcode}");
                     Directory.CreateDirectory(barcodeSpecificPhotoPath); // 确保条码级别目录存在
 
                     // 文件名可以简化，因为条码和日期已在路径中，或者保留时间戳以防万一（例如同一条码多次快照）
-                    var photoFileName = $"Photo_{DateTime.Now:HHmmssfff}.jpg"; // Example: Photo_153055123.jpg
+                    var photoFileName = $"Photo_{package.CreateTime:HHmmssfff}.jpg"; // 使用包裹创建时间而不是当前时间
                     var finalFilePath = Path.Combine(barcodeSpecificPhotoPath, photoFileName);
                     imageName = photoFileName; // Update imageName to be just the file name for return value
 
                     // 先保存BitmapSource到临时文件 (临时文件可以在基础保存路径下，避免路径过长问题)
-                    var tempFileName = $"temp_{sanitizedBarcode}_{DateTime.Now:yyyyMMddHHmmssfff}.jpg";
+                    var tempFileName = $"temp_{sanitizedBarcode}_{package.CreateTime:yyyyMMddHHmmssfff}.jpg";
                     tempFilePath =
                         Path.Combine(settings.ImageSave.SaveFolderPath, tempFileName); // Temp file in base directory
 
