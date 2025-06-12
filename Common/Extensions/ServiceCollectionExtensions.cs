@@ -4,6 +4,7 @@ using Common.Services.Audio;
 using Common.Services.License;
 using Common.Services.Settings;
 using Common.Services.Ui;
+using Common.Services.Validation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Prism.Ioc;
@@ -53,6 +54,8 @@ public static class ServiceCollectionExtensions
         services.RegisterSingleton<ISettingsService, SettingsService>();
         // 注册授权服务
         services.RegisterSingleton<ILicenseService, LicenseService>();
+        // 注册单号校验服务
+        services.RegisterSingleton<IBarcodeValidationService, BarcodeValidationService>();
     }
 
     /// <summary>

@@ -23,6 +23,7 @@ using Serilog;
 using SharedUI.Models;
 using SortingServices.Pendulum;
 using Common.Services.Audio;
+using Common.Services.Validation;
 using DeviceService.DataSourceDevices.Belt;
 using Prism.Services.Dialogs;
 using Common.Data;
@@ -43,6 +44,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private readonly INotificationService _notificationService;
     private readonly IAudioService _audioService;
     private readonly IPackageDataService _packageDataService;
+    private readonly IBarcodeValidationService _barcodeValidationService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly IDisposable? _barcodeSubscription; // Subscription for the barcode stream
 
@@ -71,7 +73,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         INotificationService notificationService,
         IAudioService audioService,
         BeltSerialService beltSerialService,
-        IPackageDataService packageDataService)
+        IPackageDataService packageDataService,
+        IBarcodeValidationService barcodeValidationService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
@@ -84,6 +87,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         _notificationService = notificationService;
         _audioService = audioService;
         _beltSerialService = beltSerialService;
+        _barcodeValidationService = barcodeValidationService;
         // 订阅扫码枪事件 - REMOVED
         // _scannerService.BarcodeScanned += OnBarcodeScannerScanned;
 
@@ -554,6 +558,28 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             // 检查条码是否为 noread 或空
             var isNoReadOrEmpty = string.IsNullOrWhiteSpace(package.Barcode) ||
                                   string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase);
+            
+            // 单号校验结果
+            BarcodeValidationResult? validationResult = null;
+            var isBarcodeInvalid = false;
+            
+            // 对非空且非noread的条码进行校验
+            if (!isNoReadOrEmpty)
+            {
+                validationResult = _barcodeValidationService.ValidateBarcode(package.Barcode);
+                isBarcodeInvalid = !validationResult.IsValid;
+                
+                if (isBarcodeInvalid)
+                {
+                    Log.Warning("单号校验失败: {Barcode}, 错误: {Error}", package.Barcode, validationResult.ErrorMessage);
+                    // 播放错误音效
+                    _ = _audioService.PlayPresetAsync(AudioType.SystemError);
+                }
+                else
+                {
+                    Log.Information("单号校验通过: {Barcode}, 类型: {Type}", package.Barcode, validationResult.BarcodeType);
+                }
+            }
             // 检查数据是否有效 (重量 > 0 且 尺寸 > 0)
             var isInvalidData = package.Weight <= 0 ||
                                 !package.Length.HasValue || package.Length.Value <= 0 ||
@@ -561,8 +587,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                                 !package.Height.HasValue || package.Height.Value <= 0;
 
 
-            // 如果条码无效 或 数据无效
-            if (isNoReadOrEmpty || isInvalidData)
+            // 如果条码无效 或 单号校验失败 或 数据无效
+            if (isNoReadOrEmpty || isBarcodeInvalid || isInvalidData)
             {
                 // 播放错误音效 (对于 NoRead，如果需要不同音效，可以调整)
                 _ = _audioService.PlayPresetAsync(AudioType.SystemError);
@@ -573,10 +599,28 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
                 // 分配到配置的异常口
                 package.SetChute(exceptionChute);
+                
+                // 确定异常原因
+                string reason;
+                if (isNoReadOrEmpty)
+                    reason = "NoRead/Empty Barcode";
+                else if (isBarcodeInvalid)
+                    reason = $"Invalid Barcode Format: {validationResult?.ErrorMessage}";
+                else
+                    reason = "Invalid Weight/Volume";
+                
                 Log.Information("包裹 Barcode: {Barcode}, Index: {Index} 因 '{Reason}',预分配到配置的异常口 {ExceptionChute}",
-                    package.Barcode, package.Index, isNoReadOrEmpty ? "NoRead/Empty Barcode" : "Invalid Weight/Volume",
-                    exceptionChute);
-                if (isInvalidData)
+                    package.Barcode, package.Index, reason, exceptionChute);
+                if (isBarcodeInvalid)
+                {
+                    // 对于单号校验失败的包裹，标记为 uploadAsNoRead 以跳过笨鸟主要交互
+                    uploadAsNoRead = true;
+                    var barcodeErrorMsg = $"单号校验失败: {validationResult?.ErrorMessage}";
+                    package.SetStatus(PackageStatus.Error, barcodeErrorMsg);
+                    Log.Information("包裹单号校验失败 Barcode: {Barcode}, Index: {Index}。状态设为Error, ErrorMessage: '{ErrorMessage}'. 将标记为 uploadAsNoRead，并继续部分处理流程。", 
+                        package.Barcode, package.Index, barcodeErrorMsg);
+                }
+                else if (isInvalidData)
                 {
                     // 对于数据无效的包裹，也将其标记为 uploadAsNoRead 以跳过笨鸟主要交互
                     // 并确保它进入后续的分拣和历史记录流程
@@ -608,18 +652,17 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                             UpdatePackageInfoItems(package);
                         });
                     }
-                    // 对于 NoRead 包裹，我们不再设置 skipFurtherProcessing = true
-                    // 而是设置 uploadAsNoRead = true，以便后续逻辑能识别并跳过笨鸟交互
-                    uploadAsNoRead = true;
-                    // 明确设置 NoRead 状态，如果之前没有因为 isInvalidData 而设置 Error 状态
-                    if (package.Status != PackageStatus.Error)
-                    {
-                        package.SetStatus(PackageStatus.NoRead); 
-                    }
-                    Log.Information("包裹为 NoRead/Empty，Barcode: {Barcode}, Index: {Index}。将标记为 uploadAsNoRead，继续部分处理流程。当前状态: {Status}",
-                        package.Barcode, package.Index, package.Status);
                 }
-                else if (isNoReadOrEmpty) // 仅当 isNoReadOrEmpty 且非 isInvalidData 时
+                else if (isBarcodeInvalid)
+                {
+                    // 对于单号校验失败的包裹，显示相应的错误提示
+                    await Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        _notificationService.ShowError($"包裹 {package.Barcode} 单号校验失败: {validationResult?.ErrorMessage}");
+                        UpdatePackageInfoItems(package);
+                    });
+                }
+                else if (isNoReadOrEmpty) // 仅当 isNoReadOrEmpty 且非 isInvalidData 且非 isBarcodeInvalid 时
                 {
                     // 对于 NoRead 包裹，我们不再设置 skipFurtherProcessing = true
                     // 而是设置 uploadAsNoRead = true，以便后续逻辑能识别并跳过笨鸟交互
@@ -699,7 +742,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                          package.SetStatus(PackageStatus.NoRead); 
                     }
                 }
-                else if(benNiaoInteractionSuccess) // 仅当条码有效、分拣服务提交未出错（或错误不影响此处）、且非NoRead/非数据无效时，才进行后续笨鸟操作
+                else if(benNiaoInteractionSuccess) // 仅当条码有效、单号校验通过、分拣服务提交未出错、且非NoRead/非数据无效/非单号校验失败时，才进行后续笨鸟操作
                 {
                     // 2.b 获取段码
                     try
