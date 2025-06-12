@@ -2,6 +2,7 @@
 using Server.JuShuiTan.ViewModels;
 using BalanceSorting.ViewModels.Settings;
 using Common.Services.Ui;
+using Common.ViewModels.Settings.ChuteRules;
 using JinHuaQiHang.ViewModels.Settings;
 
 namespace JinHuaQiHang.ViewModels;
@@ -12,6 +13,7 @@ public class SettingsDialogViewModel :BindableBase,IDialogAware
     private readonly INotificationService _notificationService;
     private readonly BalanceSortSettingsViewModel _balanceSortSettingsViewModel;
     private readonly YunDaUploadSettingsViewModel _yunDaUploadSettingsViewModel;
+    private readonly ChuteRuleSettingsViewModel  _chuteRuleSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
@@ -21,6 +23,7 @@ public class SettingsDialogViewModel :BindableBase,IDialogAware
         _jushuitanSettingsViewModel = containerProvider.Resolve<JushuitanSettingsViewModel>();
         _balanceSortSettingsViewModel = containerProvider.Resolve<BalanceSortSettingsViewModel>();
         _yunDaUploadSettingsViewModel = containerProvider.Resolve<YunDaUploadSettingsViewModel>();
+        _chuteRuleSettingsViewModel = containerProvider.Resolve<ChuteRuleSettingsViewModel>();
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
     }
@@ -43,6 +46,7 @@ public class SettingsDialogViewModel :BindableBase,IDialogAware
             _jushuitanSettingsViewModel.SaveConfigurationCommand.Execute();
             _balanceSortSettingsViewModel.SaveConfigurationCommand.Execute();
             _yunDaUploadSettingsViewModel.SaveCommand.Execute(null);
+            _chuteRuleSettingsViewModel.SaveSettingsCommand.Execute(null);
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("Settings saved successfully");
             RequestClose.Invoke(new DialogResult(ButtonResult.OK));

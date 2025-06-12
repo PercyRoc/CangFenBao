@@ -668,6 +668,70 @@
             </StackPanel>
         </Border>
 
+        <!-- Full Screen Error Overlay -->
+        <Border Grid.Row="1"
+                Background="#DD000000"
+                Visibility="{Binding IsErrorOverlayVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
+                Panel.ZIndex="1000"> <!-- Higher than initializing overlay -->
+            <Border Background="#FFFF4444"
+                    CornerRadius="12"
+                    Padding="40"
+                    MaxWidth="600"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    BorderBrush="#FFFF6666"
+                    BorderThickness="2">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <!-- Error Icon -->
+                    <ui:SymbolIcon Symbol="ErrorCircle24" 
+                                   Width="80" 
+                                   Height="80" 
+                                   Foreground="White"
+                                   Margin="0,0,0,20"/>
+                    
+                    <!-- Error Title -->
+                    <TextBlock Text="Device Connection Error"
+                               Foreground="White"
+                               FontSize="32"
+                               FontWeight="Bold"
+                               HorizontalAlignment="Center"
+                               Margin="0,0,0,20"/>
+                    
+                    <!-- Error Message -->
+                    <TextBlock Text="{Binding ErrorMessage}"
+                               Foreground="White"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"
+                               LineHeight="24"
+                               Margin="0,0,0,30"/>
+                    
+                    <!-- Restart Button -->
+                    <ui:Button Appearance="Primary"
+                               Background="#FFFFFF"
+                               Foreground="#FF4444"
+                               BorderBrush="#FFFFFF"
+                               BorderThickness="2"
+                               Padding="20,12"
+                               FontSize="16"
+                               FontWeight="SemiBold"
+                               Command="{Binding RestartApplicationCommand}"
+                               HorizontalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="ArrowClockwise24" 
+                                           Margin="0,0,8,0" 
+                                           Foreground="#FF4444"/>
+                            <TextBlock Text="Restart Application" 
+                                       VerticalAlignment="Center"
+                                       Foreground="#FF4444"/>
+                        </StackPanel>
+                    </ui:Button>
+                </StackPanel>
+            </Border>
+        </Border>
+
         <!-- Status Bar -->
         <Border Grid.Row="2"
                 Opacity="0.8"

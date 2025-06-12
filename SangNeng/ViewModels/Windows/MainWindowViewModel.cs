@@ -89,6 +89,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly IDisposable? _palletSettingsChangedSubscription;
 
     private bool _isInitializingOverlayVisible = true; // 新增：控制初始化遮罩的可见性
+    private bool _isErrorOverlayVisible = false; // 新增：控制错误遮罩的可见性
+    private string _errorMessage = string.Empty; // 新增：错误信息
 
     /// <summary>
     /// 构造函数
@@ -254,6 +256,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
         // 新增：初始化条码输入处理命令
         HandleScanStartCommand = new DelegateCommand(ExecuteHandleScanStart);
         HandleBarcodeCompleteCommand = new DelegateCommand(ExecuteHandleBarcodeComplete);
+
+        // 新增：初始化重启应用命令
+        RestartApplicationCommand = new DelegateCommand(ExecuteRestartApplication);
 
         // 订阅托盘设置更改事件
         _palletSettingsChangedSubscription =
@@ -1172,10 +1177,30 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     isConnected ? "Online" : "Offline"; // UI Strings (Keep as is, Status is a state identifier)
                 volumeCameraStatus.StatusColor = isConnected ? "#4CAF50" : "#FFA500";
 
-                if (!isConnected) return;
-                if (!IsInitializingOverlayVisible) return; // 仅当遮罩当前可见时才隐藏
-                IsInitializingOverlayVisible = false;
-                Log.Information("体积相机已连接，正在隐藏初始化遮罩。");
+                if (isConnected)
+                {
+                    // 相机重新连接时，隐藏错误遮罩
+                    if (IsErrorOverlayVisible)
+                    {
+                        IsErrorOverlayVisible = false;
+                        ErrorMessage = string.Empty;
+                        Log.Information("体积相机已重新连接，隐藏错误遮罩。");
+                    }
+                    
+                    if (!IsInitializingOverlayVisible) return; // 仅当遮罩当前可见时才隐藏
+                    IsInitializingOverlayVisible = false;
+                    Log.Information("体积相机已连接，正在隐藏初始化遮罩。");
+                }
+                else
+                {
+                    // 相机掉线时，显示错误遮罩
+                    ErrorMessage = "Volume camera connection lost!\n\nPlease check the camera connection and restart the application to restore normal functionality.";
+                    IsErrorOverlayVisible = true;
+                    Log.Error("体积相机连接已断开，显示错误遮罩。设备ID: {DeviceId}", deviceId ?? "Unknown");
+                    
+                    // 播放错误音效
+                    _ = _audioService.PlayPresetAsync(AudioType.SystemError);
+                }
             });
         }
         catch (Exception ex)
@@ -1198,6 +1223,27 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 cameraStatus.Status =
                     isConnected ? "Online" : "Offline"; // UI Strings (Keep as is, Status is a state identifier)
                 cameraStatus.StatusColor = isConnected ? "#4CAF50" : "#FFA500";
+
+                if (isConnected)
+                {
+                    // 相机重新连接时，隐藏错误遮罩（如果是因为拍照相机断开显示的）
+                    if (IsErrorOverlayVisible && ErrorMessage.Contains("Photo camera"))
+                    {
+                        IsErrorOverlayVisible = false;
+                        ErrorMessage = string.Empty;
+                        Log.Information("拍照相机已重新连接，隐藏错误遮罩。");
+                    }
+                }
+                else
+                {
+                    // 相机掉线时，显示错误遮罩
+                    ErrorMessage = "Photo camera connection lost!\n\nPlease check the camera connection and restart the application to restore normal functionality.";
+                    IsErrorOverlayVisible = true;
+                    Log.Error("拍照相机连接已断开，显示错误遮罩。设备ID: {DeviceId}", deviceId ?? "Unknown");
+                    
+                    // 播放错误音效
+                    _ = _audioService.PlayPresetAsync(AudioType.SystemError);
+                }
             });
         }
         catch (Exception ex)
@@ -1317,10 +1363,25 @@ public class MainWindowViewModel : BindableBase, IDisposable
     public DelegateCommand HandleScanStartCommand { get; } = null!;
     public DelegateCommand HandleBarcodeCompleteCommand { get; } = null!;
 
+    // 新增：重启应用命令
+    public DelegateCommand RestartApplicationCommand { get; } = null!
+
     public bool IsInitializingOverlayVisible // 新增属性
     {
         get => _isInitializingOverlayVisible;
         set => SetProperty(ref _isInitializingOverlayVisible, value);
+    }
+
+    public bool IsErrorOverlayVisible // 新增：错误遮罩可见性属性
+    {
+        get => _isErrorOverlayVisible;
+        set => SetProperty(ref _isErrorOverlayVisible, value);
+    }
+
+    public string ErrorMessage // 新增：错误信息属性
+    {
+        get => _errorMessage;
+        set => SetProperty(ref _errorMessage, value);
     }
 
     #endregion
@@ -1703,6 +1764,52 @@ public class MainWindowViewModel : BindableBase, IDisposable
         {
             await ProcessBarcodeAsync(barcode);
         });
+    }
+
+    /// <summary>
+    /// 执行重启应用程序
+    /// </summary>
+    private void ExecuteRestartApplication()
+    {
+        try
+        {
+            Log.Information("用户请求重启应用程序");
+            
+            // 获取当前应用程序的可执行文件路径
+            var currentProcess = Process.GetCurrentProcess();
+            var exePath = currentProcess.MainModule?.FileName;
+            
+            if (string.IsNullOrEmpty(exePath))
+            {
+                                 Log.Error("无法获取当前应用程序的可执行文件路径");
+                 _notificationService.ShowError("Unable to restart application: Cannot get program path");
+                return;
+            }
+
+            Log.Information("准备重启应用程序: {ExePath}", exePath);
+
+            // 启动新的应用程序实例
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = exePath,
+                UseShellExecute = true,
+                WorkingDirectory = Environment.CurrentDirectory
+            };
+
+            Process.Start(startInfo);
+            Log.Information("新的应用程序实例已启动");
+
+            // 关闭当前应用程序
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                Application.Current.Shutdown();
+            });
+        }
+        catch (Exception ex)
+        {
+                         Log.Error(ex, "重启应用程序时发生错误");
+             _notificationService.ShowError($"Failed to restart application: {ex.Message}");
+        }
     }
 
     #endregion
