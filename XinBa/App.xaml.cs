@@ -83,6 +83,9 @@ public partial class App
         containerRegistry.RegisterSingleton<IApiService, ApiService>();
         containerRegistry.RegisterSingleton<VolumeDataService>(); // VolumeDataHostedService 会用到
 
+        // 注册新的Wildberries API服务
+        containerRegistry.RegisterSingleton<WildberriesApiService>();
+
         // 注册后台服务启动器 (需要手动管理生命周期)
         Log.Debug("Registering background service singletons for manual management...");
         containerRegistry.RegisterSingleton<CameraStartupService>();

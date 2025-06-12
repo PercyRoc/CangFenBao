@@ -1,12 +1,44 @@
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.IO;
+using System.Text;
 using Common.Models.Package;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 
 namespace Common.Data;
+
+/// <summary>
+///     包裹查询参数
+/// </summary>
+public class PackageQueryParameters
+{
+    /// <summary>
+    ///     开始时间
+    /// </summary>
+    public DateTime StartTime { get; set; }
+
+    /// <summary>
+    ///     结束时间
+    /// </summary>
+    public DateTime EndTime { get; set; }
+
+    /// <summary>
+    ///     条码（支持模糊查询）
+    /// </summary>
+    public string? Barcode { get; set; }
+
+    /// <summary>
+    ///     格口号
+    /// </summary>
+    public int? ChuteNumber { get; set; }
+
+    /// <summary>
+    ///     包裹状态
+    /// </summary>
+    public PackageStatus? Status { get; set; }
+}
 
 /// <summary>
 ///     包裹数据服务
@@ -27,6 +59,11 @@ public interface IPackageDataService
     ///     查询指定时间范围内的包裹
     /// </summary>
     Task<List<PackageRecord>> GetPackagesInTimeRangeAsync(DateTime startTime, DateTime endTime);
+
+    /// <summary>
+    ///     高效查询包裹（推荐使用，支持数据库层面过滤）
+    /// </summary>
+    Task<List<PackageRecord>> QueryPackagesAsync(PackageQueryParameters queryParams);
 
     /// <summary>
     ///     查询指定状态的包裹
@@ -59,9 +96,11 @@ internal class PackageDataService : IPackageDataService
     private readonly DbContextOptions<PackageDbContext> _options;
     private readonly ConcurrentDictionary<string, bool> _tableExistsCache = new();
     private readonly string _connectionString;
+    private bool _isInitialized = false;
+    private readonly SemaphoreSlim _initializationLock = new(1, 1);
 
     /// <summary>
-    ///     构造函数
+    ///     构造函数（轻量级，不执行耗时操作）
     /// </summary>
     public PackageDataService(DbContextOptions<PackageDbContext> options)
     {
@@ -69,13 +108,57 @@ internal class PackageDataService : IPackageDataService
         _connectionString = $"Data Source={_dbPath}";
         _options = options;
 
-        // 初始化数据库
-        InitializeDatabase().Wait();
+        // 确保数据库目录存在（这是轻量级操作）
+        var dbDirectory = Path.GetDirectoryName(_dbPath);
+        if (!Directory.Exists(dbDirectory))
+        {
+            Directory.CreateDirectory(dbDirectory!);
+        }
+    }
+
+    /// <summary>
+    ///     异步初始化数据库（线程安全）
+    /// </summary>
+    private async Task InitializeAsync()
+    {
+        await _initializationLock.WaitAsync();
+        try
+        {
+            if (_isInitialized) return;
+
+            Log.Information("正在异步初始化包裹数据库...");
+
+            // 创建当月和下月的表
+            var currentMonth = DateTime.Today;
+            var nextMonth = currentMonth.AddMonths(1);
+
+            await EnsureMonthlyTableExists(currentMonth);
+            await EnsureMonthlyTableExists(nextMonth);
+
+            // 检查并修复所有现有表的结构
+            await FixAllTablesStructureAsync();
+
+            // 清理过期的表（保留近6个月的数据）
+            await CleanupOldTables(6);
+
+            _isInitialized = true;
+            Log.Information("包裹数据库异步初始化完成");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "异步初始化包裹数据库时发生错误");
+            throw;
+        }
+        finally
+        {
+            _initializationLock.Release();
+        }
     }
 
     /// <inheritdoc />
     public async Task AddPackageAsync(PackageInfo package)
     {
+        await InitializeAsync(); // 确保初始化完成
         try
         {
             var record = PackageRecord.FromPackageInfo(package);
@@ -179,6 +262,7 @@ internal class PackageDataService : IPackageDataService
     /// <inheritdoc />
     public async Task<PackageRecord?> GetPackageByBarcodeAsync(string barcode, DateTime? date = null)
     {
+        await InitializeAsync(); // 确保初始化完成
         try
         {
             Log.Debug("查询条码 {Barcode} 的包裹记录，指定日期：{Date}", barcode, date?.ToString("yyyy-MM-dd") ?? "null");
@@ -271,6 +355,7 @@ internal class PackageDataService : IPackageDataService
     /// <inheritdoc />
     public async Task<List<PackageRecord>> GetPackagesInTimeRangeAsync(DateTime startTime, DateTime endTime)
     {
+        await InitializeAsync(); // 确保初始化完成
         var allResults = new List<PackageRecord>();
 
         try
@@ -285,63 +370,196 @@ internal class PackageDataService : IPackageDataService
                 monthsToQuery.Add(month);
             }
 
-            Log.Debug("Querying time range [{StartTime}, {EndTime}] across {MonthCount} potential months using raw SQL.",
+            Log.Debug("Querying time range [{StartTime}, {EndTime}] across {MonthCount} potential months using UNION ALL.",
                 startTime.ToString("yyyy-MM-dd HH:mm:ss"),
                 endTime.ToString("yyyy-MM-dd HH:mm:ss"),
                 monthsToQuery.Count);
 
+            // 检查哪些表实际存在
+            var existingTableNames = new List<string>();
             foreach (var month in monthsToQuery)
             {
                 var tableName = GetTableName(month);
-
-                // 检查表是否存在 (可以重用现有方法，或直接SQL查询)
-                if (!await TableExistsAsync(tableName))
+                if (await TableExistsAsync(tableName))
                 {
-                    continue;
-                }
-
-                // 计算此月份在查询范围内的实际开始和结束时间
-                var monthActualStart = (month == startMonth) ? startTime : new DateTime(month.Year, month.Month, 1);
-                var monthActualEnd = (month == endMonth) ? endTime : new DateTime(month.Year, month.Month, 1).AddMonths(1).AddSeconds(-1);
-
-                try
-                {
-                    await using var connection = new SqliteConnection(_connectionString);
-                    await connection.OpenAsync();
-
-                    // 构建参数化的 SQL 查询
-                    var sql = $@"SELECT Id, PackageIndex, Barcode, SegmentCode, Weight, ChuteNumber, Status, StatusDisplay,
-                                        CreateTime, Length, Width, Height, Volume, ErrorMessage, ImagePath,
-                                        PalletName, PalletWeight, PalletLength, PalletWidth, PalletHeight
-                                 FROM {tableName}
-                                 WHERE CreateTime >= @startTime AND CreateTime <= @endTime";
-
-                    await using var command = new SqliteCommand(sql, connection);
-                    // 使用 ISO 8601 格式 (yyyy-MM-dd HH:mm:ss) 进行比较
-                    command.Parameters.AddWithValue("@startTime", monthActualStart.ToString("yyyy-MM-dd HH:mm:ss"));
-                    command.Parameters.AddWithValue("@endTime", monthActualEnd.ToString("yyyy-MM-dd HH:mm:ss"));
-
-                    await using var reader = await command.ExecuteReaderAsync();
-                    while (await reader.ReadAsync())
-                    {
-                        var record = MapReaderToPackageRecord(reader);
-                        allResults.Add(record);
-                    }
-                }
-                catch (Exception monthEx)
-                {
-                    Log.Error(monthEx, "Error querying table {TableName} with raw SQL.", tableName);
-                    // 选择继续查询其他月份，而不是让整个操作失败
+                    existingTableNames.Add(tableName);
                 }
             }
 
-            // 对所有结果进行排序
-            return [.. allResults.OrderByDescending(p => p.CreateTime)];
+            if (!existingTableNames.Any())
+            {
+                Log.Debug("没有找到任何存在的表，返回空结果");
+                return allResults;
+            }
+
+            // 构建一个巨大的 UNION ALL 查询语句，将多次I/O合并为单次I/O
+            var sqlBuilder = new System.Text.StringBuilder();
+            for (var i = 0; i < existingTableNames.Count; i++)
+            {
+                if (i > 0)
+                {
+                    sqlBuilder.AppendLine("UNION ALL");
+                }
+                
+                // 在每个子查询中就进行时间过滤，减少数据传输量
+                sqlBuilder.AppendLine($@"
+                    SELECT Id, PackageIndex, Barcode, SegmentCode, Weight, ChuteNumber, Status, StatusDisplay,
+                           CreateTime, Length, Width, Height, Volume, ErrorMessage, ImagePath,
+                           PalletName, PalletWeight, PalletLength, PalletWidth, PalletHeight
+                    FROM {existingTableNames[i]}
+                    WHERE CreateTime >= @startTime AND CreateTime <= @endTime
+                ");
+            }
+
+            // 添加最后的排序，让数据库引擎来处理排序（数据库对此有高度优化）
+            sqlBuilder.AppendLine("ORDER BY CreateTime DESC");
+
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+
+            await using var command = new SqliteCommand(sqlBuilder.ToString(), connection);
+            command.Parameters.AddWithValue("@startTime", startTime.ToString("yyyy-MM-dd HH:mm:ss"));
+            command.Parameters.AddWithValue("@endTime", endTime.ToString("yyyy-MM-dd HH:mm:ss"));
+
+            Log.Debug("执行UNION ALL查询，涉及 {TableCount} 个表", existingTableNames.Count);
+
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var record = MapReaderToPackageRecord(reader);
+                allResults.Add(record);
+            }
+
+            Log.Debug("UNION ALL查询完成，共获取 {RecordCount} 条记录", allResults.Count);
+            return allResults;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "查询时间范围内的包裹失败 (Raw SQL Approach)：{StartTime} - {EndTime}",
+            Log.Error(ex, "查询时间范围内的包裹失败 (UNION ALL Approach)：{StartTime} - {EndTime}",
                 startTime.ToString("yyyy-MM-dd HH:mm:ss"), endTime.ToString("yyyy-MM-dd HH:mm:ss"));
+            return []; // 发生错误时返回空列表
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<List<PackageRecord>> QueryPackagesAsync(PackageQueryParameters queryParams)
+    {
+        await InitializeAsync(); // 确保初始化完成
+        var allResults = new List<PackageRecord>();
+
+        try
+        {
+            // 获取所有需要查询的月份
+            var startMonth = new DateTime(queryParams.StartTime.Year, queryParams.StartTime.Month, 1);
+            var endMonth = new DateTime(queryParams.EndTime.Year, queryParams.EndTime.Month, 1);
+            var monthsToQuery = new List<DateTime>();
+
+            for (var month = startMonth; month <= endMonth; month = month.AddMonths(1))
+            {
+                monthsToQuery.Add(month);
+            }
+
+            Log.Debug("高效查询时间范围 [{StartTime}, {EndTime}]，跨越 {MonthCount} 个月，使用数据库层面过滤",
+                queryParams.StartTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                queryParams.EndTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                monthsToQuery.Count);
+
+            // 检查哪些表实际存在
+            var existingTableNames = new List<string>();
+            foreach (var month in monthsToQuery)
+            {
+                var tableName = GetTableName(month);
+                if (await TableExistsAsync(tableName))
+                {
+                    existingTableNames.Add(tableName);
+                }
+            }
+
+            if (!existingTableNames.Any())
+            {
+                Log.Debug("没有找到任何存在的表，返回空结果");
+                return allResults;
+            }
+
+            // 构建WHERE条件
+            var whereClauses = new List<string> { "CreateTime >= @startTime AND CreateTime <= @endTime" };
+            if (!string.IsNullOrWhiteSpace(queryParams.Barcode))
+            {
+                whereClauses.Add("Barcode LIKE @barcode");
+            }
+            if (queryParams.ChuteNumber.HasValue)
+            {
+                whereClauses.Add("ChuteNumber = @chuteNumber");
+            }
+            if (queryParams.Status.HasValue)
+            {
+                whereClauses.Add("Status = @status");
+            }
+
+            var whereClause = string.Join(" AND ", whereClauses);
+
+            // 构建高效的 UNION ALL 查询语句，在数据库层面完成所有过滤
+            var sqlBuilder = new StringBuilder();
+            for (var i = 0; i < existingTableNames.Count; i++)
+            {
+                if (i > 0)
+                {
+                    sqlBuilder.AppendLine("UNION ALL");
+                }
+                
+                // 在每个子查询中应用所有WHERE条件，让数据库引擎进行优化
+                sqlBuilder.AppendLine($@"
+                    SELECT Id, PackageIndex, Barcode, SegmentCode, Weight, ChuteNumber, Status, StatusDisplay,
+                           CreateTime, Length, Width, Height, Volume, ErrorMessage, ImagePath,
+                           PalletName, PalletWeight, PalletLength, PalletWidth, PalletHeight
+                    FROM {existingTableNames[i]}
+                    WHERE {whereClause}
+                ");
+            }
+
+            // 添加最后的排序，让数据库引擎来处理排序（数据库对此有高度优化）
+            sqlBuilder.AppendLine("ORDER BY CreateTime DESC");
+
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+
+            await using var command = new SqliteCommand(sqlBuilder.ToString(), connection);
+            
+            // 设置参数
+            command.Parameters.AddWithValue("@startTime", queryParams.StartTime.ToString("yyyy-MM-dd HH:mm:ss"));
+            command.Parameters.AddWithValue("@endTime", queryParams.EndTime.ToString("yyyy-MM-dd HH:mm:ss"));
+            
+            if (!string.IsNullOrWhiteSpace(queryParams.Barcode))
+            {
+                command.Parameters.AddWithValue("@barcode", $"%{queryParams.Barcode}%");
+            }
+            if (queryParams.ChuteNumber.HasValue)
+            {
+                command.Parameters.AddWithValue("@chuteNumber", queryParams.ChuteNumber.Value);
+            }
+            if (queryParams.Status.HasValue)
+            {
+                command.Parameters.AddWithValue("@status", (int)queryParams.Status.Value);
+            }
+
+            Log.Debug("执行高效UNION ALL查询，涉及 {TableCount} 个表，包含数据库层面过滤", existingTableNames.Count);
+
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var record = MapReaderToPackageRecord(reader);
+                allResults.Add(record);
+            }
+
+            Log.Information("高效查询完成，从 {TableCount} 个分表中获取了 {RecordCount} 条记录", 
+                existingTableNames.Count, allResults.Count);
+            return allResults;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "高效查询包裹失败：{StartTime} - {EndTime}",
+                queryParams.StartTime.ToString("yyyy-MM-dd HH:mm:ss"), 
+                queryParams.EndTime.ToString("yyyy-MM-dd HH:mm:ss"));
             return []; // 发生错误时返回空列表
         }
     }
@@ -349,6 +567,7 @@ internal class PackageDataService : IPackageDataService
     /// <inheritdoc />
     public async Task<List<PackageRecord>> GetPackagesByStatusAsync(PackageStatus status, DateTime? date = null)
     {
+        await InitializeAsync(); // 确保初始化完成
         try
         {
             date ??= DateTime.Today;
@@ -392,6 +611,7 @@ internal class PackageDataService : IPackageDataService
     /// <inheritdoc />
     public async Task<List<PackageRecord>> GetAllOfflinePackagesAsync()
     {
+        await InitializeAsync(); // 确保初始化完成
         var allOfflinePackages = new List<PackageRecord>();
         try
         {
@@ -468,6 +688,7 @@ internal class PackageDataService : IPackageDataService
     public async Task<bool> UpdatePackageStatusAsync(string barcode, PackageStatus status, string statusDisplay,
         DateTime? recordTime = null)
     {
+        await InitializeAsync(); // 确保初始化完成
         try
         {
             // 记录原始的调用参数，便于调试
@@ -633,44 +854,7 @@ internal class PackageDataService : IPackageDataService
         }
     }
 
-    /// <summary>
-    ///     初始化数据库
-    /// </summary>
-    private async Task InitializeDatabase()
-    {
-        try
-        {
-            Log.Information("正在初始化包裹数据库...");
 
-            // 确保数据库目录存在
-            var dbDirectory = Path.GetDirectoryName(_dbPath);
-            if (!Directory.Exists(dbDirectory))
-            {
-                Directory.CreateDirectory(dbDirectory!);
-                Log.Information("创建数据库目录：{Directory}", dbDirectory);
-            }
-
-            // 创建当月和下月的表
-            var currentMonth = DateTime.Today;
-            var nextMonth = currentMonth.AddMonths(1);
-
-            await EnsureMonthlyTableExists(currentMonth);
-            await EnsureMonthlyTableExists(nextMonth);
-
-            // 检查并修复所有现有表的结构
-            await FixAllTablesStructureAsync();
-
-            // 清理过期的表（保留近6个月的数据）
-            await CleanupOldTables(6);
-
-            Log.Information("包裹数据库初始化完成");
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "初始化包裹数据库时发生错误");
-            throw;
-        }
-    }
 
     /// <summary>
     ///     检查并修复所有现有表的结构

@@ -3,6 +3,32 @@ using System.Windows.Media.Imaging;
 namespace Common.Models.Package;
 
 /// <summary>
+///     包裹分拣状态
+/// </summary>
+public enum PackageSortState
+{
+    /// <summary>
+    ///     待处理
+    /// </summary>
+    Pending,
+
+    /// <summary>
+    ///     处理中
+    /// </summary>
+    Processing,
+
+    /// <summary>
+    ///     分拣超时（幽灵包裹）
+    /// </summary>
+    TimedOut,
+
+    /// <summary>
+    ///     已分拣
+    /// </summary>
+    Sorted
+}
+
+/// <summary>
 ///     包裹信息
 /// </summary>
 public class PackageInfo : IDisposable
@@ -30,6 +56,7 @@ public class PackageInfo : IDisposable
     private PackageInfo()
     {
         CreateTime = DateTime.Now;
+        SortState = PackageSortState.Pending; // 初始化分拣状态
     }
 
     /// <summary>
@@ -175,6 +202,11 @@ public class PackageInfo : IDisposable
     public double PalletHeight { get; private set; }
 
     /// <summary>
+    ///     分拣状态
+    /// </summary>
+    public PackageSortState SortState { get; private set; }
+
+    /// <summary>
     ///     释放资源
     /// </summary>
     public void Dispose()
@@ -309,5 +341,14 @@ public class PackageInfo : IDisposable
         PalletLength = palletLength;
         PalletWidth = palletWidth;
         PalletHeight = palletHeight;
+    }
+
+    /// <summary>
+    ///     设置分拣状态
+    /// </summary>
+    /// <param name="sortState">分拣状态</param>
+    public void SetSortState(PackageSortState sortState)
+    {
+        SortState = sortState;
     }
 }

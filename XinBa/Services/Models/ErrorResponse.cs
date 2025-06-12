@@ -1,17 +1,16 @@
-namespace XinBa.Services.Models;
+using System.Collections.Generic;
 
-/// <summary>
-///     API错误响应
-/// </summary>
-public class ErrorResponse
+namespace XinBa.Services.Models
 {
-    /// <summary>
-    ///     错误代码
-    /// </summary>
-    public string Error { get; set; } = string.Empty;
+    public class ErrorDetail
+    {
+        public string error { get; set; }
+        public string message { get; set; }
+        public string detail { get; set; }
+    }
 
-    /// <summary>
-    ///     错误消息
-    /// </summary>
-    public string Message { get; set; } = string.Empty;
-}
+    public class ErrorResponse
+    {
+        public List<ErrorDetail> errors { get; set; }
+    }
+} 

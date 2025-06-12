@@ -12,6 +12,7 @@ public class PendulumSortConfig : BindableBase
 {
     private ObservableCollection<SortPhotoelectric> _sortingPhotoelectrics = [];
     private TriggerPhotoelectric _triggerPhotoelectric = new();
+    private int _globalDebounceTime;
 
     /// <summary>
     ///     触发光电配置
@@ -30,6 +31,15 @@ public class PendulumSortConfig : BindableBase
     {
         get => _sortingPhotoelectrics;
         set => SetProperty(ref _sortingPhotoelectrics, value);
+    }
+
+    /// <summary>
+    ///     全局光电防抖时间 (毫秒)，在此时间内重复信号将被忽略
+    /// </summary>
+    public int GlobalDebounceTime
+    {
+        get => _globalDebounceTime;
+        set => SetProperty(ref _globalDebounceTime, value);
     }
 }
 

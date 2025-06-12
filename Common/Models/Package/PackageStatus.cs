@@ -46,6 +46,11 @@ public enum PackageStatus
     LoadingRejected,
 
     /// <summary>
+    ///     上包已接受，等待最终结果
+    /// </summary>
+    LoadingAccepted,
+
+    /// <summary>
     ///     上包成功
     /// </summary>
     LoadingSuccess,

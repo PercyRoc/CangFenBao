@@ -176,6 +176,8 @@ internal class PlcCommunicationService(
 
     public event EventHandler<DeviceStatusCode>? DeviceStatusChanged;
 
+    public event EventHandler<(ushort CommandId, bool IsTimeout, int PackageId)>? UploadResultReceived;
+
     private async Task HeartbeatLoopAsync()
     {
         try
@@ -538,7 +540,18 @@ internal class PlcCommunicationService(
                     uploadResult.IsTimeout,
                     uploadResult.PackageId);
 
-                // 找到对应的 TaskCompletionSource 并设置结果
+                // *** 新增: 触发上包最终结果事件 ***
+                try
+                {
+                    UploadResultReceived?.Invoke(this, (uploadResult.CommandId, uploadResult.IsTimeout, uploadResult.PackageId));
+                    Log.Debug("已触发 UploadResultReceived 事件: CommandId={CommandId}", uploadResult.CommandId);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "触发 UploadResultReceived 事件时发生错误: CommandId={CommandId}", uploadResult.CommandId);
+                }
+
+                // 找到对应的 TaskCompletionSource 并设置结果（保持向后兼容）
                 if (_pendingUploadResults.TryGetValue(uploadResult.CommandId, out var resultTcs))
                 {
                     // TrySetResult returns false if the task was already completed (e.g., by timeout/cancellation)
@@ -553,7 +566,7 @@ internal class PlcCommunicationService(
                 }
                 else
                 {
-                    Log.Warning("收到 CommandId={CommandId} 的上包结果，但未找到对应的等待 Tcs。", uploadResult.CommandId);
+                    Log.Debug("收到 CommandId={CommandId} 的上包结果，但未找到对应的等待 Tcs（可能使用新的异步模式）。", uploadResult.CommandId);
                 }
 
                 // 发送ACK响应
@@ -591,9 +604,9 @@ internal class PlcCommunicationService(
 
             // 从配置中获取超时时间 (用于初始ACK)
             var config = settingsService.LoadSettings<HostConfiguration>();
-            // 使用 UploadTimeoutSeconds 作为 ACK 超时时间
+            // 使用新的 UploadAckTimeoutSeconds 作为 ACK 超时时间
             var ackTimeoutSeconds =
-                config.UploadTimeoutSeconds > 0 ? config.UploadTimeoutSeconds : 5; // 使用 UploadTimeoutSeconds
+                config.UploadAckTimeoutSeconds > 0 ? config.UploadAckTimeoutSeconds : 10; // 默认10秒
             using var ackTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(ackTimeoutSeconds));
             // 链接外部取消令牌和ACK超时令牌
             using var linkedAckCts =
@@ -666,8 +679,8 @@ internal class PlcCommunicationService(
         {
             // 从配置获取最终结果的超时时间
             var config = settingsService.LoadSettings<HostConfiguration>();
-            // 如果配置为0或负数，设置一个默认值，例如30秒
-            var timeoutSeconds = config.UploadTimeoutSeconds > 0 ? config.UploadTimeoutSeconds : 30;
+            // 使用新的 UploadResultTimeoutSeconds 作为最终结果超时时间
+            var timeoutSeconds = config.UploadResultTimeoutSeconds > 0 ? config.UploadResultTimeoutSeconds : 60; // 默认60秒
             using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
             // 链接外部取消令牌和最终结果超时令牌
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancellationToken);

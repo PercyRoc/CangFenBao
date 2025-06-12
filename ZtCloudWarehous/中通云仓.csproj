@@ -36,6 +36,7 @@
         <PackageReference Include="FluentFTP" />
         <PackageReference Include="WPF-UI" />
         <PackageReference Include="HandyControl" />
+        <PackageReference Include="WPFLocalizeExtension" />
 
         <!-- WebSocket -->
         <PackageReference Include="WebSocketSharp-netstandard" />

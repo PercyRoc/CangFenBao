@@ -15,45 +15,49 @@ namespace ShanghaiModuleBelt.Services.Zto
     {
         private readonly HttpClient _httpClient;
         private readonly ISettingsService _settingsService;
-        private ZtoApiSettings _ztoApiSettings; // 移除 readonly 以允许重新加载
 
         public ZtoApiService(HttpClient httpClient, ISettingsService settingsService)
         {
             _httpClient = httpClient;
             _settingsService = settingsService;
-            LoadSettingsAndConfigureHttpClient(); // 在构造函数中只加载一次设置并配置HttpClient
-        }
-
-        private void LoadSettingsAndConfigureHttpClient()
-        {
-            _ztoApiSettings = _settingsService.LoadSettings<ZtoApiSettings>();
-            var apiUrl = _ztoApiSettings.UseTestEnvironment ? _ztoApiSettings.TestApiUrl : _ztoApiSettings.FormalApiUrl;
-            _httpClient.BaseAddress = new Uri(apiUrl);
-
-            // 清除旧的 AppKey 和 DataDigest 头，以防 HttpClient 被重用且这些头是在其他地方添加的
-            _httpClient.DefaultRequestHeaders.Remove("x-appKey");
-            _httpClient.DefaultRequestHeaders.Remove("x-dataDigest");
-            
-            _httpClient.DefaultRequestHeaders.Add("x-appKey", _ztoApiSettings.AppKey);
         }
 
         public async Task<CollectUploadResponse> UploadCollectTraceAsync(CollectUploadRequest request)
         {
-            // 每次请求时，只更新需要变化的请求头（如 x-dataDigest），而不是重新配置整个 HttpClient
+            // 每次请求时，重新加载最新配置，确保配置变更能实时生效
+            var ztoApiSettings = _settingsService.LoadSettings<ZtoApiSettings>();
+            
+            var apiUrl = ztoApiSettings.UseTestEnvironment ? ztoApiSettings.TestApiUrl : ztoApiSettings.FormalApiUrl;
+            // 移除 BaseAddress 设置，直接用完整 URL
+            // if (_httpClient.BaseAddress == null || _httpClient.BaseAddress.ToString() != apiUrl)
+            // {
+            //     _httpClient.BaseAddress = new Uri(apiUrl);
+            //     Log.Information("ZTO API BaseAddress 更新为: {ApiUrl}", apiUrl);
+            // }
+
+            // 移除旧的 x-appKey 和 x-dataDigest (虽然 x-dataDigest 是每次都生成的，但为了代码一致性，在这里也先移除)
+            _httpClient.DefaultRequestHeaders.Remove("x-appKey");
+            _httpClient.DefaultRequestHeaders.Remove("x-dataDigest");
+            
+            // 添加或更新 x-appKey
+            _httpClient.DefaultRequestHeaders.Add("x-appKey", ztoApiSettings.AppKey);
+            Log.Information("ZTO API x-appKey 设置为: {AppKey}", ztoApiSettings.AppKey);
+
             var jsonContent = JsonConvert.SerializeObject(request);
             Log.Information("ZTO揽收上传请求数据: {JsonContent}", jsonContent);
 
-            if (_ztoApiSettings.Secret != null)
+            if (ztoApiSettings.Secret != null)
             {
-                var dataDigest = GenerateDataDigest(jsonContent, _ztoApiSettings.Secret);
-                _httpClient.DefaultRequestHeaders.Remove("x-dataDigest"); // 确保每次更新
+                var dataDigest = GenerateDataDigest(jsonContent, ztoApiSettings.Secret);
+                // 每次请求时更新 x-dataDigest
                 _httpClient.DefaultRequestHeaders.Add("x-dataDigest", dataDigest);
             }
 
             try
             {
                 var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-                var response = await _httpClient.PostAsync("", content); // 接口地址已在BaseAddress中设置
+                // 直接用完整URL
+                var response = await _httpClient.PostAsync(apiUrl, content);
 
                 var responseContent = await response.Content.ReadAsStringAsync();
                 Log.Information("ZTO揽收上传响应内容: {ResponseContent}", responseContent);

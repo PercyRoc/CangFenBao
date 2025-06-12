@@ -16,6 +16,7 @@ using MessageBoxImage = System.Windows.MessageBoxImage;
 using System.Windows.Media.Imaging;
 using DeviceService.DataSourceDevices.Weight;
 using System.Windows.Media;
+using XinBa.Services.Models;
 
 namespace XinBa.ViewModels;
 
@@ -29,6 +30,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly ICameraService _cameraService;
     private readonly VolumeDataService _volumeDataService;
     private readonly SerialPortWeightService? _weightService;
+    private readonly WildberriesApiService _wildberriesApiService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
     private string _currentBarcode = string.Empty;
@@ -48,13 +50,15 @@ public class MainWindowViewModel : BindableBase, IDisposable
         IApiService apiService,
         ICameraService cameraService,
         VolumeDataService volumeDataService,
-        WeightStartupService weightStartupService)
+        WeightStartupService weightStartupService,
+        WildberriesApiService wildberriesApiService)
     {
         _dialogService = dialogService;
         _apiService = apiService;
         _cameraService = cameraService;
         _volumeDataService = volumeDataService;
         _weightService = weightStartupService.GetWeightService();
+        _wildberriesApiService = wildberriesApiService;
 
         // Initialize commands
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
@@ -360,11 +364,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
         {
             Log.Debug("接收到包裹信息: 条码={Barcode}", package.Barcode);
 
-            // --- Start: Added Weight Logic ---
             // 检查包裹是否已经有重量数据（大于0），如果没有且重量服务存在，则尝试查询
-            if (package.Weight <= 0.0 && _weightService != null) // Check if service exists and weight is not set
+            if (package.Weight <= 0.0 && _weightService != null)
             {
-                var weightInGrams = _weightService.FindNearestWeight(package.CreateTime); // Call method on the instance
+                var weightInGrams = _weightService.FindNearestWeight(package.CreateTime);
                 if (weightInGrams.HasValue)
                 {
                     var weightInKg = weightInGrams.Value / 1000.0;
@@ -381,11 +384,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // 检查包裹是否已经有体积数据，如果没有则尝试查询
             if (!package.Length.HasValue || !package.Width.HasValue || !package.Height.HasValue)
             {
-                // 查询体积数据
                 var volume = _volumeDataService.FindVolumeData(package);
                 if (volume.HasValue)
                 {
-                    // 使用 SetDimensions 方法设置长宽高
                     package.SetDimensions(volume.Value.Length, volume.Value.Width, volume.Value.Height);
                     Log.Information("为包裹 {Index} 找到并设置体积: L={Length}, W={Width}, H={Height}", 
                         package.Index, package.Length, package.Width, package.Height);
@@ -396,80 +397,54 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 }
             }
 
-            // 使用Dispatcher确保在UI线程上更新
             Application.Current.Dispatcher.Invoke(() =>
             {
-                // 更新当前条码
                 CurrentBarcode = package.Barcode;
-
-                // 更新包裹信息项
                 UpdatePackageInfoItems(package);
-
-                // 更新统计信息
                 UpdateStatistics(package);
-
-                // 添加到包裹历史
                 AddToPackageHistory(package);
             });
 
-            // 提交商品尺寸
-            if (package is { Length: not null, Width: not null, Height: not null })
+            // 准备并发送新的Wildberries API请求
+            if (package.Length.HasValue && package.Width.HasValue && package.Height.HasValue && package.Weight > 0.0)
             {
-                // 准备图片数据
-                var photoData = new List<byte[]>();
-                BitmapSource? imageToSubmit = package.Image; // 默认使用原始图像
+                var request = new TareAttributesRequest
+                {
+                    OfficeId = 300684, // 硬编码 Shelepanovo 仓库
+                    TareSticker = package.Barcode, // 使用包裹条码
+                    PlaceId = 943626653, // 硬编码 Shelepanovo 机器
+                    SizeAMm = (long)package.Length.Value, // 长度，单位毫米
+                    SizeBMm = (long)package.Width.Value, // 宽度，单位毫米
+                    SizeCMm = (long)package.Height.Value, // 高度，单位毫米
+                    VolumeMm = (int)(package.Length.Value * package.Width.Value * package.Height.Value), // 体积
+                    WeightG = (int)(package.Weight * 1000) // 重量，转换为克
+                };
 
-                // 如果有图片，添加水印并转换为字节数组
-                if (imageToSubmit != null)
-                    try
-                    {
-                        // 添加水印
-                        imageToSubmit = AddWatermarkToImage(imageToSubmit, package);
-                        Log.Debug("已为图片添加水印");
-
-                        // 将带水印的图片转换为字节数组
-                        using var ms = new MemoryStream();
-                        var encoder = new JpegBitmapEncoder { QualityLevel = 90 }; // 使用JPEG编码器
-                        encoder.Frames.Add(BitmapFrame.Create(imageToSubmit));
-                        encoder.Save(ms);
-                        photoData.Add(ms.ToArray());
-                        Log.Debug("带水印的图片已转换为字节数组");
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Warning(ex, "处理或转换图片数据失败");
-                        // 如果水印或转换失败，可以选择不提交图片或提交原始图片（取决于需求）
-                        // 这里我们选择不提交图片
-                        photoData.Clear(); 
-                    }
-
-                // 提交尺寸信息 (即使图片处理失败，也可能需要提交尺寸)
-                var success = await _apiService.SubmitDimensionsAsync(
-                    package.Barcode,
-                    package.Height.Value.ToString("F2"), // 已确保非 null
-                    package.Length.Value.ToString("F2"), // 已确保非 null
-                    package.Width.Value.ToString("F2"),  // 已确保非 null
-                    package.Weight.ToString("F2"),       // Weight 可能是 null，但API可能接受
-                    photoData                          // 可能为空列表
-                );
+                var (success, errorMessage) = await _wildberriesApiService.SendTareAttributesAsync(request);
 
                 if (success)
-                    Log.Information("商品尺寸提交成功: Barcode={Barcode}", package.Barcode);
+                {
+                    Log.Information("Wildberries TareAttributes提交成功: Barcode={Barcode}", package.Barcode);
+                }
                 else
-                    Log.Warning("商品尺寸提交失败: Barcode={Barcode}", package.Barcode);
+                {
+                    Log.Warning("Wildberries TareAttributes提交失败: Barcode={Barcode}, 错误: {ErrorMessage}", package.Barcode, errorMessage);
+                }
             }
             else
             {
-                Log.Warning("包裹缺少尺寸信息，无法提交: Barcode={Barcode}", package.Barcode);
+                Log.Warning("包裹缺少必要的尺寸或重量信息，无法提交到Wildberries API: Barcode={Barcode}, Length={Length}, Width={Width}, Height={Height}, Weight={Weight}", 
+                    package.Barcode, package.Length, package.Width, package.Height, package.Weight);
             }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "处理包裹信息时出错: 条码={Barcode}", package.Barcode);
         }
-        finally // Ensure image is released
+        finally
         {
-             package.ReleaseImage();
+             // 即使不上传图片，也保持释放资源（如果PackageInfo中有其他可释放资源）
+             package.ReleaseImage(); 
         }
     }
 
@@ -726,133 +701,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
         {
             Log.Error(ex, "更新设备状态时出错");
         }
-    }
-
-    /// <summary>
-    /// 为图像添加包含包裹信息的水印
-    /// </summary>
-    /// <param name="originalImage">原始图像</param>
-    /// <param name="package">包裹信息</param>
-    /// <returns>带有水印的新图像</returns>
-    private BitmapSource AddWatermarkToImage(BitmapSource originalImage, PackageInfo package)
-    {
-        try
-        {
-            // 定义画笔和字体
-            var pen = new Pen(Brushes.LimeGreen, 1);
-            var textBrush = Brushes.LimeGreen;
-            var typeface = new Typeface("Consolas");
-            const double fontSize = 14;
-            const double rulerLength = 100; // 比例尺的像素长度
-            const double rulerTickHeight = 5; // 比例尺刻度线高度
-            var dpi = new DpiScale(1,1); // Assume 96 DPI if window not available
-             if(Application.Current?.MainWindow != null)
-             {
-                 dpi = VisualTreeHelper.GetDpi(Application.Current.MainWindow);
-             }
-
-
-            // 创建绘制目标
-            var drawingVisual = new DrawingVisual();
-            using (var drawingContext = drawingVisual.RenderOpen())
-            {
-                // 1. 绘制原始图像
-                drawingContext.DrawImage(originalImage, new Rect(0, 0, originalImage.PixelWidth, originalImage.PixelHeight));
-
-                // 2. 准备并绘制文本水印
-                var watermarkText = $"""
-                                     Code:{package.Barcode}
-                                     Length:{package.Length ?? 0}MM
-                                     Width:{package.Width ?? 0}MM
-                                     Height:{package.Height ?? 0}MM
-                                     Weight:{package.Weight:F1}KG
-                                     Date:{package.CreateTime:yyyy.MM.dd}
-                                     Time:{package.CreateTime:HH:mm:ss}
-                                     """;
-                var formattedText = new FormattedText(
-                    watermarkText,
-                    CultureInfo.CurrentCulture,
-                    FlowDirection.LeftToRight,
-                    typeface,
-                    fontSize,
-                    textBrush,
-                    dpi.PixelsPerDip
-                );
-                var textPosition = new Point(10, 10);
-                drawingContext.DrawText(formattedText, textPosition);
-
-                // 3. 绘制尺寸比例尺 (在文本下方)
-                var rulerStartY = textPosition.Y + formattedText.Height + 15; // 文本下方加一点间距
-                var rulerStartX = textPosition.X;
-
-                // 绘制长度比例尺
-                DrawRuler(drawingContext, pen, textBrush, typeface, fontSize, dpi.PixelsPerDip,
-                          new Point(rulerStartX, rulerStartY),
-                          rulerLength, rulerTickHeight,
-                          $"Length: {package.Length ?? 0} MM");
-
-                // 绘制宽度比例尺 (在长度下方)
-                rulerStartY += fontSize + 10; // 下移一行加间距
-                DrawRuler(drawingContext, pen, textBrush, typeface, fontSize, dpi.PixelsPerDip,
-                          new Point(rulerStartX, rulerStartY),
-                          rulerLength, rulerTickHeight,
-                          $"Width: {package.Width ?? 0} MM");
-
-                // 绘制高度比例尺 (在宽度下方)
-                 rulerStartY += fontSize + 10; // 下移一行加间距
-                DrawRuler(drawingContext, pen, textBrush, typeface, fontSize, dpi.PixelsPerDip,
-                           new Point(rulerStartX, rulerStartY),
-                           rulerLength, rulerTickHeight,
-                           $"Height: {package.Height ?? 0} MM");
-            }
-
-            // 创建 RenderTargetBitmap
-            var renderTargetBitmap = new RenderTargetBitmap(
-                originalImage.PixelWidth,
-                originalImage.PixelHeight,
-                originalImage.DpiX,
-                originalImage.DpiY,
-                PixelFormats.Pbgra32); // 使用支持透明度的格式
-
-            // 渲染 DrawingVisual 到 Bitmap
-            renderTargetBitmap.Render(drawingVisual);
-            renderTargetBitmap.Freeze(); // 冻结以提高性能
-
-            return renderTargetBitmap;
-        }
-        catch (Exception ex)
-        {
-             Log.Error(ex, "添加水印时发生错误，将返回原始图像");
-             return originalImage; // 发生错误时返回原始图像
-        }
-    }
-
-    /// <summary>
-    /// 绘制单个比例尺及其标签
-    /// </summary>
-    private static void DrawRuler(DrawingContext dc, Pen pen, Brush textBrush, Typeface typeface, double fontSize, double pixelsPerDip,
-                           Point startPoint, double length, double tickHeight, string label)
-    {
-        // 绘制主线
-        dc.DrawLine(pen, startPoint, new Point(startPoint.X + length, startPoint.Y));
-
-        // 绘制开始刻度
-        dc.DrawLine(pen, new Point(startPoint.X, startPoint.Y - tickHeight / 2), new Point(startPoint.X, startPoint.Y + tickHeight / 2));
-
-        // 绘制结束刻度
-        dc.DrawLine(pen, new Point(startPoint.X + length, startPoint.Y - tickHeight / 2), new Point(startPoint.X + length, startPoint.Y + tickHeight / 2));
-
-        // 绘制标签 (在比例尺右侧)
-        var formattedLabel = new FormattedText(
-            label,
-            CultureInfo.CurrentCulture,
-            FlowDirection.LeftToRight,
-            typeface,
-            fontSize,
-            textBrush,
-            pixelsPerDip
-        );
-        dc.DrawText(formattedLabel, new Point(startPoint.X + length + 5, startPoint.Y - formattedLabel.Height / 2)); // 垂直居中对齐
     }
 
     #region Properties

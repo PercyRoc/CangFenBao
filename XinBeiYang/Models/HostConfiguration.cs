@@ -14,8 +14,12 @@ public class HostConfiguration : BindableBase
     // PLC 配置
     private string _plcIpAddress = "127.0.0.1";
     private int _plcPort = 8080;
-    private int _uploadTimeoutSeconds = 60; // 默认60秒超时
+    private int _uploadAckTimeoutSeconds = 10; // 默认10秒等待初始确认超时
+    private int _uploadResultTimeoutSeconds = 60; // 默认60秒等待最终结果超时
     private int _uploadCountdownSeconds = 5; // 默认5秒倒计时
+    
+    // *** 向后兼容：保留原有的 UploadTimeoutSeconds 属性 ***
+    private int _uploadTimeoutSeconds = 60; // 默认60秒超时（向后兼容）
 
     // 京东服务配置
     private string _jdIpAddress = "127.0.0.1";
@@ -45,6 +49,27 @@ public class HostConfiguration : BindableBase
         set => SetProperty(ref _plcPort, value);
     }
 
+    /// <summary>
+    /// 等待PLC初始确认的超时时间（秒）
+    /// </summary>
+    public int UploadAckTimeoutSeconds
+    {
+        get => _uploadAckTimeoutSeconds;
+        set => SetProperty(ref _uploadAckTimeoutSeconds, value);
+    }
+    
+    /// <summary>
+    /// 等待PLC最终结果的超时时间（秒）
+    /// </summary>
+    public int UploadResultTimeoutSeconds
+    {
+        get => _uploadResultTimeoutSeconds;
+        set => SetProperty(ref _uploadResultTimeoutSeconds, value);
+    }
+    
+    /// <summary>
+    /// 向后兼容：上包超时时间（秒）- 现在映射到最终结果超时时间
+    /// </summary>
     public int UploadTimeoutSeconds
     {
         get => _uploadTimeoutSeconds;

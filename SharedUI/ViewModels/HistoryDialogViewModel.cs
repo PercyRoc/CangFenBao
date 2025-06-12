@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Windows;
 using System.Windows.Input;
 using Common.Data;
 using Common.Models.Package;
@@ -8,6 +9,7 @@ using Common.Services.Ui;
 using Microsoft.Win32;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
+
 using Serilog;
 using WPFLocalizeExtension.Engine;
 
@@ -42,10 +44,9 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
         get => _selectedStatus;
         set
         {
-            if (SetProperty(ref _selectedStatus, value))
-            {
-                QueryAsync();
-            }
+            // 只设置属性，不执行任何操作，避免无限查询循环
+            // 查询操作应该由用户明确点击"查询"按钮来触发
+            SetProperty(ref _selectedStatus, value);
         }
     }
 
@@ -70,7 +71,7 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
         StatusList = statusOptions;
         _selectedStatus = allOption;
 
-        QueryCommand = new DelegateCommand(QueryAsync);
+        QueryCommand = new DelegateCommand(ExecuteQuery);
         ExportToExcelCommand = new DelegateCommand(ExecuteExportToExcel, CanExportToExcel)
             .ObservesProperty(() => PackageRecords.Count);
         OpenImageCommand = new DelegateCommand<string>(OpenImageExecute, CanOpenImage);
@@ -164,13 +165,24 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
 
     public void OnDialogOpened(IDialogParameters parameters)
     {
-        QueryAsync();
+        // 使用 ExecuteQuery 方法确保查询在后台线程执行
+        ExecuteQuery();
+    }
+
+    /// <summary>
+    ///     执行查询命令（UI线程保护）
+    /// </summary>
+    private void ExecuteQuery()
+    {
+        // 使用Task.Run确保整个查询流程都在后台线程启动
+        // 这样即使用户快速连续点击，也不会阻塞UI
+        _ = Task.Run(QueryAsync);
     }
 
     /// <summary>
     ///     执行查询
     /// </summary>
-    private async void QueryAsync()
+    private async Task QueryAsync()
     {
         try
         {
@@ -182,48 +194,41 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
                 startTime, endTime, SearchBarcode, SearchChute, SelectedStatus);
 
             IsLoading = true;
-            var records = await _packageDataService.GetPackagesInTimeRangeAsync(startTime, endTime);
 
-            if (!string.IsNullOrWhiteSpace(SearchBarcode))
+            // 准备查询参数，将所有过滤条件传递给数据库层面处理
+            var queryParams = new PackageQueryParameters
             {
-                records = records.Where(r => r.Barcode.Contains(SearchBarcode, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-            }
+                StartTime = startTime,
+                EndTime = endTime,
+                Barcode = string.IsNullOrWhiteSpace(SearchBarcode) ? null : SearchBarcode,
+                ChuteNumber = int.TryParse(SearchChute, out var chute) ? chute : null,
+                Status = GetStatusEnumValueFromSelection(SelectedStatus, allOptionLocalized)
+            };
 
-            if (!string.IsNullOrWhiteSpace(SearchChute) && int.TryParse(SearchChute, out var chuteNumber))
-            {
-                records = records.Where(r => r.ChuteNumber == chuteNumber).ToList();
-            }
+            // 调用新的、高效的数据服务方法，所有过滤都在数据库层面完成
+            var records = await _packageDataService.QueryPackagesAsync(queryParams);
 
-            if (SelectedStatus != allOptionLocalized)
+            // 确保在UI线程上更新集合
+            Application.Current.Dispatcher.Invoke(() =>
             {
-                var targetStatuses = Enum.GetValues<PackageStatus>()
-                                         .Where(s => GetLocalizedStatusDisplayForFilter(s) == SelectedStatus)
-                                         .ToList();
-                if (targetStatuses.Any())
-                {
-                    records = records.Where(r => targetStatuses.Contains(r.Status)).ToList();
-                }
-                else
-                {
-                    Log.Warning("无法将选择的状态 '{SelectedStatus}' 映射到任何 PackageStatus。将显示所有状态。", SelectedStatus);
-                }
-            }
+                PackageRecords = new ObservableCollection<PackageRecord>(records);
+            });
             
-            PackageRecords = [.. records];
             _notificationService.ShowSuccessWithToken(
                 GetLocString("HistoryDialog_QuerySuccess", "Query successful"),
                 "HistoryWindowGrowl");
         }
         catch (Exception ex)
-        {             Log.Error(ex, "查询历史记录时发生错误");
+        {
+            Log.Error(ex, "查询历史记录时发生错误");
             _notificationService.ShowErrorWithToken(
                 GetLocString("HistoryDialog_QueryFailed", "Query failed"),
                 "HistoryWindowGrowl");
             PackageRecords = [];
         }
         finally
-        {             IsLoading = false;
+        {
+            IsLoading = false;
             ExportToExcelCommand.RaiseCanExecuteChanged();
         }
     }
@@ -273,8 +278,8 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
                 headerStyle.BorderLeft = BorderStyle.Thin;
                 headerStyle.BorderRight = BorderStyle.Thin;
                 headerStyle.BorderTop = BorderStyle.Thin;
-                headerStyle.Alignment = HorizontalAlignment.Center;
-                headerStyle.VerticalAlignment = VerticalAlignment.Center;
+                headerStyle.Alignment = NPOI.SS.UserModel.HorizontalAlignment.Center;
+                headerStyle.VerticalAlignment = NPOI.SS.UserModel.VerticalAlignment.Center;
 
                 var dataFormat = workbook.CreateDataFormat();
                 var dateStyle = workbook.CreateCellStyle();
@@ -415,5 +420,22 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
             _ => $"HistoryDialog_Status_{status}"
         };
         return GetLocString(resourceKey, status.ToString());
+    }
+
+    /// <summary>
+    ///     将UI选择的状态字符串转换为PackageStatus枚举值
+    /// </summary>
+    private PackageStatus? GetStatusEnumValueFromSelection(string selectedStatus, string allOptionLocalized)
+    {
+        if (selectedStatus == allOptionLocalized)
+        {
+            return null; // 表示查询所有状态
+        }
+
+        // 遍历所有PackageStatus枚举值，找到匹配的本地化显示名称
+        var matchingStatus = Enum.GetValues<PackageStatus>()
+            .FirstOrDefault(status => GetLocalizedStatusDisplayForFilter(status) == selectedStatus);
+
+        return matchingStatus == default ? null : matchingStatus;
     }
 }

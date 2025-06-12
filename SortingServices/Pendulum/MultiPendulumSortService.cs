@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text;
+using System.Threading.Channels;
+using Common.Models.Package;
 using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.TCP;
@@ -17,11 +19,15 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
     private bool _isInitialized;
     private readonly ISettingsService _settingsService = settingsService;
 
-    // 记录光电信号状态的字典，true 表示高电平，false 表示低电平
-    private readonly ConcurrentDictionary<string, bool> _photoelectricSignalStates = new();
+    // 为每个光电创建一个动作队列和处理任务
+    private readonly ConcurrentDictionary<string, Channel<Func<Task>>> _actionChannels = new();
+    private readonly ConcurrentDictionary<string, Task> _actionProcessorTasks = new();
 
-    // 记录上一次信号状态的字典
-    private readonly ConcurrentDictionary<string, bool> _previousPhotoelectricSignalStates = new();
+    // 管理等待任务的字典，用于可中断延迟
+    private readonly ConcurrentDictionary<string, TaskCompletionSource<PackageInfo>> _waitingTasks = new();
+
+    // 缓存配置以避免重复加载
+    private PendulumSortConfig _config = new();
 
     public override async Task InitializeAsync(PendulumSortConfig configuration)
     {
@@ -37,6 +43,9 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
 
             Log.Information("开始初始化多光电多摆轮分拣服务...");
 
+            // 缓存配置
+            _config = configuration;
+
             // 初始化触发光电连接
             TriggerClient = new TcpClientService(
                 "触发光电",
@@ -45,10 +54,6 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
                 ProcessTriggerData,
                 connected => UpdateDeviceConnectionState("触发光电", connected)
             );
-
-            // 初始化触发光电信号状态
-            _photoelectricSignalStates["触发光电"] = false;
-            _previousPhotoelectricSignalStates["触发光电"] = false;
 
             try
             {
@@ -61,7 +66,7 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
                 // 连接失败不抛出异常，后续会自动重连
             }
 
-            // 初始化分拣光电连接
+            // 初始化分拣光电连接和动作队列
             foreach (var photoelectric in configuration.SortingPhotoelectrics)
             {
                 Log.Debug("开始初始化分拣光电 {Name} 连接", photoelectric.Name);
@@ -76,9 +81,9 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
                 _sortingClients[photoelectric.Name] = client;
                 PendulumStates[photoelectric.Name] = new PendulumState();
 
-                // 初始化分拣光电信号状态
-                _photoelectricSignalStates[photoelectric.Name] = false;
-                _previousPhotoelectricSignalStates[photoelectric.Name] = false;
+                // 创建动作队列
+                var channel = Channel.CreateUnbounded<Func<Task>>();
+                _actionChannels[photoelectric.Name] = channel;
 
                 try
                 {
@@ -120,6 +125,20 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
                 await InitializeAsync(_settingsService.LoadSettings<PendulumSortConfig>());
             }
 
+            // 创建取消令牌
+            CancellationTokenSource = new CancellationTokenSource();
+
+            // 启动每个光电的动作处理队列
+            foreach (var photoelectric in _config.SortingPhotoelectrics)
+            {
+                if (_actionChannels.TryGetValue(photoelectric.Name, out var channel))
+                {
+                    var processorTask = ProcessActionQueueAsync(photoelectric.Name, channel.Reader, CancellationTokenSource.Token);
+                    _actionProcessorTasks[photoelectric.Name] = processorTask;
+                    Log.Debug("已启动分拣光电 {Name} 的动作处理队列", photoelectric.Name);
+                }
+            }
+
             // 在启动服务前直接发送启动命令到所有连接的分拣光电
             try
             {
@@ -149,8 +168,6 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
             TimeoutCheckTimer.Start();
             Log.Debug("超时检查定时器已启动");
 
-            // 创建取消令牌
-            CancellationTokenSource = new CancellationTokenSource();
             IsRunningFlag = true;
 
             // 启动主循环
@@ -211,6 +228,47 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
         }
     }
 
+    /// <summary>
+    /// 为每个摆轮处理动作队列的专用方法
+    /// </summary>
+    private async Task ProcessActionQueueAsync(string photoelectricName, ChannelReader<Func<Task>> reader, CancellationToken token)
+    {
+        Log.Debug("开始处理分拣光电 {Name} 的动作队列", photoelectricName);
+        
+        try
+        {
+            await foreach (var action in reader.ReadAllAsync(token))
+            {
+                try
+                {
+                    // 顺序执行队列中的每一个动作
+                    await action();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "处理摆轮 {Name} 的动作时发生错误", photoelectricName);
+                    // 发生错误时强制复位状态
+                    if (PendulumStates.TryGetValue(photoelectricName, out var state))
+                    {
+                        state.ForceReset();
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            Log.Debug("分拣光电 {Name} 的动作队列处理被取消", photoelectricName);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "分拣光电 {Name} 的动作队列处理发生致命错误", photoelectricName);
+        }
+        finally
+        {
+            Log.Debug("分拣光电 {Name} 的动作队列处理结束", photoelectricName);
+        }
+    }
+
     public override async Task StopAsync()
     {
         if (!IsRunningFlag)
@@ -253,6 +311,39 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
                 Log.Debug("已发送取消信号到主循环");
             }
 
+            // 关闭所有动作队列并等待处理任务完成
+            foreach (var (photoelectricName, channel) in _actionChannels)
+            {
+                try
+                {
+                    channel.Writer.Complete();
+                    Log.Debug("已关闭分拣光电 {Name} 的动作队列", photoelectricName);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "关闭分拣光电 {Name} 的动作队列时发生错误", photoelectricName);
+                }
+            }
+
+            // 等待所有动作处理任务完成
+            var waitTasks = _actionProcessorTasks.Values.ToArray();
+            if (waitTasks.Length > 0)
+            {
+                try
+                {
+                    await Task.WhenAll(waitTasks).WaitAsync(TimeSpan.FromSeconds(5));
+                    Log.Debug("所有动作处理任务已完成");
+                }
+                catch (TimeoutException)
+                {
+                    Log.Warning("等待动作处理任务完成超时");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "等待动作处理任务完成时发生错误");
+                }
+            }
+
             IsRunningFlag = false;
 
             // 停止超时检查定时器
@@ -271,6 +362,7 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
             }
 
             PackageTimers.Clear();
+            _actionProcessorTasks.Clear();
 
             Log.Information("多光电多摆轮分拣服务已停止");
         }
@@ -288,20 +380,8 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
             var message = Encoding.ASCII.GetString(data);
             Log.Debug("收到触发光电数据: {Message}", message);
 
-            // 更新触发光电信号状态
-            if (message.Contains("OCCH2:1"))
-            {
-                // 高电平
-                UpdatePhotoelectricSignalState("触发光电", true);
-            }
-            else if (message.Contains("OCCH2:0"))
-            {
-                // 低电平
-                UpdatePhotoelectricSignalState("触发光电", false);
-            }
-
             // 使用基类的信号处理方法
-            HandlePhotoelectricSignal(message);
+            HandlePhotoelectricSignal(message, "触发光电");
         }
         catch (Exception ex)
         {
@@ -314,68 +394,71 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
         try
         {
             var message = Encoding.ASCII.GetString(data);
-            Log.Information("收到分拣光电 {Name} 数据: {Message}", photoelectricName, message);
+            
+            // 只对上升沿信号（OCCH1:1）做出反应
+            if (!message.Contains("OCCH2:1")) 
+            {
+                // 记录Debug日志表示收到了其他信号，但不会处理
+                Log.Debug("收到分拣光电 {Name} 的非上升沿信号: {Message}，已忽略", photoelectricName, message);
+                return;
+            }
 
-            // 更新分拣光电信号状态
-            if (!message.Contains("OCCH1:1")) return;
-            // 高电平
-            UpdatePhotoelectricSignalState(photoelectricName, true);
-            Log.Information("分拣光电 {Name} 收到上升沿信号，开始匹配包裹并执行分拣", photoelectricName);
+            Log.Information("分拣光电 {Name} 收到上升沿信号，开始匹配包裹", photoelectricName);
+            
             // 使用基类的匹配逻辑
-            var package = MatchPackageForSorting(photoelectricName);
-            if (package == null) return;
+            var newPackage = MatchPackageForSorting(photoelectricName);
+            if (newPackage == null) return;
+            
             var matchTime = DateTime.Now;
-            var timeSinceTrigger = matchTime - package.TriggerTimestamp;
+            var timeSinceTrigger = matchTime - newPackage.TriggerTimestamp;
 
-            Log.Information("分拣光电 {Name} 匹配到包裹 {Barcode} (耗时: {MatchDuration:F2}ms)，开始执行分拣动作",
-                photoelectricName, package.Barcode, timeSinceTrigger.TotalMilliseconds);
-            // 直接执行分拣动作
-            _ = ExecuteSortingAction(package, photoelectricName);
+            Log.Information("分拣光电 {Name} 匹配到包裹 {Index}|{Barcode} (耗时: {MatchDuration:F2}ms)",
+                photoelectricName, newPackage.Index, newPackage.Barcode, timeSinceTrigger.TotalMilliseconds);
+            
+            // 尝试唤醒正在等待的任务
+            if (_waitingTasks.TryRemove(photoelectricName, out var tcs))
+            {
+                // 如果成功移除了一个TCS，说明有任务正在等待
+                // 通过SetResult将新包裹信息传递给它，从而唤醒它
+                if (tcs.TrySetResult(newPackage))
+                {
+                    Log.Information("光电 {Name} 发现一个等待中的任务，已发送新包裹 {Index}|{Barcode} 进行唤醒",
+                        photoelectricName, newPackage.Index, newPackage.Barcode);
+                    // 唤醒后，这个新包裹的使命已经完成，不需要再入队
+                    return; 
+                }
+                else
+                {
+                    Log.Warning("尝试唤醒等待任务失败，将按正常流程处理包裹 {Index}|{Barcode}",
+                        newPackage.Index, newPackage.Barcode);
+                }
+            }
+
+            // 如果没有任务在等待，或者唤醒失败，则正常将新包裹的动作入队
+            Log.Information("光电 {Name} 未发现等待任务，将包裹 {Index}|{Barcode} 的动作正常入队",
+                photoelectricName, newPackage.Index, newPackage.Barcode);
+            
+            // 将 ExecuteSortingAction 的调用包装成一个 Func<Task> 并放入队列
+            if (_actionChannels.TryGetValue(photoelectricName, out var channel))
+            {
+                // 注意，这里传递的是当时的数据快照，避免闭包问题
+                var packageSnapshot = newPackage; 
+                var success = channel.Writer.TryWrite(async () => await ExecuteSortingAction(packageSnapshot, photoelectricName));
+                
+                if (!success)
+                {
+                    Log.Error("无法将分拣动作加入队列，光电 {Name} 的队列可能已关闭", photoelectricName);
+                }
+            }
+            else
+            {
+                Log.Error("未找到分拣光电 {Name} 的动作队列", photoelectricName);
+            }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "处理分拣光电 {Name} 数据时发生错误", photoelectricName);
         }
-    }
-
-    /// <summary>
-    /// 更新光电信号状态并检测异常情况
-    /// </summary>
-    /// <param name="photoelectricName">光电名称</param>
-    /// <param name="isHighLevel">是否为高电平</param>
-    private void UpdatePhotoelectricSignalState(string photoelectricName, bool isHighLevel)
-    {
-        // 获取上一次的信号状态
-        _previousPhotoelectricSignalStates.TryGetValue(photoelectricName, out var previousState);
-
-        // 如果当前是低电平，且上一次也是低电平，将第二次低电平视为高电平处理
-        if (!isHighLevel && !previousState)
-        {
-            Log.Warning("光电 {Name} 连续收到两个低电平信号，将第二次低电平视为一次高电平处理", photoelectricName);
-            
-            try
-            {
-                // 构造一个模拟的高电平信号数据
-                var fakeHighLevelMsg = "OCCH1:1";
-                var fakeHighLevelData = Encoding.ASCII.GetBytes(fakeHighLevelMsg);
-                
-                Log.Information("光电 {Name} 模拟高电平信号: {Signal}", photoelectricName, fakeHighLevelMsg);
-                
-                // 调用分拣数据处理逻辑，模拟高电平触发
-                ProcessSortingData(fakeHighLevelData, photoelectricName);
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "光电 {Name} 处理模拟高电平信号失败", photoelectricName);
-            }
-        }
-
-        // 记录当前信号状态
-        Log.Debug("光电 {Name} 信号状态: {State}", photoelectricName, isHighLevel ? "高电平" : "低电平");
-
-        // 更新状态记录
-        _previousPhotoelectricSignalStates[photoelectricName] = _photoelectricSignalStates[photoelectricName];
-        _photoelectricSignalStates[photoelectricName] = isHighLevel;
     }
 
     /// <summary>
@@ -399,8 +482,8 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
                 TriggerClient.Dispose();
                 TriggerClient = new TcpClientService(
                     "触发光电",
-                    _settingsService.LoadSettings<PendulumSortConfig>().TriggerPhotoelectric.IpAddress,
-                    _settingsService.LoadSettings<PendulumSortConfig>().TriggerPhotoelectric.Port,
+                    _config.TriggerPhotoelectric.IpAddress,
+                    _config.TriggerPhotoelectric.Port,
                     ProcessTriggerData,
                     connected => UpdateDeviceConnectionState("触发光电", connected)
                 );
@@ -408,7 +491,7 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
             }
 
             // 重连分拣光电
-            foreach (var photoelectric in _settingsService.LoadSettings<PendulumSortConfig>().SortingPhotoelectrics)
+            foreach (var photoelectric in _config.SortingPhotoelectrics)
             {
                 if (!_sortingClients.TryGetValue(photoelectric.Name, out var client) || client.IsConnected()) continue;
 
@@ -446,11 +529,11 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
     protected override bool SlotBelongsToPhotoelectric(int targetSlot, string photoelectricName)
     {
         // 获取分拣光电的配置
-        var photoelectric = _settingsService.LoadSettings<PendulumSortConfig>().SortingPhotoelectrics.FirstOrDefault(p => p.Name == photoelectricName);
+        var photoelectric = _config.SortingPhotoelectrics.FirstOrDefault(p => p.Name == photoelectricName);
         if (photoelectric == null) return false;
 
         // 获取分拣光电的索引（从0开始）
-        var index = _settingsService.LoadSettings<PendulumSortConfig>().SortingPhotoelectrics.IndexOf(photoelectric);
+        var index = _config.SortingPhotoelectrics.IndexOf(photoelectric);
         if (index < 0) return false;
 
         // 每个分拣光电处理两个格口
@@ -471,7 +554,32 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
         var index = (slot - 1) / 2;
 
         // 获取对应索引的光电配置
-        var photoelectric = _settingsService.LoadSettings<PendulumSortConfig>().SortingPhotoelectrics.ElementAtOrDefault(index);
+        var photoelectric = _config.SortingPhotoelectrics.ElementAtOrDefault(index);
         return photoelectric?.Name;
+    }
+
+    protected override bool TryGetActionChannel(string photoelectricName, out ChannelWriter<Func<Task>>? writer)
+    {
+        if (_actionChannels.TryGetValue(photoelectricName, out var channel))
+        {
+            writer = channel.Writer;
+            return true;
+        }
+        writer = null;
+        return false;
+    }
+
+    protected override void RegisterWaitingTask(string photoelectricName, TaskCompletionSource<PackageInfo> tcs)
+    {
+        _waitingTasks[photoelectricName] = tcs;
+        Log.Debug("已注册等待任务 (光电: {Name})", photoelectricName);
+    }
+
+    protected override void UnregisterWaitingTask(string photoelectricName)
+    {
+        if (_waitingTasks.TryRemove(photoelectricName, out _))
+        {
+            Log.Debug("已取消注册等待任务 (光电: {Name})", photoelectricName);
+        }
     }
 }

@@ -18,6 +18,11 @@ public interface IPlcCommunicationService : IDisposable
     event EventHandler<DeviceStatusCode> DeviceStatusChanged;
 
     /// <summary>
+    ///     上包最终结果事件
+    /// </summary>
+    event EventHandler<(ushort CommandId, bool IsTimeout, int PackageId)> UploadResultReceived;
+
+    /// <summary>
     ///     连接到PLC
     /// </summary>
     Task ConnectAsync(string ipAddress, int port);

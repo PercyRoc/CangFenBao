@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text;
+using System.Threading.Channels;
+using Common.Models.Package;
 using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.TCP;
@@ -203,7 +205,7 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
             }
 
             // 使用基类的信号处理方法
-            HandlePhotoelectricSignal(message);
+            HandlePhotoelectricSignal(message, "触发光电");
         }
         catch (Exception ex)
         {
@@ -280,8 +282,27 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
 
     protected override string? GetPhotoelectricNameBySlot(int slot)
     {
-        // 单摆轮只处理1、2号格口，使用默认光电
-        return slot is 1 or 2 ? "默认" : null;
+        // 单光电单摆轮模式下，所有格口都属于同一个光电
+        return "默认";
+    }
+
+    protected override bool TryGetActionChannel(string photoelectricName, out ChannelWriter<Func<Task>>? writer)
+    {
+        // 单摆轮服务没有使用 Channel 队列模型，返回 false
+        writer = null;
+        return false;
+    }
+
+    protected override void RegisterWaitingTask(string photoelectricName, TaskCompletionSource<PackageInfo> tcs)
+    {
+        // 单摆轮服务没有使用可中断延迟机制，空实现
+        Log.Debug("单摆轮服务不支持等待任务注册");
+    }
+
+    protected override void UnregisterWaitingTask(string photoelectricName)
+    {
+        // 单摆轮服务没有使用可中断延迟机制，空实现
+        Log.Debug("单摆轮服务不支持等待任务取消注册");
     }
 
     /// <summary>

@@ -1,7 +1,8 @@
 using System.Collections.ObjectModel;
-using Prism.Commands;
-using Prism.Mvvm;
 using ShanghaiModuleBelt.Models;
+using Serilog;
+using ShanghaiModuleBelt.Services;
+using Common.Services.Ui;
 
 namespace ShanghaiModuleBelt.ViewModels;
 
@@ -25,9 +26,17 @@ internal class ChuteStatisticsDialogViewModel : BindableBase
     /// </summary>
     public Action? RefreshAction { get; set; }
 
-    public ChuteStatisticsDialogViewModel()
+    private readonly INotificationService _notificationService;
+    private readonly RetryService _retryService;
+
+    public DelegateCommand RetryFailedDataCommand { get; }
+
+    public ChuteStatisticsDialogViewModel(INotificationService notificationService, RetryService retryService)
     {
+        _notificationService = notificationService;
+        _retryService = retryService;
         RefreshCommand = new DelegateCommand(ExecuteRefresh);
+        RetryFailedDataCommand = new DelegateCommand(ExecuteRetryFailedData);
     }
 
     /// <summary>
@@ -55,5 +64,24 @@ internal class ChuteStatisticsDialogViewModel : BindableBase
     {
         // 执行外部提供的刷新动作
         RefreshAction?.Invoke();
+    }
+
+    private async void ExecuteRetryFailedData()
+    {
+        try
+        {
+            // 调用 RetryService 的重传方法
+            await _retryService.PerformRetryAsync(); 
+            _notificationService.ShowSuccess("重传成功");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "手动重传失败数据时发生错误");
+            _notificationService.ShowError($"重传失败数据时发生错误：{ex.Message}");
+        }
+        finally
+        {
+            RefreshAction?.Invoke(); // 重传完成后刷新统计数据
+        }
     }
 } 

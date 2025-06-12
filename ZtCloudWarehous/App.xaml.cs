@@ -10,10 +10,13 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using SharedUI.Extensions;
+using SharedUI.ViewModels;
 using SharedUI.ViewModels.Settings;
+using SharedUI.Views.Dialogs;
 using SharedUI.Views.Settings;
 using SortingServices.Pendulum;
 using SortingServices.Pendulum.Extensions;
+using WPFLocalizeExtension.Engine;
 using ZtCloudWarehous.Services;
 using ZtCloudWarehous.ViewModels;
 using ZtCloudWarehous.ViewModels.Settings;
@@ -143,6 +146,7 @@ public partial class App
         
         // 注册称重服务
         containerRegistry.RegisterSingleton<IWeighingService, WeighingService>();
+        containerRegistry.RegisterForNavigation<HistoryDialogView, HistoryDialogViewModel>("HistoryDialog");
 
         // 注册称重设置页面
         containerRegistry.RegisterForNavigation<WeighingSettingsPage, WeighingSettingsViewModel>();
@@ -160,6 +164,19 @@ public partial class App
     protected override void OnStartup(StartupEventArgs e)
     {
         Log.Information("应用程序启动 (OnStartup)");
+        
+        // 初始化 WPFLocalizeExtension 为中文
+        try
+        {
+            LocalizeDictionary.Instance.SetCurrentThreadCulture = true;
+            LocalizeDictionary.Instance.Culture = new System.Globalization.CultureInfo("zh-CN");
+            Log.Information("WPFLocalizeExtension 已初始化为中文 (zh-CN)");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "初始化 WPFLocalizeExtension 时发生错误");
+        }
+        
         base.OnStartup(e);
 
         try

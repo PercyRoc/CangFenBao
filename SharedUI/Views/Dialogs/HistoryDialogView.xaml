@@ -8,7 +8,7 @@
              xmlns:hc="https://handyorg.github.io/handycontrol"
              xmlns:viewModels="clr-namespace:SharedUI.ViewModels"
              xmlns:lex="http://wpflocalizeextension.codeplex.com" 
-             lex:LocalizeDictionary.DesignCulture="en" 
+             lex:LocalizeDictionary.DesignCulture="zh-CN" 
              lex:ResxLocalizationProvider.DefaultAssembly="SharedUI" 
              lex:ResxLocalizationProvider.DefaultDictionary="Resources.Strings" 
              prism:ViewModelLocator.AutoWireViewModel="True"
@@ -44,21 +44,21 @@
     <Grid>
         <!-- 主要内容 -->
         <Border Background="{StaticResource MainBackground}">
-            <ScrollViewer>
-                <Grid Margin="16">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
+            <!-- 移除ScrollViewer，让DataGrid直接管理自己的滚动和虚拟化 -->
+            <Grid Margin="16">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
 
-                    <!-- 查询条件 -->
-                    <Border Grid.Row="0"
-                            Margin="0,0,0,16"
-                            Background="{DynamicResource ControlFillColorDefaultBrush}"
-                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                            BorderThickness="1"
-                            CornerRadius="4"
-                            Padding="16">
+                <!-- 查询条件 -->
+                <Border Grid.Row="0"
+                        Margin="0,0,0,16"
+                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        Padding="16">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
@@ -98,7 +98,7 @@
                                        Margin="0,0,8,0"
                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
                             <ui:TextBox Grid.Column="5"
-                                        Text="{Binding SearchBarcode, UpdateSourceTrigger=PropertyChanged}"
+                                        Text="{Binding SearchBarcode, UpdateSourceTrigger=LostFocus}"
                                         PlaceholderText="{lex:Loc Key=HistoryDialog_Placeholder_Barcode}"
                                         ClearButtonEnabled="True"
                                         Icon="Barcode24"
@@ -110,7 +110,7 @@
                                        Margin="0,0,8,0"
                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
                             <ui:TextBox Grid.Column="7"
-                                        Text="{Binding SearchChute, UpdateSourceTrigger=PropertyChanged}"
+                                        Text="{Binding SearchChute, UpdateSourceTrigger=LostFocus}"
                                         PlaceholderText="{lex:Loc Key=HistoryDialog_Placeholder_Chute}"
                                         ClearButtonEnabled="True"
                                         Icon="BoxMultiple24"
@@ -147,7 +147,7 @@
                         </Grid>
                     </Border>
 
-                    <!-- 数据列表 -->
+                    <!-- 数据列表 - DataGrid现在直接位于Grid的*行中，确保UI虚拟化正常工作 -->
                     <Border Grid.Row="1"
                             Background="{DynamicResource ControlFillColorDefaultBrush}"
                             BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
@@ -160,6 +160,10 @@
                                   CanUserSortColumns="True"
                                   CanUserResizeColumns="True"
                                   GridLinesVisibility="All"
+                                  VirtualizingPanel.IsVirtualizing="True"
+                                  VirtualizingPanel.VirtualizationMode="Recycling"
+                                  VirtualizingPanel.IsContainerVirtualizable="True"
+                                  ScrollViewer.CanContentScroll="True"
                                   Style="{DynamicResource DefaultDataGridStyle}"
                                   ColumnHeaderStyle="{DynamicResource DefaultDataGridColumnHeaderStyle}"
                                   CellStyle="{DynamicResource DefaultDataGridCellStyle}"
@@ -196,7 +200,6 @@
                         </DataGrid>
                     </Border>
                 </Grid>
-            </ScrollViewer>
         </Border>
 
         <!-- 消息通知容器 -->

@@ -60,8 +60,31 @@
                         <TextBlock Text="PLC配置"
                                FontSize="16"
                                FontWeight="SemiBold"
-                               Margin="0,0,0,16"
+                               Margin="0,0,0,8"
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        
+                        <!-- 超时设置说明 -->
+                        <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                CornerRadius="4"
+                                Padding="12"
+                                Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="💡 超时设置说明"
+                                       FontWeight="SemiBold"
+                                       FontSize="13"
+                                       Margin="0,0,0,8"
+                                       Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                <TextBlock TextWrapping="Wrap"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                    <Run Text="• 初始确认超时：等待PLC响应是否接受包裹的时间，建议设置为5-15秒" />
+                                    <LineBreak />
+                                    <Run Text="• 最终结果超时：等待PLC处理完包裹并返回最终结果的时间，建议设置为30-120秒" />
+                                    <LineBreak />
+                                    <Run Text="• 初始确认超时应小于最终结果超时，以确保流程的合理性" />
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
 
                         <!-- PLC IP地址 -->
                         <Grid Margin="0,0,0,16">
@@ -101,14 +124,74 @@
                                       Value="{Binding Configuration.PlcPort, UpdateSourceTrigger=PropertyChanged}" />
                         </Grid>
 
-                        <!-- 上包超时时间 -->
+                        <!-- 初始确认超时时间 -->
                         <Grid Margin="0,16,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="120" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="200" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Text="初始确认超时："
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
+
+                            <ui:NumberBox Grid.Column="1"
+                                      Width="120"
+                                      HorizontalAlignment="Left"
+                                      ClearButtonEnabled="False"
+                                      Minimum="1"
+                                      Maximum="300"
+                                      Value="{Binding Configuration.UploadAckTimeoutSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            
+                            <TextBlock Grid.Column="2"
+                                   Text="秒 (等待PLC初始确认的超时时间)"
+                                   VerticalAlignment="Center"
+                                   Margin="8,0,0,0"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </Grid>
+
+                        <!-- 最终结果超时时间 -->
+                        <Grid Margin="0,16,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="120" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="200" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Text="最终结果超时："
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
+
+                            <ui:NumberBox Grid.Column="1"
+                                      Width="120"
+                                      HorizontalAlignment="Left"
+                                      ClearButtonEnabled="False"
+                                      Minimum="10"
+                                      Maximum="600"
+                                      Value="{Binding Configuration.UploadResultTimeoutSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            
+                            <TextBlock Grid.Column="2"
+                                   Text="秒 (等待PLC最终处理结果的超时时间)"
+                                   VerticalAlignment="Center"
+                                   Margin="8,0,0,0"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </Grid>
+
+                        <!-- 向后兼容的超时时间 (隐藏或标记为已弃用) -->
+                        <Grid Margin="0,16,0,0" Visibility="Collapsed">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="120" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
 
-                            <TextBlock Text="超时时间："
+                            <TextBlock Text="超时时间(旧)："
                                    Grid.Column="0"
                                    VerticalAlignment="Center"
                                    HorizontalAlignment="Right"
@@ -126,9 +209,10 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="120" />
                                 <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="200" />
                             </Grid.ColumnDefinitions>
 
-                            <TextBlock Text="倒计时(秒)："
+                            <TextBlock Text="倒计时："
                                        Grid.Column="0"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Right"
@@ -138,7 +222,16 @@
                                           Width="120"
                                           HorizontalAlignment="Left"
                                           ClearButtonEnabled="False"
+                                          Minimum="0"
+                                          Maximum="60"
                                           Value="{Binding Configuration.UploadCountdownSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            
+                            <TextBlock Grid.Column="2"
+                                   Text="秒 (上包过程中的倒计时显示时间)"
+                                   VerticalAlignment="Center"
+                                   Margin="8,0,0,0"
+                                   FontSize="12"
+                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                         </Grid>
                     </StackPanel>
                 </ui:Card>

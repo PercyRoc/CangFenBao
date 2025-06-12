@@ -313,6 +313,9 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         // 订阅京东WCS连接状态变更事件
         _jdWcsCommunicationService.ConnectionChanged += OnJdWcsConnectionChanged;
 
+        // *** 新增: 订阅PLC最终结果事件 ***
+        _plcCommunicationService.UploadResultReceived += OnPlcUploadResultReceived;
+
         // --- 包裹流处理 (优化日志) ---
         _subscriptions.Add(_cameraService.PackageStream
             .ObserveOn(Scheduler.Default)
@@ -1087,80 +1090,81 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
 
             // --- PLC接受 ---
             Log.Information("{Context} PLC接受上包请求. CommandId={CommandId}", packageContext, ackResult.CommandId);
+            
+            // *** 新增: 将包裹缓存到等待最终结果的字典中 ***
+            if (!_pendingFinalResultPackages.TryAdd(ackResult.CommandId, package))
+            {
+                Log.Error("{Context} 无法将包裹添加到等待最终结果的缓存中，CommandId={CommandId} 可能已存在", packageContext, ackResult.CommandId);
+                package.SetStatus(PackageStatus.Error, "内部错误：无法缓存包裹");
+                return; // 不再处理此包裹，将在 finally 中更新 UI
+            }
+
+            // *** 新增: 设置最终结果超时机制 ***
+            try
+            {
+                var config = _settingsService.LoadSettings<HostConfiguration>();
+                var resultTimeoutSeconds = config.UploadResultTimeoutSeconds > 0 ? config.UploadResultTimeoutSeconds : 60;
+                var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(resultTimeoutSeconds));
+                
+                if (_pendingFinalResultTimeouts.TryAdd(ackResult.CommandId, timeoutCts))
+                {
+                    // 注册超时回调
+                    _ = timeoutCts.Token.Register(() =>
+                    {
+                        if (_pendingFinalResultPackages.TryRemove(ackResult.CommandId, out var timeoutPackage))
+                        {
+                            var timeoutContext = $"[包裹{timeoutPackage.Index}|{timeoutPackage.Barcode}]";
+                            Log.Warning("{Context} 等待最终结果超时，CommandId={CommandId}", timeoutContext, ackResult.CommandId);
+                            
+                            // 异步处理超时
+                            _ = Task.Run(async () =>
+                            {
+                                try
+                                {
+                                    await ProcessFinalUploadResult(timeoutPackage, timeoutContext, ackResult.CommandId, true, 0, _viewModelCts.Token);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Log.Error(ex, "{Context} 处理超时包裹时发生错误", timeoutContext);
+                                    timeoutPackage.ReleaseImage();
+                                }
+                            });
+                        }
+                        
+                        // 清理超时管理器
+                        _pendingFinalResultTimeouts.TryRemove(ackResult.CommandId, out _);
+                    });
+                    
+                    Log.Debug("{Context} 已设置最终结果超时机制: {TimeoutSeconds}秒", packageContext, resultTimeoutSeconds);
+                }
+                else
+                {
+                    timeoutCts.Dispose();
+                    Log.Warning("{Context} 无法添加超时管理器，CommandId={CommandId}", packageContext, ackResult.CommandId);
+                }
+            }
+            catch (Exception timeoutEx)
+            {
+                Log.Error(timeoutEx, "{Context} 设置最终结果超时机制时发生错误", packageContext);
+            }
+
+            // *** 修改: 设置包裹状态为等待最终结果，但不等待 ***
+            package.SetStatus(PackageStatus.LoadingAccepted, $"上包已接受，等待最终结果 (序号: {package.Index})");
+            
             Application.Current.Dispatcher.Invoke(() =>
             {
                 MainWindowBackgroundBrush = BackgroundSuccess; // PLC 接受，允许下一个扫描
                 Log.Information("[状态][UI] 设置背景为 绿色 (允许上包) - PLC接受 ({Context})", packageContext);
-                StartUploadCountdown(); // 开始倒计时
                 var statusItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "状态");
                 if (statusItem == null) return;
-                statusItem.Value = $"等待处理结果 (序号: {package.Index})";
-                statusItem.Description = "等待PLC最终结果...";
+                statusItem.Value = $"已接受，等待最终结果 (序号: {package.Index})";
+                statusItem.Description = "PLC已接受请求，等待最终处理结果...";
                 statusItem.StatusColor = "#4CAF50"; // Green
             });
 
-            // 2. 等待最终结果
-            (bool WasSuccess, bool IsTimeout, int PackageId) finalResult;
-            try
-            {
-                Log.Debug("{Context} 等待PLC最终结果...", packageContext);
-                finalResult =
-                    await _plcCommunicationService.WaitForUploadResultAsync(ackResult.CommandId, cancellationToken);
-                StopUploadCountdown(); // 收到结果，停止倒计时
-            }
-            catch (OperationCanceledException)
-            {
-                Log.Warning("{Context} 等待PLC最终结果时操作被取消.", packageContext);
-                package.SetStatus(PackageStatus.Error, "操作取消 (等待PLC结果)");
-                StopUploadCountdown();
-                throw; // 抛出以触发 finally 清理
-            }
-            catch (Exception finalEx)
-            {
-                Log.Error(finalEx, "{Context} 等待PLC最终结果时出错.", packageContext);
-                package.SetStatus(PackageStatus.Error, $"PLC通信错误 (结果): {finalEx.Message}");
-                StopUploadCountdown();
-                throw; // 抛出以触发 finally 清理
-            }
-
-            // --- 处理最终结果 ---
-            if (!finalResult.WasSuccess) // PLC 失败或超时
-            {
-                if (finalResult.IsTimeout)
-                {
-                    Log.Warning("{Context} 等待PLC最终结果超时. CommandId={CommandId}", packageContext, ackResult.CommandId);
-                    package.SetStatus(PackageStatus.LoadingTimeout, $"上包结果超时 (序号: {package.Index})"); // 专用状态
-                    _ = _audioService.PlayPresetAsync(AudioType.LoadingTimeout);
-                    Application.Current.Dispatcher.Invoke(() =>
-                    {
-                        MainWindowBackgroundBrush = BackgroundSuccess;
-                        Log.Information("[状态][UI] 设置背景为 绿色 (允许上包) - 上包超时 ({Context})", packageContext);
-                    });
-                    // *** 新增: 超时后清空堆栈 ***
-                    Log.Information("{Context} 处理结果超时，清空包裹堆栈.", packageContext);
-                    // *** Pass context to ClearPackageStack ***
-                    ClearPackageStack($"包裹 {package.Index} 处理结果超时", packageContext + " (超时清理)");
-                }
-                else
-                {
-                    // PLC 报告失败
-                    Log.Error("{Context} PLC报告上包处理失败 (非超时). CommandId={CommandId}", packageContext, ackResult.CommandId);
-                    package.SetStatus(PackageStatus.Error, $"PLC处理失败 (序号: {package.Index})");
-                    _ = _audioService.PlayPresetAsync(AudioType.SystemError);
-                }
-                return; // 不再处理此包裹，将在 finally 中更新 UI
-            }
-
-            // --- PLC 成功 ---
-            package.SetStatus(PackageStatus.LoadingSuccess, $"上包完成 (PLC流水号: {finalResult.PackageId})"); // 专用状态
-            Log.Information("{Context} PLC报告上包成功. CommandId={CommandId}, PLC流水号={PackageId}", packageContext, ackResult.CommandId,
-                finalResult.PackageId);
-            _ = _audioService.PlayPresetAsync(AudioType.LoadingSuccess);
-            Application.Current.Dispatcher.Invoke(HidePlcRejectionWarning);
-
-            // --- 图像保存和WCS上传 ---
-            // *** Pass context ***
-            await HandleImageSavingAndWcsUpload(package, packageContext, finalResult.PackageId, cancellationToken);
+            Log.Information("{Context} 包裹已缓存等待最终结果，立即释放处理权限", packageContext);
+            // *** 不再等待最终结果，直接返回，让下一个包裹可以立即处理 ***
+            return;
         } // 结束 try (PLC 通信块)
         catch (OperationCanceledException) // 捕获 await 过程中的取消
         {
@@ -1180,11 +1184,21 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         finally
         {
             Log.Debug("{Context} 进入 ProcessSinglePackageAsync 的 finally 块", packageContext);
-            // --- 最终UI更新 ---
-            Application.Current.Dispatcher.Invoke(() => UpdateUiFromResult(package));
-            // --- 释放图像 ---
-            package.ReleaseImage();
-            Log.Debug("{Context} 图像资源已释放", packageContext);
+            
+            // *** 修改: 只有在包裹未被缓存等待最终结果时才进行UI更新和资源释放 ***
+            if (package.Status != PackageStatus.LoadingAccepted)
+            {
+                // --- 最终UI更新 ---
+                Application.Current.Dispatcher.Invoke(() => UpdateUiFromResult(package));
+                // --- 释放图像 ---
+                package.ReleaseImage();
+                Log.Debug("{Context} 图像资源已释放", packageContext);
+            }
+            else
+            {
+                Log.Debug("{Context} 包裹已缓存等待最终结果，跳过资源释放", packageContext);
+            }
+            
             // --- 结束处理，可能启动下一个 ---
             // *** Pass context ***
             FinalizeProcessing(package, packageContext);
@@ -1741,6 +1755,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                 // 取消订阅
                 _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
                 _plcCommunicationService.DeviceStatusChanged -= OnPlcDeviceStatusChanged;
+                _plcCommunicationService.UploadResultReceived -= OnPlcUploadResultReceived;
                 _jdWcsCommunicationService.ConnectionChanged -= OnJdWcsConnectionChanged;
                 foreach (var sub in _subscriptions) sub.Dispose();
                 _subscriptions.Clear();
@@ -1754,7 +1769,8 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
 
                 // 清理包裹状态
                 // Pass a string context for the reason
-                ClearPackageStack("[Dispose] 清理包裹堆栈", "[DisposeCtx]"); 
+                ClearPackageStack("[Dispose] 清理包裹堆栈", "[DisposeCtx]");
+                ClearPendingFinalResultPackages("[Dispose] 清理等待最终结果的包裹缓存");
                 lock (_processingLock)
                 {
                     _currentlyProcessingPackage?.ReleaseImage();
@@ -1788,6 +1804,96 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         foreach (var key in keysToRemove.Where(key => _timedOutPrefixes.TryRemove(key, out _)))
         {
             Log.Debug("[State] 清理了过期的超时前缀: {Prefix}", key);
+        }
+    }
+
+    // *** 新增: 处理PLC上包最终结果事件 ***
+    private void OnPlcUploadResultReceived(object? sender, (ushort CommandId, bool IsTimeout, int PackageId) result)
+    {
+        var (commandId, isTimeout, packageId) = result;
+        
+        // 从缓存中获取对应的包裹
+        if (!_pendingFinalResultPackages.TryRemove(commandId, out var package))
+        {
+            Log.Warning("收到 CommandId={CommandId} 的最终结果，但未找到对应的缓存包裹", commandId);
+            return;
+        }
+
+        // *** 新增: 清理对应的超时管理器 ***
+        if (_pendingFinalResultTimeouts.TryRemove(commandId, out var timeoutCts))
+        {
+            timeoutCts.Cancel(); // 取消超时
+            timeoutCts.Dispose();
+            Log.Debug("已清理 CommandId={CommandId} 的超时管理器", commandId);
+        }
+
+        var packageContext = $"[包裹{package.Index}|{package.Barcode}]";
+        Log.Information("{Context} 收到PLC最终结果: CommandId={CommandId}, IsTimeout={IsTimeout}, PackageId={PackageId}", 
+            packageContext, commandId, isTimeout, packageId);
+
+        // 异步处理最终结果，避免阻塞PLC通信线程
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await ProcessFinalUploadResult(package, packageContext, commandId, isTimeout, packageId, _viewModelCts.Token);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "{Context} 处理最终上包结果时发生错误", packageContext);
+                // 确保包裹资源被释放
+                package.ReleaseImage();
+            }
+        });
+    }
+
+    // *** 新增: 处理最终上包结果的方法 ***
+    private async Task ProcessFinalUploadResult(PackageInfo package, string packageContext, ushort commandId, bool isTimeout, int packageId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (isTimeout)
+            {
+                Log.Warning("{Context} PLC最终结果超时. CommandId={CommandId}", packageContext, commandId);
+                package.SetStatus(PackageStatus.LoadingTimeout, $"上包结果超时 (序号: {package.Index})");
+                _ = _audioService.PlayPresetAsync(AudioType.LoadingTimeout);
+            }
+            else if (packageId <= 0)
+            {
+                Log.Error("{Context} PLC报告上包处理失败. CommandId={CommandId}, PackageId={PackageId}", packageContext, commandId, packageId);
+                package.SetStatus(PackageStatus.Error, $"PLC处理失败 (序号: {package.Index})");
+                _ = _audioService.PlayPresetAsync(AudioType.SystemError);
+            }
+            else
+            {
+                // PLC 成功
+                package.SetStatus(PackageStatus.LoadingSuccess, $"上包完成 (PLC流水号: {packageId})");
+                Log.Information("{Context} PLC报告上包成功. CommandId={CommandId}, PLC流水号={PackageId}", packageContext, commandId, packageId);
+                _ = _audioService.PlayPresetAsync(AudioType.LoadingSuccess);
+                
+                // 处理图像保存和WCS上传
+                await HandleImageSavingAndWcsUpload(package, packageContext, packageId, cancellationToken);
+            }
+
+            // 更新UI
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                UpdateUiFromResult(package);
+                UpdatePackageHistory(package);
+                UpdateStatistics(package);
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "{Context} 处理最终上包结果时发生内部错误", packageContext);
+            package.SetStatus(PackageStatus.Error, $"处理最终结果时出错: {ex.Message}");
+            Application.Current.Dispatcher.Invoke(() => UpdateUiFromResult(package));
+        }
+        finally
+        {
+            // 释放图像资源
+            package.ReleaseImage();
+            Log.Debug("{Context} 最终结果处理完成，图像资源已释放", packageContext);
         }
     }
 
@@ -2102,6 +2208,12 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     // *** 新增: 包裹缓冲栈 ***
     private readonly ConcurrentStack<PackageInfo> _packageStack = new();
 
+    // *** 新增: 等待最终结果的包裹缓存 ***
+    private readonly ConcurrentDictionary<ushort, PackageInfo> _pendingFinalResultPackages = new();
+    
+    // *** 新增: 等待最终结果的包裹超时管理 ***
+    private readonly ConcurrentDictionary<ushort, CancellationTokenSource> _pendingFinalResultTimeouts = new();
+
     // *** 新增: 清理包裹堆栈并释放资源 ***
     // *** Update signature to accept context string ***
     private void ClearPackageStack(string reason, string reasonContext, PackageInfo? excludePackage = null)
@@ -2135,6 +2247,36 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         // UI update (IsNextPackageWaiting) is handled in FinalizeProcessing
     }
 
+    // *** 新增: 清理等待最终结果的包裹缓存 ***
+    private void ClearPendingFinalResultPackages(string reason)
+    {
+        Log.Debug("开始清理等待最终结果的包裹缓存. 原因: {Reason}", reason);
+        var count = 0;
+        foreach (var kvp in _pendingFinalResultPackages)
+        {
+            var package = kvp.Value;
+            var packageContext = $"[包裹{package.Index}|{package.Barcode}]";
+            Log.Warning("{Context} 正在丢弃等待最终结果的包裹", packageContext);
+            package.ReleaseImage();
+            count++;
+        }
+        _pendingFinalResultPackages.Clear();
+        
+        // *** 新增: 清理所有超时管理器 ***
+        var timeoutCount = 0;
+        foreach (var kvp in _pendingFinalResultTimeouts)
+        {
+            kvp.Value.Cancel();
+            kvp.Value.Dispose();
+            timeoutCount++;
+        }
+        _pendingFinalResultTimeouts.Clear();
+        
+        if (count > 0)
+        {
+            Log.Information("共清理了 {Count} 个等待最终结果的包裹和 {TimeoutCount} 个超时管理器", count, timeoutCount);
+        }
+    }
 
     // *** 新增: 获取重量并处理包裹的方法 ***
     // *** Add packageContext parameter ***
