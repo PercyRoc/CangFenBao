@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -184,9 +185,9 @@ public class ApiService : IApiService
             try
             {
                 var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(errorContent, _jsonOptions);
-                _notificationService.ShowError(errorResponse != null
-                    ? $"登录失败: {errorResponse.Message}"
-                    : $"登录失败: {response.StatusCode}");
+                _notificationService.ShowError(errorResponse?.errors?.FirstOrDefault()?.message != null
+                    ? $"Login failed: {errorResponse.errors.First().message}"
+                    : $"Login failed: {response.StatusCode}");
             }
             catch
             {
@@ -249,9 +250,9 @@ public class ApiService : IApiService
             try
             {
                 var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(errorContent, _jsonOptions);
-                _notificationService.ShowError(errorResponse != null
-                    ? $"登出失败: {errorResponse.Message}"
-                    : $"登出失败: {response.StatusCode}");
+                _notificationService.ShowError(errorResponse?.errors?.FirstOrDefault()?.message != null
+                    ? $"Logout failed: {errorResponse.errors.First().message}"
+                    : $"Logout failed: {response.StatusCode}");
             }
             catch
             {
@@ -334,10 +335,11 @@ public class ApiService : IApiService
             try
             {
                 var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(responseContent, _jsonOptions);
-                if (errorResponse != null)
+                if (errorResponse?.errors?.FirstOrDefault()?.message != null)
                 {
-                    _notificationService.ShowError($"提交失败: {errorResponse.Message}");
-                    Log.Error("错误详情: {ErrorMessage}", errorResponse.Message);
+                    var errorMessage = errorResponse.errors.First().message;
+                    _notificationService.ShowError($"Submit failed: {errorMessage}");
+                    Log.Error("错误详情: {ErrorMessage}", errorMessage);
                 }
                 else
                 {

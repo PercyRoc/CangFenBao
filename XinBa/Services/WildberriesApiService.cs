@@ -1,9 +1,7 @@
-using System;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 using Serilog;
 using XinBa.Services.Models;
 using Common.Services.Settings;
@@ -14,13 +12,11 @@ namespace XinBa.Services
     public class WildberriesApiService
     {
         private readonly HttpClient _httpClient;
-        private readonly ILogger _logger;
         private readonly WildberriesApiSettings _settings;
 
-        public WildberriesApiService(HttpClient httpClient, ILogger logger, ISettingsService settingsService)
+        public WildberriesApiService(HttpClient httpClient, ISettingsService settingsService)
         {
             _httpClient = httpClient;
-            _logger = logger.ForContext<WildberriesApiService>();
 
             _settings = settingsService.LoadSettings<WildberriesApiSettings>();
 
@@ -36,7 +32,7 @@ namespace XinBa.Services
                 var jsonRequest = JsonSerializer.Serialize(request);
                 var content = new StringContent(jsonRequest, Encoding.UTF8, "application/json");
 
-                _logger.Information("Sending TareAttributes request to Wildberries API: {RequestUrl}, Body: {RequestBody}", _settings.TareAttributesEndpoint, jsonRequest);
+                Log.Information("Sending TareAttributes request to Wildberries API: {RequestUrl}, Body: {RequestBody}", _settings.TareAttributesEndpoint, jsonRequest);
 
                 var response = await _httpClient.PostAsync(_settings.TareAttributesEndpoint, content);
 
@@ -44,16 +40,16 @@ namespace XinBa.Services
                 {
                     if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
                     {
-                        _logger.Information("TareAttributes request succeeded with 204 No Content.");
+                        Log.Information("TareAttributes request succeeded with 204 No Content.");
                         return (true, string.Empty);
                     }
-                    _logger.Warning("TareAttributes request succeeded with unexpected status code: {StatusCode}", response.StatusCode);
+                    Log.Warning("TareAttributes request succeeded with unexpected status code: {StatusCode}", response.StatusCode);
                     return (true, string.Empty);
                 }
                 else
                 {
                     var responseBody = await response.Content.ReadAsStringAsync();
-                    _logger.Error("TareAttributes request failed with status code {StatusCode}. Response Body: {ResponseBody}", response.StatusCode, responseBody);
+                    Log.Error("TareAttributes request failed with status code {StatusCode}. Response Body: {ResponseBody}", response.StatusCode, responseBody);
 
                     try
                     {
@@ -66,19 +62,19 @@ namespace XinBa.Services
                     }
                     catch (JsonException ex)
                     {
-                        _logger.Error(ex, "Failed to deserialize error response from Wildberries API.");
+                        Log.Error(ex, "Failed to deserialize error response from Wildberries API.");
                     }
                     return (false, $"API request failed: {response.StatusCode} - {responseBody}");
                 }
             }
             catch (HttpRequestException ex)
             {
-                _logger.Error(ex, "HTTP request error when sending TareAttributes to Wildberries API.");
+                Log.Error(ex, "HTTP request error when sending TareAttributes to Wildberries API.");
                 return (false, $"网络请求错误: {ex.Message}");
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "An unexpected error occurred when sending TareAttributes to Wildberries API.");
+                Log.Error(ex, "An unexpected error occurred when sending TareAttributes to Wildberries API.");
                 return (false, $"未知错误: {ex.Message}");
             }
         }
