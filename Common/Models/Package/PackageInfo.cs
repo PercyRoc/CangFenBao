@@ -18,9 +18,15 @@ public enum PackageSortState
     Processing,
 
     /// <summary>
-    ///     分拣超时（幽灵包裹）
+    ///     分拣超时（已废弃，现在使用Error状态）
     /// </summary>
+    [Obsolete("已废弃，现在使用Error状态处理超时包裹")]
     TimedOut,
+
+    /// <summary>
+    ///     分拣错误（包裹超时错过分拣点，已从处理队列移除）
+    /// </summary>
+    Error,
 
     /// <summary>
     ///     已分拣

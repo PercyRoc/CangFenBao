@@ -286,6 +286,95 @@
                     </Grid>
                 </StackPanel>
             </ui:Card>
+
+            <!-- 新称重接口配置 -->
+            <ui:Card Margin="0,16,0,0">
+                <StackPanel Margin="16">
+                    <TextBlock Text="新称重接口配置"
+                             Style="{DynamicResource SubtitleTextBlockStyle}"
+                             Margin="0,0,0,16" />
+
+                    <!-- 启用新接口 -->
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Text="启用新接口："
+                                 Grid.Column="0"
+                                 VerticalAlignment="Center"
+                                 HorizontalAlignment="Right"
+                                 Margin="0,0,8,0" />
+
+                        <CheckBox Grid.Column="1"
+                                Content="启用新称重接口"
+                                IsChecked="{Binding Settings.UseNewWeighingApi}" />
+                    </Grid>
+
+                    <!-- 新接口环境选择 -->
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Text="接口环境："
+                                 Grid.Column="0"
+                                 VerticalAlignment="Center"
+                                 HorizontalAlignment="Right"
+                                 Margin="0,0,8,0" />
+
+                        <ComboBox Grid.Column="1"
+                                SelectedValue="{Binding Settings.NewWeighingEnvironment, UpdateSourceTrigger=PropertyChanged}"
+                                SelectedValuePath="Tag">
+                            <ComboBoxItem Content="UAT环境" Tag="uat" />
+                            <ComboBoxItem Content="VER环境" Tag="ver" />
+                            <ComboBoxItem Content="PROD环境" Tag="prod" />
+                        </ComboBox>
+                    </Grid>
+
+                    <!-- 当前接口URL显示 -->
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Text="接口地址："
+                                 Grid.Column="0"
+                                 VerticalAlignment="Center"
+                                 HorizontalAlignment="Right"
+                                 Margin="0,0,8,0" />
+
+                        <TextBlock Grid.Column="1"
+                                 Text="{Binding Settings.NewWeighingApiUrl}"
+                                 VerticalAlignment="Center"
+                                 TextWrapping="Wrap"
+                                 Foreground="{DynamicResource SystemAccentBrush}" />
+                    </Grid>
+
+                    <!-- 测试按钮 -->
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Text="接口测试："
+                                 Grid.Column="0"
+                                 VerticalAlignment="Center"
+                                 HorizontalAlignment="Right"
+                                 Margin="0,0,8,0" />
+
+                        <ui:Button Grid.Column="1"
+                                 Content="测试新称重接口"
+                                 Command="{Binding TestNewWeighingApiCommand}"
+                                 HorizontalAlignment="Left"
+                                 Appearance="Primary" />
+                    </Grid>
+                </StackPanel>
+            </ui:Card>
         </StackPanel>
     </Grid>
 </Page>

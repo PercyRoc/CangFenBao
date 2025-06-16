@@ -41,6 +41,19 @@ public class PendulumSortConfig : BindableBase
         get => _globalDebounceTime;
         set => SetProperty(ref _globalDebounceTime, value);
     }
+
+    private double _straightThroughTimeout = 20000; // 默认20秒
+
+    /// <summary>
+    ///     直行包裹的超时时间（毫秒）。
+    ///     对于目的地在最后一个摆轮之后的包裹，其超时被视为正常分拣完成。
+    ///     此值应足够长，以确保包裹已通过所有物理设备。
+    /// </summary>
+    public double StraightThroughTimeout
+    {
+        get => _straightThroughTimeout;
+        set => SetProperty(ref _straightThroughTimeout, value);
+    }
 }
 
 public class TriggerPhotoelectric : BindableBase

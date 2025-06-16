@@ -29,6 +29,10 @@ internal class WeighingSettings : BindableBase
     private string _userId = string.Empty;
     private decimal _defaultWeight;
 
+    // 新称重接口配置
+    private bool _useNewWeighingApi = false;
+    private string _newWeighingEnvironment = "uat"; // uat, ver, prod
+
     public bool IsProduction
     {
         get => _isProduction;
@@ -107,7 +111,36 @@ internal class WeighingSettings : BindableBase
         set => SetProperty(ref _defaultWeight, value);
     }
 
+    /// <summary>
+    ///     是否使用新称重接口
+    /// </summary>
+    public bool UseNewWeighingApi
+    {
+        get => _useNewWeighingApi;
+        set => SetProperty(ref _useNewWeighingApi, value);
+    }
+
+    /// <summary>
+    ///     新称重接口环境 (uat, ver, prod)
+    /// </summary>
+    public string NewWeighingEnvironment
+    {
+        get => _newWeighingEnvironment;
+        set => SetProperty(ref _newWeighingEnvironment, value);
+    }
+
     public string ApiUrl => IsProduction ? ProdBaseUrl : UatBaseUrl;
+
+    /// <summary>
+    ///     新称重接口URL
+    /// </summary>
+    public string NewWeighingApiUrl => NewWeighingEnvironment.ToLower() switch
+    {
+        "uat" => "https://anapi-uat.annto.com/bop/T201904230000000014/xjyc/weighing",
+        "ver" => "https://anapi-ver.annto.com/bop/T201904230000000014/xjyc/weighing",
+        "prod" => "https://anapi.annto.com/bop/T201904230000000014/xjyc/weighing",
+        _ => "https://anapi-uat.annto.com/bop/T201904230000000014/xjyc/weighing"
+    };
 
     private const string UatBaseUrl = "https://scm-gateway-uat.ztocwst.com/edi/service/inbound/bz";
     private const string ProdBaseUrl = "https://scm-openapi.ztocwst.com/edi/service/inbound/bz";

@@ -399,17 +399,13 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 else // 有有效条码
                 {
                     Log.Debug("开始上传称重数据.");
-                    // 步骤 4：上传包裹并处理响应
+                    // 步骤 4：上传包裹并处理响应（使用自动选择接口）
                     try
                     {
-                        var request = new WeighingRequest
-                        {
-                            WaybillCode = package.Barcode,
-                            ActualWeight = Convert.ToDecimal(package.Weight),
-                            ActualVolume = package.Volume.HasValue ? Convert.ToDecimal(package.Volume.Value) : 0
-                        };
-
-                        var uploadTask = _weighingService.SendWeightDataAsync(request);
+                        var uploadTask = _weighingService.SendWeightDataAutoAsync(
+                            package.Barcode, 
+                            Convert.ToDecimal(package.Weight), 
+                            package.Volume.HasValue ? Convert.ToDecimal(package.Volume.Value) : null);
                         var timeoutTask = Task.Delay(500);
 
                         var completedTask = await Task.WhenAny(uploadTask, timeoutTask);
@@ -420,7 +416,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                             var targetChute = chuteSettings.TimeoutChuteNumber > 0
                                 ? chuteSettings.TimeoutChuteNumber
                                 : chuteSettings.ErrorChuteNumber;
-                            Log.Warning("上传称重数据超时 (>{Timeout}ms).", 800);
+                            Log.Warning("上传称重数据超时 (>{Timeout}ms).", 500);
                             _notificationService.ShowWarning($"上传称重数据超时: {package.Barcode}");
                             package.SetChute(targetChute);
                             package.SetStatus(PackageStatus.Timeout, "上传超时");
@@ -430,16 +426,11 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                         else
                         {
                             // 上传完成 (成功或失败)
-                            var response = await uploadTask;
-                            Log.Debug("收到称重数据上传响应: Success={Success}, Code={Code}, Message={Message}",
-                                response.Success, response.Code, response.Message);
+                            var isSuccess = await uploadTask;
+                            Log.Debug("收到称重数据上传响应: Success={Success}", isSuccess);
 
-                            bool treatAsSuccess = response.Success || (response.Message.Contains("出库完成"));
-
-                            if (treatAsSuccess)
+                            if (isSuccess)
                             {
-                                if (!response.Success) Log.Information("响应消息为 '出库完成'，视为成功处理.");
-
                                 // 查找匹配规则
                                 var matchedChute = chuteSettings.FindMatchingChute(package.Barcode);
                                 if (matchedChute.HasValue)
@@ -452,39 +443,23 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                                 {
                                     // 无规则匹配
                                     package.SetChute(chuteSettings.ErrorChuteNumber);
-                                    package.SetStatus(PackageStatus.Error, response.Success ? "未匹配规则" : "出库完成但未匹配规则");
+                                    package.SetStatus(PackageStatus.Error, "未匹配规则");
                                     Interlocked.Increment(ref _otherErrorCount);
                                     Log.Warning("未匹配到规则，分配到异常口: {ErrorChute}", chuteSettings.ErrorChuteNumber);
                                 }
                             }
-                            else // API 返回失败且非 "出库完成"
+                            else // API 返回失败
                             {
                                 Log.Warning("上传称重数据API返回失败.");
-                                _notificationService.ShowWarning($"上传称重数据失败: {response.Message}");
-                                int targetChute;
-                                if (response.Message.Contains("重量"))
-                                {
-                                    targetChute = chuteSettings.WeightMismatchChuteNumber > 0
-                                        ? chuteSettings.WeightMismatchChuteNumber
-                                        : chuteSettings.ErrorChuteNumber;
-                                    Interlocked.Increment(ref _weightErrorCount);
-                                    Log.Warning("失败原因为重量相关，分配到重量异常/异常口: {TargetChute}", targetChute);
-                                }
-                                else if (response.Message.Contains("拦截"))
-                                {
-                                    targetChute = chuteSettings.ErrorChuteNumber;
-                                    Interlocked.Increment(ref _otherErrorCount);
-                                    Log.Warning("失败原因为拦截，分配到异常口: {TargetChute}", targetChute);
-                                }
-                                else
-                                {
-                                    targetChute = chuteSettings.ErrorChuteNumber;
-                                    Interlocked.Increment(ref _otherErrorCount);
-                                    Log.Warning("失败原因未知或其他，分配到异常口: {TargetChute}", targetChute);
-                                }
+                                _notificationService.ShowWarning($"上传称重数据失败: {package.Barcode}");
+                                
+                                // 统一分配到异常口
+                                var targetChute = chuteSettings.ErrorChuteNumber;
+                                Interlocked.Increment(ref _otherErrorCount);
+                                Log.Warning("分配到异常口: {TargetChute}", targetChute);
 
                                 package.SetChute(targetChute);
-                                package.SetStatus(PackageStatus.Error, $"上传失败: {response.Message}");
+                                package.SetStatus(PackageStatus.Error, "上传失败");
                             }
                         }
                     }

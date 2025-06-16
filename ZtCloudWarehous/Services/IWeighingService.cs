@@ -13,4 +13,20 @@ internal interface IWeighingService
     /// <param name="request">称重请求</param>
     /// <returns>称重响应</returns>
     Task<WeighingResponse> SendWeightDataAsync(WeighingRequest request);
+
+    /// <summary>
+    ///     发送新称重接口数据
+    /// </summary>
+    /// <param name="request">新称重请求</param>
+    /// <returns>新称重响应</returns>
+    Task<NewWeighingResponse> SendNewWeightDataAsync(NewWeighingRequest request);
+
+    /// <summary>
+    ///     根据配置自动选择称重接口发送数据
+    /// </summary>
+    /// <param name="waybillCode">运单号</param>
+    /// <param name="weight">重量</param>
+    /// <param name="volume">体积（可选，仅旧接口使用）</param>
+    /// <returns>是否成功</returns>
+    Task<bool> SendWeightDataAutoAsync(string waybillCode, decimal weight, decimal? volume = null);
 }

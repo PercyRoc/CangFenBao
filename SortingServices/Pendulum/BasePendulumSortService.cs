@@ -181,16 +181,19 @@ public abstract class BasePendulumSortService : IPendulumSortService
             package.SetSortState(PackageSortState.Pending);
             Log.Information("已添加到待处理队列. 目标格口: {TargetChute}", package.ChuteNumber);
 
-            // 创建超时定时器
+            // 创建超时定时器，根据包裹类型绑定不同的处理方法
             var timer = new Timer();
-            timer.Elapsed += (_, _) => HandlePackageTimeout(package);
-
-            double timeoutInterval = 10000; // 默认 10s
-            var timeoutReason = "默认值";
+            double timeoutInterval;
+            string timeoutReason;
             var photoelectricName = GetPhotoelectricNameBySlot(package.ChuteNumber);
 
             if (photoelectricName != null)
             {
+                // 这是"可分拣包裹"，绑定到新的超时失败处理方法
+                timer.Elapsed += (_, _) => HandleSortTimeout(package, photoelectricName);
+                
+                timeoutInterval = 10000; // 默认 10s
+                timeoutReason = "默认值";
                 try
                 {
                     var photoelectricConfig = GetPhotoelectricConfig(photoelectricName);
@@ -211,8 +214,13 @@ public abstract class BasePendulumSortService : IPendulumSortService
             }
             else
             {
-                Log.Warning("无法确定目标光电名称 (格口: {Chute}), 使用默认超时 {DefaultTimeout}ms",
-                    package.ChuteNumber, timeoutInterval);
+                // 这是"直行包裹"，绑定到专门的直行超时处理方法
+                timer.Elapsed += (_, _) => HandleStraightThroughTimeout(package);
+                
+                var config = _settingsService.LoadSettings<PendulumSortConfig>();
+                timeoutInterval = config.StraightThroughTimeout;
+                timeoutReason = $"直行包裹 (目标格口: {package.ChuteNumber})";
+                Log.Information("包裹为直行包裹，将使用直行超时配置.");
             }
 
             timer.Interval = timeoutInterval;
@@ -264,28 +272,103 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// <summary>
     ///     处理包裹超时
     /// </summary>
-    private void HandlePackageTimeout(PackageInfo package)
+    /// <summary>
+    /// 处理可分拣包裹的超时失败，并对目标摆轮执行回正操作
+    /// </summary>
+    private void HandleSortTimeout(PackageInfo package, string photoelectricName)
     {
-        // --- 开始应用日志上下文 ---
         var packageContext = $"[包裹{package.Index}|{package.Barcode}]";
         using (LogContext.PushProperty("PackageContext", packageContext))
         {
+            // 1. 清理包裹自身的资源
             if (PackageTimers.TryRemove(package.Index, out var timer))
             {
                 timer.Dispose();
             }
 
-            if (PendingSortPackages.TryGetValue(package.Index, out var pkg))
+            // 2. 从待处理队列中移除，并标记为错误
+            if (PendingSortPackages.TryRemove(package.Index, out var pkg))
             {
-                // 不再立即移除包裹，而是标记为超时状态，创建"幽灵包裹"
-                pkg.SetSortState(PackageSortState.TimedOut);
-                Log.Warning("分拣超时，标记为TimedOut状态（幽灵包裹），等待强制同步处理.");
+                pkg.SetSortState(PackageSortState.Error);
+                Log.Error("【分拣失败-超时】包裹分拣超时，错过目标光电 '{PhotoelectricName}'。该包裹将直行至末端。", photoelectricName);
             }
             else
             {
-                Log.Debug("超时触发，但包裹已不在待处理队列中 (可能已处理).");
+                // 如果包裹已经不在队列，可能已被正常处理或被其他机制移除，无需再做任何事
+                Log.Debug("超时触发，但包裹已不在待处理队列，无需操作。");
+                return;
             }
-        } // --- 日志上下文结束 ---
+
+            // 3. 【新逻辑】触发目标摆轮的回正任务
+            Log.Warning("为防止摆轮状态异常，将向光电 '{PhotoelectricName}' 的动作队列中添加一个强制回正任务。", photoelectricName);
+
+            // 获取目标摆轮的动作队列
+            if (TryGetActionChannel(photoelectricName, out var channel) && channel != null)
+            {
+                // 创建一个回正动作的函数
+                var resetAction = new Func<Task>(async () =>
+                {
+                    // 这里我们不能依赖 package 对象了，因为它已经处理失败
+                    // 我们需要直接操作摆轮
+                    var client = GetSortingClient(photoelectricName);
+                    if (client == null || !client.IsConnected())
+                    {
+                        Log.Warning("执行超时触发的回正时，客户端 '{PhotoelectricName}' 未连接。", photoelectricName);
+                        if (PendulumStates.TryGetValue(photoelectricName, out var stateToReset))
+                        {
+                            stateToReset.ForceReset(); // 至少在软件层面复位状态
+                        }
+                        return;
+                    }
+
+                    if (PendulumStates.TryGetValue(photoelectricName, out var pendulumState))
+                    {
+                        // 使用我们之前写的 ExecuteImmediateReset 方法，它很适合这个场景
+                        await ExecuteImmediateReset(client, pendulumState, photoelectricName, "TimeoutRecovery");
+                    }
+                });
+
+                // 将回正动作写入队列
+                var success = channel.TryWrite(resetAction);
+                if (!success)
+                {
+                    Log.Error("无法将超时恢复的回正动作加入队列，光电 '{PhotoelectricName}' 的队列可能已关闭。请检查摆轮状态！", photoelectricName);
+                }
+            }
+            else // 对于单摆轮模式或获取Channel失败的情况
+            {
+                Log.Error("无法获取光电 '{PhotoelectricName}' 的动作队列来执行超时恢复的回正动作。请检查摆轮状态！", photoelectricName);
+                // 对于单摆轮，可能需要一个不同的机制，
+                // 但鉴于这个问题主要出现在多摆轮场景，我们暂时聚焦于此。
+            }
+        }
+    }
+
+    /// <summary>
+    /// 处理直行包裹的超时（正常流程）
+    /// </summary>
+    private void HandleStraightThroughTimeout(PackageInfo package)
+    {
+        var packageContext = $"[包裹{package.Index}|{package.Barcode}]";
+        using (LogContext.PushProperty("PackageContext", packageContext))
+        {
+            // 清理定时器
+            if (PackageTimers.TryRemove(package.Index, out var timer))
+            {
+                timer.Dispose();
+            }
+
+            // 直行包裹超时是正常流程
+            if (PendingSortPackages.TryRemove(package.Index, out var pkg))
+            {
+                pkg.SetSortState(PackageSortState.Sorted);
+                Log.Information("直行包裹超时，视为分拣成功。已从待处理队列移除。");
+            }
+            else
+            {
+                Log.Debug("直行包裹超时触发，但包裹已不在待处理队列中。");
+            }
+        }
     }
 
     /// <summary>
@@ -495,107 +578,8 @@ public abstract class BasePendulumSortService : IPendulumSortService
 
         try
         {
-            // 首先检查是否存在"幽灵包裹"（超时包裹），如果存在则执行强制同步
-            var ghosts = PendingSortPackages.Values
-                .Where(p => p.SortState == PackageSortState.TimedOut)
-                .OrderBy(p => p.Index)
-                .ToList();
-
-            if (ghosts.Any())
-            {
-                Log.Warning("检测到 {Count} 个超时（幽灵）包裹，进入强制同步模式", ghosts.Count);
-                
-                // 记录幽灵包裹信息
-                foreach (var ghost in ghosts)
-                {
-                    Log.Warning("幽灵包裹: {Index}|{Barcode} (格口: {Chute})", 
-                        ghost.Index, ghost.Barcode, ghost.ChuteNumber);
-                }
-
-                // 执行强制同步：立即回正摆轮
-                if (PendulumStates.TryGetValue(photoelectricName, out var pendulumState))
-                {
-                    // 将强制同步操作纳入动作队列，避免并发风险
-                    if (TryGetActionChannel(photoelectricName, out var channelWriter) && channelWriter != null)
-                    {
-                        Log.Information("将强制同步动作加入队列 (光电: {Name})", photoelectricName);
-                        
-                        // 创建幽灵包裹的快照，避免闭包问题
-                        var ghostsSnapshot = ghosts.ToList();
-                        
-                        // 将强制回正和清理逻辑包装成一个动作，放入队列
-                        var success = channelWriter.TryWrite(async () => 
-                        {
-                            try
-                            {
-                                var client = GetSortingClient(photoelectricName);
-                                if (client != null && client.IsConnected())
-                                {
-                                    await ExecuteImmediateReset(client, pendulumState, photoelectricName, "GhostPackageSync");
-                                }
-                                else
-                                {
-                                    Log.Warning("强制同步时客户端未连接，强制复位摆轮状态");
-                                    pendulumState.ForceReset();
-                                }
-                                
-                                // 在动作执行时清理幽灵包裹
-                                foreach (var ghost in ghostsSnapshot)
-                                {
-                                    if (PendingSortPackages.TryRemove(ghost.Index, out _))
-                                    {
-                                        Log.Information("已清理幽灵包裹: {Index}|{Barcode}", ghost.Index, ghost.Barcode);
-                                    }
-                                    
-                                    // 清理对应的定时器
-                                    if (PackageTimers.TryRemove(ghost.Index, out var timer))
-                                    {
-                                        timer.Stop();
-                                        timer.Dispose();
-                                    }
-                                }
-                                
-                                Log.Information("强制同步动作执行完成 (光电: {Name})", photoelectricName);
-                            }
-                            catch (Exception ex)
-                            {
-                                Log.Error(ex, "执行强制同步动作时发生错误 (光电: {Name})", photoelectricName);
-                                pendulumState.ForceReset();
-                            }
-                        });
-                        
-                        if (!success)
-                        {
-                            Log.Error("无法将强制同步动作加入队列，光电 {Name} 的队列可能已关闭", photoelectricName);
-                            // 降级处理：直接强制复位状态
-                            pendulumState.ForceReset();
-                        }
-                    }
-                    else
-                    {
-                        Log.Warning("无法获取光电 {Name} 的动作队列，直接强制复位摆轮状态");
-                        pendulumState.ForceReset();
-                        
-                        // 直接清理幽灵包裹（因为无法入队）
-                        foreach (var ghost in ghosts)
-                        {
-                            if (PendingSortPackages.TryRemove(ghost.Index, out _))
-                            {
-                                Log.Information("已清理幽灵包裹: {Index}|{Barcode}", ghost.Index, ghost.Barcode);
-                            }
-                            
-                            if (PackageTimers.TryRemove(ghost.Index, out var timer))
-                            {
-                                timer.Stop();
-                                timer.Dispose();
-                            }
-                        }
-                    }
-                }
-
-                Log.Information("强制同步已处理，本次信号不处理，等待下一个信号重新触发匹配");
-                return null; // 本次不匹配任何包裹，等待下一个信号来重新触发匹配
-            }
+            // 移除所有关于"幽灵包裹"和"强制同步"的逻辑
+            // 新策略：超时包裹已在HandlePackageTimeout中被移除，不再影响后续分拣
 
             // 正常的包裹匹配逻辑
             var photoelectricConfigBase = GetPhotoelectricConfig(photoelectricName);
@@ -627,7 +611,8 @@ public abstract class BasePendulumSortService : IPendulumSortService
                         continue;
                     }
 
-                    // 只处理待处理状态的包裹，跳过超时和已处理的包裹
+                    // 只处理待处理状态的包裹，跳过其他状态 (Error, Sorted, TimedOut等)
+                    // TimedOut 状态理论上不会再出现，但保留检查以增强鲁棒性
                     if (pkg.SortState != PackageSortState.Pending)
                     {
                         Log.Verbose("包裹状态为 {SortState}，跳过.", pkg.SortState);
