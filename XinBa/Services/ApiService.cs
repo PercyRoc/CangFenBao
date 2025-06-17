@@ -53,18 +53,18 @@ public interface IApiService
     ///     提交商品尺寸
     /// </summary>
     /// <param name="goodsSticker">商品条码</param>
-    /// <param name="height">高度(cm)</param>
-    /// <param name="length">长度(cm)</param>
-    /// <param name="width">宽度(cm)</param>
-    /// <param name="weight">重量(g)</param>
+    /// <param name="height">高度(毫米)</param>
+    /// <param name="length">长度(毫米)</param>
+    /// <param name="width">宽度(毫米)</param>
+    /// <param name="weight">重量(毫克)</param>
     /// <param name="photoData">商品图片数据列表（可选）</param>
     /// <returns>提交是否成功</returns>
     Task<bool> SubmitDimensionsAsync(
         string goodsSticker,
-        string height,
-        string length,
-        string width,
-        string weight,
+        int height,
+        int length,
+        int width,
+        int weight,
         IEnumerable<byte[]>? photoData = null);
 }
 
@@ -78,7 +78,7 @@ public class ApiService : IApiService
     private const string DefaultApiPassword = "testWds";
     private readonly HttpClient _httpClient;
 
-    private readonly JsonSerializerOptions _jsonOptions = new()
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true
@@ -142,7 +142,7 @@ public class ApiService : IApiService
             };
 
             var content = new StringContent(
-                JsonSerializer.Serialize(request, _jsonOptions),
+                JsonSerializer.Serialize(request, JsonOptions),
                 Encoding.UTF8,
                 "application/json");
 
@@ -184,9 +184,9 @@ public class ApiService : IApiService
 
             try
             {
-                var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(errorContent, _jsonOptions);
-                _notificationService.ShowError(errorResponse?.errors?.FirstOrDefault()?.message != null
-                    ? $"Login failed: {errorResponse.errors.First().message}"
+                var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(errorContent, JsonOptions);
+                _notificationService.ShowError(!string.IsNullOrEmpty(errorResponse?.message)
+                    ? $"Login failed: {errorResponse.message}"
                     : $"Login failed: {response.StatusCode}");
             }
             catch
@@ -224,7 +224,7 @@ public class ApiService : IApiService
             };
 
             var content = new StringContent(
-                JsonSerializer.Serialize(request, _jsonOptions),
+                JsonSerializer.Serialize(request, JsonOptions),
                 Encoding.UTF8,
                 "application/json");
 
@@ -249,9 +249,9 @@ public class ApiService : IApiService
 
             try
             {
-                var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(errorContent, _jsonOptions);
-                _notificationService.ShowError(errorResponse?.errors?.FirstOrDefault()?.message != null
-                    ? $"Logout failed: {errorResponse.errors.First().message}"
+                var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(errorContent, JsonOptions);
+                _notificationService.ShowError(!string.IsNullOrEmpty(errorResponse?.message)
+                    ? $"Logout failed: {errorResponse.message}"
                     : $"Logout failed: {response.StatusCode}");
             }
             catch
@@ -286,10 +286,10 @@ public class ApiService : IApiService
     /// <inheritdoc />
     public async Task<bool> SubmitDimensionsAsync(
         string goodsSticker,
-        string height,
-        string length,
-        string width,
-        string weight,
+        int height,
+        int length,
+        int width,
+        int weight,
         IEnumerable<byte[]>? photoData = null)
     {
         try
@@ -299,10 +299,10 @@ public class ApiService : IApiService
             using var formData = new MultipartFormDataContent();
             // 添加基本数据
             formData.Add(new StringContent(goodsSticker), "goods_sticker");
-            formData.Add(new StringContent(height), "height");
-            formData.Add(new StringContent(length), "length");
-            formData.Add(new StringContent(width), "width");
-            formData.Add(new StringContent(weight), "weight");
+            formData.Add(new StringContent(height.ToString()), "height");
+            formData.Add(new StringContent(length.ToString()), "length");
+            formData.Add(new StringContent(width.ToString()), "width");
+            formData.Add(new StringContent(weight.ToString()), "weight");
 
             // 添加图片数据
             if (photoData != null)
@@ -334,10 +334,10 @@ public class ApiService : IApiService
 
             try
             {
-                var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(responseContent, _jsonOptions);
-                if (errorResponse?.errors?.FirstOrDefault()?.message != null)
+                var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(responseContent, JsonOptions);
+                if (!string.IsNullOrEmpty(errorResponse?.message))
                 {
-                    var errorMessage = errorResponse.errors.First().message;
+                    var errorMessage = errorResponse.message;
                     _notificationService.ShowError($"Submit failed: {errorMessage}");
                     Log.Error("错误详情: {ErrorMessage}", errorMessage);
                 }

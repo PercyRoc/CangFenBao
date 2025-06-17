@@ -53,11 +53,11 @@ namespace XinBa.Services
 
                     try
                     {
-                        var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(responseBody);
-                        if (errorResponse?.errors != null && errorResponse.errors.Count > 0)
+                        var errorResponse = JsonSerializer.Deserialize<TareAttributesErrorResponse>(responseBody);
+                        if (errorResponse?.Errors != null && errorResponse.Errors.Count > 0)
                         {
-                            var firstError = errorResponse.errors[0];
-                            return (false, $"API Error: {firstError.message} (Code: {firstError.error}, Detail: {firstError.detail})");
+                            var firstError = errorResponse.Errors[0];
+                            return (false, $"API Error: {firstError.Message} (Code: {firstError.Error}, Detail: {firstError.Detail})");
                         }
                     }
                     catch (JsonException ex)

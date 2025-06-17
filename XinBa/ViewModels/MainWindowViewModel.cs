@@ -30,7 +30,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly ICameraService _cameraService;
     private readonly VolumeDataService _volumeDataService;
     private readonly SerialPortWeightService? _weightService;
-    private readonly WildberriesApiService _wildberriesApiService;
+    private readonly ITareAttributesApiService _tareAttributesApiService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
     private string _currentBarcode = string.Empty;
@@ -51,14 +51,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
         ICameraService cameraService,
         VolumeDataService volumeDataService,
         WeightStartupService weightStartupService,
-        WildberriesApiService wildberriesApiService)
+        ITareAttributesApiService tareAttributesApiService)
     {
         _dialogService = dialogService;
         _apiService = apiService;
         _cameraService = cameraService;
         _volumeDataService = volumeDataService;
         _weightService = weightStartupService.GetWeightService();
-        _wildberriesApiService = wildberriesApiService;
+        _tareAttributesApiService = tareAttributesApiService;
 
         // Initialize commands
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
@@ -405,35 +405,63 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 AddToPackageHistory(package);
             });
 
-            // 准备并发送新的Wildberries API请求
+            // 同时提交到两个API：Dimensions Machine API 和 Tare Attributes API
             if (package.Length.HasValue && package.Width.HasValue && package.Height.HasValue && package.Weight > 0.0)
             {
-                var request = new TareAttributesRequest
-                {
-                    OfficeId = 300684, // 硬编码 Shelepanovo 仓库
-                    TareSticker = package.Barcode, // 使用包裹条码
-                    PlaceId = 943626653, // 硬编码 Shelepanovo 机器
-                    SizeAMm = (long)package.Length.Value, // 长度，单位毫米
-                    SizeBMm = (long)package.Width.Value, // 宽度，单位毫米
-                    SizeCMm = (long)package.Height.Value, // 高度，单位毫米
-                    VolumeMm = (int)(package.Length.Value * package.Width.Value * package.Height.Value), // 体积
-                    WeightG = (int)(package.Weight * 1000) // 重量，转换为克
-                };
+                // 将包裹数据转换为API所需的单位和类型
+                // 包裹数据通常以厘米和千克为单位，需要转换为毫米和毫克/克
+                var heightMm = (int)(package.Height.Value * 10); // 厘米转毫米
+                var lengthMm = (int)(package.Length.Value * 10);  // 厘米转毫米
+                var widthMm = (int)(package.Width.Value * 10);    // 厘米转毫米
+                var weightMg = (int)(package.Weight * 1000000);   // 千克转毫克
+                var weightG = (int)(package.Weight * 1000);       // 千克转克
 
-                var (success, errorMessage) = await _wildberriesApiService.SendTareAttributesAsync(request);
+                // 提交到 Dimensions Machine API
+                var dimensionsSuccess = await _apiService.SubmitDimensionsAsync(
+                    package.Barcode,
+                    heightMm,
+                    lengthMm, 
+                    widthMm,
+                    weightMg,
+                    null); // 不提交图片数据
 
-                if (success)
+                if (dimensionsSuccess)
                 {
-                    Log.Information("Wildberries TareAttributes提交成功: Barcode={Barcode}", package.Barcode);
+                    Log.Information("Dimensions Machine API 提交成功: Barcode={Barcode}, H={Height}mm, L={Length}mm, W={Width}mm, Weight={Weight}mg", 
+                        package.Barcode, heightMm, lengthMm, widthMm, weightMg);
                 }
                 else
                 {
-                    Log.Warning("Wildberries TareAttributes提交失败: Barcode={Barcode}, 错误: {ErrorMessage}", package.Barcode, errorMessage);
+                    Log.Warning("Dimensions Machine API 提交失败: Barcode={Barcode}", package.Barcode);
+                }
+
+                // 提交到 Tare Attributes API
+                var tareRequest = new TareAttributesRequest
+                {
+                    TareSticker = package.Barcode,
+                    SizeAMm = lengthMm,  // 长度
+                    SizeBMm = widthMm,   // 宽度
+                    SizeCMm = heightMm,  // 高度
+                    WeightG = weightG    // 重量（克）
+                    // OfficeId 和 PlaceId 使用默认硬编码值
+                    // VolumeMm 将通过 CalculateVolume() 自动计算
+                };
+
+                var (tareSuccess, tareErrorMessage) = await _tareAttributesApiService.SubmitTareAttributesAsync(tareRequest);
+
+                if (tareSuccess)
+                {
+                    Log.Information("Tare Attributes API 提交成功: Barcode={Barcode}, Size={Length}x{Width}x{Height}mm, Weight={Weight}g", 
+                        package.Barcode, lengthMm, widthMm, heightMm, weightG);
+                }
+                else
+                {
+                    Log.Warning("Tare Attributes API 提交失败: Barcode={Barcode}, Error={Error}", package.Barcode, tareErrorMessage);
                 }
             }
             else
             {
-                Log.Warning("包裹缺少必要的尺寸或重量信息，无法提交到Wildberries API: Barcode={Barcode}, Length={Length}, Width={Width}, Height={Height}, Weight={Weight}", 
+                Log.Warning("包裹缺少必要的尺寸或重量信息，无法提交到API: Barcode={Barcode}, Length={Length}, Width={Width}, Height={Height}, Weight={Weight}", 
                     package.Barcode, package.Length, package.Width, package.Height, package.Weight);
             }
         }
@@ -582,9 +610,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
             const int maxHistoryItems = 1000;
             while (PackageHistory.Count > maxHistoryItems)
             {
-               var removedPackage = PackageHistory[^1]; // Get the last item
+               var removedPackage = PackageHistory[^1];
                PackageHistory.RemoveAt(PackageHistory.Count - 1);
-               removedPackage.Dispose(); // Dispose if not null
+               removedPackage.Dispose();
             }
         }
         catch (Exception ex)
