@@ -7,8 +7,8 @@
              xmlns:prism="http://prismlibrary.com/"
              xmlns:viewModels="clr-namespace:WeiCiModule.ViewModels"
              xmlns:hc="https://handyorg.github.io/handycontrol"
-             xmlns:settings="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
              xmlns:views="clr-namespace:WeiCiModule.Views"
+             xmlns:localSettings="clr-namespace:WeiCiModule.Views.Settings"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}">
@@ -34,7 +34,7 @@
                                                Tag="ModulesTcpSettingsView"
                                                Icon="{ui:SymbolIcon Settings24}">
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="settings:ModulesTcpSettingsView" />
+                                <x:Type Type="localSettings:ModulesTcpSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
 

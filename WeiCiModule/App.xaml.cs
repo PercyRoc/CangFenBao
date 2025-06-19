@@ -1,20 +1,19 @@
 ﻿using System.Globalization;
 using System.Windows;
-using SharedUI.Views.Windows;
-using SortingServices.Modules;
 using WeiCiModule.ViewModels;
 using WeiCiModule.Views;
 using Serilog;
 using Common.Services.Settings;
-using SortingServices.Modules.Models;
-using SharedUI.ViewModels.Settings;
-using SharedUI.Views.Settings;
 using Microsoft.Extensions.Configuration;
 using System.IO;
 using Camera.Services.Implementations.TCP;
 using WPFLocalizeExtension.Engine;
 using WPFLocalizeExtension.Providers;
-using DeviceService.DataSourceDevices.Camera.TCP;
+using WeiCiModule.Services;
+using WeiCiModule.ViewModels.Settings;
+using WeiCiModule.Views.Settings;
+using Common;
+using History;
 
 namespace WeiCiModule;
 
@@ -93,9 +92,16 @@ public partial class App
         return null!; // 确保在所有路径上都有返回值
     }
 
+    protected override void ConfigureModuleCatalog(IModuleCatalog moduleCatalog)
+    {
+        // 注册基础模块
+        moduleCatalog.AddModule<CommonServicesModule>();
+        moduleCatalog.AddModule<HistoryModule>();
+        Log.Information("已注册 CommonServicesModule 和 HistoryModule 模块");
+    }
+
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
-        // containerRegistry.AddCommonServices();
         containerRegistry.RegisterSingleton<TcpCameraService>();
         containerRegistry.RegisterSingleton<SettingsDialogViewModel>();
         containerRegistry.RegisterSingleton<ChuteSettingsViewModel>();
@@ -103,7 +109,6 @@ public partial class App
         containerRegistry.RegisterForNavigation<MainWindow, MainViewModel>();
         containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>();
         containerRegistry.RegisterDialog<ChuteSettingsView, ChuteSettingsViewModel>();
-        containerRegistry.RegisterDialogWindow<HistoryDialogWindow>();
         containerRegistry.RegisterForNavigation<ModulesTcpSettingsView, ModulesTcpSettingsViewModel>();
         containerRegistry.RegisterSingleton<IModuleConnectionService, ModuleConnectionService>();
     }
@@ -120,11 +125,11 @@ public partial class App
             var settingsService = Container.Resolve<ISettingsService>();
             try
             {
-                var tcpSettings = settingsService.LoadSettings<ModelsTcpSettings>();
+                var tcpSettings = settingsService.LoadSettings<Models.Settings.ModelsTcpSettings>();
                 if (!string.IsNullOrEmpty(tcpSettings.Address))
                 {
                     Log.Information("正在启动 ModuleConnectionService，监听地址: {IpAddress}:{Port}...", tcpSettings.Address, tcpSettings.Port);
-                    bool started = await moduleConnectionService.StartServerAsync(tcpSettings.Address, tcpSettings.Port);
+                    var started = await moduleConnectionService.StartServerAsync(tcpSettings.Address, tcpSettings.Port);
                     if (started)
                     {
                         Log.Information("ModuleConnectionService 已成功启动。");

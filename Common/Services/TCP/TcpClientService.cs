@@ -543,18 +543,15 @@ public class TcpClientService : IDisposable
                 var data = new byte[bytesRead];
                 Array.Copy(_receiveBuffer, data, bytesRead);
 
-                // 使用 Task.Run 异步处理数据，避免阻塞接收线程
-                _ = Task.Run(() =>
+                // 直接在接收线程中同步调用回调，保证顺序处理
+                try
                 {
-                    try
-                    {
-                        _dataReceivedCallback(data);
-                    }
-                    catch (Exception callbackEx) // 捕获回调函数中的异常
-                    {
-                        Log.Error(callbackEx, "设备 {DeviceName} 处理接收到的数据时发生未处理的异常", _deviceName);
-                    }
-                });
+                    _dataReceivedCallback(data);
+                }
+                catch (Exception callbackEx) // 捕获回调函数中的异常
+                {
+                    Log.Error(callbackEx, "设备 {DeviceName} 处理接收到的数据时发生未处理的异常", _deviceName);
+                }
             }
             catch (OperationCanceledException)
             {

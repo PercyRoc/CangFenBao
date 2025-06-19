@@ -48,7 +48,7 @@ public class CommonServicesModule : IModule
 
             containerRegistry.RegisterForNavigation<ChuteRuleSettingsView, ChuteRuleSettingsViewModel>();
 
-            // containerRegistry.RegisterDialogWindow<CustomDialogWindow>();
+            containerRegistry.RegisterDialogWindow<CustomDialogWindow>();
         }
         catch (Exception ex)
         {

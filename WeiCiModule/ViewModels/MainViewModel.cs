@@ -2,9 +2,8 @@
 using System.Windows.Threading;
 using Common.Models.Package;
 using Common.Services.Settings;
-using DeviceService.DataSourceDevices.Camera.TCP;
 using Serilog;
-using SortingServices.Modules;
+using WeiCiModule.Services;
 using Application = System.Windows.Application;
 using Microsoft.Win32;
 using System.IO;
@@ -12,6 +11,8 @@ using System.Text;
 using Camera.Services.Implementations.TCP;
 using Common.Models;
 using WeiCiModule.Models;
+using History.Data;
+using History.Views.Dialogs;
 
 namespace WeiCiModule.ViewModels;
 
@@ -21,12 +22,18 @@ public class MainViewModel : BindableBase, IDisposable
     private readonly TcpCameraService _cameraService;
     private readonly IModuleConnectionService _moduleConnectionService;
     private readonly ISettingsService _settingsService;
+    private readonly IPackageHistoryDataService _packageHistoryDataService;
     private readonly DispatcherTimer _timer;
     private string _currentBarcode = string.Empty;
     private SystemStatus _systemStatus = new();
     private string _searchImportedText = string.Empty;
     private readonly IDisposable? _packageStreamSubscription;
-    private int _nextChuteNumber = 1; // 修改：用于1-32格口循环
+    
+    // 统计信息相关字段
+    private int _totalPackages = 0;
+    private int _successPackages = 0;
+    private int _failurePackages = 0;
+    private DateTime _firstPackageTime = DateTime.MinValue;
 
     public ObservableCollection<PackageInfo> PackageHistory { get; } = [];
     public ObservableCollection<StatisticsItem> StatisticsItems { get; } = [];
@@ -36,15 +43,19 @@ public class MainViewModel : BindableBase, IDisposable
     public ObservableCollection<BarcodeChuteMapping> FilteredImportedMappings { get; } = [];
     
     public MainViewModel(IDialogService dialogService, ISettingsService settingsService,
-        IModuleConnectionService moduleConnectionService, TcpCameraService cameraService)
+        IModuleConnectionService moduleConnectionService, TcpCameraService cameraService,
+        IPackageHistoryDataService packageHistoryDataService)
     {
         _dialogService = dialogService;
         _settingsService = settingsService;
         _moduleConnectionService = moduleConnectionService;
         _cameraService = cameraService;
+        _packageHistoryDataService = packageHistoryDataService;
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
+        OpenHistoryCommand = new DelegateCommand(ExecuteOpenHistory);
         ImportConfigCommand = new DelegateCommand(ExecuteImportConfig);
         SearchImportedCommand = new DelegateCommand(ExecuteSearchImported);
+        ResetStatisticsCommand = new DelegateCommand(ExecuteResetStatistics);
 
         // 初始化系统状态更新定时器
         _timer = new DispatcherTimer
@@ -72,11 +83,16 @@ public class MainViewModel : BindableBase, IDisposable
 
         // 启动时加载已保存的导入映射
         _ = LoadInitialImportedMappingsAsync();
+        
+        // 重置统计信息
+        ResetStatistics();
     }
     
     public DelegateCommand OpenSettingsCommand { get; }
+    public DelegateCommand OpenHistoryCommand { get; }
     public DelegateCommand ImportConfigCommand { get; }
     public DelegateCommand SearchImportedCommand { get; }
+    public DelegateCommand ResetStatisticsCommand { get; }
     public SystemStatus SystemStatus
     {
         get => _systemStatus;
@@ -86,6 +102,26 @@ public class MainViewModel : BindableBase, IDisposable
     private void ExecuteOpenSettings()
     {
         _dialogService.ShowDialog("SettingsDialog");
+    }
+
+    private void ExecuteOpenHistory()
+    {
+        _dialogService.ShowDialog(nameof(PackageHistoryDialogView));
+    }
+
+    private void ExecuteResetStatistics()
+    {
+        try
+        {
+            ResetStatistics();
+            HandyControl.Controls.Growl.Success("Statistics have been reset successfully!");
+            Log.Information("用户手动重置了统计信息");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "用户重置统计信息时发生错误");
+            HandyControl.Controls.Growl.Error("Failed to reset statistics. Please check logs.");
+        }
     }
 
     private async void ExecuteImportConfig()
@@ -360,30 +396,21 @@ public class MainViewModel : BindableBase, IDisposable
         }
     }
 
-    private async void OnCameraPackageStreamReceived(PackageInfo packageInfo)
+    private void OnCameraPackageStreamReceived(PackageInfo packageInfo)
     {
-        // Step 1: Immediate UI Update with available data (on dispatcher)
-        await Application.Current.Dispatcher.InvokeAsync(() =>
-        {
-            CurrentBarcode = packageInfo.Barcode;
-
-            if (packageInfo.Barcode == "NOREAD" || packageInfo.Status == PackageStatus.NoRead)
-            {
-                UpdatePackageInfoItems_NoRead(packageInfo.TriggerTimestamp);
-            }
-            else
-            {
-                UpdatePackageInfoItems_Raw(packageInfo);
-            }
-        });
-        string? operationMessage;
+        // Fire-and-forget UI update for immediate barcode display
+        _ = Application.Current.Dispatcher.InvokeAsync(() => { CurrentBarcode = packageInfo.Barcode; });
 
         try
         {
-            if (packageInfo.Barcode == "NOREAD" || packageInfo.Status == PackageStatus.NoRead)
+            // -----------------------------------------------------
+            // 第1步：业务逻辑处理（这是CPU密集型，很快，同步执行）
+            // -----------------------------------------------------
+            string? operationMessage;
+            if (packageInfo.Barcode == "NOREAD" || packageInfo.Status == "no read")
             {
                 Log.Information("开始处理相机无码事件，条码标记为: {Barcode}", packageInfo.Barcode);
-                var moduleTcpSettingsNoRead = _settingsService.LoadSettings<SortingServices.Modules.Models.ModelsTcpSettings>();
+                var moduleTcpSettingsNoRead = _settingsService.LoadSettings<Models.Settings.ModelsTcpSettings>();
                 string exceptionChuteStringNoRead = moduleTcpSettingsNoRead.ExceptionChute.ToString();
 
                 if (int.TryParse(exceptionChuteStringNoRead, out var chuteIntNoRead))
@@ -395,7 +422,7 @@ public class MainViewModel : BindableBase, IDisposable
                     Log.Warning("无法将NoRead的异常格口 '{ExceptionChute}' 解析为整数", exceptionChuteStringNoRead);
                     packageInfo.SetChute(998);
                 }
-                packageInfo.SetStatus(PackageStatus.NoRead, "NoRead, to exception chute"); // Ensure status is set
+                packageInfo.SetStatus("no read"); // Ensure status is set
                 operationMessage = $"无码事件，分配到异常格口 {packageInfo.ChuteNumber}.";
                 Log.Information(operationMessage);
             }
@@ -404,100 +431,106 @@ public class MainViewModel : BindableBase, IDisposable
                 Log.Information("开始处理相机包裹数据事件: {Barcode}", packageInfo.Barcode);
 
                 var mappingSettings = _settingsService.LoadSettings<BarcodeChuteMappingSettings>();
-                var moduleTcpSettings = _settingsService.LoadSettings<SortingServices.Modules.Models.ModelsTcpSettings>();
-                string exceptionChute = moduleTcpSettings.ExceptionChute.ToString();
+                var moduleTcpSettings = _settingsService.LoadSettings<Models.Settings.ModelsTcpSettings>();
 
                 var mapping = mappingSettings.Mappings.FirstOrDefault(m => m.Barcode == packageInfo.Barcode);
 
                 if (mapping != null)
                 {
-                    string mappedBranchName = mapping.Chute;
-                    Log.Information("条码 {Barcode} 查找到映射规则，目标库分馆名称: {BranchName}", packageInfo.Barcode, mappedBranchName);
+                    string mappedBranchCode = mapping.Chute;
+                    Log.Information("条码 {Barcode} 查找到映射规则，目标库分馆代码: {BranchCode}", packageInfo.Barcode, mappedBranchCode);
 
                     var chuteSettingsConfig = _settingsService.LoadSettings<Models.Settings.ChuteSettings>();
                     var chuteData = chuteSettingsConfig.Items.FirstOrDefault(csd =>
-                        string.Equals(csd.Branch.Trim(), mappedBranchName.Trim(), StringComparison.OrdinalIgnoreCase));
+                        string.Equals(csd.BranchCode.Trim(), mappedBranchCode.Trim(), StringComparison.OrdinalIgnoreCase));
 
                     if (chuteData != null)
                     {
-                        string targetChuteCode = chuteData.BranchCode;
-                        Log.Information("库分馆名称 '{BranchName}' 在 ChuteSettings 中找到对应记录，库分馆代码 (格口号): '{BranchCode}'", mappedBranchName, targetChuteCode);
-
-                        if (int.TryParse(targetChuteCode, out var chuteInt))
+                        var targetChuteNumber = chuteData.SN;
+                        if (targetChuteNumber is > 32 or <= 0)
                         {
-                            packageInfo.SetChute(chuteInt);
-                            packageInfo.SetStatus(PackageStatus.Success, $"Chute: {chuteInt} (From: {mappedBranchName})");
-                            operationMessage = $"条码 {packageInfo.Barcode} -> 库分馆 '{mappedBranchName}' -> 代码 '{targetChuteCode}' -> 格口 {packageInfo.ChuteNumber}.";
-                            Log.Information(operationMessage);
+                            Log.Warning("规则 '{BranchCode}' 匹配到的格口号 {TargetChuteNumber} 超出有效范围(1-32)，将分配到\"不在规则内\"格口",
+                                mappedBranchCode, targetChuteNumber);
+                            var noRuleChute = moduleTcpSettings.NoRuleChute;
+                            packageInfo.SetChute(noRuleChute);
+                            packageInfo.SetStatus("chute out of range");
+                            operationMessage = $"条码 {packageInfo.Barcode} 的规则格口 {targetChuteNumber} 无效，分配到\"不在规则内\"格口 {packageInfo.ChuteNumber}.";
+                            Log.Warning(operationMessage);
                         }
                         else
                         {
-                            Log.Warning("无法将库分馆代码 '{BranchCode}' (来自库分馆 '{BranchName}', 条码 '{Barcode}') 解析为整数格口. 将分配到异常口.", targetChuteCode, mappedBranchName, packageInfo.Barcode);
-                            packageInfo.SetChute(int.TryParse(exceptionChute, out var exChuteInt) ? exChuteInt : 999);
-                            packageInfo.SetStatus(PackageStatus.Error, $"Code '{targetChuteCode}' parsing failed, to exception chute");
-                            operationMessage = $"条码 {packageInfo.Barcode} (库分馆 '{mappedBranchName}') 的格口代码 '{targetChuteCode}' 解析失败, 分配到异常格口 {packageInfo.ChuteNumber}.";
-                            Log.Warning(operationMessage);
+                            Log.Information("库分馆代码 '{BranchCode}' 在 ChuteSettings 中找到对应记录，库分馆名称: '{BranchName}'，格口号: {ChuteNumber}", mappedBranchCode, chuteData.Branch, targetChuteNumber);
+
+                            packageInfo.SetChute(targetChuteNumber);
+                            packageInfo.SetStatus($"chute: {targetChuteNumber}");
+                            operationMessage = $"条码 {packageInfo.Barcode} -> 库分馆代码 '{mappedBranchCode}' -> 格口 {targetChuteNumber}.";
+                            Log.Information(operationMessage);
                         }
                     }
                     else
                     {
-                        Log.Warning("在 ChuteSettings 中未找到条码 '{Barcode}' 映射的库分馆名称 '{BranchName}'. 将分配到异常口.", packageInfo.Barcode, mappedBranchName);
-                        packageInfo.SetChute(int.TryParse(exceptionChute, out var exChuteInt) ? exChuteInt : 999);
-                        packageInfo.SetStatus(PackageStatus.Error, $"Branch '{mappedBranchName}' not configured, to exception chute");
-                        operationMessage = $"条码 {packageInfo.Barcode} 映射的库分馆名称 '{mappedBranchName}' 未在 ChuteSettings 中找到, 分配到异常格口 {packageInfo.ChuteNumber}.";
+                        Log.Warning("在 ChuteSettings 中未找到条码 '{Barcode}' 映射的库分馆代码 '{BranchCode}'. 将分配到\"不在规则内\"格口.",
+                            packageInfo.Barcode, mappedBranchCode);
+                        
+                        var noRuleChute = moduleTcpSettings.NoRuleChute;
+                        packageInfo.SetChute(noRuleChute);
+                        packageInfo.SetStatus("branch code not configured");
+                        operationMessage = $"条码 {packageInfo.Barcode} 映射的库分馆代码 '{mappedBranchCode}' 未在 ChuteSettings 中找到, 分配到\"不在规则内\"格口 {packageInfo.ChuteNumber}.";
                         Log.Warning(operationMessage);
                     }
                 }
                 else
                 {
-                    if (int.TryParse(exceptionChute, out var chuteInt))
-                    {
-                        packageInfo.SetChute(chuteInt);
-                    }
-                    else
-                    {
-                        Log.Warning("无法将异常格口 '{ExceptionChute}' 解析为整数，条码: {Barcode}", exceptionChute, packageInfo.Barcode);
-                        packageInfo.SetChute(999); // Default exception chute
-                    }
-                    packageInfo.SetStatus(PackageStatus.Error, "No rule found, to exception chute");
-                    operationMessage = $"条码 {packageInfo.Barcode} 未找到映射规则，分配到异常格口 {packageInfo.ChuteNumber}.";
+                    var noRuleChute = moduleTcpSettings.NoRuleChute;
+                    packageInfo.SetChute(noRuleChute);
+                    packageInfo.SetStatus("no rule found");
+                    operationMessage = $"条码 {packageInfo.Barcode} 未找到映射规则，分配到\"不在规则内\"格口 {packageInfo.ChuteNumber}.";
                     Log.Warning(operationMessage);
                 }
             }
-            
-            // 修改：格口从1依次递增到32
-            packageInfo.SetChute(_nextChuteNumber);
-            Log.Information("循环格口逻辑：设置包裹 GUID:{Guid}, 条码:{Barcode} 到格口 {Chute}", packageInfo.Guid, packageInfo.Barcode, _nextChuteNumber);
 
-            _nextChuteNumber++;
-            if (_nextChuteNumber > 32)
-            {
-                _nextChuteNumber = 1; // 循环回1
-            }
-
-            // Step 3: Send to module service
+            // -----------------------------------------------------
+            // 第2步：将处理好的包裹信息交给模组带服务（同步执行）
+            // -----------------------------------------------------
             _moduleConnectionService.OnPackageReceived(packageInfo);
 
-            // Step 4: Final UI Update with processed package data (on dispatcher)
-            await Application.Current.Dispatcher.InvokeAsync(() =>
+            // -----------------------------------------------------
+            // 第3步：将数据库保存操作推到后台线程（发后不理）
+            // -----------------------------------------------------
+            _ = Task.Run(() => SavePackageToHistoryAsync(packageInfo));
+            
+            // -----------------------------------------------------
+            // 第4步：在UI线程上更新最终的UI状态（发后不理）
+            // -----------------------------------------------------
+            _ = Application.Current.Dispatcher.InvokeAsync(() =>
             {
                 UpdatePackageInfoItems_Final(packageInfo);
 
                 PackageHistory.Insert(0, packageInfo);
-                if (PackageHistory.Count > 1000)
-                {
-                    PackageHistory.RemoveAt(PackageHistory.Count - 1);
-                }
+                if (PackageHistory.Count > 1000) PackageHistory.RemoveAt(PackageHistory.Count - 1);
+
+                // 更新统计信息
+                UpdateStatistics(packageInfo);
             });
         }
         catch (Exception ex)
         {
             Log.Error(ex, "处理相机包裹流事件的业务逻辑时发生错误。");
-            await Application.Current.Dispatcher.InvokeAsync(() =>
+
+            packageInfo.SetStatus("error");
+
+            // 异常情况下，同样将数据库保存推到后台
+            _ = Task.Run(() => SavePackageToHistoryAsync(packageInfo));
+
+            // 更新UI
+            _ = Application.Current.Dispatcher.InvokeAsync(() =>
             {
                 HandyControl.Controls.Growl.Error("Error processing package stream event, please check logs.");
                 UpdatePackageInfoItems_Reset();
                 CurrentBarcode = string.Empty;
+
+                // Update statistics with failure
+                UpdateStatistics(packageInfo);
             });
         }
     }
@@ -567,11 +600,99 @@ public class MainViewModel : BindableBase, IDisposable
             statusItem.Value = processedPackage.StatusDisplay;
             statusItem.Icon = processedPackage.Status switch
             {
-                PackageStatus.Success => "CheckmarkCircle24",
-                PackageStatus.Error => "ErrorCircle24",
-                PackageStatus.NoRead => "Warning24",
+                "sorting" => "CheckmarkCircle24",
+                "chute" when processedPackage.Status.StartsWith("chute:") => "CheckmarkCircle24",
+                "error" or "timeout" or "parse error" or "branch not configured" or "no rule found" => "ErrorCircle24",
+                "no read" => "Warning24",
                 _ => "AlertCircle24"
             };
+        }
+    }
+
+    private void UpdateStatistics(PackageInfo package)
+    {
+        try
+        {
+            // 更新总包裹数
+            _totalPackages++;
+            
+            // 记录第一个包裹的时间用于计算处理速率
+            if (_firstPackageTime == DateTime.MinValue)
+            {
+                _firstPackageTime = DateTime.Now;
+            }
+
+            // 根据状态更新成功/失败统计
+            bool isSuccess = package.Status switch
+            {
+                "sorting" => true,
+                string s when s.StartsWith("chute:") => true,
+                "error" or "timeout" or "parse error" or "branch not configured" or "no rule found" or "no read" => false,
+                _ => false
+            };
+
+            if (isSuccess)
+            {
+                _successPackages++;
+            }
+            else
+            {
+                _failurePackages++;
+            }
+
+            // 计算处理速率 (包裹/小时)
+            var elapsedTime = DateTime.Now - _firstPackageTime;
+            var rate = elapsedTime.TotalHours > 0 ? _totalPackages / elapsedTime.TotalHours : 0;
+
+            // 更新UI中的统计项目
+            var totalItem = StatisticsItems.FirstOrDefault(s => s.Label == "Total Packages");
+            if (totalItem != null) totalItem.Value = _totalPackages.ToString();
+
+            var successItem = StatisticsItems.FirstOrDefault(s => s.Label == "Successes");
+            if (successItem != null) successItem.Value = _successPackages.ToString();
+
+            var failureItem = StatisticsItems.FirstOrDefault(s => s.Label == "Failures");
+            if (failureItem != null) failureItem.Value = _failurePackages.ToString();
+
+            var rateItem = StatisticsItems.FirstOrDefault(s => s.Label == "Processing Rate");
+            if (rateItem != null) rateItem.Value = rate.ToString("F1");
+
+            Log.Debug("统计信息已更新: 总数={Total}, 成功={Success}, 失败={Failure}, 速率={Rate:F1}/hr", 
+                _totalPackages, _successPackages, _failurePackages, rate);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "更新统计信息时发生错误");
+        }
+    }
+
+    private void ResetStatistics()
+    {
+        try
+        {
+            _totalPackages = 0;
+            _successPackages = 0;
+            _failurePackages = 0;
+            _firstPackageTime = DateTime.MinValue;
+
+            // 重置UI中的统计项目
+            var totalItem = StatisticsItems.FirstOrDefault(s => s.Label == "Total Packages");
+            if (totalItem != null) totalItem.Value = "0";
+
+            var successItem = StatisticsItems.FirstOrDefault(s => s.Label == "Successes");
+            if (successItem != null) successItem.Value = "0";
+
+            var failureItem = StatisticsItems.FirstOrDefault(s => s.Label == "Failures");
+            if (failureItem != null) failureItem.Value = "0";
+
+            var rateItem = StatisticsItems.FirstOrDefault(s => s.Label == "Processing Rate");
+            if (rateItem != null) rateItem.Value = "0";
+
+            Log.Information("统计信息已重置");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "重置统计信息时发生错误");
         }
     }
 
@@ -613,6 +734,20 @@ public class MainViewModel : BindableBase, IDisposable
                 AllImportedMappings.Clear(); // 出错时也确保集合为空
                 FilteredImportedMappings.Clear();
             });
+        }
+    }
+
+    private async Task SavePackageToHistoryAsync(PackageInfo packageInfo)
+    {
+        try
+        {
+            var historyRecord = PackageHistoryRecord.FromPackageInfo(packageInfo);
+            await _packageHistoryDataService.AddPackageAsync(historyRecord);
+            Log.Information("包裹 {Barcode} 已成功保存到历史记录。", packageInfo.Barcode);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "保存包裹 {Barcode} 到历史记录时发生错误。", packageInfo.Barcode);
         }
     }
 

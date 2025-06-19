@@ -37,7 +37,7 @@ namespace WeiCiModule.Services
 
                 // Create header row
                 IRow headerRow = sheet.CreateRow(0);
-                headerRow.CreateCell(0).SetCellValue("S/N");
+                headerRow.CreateCell(0).SetCellValue("Bin");
                 headerRow.CreateCell(1).SetCellValue("Branch Code");
                 headerRow.CreateCell(2).SetCellValue("Branch");
 
@@ -81,23 +81,13 @@ namespace WeiCiModule.Services
         public List<ChuteSettingData> ImportFromExcel(string filePath)
         {
             var result = new List<ChuteSettingData>();
-
             try
             {
-                using FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read);
-                IWorkbook workbook;
+                using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read);
+                IWorkbook workbook = Path.GetExtension(filePath).Equals(".xlsx", StringComparison.OrdinalIgnoreCase)
+                    ? new XSSFWorkbook(fs)
+                    : new HSSFWorkbook(fs);
 
-                // Determine Excel version based on file extension
-                if (Path.GetExtension(filePath).Equals(".xlsx", StringComparison.OrdinalIgnoreCase))
-                {
-                    workbook = new XSSFWorkbook(fs);
-                }
-                else
-                {
-                    workbook = new HSSFWorkbook(fs);
-                }
-
-                // Get first worksheet
                 ISheet sheet = workbook.GetSheetAt(0);
                 if (sheet == null)
                 {
@@ -105,13 +95,41 @@ namespace WeiCiModule.Services
                     return result;
                 }
 
-                // Check if header row exists
-                if (sheet.LastRowNum < 1)
+                IRow headerRow = sheet.GetRow(0);
+                if (headerRow == null)
                 {
-                    Log.Warning("No data rows found in Excel file: {FilePath}", filePath);
+                    Log.Warning("No header row found in Excel file: {FilePath}", filePath);
                     return result;
                 }
 
+                // Create a map from header name to column index
+                var headerMap = new Dictionary<string, int>();
+                for (int i = 0; i < headerRow.LastCellNum; i++)
+                {
+                    string header = headerRow.GetCell(i)?.ToString()?.Trim();
+                    if (!string.IsNullOrEmpty(header))
+                    {
+                        headerMap[header] = i;
+                    }
+                }
+
+                // Try to find columns for our required fields using flexible names
+                if (!headerMap.TryGetValue("SN", out int snCol) && !headerMap.TryGetValue("Bin", out snCol))
+                {
+                    Log.Warning("Header 'SN' or 'Bin' not found. Will try to read from column 0.");
+                    snCol = 0;
+                }
+                if (!headerMap.TryGetValue("BranchCode", out int codeCol))
+                {
+                    Log.Warning("Header 'BranchCode' not found. Will try to read from column 1.");
+                    codeCol = 1;
+                }
+                if (!headerMap.TryGetValue("Branch", out int nameCol) && !headerMap.TryGetValue("Name", out nameCol))
+                {
+                    Log.Warning("Header 'Branch' or 'Name' not found. Will try to read from column 2.");
+                    nameCol = 2;
+                }
+                
                 // Iterate through data rows (starting from second row, skipping header)
                 for (int i = 1; i <= sheet.LastRowNum; i++)
                 {
@@ -119,48 +137,39 @@ namespace WeiCiModule.Services
                     if (row == null) continue;
 
                     var data = new ChuteSettingData();
-                    
-                    // Try to read S/N
-                    var snCell = row.GetCell(0);
+
+                    // Read SN from the determined column
+                    var snCell = row.GetCell(snCol);
                     if (snCell != null)
                     {
                         if (snCell.CellType == CellType.Numeric)
                         {
                             data.SN = (int)snCell.NumericCellValue;
                         }
+                        else if (int.TryParse(snCell.ToString(), out int sn))
+                        {
+                            data.SN = sn;
+                        }
                         else
                         {
-                            // Try to convert text to number
-                            if (int.TryParse(snCell.ToString(), out int sn))
-                            {
-                                data.SN = sn;
-                            }
-                            else
-                            {
-                                data.SN = i; // Use row number as fallback
-                            }
+                            data.SN = i; // Use row index as fallback
                         }
                     }
                     else
                     {
-                        data.SN = i; // Use row number as fallback
+                        data.SN = i; // Fallback
                     }
 
-                    // Read Branch Code
-                    var codeCell = row.GetCell(1);
-                    if (codeCell != null)
+                    // Read Branch Code from the determined column
+                    data.BranchCode = row.GetCell(codeCol)?.ToString() ?? string.Empty;
+                    
+                    // Read Branch from the determined column
+                    data.Branch = row.GetCell(nameCol)?.ToString() ?? string.Empty;
+
+                    if (!string.IsNullOrWhiteSpace(data.BranchCode) || !string.IsNullOrWhiteSpace(data.Branch))
                     {
-                        data.BranchCode = codeCell.ToString();
+                        result.Add(data);
                     }
-
-                    // Read Branch
-                    var nameCell = row.GetCell(2);
-                    if (nameCell != null)
-                    {
-                        data.Branch = nameCell.ToString();
-                    }
-
-                    result.Add(data);
                 }
 
                 Log.Information("Successfully imported {Count} records from Excel file: {FilePath}", result.Count, filePath);
@@ -168,6 +177,7 @@ namespace WeiCiModule.Services
             catch (Exception ex)
             {
                 Log.Error(ex, "Error importing Excel file: {FilePath}", filePath);
+                throw; // Rethrow to be caught by the ViewModel
             }
 
             return result;

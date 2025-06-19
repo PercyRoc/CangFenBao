@@ -7,7 +7,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
         <RootNamespace>WeiCiModule</RootNamespace>
-        <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
+        <ApplicationIcon>logo.ico</ApplicationIcon>
     </PropertyGroup>
 
     <ItemGroup>
@@ -32,15 +32,8 @@
         <PackageReference Include="NPOI"/>
 
         <ProjectReference Include="..\Camera\相机模块.csproj" />
-
         <ProjectReference Include="..\Common\基础模块.csproj" />
-        <ProjectReference Include="..\SortingServices\分拣服务.csproj"/>
-    </ItemGroup>
-
-    <ItemGroup>
-        <Resource Include="..\SharedUI\Resources\Icon\logo.ico">
-            <Link>logo.ico</Link>
-        </Resource>
+        <ProjectReference Include="..\History\历史模块.csproj" />
     </ItemGroup>
 
     <ItemGroup>

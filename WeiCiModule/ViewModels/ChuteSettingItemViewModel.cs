@@ -26,34 +26,24 @@ namespace WeiCiModule.ViewModels
             set => SetProperty(ref _branch, value);
         }
 
-        // 这个列表将由父ViewModel (ChuteSettingsViewModel) 填充
-        public ObservableCollection<string> AvailableBranchCodes { get; } = new ObservableCollection<string>();
+        // 这个列表将由父ViewModel (ChuteSettingsViewModel) 填充和拥有
+        public ObservableCollection<string> AvailableBranchCodes { get; }
 
         public ChuteSettingItemViewModel()
         {
+            // 在设计时或特殊情况下可能需要一个空的列表
+            AvailableBranchCodes = [];
         }
 
         // 从数据模型映射的构造函数
-        public ChuteSettingItemViewModel(ChuteSettingData data, ObservableCollection<string>? globalBranchCodesSource)
+        public ChuteSettingItemViewModel(ChuteSettingData data, ObservableCollection<string> globalBranchCodesSource)
         {
             SN = data.SN;
             BranchCode = data.BranchCode;
             Branch = data.Branch;
-            
-            // 为每个项复制一份全局可用格口列表
-            if (globalBranchCodesSource != null)
-            {
-                foreach (var code in globalBranchCodesSource)
-                {
-                    AvailableBranchCodes.Add(code);
-                }
-            }
 
-            // 如果已保存的BranchCode不在当前可用列表中，并且不为空，则添加进去，以防数据显示问题。
-            if (!string.IsNullOrEmpty(BranchCode) && !AvailableBranchCodes.Contains(BranchCode))
-            {
-                AvailableBranchCodes.Add(BranchCode);
-            }
+            // 直接引用父ViewModel的全局列表，而不是复制
+            AvailableBranchCodes = globalBranchCodesSource;
         }
 
         public ChuteSettingData ToData()

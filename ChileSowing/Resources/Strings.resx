@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+    <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+        <xsd:element name="root" msdata:IsDataSet="true">
+            <xsd:complexType>
+                <xsd:choice maxOccurs="unbounded">
+                    <xsd:element name="metadata">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="value" type="xsd:string" minOccurs="0"/>
+                            </xsd:sequence>
+                            <xsd:attribute name="name" use="required" type="xsd:string"/>
+                            <xsd:attribute name="type" type="xsd:string"/>
+                            <xsd:attribute name="mimetype" type="xsd:string"/>
+                            <xsd:attribute ref="xml:space"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                    <xsd:element name="assembly">
+                        <xsd:complexType>
+                            <xsd:attribute name="alias" type="xsd:string"/>
+                            <xsd:attribute name="name" type="xsd:string"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                    <xsd:element name="data">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="value" type="xsd:string" minOccurs="0"/>
+                                <xsd:element name="comment" type="xsd:string" minOccurs="0"/>
+                            </xsd:sequence>
+                            <xsd:attribute name="name" use="required" type="xsd:string"/>
+                            <xsd:attribute name="type" type="xsd:string"/>
+                            <xsd:attribute name="mimetype" type="xsd:string"/>
+                            <xsd:attribute ref="xml:space"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                    <xsd:element name="resheader">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="value" type="xsd:string" minOccurs="0"/>
+                            </xsd:sequence>
+                            <xsd:attribute name="name" use="required" type="xsd:string"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:choice>
+            </xsd:complexType>
+        </xsd:element>
+    </xsd:schema>
+    <resheader name="resmimetype">
+        <value>text/microsoft-resx</value>
+    </resheader>
+    <resheader name="version">
+        <value>2.0</value>
+    </resheader>
+    <resheader name="reader">
+        <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+    </resheader>
+    <resheader name="writer">
+        <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+    </resheader>
+    
+    <!-- 窗口标题 -->
+    <data name="Window_Title" xml:space="preserve">
+        <value>播种墙</value>
+    </data>
+    
+    <!-- 按钮文本 -->
+    <data name="Button_Settings" xml:space="preserve">
+        <value>设置</value>
+    </data>
+    <data name="Button_History" xml:space="preserve">
+        <value>历史</value>
+    </data>
+    
+    <!-- 输入区域 -->
+    <data name="Label_ScanProductSku" xml:space="preserve">
+        <value>扫描产品SKU</value>
+    </data>
+    <data name="Placeholder_EnterScanSku" xml:space="preserve">
+        <value>输入或扫描SKU</value>
+    </data>
+    <data name="Label_ScanWaveNumber" xml:space="preserve">
+        <value>扫描波次号</value>
+    </data>
+    <data name="Placeholder_EnterScanWaveNumber" xml:space="preserve">
+        <value>输入或扫描波次号</value>
+    </data>
+    
+    <!-- 信息面板 -->
+    <data name="Label_PackageInfo" xml:space="preserve">
+        <value>包裹信息</value>
+    </data>
+    <data name="Label_Statistics" xml:space="preserve">
+        <value>统计信息</value>
+    </data>
+    
+    <!-- 格口监控 -->
+    <data name="Label_ChuteMonitoring" xml:space="preserve">
+        <value>格口监控（总计：80）</value>
+    </data>
+    
+    <!-- 状态栏 -->
+    <data name="Status_CPU" xml:space="preserve">
+        <value>CPU：{0:F1}%</value>
+    </data>
+    <data name="Status_Memory" xml:space="preserve">
+        <value>内存：{0:F1}%</value>
+    </data>
+    <data name="Status_Uptime" xml:space="preserve">
+        <value>运行时间：</value>
+    </data>
+    
+    <!-- 工具提示 -->
+    <data name="Tooltip_Settings" xml:space="preserve">
+        <value>设置</value>
+    </data>
+    <data name="Tooltip_History" xml:space="preserve">
+        <value>历史</value>
+    </data>
+</root> 

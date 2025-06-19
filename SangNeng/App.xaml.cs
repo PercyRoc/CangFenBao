@@ -147,6 +147,7 @@ internal partial class App
             .WriteTo.File("logs/app-.log",
                 rollingInterval: RollingInterval.Day,
                 rollOnFileSizeLimit: true,
+                fileSizeLimitBytes: 10 * 1024 * 1024, // 10MB
                 retainedFileCountLimit: 30,
                 encoding: System.Text.Encoding.UTF8)
             .CreateLogger();

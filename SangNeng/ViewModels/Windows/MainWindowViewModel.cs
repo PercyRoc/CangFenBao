@@ -80,7 +80,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     private readonly Queue<StableWeightEntry> _stableWeightQueue = new();
     private const int MaxStableWeightQueueSize = 100;
-    private readonly List<double> _rawWeightBuffer = [];
+    private readonly Queue<double> _rawWeightBuffer = new();
 
     // 新增：用于存储Rx订阅的字段
     private readonly IDisposable? _weightDataSubscription;
@@ -89,7 +89,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly IDisposable? _palletSettingsChangedSubscription;
 
     private bool _isInitializingOverlayVisible = true; // 新增：控制初始化遮罩的可见性
-    private bool _isErrorOverlayVisible = false; // 新增：控制错误遮罩的可见性
+    private bool _initializationComplete; // 新增：跟踪初始设备连接是否完成
+    private bool _isErrorOverlayVisible; // 新增：控制错误遮罩的可见性
     private string _errorMessage = string.Empty; // 新增：错误信息
 
     /// <summary>
@@ -139,7 +140,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         // 订阅重量称连接状态
         _weightService.ConnectionChanged += OnWeightScaleConnectionChanged;
 
-        // 订阅重量数据流
+                // 订阅重量数据流
         _weightDataSubscription = _weightService.WeightDataStream.Subscribe(streamTuple =>
         {
             // 在事件处理中按需加载配置
@@ -162,55 +163,55 @@ public class MainWindowViewModel : BindableBase, IDisposable
             double currentRawWeightKg = streamTuple.Value;
             var currentTimestamp = streamTuple.Timestamp;
 
-            // 将当前原始重量(kg)添加到缓冲区，忽略0值
-            if (currentRawWeightKg > 0)
+            // 忽略无效重量，并在重量为0时清空缓冲区
+            if (currentRawWeightKg <= 0)
             {
-                _rawWeightBuffer.Add(currentRawWeightKg);
-                if (_rawWeightBuffer.Count > stabilityCheckSamples)
+                Log.Debug("忽略零重量或负重量: {Weight}kg，清空历史缓冲区", currentRawWeightKg);
+                _rawWeightBuffer.Clear(); // 清空缓冲区，为下一个物体重置状态
+                return;
+            }
+
+            // 1. 检查历史样本是否足够进行比较
+            // 至少需要 stabilityCheckSamples - 1 个历史样本来进行有意义的比较
+            if (_rawWeightBuffer.Count >= stabilityCheckSamples - 1 && stabilityCheckSamples > 1)
+            {
+                // 2. 核心比较逻辑：检查新值是否与缓冲区中的所有历史值都足够接近
+                bool isStable = _rawWeightBuffer.All(historicalWeight => 
+                    Math.Abs(currentRawWeightKg - historicalWeight) < stabilityThresholdKg);
+
+                Log.Debug("稳定性检查: 最新值={New}kg, 历史样本数={Count}, 阈值={Threshold}kg, 是否稳定={IsStable}",
+                    currentRawWeightKg, _rawWeightBuffer.Count, stabilityThresholdKg, isStable);
+
+                if (isStable)
                 {
-                    _rawWeightBuffer.RemoveAt(0); // 保持缓冲区大小固定（滑动窗口）
+                    // 3. 如果稳定，则采纳当前值作为稳定重量
+                    // 注意：这里我们直接使用 currentRawWeightKg，而不是窗口的平均值
+                    var stableWeightKg = currentRawWeightKg;
+                    var stableEntry = new StableWeightEntry(stableWeightKg, currentTimestamp);
+
+                    lock (_stableWeightQueue)
+                    {
+                        _stableWeightQueue.Enqueue(stableEntry);
+                        if (_stableWeightQueue.Count > MaxStableWeightQueueSize)
+                        {
+                            _stableWeightQueue.Dequeue();
+                        }
+                        Log.Information("发现稳定重量: {Weight}kg, 时间戳: {Timestamp:HH:mm:ss.fff}, 队列大小: {QueueSize}",
+                            stableWeightKg, currentTimestamp, _stableWeightQueue.Count);
+                    }
                 }
-                Log.Debug("重量数据已添加到缓冲区: {Weight}kg, 缓冲区大小: {BufferSize}/{RequiredSize}", 
-                    currentRawWeightKg, _rawWeightBuffer.Count, stabilityCheckSamples);
             }
             else
             {
-                Log.Debug("忽略零重量或负重量: {Weight}kg", currentRawWeightKg);
+                Log.Debug("历史样本不足 ({Current}/{Required})，仅将新值添加到缓冲区", 
+                    _rawWeightBuffer.Count, stabilityCheckSamples - 1);
             }
-            
-            // 如果缓冲区已满，则检查稳定性
-            if (_rawWeightBuffer.Count != stabilityCheckSamples) return;
-            
-            // 在稳定性检查时计算当前窗口的最小值和最大值
-            var minWeightInWindow = _rawWeightBuffer.Min();
-            var maxWeightInWindow = _rawWeightBuffer.Max();
-            var weightDifference = maxWeightInWindow - minWeightInWindow;
 
-            Log.Debug("稳定性检查: 最小值={Min}kg, 最大值={Max}kg, 差值={Diff}kg, 阈值={Threshold}kg", 
-                minWeightInWindow, maxWeightInWindow, weightDifference, stabilityThresholdKg);
-
-            // 使用转换后的 stabilityThresholdKg 进行比较
-            if (!(weightDifference < stabilityThresholdKg)) 
+            // 4. 更新滑动窗口：无论是否稳定，都将新值入队，并保持窗口大小
+            _rawWeightBuffer.Enqueue(currentRawWeightKg);
+            if (_rawWeightBuffer.Count > stabilityCheckSamples) // 保持窗口大小为N
             {
-                Log.Debug("重量不稳定，差值 {Diff}kg 超过阈值 {Threshold}kg", weightDifference, stabilityThresholdKg);
-                return;
-            }
-            // 数据稳定
-            // _rawWeightBuffer 中的数据已经是 kg，所以 Average() 也是 kg
-            var stableAverageWeightKg = _rawWeightBuffer.Average();
-            // 使用稳定窗口中最后一个样本的时间戳
-            // stableAverageWeightKg 已经是 kg，直接使用
-            var stableEntry = new StableWeightEntry(stableAverageWeightKg, currentTimestamp);
-
-            lock (_stableWeightQueue) // 确保队列操作的线程安全
-            {
-                _stableWeightQueue.Enqueue(stableEntry);
-                if (_stableWeightQueue.Count > MaxStableWeightQueueSize)
-                {
-                    _stableWeightQueue.Dequeue();
-                }
-                Log.Information("稳定重量已添加到队列: {Weight}kg, 时间戳: {Timestamp:HH:mm:ss.fff}, 队列大小: {QueueSize}", 
-                    stableAverageWeightKg, currentTimestamp, _stableWeightQueue.Count);
+                _rawWeightBuffer.Dequeue();
             }
         });
 
@@ -335,7 +336,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     // 将原有的实现移到这个方法中，并设为 internal 以便视图调用
-    internal async Task ProcessBarcodeAsync(string barcode)
+    public async Task ProcessBarcodeAsync(string barcode)
     {
         // 尝试获取处理锁，如果已被占用则直接返回
         if (!await _barcodeProcessingLock.WaitAsync(0)) // 设置超时为0，如果锁不可用则立即返回false
@@ -596,12 +597,34 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         }
                         else
                         {
-                            Log.Warning("包裹 {Barcode}: 最终未能获取包裹重量。", _currentPackage.Barcode);
+                            // 如果未找到稳定重量，尝试使用实时流中的最新重量作为fallback
+                            double? latestRawWeight = null;
+                            if (_rawWeightBuffer.Count > 0)
+                            {
+                                // 对于Queue，我们需要将其转换为数组来获取最后一个元素
+                                latestRawWeight = _rawWeightBuffer.ToArray().Last();
+                                Log.Information("包裹 {Barcode}: 未找到稳定重量，使用原始重量缓冲区中的最新重量: {Weight}kg", 
+                                    _currentPackage.Barcode, latestRawWeight);
+                            }
+
+                            if (latestRawWeight.HasValue && latestRawWeight.Value > 0)
+                            {
+                                var actualWeight = latestRawWeight.Value;
+                                if (SelectedPallet != null && SelectedPallet.Name != "noPallet")
+                                    actualWeight = Math.Max(0, actualWeight - SelectedPallet.Weight);
+                                _currentPackage.Weight = actualWeight;
+                                Log.Information("包裹 {Barcode}: 已使用最新原始重量设置包裹重量: {Weight}kg (扣除托盘后)", 
+                                    _currentPackage.Barcode, actualWeight);
+                            }
+                            else
+                            {
+                                Log.Warning("包裹 {Barcode}: 最终未能获取包裹重量，原始重量缓冲区也为空或无效。", _currentPackage.Barcode);
+                            }
                         }
                     }
                     catch (Exception ex)
                     {
-                        Log.Error(ex, "包裹 {Barcode}: 获取重量数据时发生错误。", _currentPackage.Barcode);
+                        Log.Error(ex, "包裹 {Barcode}: 获取重量数据时发生错误。l", _currentPackage.Barcode);
                     }
 
                     try
@@ -995,10 +1018,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     var finalFilePath = Path.Combine(barcodeSpecificPhotoPath, photoFileName);
                     imageName = photoFileName; // Update imageName to be just the file name for return value
 
-                    // 先保存BitmapSource到临时文件 (临时文件可以在基础保存路径下，避免路径过长问题)
+                    // 先保存BitmapSource到临时文件
                     var tempFileName = $"temp_{sanitizedBarcode}_{package.CreateTime:yyyyMMddHHmmssfff}.jpg";
-                    tempFilePath =
-                        Path.Combine(settings.ImageSave.SaveFolderPath, tempFileName); // Temp file in base directory
+                    var tempDirectory = "D:\\temp";
+                    Directory.CreateDirectory(tempDirectory); // 确保目录存在
+                    tempFilePath = Path.Combine(tempDirectory, tempFileName);
 
                     BitmapEncoder encoder = new JpegBitmapEncoder { QualityLevel = 90 };
 
@@ -1039,7 +1063,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         {
                             var palletLines = new List<string>(watermarkLines);
                             palletLines.Insert(1, $"Pallet: {package.PalletName} ({package.PalletWeight:F3}kg)");
-                            watermarkLines = palletLines.ToArray();
+                            watermarkLines = [.. palletLines];
                         }
 
                         const int padding = 20;
@@ -1179,28 +1203,28 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                 if (isConnected)
                 {
-                    // 相机重新连接时，隐藏错误遮罩
-                    if (IsErrorOverlayVisible)
+                    // 如果所有设备都重新连接，则隐藏错误遮罩
+                    if (DeviceStatuses.All(d => d.Status == "Online"))
                     {
                         IsErrorOverlayVisible = false;
                         ErrorMessage = string.Empty;
-                        Log.Information("体积相机已重新连接，隐藏错误遮罩。");
+                        Log.Information("所有设备均已连接，错误遮罩已隐藏。");
                     }
-                    
-                    if (!IsInitializingOverlayVisible) return; // 仅当遮罩当前可见时才隐藏
-                    IsInitializingOverlayVisible = false;
-                    Log.Information("体积相机已连接，正在隐藏初始化遮罩。");
                 }
                 else
                 {
-                    // 相机掉线时，显示错误遮罩
-                    ErrorMessage = "Volume camera connection lost!\n\nPlease check the camera connection and restart the application to restore normal functionality.";
-                    IsErrorOverlayVisible = true;
-                    Log.Error("体积相机连接已断开，显示错误遮罩。设备ID: {DeviceId}", deviceId ?? "Unknown");
-                    
-                    // 播放错误音效
-                    _ = _audioService.PlayPresetAsync(AudioType.SystemError);
+                    // 仅当初始化完成后设备掉线才显示错误
+                    if (_initializationComplete)
+                    {
+                        ErrorMessage = "Volume camera connection lost!\n\nPlease check the camera connection and restart the application to restore normal functionality.";
+                        IsErrorOverlayVisible = true;
+                        Log.Error("体积相机连接已断开，显示错误遮罩。设备ID: {DeviceId}", deviceId ?? "Unknown");
+                        _ = _audioService.PlayPresetAsync(AudioType.SystemError);
+                    }
                 }
+
+                // 检查是否所有设备都已连接以完成初始化
+                CheckInitializationComplete();
             });
         }
         catch (Exception ex)
@@ -1226,24 +1250,28 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                 if (isConnected)
                 {
-                    // 相机重新连接时，隐藏错误遮罩（如果是因为拍照相机断开显示的）
-                    if (IsErrorOverlayVisible && ErrorMessage.Contains("Photo camera"))
+                    // 如果所有设备都重新连接，则隐藏错误遮罩
+                    if (DeviceStatuses.All(d => d.Status == "Online"))
                     {
                         IsErrorOverlayVisible = false;
                         ErrorMessage = string.Empty;
-                        Log.Information("拍照相机已重新连接，隐藏错误遮罩。");
+                        Log.Information("所有设备均已连接，错误遮罩已隐藏。");
                     }
                 }
                 else
                 {
-                    // 相机掉线时，显示错误遮罩
-                    ErrorMessage = "Photo camera connection lost!\n\nPlease check the camera connection and restart the application to restore normal functionality.";
-                    IsErrorOverlayVisible = true;
-                    Log.Error("拍照相机连接已断开，显示错误遮罩。设备ID: {DeviceId}", deviceId ?? "Unknown");
-                    
-                    // 播放错误音效
-                    _ = _audioService.PlayPresetAsync(AudioType.SystemError);
+                    // 仅当初始化完成后设备掉线才显示错误
+                    if (_initializationComplete)
+                    {
+                        ErrorMessage = "Photo camera connection lost!\n\nPlease check the camera connection and restart the application to restore normal functionality.";
+                        IsErrorOverlayVisible = true;
+                        Log.Error("拍照相机连接已断开，显示错误遮罩。设备ID: {DeviceId}", deviceId ?? "Unknown");
+                        _ = _audioService.PlayPresetAsync(AudioType.SystemError);
+                    }
                 }
+
+                // 检查是否所有设备都已连接以完成初始化
+                CheckInitializationComplete();
             });
         }
         catch (Exception ex)
@@ -1266,6 +1294,31 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 weightScaleStatus.Status =
                     isConnected ? "Online" : "Offline"; // UI Strings (Keep as is, Status is a state identifier)
                 weightScaleStatus.StatusColor = isConnected ? "#4CAF50" : "#FFA500";
+
+                if (isConnected)
+                {
+                    // 如果所有设备都重新连接，则隐藏错误遮罩
+                    if (DeviceStatuses.All(d => d.Status == "Online"))
+                    {
+                        IsErrorOverlayVisible = false;
+                        ErrorMessage = string.Empty;
+                        Log.Information("所有设备均已连接，错误遮罩已隐藏。");
+                    }
+                }
+                else
+                {
+                    // 仅当初始化完成后设备掉线才显示错误
+                    if (_initializationComplete)
+                    {
+                        ErrorMessage = "Weight Scale connection lost!\n\nPlease check the device connection and restart the application to restore normal functionality.";
+                        IsErrorOverlayVisible = true;
+                        Log.Error("重量秤连接已断开，显示错误遮罩。设备ID: {DeviceId}", deviceId ?? "Unknown");
+                        _ = _audioService.PlayPresetAsync(AudioType.SystemError);
+                    }
+                }
+
+                // 检查是否所有设备都已连接以完成初始化
+                CheckInitializationComplete();
             });
 
             // 如果断开连接，清除最新的重量数据和队列
@@ -1364,7 +1417,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     public DelegateCommand HandleBarcodeCompleteCommand { get; } = null!;
 
     // 新增：重启应用命令
-    public DelegateCommand RestartApplicationCommand { get; } = null!
+    public DelegateCommand RestartApplicationCommand { get; } = null!;
 
     public bool IsInitializingOverlayVisible // 新增属性
     {
@@ -1560,7 +1613,26 @@ public class MainWindowViewModel : BindableBase, IDisposable
             Log.Error(ex, "更新初始设备状态时发生错误");
         }
     }
-    // --- 新增结束 ---
+
+    /// <summary>
+    /// 检查所有设备是否已连接，如果已连接，则隐藏初始化遮罩。
+    /// </summary>
+    private void CheckInitializationComplete()
+    {
+        // 如果初始化已完成，则无需再次检查
+        if (_initializationComplete)
+        {
+            return;
+        }
+
+        // 检查所有设备的状态是否为 "Online"
+        if (DeviceStatuses.All(d => d.Status == "Online"))
+        {
+            _initializationComplete = true;
+            IsInitializingOverlayVisible = false;
+            Log.Information("所有设备已连接，初始化完成，正在隐藏初始化遮罩。");
+        }
+    }
 
     /// <summary>
     /// 异步将 BitmapSource 保存到文件。
@@ -1759,10 +1831,31 @@ public class MainWindowViewModel : BindableBase, IDisposable
         // 请求View将焦点移回窗口
         RequestFocusToWindow?.Invoke();
 
-        // 直接开始处理条码
+        // 使用Task.Run包装并添加异常处理
         Task.Run(async () =>
         {
-            await ProcessBarcodeAsync(barcode);
+            try
+            {
+                await ProcessBarcodeAsync(barcode);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "处理条码时发生未捕获的异常: {Barcode}", barcode);
+                
+                // 在UI线程上显示错误通知
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    try
+                    {
+                        _notificationService.ShowError($"Processing barcode failed: {ex.Message}");
+                        _ = _audioService.PlayPresetAsync(AudioType.SystemError);
+                    }
+                    catch (Exception notifyEx)
+                    {
+                        Log.Error(notifyEx, "显示错误通知时发生异常");
+                    }
+                });
+            }
         });
     }
 
@@ -1774,15 +1867,15 @@ public class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             Log.Information("用户请求重启应用程序");
-            
+
             // 获取当前应用程序的可执行文件路径
             var currentProcess = Process.GetCurrentProcess();
             var exePath = currentProcess.MainModule?.FileName;
-            
+
             if (string.IsNullOrEmpty(exePath))
             {
-                                 Log.Error("无法获取当前应用程序的可执行文件路径");
-                 _notificationService.ShowError("Unable to restart application: Cannot get program path");
+                Log.Error("无法获取当前应用程序的可执行文件路径");
+                _notificationService.ShowError("Unable to restart application: Cannot get program path");
                 return;
             }
 
@@ -1800,15 +1893,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
             Log.Information("新的应用程序实例已启动");
 
             // 关闭当前应用程序
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                Application.Current.Shutdown();
-            });
+            Application.Current.Dispatcher.Invoke(Application.Current.Shutdown);
         }
         catch (Exception ex)
         {
-                         Log.Error(ex, "重启应用程序时发生错误");
-             _notificationService.ShowError($"Failed to restart application: {ex.Message}");
+            Log.Error(ex, "重启应用程序时发生错误");
+            _notificationService.ShowError($"Failed to restart application: {ex.Message}");
         }
     }
 

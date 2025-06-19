@@ -64,45 +64,8 @@ namespace WeiCiModule.ViewModels
         {
             GlobalAvailableBranchCodes.Clear();
             
-            // Import branch codes from table
-            var branchData = new List<(string code, string name)>
-            {
-                ("AMKPL", "Ang Mo Kio Public Library"),
-                ("BBPL", "Bukit Batok Public Library (currently closed)"),
-                ("BEPL", "Bedok Public Library"),
-                ("BIPL", "Bishan Public Library"),
-                ("BPPL", "Bukit Panjang Public Library"),
-                ("CAL", "Central Arts Library (at NL Building)"),
-                ("CCKPL", "Choa Chu Kang Public Library"),
-                ("CPL", "Central Public Library"),
-                ("CMPL", "Clementi Public Library"),
-                ("CNPL", "library@chinatown"),
-                ("CSPL", "Cheng San Public Library"),
-                ("GEPL", "Geylang East Public Library"),
-                ("HBPL", "library@harbourfront"),
-                ("JRL", "Jurong Regional Library"),
-                ("JWPL", "Jurong West Public Library"),
-                ("LKCRL", "Lee Kong Chian Reference Library (at NL building)"),
-                ("MOLLY", "Mobile Library"),
-                ("MPPL", "Marine Parade Public Library (currently closed)"),
-                ("OCPL", "library@orchard (currently closed)"),
-                ("PRL", "Punggol Regional Library"),
-                ("PRPL", "Pasir Ris Public Library"),
-                ("QUPL", "Queenstown Public Library"),
-                ("SBPL", "Sembawang Public Library"),
-                ("SKPL", "Sengkang Public Library"),
-                ("SRPL", "Serangoon Public Library"),
-                ("TPPL", "Toa Payoh Public Library"),
-                ("TRL", "Tampines Regional Library"),
-                ("WRL", "Woodlands Regional Library"),
-                ("YIPL", "Yishun Public Library")
-            };
-
-            // Add to available branch codes list
-            foreach (var branch in branchData)
-            {
-                GlobalAvailableBranchCodes.Add(branch.code);
-            }
+            // This method is now primarily for clearing. 
+            // The list will be populated dynamically from loaded or imported settings.
         }
 
         // Import from Excel file
@@ -127,7 +90,7 @@ namespace WeiCiModule.ViewModels
                 var importedData = _excelService.ImportFromExcel(openFileDialog.FileName);
                 if (importedData.Count == 0)
                 {
-                    MessageBox.Show("No data was imported from the Excel file. Please check if the file format is correct.", "Import Failed", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    MessageBox.Show("No valid data was imported. Please check the file format and content.", "Import Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
 
@@ -139,21 +102,28 @@ namespace WeiCiModule.ViewModels
                 {
                     return;
                 }
+                
+                var newItems = importedData.Select(data => new ChuteSettingItemViewModel(data, GlobalAvailableBranchCodes)).ToList();
 
                 // Process data based on user choice
                 if (result == MessageBoxResult.Yes)
                 {
                     ChuteSettingItems.Clear();
+                    GlobalAvailableBranchCodes.Clear();
                 }
 
                 // Add imported data
-                foreach (var data in importedData)
+                foreach (var newItem in newItems)
                 {
-                    ChuteSettingItems.Add(new ChuteSettingItemViewModel(data, GlobalAvailableBranchCodes));
+                    ChuteSettingItems.Add(newItem);
+                    if (!GlobalAvailableBranchCodes.Contains(newItem.BranchCode))
+                    {
+                        GlobalAvailableBranchCodes.Add(newItem.BranchCode);
+                    }
                 }
 
-                // Renumber items
-                ReNumberItems();
+                // Do not renumber items, respect the values from the Excel file.
+                // ReNumberItems();
 
                 Log.Information("Successfully imported {Count} records from Excel", importedData.Count);
                 MessageBox.Show($"Successfully imported {importedData.Count} records.", "Import Successful", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -212,7 +182,8 @@ namespace WeiCiModule.ViewModels
             return ChuteSettingItems.Count > 0;
         }
 
-        // Renumber all items
+        // Renumber all items - This logic is deprecated as per user requirements.
+        /*
         private void ReNumberItems()
         {
             int sn = 1;
@@ -221,6 +192,7 @@ namespace WeiCiModule.ViewModels
                 if (item != null) item.SN = sn++;
             }
         }
+        */
 
         private void LoadSettings()
         {
@@ -229,9 +201,15 @@ namespace WeiCiModule.ViewModels
                 _chuteSettingsConfig = _settingsService.LoadSettings<ChuteSettings>();
 
                 ChuteSettingItems.Clear();
+                GlobalAvailableBranchCodes.Clear();
+                
                 foreach (var itemData in _chuteSettingsConfig.Items.OrderBy(i => i.SN))
                 {
                     ChuteSettingItems.Add(new ChuteSettingItemViewModel(itemData, GlobalAvailableBranchCodes));
+                    if (!GlobalAvailableBranchCodes.Contains(itemData.BranchCode))
+                    {
+                        GlobalAvailableBranchCodes.Add(itemData.BranchCode);
+                    }
                 }
             }
             catch (Exception ex)
@@ -269,19 +247,19 @@ namespace WeiCiModule.ViewModels
             try
             {
                 _chuteSettingsConfig.Items.Clear();
-                int currentSn = 1;
                 foreach (var itemVm in ChuteSettingItems)
                 {
-                    itemVm!.SN = currentSn++;
-                    _chuteSettingsConfig.Items.Add(itemVm.ToData());
+                    if (itemVm != null) _chuteSettingsConfig.Items.Add(itemVm.ToData());
                 }
                 _settingsService.SaveSettings(_chuteSettingsConfig);
                 
                 Log.Information("Branch settings successfully saved.");
+                MessageBox.Show("Settings saved successfully.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "Error saving branch settings. Handling approach: Log error, keep dialog open.");
+                MessageBox.Show($"Error saving settings: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 

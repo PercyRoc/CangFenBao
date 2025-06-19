@@ -13,21 +13,15 @@ namespace Camera.Services.Implementations.TCP;
 /// </summary>
 public class TcpCameraService : IDisposable
 {
-    private const int MinProcessInterval = 1000; // 最小处理间隔（毫秒）
     private const int MaxBufferSize = 1024 * 1024; // 最大缓冲区大小（1MB）
 
     private readonly Subject<PackageInfo> _packageSubject = new();
-    private readonly object _processLock = new(); // 处理锁，确保同一时间只处理一个包裹
     private readonly Subject<BitmapSource> _realtimeImageSubject = new(); // 保留，但当前未使用
 
     private readonly TcpClientService _tcpClientService;
     private readonly string _host;
     private readonly int _port;
-    private readonly StringBuilder _receiveBuffer = new(); // 用于累积接收数据的缓冲区
-
-    private string _lastProcessedData = string.Empty; // 用于记录上一次处理的数据，避免重复处理
-    private DateTime _lastProcessedTime = DateTime.MinValue; // 用于记录上一次处理数据的时间
-    private bool _processingPackage; // 是否正在处理包裹
+    private readonly StringBuilder _receiveBuffer = new(); // 用于累积接收数据的缓冲
 
     public TcpCameraService(string host = "127.0.0.1", int port = 20011)
     {
@@ -122,6 +116,7 @@ public class TcpCameraService : IDisposable
             var receivedString = Encoding.UTF8.GetString(data);
             Log.Debug("TcpCameraService - 收到原始数据片段: {Data}", receivedString);
 
+            List<string> packetsToProcess;
             lock (_receiveBuffer)
             {
                 _receiveBuffer.Append(receivedString);
@@ -134,8 +129,22 @@ public class TcpCameraService : IDisposable
                     return;
                 }
 
-                // 处理缓冲区中的数据
-                ProcessReceiveBuffer();
+                // 提取所有完整的数据包
+                var (extractedPackets, remainder) = ExtractAllValidPackets(_receiveBuffer.ToString());
+                packetsToProcess = extractedPackets;
+                
+                // 更新缓冲区，只保留剩余不完整的部分
+                if (_receiveBuffer.ToString() != remainder)
+                {
+                    _receiveBuffer.Clear().Append(remainder);
+                }
+            }
+
+            // 在锁外部，串行处理提取出的数据包
+            foreach (var packet in packetsToProcess)
+            {
+                // 直接调用，保证顺序处理，避免并发问题
+                ProcessPackageData(packet);
             }
         }
         catch (Exception ex)
@@ -149,67 +158,25 @@ public class TcpCameraService : IDisposable
         }
     }
 
-    private void ProcessReceiveBuffer()
+    private static (List<string> Packets, string Remainder) ExtractAllValidPackets(string bufferContent)
     {
-        var content = _receiveBuffer.ToString();
-        var bufferModified = false;
-
+        var packets = new List<string>();
+        var currentContent = bufferContent;
         while (true)
         {
-            var (packet, processedLength) = ExtractFirstValidPacket(content);
-
+            var (packet, processedLength) = ExtractFirstValidPacket(currentContent);
             if (packet != null)
             {
-                Log.Debug("从缓冲区提取到数据包: {Packet}", packet);
-                _receiveBuffer.Remove(0, processedLength);
-                content = _receiveBuffer.ToString();
-                bufferModified = true;
-
-                var now = DateTime.Now;
-                var timeSinceLastProcess = (now - _lastProcessedTime).TotalMilliseconds;
-
-                if (packet != _lastProcessedData || timeSinceLastProcess > MinProcessInterval)
-                {
-                    Log.Debug("处理数据包: {Packet}", packet);
-                    _lastProcessedData = packet;
-                    _lastProcessedTime = now;
-
-                    lock (_processLock)
-                    {
-                        if (!_processingPackage)
-                        {
-                            try
-                            {
-                                _processingPackage = true;
-                                ProcessPackageData(packet);
-                            }
-                            finally
-                            {
-                                _processingPackage = false;
-                            }
-                        }
-                        else
-                        {
-                            Log.Debug("正在处理其他包裹，跳过当前数据: {Data}", packet);
-                        }
-                    }
-                }
-                else
-                {
-                    Log.Debug("跳过重复的数据包(间隔{Interval}ms): {Packet}", timeSinceLastProcess, packet);
-                }
+                packets.Add(packet);
+                currentContent = currentContent[processedLength..];
             }
             else
             {
-                Log.Debug("当前缓冲区未找到完整数据包，等待更多数据。当前缓冲区内容: {Content}", content);
+                // 没有更多完整的数据包了
                 break;
             }
         }
-
-        if (bufferModified)
-        {
-            Log.Debug("处理完成后，剩余缓冲区内容: {Content}", content);
-        }
+        return (packets, currentContent);
     }
 
     // Validates a packet according to the new 8-part structure.

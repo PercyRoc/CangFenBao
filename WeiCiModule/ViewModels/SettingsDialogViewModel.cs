@@ -1,6 +1,6 @@
 ﻿using Common.Services.Ui;
 using Serilog;
-using SharedUI.ViewModels.Settings;
+using WeiCiModule.ViewModels.Settings;
 
 namespace WeiCiModule.ViewModels;
 

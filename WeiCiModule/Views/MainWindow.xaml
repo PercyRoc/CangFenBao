@@ -25,9 +25,9 @@
             <RowDefinition Height="28" />
         </Grid.RowDefinitions>
 
-        <!-- Title Bar -->
         <Grid Grid.Row="0">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
@@ -80,9 +80,22 @@
                     <TextBlock Text="Import Config" VerticalAlignment="Center" />
                 </StackPanel>
             </ui:Button>
+            
+            <!-- History Button -->
+            <ui:Button Grid.Column="3"
+                       Appearance="Primary"
+                       Command="{Binding OpenHistoryCommand}"
+                       Margin="0,0,8,0"
+                       Padding="8,6"
+                       ToolTip="View Package History">
+                <StackPanel Orientation="Horizontal">
+                    <ui:SymbolIcon Symbol="History24" Margin="0,0,8,0" />
+                    <TextBlock Text="History" VerticalAlignment="Center" />
+                </StackPanel>
+            </ui:Button>
 
             <!-- Title -->
-            <TextBlock Grid.Column="3"
+            <TextBlock Grid.Column="4"
                        Text="CangFenBao - Module Belt"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
@@ -102,7 +115,7 @@
             </TextBlock>
 
             <!-- TitleBar -->
-            <ui:TitleBar Grid.Column="4"
+            <ui:TitleBar Grid.Column="5"
                          Title=""
                          ButtonsForeground="#FF008891"
                          ShowMaximize="True"
@@ -110,7 +123,7 @@
                          ShowClose="True" />
 
             <Border Grid.Column="0"
-                    Grid.ColumnSpan="5"
+                    Grid.ColumnSpan="6"
                     Height="1"
                     VerticalAlignment="Bottom"
                     Background="#20008080"
@@ -366,7 +379,7 @@
                                         <ui:SymbolIcon Symbol="History24"
                                                        Margin="0,0,8,0"
                                                        VerticalAlignment="Center" />
-                                        <TextBlock Text="Package 历史模块"
+                                        <TextBlock Text="Package History"
                                                    Foreground="{StaticResource AccentBrush}"
                                                    FontSize="16"
                                                    FontWeight="SemiBold"

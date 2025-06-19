@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+    <resheader name="resmimetype">
+        <value>text/microsoft-resx</value>
+    </resheader>
+    <resheader name="version">
+        <value>2.0</value>
+    </resheader>
+    <resheader name="reader">
+        <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+    </resheader>
+    <resheader name="writer">
+        <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+    </resheader>
+    
+    <!-- Window Title -->
+    <data name="Window_Title" xml:space="preserve">
+        <value>Sowing Wall</value>
+    </data>
+    
+    <!-- Button Text -->
+    <data name="Button_Settings" xml:space="preserve">
+        <value>Settings</value>
+    </data>
+    <data name="Button_History" xml:space="preserve">
+        <value>History</value>
+    </data>
+    
+    <!-- Input Area -->
+    <data name="Label_ScanProductSku" xml:space="preserve">
+        <value>Scan Product SKU</value>
+    </data>
+    <data name="Placeholder_EnterScanSku" xml:space="preserve">
+        <value>Enter or scan SKU</value>
+    </data>
+    <data name="Label_ScanWaveNumber" xml:space="preserve">
+        <value>Scan Wave Number</value>
+    </data>
+    <data name="Placeholder_EnterScanWaveNumber" xml:space="preserve">
+        <value>Enter or scan wave number</value>
+    </data>
+    
+    <!-- Information Panel -->
+    <data name="Label_PackageInfo" xml:space="preserve">
+        <value>Package Info</value>
+    </data>
+    <data name="Label_Statistics" xml:space="preserve">
+        <value>Statistics</value>
+    </data>
+    
+    <!-- Chute Monitoring -->
+    <data name="Label_ChuteMonitoring" xml:space="preserve">
+        <value>Chute Monitoring (Total: 80)</value>
+    </data>
+    
+    <!-- Status Bar -->
+    <data name="Status_CPU" xml:space="preserve">
+        <value>CPU: {0:F1}%</value>
+    </data>
+    <data name="Status_Memory" xml:space="preserve">
+        <value>Memory: {0:F1}%</value>
+    </data>
+    <data name="Status_Uptime" xml:space="preserve">
+        <value>Uptime: </value>
+    </data>
+    
+    <!-- Tooltips -->
+    <data name="Tooltip_Settings" xml:space="preserve">
+        <value>Settings</value>
+    </data>
+    <data name="Tooltip_History" xml:space="preserve">
+        <value>History</value>
+    </data>
+</root> 
