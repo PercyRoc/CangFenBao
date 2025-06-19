@@ -743,6 +743,10 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
@@ -847,7 +851,7 @@
                                FontSize="12"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                         <Run Text="Running Time: " />
-                        <Run Text="{Binding SystemStatus.RunningTime, Mode=OneWay, StringFormat={}{0:hh\:mm\:ss}}" />
+                        <Run Text="{Binding SystemStatus.RunningTime, Mode=OneWay, StringFormat={}{0:hh\\:mm\\:ss}}" />
                     </TextBlock>
                 </StackPanel>
             </Grid>

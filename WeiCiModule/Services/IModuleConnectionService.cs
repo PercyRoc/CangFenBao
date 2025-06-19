@@ -1,4 +1,6 @@
 using Common.Models.Package;
+using System.Reactive.Linq;
+using System.Reactive.Subjects;
 
 namespace WeiCiModule.Services;
 
@@ -18,6 +20,11 @@ public interface IModuleConnectionService
     event EventHandler<bool>? ConnectionStateChanged;
 
     /// <summary>
+    /// PLC 触发信号的响应式流
+    /// </summary>
+    IObservable<ushort> TriggerSignalStream { get; }
+
+    /// <summary>
     /// 启动TCP服务器
     /// </summary>
     /// <param name="ipAddress">监听IP地址</param>
@@ -32,8 +39,7 @@ public interface IModuleConnectionService
     Task StopServerAsync();
 
     /// <summary>
-    /// 处理收到的包裹信息
+    /// 异步发送分拣指令到模组带
     /// </summary>
-    /// <param name="package">包裹信息</param>
-    void OnPackageReceived(PackageInfo package);
+    Task SendSortingCommandAsync(ushort packageNumber, byte chute);
 } 

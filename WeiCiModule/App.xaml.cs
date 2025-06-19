@@ -97,7 +97,7 @@ public partial class App
         // 注册基础模块
         moduleCatalog.AddModule<CommonServicesModule>();
         moduleCatalog.AddModule<HistoryModule>();
-        Log.Information("已注册 CommonServicesModule 和 HistoryModule 模块");
+        Log.Information("已注册 CommonServicesModule, HistoryModule 和 WeiCiModule 模块");
     }
 
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
@@ -110,7 +110,7 @@ public partial class App
         containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>();
         containerRegistry.RegisterDialog<ChuteSettingsView, ChuteSettingsViewModel>();
         containerRegistry.RegisterForNavigation<ModulesTcpSettingsView, ModulesTcpSettingsViewModel>();
-        containerRegistry.RegisterSingleton<IModuleConnectionService, ModuleConnectionService>();
+        containerRegistry.RegisterSingleton<IModuleConnectionService,ModuleConnectionService>();
     }
 
     protected override void OnInitialized()
