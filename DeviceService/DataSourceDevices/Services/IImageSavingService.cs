@@ -24,4 +24,11 @@ public interface IImageSavingService
     /// <param name="timestamp">The timestamp for the image.</param>
     /// <returns>The potential full path where the image would be saved, or null if saving is disabled or path cannot be determined.</returns>
     string? GenerateImagePath(string? barcode, DateTime timestamp);
+
+    /// <summary>
+    /// Manually triggers cleanup of old image files that exceed the retention period.
+    /// </summary>
+    /// <param name="retentionDays">Number of days to retain images. If null, uses default retention period (7 days).</param>
+    /// <returns>A task representing the async cleanup operation.</returns>
+    Task CleanupOldImagesAsync(int? retentionDays = null);
 } 

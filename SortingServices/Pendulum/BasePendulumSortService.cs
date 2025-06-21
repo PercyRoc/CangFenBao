@@ -337,9 +337,40 @@ public abstract class BasePendulumSortService : IPendulumSortService
             }
             else // 对于单摆轮模式或获取Channel失败的情况
             {
-                Log.Error("无法获取光电 '{PhotoelectricName}' 的动作队列来执行超时恢复的回正动作。请检查摆轮状态！", photoelectricName);
-                // 对于单摆轮，可能需要一个不同的机制，
-                // 但鉴于这个问题主要出现在多摆轮场景，我们暂时聚焦于此。
+                // 【修复】为单摆轮服务添加直接回正机制
+                Log.Warning("无法获取光电 '{PhotoelectricName}' 的动作队列，将直接执行超时恢复回正操作", photoelectricName);
+                
+                // 直接在后台线程执行回正操作，避免阻塞
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var client = GetSortingClient(photoelectricName);
+                        if (client == null || !client.IsConnected())
+                        {
+                            Log.Warning("执行超时触发的直接回正时，客户端 '{PhotoelectricName}' 未连接", photoelectricName);
+                            if (PendulumStates.TryGetValue(photoelectricName, out var stateToReset))
+                            {
+                                stateToReset.ForceReset(); // 至少在软件层面复位状态
+                            }
+                            return;
+                        }
+
+                        if (PendulumStates.TryGetValue(photoelectricName, out var pendulumState))
+                        {
+                            Log.Information("开始执行超时恢复的直接回正操作 (光电: {PhotoelectricName})", photoelectricName);
+                            await ExecuteImmediateReset(client, pendulumState, photoelectricName, "TimeoutRecovery_Direct");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "执行超时恢复的直接回正操作失败 (光电: {PhotoelectricName})", photoelectricName);
+                        if (PendulumStates.TryGetValue(photoelectricName, out var stateToReset))
+                        {
+                            stateToReset.ForceReset();
+                        }
+                    }
+                });
             }
         }
     }
@@ -744,83 +775,54 @@ public abstract class BasePendulumSortService : IPendulumSortService
 
                 var photoelectricConfig = GetPhotoelectricConfig(photoelectricName);
 
-                // 1. 等待到达最佳位置
-                var sortDelay = photoelectricConfig.SortingDelay;
-                Log.Debug("等待分拣延迟: {SortDelay}ms", sortDelay);
-                await Task.Delay(sortDelay);
+                // === 新策略：预防性回正 ===
+                // 1. 先发送回正命令，确保从已知状态开始
+                Log.Information("开始执行预防性回正，确保摆轮从复位状态开始");
+                await ExecutePreventiveReset(client, pendulumState, photoelectricName);
 
-                // 2. 确定目标状态和所需命令
+                // 2. 等待分拣延迟到达最佳位置
+                var sortDelay = photoelectricConfig.SortingDelay;
+                var actualDelay = sortDelay > 0 ? sortDelay : 50; // 如果延迟为0，固定等待50ms
+                Log.Debug("等待分拣延迟: {SortDelay}ms (实际: {ActualDelay}ms)", sortDelay, actualDelay);
+                await Task.Delay(actualDelay);
+
+                // 3. 确定目标动作并发送摆动命令
                 var targetSlot = package.ChuteNumber;
                 var swingLeft = ShouldSwingLeft(targetSlot);
                 var swingRight = ShouldSwingRight(targetSlot);
-
-                var commandToSend = string.Empty;
-                var commandLogName = string.Empty;
                 var needsResetLater = false;
 
-                // 3. 根据当前状态和目标状态决定是否需要发送命令
                 if (swingLeft || swingRight) // 需要摆动
                 {
-                    // 检查当前状态是否已经符合要求
-                    if ((swingLeft && pendulumState.CurrentDirection == PendulumDirection.SwingingLeft) ||
-                        (swingRight && pendulumState.CurrentDirection == PendulumDirection.SwingingRight))
-                    {
-                        Log.Debug("摆轮已在所需状态 ({CurrentState})，无需发送摆动命令", pendulumState.GetCurrentState());
-                        needsResetLater = true; // 仍然需要后续回正
-                    }
-                    else
-                    {
-                        commandToSend = swingLeft ? PendulumCommands.Module2.SwingLeft : PendulumCommands.Module2.SwingRight;
-                        commandLogName = swingLeft ? "左摆" : "右摆";
-                        needsResetLater = true;
-                        Log.Debug("需要改变摆轮状态，确定命令: {CommandLogName} ({CommandToSend})", commandLogName, commandToSend);
-                    }
-                }
-                else // 不需要摆动，但可能需要回正
-                {
-                    if (pendulumState.CurrentDirection != PendulumDirection.Reset)
-                    {
-                        commandToSend = pendulumState.CurrentDirection == PendulumDirection.SwingingLeft
-                            ? PendulumCommands.Module2.ResetLeft
-                            : PendulumCommands.Module2.ResetRight;
-                        commandLogName = pendulumState.CurrentDirection == PendulumDirection.SwingingLeft 
-                            ? "左回正" 
-                            : "右回正";
-                        Log.Debug("摆轮需要回正，确定命令: {CommandLogName} ({CommandToSend})", commandLogName, commandToSend);
-                    }
-                    else
-                    {
-                        Log.Debug("摆轮已在复位状态，无需发送命令");
-                    }
-                }
+                    var commandToSend = swingLeft ? PendulumCommands.Module2.SwingLeft : PendulumCommands.Module2.SwingRight;
+                    var commandLogName = swingLeft ? "左摆" : "右摆";
+                    needsResetLater = true;
 
-                // 4. 发送命令 (如果需要)
-                if (!string.IsNullOrEmpty(commandToSend))
-                {
+                    Log.Debug("发送摆动命令: {CommandLogName} ({CommandToSend})", commandLogName, commandToSend);
                     var commandBytes = GetCommandBytes(commandToSend);
+                    
                     if (!await SendCommandWithRetryAsync(client, commandBytes, photoelectricName))
                     {
-                        Log.Error("发送命令 '{CommandLogName}' ({CommandToSend}) 失败.", commandLogName, commandToSend);
+                        Log.Error("发送摆动命令 '{CommandLogName}' ({CommandToSend}) 失败", commandLogName, commandToSend);
                         ProcessingPackages.TryRemove(package.Barcode, out _);
                         pendulumState.ForceReset(); // 发送失败时强制复位状态
                         return;
                     }
 
                     // 命令发送成功，更新状态
-                    if (swingLeft)
-                        pendulumState.SetSwinging(true);
-                    else if (swingRight)
-                        pendulumState.SetSwinging(false);
-                    else
-                        pendulumState.SetReset();
-
-                    Log.Information("已发送命令: {CommandLogName} ({CommandToSend}) 并更新状态为: {State}", 
+                    pendulumState.SetSwinging(swingLeft);
+                    Log.Information("已发送摆动命令: {CommandLogName} ({CommandToSend}) 并更新状态为: {State}", 
                         commandLogName, commandToSend, pendulumState.GetCurrentState());
                 }
+                else
+                {
+                    // 不需要摆动，包裹直行，摆轮保持复位状态
+                    Log.Debug("包裹无需摆动，摆轮保持复位状态");
+                }
 
-                PendulumState.UpdateLastSlot(targetSlot);
+                                PendulumState.UpdateLastSlot(targetSlot);
 
-                // 5. 如果需要，执行延迟回正
+                // 4. 如果需要，执行延迟回正
                 if (needsResetLater)
                 {
                     var resetDelay = photoelectricConfig.ResetDelay;
@@ -887,7 +889,35 @@ public abstract class BasePendulumSortService : IPendulumSortService
             {
                 Log.Error(ex, "执行分拣动作时发生异常.");
                 PendingSortPackages.TryRemove(package.Index, out _);
-                pendulumState?.ForceReset();
+                
+                // 【修复】异常时尝试发送物理回正命令，而不仅仅是软件复位
+                if (pendulumState != null)
+                {
+                    Log.Warning("由于异常，将尝试发送物理回正命令以确保摆轮状态正确");
+                    
+                    // 在后台线程执行回正，避免阻塞异常处理
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            var exceptionClient = GetSortingClient(photoelectricName);
+                            if (exceptionClient != null && exceptionClient.IsConnected() && pendulumState.CurrentDirection != PendulumDirection.Reset)
+                            {
+                                await ExecuteImmediateReset(exceptionClient, pendulumState, photoelectricName, "ExceptionRecovery");
+                            }
+                            else
+                            {
+                                pendulumState.ForceReset(); // 如果无法发送命令，至少软件复位
+                            }
+                        }
+                        catch (Exception resetEx)
+                        {
+                            Log.Error(resetEx, "异常恢复时执行回正操作失败");
+                            pendulumState.ForceReset(); // 最后的兜底操作
+                        }
+                    });
+                }
+                
                 // 异常情况下也要更新状态，避免包裹卡在Processing状态
                 package.SetSortState(PackageSortState.Pending);
             }
@@ -1240,6 +1270,87 @@ public abstract class BasePendulumSortService : IPendulumSortService
         else
         {
             Log.Error("第一次发送延迟 {ResetDir} 回正命令 ({ResetCommand}) 失败，强制复位状态.", resetDir, resetCommand);
+            pendulumState.ForceReset();
+        }
+    }
+
+    /// <summary>
+    /// 执行预防性回正，确保摆轮从复位状态开始
+    /// </summary>
+    private async Task ExecutePreventiveReset(TcpClientService client, PendulumState pendulumState, string photoelectricName)
+    {
+        Log.Debug("执行预防性回正 (光电: {Name})", photoelectricName);
+        
+        if (!client.IsConnected())
+        {
+            Log.Warning("预防性回正时客户端 '{Name}' 未连接", photoelectricName);
+            pendulumState.ForceReset();
+            return;
+        }
+
+        try
+        {
+            // 检查当前状态，如果已经是复位状态，仍然发送一次回正命令确保状态同步
+            var resetCommand = string.Empty;
+            var resetDirection = "通用";
+
+            // 根据当前状态选择合适的回正命令，如果状态未知则发送两个回正命令
+            if (pendulumState.CurrentDirection == PendulumDirection.SwingingLeft)
+            {
+                resetCommand = PendulumCommands.Module2.ResetLeft;
+                resetDirection = "左";
+            }
+            else if (pendulumState.CurrentDirection == PendulumDirection.SwingingRight)
+            {
+                resetCommand = PendulumCommands.Module2.ResetRight;
+                resetDirection = "右";
+            }
+            else
+            {
+                // 状态未知或已经复位，发送双重回正命令以确保安全
+                Log.Debug("摆轮状态未知或已复位，发送双重回正命令确保安全");
+                
+                var resetLeftBytes = GetCommandBytes(PendulumCommands.Module2.ResetLeft);
+                var resetRightBytes = GetCommandBytes(PendulumCommands.Module2.ResetRight);
+                
+                await SendCommandWithRetryAsync(client, resetLeftBytes, photoelectricName, maxRetries: 1);
+                await Task.Delay(10); // 短暂延迟
+                await SendCommandWithRetryAsync(client, resetRightBytes, photoelectricName, maxRetries: 1);
+                
+                pendulumState.SetReset();
+                Log.Information("预防性双重回正命令发送完成 (光电: {Name})", photoelectricName);
+                return;
+            }
+
+            // 发送特定方向的回正命令
+            var commandBytes = GetCommandBytes(resetCommand);
+            Log.Debug("发送预防性 {Direction} 回正命令 ({Command})...", resetDirection, resetCommand);
+            
+            if (await SendCommandWithRetryAsync(client, commandBytes, photoelectricName, maxRetries: 2))
+            {
+                pendulumState.SetReset();
+                Log.Information("预防性 {Direction} 回正命令发送成功 (光电: {Name})", resetDirection, photoelectricName);
+                
+                // 发送第二次回正命令以确保可靠性
+                await Task.Delay(10);
+                if (await SendCommandWithRetryAsync(client, commandBytes, photoelectricName, maxRetries: 1))
+                {
+                    Log.Debug("第二次预防性 {Direction} 回正命令发送成功", resetDirection);
+                }
+                else
+                {
+                    Log.Warning("第二次预防性 {Direction} 回正命令发送失败", resetDirection);
+                }
+            }
+            else
+            {
+                Log.Error("发送预防性 {Direction} 回正命令失败，强制复位状态 (光电: {Name})", resetDirection, photoelectricName);
+                pendulumState.ForceReset();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "执行预防性回正时发生错误 (光电: {Name})", photoelectricName);
             pendulumState.ForceReset();
         }
     }

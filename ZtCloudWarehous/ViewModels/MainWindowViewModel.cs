@@ -571,7 +571,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     // 尝试记录异常状态并分配到错误口
                     var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
                     package.SetChute(chuteSettings.ErrorChuteNumber);
-                    package.SetStatus(PackageStatus.Error, $"处理异常: {ex.Message}");
+                    package.SetStatus(Error, $"处理异常: {ex.Message}");
                     Log.Warning("因顶层处理异常，分配到异常口: {ErrorChute}", chuteSettings.ErrorChuteNumber);
                     // 可能需要调用 _sortService.ProcessPackage(package) 来确保包裹被送走
                     _sortService.ProcessPackage(package);
