@@ -1,6 +1,4 @@
-using Common.Models.Package;
-using System.Reactive.Linq;
-using System.Reactive.Subjects;
+using System.Reactive;
 
 namespace WeiCiModule.Services;
 
@@ -20,9 +18,9 @@ public interface IModuleConnectionService
     event EventHandler<bool>? ConnectionStateChanged;
 
     /// <summary>
-    /// PLC 触发信号的响应式流
+    /// PLC 触发信号的响应式流 (已包含服务器时间戳)
     /// </summary>
-    IObservable<ushort> TriggerSignalStream { get; }
+    IObservable<Timestamped<ushort>> TriggerSignalStream { get; }
 
     /// <summary>
     /// 启动TCP服务器

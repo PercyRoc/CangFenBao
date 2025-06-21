@@ -16,16 +16,21 @@ namespace Camera.Services
     /// 数据中转服务，用于处理条码过滤、重复过滤和图像保存等。
     /// 订阅来自相机接口的数据流，经过处理之后向下传递。
     /// </summary>
-    public sealed class CameraDataProcessingService(ICameraService actualCameraService, ISettingsService settingsService):IDisposable
+    public sealed class CameraDataProcessingService:IDisposable
     {
-        private readonly ICameraService _actualCameraService = actualCameraService ?? throw new ArgumentNullException(nameof(actualCameraService));
-        private readonly ISettingsService _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        private readonly ICameraService _actualCameraService;
+        private readonly ISettingsService _settingsService;
 
         private readonly Subject<PackageInfo> _processedPackageSubject = new();
         private readonly Subject<(BitmapSource Image, string CameraId)> _processedImageWithIdSubject = new();
 
         private IDisposable? _packageSubscription;
         private IDisposable? _imageSubscription;
+
+        // 【关键改进】为包裹匹配和处理创建一个专用的线程和调度器
+        private readonly Thread _packageMatchingThread;
+        private readonly EventLoopScheduler _packageMatchingScheduler;
+        private readonly CancellationTokenSource _cts = new();
 
         // State for the new N-2 barcode duplication filter
         private string? _nMinus1BarcodeForFilter;
@@ -42,13 +47,41 @@ namespace Camera.Services
             remove => _actualCameraService.ConnectionChanged -= value;
         }
 
+        public CameraDataProcessingService(ICameraService actualCameraService, ISettingsService settingsService)
+        {
+            _actualCameraService = actualCameraService ?? throw new ArgumentNullException(nameof(actualCameraService));
+            _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+
+            // 【关键改进】初始化专用线程和调度器
+            _packageMatchingThread = new Thread(ThreadStart)
+            {
+                Name = "PackageMatchingThread",
+                IsBackground = true,
+                Priority = ThreadPriority.Normal // 正常优先级，低于TCP接收线程
+            };
+            
+            _packageMatchingScheduler = new EventLoopScheduler(ts => _packageMatchingThread);
+            
+            _packageMatchingThread.Start();
+            Log.Information("✅ [专用匹配线程] 线程 'PackageMatchingThread' 已启动。");
+        }
+        
+        private void ThreadStart()
+        {
+            Log.Debug("专用匹配线程循环开始。");
+            // EventLoopScheduler 会处理循环和等待，我们只需要保持线程存活
+            _cts.Token.WaitHandle.WaitOne();
+            Log.Debug("专用匹配线程循环结束。");
+        }
+
         public bool Start()
         {
             Log.Information("[相机数据处理服务] 正在启动订阅...");
   
             _packageSubscription?.Dispose();
+            // 【关键改进】将包裹处理调度到专用的匹配线程上，而不是线程池
             _packageSubscription = _actualCameraService.PackageStream
-                .ObserveOn(TaskPoolScheduler.Default) 
+                .ObserveOn(_packageMatchingScheduler) 
                 .Subscribe(HandleRawPackage, OnStreamError, OnPackageStreamCompleted);
 
             _imageSubscription?.Dispose();
@@ -283,13 +316,19 @@ namespace Camera.Services
             if (disposing)
             {
                 Log.Debug("[相机数据处理服务] 正在释放托管资源。");
+                
+                // 【关键改进】优雅地停止专用线程
+                _cts.Cancel();
+                _packageMatchingScheduler.Dispose();
+                
                 Stop(); 
                     
                 _processedPackageSubject.OnCompleted(); 
                 _processedPackageSubject.Dispose();
                 _processedImageWithIdSubject.OnCompleted();
                 _processedImageWithIdSubject.Dispose();
-
+                
+                _cts.Dispose();
             }
             _disposedValue = true;
             Log.Debug("[相机数据处理服务] 已释放。");

@@ -97,49 +97,44 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
             await using var connection = new SqliteConnection(_options.FindExtension<Microsoft.EntityFrameworkCore.Sqlite.Infrastructure.Internal.SqliteOptionsExtension>()?.ConnectionString);
             await connection.OpenAsync();
 
-            // 检查记录是否已存在，如果存在则不重复添加
-            // 注意：这里需要精确匹配条码和创建时间，因为 CreateTime 现在是去重的唯一标识
-            string checkSql = $"SELECT COUNT(*) FROM \"{targetTableName}\" WHERE Barcode = @Barcode AND CreateTime = @CreateTime;";
-            await using var checkCommand = connection.CreateCommand();
-            checkCommand.CommandText = checkSql;
-            checkCommand.Parameters.Add(new SqliteParameter("@Barcode", record.Barcode));
-            checkCommand.Parameters.Add(new SqliteParameter("@CreateTime", record.CreateTime.ToString("yyyy-MM-dd HH:mm:ss.fff")));
-            long count = (long)await checkCommand.ExecuteScalarAsync();
-
-            if (count > 0)
-            {
-                Log.Information("PackageHistoryDataService: AddPackageAsync: 记录 (Barcode: {Barcode}, CreateTime: {CreateTime:yyyy-MM-dd HH:mm:ss.fff}) 已存在于表 {TargetTableName}, 跳过插入.", record.Barcode, record.CreateTime, targetTableName);
-                return; // 记录已存在，不重复添加
-            }
-
+            // 【性能优化】使用乐观并发：直接尝试插入，利用唯一索引约束防重复
             string insertSql = $"INSERT INTO \"{targetTableName}\" (" +
                                "\"Index\", Barcode, SegmentCode, Weight, ChuteNumber, Status, StatusDisplay, CreateTime, ErrorMessage, Length, Width, Height, Volume, ImagePath, PalletName, PalletWeight, PalletLength, PalletWidth, PalletHeight) VALUES (" +
                                "@Index, @Barcode, @SegmentCode, @Weight, @ChuteNumber, @Status, @StatusDisplay, @CreateTime, @ErrorMessage, @Length, @Width, @Height, @Volume, @ImagePath, @PalletName, @PalletWeight, @PalletLength, @PalletWidth, @PalletHeight)";
 
-            await using var insertCommand = connection.CreateCommand();
-            insertCommand.CommandText = insertSql;
-            insertCommand.Parameters.Add(new SqliteParameter("@Index", record.Index));
-            insertCommand.Parameters.Add(new SqliteParameter("@Barcode", record.Barcode));
-            insertCommand.Parameters.Add(new SqliteParameter("@SegmentCode", (object?)record.SegmentCode ?? DBNull.Value));
-            insertCommand.Parameters.Add(new SqliteParameter("@Weight", record.Weight));
-            insertCommand.Parameters.Add(new SqliteParameter("@ChuteNumber", (object?)record.ChuteNumber ?? DBNull.Value));
-            insertCommand.Parameters.Add(new SqliteParameter("@Status", (object?)record.Status ?? DBNull.Value));
-            insertCommand.Parameters.Add(new SqliteParameter("@StatusDisplay", record.StatusDisplay));
-            insertCommand.Parameters.Add(new SqliteParameter("@CreateTime", record.CreateTime.ToString("yyyy-MM-dd HH:mm:ss.fff")));
-            insertCommand.Parameters.Add(new SqliteParameter("@ErrorMessage", (object?)record.ErrorMessage ?? DBNull.Value));
-            insertCommand.Parameters.Add(new SqliteParameter("@Length", (object?)record.Length ?? DBNull.Value));
-            insertCommand.Parameters.Add(new SqliteParameter("@Width", (object?)record.Width ?? DBNull.Value));
-            insertCommand.Parameters.Add(new SqliteParameter("@Height", (object?)record.Height ?? DBNull.Value));
-            insertCommand.Parameters.Add(new SqliteParameter("@Volume", (object?)record.Volume ?? DBNull.Value));
-            insertCommand.Parameters.Add(new SqliteParameter("@ImagePath", (object?)record.ImagePath ?? DBNull.Value));
-            insertCommand.Parameters.Add(new SqliteParameter("@PalletName", (object?)record.PalletName ?? DBNull.Value));
-            insertCommand.Parameters.Add(new SqliteParameter("@PalletWeight", (object?)record.PalletWeight ?? DBNull.Value));
-            insertCommand.Parameters.Add(new SqliteParameter("@PalletLength", (object?)record.PalletLength ?? DBNull.Value));
-            insertCommand.Parameters.Add(new SqliteParameter("@PalletWidth", (object?)record.PalletWidth ?? DBNull.Value));
-            insertCommand.Parameters.Add(new SqliteParameter("@PalletHeight", (object?)record.PalletHeight ?? DBNull.Value));
+            try
+            {
+                await using var insertCommand = connection.CreateCommand();
+                insertCommand.CommandText = insertSql;
+                insertCommand.Parameters.Add(new SqliteParameter("@Index", record.Index));
+                insertCommand.Parameters.Add(new SqliteParameter("@Barcode", record.Barcode));
+                insertCommand.Parameters.Add(new SqliteParameter("@SegmentCode", (object?)record.SegmentCode ?? DBNull.Value));
+                insertCommand.Parameters.Add(new SqliteParameter("@Weight", record.Weight));
+                insertCommand.Parameters.Add(new SqliteParameter("@ChuteNumber", (object?)record.ChuteNumber ?? DBNull.Value));
+                insertCommand.Parameters.Add(new SqliteParameter("@Status", (object?)record.Status ?? DBNull.Value));
+                insertCommand.Parameters.Add(new SqliteParameter("@StatusDisplay", record.StatusDisplay));
+                insertCommand.Parameters.Add(new SqliteParameter("@CreateTime", record.CreateTime.ToString("yyyy-MM-dd HH:mm:ss.fff")));
+                insertCommand.Parameters.Add(new SqliteParameter("@ErrorMessage", (object?)record.ErrorMessage ?? DBNull.Value));
+                insertCommand.Parameters.Add(new SqliteParameter("@Length", (object?)record.Length ?? DBNull.Value));
+                insertCommand.Parameters.Add(new SqliteParameter("@Width", (object?)record.Width ?? DBNull.Value));
+                insertCommand.Parameters.Add(new SqliteParameter("@Height", (object?)record.Height ?? DBNull.Value));
+                insertCommand.Parameters.Add(new SqliteParameter("@Volume", (object?)record.Volume ?? DBNull.Value));
+                insertCommand.Parameters.Add(new SqliteParameter("@ImagePath", (object?)record.ImagePath ?? DBNull.Value));
+                insertCommand.Parameters.Add(new SqliteParameter("@PalletName", (object?)record.PalletName ?? DBNull.Value));
+                insertCommand.Parameters.Add(new SqliteParameter("@PalletWeight", (object?)record.PalletWeight ?? DBNull.Value));
+                insertCommand.Parameters.Add(new SqliteParameter("@PalletLength", (object?)record.PalletLength ?? DBNull.Value));
+                insertCommand.Parameters.Add(new SqliteParameter("@PalletWidth", (object?)record.PalletWidth ?? DBNull.Value));
+                insertCommand.Parameters.Add(new SqliteParameter("@PalletHeight", (object?)record.PalletHeight ?? DBNull.Value));
 
-            await insertCommand.ExecuteNonQueryAsync();
-            Log.Information("PackageHistoryDataService: 成功将条码 {Barcode} (创建时间 {CreateTime:yyyy-MM-dd HH:mm:ss.fff}) 的数据插入到表 {TargetTableName}.", record.Barcode, record.CreateTime, targetTableName);
+                await insertCommand.ExecuteNonQueryAsync();
+                Log.Information("PackageHistoryDataService: 成功将条码 {Barcode} (创建时间 {CreateTime:yyyy-MM-dd HH:mm:ss.fff}) 的数据插入到表 {TargetTableName}.", record.Barcode, record.CreateTime, targetTableName);
+            }
+            catch (SqliteException ex) when (ex.SqliteErrorCode == 19) // SQLITE_CONSTRAINT (约束冲突)
+            {
+                // 这是预期的错误，说明记录已经存在（被唯一索引阻止）
+                Log.Information("PackageHistoryDataService: AddPackageAsync: 记录 (Barcode: {Barcode}, CreateTime: {CreateTime:yyyy-MM-dd HH:mm:ss.fff}) 已存在 (约束冲突)，跳过插入.", record.Barcode, record.CreateTime);
+                return; // 静默处理重复记录
+            }
         }
         catch (Exception ex)
         {
@@ -460,29 +455,46 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
         {
             var cutoffDate = DateTime.Today.AddMonths(-monthsToKeep);
             var allTables = await GetAllHistoricalTableNamesAsync(useSemaphore: false);
+            
+            Log.Information("开始历史数据清理: 保留最近{MonthsToKeep}个月的数据, 截止日期: {CutoffDate:yyyy-MM-dd}, 共找到{TableCount}个历史表", 
+                monthsToKeep, cutoffDate, allTables.Count);
 
             if (allTables.Count == 0) { return; }
+
+            var deletedCount = 0;
+            var keptCount = 0;
 
             foreach (var tableName in allTables)
             {
                 if (!TryParseDateFromTableName(tableName, out var tableDate)) continue;
-                if (tableDate >= new DateTime(cutoffDate.Year, cutoffDate.Month, 1)) continue;
+                
+                if (tableDate >= new DateTime(cutoffDate.Year, cutoffDate.Month, 1))
+                {
+                    keptCount++;
+                    Log.Debug("保留表: {TableName} (日期: {TableDate:yyyy-MM})", tableName, tableDate);
+                    continue;
+                }
+                
                 try 
                 { 
                     await using var context = CreateDbContext(); 
                     var esc = tableName.Replace("`", "``"); 
                     await context.Database.ExecuteSqlAsync($"DROP TABLE IF EXISTS `{esc}`");
                     _tableExistsCache.TryRemove(tableName, out _);
+                    deletedCount++;
+                    Log.Information("已删除过期历史表: {TableName} (日期: {TableDate:yyyy-MM})", tableName, tableDate);
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    // ignored
+                    Log.Warning(ex, "删除历史表 {TableName} 时发生错误", tableName);
                 }
             }
+            
+            Log.Information("历史数据清理完成: 删除了{DeletedCount}个过期表, 保留了{KeptCount}个表", deletedCount, keptCount);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // ignored
+            Log.Error(ex, "执行历史数据清理时发生错误");
         }
         finally { _semaphore.Release(); }
     }
@@ -595,12 +607,11 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
                   ");";
         await dbContext.Database.ExecuteSqlRawAsync(sql);
 
-        var indexBarcodeSql = $"CREATE INDEX IF NOT EXISTS \"IX_{tableName}_Barcode\" ON \"{tableName}\" (\"Barcode\");";
-        await dbContext.Database.ExecuteSqlRawAsync(indexBarcodeSql);
+        // 【性能优化】创建联合唯一索引，覆盖去重查询条件，效率最高
+        var indexCompositeSql = $"CREATE UNIQUE INDEX IF NOT EXISTS \"IX_{tableName}_Barcode_CreateTime\" ON \"{tableName}\" (\"Barcode\", \"CreateTime\");";
+        await dbContext.Database.ExecuteSqlRawAsync(indexCompositeSql);
 
-        var indexCreateTimeSql = $"CREATE INDEX IF NOT EXISTS \"IX_{tableName}_CreateTime\" ON \"{tableName}\" (\"CreateTime\");";
-        await dbContext.Database.ExecuteSqlRawAsync(indexCreateTimeSql);
-
+        // 保留状态索引用于其他查询场景
         var indexStatusSql = $"CREATE INDEX IF NOT EXISTS \"IX_{tableName}_Status\" ON \"{tableName}\" (\"Status\");";
         await dbContext.Database.ExecuteSqlRawAsync(indexStatusSql);
     }

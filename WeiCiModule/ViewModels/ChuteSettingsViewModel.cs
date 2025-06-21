@@ -1,4 +1,5 @@
 ﻿using System.Collections.ObjectModel;
+using System.IO;
 using Common.Services.Settings;
 using WeiCiModule.Models; 
 using WeiCiModule.Models.Settings;
@@ -12,16 +13,15 @@ namespace WeiCiModule.ViewModels
     public class ChuteSettingsViewModel : BindableBase, IDialogAware
     {
         private readonly ISettingsService _settingsService;
-        private readonly ExcelService _excelService;
         private ChuteSettings _chuteSettingsConfig;
 
-        public string Title => "Library Branch Settings";
+        public static string Title => "Library Branch Settings";
 
-        public ObservableCollection<ChuteSettingItemViewModel?> ChuteSettingItems { get; } = new ObservableCollection<ChuteSettingItemViewModel?>();
-        private ObservableCollection<string> GlobalAvailableBranchCodes { get; } = new ObservableCollection<string>();
+        public ObservableCollection<ChuteSettingItemViewModel?> ChuteSettingItems { get; } = [];
+        private ObservableCollection<string> GlobalAvailableBranchCodes { get; } = [];
 
         private ChuteSettingItemViewModel? _selectedChuteSettingItem;
-        private DialogCloseListener _requestClose;
+        private readonly DialogCloseListener _requestClose;
 
         public ChuteSettingItemViewModel? SelectedChuteSettingItem
         {
@@ -40,7 +40,6 @@ namespace WeiCiModule.ViewModels
         public ChuteSettingsViewModel(ISettingsService settingsService)
         {
             _settingsService = settingsService;
-            _excelService = new ExcelService();
             _chuteSettingsConfig = new ChuteSettings(); // Initialize to avoid null
             _requestClose = new DialogCloseListener(); // Initialize DialogCloseListener
 
@@ -68,16 +67,16 @@ namespace WeiCiModule.ViewModels
             // The list will be populated dynamically from loaded or imported settings.
         }
 
-        // Import from Excel file
+        // Import from Excel or CSV file
         private void ExecuteImportExcel()
         {
             try
             {
-                // Create open file dialog
+                // Create open file dialog with CSV support
                 var openFileDialog = new OpenFileDialog
                 {
-                    Filter = "Excel Files|*.xlsx;*.xls",
-                    Title = "Select Excel File to Import"
+                    Filter = "Excel Files|*.xlsx;*.xls|CSV Files|*.csv|All Supported|*.xlsx;*.xls;*.csv",
+                    Title = "Select File to Import"
                 };
 
                 // Show dialog and check if user selected a file
@@ -87,7 +86,7 @@ namespace WeiCiModule.ViewModels
                 }
 
                 // Use ExcelService to import data
-                var importedData = _excelService.ImportFromExcel(openFileDialog.FileName);
+                var importedData = ExcelService.ImportFromExcel(openFileDialog.FileName);
                 if (importedData.Count == 0)
                 {
                     MessageBox.Show("No valid data was imported. Please check the file format and content.", "Import Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -95,7 +94,8 @@ namespace WeiCiModule.ViewModels
                 }
 
                 // Confirm whether to replace existing data
-                var result = MessageBox.Show($"Successfully read {importedData.Count} records from Excel. Replace all current data? Select \"No\" to append to existing data.", 
+                var fileType = Path.GetExtension(openFileDialog.FileName).Equals(".csv", StringComparison.InvariantCultureIgnoreCase) ? "CSV" : "Excel";
+                var result = MessageBox.Show($"Successfully read {importedData.Count} records from {fileType}. Replace all current data? Select \"No\" to append to existing data.", 
                     "Import Confirmation", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
                 
                 if (result == MessageBoxResult.Cancel)
@@ -125,7 +125,7 @@ namespace WeiCiModule.ViewModels
                 // Do not renumber items, respect the values from the Excel file.
                 // ReNumberItems();
 
-                Log.Information("Successfully imported {Count} records from Excel", importedData.Count);
+                Log.Information("Successfully imported {Count} records from {FileType}", importedData.Count, fileType);
                 MessageBox.Show($"Successfully imported {importedData.Count} records.", "Import Successful", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
@@ -135,17 +135,17 @@ namespace WeiCiModule.ViewModels
             }
         }
 
-        // Export to Excel file
+        // Export to Excel or CSV file
         private void ExecuteExportExcel()
         {
             try
             {
-                // Create save file dialog
+                // Create save file dialog with CSV support
                 var saveFileDialog = new SaveFileDialog
                 {
-                    Filter = "Excel Workbook|*.xlsx|Excel 97-2003 Workbook|*.xls",
+                    Filter = "Excel Workbook|*.xlsx|Excel 97-2003 Workbook|*.xls|CSV File|*.csv",
                     DefaultExt = ".xlsx",
-                    Title = "Save Excel File",
+                    Title = "Save File",
                     FileName = "LibraryBranchSettings_" + DateTime.Now.ToString("yyyyMMdd")
                 };
 
@@ -158,22 +158,23 @@ namespace WeiCiModule.ViewModels
                 // Prepare data for export
                 var dataToExport = ChuteSettingItems.Select(vm => vm?.ToData()).ToList();
 
-                // Use ExcelService to export data
-                bool success = _excelService.ExportToExcel(saveFileDialog.FileName, dataToExport);
+                // Use ExcelService to export data (automatically handles Excel and CSV based on extension)
+                bool success = ExcelService.ExportToExcel(saveFileDialog.FileName, dataToExport);
                 if (success)
                 {
-                    Log.Information("Successfully exported {Count} records to Excel: {FileName}", dataToExport.Count, saveFileDialog.FileName);
-                    MessageBox.Show($"Successfully exported {dataToExport.Count} records to Excel file.", "Export Successful", MessageBoxButton.OK, MessageBoxImage.Information);
+                    var fileType = Path.GetExtension(saveFileDialog.FileName).Equals(".csv", StringComparison.InvariantCultureIgnoreCase) ? "CSV" : "Excel";
+                    Log.Information("Successfully exported {Count} records to {FileType}: {FileName}", dataToExport.Count, fileType, saveFileDialog.FileName);
+                    MessageBox.Show($"Successfully exported {dataToExport.Count} records to {fileType} file.", "Export Successful", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 else
                 {
-                    MessageBox.Show("Failed to export Excel file. Please check the log for details.", "Export Failed", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    MessageBox.Show("Failed to export file. Please check the log for details.", "Export Failed", MessageBoxButton.OK, MessageBoxImage.Warning);
                 }
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Error exporting Excel");
-                MessageBox.Show($"Error exporting Excel: {ex.Message}", "Export Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                Log.Error(ex, "Error exporting file");
+                MessageBox.Show($"Error exporting file: {ex.Message}", "Export Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -181,18 +182,6 @@ namespace WeiCiModule.ViewModels
         {
             return ChuteSettingItems.Count > 0;
         }
-
-        // Renumber all items - This logic is deprecated as per user requirements.
-        /*
-        private void ReNumberItems()
-        {
-            int sn = 1;
-            foreach (var item in ChuteSettingItems)
-            {
-                if (item != null) item.SN = sn++;
-            }
-        }
-        */
 
         private void LoadSettings()
         {

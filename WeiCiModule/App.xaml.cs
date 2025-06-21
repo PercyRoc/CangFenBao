@@ -14,6 +14,7 @@ using WeiCiModule.ViewModels.Settings;
 using WeiCiModule.Views.Settings;
 using Common;
 using History;
+using System.Runtime.InteropServices;
 
 namespace WeiCiModule;
 
@@ -25,6 +26,10 @@ public partial class App
     private static Mutex? _mutex;
     private const string MutexName = "Global\\WeiCiModule_App_Mutex_B3A7F8D1-C2E9-4B5A-9A1D-F8C7E0A1B2C3";
     private static ResxLocalizationProvider ResxProvider { get; } = ResxLocalizationProvider.Instance;
+    
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AllocConsole();
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -51,22 +56,79 @@ public partial class App
 
         Current.DispatcherUnhandledException += (_, args) =>
         {
-            Log.Fatal(args.Exception, "应用程序发生未经处理的致命异常!");
-            args.Handled = true;
-            MessageBox.Show($"发生了一个致命错误，应用程序即将关闭。详情请查看日志。", "致命错误", MessageBoxButton.OK, MessageBoxImage.Error);
-            Current.Shutdown(-1);
+            try
+            {
+                if (args?.Exception != null)
+                {
+                    Log.Fatal(args.Exception, "应用程序发生未经处理的致命异常!");
+                }
+                else
+                {
+                    Log.Fatal("应用程序发生未经处理的致命异常，但异常对象为空!");
+                }
+                
+                if (args != null)
+                {
+                    args.Handled = true;
+                }
+                
+                MessageBox.Show($"发生了一个致命错误，应用程序即将关闭。详情请查看日志。", "致命错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                Application.Current.Shutdown(-1);
+            }
+            catch (Exception ex)
+            {
+                // 如果异常处理程序本身出错，至少尝试记录
+                try
+                {
+                    Log.Error(ex, "异常处理程序内部发生错误");
+                }
+                catch
+                {
+                    // 忽略日志错误
+                }
+            }
         };
 
         TaskScheduler.UnobservedTaskException += (_, args) =>
         {
-            Log.Error(args.Exception, "后台任务发生未观察到的异常!");
-            args.SetObserved();
+            try
+            {
+                Log.Error(args.Exception, "后台任务发生未观察到的异常!");
+                args.SetObserved();
+            }
+            catch (Exception ex)
+            {
+                // 忽略异常处理程序内部的错误
+                try { Log.Error(ex, "UnobservedTaskException处理程序内部错误"); }
+                catch
+                {
+                    // ignored
+                }
+            }
         };
         
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
-            var exception = args.ExceptionObject as Exception;
-            Log.Fatal(exception, "AppDomain 级别捕获到未经处理的致命异常! IsTerminating: {IsTerminating}", args.IsTerminating);
+            try
+            {
+                if (args.ExceptionObject is Exception exception)
+                {
+                    Log.Fatal(exception, "AppDomain 级别捕获到未经处理的致命异常! IsTerminating: {IsTerminating}", args.IsTerminating);
+                }
+                else
+                {
+                    Log.Fatal("AppDomain 级别捕获到未经处理的致命异常，但异常对象无法转换! IsTerminating: {IsTerminating}", args.IsTerminating);
+                }
+            }
+            catch (Exception ex)
+            {
+                // 忽略异常处理程序内部的错误
+                try { Log.Error(ex, "UnhandledException处理程序内部错误"); }
+                catch
+                {
+                    // ignored
+                }
+            }
         };
 
         base.OnStartup(e);
@@ -103,6 +165,7 @@ public partial class App
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
         containerRegistry.RegisterSingleton<TcpCameraService>();
+        containerRegistry.RegisterSingleton<MainViewModel>();
         containerRegistry.RegisterSingleton<SettingsDialogViewModel>();
         containerRegistry.RegisterSingleton<ChuteSettingsViewModel>();
         containerRegistry.RegisterSingleton<ModulesTcpSettingsViewModel>();
@@ -175,20 +238,48 @@ public partial class App
         Log.Information("应用程序正在准备退出...");
         var tasks = new List<Task>();
 
-        var moduleConnectionService = ContainerLocator.Container.Resolve<IModuleConnectionService>();
-        Log.Information("正在尝试停止 ModuleConnectionService...");
-        tasks.Add(Task.Run(async () => 
+        // 首先释放MainViewModel资源（包含专用线程）
+        try
         {
-            try
+            if (ContainerLocator.Container.IsRegistered<MainViewModel>())
             {
-                await moduleConnectionService.StopServerAsync();
-                Log.Information("ModuleConnectionService 已成功停止。");
+                var mainViewModel = ContainerLocator.Container.Resolve<MainViewModel>();
+                Log.Information("正在释放 MainViewModel 资源...");
+                mainViewModel.Dispose();
+                Log.Information("MainViewModel 资源已释放。");
             }
-            catch (Exception ex)
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "释放 MainViewModel 时发生错误");
+        }
+
+        if (ContainerLocator.Container.IsRegistered<IModuleConnectionService>())
+        {
+            var moduleConnectionService = ContainerLocator.Container.Resolve<IModuleConnectionService>();
+            Log.Information("正在尝试释放 ModuleConnectionService...");
+            tasks.Add(Task.Run(() =>
             {
-                Log.Error(ex, "停止 ModuleConnectionService 时发生意外错误。");
-            }
-        }));
+                try
+                {
+                    if (moduleConnectionService is IDisposable disposableService)
+                    {
+                        disposableService.Dispose();
+                        Log.Information("ModuleConnectionService 已成功释放。");
+                    }
+                    else
+                    {
+                        // 回退到原来的停止方法
+                        moduleConnectionService.StopServerAsync().Wait(TimeSpan.FromSeconds(3));
+                        Log.Information("ModuleConnectionService 已成功停止。");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "释放 ModuleConnectionService 时发生意外错误。");
+                }
+            }));
+        }
 
         // Stop TcpCameraService
         if (ContainerLocator.Container.IsRegistered<TcpCameraService>())
@@ -199,18 +290,12 @@ public partial class App
             {
                 try
                 {
-                    if (tcpCameraService.Stop())
-                    {
-                        Log.Information("TcpCameraService 已成功请求停止。");
-                    }
-                    else
-                    {
-                        Log.Warning("TcpCameraService 停止请求失败。");
-                    }
+                    tcpCameraService.Dispose(); // 使用Dispose而不是Stop，确保完全清理
+                    Log.Information("TcpCameraService 已成功释放资源。");
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "停止 TcpCameraService 时发生意外错误。");
+                    Log.Error(ex, "释放 TcpCameraService 时发生意外错误。");
                 }
             }));
         } else {
@@ -222,13 +307,16 @@ public partial class App
             Log.Information("等待后台服务停止...");
             try
             {
-                if (!Task.WhenAll(tasks).Wait(TimeSpan.FromSeconds(3)))
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3)); // 减少到3秒超时
+                var allTasks = Task.WhenAll(tasks);
+                
+                if (allTasks.Wait(TimeSpan.FromSeconds(3)))
                 {
-                    Log.Warning("一个或多个后台服务未在3秒超时内完全停止。");
+                    Log.Information("所有请求停止的后台服务均已处理完毕。");
                 }
                 else
                 {
-                    Log.Information("所有请求停止的后台服务均已处理完毕。");
+                    Log.Warning("一个或多个后台服务未在3秒超时内完全停止，继续退出流程。");
                 }
             }
             catch (AggregateException ae) when (ae.InnerExceptions.Any(ex => ex is TimeoutException))
@@ -241,6 +329,11 @@ public partial class App
             }
         }
 
+        // 强制垃圾回收，确保所有资源被释放
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
         _mutex?.ReleaseMutex();
         if (_mutex != null)
         {
@@ -252,6 +345,23 @@ public partial class App
         
         base.OnExit(e);
         Log.Information("应用程序已退出。 Status Code: {ExitCode}", e.ApplicationExitCode);
-        Log.CloseAndFlush();
+        
+        // 确保所有日志都被写入，设置超时避免无限等待
+        try
+        {
+            // 使用异步方法并设置超时
+            var flushTask = Log.CloseAndFlushAsync().AsTask();
+            if (!flushTask.Wait(TimeSpan.FromSeconds(3)))
+            {
+                Console.WriteLine("日志刷新超时，强制退出");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"日志刷新时发生错误: {ex.Message}");
+        }
+        
+        // 正常退出，不使用强制退出
+        // Environment.Exit(e.ApplicationExitCode); // 移除强制退出
     }
 }

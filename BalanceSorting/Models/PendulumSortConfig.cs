@@ -112,4 +112,4 @@ public class SortPhotoelectric : TriggerPhotoelectric
         get => _name;
         set => SetProperty(ref _name, value);
     }
-} 
+}

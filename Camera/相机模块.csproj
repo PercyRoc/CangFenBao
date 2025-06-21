@@ -12,15 +12,19 @@
     </PropertyGroup>
     
     <ItemGroup>
-        <PackageReference Include="Prism.Wpf"/>
+        <PackageReference Include="Prism.Wpf" />
         <PackageReference Include="Serilog" />
-        <PackageReference Include="WPF-UI"/>
-        <PackageReference Include="HandyControl"/>
-        <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
+        <PackageReference Include="Serilog.Sinks.Async" />
+        <PackageReference Include="Serilog.Sinks.Console" />
+        <PackageReference Include="Serilog.Sinks.Debug" />
+        <PackageReference Include="Serilog.Sinks.File" />
+        <PackageReference Include="WPF-UI" />
+        <PackageReference Include="HandyControl" />
+        <PackageReference Include="MahApps.Metro.IconPacks.Material" />
         <PackageReference Include="WPFLocalizeExtension" />
         <PackageReference Include="System.Reactive" />
-        <PackageReference Include="TurboJpegWrapper"/>
-        <PackageReference Include="Microsoft.Extensions.ObjectPool"/>
+        <PackageReference Include="TurboJpegWrapper" />
+        <PackageReference Include="Microsoft.Extensions.ObjectPool" />
     </ItemGroup>
     
     <ItemGroup>
