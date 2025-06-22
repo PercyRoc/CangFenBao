@@ -7,6 +7,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Serilog;
 using System.Linq;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading.Channels;
 
 namespace TcpCameraSimulator;
 
@@ -43,6 +46,18 @@ public class CoordinatedCameraSimulator : IDisposable
     // 延迟统计
     private readonly ConcurrentQueue<double> _delayMeasurements = new();
     
+    // 相机模拟相关
+    private static TcpListener? _cameraListener;
+    private static readonly List<TcpClient> CameraClients = new();
+    private static readonly Channel<string> CameraDataChannel = Channel.CreateUnbounded<string>();
+    private static CancellationTokenSource? _cts;
+    
+    // 【新增】PLC模拟相关
+    private static TcpClient? _plcClient;
+    private static NetworkStream? _plcStream;
+    private static readonly ConcurrentDictionary<ushort, DateTimeOffset> SentPlcSignals = new();
+    private static ushort _currentPlcPackageNumber = 1;
+
     public CoordinatedCameraSimulator(string host = "127.0.0.1", int port = 20011, 
         int minDelayMs = 800, int maxDelayMs = 900)
     {
@@ -439,5 +454,380 @@ public class CoordinatedCameraSimulator : IDisposable
         _signalSemaphore?.Dispose();
         _listener?.Stop();
         GC.SuppressFinalize(this);
+    }
+
+    public static async Task Main(string[] args)
+    {
+        Console.Title = "增强版协同相机与PLC模拟器";
+        _cts = new CancellationTokenSource();
+        Console.CancelKeyPress += (_, e) =>
+        {
+            e.Cancel = true;
+            _cts.Cancel();
+        };
+
+        // 【关键改进】使用更健壮的具名参数解析
+        var cameraPort = int.Parse(GetArgValue(args, "--camera-port", "20011"));
+        var plcIp = GetArgValue(args, "--plc-ip", "127.0.0.1");
+        var plcPort = int.Parse(GetArgValue(args, "--plc-port", "20010"));
+        var sendIntervalMs = int.Parse(GetArgValue(args, "--interval", "20"));
+        
+        Console.WriteLine("--- 模拟器配置 ---");
+        Console.WriteLine($"相机服务监听端口: {cameraPort} (使用 --camera-port 重写)");
+        Console.WriteLine($"PLC服务目标: {plcIp}:{plcPort} (使用 --plc-ip, --plc-port 重写)");
+        Console.WriteLine($"发送间隔: {sendIntervalMs} ms (约 {60000.0 / sendIntervalMs:F1} 次/分钟, 使用 --interval 重写)");
+        Console.WriteLine("--------------------");
+        Console.WriteLine("按 Ctrl+C 停止模拟器。");
+
+        try
+        {
+            // 启动相机服务器
+            var cameraListenTask = StartCameraServer(cameraPort, _cts.Token);
+            var cameraBroadcastTask = BroadcastCameraData(_cts.Token);
+            
+            // 【新增】连接到PLC服务器
+            await ConnectToPlcAsync(plcIp, plcPort, _cts.Token);
+            StartListeningToPlc(_cts.Token);
+
+            // 启动协同数据发送任务
+            var coordinatedSendTask = SendCoordinatedData(sendIntervalMs, _cts.Token);
+            
+            await Task.WhenAll(cameraListenTask, cameraBroadcastTask, coordinatedSendTask);
+        }
+        catch (OperationCanceledException)
+        {
+            Console.WriteLine("\n模拟器正在停止...");
+        }
+        catch (Exception ex)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"\n模拟器发生致命错误: {ex.Message}");
+            Console.ResetColor();
+        }
+        finally
+        {
+            // 清理资源
+            _cameraListener?.Stop();
+            foreach (var client in CameraClients)
+            {
+                client.Close();
+            }
+            _plcClient?.Close();
+            Console.WriteLine("所有资源已释放，模拟器已关闭。");
+        }
+    }
+    
+    /// <summary>
+    /// 【新增】从命令行参数数组中安全地获取具名参数的值
+    /// </summary>
+    private static string GetArgValue(string[] args, string argName, string defaultValue)
+    {
+        for (var i = 0; i < args.Length - 1; i++)
+        {
+            if (args[i].Equals(argName, StringComparison.OrdinalIgnoreCase))
+            {
+                return args[i + 1];
+            }
+        }
+        return defaultValue;
+    }
+
+    private static async Task StartCameraServer(int port, CancellationToken token)
+    {
+        // ... existing code ...
+        _cameraListener = new TcpListener(IPAddress.Any, port);
+        _cameraListener.Start();
+        Console.WriteLine($"[相机服务] 正在监听端口 {port}...");
+
+        while (!token.IsCancellationRequested)
+        {
+            try
+            {
+                var client = await _cameraListener.AcceptTcpClientAsync(token);
+                lock (CameraClients)
+                {
+                    CameraClients.Add(client);
+                }
+                var clientEp = client.Client.RemoteEndPoint;
+                Console.WriteLine($"[相机服务] 接受客户端连接: {clientEp}");
+            }
+            catch (OperationCanceledException)
+            {
+                // 这是正常的关闭流程
+                break;
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"[相机服务] 接受连接时发生错误: {ex.Message}");
+                Console.ResetColor();
+            }
+        }
+        Console.WriteLine("[相机服务] 监听已停止。");
+    }
+
+    private static async Task BroadcastCameraData(CancellationToken token)
+    {
+        await foreach (var data in CameraDataChannel.Reader.ReadAllAsync(token))
+        {
+            var dataBytes = Encoding.UTF8.GetBytes(data);
+            List<TcpClient> clientsToBroadcast;
+            List<TcpClient> disconnectedClients = new();
+
+            // 【关键修复 CS1996】在lock中只复制列表，不在lock中await
+            lock (CameraClients)
+            {
+                clientsToBroadcast = new List<TcpClient>(CameraClients);
+            }
+
+            foreach (var client in clientsToBroadcast)
+            {
+                if (!client.Connected)
+                {
+                    disconnectedClients.Add(client);
+                    continue;
+                }
+
+                try
+                {
+                    var stream = client.GetStream();
+                    await stream.WriteAsync(dataBytes, token);
+                }
+                catch (Exception ex)
+                {
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.WriteLine($"[相机服务] 发送数据到 {client.Client.RemoteEndPoint} 失败: {ex.Message}");
+                    Console.ResetColor();
+                    disconnectedClients.Add(client);
+                }
+            }
+
+            // 移除已断开的客户端
+            if (disconnectedClients.Count > 0)
+            {
+                lock (CameraClients)
+                {
+                    foreach (var disconnected in disconnectedClients)
+                    {
+                        CameraClients.Remove(disconnected);
+                        disconnected.Close();
+                    }
+                }
+            }
+        }
+        Console.WriteLine("[相机服务] 数据广播已停止。");
+    }
+
+    /// <summary>
+    /// 【新增】连接到PLC服务器
+    /// </summary>
+    private static async Task ConnectToPlcAsync(string ip, int port, CancellationToken token)
+    {
+        Console.WriteLine($"[PLC客户端] 正在尝试连接到 {ip}:{port}...");
+        _plcClient = new TcpClient();
+
+        while (!token.IsCancellationRequested)
+        {
+            try
+            {
+                await _plcClient.ConnectAsync(ip, port, token);
+                _plcStream = _plcClient.GetStream();
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"[PLC客户端] ✅ 成功连接到PLC服务器: {ip}:{port}");
+                Console.ResetColor();
+                return; // 连接成功，退出循环
+            }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine("[PLC客户端] 连接操作被取消。");
+                break;
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"[PLC客户端] 连接失败: {ex.Message}。将在5秒后重试...");
+                Console.ResetColor();
+                await Task.Delay(5000, token);
+                _plcClient?.Dispose(); // 销毁旧实例
+                _plcClient = new TcpClient(); // 创建新实例以备重试
+            }
+        }
+    }
+
+    /// <summary>
+    /// 【新增】启动一个后台任务来监听PLC服务器的返回指令
+    /// </summary>
+    private static void StartListeningToPlc(CancellationToken token)
+    {
+        Task.Run(async () =>
+        {
+            if (_plcStream == null) return;
+            Console.WriteLine("[PLC客户端] 开始监听返回指令...");
+            
+            var buffer = new byte[8]; // PLC指令固定8字节
+            var packageIndex = 0;
+
+            try
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    var bytesRead = await _plcStream.ReadAsync(buffer.AsMemory(packageIndex, buffer.Length - packageIndex), token);
+                    if (bytesRead == 0)
+                    {
+                        Console.WriteLine("[PLC客户端] 服务器关闭了连接。");
+                        break;
+                    }
+
+                    packageIndex += bytesRead;
+                    if (packageIndex < buffer.Length)
+                    {
+                        continue; // 未接收完整
+                    }
+
+                    packageIndex = 0; // 重置索引
+                    
+                    // 验证并处理收到的完整数据包
+                    ProcessPlcFeedback(buffer);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // 正常关闭
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"[PLC客户端] 监听时发生错误: {ex.Message}");
+                Console.ResetColor();
+            }
+            finally
+            {
+                Console.WriteLine("[PLC客户端] 监听已停止。");
+            }
+
+        }, token);
+    }
+    
+    /// <summary>
+    /// 【新增】处理从PLC服务器收到的反馈指令
+    /// </summary>
+    private static void ProcessPlcFeedback(byte[] data)
+    {
+        // 验证数据包: 起始码 0xF9, 功能码 0x11, 校验和 0xFF
+        if (data.Length != 8 || data[0] != 0xF9 || data[1] != 0x11 || data[7] != 0xFF)
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine($"[PLC反馈] 收到无效数据包: {BitConverter.ToString(data)}");
+            Console.ResetColor();
+            return;
+        }
+
+        var packageNumber = (ushort)(data[2] << 8 | data[3]);
+        var chute = data[6];
+
+        // 尝试从字典中找到对应的发送记录并计算时间差
+        if (SentPlcSignals.TryRemove(packageNumber, out var sentTime))
+        {
+            var rtt = DateTimeOffset.UtcNow - sentTime;
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine($"[PLC反馈] 收到指令: 序号={packageNumber}, 格口={chute}。往返时延: {rtt.TotalMilliseconds:F0} ms");
+            Console.ResetColor();
+        }
+        else
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine($"[PLC反馈] 收到未知序号 {packageNumber} 的指令，可能已超时或重复。");
+            Console.ResetColor();
+        }
+    }
+
+    /// <summary>
+    /// 【新增】发送PLC触发信号
+    /// </summary>
+    private static async Task SendPlcTriggerSignalAsync(ushort packageNumber, CancellationToken token)
+    {
+        if (_plcStream == null || !_plcClient?.Connected == true)
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("[PLC客户端] 未连接，无法发送触发信号。");
+            Console.ResetColor();
+            return;
+        }
+
+        // 协议格式: 起始码(0xF9), 功能码(0x10), 包裹序号(2字节), 预留(2字节), 预留(1字节), 校验和(0xFF)
+        var command = new byte[8];
+        command[0] = 0xF9; // 起始码
+        command[1] = 0x10; // 功能码: 接收包裹序号
+        command[2] = (byte)(packageNumber >> 8 & 0xFF); // 包裹序号高字节
+        command[3] = (byte)(packageNumber & 0xFF);     // 包裹序号低字节
+        command[4] = 0x00; // 预留
+        command[5] = 0x00; // 预留
+        command[6] = 0x00; // 预留
+        command[7] = 0xFF; // 校验和
+
+        try
+        {
+            // 记录发送时间
+            SentPlcSignals[packageNumber] = DateTimeOffset.UtcNow;
+            await _plcStream.WriteAsync(command, token);
+            await _plcStream.FlushAsync(token);
+
+            Console.WriteLine($"[PLC客户端] -> 发送触发信号: 序号={packageNumber}");
+        }
+        catch (Exception ex)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"[PLC客户端] 发送触发信号 {packageNumber} 失败: {ex.Message}");
+            Console.ResetColor();
+            SentPlcSignals.TryRemove(packageNumber, out _); // 发送失败则移除记录
+        }
+    }
+    
+    private static async Task SendCoordinatedData(int intervalMilliseconds, CancellationToken token)
+    {
+        var random = new Random();
+        Console.WriteLine("\n--- 开始协同发送 PLC信号 和 相机数据 ---");
+        
+        while (!token.IsCancellationRequested)
+        {
+            try
+            {
+                // 1. 【新增】发送PLC触发信号
+                var packageNumber = _currentPlcPackageNumber++;
+                await SendPlcTriggerSignalAsync(packageNumber, token);
+                
+                // 2. 模拟PLC和相机之间的物理延迟
+                await Task.Delay(random.Next(100, 300), token);
+
+                // 3. 发送相机数据
+                var barcode = $"PKG{DateTime.Now:HHmmssfff}{random.Next(100, 999)}";
+                var weight = random.Next(1, 5000) / 1000.0f;
+                var length = random.Next(10, 50) / 10.0;
+                var width = random.Next(10, 40) / 10.0;
+                var height = random.Next(5, 30) / 10.0;
+                var volume = length * width * height;
+                var sendTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+                // 协议格式: {code},{weight},{length},{width},{height},{volume},{sendTimestamp(秒)};
+                var cameraData = $"{barcode},{weight:F3},{length:F2},{width:F2},{height:F2},{volume:F2},{sendTimestamp};";
+                
+                await CameraDataChannel.Writer.WriteAsync(cameraData, token);
+                Console.WriteLine($"[相机服务] -> 发送相机数据: 条码={barcode}");
+
+                // 4. 等待下一个循环
+                await Task.Delay(intervalMilliseconds, token);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"发送协同数据时发生错误: {ex.Message}");
+                Console.ResetColor();
+                await Task.Delay(1000, token); // 出错后稍作等待
+            }
+        }
     }
 } 

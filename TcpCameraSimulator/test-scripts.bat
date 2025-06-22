@@ -226,4 +226,4 @@ pause
 
 :exit
 echo.
-echo 👋 再见！ 
+echo 👋 再见！

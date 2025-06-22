@@ -1,0 +1,15 @@
+[
+  {
+    "Name": "新建配置文件",
+    "Projects": [
+      {
+        "Path": "WeiCiModule\\卫慈模组带.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "TcpCameraSimulator\\TcpCameraSimulator.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]
