@@ -51,7 +51,7 @@ internal class SangNengService(ISettingsService settingsService) : ISangNengServ
             var response = await _httpClient.PostAsync(url, content);
 
             var responseContent = await response.Content.ReadAsStringAsync();
-            Log.Debug("收到桑能服务器响应: {Response}", responseContent);
+            Log.Information("收到桑能服务器响应: {Response}", responseContent);
 
             if (!response.IsSuccessStatusCode)
             {
