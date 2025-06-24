@@ -6,6 +6,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Configuration;
+using System.Threading;
 
 namespace Common.Services.Settings;
 
@@ -14,6 +15,8 @@ namespace Common.Services.Settings;
 /// </summary>
 public class SettingsService : ISettingsService
 {
+    private static readonly SemaphoreSlim _fileAccessLock = new(1, 1);
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -58,17 +61,17 @@ public class SettingsService : ISettingsService
             return cachedSettings;
 
         var filePath = GetSettingsFilePath(settingsKey);
-        if (!File.Exists(filePath))
-        {
-            var newSettings = new T();
-
-            if (useCache) _cachedSettings[settingsKey] = newSettings;
-
-            return newSettings;
-        }
-
+        
+        _fileAccessLock.Wait();
         try
         {
+            if (!File.Exists(filePath))
+            {
+                var newSettings = new T();
+                if (useCache) _cachedSettings[settingsKey] = newSettings;
+                return newSettings;
+            }
+
             if (!_configurations.TryGetValue(typeof(T), out var configuration))
             {
                 var builder = new ConfigurationBuilder()
@@ -89,12 +92,13 @@ public class SettingsService : ISettingsService
         catch (Exception ex)
         {
             Debug.WriteLine($"加载设置异常: {ex.Message}");
-
             var newSettings = new T();
-
             if (useCache) _cachedSettings[settingsKey] = newSettings;
-
             return newSettings;
+        }
+        finally
+        {
+            _fileAccessLock.Release();
         }
     }
 
@@ -272,6 +276,15 @@ public class SettingsService : ISettingsService
         ArgumentNullException.ThrowIfNull(configuration);
         var filePath = GetSettingsFilePath(key);
         var json = JsonSerializer.Serialize(configuration, JsonOptions);
-        File.WriteAllText(filePath, json);
+        
+        _fileAccessLock.Wait();
+        try
+        {
+            File.WriteAllText(filePath, json);
+        }
+        finally
+        {
+            _fileAccessLock.Release();
+        }
     }
 }

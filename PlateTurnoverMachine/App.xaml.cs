@@ -1,5 +1,7 @@
 ﻿using System.Net.Http;
+using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Threading;
 using Common.Extensions;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
@@ -85,6 +87,9 @@ internal partial class App
                 fileSizeLimitBytes: 10 * 1024 * 1024, // Limit file size to 10MB
                 retainedFileCountLimit: 31) // Retain logs for 30 days (31 files total)
             .CreateLogger();
+        
+        // 注册全局异常处理
+        RegisterGlobalExceptionHandling();
 
         Log.Information("应用程序启动");
         // 先调用基类方法初始化容器
@@ -146,6 +151,17 @@ internal partial class App
         try
         {
             Log.Information("开始执行异步关闭操作...");
+
+            // 0. 新增：复位所有格口
+            try
+            {
+                var sortingService = Container.Resolve<SortingService>();
+                await sortingService.ResetAllChutesAsync();
+            }
+            catch (Exception resetEx)
+            {
+                Log.Error(resetEx, "复位所有格口时发生错误");
+            }
 
             // 1. 先调用中通下线接口
             var ztoSortingService = Container.Resolve<IZtoSortingService>();
@@ -234,5 +250,54 @@ internal partial class App
             Log.Information("Mutex 已释放");
             base.OnExit(e);
         }
+    }
+
+    /// <summary>
+    /// 注册全局异常处理程序
+    /// </summary>
+    private void RegisterGlobalExceptionHandling()
+    {
+        // UI线程未处理异常
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
+
+        // 非UI线程未处理异常
+        AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
+
+        // Task线程内未处理异常
+        TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+    }
+
+    private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        Log.Fatal(e.Exception, "UI线程发生未经处理的异常 (Dispatcher Unhandled Exception)");
+        // 显示一个友好的对话框
+        MessageBox.Show($"发生了一个无法恢复的严重错误，应用程序即将退出。\n\n错误信息：{e.Exception.Message}", 
+            "严重错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        
+        e.Handled = true; // 标记为已处理，防止默认的崩溃对话框
+        
+        // 尝试优雅地关闭
+        _ = PerformShutdownAsync().ContinueWith(_ =>
+        {
+            Current.Dispatcher.Invoke(Current.Shutdown);
+        });
+    }
+
+    private void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
+    {
+        var exception = e.ExceptionObject as Exception;
+        Log.Fatal(exception, "非UI线程发生未经处理的异常 (AppDomain Unhandled Exception). IsTerminating: {IsTerminating}", e.IsTerminating);
+        
+        // 如果应用程序即将终止，确保日志被写入
+        if (e.IsTerminating)
+        {
+            Log.CloseAndFlush();
+        }
+    }
+
+    private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    {
+        Log.Fatal(e.Exception, "一个后台任务发生未经观察的异常 (Unobserved Task Exception)");
+        e.SetObserved(); // 防止进程终止
     }
 }

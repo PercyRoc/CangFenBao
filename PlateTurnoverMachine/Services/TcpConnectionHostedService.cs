@@ -76,14 +76,11 @@ internal class TcpConnectionHostedService(
                         parts.Length > 1 && int.TryParse(parts[1], out var port) ? port : 2000
                     );
                 })
+                .Distinct()
                 .ToList();
-
-            var disconnectedConfigs = tcpConfigs
-                .Where(config => !tcpConnectionService.TcpModuleClients.ContainsKey(config) ||
-                                 !tcpConnectionService.TcpModuleClients[config].Connected)
-                .ToList();
-
-            if (disconnectedConfigs.Count != 0) await tcpConnectionService.ConnectTcpModulesAsync(disconnectedConfigs);
+            
+            // 每次都传递完整的配置列表，由TcpConnectionService内部处理按需连接
+            await tcpConnectionService.ConnectTcpModulesAsync(tcpConfigs);
         }
         catch (Exception ex)
         {

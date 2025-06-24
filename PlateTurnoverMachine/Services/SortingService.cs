@@ -4,6 +4,8 @@ using Common.Models.Package;
 using Common.Services.Settings;
 using DongtaiFlippingBoardMachine.Models;
 using Serilog;
+using DongtaiFlippingBoardMachine.Events;
+using Prism.Events;
 
 namespace DongtaiFlippingBoardMachine.Services;
 
@@ -16,37 +18,38 @@ public class SortingService : IDisposable
     private readonly ISettingsService _settingsService;
     private readonly Dictionary<string, TcpConnectionConfig> _tcpConfigs = [];
     private readonly ITcpConnectionService _tcpConnectionService;
+    private readonly IEventAggregator _eventAggregator;
     private double _lastIntervalMs;
     private bool _disposed;
     private DateTime _lastTriggerTime;
-    private PlateTurnoverSettings? _cachedSettings;
+    private PlateTurnoverSettings _settings;
     private readonly IZtoSortingService _ztoSortingService;
     private bool _lastSignalWasLow; // 新增：标记上一个信号是否为低电平
     private DateTime _lastLowSignalTime; // 新增：记录上一次低电平信号的时间
 
-    public SortingService(ITcpConnectionService tcpConnectionService, ISettingsService settingsService, IZtoSortingService ztoSortingService)
+    public SortingService(ITcpConnectionService tcpConnectionService, 
+        ISettingsService settingsService, 
+        IZtoSortingService ztoSortingService,
+        IEventAggregator eventAggregator)
     {
         _tcpConnectionService = tcpConnectionService;
         _settingsService = settingsService;
         _ztoSortingService = ztoSortingService;
+        _eventAggregator = eventAggregator;
+        
+        _settings = _settingsService.LoadSettings<PlateTurnoverSettings>();
+
         _tcpConnectionService.TriggerPhotoelectricDataReceived += OnTriggerPhotoelectricDataReceived;
         _lastTriggerTime = DateTime.Now;
+        
+        // 订阅配置更新事件
+        _eventAggregator.GetEvent<PlateTurnoverSettingsUpdatedEvent>().Subscribe(OnSettingsUpdated);
 
-        // 初始化所有TCP配置
-        foreach (var item in Settings.Items.Where(static item => !string.IsNullOrEmpty(item.TcpAddress)))
-            if (item.TcpAddress != null)
-            {
-                _tcpConfigs[item.TcpAddress] = new TcpConnectionConfig(item.TcpAddress, 2000);
-            }
-
-        // 订阅配置变更事件
-        Settings.SettingsChanged += OnSettingsChanged;
+        // 初始化TCP配置
+        UpdateTcpConfigs();
     }
 
-    private PlateTurnoverSettings Settings
-    {
-        get { return _cachedSettings ??= _settingsService.LoadSettings<PlateTurnoverSettings>(); }
-    }
+    private PlateTurnoverSettings Settings => _settings;
 
     /// <summary>
     ///     获取最近一次计算的高电平信号时间间隔（毫秒）
@@ -273,6 +276,13 @@ public class SortingService : IDisposable
              Log.Debug("包裹 {Barcode} 将在 {Delay} 毫秒后触发落格，使用最近间隔：{Interval:F2}毫秒，延迟系数：{Factor:F2}",
                  package.Barcode, delayMs, LastIntervalMs, turnoverItem.DelayFactor);
 
+             // --- 参数快照 ---
+             // 在启动任务前，捕获所有需要的参数，避免竞态条件
+             var magnetTime = turnoverItem.MagnetTime;
+             var tcpAddress = turnoverItem.TcpAddress;
+             var ioPoint = turnoverItem.IoPoint;
+             var chuteNumber = package.ChuteNumber;
+
              // 异步发送落格命令 (将包裹实例传递给异步方法)
              var packageToSend = package; // 捕获当前循环的包裹实例
              packagesToDequeue.Add(packageToSend); // 标记此包裹需要被移除
@@ -281,22 +291,28 @@ public class SortingService : IDisposable
              {
                  try
                  {
+                     // *** 新增：在这里执行计算好的延迟 ***
+                     if (delayMs > 0)
+                     {
+                         await Task.Delay(delayMs);
+                     }
+                     
                      // 1. 检查配置的 TCP 地址
-                     if (string.IsNullOrEmpty(turnoverItem.TcpAddress))
+                     if (string.IsNullOrEmpty(tcpAddress))
                      {
                          Log.Error("包裹 {Barcode} 的翻板机未配置TCP地址", packageToSend.Barcode);
                          return;
                      }
 
                      // 2. 从字典中查找对应的 TcpConnectionConfig
-                     if (!_tcpConfigs.TryGetValue(turnoverItem.TcpAddress, out var targetConfig))
+                     if (!_tcpConfigs.TryGetValue(tcpAddress, out var targetConfig))
                      {
-                          Log.Error("包裹 {Barcode} 配置的TCP地址 {TcpAddress} 在配置字典中未找到", packageToSend.Barcode, turnoverItem.TcpAddress);
+                          Log.Error("包裹 {Barcode} 配置的TCP地址 {TcpAddress} 在配置字典中未找到", packageToSend.Barcode, tcpAddress);
                           return;
                      }
 
                      // 准备落格命令
-                     var outNumber = turnoverItem.IoPoint!.ToUpper().Replace("OUT", "");
+                     var outNumber = ioPoint!.ToUpper().Replace("OUT", "");
                      var lockCommand = $"AT+STACH{outNumber}=1\r\n"; // 直接使用 \r\n
                      var commandData = Encoding.ASCII.GetBytes(lockCommand);
 
@@ -309,7 +325,7 @@ public class SortingService : IDisposable
                      Log.Information("包裹 {Barcode} 已发送落格命令：{Command} 到 {TargetIp}", packageToSend.Barcode, lockCommand.TrimEnd('\r', '\n'), targetConfig.IpAddress);
 
                      // 等待磁铁吸合时间后复位
-                     await Task.Delay(turnoverItem.MagnetTime);
+                     await Task.Delay(magnetTime);
                      var resetCommand = $"AT+STACH{outNumber}=0\r\n"; // 直接使用 \r\n
                      var resetData = Encoding.ASCII.GetBytes(resetCommand);
 
@@ -356,52 +372,48 @@ public class SortingService : IDisposable
          Log.Debug("检查了 {CheckedCount} 个包裹是否到达距离 (触发源: {Source})", checkedPackages, triggerSource);
     }
 
-    private void OnSettingsChanged(object? sender, EventArgs e)
+    /// <summary>
+    /// 接收来自UI的实时配置更新
+    /// </summary>
+    /// <param name="newSettings">新的配置对象</param>
+    private void OnSettingsUpdated(PlateTurnoverSettings newSettings)
     {
-        // 清除缓存的设置
-        _cachedSettings = null;
+        Log.Information("接收到来自UI的实时配置更新...");
+        _settings = newSettings;
+        UpdateTcpConfigs();
+        Log.Information("翻板机实时配置已应用。");
+    }
 
-        // 获取新的配置
-        var newSettings = _settingsService.LoadSettings<PlateTurnoverSettings>();
+    /// <summary>
+    /// 根据当前配置更新TCP连接字典
+    /// </summary>
+    private void UpdateTcpConfigs()
+    {
+        var currentKnownIps = _tcpConfigs.Keys.ToHashSet();
+        var newSettingsIps = Settings.Items
+            .Where(item => !string.IsNullOrEmpty(item.TcpAddress))
+            .Select(item => item.TcpAddress!)
+            .ToHashSet();
 
-        // 检查TCP地址和端口号是否发生变化
-        var changedConfigs = new List<(string IpAddress, TcpConnectionConfig Config)>();
-        foreach (var item in newSettings.Items.Where(static item => !string.IsNullOrEmpty(item.TcpAddress)))
+        // 找出需要新增的
+        var ipsToAdd = newSettingsIps.Where(ip => !currentKnownIps.Contains(ip)).ToList();
+        foreach (var ip in ipsToAdd)
         {
-            if (item.TcpAddress == null) continue;
-
-            // 检查是否已存在该TCP地址的配置
-            if (!_tcpConfigs.ContainsKey(item.TcpAddress))
-            {
-                // 添加新的配置
-                changedConfigs.Add((item.TcpAddress, new TcpConnectionConfig(item.TcpAddress, 2000)));
-            }
+            _tcpConfigs[ip] = new TcpConnectionConfig(ip, 2000);
+            Log.Information("已添加新的TCP配置: {IpAddress}", ip);
         }
 
-        // 检查是否有需要移除的配置
-        var removedConfigs = _tcpConfigs.Keys
-            .Where(ip => newSettings.Items.All(item => item.TcpAddress != ip))
-            .ToList();
-
-        // 更新配置
-        foreach (var (ipAddress, config) in changedConfigs)
+        // 找出需要移除的
+        var ipsToRemove = currentKnownIps.Where(ip => !newSettingsIps.Contains(ip)).ToList();
+        foreach (var ip in ipsToRemove)
         {
-            _tcpConfigs[ipAddress] = config;
-            Log.Information("更新TCP配置：{Address}", ipAddress);
+            _tcpConfigs.Remove(ip);
+            Log.Information("已移除过时的TCP配置: {IpAddress}", ip);
         }
 
-        // 移除不再使用的配置
-        foreach (var ipAddress in removedConfigs)
+        if (ipsToAdd.Count != 0 || ipsToRemove.Count != 0)
         {
-            _tcpConfigs.Remove(ipAddress);
-            Log.Information("移除TCP配置：{Address}", ipAddress);
-        }
-
-        // 如果有配置变更，记录日志
-        if (changedConfigs.Count > 0 || removedConfigs.Count > 0)
-        {
-            Log.Information("翻板机配置已更新，变更：{ChangedCount}个，移除：{RemovedCount}个",
-                changedConfigs.Count, removedConfigs.Count);
+            Log.Information("TCP配置更新完成. 新增: {AddCount}, 移除: {RemoveCount}", ipsToAdd.Count, ipsToRemove.Count);
         }
     }
 
@@ -429,6 +441,57 @@ public class SortingService : IDisposable
         }
     }
 
+    /// <summary>
+    /// 向所有已配置的格口发送复位命令。
+    /// </summary>
+    public async Task ResetAllChutesAsync()
+    {
+        Log.Information("正在向所有已配置的格口发送复位命令...");
+        var allItems = Settings.Items.ToList(); // 创建副本以安全迭代
+        if (!allItems.Any())
+        {
+            Log.Information("没有配置任何格口，跳过复位操作。");
+            return;
+        }
+
+        var resetTasks = allItems
+            .Where(item => !string.IsNullOrEmpty(item.TcpAddress) && !string.IsNullOrEmpty(item.IoPoint))
+            .Select(item => Task.Run(async () =>
+            {
+                try
+                {
+                    if (!_tcpConfigs.TryGetValue(item.TcpAddress!, out var targetConfig))
+                    {
+                        Log.Error("格口 {MappingChute} 配置的TCP地址 {TcpAddress} 在配置字典中未找到，无法发送复位命令", item.MappingChute, item.TcpAddress);
+                        return;
+                    }
+
+                    if (!_tcpConnectionService.TcpModuleClients.TryGetValue(targetConfig, out var client) || !client.Connected)
+                    {
+                        Log.Warning("TCP模块 {IpAddress} 未连接，无法为格口 {MappingChute} 发送复位命令", targetConfig.IpAddress, item.MappingChute);
+                        return;
+                    }
+
+                    var outNumber = item.IoPoint!.ToUpper().Replace("OUT", "");
+                    var resetCommand = $"AT+STACH{outNumber}=0\r\n";
+                    var resetData = Encoding.ASCII.GetBytes(resetCommand);
+
+                    Log.Information("向TCP模块 {TargetIp} (格口 {Chute}) 发送复位命令: {Command}",
+                        targetConfig.IpAddress, item.MappingChute, resetCommand.TrimEnd('\r', '\n'));
+
+                    await _tcpConnectionService.SendToTcpModuleAsync(targetConfig, resetData);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "为格口 {MappingChute} (TCP: {TcpAddress}, IO: {IoPoint}) 发送复位命令时发生错误",
+                        item.MappingChute, item.TcpAddress, item.IoPoint);
+                }
+            }));
+
+        await Task.WhenAll(resetTasks);
+        Log.Information("所有格口的复位命令已发送完毕。");
+    }
+
     protected virtual void Dispose(bool disposing)
     {
         if (_disposed)
@@ -437,7 +500,7 @@ public class SortingService : IDisposable
         if (disposing)
         {
             _tcpConnectionService.TriggerPhotoelectricDataReceived -= OnTriggerPhotoelectricDataReceived;
-            Settings.SettingsChanged -= OnSettingsChanged;
+            _eventAggregator.GetEvent<PlateTurnoverSettingsUpdatedEvent>().Unsubscribe(OnSettingsUpdated);
         }
 
         _disposed = true;

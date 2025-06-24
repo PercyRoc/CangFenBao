@@ -11,8 +11,6 @@
              xmlns:local="clr-namespace:DongtaiFlippingBoardMachine.Views.Settings"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
-             Width="1280"
-             Height="720"
              d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}">
 
     <UserControl.Resources>

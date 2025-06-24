@@ -84,6 +84,7 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
                     <TextBlock Text="格口总数："
@@ -94,7 +95,7 @@
                     <ui:NumberBox Value="{Binding Settings.ChuteCount, UpdateSourceTrigger=PropertyChanged}"
                                   Grid.Column="1"
                                   Minimum="1"
-                                  Maximum="100"
+                                  Maximum="1000"
                                   SpinButtonPlacementMode="Inline"
                                   Margin="0,0,16,0" />
 
@@ -106,8 +107,15 @@
                     <ui:NumberBox Value="{Binding Settings.ErrorChute, UpdateSourceTrigger=PropertyChanged}"
                                   Grid.Column="3"
                                   Minimum="0"
-                                  Maximum="100"
+                                  Maximum="1000"
                                   SpinButtonPlacementMode="Inline" />
+
+                    <ui:Button Grid.Row="1" Grid.Column="4"
+                              Content="根据格口生成"
+                              Command="{Binding InitializeByChuteCountCommand}"
+                              Margin="16,0,0,0"
+                              VerticalAlignment="Center"
+                              HorizontalAlignment="Left" />
                 </Grid>
             </Grid>
         </Border>
@@ -277,6 +285,12 @@
                   d:ItemsSource="{d:DesignInstance Type=models:PlateTurnoverItem}"
                   AutoGenerateColumns="False"
                   CanUserAddRows="False"
+                  VirtualizingPanel.IsVirtualizing="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling"
+                  VirtualizingPanel.IsContainerVirtualizable="True"
+                  EnableRowVirtualization="True"
+                  EnableColumnVirtualization="True"
+                  ScrollViewer.CanContentScroll="True"
                   Background="Transparent"
                   BorderThickness="1"
                   BorderBrush="{DynamicResource ControlElevationBorderBrush}">
@@ -311,7 +325,7 @@
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <DataGridTemplateColumn Header="映射格口" Width="120">
+                <DataGridTemplateColumn Header="映射格口" Width="150">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <ui:NumberBox Value="{Binding MappingChute, UpdateSourceTrigger=PropertyChanged}"
@@ -324,49 +338,37 @@
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <DataGridTemplateColumn Header="距离当前点位位置" Width="120">
+                <DataGridTemplateColumn Header="距离当前点位位置" Width="250">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <ui:NumberBox Value="{Binding Distance}"
-                                          Width="120"
+                            <ui:NumberBox Value="{Binding Distance, UpdateSourceTrigger=PropertyChanged}"
                                           Minimum="0"
                                           Maximum="10000" />
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <DataGridTemplateColumn Header="分拣延迟系数(0-1)" Width="150">
+                <DataGridTemplateColumn Header="分拣延迟系数(0-1)" Width="200">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <Slider Grid.Column="0"
-                                        Value="{Binding DelayFactor, UpdateSourceTrigger=PropertyChanged}"
-                                        Minimum="0"
-                                        Maximum="1"
-                                        TickFrequency="0.01"
-                                        IsSnapToTickEnabled="True"
-                                        VerticalAlignment="Center"
-                                        Margin="4,0"/>
-                                <TextBlock Grid.Column="1"
-                                         Text="{Binding DelayFactor, StringFormat={}{0:F2}}"
-                                         VerticalAlignment="Center"
-                                         Margin="4,0,0,0"/>
-                            </Grid>
+                            <ui:NumberBox Value="{Binding DelayFactor, UpdateSourceTrigger=PropertyChanged}"
+                                          Minimum="0"
+                                          Maximum="1"
+                                          SmallChange="0.05"
+                                          SpinButtonPlacementMode="Inline"
+                                          Margin="4,0"/>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <DataGridTemplateColumn Header="磁铁吸合时间(ms)" Width="150">
+                <DataGridTemplateColumn Header="磁铁吸合时间(ms)" Width="200">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <ui:NumberBox Value="{Binding MagnetTime, UpdateSourceTrigger=PropertyChanged}"
                                        VerticalAlignment="Center"
                                        Minimum="0"
                                        Maximum="1000"
+                                       SmallChange="50"
                                        SpinButtonPlacementMode="Inline"
                                        Margin="4,0"/>
                         </DataTemplate>

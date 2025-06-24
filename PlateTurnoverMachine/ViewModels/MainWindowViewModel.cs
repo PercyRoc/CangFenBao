@@ -14,6 +14,8 @@ using DongtaiFlippingBoardMachine.Models;
 using DongtaiFlippingBoardMachine.Services;
 using Serilog;
 using SharedUI.Models;
+using DongtaiFlippingBoardMachine.Events;
+using Prism.Events;
 
 namespace DongtaiFlippingBoardMachine.ViewModels;
 
@@ -31,6 +33,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private SystemStatus _systemStatus = new();
     private readonly ISettingsService _settingsService;
     private readonly IZtoSortingService _ztoSortingService;
+    private readonly IEventAggregator _eventAggregator;
+    private PlateTurnoverSettings _settings;
     private int _historyIndexCounter;
 
     public MainWindowViewModel(
@@ -40,7 +44,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         SortingService sortingService,
         ITcpConnectionService tcpConnectionService,
         ISettingsService settingsService,
-        IZtoSortingService ztoSortingService)
+        IZtoSortingService ztoSortingService,
+        IEventAggregator eventAggregator)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
@@ -48,6 +53,10 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         _tcpConnectionService = tcpConnectionService;
         _settingsService = settingsService;
         _ztoSortingService = ztoSortingService;
+        _eventAggregator = eventAggregator;
+
+        // 加载初始配置
+        _settings = _settingsService.LoadSettings<PlateTurnoverSettings>();
 
         // 初始化命令
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
@@ -77,6 +86,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
         // 订阅TCP模块连接状态变化
         _tcpConnectionService.TcpModuleConnectionChanged += OnTcpModuleConnectionChanged;
+        
+        // 订阅配置更新事件
+        _eventAggregator.GetEvent<PlateTurnoverSettingsUpdatedEvent>().Subscribe(OnSettingsUpdated);
 
         // 订阅包裹流
         _subscriptions.Add(packageTransferService.PackageStream
@@ -148,6 +160,15 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         _dialogService.ShowDialog("SettingsDialog");
     }
 
+    private void OnSettingsUpdated(PlateTurnoverSettings newSettings)
+    {
+        Log.Information("主窗口接收到实时配置更新。");
+        _settings = newSettings;
+        // 配置更新后，立即更新TCP模块的状态显示，以反映可能变化的总数
+        Application.Current.Dispatcher.Invoke(UpdateTcpModuleStatus);
+        Log.Information("主窗口已应用翻板机实时配置。");
+    }
+
     private void Timer_Tick(object? sender, EventArgs e)
     {
         SystemStatus = SystemStatus.GetCurrentStatus();
@@ -189,9 +210,13 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            UpdateTcpModuleStatus();
-            Log.Information("TCP模块 {IpAddress} 连接状态更新为：{Status}",
-                e.Item1.IpAddress, e.Item2 ? "已连接" : "已断开");
+            // 确保在UI线程上更新状态
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                UpdateTcpModuleStatus();
+                Log.Information("TCP模块 {IpAddress} 连接状态更新为：{Status}",
+                    e.Item1.IpAddress, e.Item2 ? "已连接" : "已断开");
+            });
         }
         catch (Exception ex)
         {
@@ -199,82 +224,33 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    private async void OnPackageInfo(PackageInfo package)
+    private void OnPackageInfo(PackageInfo package)
     {
         try
         {
-            // 分配格口号
-            var settings = _settingsService.LoadSettings<PlateTurnoverSettings>();
-            var errorChuteNumber = settings.ErrorChute;
-
-            // 处理未读包裹
+            // 规则 1: 如果是 "noread" 包裹，则直接忽略，不进行任何处理。
             if (package.Barcode.Equals("noread", StringComparison.OrdinalIgnoreCase))
             {
-                return;
+                return; // 直接退出方法
             }
 
+            // 规则 2: 所有非 "noread" 包裹都分配到异常口。
+            var errorChuteNumber = _settings.ErrorChute;
+            package.SetChute(errorChuteNumber);
 
-            if (!string.IsNullOrEmpty(package.Barcode))
+            if (string.IsNullOrEmpty(package.Barcode))
             {
-                // 获取中通面单规则
-                var billRule = await _ztoSortingService.GetBillRuleAsync();
-
-                // 检查是否符合面单规则
-                if (!string.IsNullOrEmpty(billRule.Pattern) &&
-                    !System.Text.RegularExpressions.Regex.IsMatch(package.Barcode, billRule.Pattern))
-                {
-                    Log.Warning("包裹条码 {Barcode} 不符合中通面单规则，分配到异常口", package.Barcode);
-                    package.SetChute(errorChuteNumber);
-                    package.SetStatus(PackageStatus.Error,"不符合中通面单规则");
-                }
+                package.SetStatus(PackageStatus.Error, "No barcode");
+                Log.Warning("包裹无有效条码，已按规则分配到异常口 {ErrorChute}", errorChuteNumber);
             }
-            // 先调用中通接口获取分拣格口信息
-            if (!string.IsNullOrEmpty(settings.ZtoPipelineCode) &&
-                !string.IsNullOrEmpty(package.Barcode))
+            else
             {
-                // Directly call the service. Subsequent logic handles the response.
-                var sortingInfo = await _ztoSortingService.GetSortingInfoAsync(
-                    package.Barcode,
-                    settings.ZtoPipelineCode, // Use the local 'settings' variable
-                    1, // 使用 0 或 package.PackageCount
-                    settings.ZtoTrayCode, // Use the local 'settings' variable
-                    (float)package.Weight);
-
-                if (sortingInfo.SortPortCode.Count > 0)
-                {
-                    // 解析服务器返回的格口号
-                    if (int.TryParse(sortingInfo.SortPortCode[0], out var chuteNumber))
-                    {
-                        package.SetChute(chuteNumber);
-                        Log.Information("从中通服务器获取到格口号：{ChuteNumber}，状态设置为 Sorting，包裹：{Barcode}", chuteNumber, package.Barcode);
-                    }
-                    else
-                    {
-                        Log.Warning("无法解析从中通获取的格口号 '{PortCode}'，分配到异常口 {ErrorChute}，包裹：{Barcode}", sortingInfo.SortPortCode[0], errorChuteNumber, package.Barcode);
-                        package.SetChute(errorChuteNumber);
-                        package.SetStatus(PackageStatus.Error,$"从中通获取的格口号无效: {sortingInfo.SortPortCode[0]}");
-                    }
-                }
-                else
-                {
-                    Log.Warning("中通未返回格口信息，分配到异常口 {ErrorChute}，包裹：{Barcode}", errorChuteNumber, package.Barcode);
-                    package.SetChute(errorChuteNumber);
-                    package.SetStatus(PackageStatus.Error,"中通未返回格口信息");
-                }
+                package.SetStatus(PackageStatus.Success, $"Routed to error chute as per rule: {errorChuteNumber}");
+                Log.Information("包裹 {Barcode} 已按规则分配到异常口 {ErrorChute}", package.Barcode, errorChuteNumber);
             }
-            else if (string.IsNullOrEmpty(package.Barcode))
-            {
-                // 处理无条码情况（如果需要，但前面已有 noread 处理）
-                Log.Warning("包裹无有效条码，分配到异常口 {ErrorChute}", errorChuteNumber);
-                package.SetChute(errorChuteNumber);
-                package.SetStatus(PackageStatus.Error,"无有效条码");
-            }
-            // 如果未调用中通接口（例如未配置 PipelineCode），则可能需要默认逻辑或保持原状
-            // 此处可以添加 else if (!string.IsNullOrEmpty(Settings.ZtoPipelineCode)) 来区分是否调用了中通
-            // 如果没有调用 ZTO 且没有其他分配逻辑，包裹可能没有格口号，需要决定后续状态
 
-            // 将包裹添加到分拣队列 (Runs after ZTO logic or if ZTO logic was skipped)
-             _sortingService.EnqueuePackage(package);
+            // 规则 3: 只有被处理的包裹才进入分拣队列和更新UI。
+            _sortingService.EnqueuePackage(package);
 
             Application.Current.Dispatcher.Invoke(() =>
             {
@@ -427,13 +403,20 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 StatusColor = "#F44336"
             });
 
-            // 添加TCP模块汇总状态
+            // 添加TCP模块汇总状态 - 从配置初始化
+            var connectedModules = _tcpConnectionService.TcpModuleClients.Count(static x => x.Value.Connected);
+            var totalConfiguredModules = _settings.Items
+                .Where(item => !string.IsNullOrEmpty(item.TcpAddress))
+                .Select(item => item.TcpAddress)
+                .Distinct()
+                .Count();
             DeviceStatuses.Add(new DeviceStatus
             {
                 Name = "TCP模块",
-                Status = "0/0",
+                Status = $"{connectedModules}/{totalConfiguredModules}",
                 Icon = "DeviceEq24",
-                StatusColor = "#F44336"
+                StatusColor = totalConfiguredModules > 0 && connectedModules == totalConfiguredModules ? "#4CAF50" :
+                    connectedModules > 0 ? "#FFA500" : "#F44336"
             });
 
             Log.Information("设备状态列表初始化完成，共 {Count} 个设备", DeviceStatuses.Count);
@@ -448,26 +431,23 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                var status = DeviceStatuses.FirstOrDefault(static s => s.Name == "TCP模块");
-                if (status == null) return;
+            var status = DeviceStatuses.FirstOrDefault(static s => s.Name == "TCP模块");
+            if (status == null) return;
 
-                var totalModules = _tcpConnectionService.TcpModuleClients.Count;
-                var connectedModules = _tcpConnectionService.TcpModuleClients.Count(static x => x.Value.Connected);
+            // 总数应始终来自配置中不重复的TCP地址数量
+            var totalModules = _settings.Items
+                .Where(item => !string.IsNullOrEmpty(item.TcpAddress))
+                .Select(item => item.TcpAddress)
+                .Distinct()
+                .Count();
+            var connectedModules = _tcpConnectionService.TcpModuleClients.Count(static x => x.Value.Connected);
 
-                status.Status = $"{connectedModules}/{totalModules}";
-                status.StatusColor = connectedModules == totalModules ? "#4CAF50" :
-                    connectedModules > 0 ? "#FFA500" : "#F44336";
-
-                // 更新详细信息
-                var details = new StringBuilder();
-                foreach (var (config, client) in _tcpConnectionService.TcpModuleClients)
-                    details.AppendLine($"{config.IpAddress}: {(client.Connected ? "已连接" : "已断开")}");
-
-                Log.Debug("TCP模块状态更新为：{Status}, 已连接：{Connected}, 总数：{Total}",
-                    status.Status, connectedModules, totalModules);
-            });
+            status.Status = $"{connectedModules}/{totalModules}";
+            status.StatusColor = totalModules > 0 && connectedModules == totalModules ? "#4CAF50" :
+                connectedModules > 0 ? "#FFA500" : "#F44336";
+            
+            Log.Debug("TCP模块状态更新为：{Status}, 已连接：{Connected}, 总数(配置)：{Total}",
+                status.Status, connectedModules, totalModules);
         }
         catch (Exception ex)
         {
@@ -566,6 +546,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
                 _tcpConnectionService.TriggerPhotoelectricConnectionChanged -= OnTriggerPhotoelectricConnectionChanged;
                 _tcpConnectionService.TcpModuleConnectionChanged -= OnTcpModuleConnectionChanged;
+                _eventAggregator.GetEvent<PlateTurnoverSettingsUpdatedEvent>().Unsubscribe(OnSettingsUpdated);
 
                 // 释放订阅
                 foreach (var subscription in _subscriptions) subscription.Dispose();

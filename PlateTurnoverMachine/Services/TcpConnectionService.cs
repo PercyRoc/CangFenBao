@@ -147,7 +147,7 @@ internal class TcpConnectionService : ITcpConnectionService
     /// <param name="configs">TCP模块连接配置列表</param>
     /// <returns>连接结果字典，key为配置，value为对应的TcpClient</returns>
     public async Task<Dictionary<TcpConnectionConfig, TcpClient>> ConnectTcpModulesAsync(
-        IEnumerable<TcpConnectionConfig> configs)
+        IEnumerable<TcpConnectionConfig> desiredConfigs)
     {
         if (_disposed)
         {
@@ -155,33 +155,57 @@ internal class TcpConnectionService : ITcpConnectionService
             return []; // 返回空字典
         }
 
-        // 停止并清理旧的监听任务
-        foreach (var (config, _) in _tcpModuleListeningTasks) await StopListeningTcpModuleAsync(config);
-        _tcpModuleListeningTasks.Clear();
-        _tcpModuleListeningCts.Clear();
+        var uniqueDesiredConfigs = desiredConfigs.Distinct().ToList();
+        var currentClients = _tcpModuleClients.Keys.ToList();
+        
+        // 2. 识别需要断开的模块（当前已连接，但不在新的期望列表中）
+        var configsToDisconnect = currentClients
+            .Where(c => !uniqueDesiredConfigs.Contains(c))
+            .ToList();
 
-        // 更新当前连接的客户端集合，并触发断开连接事件
-        foreach (var (config, client) in _tcpModuleClients)
+        foreach (var config in configsToDisconnect)
         {
+            Log.Information("配置已移除，正在断开TCP模块: {Config}", config.IpAddress);
+            if (_tcpModuleClients.TryGetValue(config, out var client))
+        {
+                await StopListeningTcpModuleAsync(config);
             client.Close();
+                _tcpModuleClients.Remove(config);
             OnTcpModuleConnectionChanged(config, false);
         }
+        }
+        
+        // 1. 识别需要连接的模块（在期望列表中，但当前未连接或已断开）
+        var configsToConnect = uniqueDesiredConfigs
+            .Where(c => !_tcpModuleClients.TryGetValue(c, out var client) || !client.Connected)
+            .ToList();
 
-        _tcpModuleClients.Clear();
+        var newConnections = new Dictionary<TcpConnectionConfig, TcpClient>();
+        if (!configsToConnect.Any())
+        {
+            return newConnections; // 没有需要连接的，直接返回
+        }
 
-        var uniqueConfigs = configs.Distinct().ToList();
-        var result = new Dictionary<TcpConnectionConfig, TcpClient>();
+        Log.Information("检测到 {Count} 个需要连接/重连的TCP模块。", configsToConnect.Count);
 
-        foreach (var config in uniqueConfigs)
+        foreach (var config in configsToConnect)
+        {
             try
             {
+                // 如果存在旧的、已断开的客户端实例，先移除
+                if (_tcpModuleClients.ContainsKey(config))
+                {
+                    await StopListeningTcpModuleAsync(config); // 确保旧的监听任务已停止
+                    _tcpModuleClients.Remove(config);
+                }
+
                 var client = new TcpClient();
                 await client.ConnectAsync(config.GetIpEndPoint());
-                result.Add(config, client);
+                
                 _tcpModuleClients.Add(config, client);
+                newConnections.Add(config, client);
+                
                 Log.Information("成功连接到TCP模块: {Config}", config.IpAddress);
-
-                // 触发连接成功事件
                 OnTcpModuleConnectionChanged(config, true);
 
                 // 连接成功后自动开始监听数据
@@ -190,10 +214,10 @@ internal class TcpConnectionService : ITcpConnectionService
             catch (Exception ex)
             {
                 Log.Error(ex, "连接TCP模块失败: {Config}", config.IpAddress);
-                OnTcpModuleConnectionChanged(config, false);
+                OnTcpModuleConnectionChanged(config, false); // 确保在失败时也触发状态变更
             }
-
-        return result;
+        }
+        return newConnections;
     }
 
     /// <summary>

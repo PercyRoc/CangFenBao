@@ -7,8 +7,13 @@ using Microsoft.Win32;
 using Serilog;
 using DongtaiFlippingBoardMachine.Models;
 using System.Globalization;
+using DongtaiFlippingBoardMachine.Events;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
+using Prism.Events;
+using System.ComponentModel;
+using System.Collections.Specialized;
+using System.Windows;
 
 namespace DongtaiFlippingBoardMachine.ViewModels.Settings;
 
@@ -16,35 +21,32 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
 {
     private readonly INotificationService _notificationService;
     private readonly ISettingsService _settingsService;
+    private readonly IEventAggregator _eventAggregator;
     private PlateTurnoverSettings _settings = new();
-    private bool _isAutoSaveEnabled = true;
+    private CancellationTokenSource? _autoSaveCts;
 
     public PlateTurnoverSettingsViewModel(
         ISettingsService settingsService,
-        INotificationService notificationService)
+        INotificationService notificationService,
+        IEventAggregator eventAggregator)
     {
         _settingsService = settingsService;
         _notificationService = notificationService;
+        _eventAggregator = eventAggregator;
 
         // 在构造函数中初始化命令
         AddItemCommand = new DelegateCommand(AddItem);
         RemoveItemCommand = new DelegateCommand<PlateTurnoverItem>(RemoveItem);
-        ImportFromExcelCommand = new DelegateCommand(ExecuteImportFromExcel);
+        ImportFromExcelCommand = new DelegateCommand(async () => await ExecuteImportFromExcelAsync());
         ExportToExcelCommand = new DelegateCommand(ExecuteExportToExcel);
-        SaveConfigurationCommand = new DelegateCommand(ExecuteSaveConfiguration);
+        SaveConfigurationCommand = new DelegateCommand(async () => await SaveSettingsAsync());
+        InitializeByChuteCountCommand = new DelegateCommand(async () => await InitializeSettingsByChuteCountAsync());
 
         // 加载配置
         LoadSettings();
 
-        // 订阅配置变更事件以实现自动保存
-        Settings.SettingsChanged += OnSettingsChanged;
-
-        // 订阅格口总数变更事件
-        Settings.PropertyChanged += (_, args) =>
-        {
-            if (args.PropertyName != nameof(PlateTurnoverSettings.ChuteCount)) return;
-            InitializeSettingsByChuteCount();
-        };
+        // 订阅配置对象本身的属性变更
+        _settings.PropertyChanged += Settings_PropertyChanged;
     }
 
     #region Properties
@@ -64,6 +66,7 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
     public DelegateCommand ImportFromExcelCommand { get; private set; }
     public DelegateCommand ExportToExcelCommand { get; private set; }
     public DelegateCommand SaveConfigurationCommand { get; set; }
+    public DelegateCommand InitializeByChuteCountCommand { get; set; }
 
     #endregion
 
@@ -87,36 +90,126 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
             // 初始化为空集合，避免 NullReferenceException
             Settings = new PlateTurnoverSettings { Items = new ObservableCollection<PlateTurnoverItem>() };
         }
+        
+        // 确保为加载的配置项订阅深度监听
+        SubscribeToItemChanges(Settings.Items);
+    }
+
+    private async Task InitializeSettingsByChuteCountAsync()
+    {
+        try
+        {
+            // 预检查，以便在无法生成时提供即时反馈
+            if (_settingsService.LoadSettings<PlateTurnoverSettings>().ChuteCount <= 0)
+            {
+                Log.Warning("格口数量未设置，无法初始化翻板机配置");
+                _notificationService.ShowWarning("请先设置一个大于0的格口总数。");
+                return;
+            }
+
+            // 在后台线程执行初始化操作
+            var newItems = await Task.Run(GenerateItemsByChuteCount);
+
+            if (newItems != null && newItems.Any())
+            {
+                UnsubscribeFromItemChanges(Settings.Items);
+                // 在 UI 线程更新集合
+                Settings.Items = newItems;
+                SubscribeToItemChanges(Settings.Items);
+                Log.Information("已根据格口数量({ChuteCount})初始化{ItemsCount}条翻板机配置", Settings.ChuteCount, newItems.Count);
+                _notificationService.ShowSuccess($"已生成 {newItems.Count} 条配置，请检查后手动保存。");
+            }
+            else
+            {
+                Log.Warning("未能生成任何配置项。");
+                _notificationService.ShowWarning("未能生成配置，请检查格口数量设置。");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "初始化翻板机配置失败");
+            _notificationService.ShowError("初始化配置时发生错误。");
+        }
     }
 
     private void InitializeSettingsByChuteCount()
     {
         try
         {
-            // 获取格口设置
-            var settings = _settingsService.LoadSettings<PlateTurnoverSettings>();
-            if (settings.ChuteCount <= 0)
+            var newItems = GenerateItemsByChuteCount();
+            if (newItems != null)
+            {
+                UnsubscribeFromItemChanges(Settings.Items);
+                Settings.Items = newItems;
+                SubscribeToItemChanges(Settings.Items);
+                Log.Information("已根据格口数量({ChuteCount})初始化{ItemsCount}条翻板机配置", Settings.ChuteCount, newItems.Count);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "初始化翻板机配置失败");
+        }
+    }
+
+    private ObservableCollection<PlateTurnoverItem>? GenerateItemsByChuteCount()
+    {
+        var settings = _settingsService.LoadSettings<PlateTurnoverSettings>();
+        var chuteCount = settings.ChuteCount;
+        var items = new ObservableCollection<PlateTurnoverItem>();
+
+        if (chuteCount == 94) // 用户的特殊配置
+        {
+            Log.Information("检测到94格口，应用特殊配置生成规则：12个控制盒，首尾各7个IO点，中间各8个。");
+            const int totalBoxes = 12;
+            var baseIpParts = new byte[] { 192, 168, 0, 100 };
+            int chuteCursor = 1;
+
+            for (var boxIndex = 0; boxIndex < totalBoxes; boxIndex++)
+            {
+                var chutesInThisBox = boxIndex == 0 || boxIndex == totalBoxes - 1 ? 7 : 8;
+
+                var currentIpParts = (byte[])baseIpParts.Clone();
+                currentIpParts[3] = (byte)(100 + boxIndex);
+                var ipAddress = new IPAddress(currentIpParts).ToString();
+
+                for (var i = 0; i < chutesInThisBox; i++)
+                {
+                    if (chuteCursor > chuteCount) break;
+
+                    var item = new PlateTurnoverItem
+                    {
+                        Index = (items.Count + 1).ToString(),
+                        TcpAddress = ipAddress,
+                        IoPoint = $"out{i + 1}",
+                        MappingChute = chuteCursor,
+                        Distance = 0,
+                        DelayFactor = 1,
+                        MagnetTime = 300
+                    };
+                    items.Add(item);
+                    chuteCursor++;
+                }
+            }
+        }
+        else // 回退到原始通用逻辑
+        {
+            if (chuteCount <= 0)
             {
                 Log.Warning("格口数量未设置，无法初始化翻板机配置");
-                return;
+                // 在同步方法中不显示通知，避免不必要的UI交互
+                return null;
             }
 
-            var chuteCount = settings.ChuteCount;
-            const int itemsPerIp = 8; // 每个IP地址对应8个格口
+            const int itemsPerIp = 8;
             var ipCount = (int)Math.Ceiling(chuteCount / (double)itemsPerIp);
-
-            // 从192.168.0.100开始
             var baseIpParts = new byte[] { 192, 168, 0, 100 };
-            var items = new ObservableCollection<PlateTurnoverItem>();
 
             for (var i = 0; i < ipCount; i++)
             {
-                // 计算当前IP地址
                 var currentIpParts = (byte[])baseIpParts.Clone();
                 currentIpParts[3] = (byte)(100 + i);
                 var ipAddress = new IPAddress(currentIpParts);
 
-                // 计算当前IP对应的格口范围
                 var startChute = i * itemsPerIp + 1;
                 var endChute = Math.Min(startChute + itemsPerIp - 1, chuteCount);
 
@@ -125,25 +218,20 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
                     var outNumber = chute - startChute + 1;
                     var item = new PlateTurnoverItem
                     {
-                        Index = (items.Count + 1).ToString(), // Index 似乎未使用，暂时保留
+                        Index = (items.Count + 1).ToString(),
                         TcpAddress = ipAddress.ToString(),
                         IoPoint = $"out{outNumber}",
                         MappingChute = chute,
                         Distance = 0,
                         DelayFactor = 1,
-                        MagnetTime = 100
+                        MagnetTime = 300
                     };
                     items.Add(item);
                 }
             }
+        }
 
-            Settings.Items = items;
-            Log.Information("已根据格口数量({ChuteCount})初始化{ItemsCount}条翻板机配置", chuteCount, items.Count);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "初始化翻板机配置失败");
-        }
+        return items.Any() ? items : null;
     }
 
     private void AddItem()
@@ -159,7 +247,7 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
     }
 
     // --- NPOI Import ---
-    private void ExecuteImportFromExcel()
+    private async Task ExecuteImportFromExcelAsync()
     {
         var dialog = new OpenFileDialog
         {
@@ -172,7 +260,6 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
         try
         {
             // 导入时关闭自动保存
-            _isAutoSaveEnabled = false;
 
             using var stream = new FileStream(dialog.FileName, FileMode.Open, FileAccess.Read);
             var workbook = new XSSFWorkbook(stream);
@@ -209,26 +296,25 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
                     Log.Error(cellEx, "处理 Excel 第 {RowIndex} 行数据时出错", i + 1);
                     _notificationService.ShowError($"导入 Excel 第 {i + 1} 行时出错: {cellEx.Message}");
                     // 根据需要决定是否继续导入或中断
-                    // return;
+                    return;
                 }
             }
+
+            UnsubscribeFromItemChanges(Settings.Items);
             Settings.Items = new ObservableCollection<PlateTurnoverItem>(importedItems);
+            SubscribeToItemChanges(Settings.Items);
             _notificationService.ShowSuccess($"成功导入 {Settings.Items.Count} 条数据");
             Log.Information("从 Excel 成功导入 {Count} 条翻板机配置", Settings.Items.Count);
+
+            if (Settings.Items.Any())
+            {
+                await SaveSettingsAsync();
+            }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "导入 Excel 失败: {FilePath}", dialog.FileName);
             _notificationService.ShowError($"导入 Excel 文件失败: {ex.Message}");
-        }
-        finally
-        {
-            // 恢复自动保存并手动保存一次
-            _isAutoSaveEnabled = true;
-            if (Settings.Items.Any()) // 仅当导入成功时保存
-            {
-                 SaveSettings();
-            }
         }
     }
 
@@ -293,34 +379,28 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
          }
     }
 
-    private void ExecuteSaveConfiguration()
-    {
-        SaveSettings();
-    }
-
-    private void SaveSettings()
+    private async Task SaveSettingsAsync()
     {
         try
         {
-            _settingsService.SaveSettings(Settings);
-            _notificationService.ShowSuccessWithToken("翻板机配置已保存", "SettingWindowGrowl");
+            await Task.Run(() => _settingsService.SaveSettings(Settings));
+            
+            Application.Current.Dispatcher.Invoke(() => 
+            {
+                _notificationService.ShowSuccessWithToken("翻板机配置已自动保存", "SettingWindowGrowl");
+            });
 
-            // 更新光电设备配置 (这段逻辑保持不变)
-            try
-            {
-                Log.Information("触发光电设备配置更新 (具体逻辑待确认)");
-                _notificationService.ShowSuccessWithToken("已更新光电设备配置", "SettingWindowGrowl");
-            }
-            catch (Exception updateEx)
-            {
-                Log.Error(updateEx, "更新光电设备配置失败");
-                _notificationService.ShowErrorWithToken("更新光电设备配置失败: " + updateEx.Message, "SettingWindowGrowl");
-            }
+            // 保存成功后，发布一次更新，确保服务获取到最新的配置
+            _eventAggregator.GetEvent<PlateTurnoverSettingsUpdatedEvent>().Publish(Settings);
+            Log.Information("翻板机配置已自动保存并发布更新。");
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "保存翻板机配置失败");
-            _notificationService.ShowErrorWithToken("保存翻板机配置失败", "SettingWindowGrowl");
+            Log.Error(ex, "自动保存翻板机配置失败");
+            Application.Current.Dispatcher.Invoke(() => 
+            {
+                _notificationService.ShowErrorWithToken("自动保存配置失败: " + ex.Message, "SettingWindowGrowl");
+            });
         }
     }
 
@@ -400,17 +480,95 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
 
     private void OnSettingsChanged(object? sender, EventArgs e)
     {
-        // 属性变更时自动保存
-        if (!_isAutoSaveEnabled) return;
-        // 考虑增加防抖或延迟保存，避免过于频繁的IO操作
-        SaveSettings();
+        DebouncedAutoSave();
+    }
+    
+    // --- 深度监听逻辑 ---
+
+    private void SubscribeToItemChanges(ObservableCollection<PlateTurnoverItem> items)
+    {
+        if (items == null) return;
+        items.CollectionChanged += OnItemsCollectionChanged;
+        foreach (var item in items)
+        {
+            item.PropertyChanged += OnItemPropertyChanged;
+        }
+    }
+
+    private void UnsubscribeFromItemChanges(ObservableCollection<PlateTurnoverItem> items)
+    {
+        if (items == null) return;
+        items.CollectionChanged -= OnItemsCollectionChanged;
+        foreach (var item in items)
+        {
+            item.PropertyChanged -= OnItemPropertyChanged;
+        }
+    }
+    
+    private void OnItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems != null)
+        {
+            foreach (INotifyPropertyChanged item in e.OldItems)
+                item.PropertyChanged -= OnItemPropertyChanged;
+        }
+        if (e.NewItems != null)
+        {
+            foreach (INotifyPropertyChanged item in e.NewItems)
+                item.PropertyChanged += OnItemPropertyChanged;
+        }
+        DebouncedAutoSave();
+    }
+    
+    private void OnItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        DebouncedAutoSave();
+    }
+
+    private async void DebouncedAutoSave()
+    {
+        try
+        {
+            _autoSaveCts?.Cancel(); // Cancel previous pending save
+            _autoSaveCts?.Dispose();
+            _autoSaveCts = new CancellationTokenSource();
+            var token = _autoSaveCts.Token;
+
+            await Task.Delay(1000, token); // Wait for 1 second
+
+            // If not cancelled, proceed to save
+            await SaveSettingsAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            // This is expected if the user makes another change quickly.
+            Log.Debug("自动保存操作被新的修改取消。");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "DebouncedAutoSave 发生意外错误。");
+        }
     }
 
     // 释放资源，取消事件订阅
     public void Dispose()
     {
-        Settings.PropertyChanged -= Settings_PropertyChanged; // 取消订阅属性变更
-        Settings.SettingsChanged -= OnSettingsChanged; // 取消订阅集合内容变更
+        if (_settings != null)
+        {
+            _settings.PropertyChanged -= Settings_PropertyChanged;
+            UnsubscribeFromItemChanges(_settings.Items);
+        }
+
+        if (_autoSaveCts != null)
+        {
+            if (!_autoSaveCts.IsCancellationRequested)
+            {
+                _autoSaveCts.Cancel();
+            }
+            _autoSaveCts.Dispose();
+            _autoSaveCts = null; // 确保被清理
+        }
+        
         GC.SuppressFinalize(this); // 通知GC不需要调用Finalize
         Log.Debug("PlateTurnoverSettingsViewModel disposed.");
     }
@@ -420,8 +578,11 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
      {
          if (e.PropertyName == nameof(PlateTurnoverSettings.ChuteCount))
          {
-             InitializeSettingsByChuteCount();
+             // 改为手动触发，但当其他直接属性（如ErrorChute）变更时，我们仍需发布更新
          }
+         
+         // 任何直接在Settings对象上的属性变更都应触发更新
+         DebouncedAutoSave();
      }
 
 
