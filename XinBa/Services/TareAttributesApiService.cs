@@ -24,6 +24,8 @@ namespace XinBa.Services
         private const string ApiPassword = "L4T97kdYBKHg1YTkSmccy3YvnSibr4z66NtpxJ28buSjaXdIKEMJvbY8bqewbkIi";
         private const string ApiBaseUrl = "https://wh-skud-external.wildberries.ru";
         private const string ApiEndpoint = "/srv/measure_machine_api/api/tare_attributes_from_machine";
+        private const long ApiOfficeId = 300864; // 仓库ID
+        private const long ApiPlaceId = 943626653; // 机器ID
 
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
@@ -72,11 +74,15 @@ namespace XinBa.Services
                     return (false, error);
                 }
 
+                // 设置 API 参数
+                request.OfficeId = ApiOfficeId;
+                request.PlaceId = ApiPlaceId;
+                
                 // 自动计算体积
                 request.CalculateVolume();
 
-                Log.Information("开始提交 Tare Attributes: TareSticker={TareSticker}, Size={Length}x{Width}x{Height}mm, Weight={Weight}g, Volume={Volume}mm³",
-                    request.TareSticker, request.SizeAMm, request.SizeBMm, request.SizeCMm, request.WeightG, request.VolumeMm);
+                Log.Information("开始提交 Tare Attributes: OfficeId={OfficeId}, PlaceId={PlaceId}, TareSticker={TareSticker}, Size={Length}x{Width}x{Height}mm, Weight={Weight}g, Volume={Volume}mm³",
+                    request.OfficeId, request.PlaceId, request.TareSticker, request.SizeAMm, request.SizeBMm, request.SizeCMm, request.WeightG, request.VolumeMm);
 
                 // 序列化请求数据
                 var jsonContent = JsonSerializer.Serialize(request, JsonOptions);

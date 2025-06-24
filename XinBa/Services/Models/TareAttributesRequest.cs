@@ -10,11 +10,11 @@ namespace XinBa.Services.Models
     public class TareAttributesRequest
     {
         /// <summary>
-        /// 仓库办公室ID - Shelepanovo 仓库硬编码为 300684
+        /// 仓库办公室ID
         /// </summary>
         [JsonPropertyName("office_id")]
         [Required]
-        public long OfficeId { get; set; } = 300684;
+        public long OfficeId { get; set; }
 
         /// <summary>
         /// 包装箱上的二维码或条形码值
@@ -24,11 +24,11 @@ namespace XinBa.Services.Models
         public string TareSticker { get; set; } = string.Empty;
 
         /// <summary>
-        /// 测量机器的地点ID - Shelepanovo 机器硬编码为 943626653
+        /// 测量机器的地点ID
         /// </summary>
         [JsonPropertyName("place_id")]
         [Required]
-        public long PlaceId { get; set; } = 943626653;
+        public long PlaceId { get; set; }
 
         /// <summary>
         /// 长度，单位毫米 (mm)
