@@ -778,7 +778,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
                 // === 新策略：预防性回正 ===
                 // 1. 先发送回正命令，确保从已知状态开始
                 Log.Information("开始执行预防性回正，确保摆轮从复位状态开始");
-                await ExecutePreventiveReset(client, pendulumState, photoelectricName);
+                await ExecutePreventiveReset(client, pendulumState, photoelectricName, package);
 
                 // 2. 等待分拣延迟到达最佳位置
                 var sortDelay = photoelectricConfig.SortingDelay;
@@ -1277,8 +1277,23 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// <summary>
     /// 执行预防性回正，确保摆轮从复位状态开始
     /// </summary>
-    private async Task ExecutePreventiveReset(TcpClientService client, PendulumState pendulumState, string photoelectricName)
+    private async Task ExecutePreventiveReset(TcpClientService client, PendulumState pendulumState, string photoelectricName, PackageInfo package)
     {
+        // === 智能预防性回正优化 ===
+        // 检查新包裹的摆动方向是否与摆轮当前状态一致
+        if (ShouldSwingLeft(package.ChuteNumber) && pendulumState.CurrentDirection == PendulumDirection.SwingingLeft)
+        {
+            Log.Information("智能跳过预防性回正：新包裹 {Index}|{Barcode} (格口 {Chute}) 需要左摆，与摆轮当前状态一致",
+                package.Index, package.Barcode, package.ChuteNumber);
+            return; // 直接返回，不执行任何回正操作
+        }
+        if (ShouldSwingRight(package.ChuteNumber) && pendulumState.CurrentDirection == PendulumDirection.SwingingRight)
+        {
+            Log.Information("智能跳过预防性回正：新包裹 {Index}|{Barcode} (格口 {Chute}) 需要右摆，与摆轮当前状态一致",
+                package.Index, package.Barcode, package.ChuteNumber);
+            return; // 直接返回，不执行任何回正操作
+        }
+        
         Log.Debug("执行预防性回正 (光电: {Name})", photoelectricName);
         
         if (!client.IsConnected())
