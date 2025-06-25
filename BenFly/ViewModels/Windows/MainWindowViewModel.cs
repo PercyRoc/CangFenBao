@@ -638,7 +638,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                             package.Index);
                         await Application.Current.Dispatcher.InvokeAsync(() =>
                         {
-                            _notificationService.ShowError($"包裹 {package.Barcode} 因数据无效停止。请检查包裹或设备。");
+                            _notificationService.ShowWarning($"包裹 {package.Barcode} 因数据无效停止。请检查包裹或设备。");
                             UpdatePackageInfoItems(package);
                         });
                     }
@@ -648,7 +648,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                             package.Index);
                         await Application.Current.Dispatcher.InvokeAsync(() =>
                         {
-                            _notificationService.ShowError($"包裹 {package.Barcode} 因数据无效跳过处理流程。请检查包裹或设备。 (皮带控制已禁用)");
+                            _notificationService.ShowWarning($"包裹 {package.Barcode} 因数据无效跳过处理流程。请检查包裹或设备。 (皮带控制已禁用)");
                             UpdatePackageInfoItems(package);
                         });
                     }
@@ -658,7 +658,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     // 对于单号校验失败的包裹，显示相应的错误提示
                     await Application.Current.Dispatcher.InvokeAsync(() =>
                     {
-                        _notificationService.ShowError($"包裹 {package.Barcode} 单号校验失败: {validationResult?.ErrorMessage}");
+                        _notificationService.ShowWarning($"包裹 {package.Barcode} 单号校验失败: {validationResult?.ErrorMessage}");
                         UpdatePackageInfoItems(package);
                     });
                 }
@@ -670,7 +670,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     // 明确设置 NoRead 状态，如果之前没有因为 isInvalidData 而设置 Error 状态
                     if (package.Status != PackageStatus.Error)
                     {
-                        package.SetStatus(PackageStatus.NoRead); 
+                        package.SetStatus(PackageStatus.Error, "未能识别包裹条码(NoRead)");
                     }
                     Log.Information("包裹为 NoRead/Empty，Barcode: {Barcode}, Index: {Index}。将标记为 uploadAsNoRead，继续部分处理流程。当前状态: {Status}",
                         package.Barcode, package.Index, package.Status);
@@ -1026,20 +1026,17 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         var totalItem = StatisticsItems.FirstOrDefault(static x => x.Label == "总包裹数");
         if (totalItem != null)
         {
-            // 计算非noread包裹的数量
-            var validPackageCount =
-                PackageHistory.Count(p => !string.Equals(p.Barcode, "noread", StringComparison.OrdinalIgnoreCase));
-            totalItem.Value = validPackageCount.ToString();
-            totalItem.Description = $"累计处理 {validPackageCount} 个有效包裹";
+            // 计算成功处理的包裹（没有错误信息）
+            var successCount = PackageHistory.Count(p => string.IsNullOrEmpty(p.ErrorMessage));
+            totalItem.Value = successCount.ToString();
+            totalItem.Description = $"累计处理 {successCount} 个有效包裹";
         }
 
         var errorItem = StatisticsItems.FirstOrDefault(static x => x.Label == "异常数");
         if (errorItem != null)
         {
-            // 计算非noread且存在错误的包裹数量
-            var errorCount = PackageHistory.Count(p =>
-                !string.IsNullOrEmpty(p.ErrorMessage) &&
-                !string.Equals(p.Barcode, "noread", StringComparison.OrdinalIgnoreCase));
+            // 计算存在错误的包裹数量
+            var errorCount = PackageHistory.Count(p => !string.IsNullOrEmpty(p.ErrorMessage));
             errorItem.Value = errorCount.ToString();
             errorItem.Description = $"共有 {errorCount} 个异常包裹";
         }
