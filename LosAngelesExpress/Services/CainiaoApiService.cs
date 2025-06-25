@@ -34,6 +34,12 @@ public class CainiaoApiService(HttpClient httpClient, ISettingsService settingsS
         try
         {
             var settings = settingsService.LoadSettings<CainiaoApiSettings>();
+            
+            // 记录API配置信息
+            Log.Information(
+                "[菜鸟API] 开始上传包裹，API地址: {ApiUrl}, 超时时间: {TimeoutSeconds}秒, 工作台: {Workbench}",
+                settings.ApiUrl, settings.TimeoutSeconds, settings.Workbench);
+            
             // 构建 logistics_interface 对象
             var logistics = new CainiaoOpenLogisticsInterface
             {
@@ -63,9 +69,17 @@ public class CainiaoApiService(HttpClient httpClient, ISettingsService settingsS
                 new("data_digest", dataDigest),
                 new("to_code", "smart_site_am")
             };
+            
+            // 记录完整的请求参数
+            Log.Information(
+                "[菜鸟API] 完整请求参数 - URL: {ApiUrl}, 表单参数: logistics_interface={LogisticsInterface}, msg_type={MsgType}, logistic_provider_id={LogisticProviderId}, data_digest={DataDigest}, to_code={ToCode}",
+                settings.ApiUrl, logisticsJson, "GLOBAL_SMART_SITE_SIGN_IN_NOTIFY", "wuke_iot", dataDigest, "smart_site_am");
+            
             var content = new FormUrlEncodedContent(form);
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(settings.TimeoutSeconds));
-            var response = await httpClient.PostAsync(settings.CurrentApiUrl, content, cts.Token);
+            
+            Log.Information("[菜鸟API] 发送POST请求到: {ApiUrl}", settings.ApiUrl);
+            var response = await httpClient.PostAsync(settings.ApiUrl, content, cts.Token);
             stopwatch.Stop();
             var responseJson = await response.Content.ReadAsStringAsync(cts.Token);
             Log.Information("[菜鸟API] 上传包裹响应: StatusCode={StatusCode}, Response={Response}, 耗时={ElapsedMs}ms",
@@ -92,7 +106,7 @@ public class CainiaoApiService(HttpClient httpClient, ISettingsService settingsS
         try
         {
             var settings = settingsService.LoadSettings<CainiaoApiSettings>();
-            var response = await httpClient.GetAsync(settings.CurrentApiUrl);
+            var response = await httpClient.GetAsync(settings.ApiUrl);
             return response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed;
         }
         catch

@@ -73,6 +73,11 @@ public class SettingsDialogViewModel: BindableBase, IDialogAware, IDisposable
     // 实现 IDisposable 接口
     public void Dispose()
     {
+        // 释放拥有的资源
+        if (_cainiaoSettingsViewModel is IDisposable disposable)
+        {
+            disposable.Dispose();
+        }
         GC.SuppressFinalize(this);
     }
 }

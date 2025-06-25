@@ -64,7 +64,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     // 新增：MVVM模式的条码输入处理相关字段和事件
     private bool _isScanningInProgress;
-    private readonly StringBuilder _barcodeBuffer = new();
 
     // 请求UI操作的事件
     public event Action? RequestClearBarcodeInput;
@@ -1770,9 +1769,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
     /// </summary>
     internal void ClearBarcodeBuffer()
     {
-        _barcodeBuffer.Clear();
         CurrentBarcode = string.Empty;
-        Log.Information("手动删除输入框内容，已清空条码缓存。");
+        Log.Information("手动删除输入框内容，已清空条码输入。");
     }
 
     /// <summary>
@@ -1781,7 +1779,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private void ExecuteHandleScanStart()
     {
         _isScanningInProgress = true;
-        _barcodeBuffer.Clear();
 
         // 清空当前条码显示
         CurrentBarcode = string.Empty;
@@ -1800,10 +1797,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
         string barcode;
         if (_isScanningInProgress)
         {
-            barcode = _barcodeBuffer.ToString().Trim();
-            _barcodeBuffer.Clear();
+            barcode = CurrentBarcode.Trim();
             _isScanningInProgress = false;
-            Log.Information("扫码模式完成，从缓存获取条码: {Barcode}", barcode);
+            Log.Information("扫码模式完成，从UI绑定获取条码: {Barcode}", barcode);
         }
         else
         {

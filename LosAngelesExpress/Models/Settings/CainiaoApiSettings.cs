@@ -8,10 +8,8 @@ namespace LosAngelesExpress.Models.Settings;
 [Configuration("CainiaoApiSettings")]
 public class CainiaoApiSettings : BindableBase
 {
-    private bool _usePreEnvironment = true;
-    private string _preApiUrl = "https://pre-gxms-us.cainiao.com/api/operate/automation";
-    private string _productionApiUrl = "https://gxms-us.cainiao.com/api/operate/automation";
-    private string _appSecret = "YGJ7kQcO";
+    private string _apiUrl = "https://gxms-us.cainiao.com/api/operate/automation";
+    private string _appSecret = "1370130PKs86X14IKV7C135W35v83m60";
     private string? _workbench = "iVMS_AJ_01";
     private int _timeoutSeconds = 30;
     private int _retryCount = 3;
@@ -19,30 +17,12 @@ public class CainiaoApiSettings : BindableBase
     private string _bizCode = "789999991";
 
     /// <summary>
-    /// 是否使用预发环境（false为线上环境）
+    /// API地址
     /// </summary>
-    public bool UsePreEnvironment
+    public string ApiUrl
     {
-        get => _usePreEnvironment;
-        set => SetProperty(ref _usePreEnvironment, value);
-    }
-
-    /// <summary>
-    /// 预发环境API地址
-    /// </summary>
-    public string PreApiUrl
-    {
-        get => _preApiUrl;
-        set => SetProperty(ref _preApiUrl, value);
-    }
-
-    /// <summary>
-    /// 线上环境API地址
-    /// </summary>
-    public string ProductionApiUrl
-    {
-        get => _productionApiUrl;
-        set => SetProperty(ref _productionApiUrl, value);
+        get => _apiUrl;
+        set => SetProperty(ref _apiUrl, value);
     }
 
     /// <summary>
@@ -98,9 +78,4 @@ public class CainiaoApiSettings : BindableBase
         get => _bizCode;
         set => SetProperty(ref _bizCode, value);
     }
-
-    /// <summary>
-    /// 获取当前环境的API地址
-    /// </summary>
-    public string CurrentApiUrl => UsePreEnvironment ? PreApiUrl : ProductionApiUrl;
-} 
+}

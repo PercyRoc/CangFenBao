@@ -27,46 +27,17 @@
                        FontWeight="SemiBold" 
                        Margin="0,0,0,8"/>
             
-            <!-- Environment Selection -->
+            <!-- API URL Configuration -->
             <ui:Card>
                 <StackPanel Margin="16">
-                    <TextBlock Text="Environment" 
-                               FontWeight="Medium" 
-                               FontSize="14"/>
-                    
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                        <RadioButton Content="Pre-production Environment"
-                                     IsChecked="{Binding Settings.UsePreEnvironment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                     GroupName="Environment"/>
-                        <RadioButton Content="Production Environment"
-                                     IsChecked="{Binding Settings.UsePreEnvironment, Converter={StaticResource InverseBooleanConverter}, Mode=TwoWay}"
-                                     GroupName="Environment"/>
-                    </StackPanel>
-                    
-                    <TextBlock Text="{Binding Settings.CurrentApiUrl, StringFormat='Current API URL: {0}'}" 
-                               FontStyle="Italic" 
-                               Foreground="Gray" 
-                               FontSize="12"/>
-                </StackPanel>
-            </ui:Card>
-            
-            <!-- API URLs Configuration -->
-            <ui:Card>
-                <StackPanel Margin="16">
-                    <TextBlock Text="API URLs Configuration" 
+                    <TextBlock Text="API URL Configuration" 
                                FontWeight="Medium" 
                                FontSize="14"/>
                     
                     <StackPanel Margin="0,8,0,0">
-                        <TextBlock Text="Pre-production API URL:"/>
-                        <ui:TextBox Text="{Binding Settings.PreApiUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
-                                    PlaceholderText="Enter pre-production API URL"/>
-                    </StackPanel>
-                    
-                    <StackPanel Margin="0,8,0,0">
-                        <TextBlock Text="Production API URL:"/>
-                        <ui:TextBox Text="{Binding Settings.ProductionApiUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
-                                    PlaceholderText="Enter production API URL"/>
+                        <TextBlock Text="API URL:"/>
+                        <ui:TextBox Text="{Binding Settings.ApiUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
+                                    PlaceholderText="Enter API URL"/>
                     </StackPanel>
                 </StackPanel>
             </ui:Card>

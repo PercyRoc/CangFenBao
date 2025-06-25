@@ -1,16 +1,18 @@
- using Common.Models.Package;
+using Common.Models.Package;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using LosAngelesExpress.Models.Settings;
 using LosAngelesExpress.Services;
 using Serilog;
+using System.ComponentModel;
+using System.Text.Json;
 
 namespace LosAngelesExpress.ViewModels.Settings;
 
 /// <summary>
 /// 菜鸟API设置 ViewModel
 /// </summary>
-public class CainiaoSettingsViewModel : BindableBase
+public class CainiaoSettingsViewModel : BindableBase, IDisposable
 {
     private readonly ISettingsService _settingsService;
     private readonly ICainiaoApiService _cainiaoApiService;
@@ -28,9 +30,12 @@ public class CainiaoSettingsViewModel : BindableBase
         _cainiaoApiService = cainiaoApiService;
         _notificationService = notificationService;
 
-        Settings = _settingsService.LoadSettings<CainiaoApiSettings>();
-
-        TestApiCommand = new DelegateCommand(async void () => await ExecuteTestApiCommandAsync());
+        // 从设置服务加载原始设置
+        var originalSettings = _settingsService.LoadSettings<CainiaoApiSettings>();
+        // 克隆一个副本用于UI绑定和编辑，避免直接修改缓存中的实例
+        Settings = JsonSerializer.Deserialize<CainiaoApiSettings>(JsonSerializer.Serialize(originalSettings)) ?? new CainiaoApiSettings();
+        
+        TestApiCommand = new DelegateCommand(async () => await ExecuteTestApiCommandAsync());
     }
 
     /// <summary>
@@ -78,8 +83,8 @@ public class CainiaoSettingsViewModel : BindableBase
         // 使用 PackageInfo.Create() 工厂方法创建实例
         var dummyPackageInfo = PackageInfo.Create();
         dummyPackageInfo.SetBarcode(TestBarcode);
-        dummyPackageInfo.Weight = 1.0;
-        dummyPackageInfo.SetDimensions(10.11, 10.1, 10.0);
+        dummyPackageInfo.Weight = 2.129; // 对应 2129g
+        dummyPackageInfo.SetDimensions(36.1, 26.6, 23.0); // 对应 361mm x 266mm x 230mm
 
         Log.Information($"开始测试菜鸟API，条码: {TestBarcode}");
         _notificationService.ShowSuccess($"正在测试API，条码: {TestBarcode}...");
@@ -104,5 +109,10 @@ public class CainiaoSettingsViewModel : BindableBase
             Log.Error(ex, $"菜鸟API测试发生异常，条码: {TestBarcode}");
             _notificationService.ShowError($"API测试发生异常！条码: {TestBarcode}, 异常: {ex.Message}");
         }
+    }
+
+    public void Dispose()
+    {
+        GC.SuppressFinalize(this);
     }
 }
