@@ -167,6 +167,8 @@
                                             FontWeight="Bold" 
                                             VerticalAlignment="Center"
                                             Padding="10,0"
+                                            MaxLength="128"
+                                            AcceptsReturn="False"
                                             KeyDown="ManualBarcodeTextBox_KeyDown"
                                             TextChanged="ManualBarcodeTextBox_TextChanged"/>
                             </Grid>

@@ -81,6 +81,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private const int MaxStableWeightQueueSize = 100;
     private readonly Queue<double> _rawWeightBuffer = new();
 
+    // 新增：用于条码防抖动的字段
+    private string _lastProcessedBarcode = string.Empty;
+    private DateTime _lastProcessedTime = DateTime.MinValue;
+    private const int BarcodeDebounceMilliseconds = 500; // 500ms内相同条码不重复处理
+
     // 新增：用于存储Rx订阅的字段
     private readonly IDisposable? _weightDataSubscription;
     private readonly IDisposable? _volumeCameraImageSubscription;
@@ -337,6 +342,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
     // 将原有的实现移到这个方法中，并设为 internal 以便视图调用
     public async Task ProcessBarcodeAsync(string barcode)
     {
+        // 条码完整性日志
+        Log.Information("开始处理条码: {Barcode}, 长度: {Length}, 字符: [{Characters}]", 
+            barcode, barcode.Length, string.Join(", ", barcode.Select(c => $"'{c}'({(int)c})")));
+
         // 尝试获取处理锁，如果已被占用则直接返回
         if (!await _barcodeProcessingLock.WaitAsync(0)) // 设置超时为0，如果锁不可用则立即返回false
         {
@@ -1778,6 +1787,16 @@ public class MainWindowViewModel : BindableBase, IDisposable
     /// </summary>
     private void ExecuteHandleScanStart()
     {
+        // 检查是否正在处理条码，如果是则忽略新的扫描
+        if (!_barcodeProcessingLock.Wait(0))
+        {
+            Log.Warning("正在处理条码，忽略新的扫描开始信号");
+            return;
+        }
+        
+        // 立即释放锁，因为我们只是检查状态
+        _barcodeProcessingLock.Release();
+
         _isScanningInProgress = true;
 
         // 清空当前条码显示
@@ -1787,6 +1806,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         RequestClearBarcodeInput?.Invoke();
         RequestFocusBarcodeInput?.Invoke();
 
+        Log.Information("扫码开始，已重置输入状态");
     }
 
     /// <summary>
@@ -1819,7 +1839,37 @@ public class MainWindowViewModel : BindableBase, IDisposable
             barcode = barcode[1..];
         }
 
+        // 防抖动检查：如果是相同的条码且在防抖时间内，则忽略
+        var currentTime = DateTime.Now;
+        if (barcode == _lastProcessedBarcode && 
+            (currentTime - _lastProcessedTime).TotalMilliseconds < BarcodeDebounceMilliseconds)
+        {
+            Log.Information("忽略重复条码（防抖动）: {Barcode}, 距上次处理仅 {Milliseconds}ms", 
+                barcode, (currentTime - _lastProcessedTime).TotalMilliseconds);
+            return;
+        }
+
+        // 条码长度验证（可根据实际需求调整）
+        if (barcode.Length < 3)
+        {
+            Log.Warning("条码长度过短，可能不完整: {Barcode}", barcode);
+            _notificationService.ShowWarning($"Barcode too short: {barcode}. Please scan again.");
+            return;
+        }
+
+        // 条码字符验证（确保不包含非预期字符）
+        if (barcode.Contains('\0') || barcode.Contains('\t'))
+        {
+            Log.Warning("条码包含非法字符: {Barcode}", barcode);
+            _notificationService.ShowWarning("Invalid barcode format. Please scan again.");
+            return;
+        }
+
         Log.Information("处理完成，最终处理条码: {Barcode}", barcode);
+
+        // 更新最后处理的条码和时间
+        _lastProcessedBarcode = barcode;
+        _lastProcessedTime = currentTime;
 
         // 更新UI显示的当前条码为最终处理的条码
         CurrentBarcode = barcode;

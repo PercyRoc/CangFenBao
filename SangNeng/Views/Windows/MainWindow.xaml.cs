@@ -140,7 +140,7 @@ public partial class MainWindow
         if (e.Key != Key.Enter || sender is not HandyControl.Controls.TextBox textBox) return;
 
         // 等待一小段时间，确保所有字符都已输入到文本框
-        await Task.Delay(50);
+        await Task.Delay(100); // 增加延迟时间从50ms到100ms
 
         // 委托给ViewModel处理条码完成
         if (DataContext is MainWindowViewModel viewModel)
@@ -163,7 +163,7 @@ public partial class MainWindow
     }
 
     // 重构：全局文本输入事件处理 - MVVM模式
-    private void MainWindow_PreviewTextInput(object sender, TextCompositionEventArgs e)
+    private async void MainWindow_PreviewTextInput(object sender, TextCompositionEventArgs e)
     {
         if (DataContext is not MainWindowViewModel viewModel) return;
 
@@ -176,9 +176,18 @@ public partial class MainWindow
                 break;
             case "\r":
             case "\n":
-                // 扫码枪输入结束
-                viewModel.HandleBarcodeCompleteCommand.Execute();
+                // 扫码枪输入结束 - 添加延迟确保所有字符都已更新到绑定属性
                 e.Handled = true;
+                
+                // 使用异步延迟，确保TextBox的绑定已完成更新
+                await Task.Run(async () =>
+                {
+                    await Task.Delay(100); // 增加延迟时间，确保所有字符都已处理
+                    await Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        viewModel.HandleBarcodeCompleteCommand.Execute();
+                    });
+                });
                 break;
         }
     }
