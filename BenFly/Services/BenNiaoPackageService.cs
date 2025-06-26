@@ -14,6 +14,7 @@ using Renci.SshNet.Common;
 using Serilog;
 using System.Drawing;
 using System.Drawing.Text;
+using System.Threading;
 
 namespace BenFly.Services;
 
@@ -205,7 +206,7 @@ internal class BenNiaoPackageService : IDisposable
     ///     实时查询三段码
     /// </summary>
     /// <returns>包含段码和错误消息的元组。如果成功，ErrorMessage 为 null。</returns>
-    internal async Task<(string? SegmentCode, string? ErrorMessage)> GetRealTimeSegmentCodeAsync(string waybillNum)
+    internal async Task<(string? SegmentCode, string? ErrorMessage)> GetRealTimeSegmentCodeAsync(string waybillNum, CancellationToken cancellationToken)
     {
         try
         {
@@ -225,7 +226,7 @@ internal class BenNiaoPackageService : IDisposable
 
             // 使用 StringContent 发送请求
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync(url, content);
+            var response = await _httpClient.PostAsync(url, content, cancellationToken);
             // 不再 EnsureSuccessStatusCode，手动检查并返回错误
             // response.EnsureSuccessStatusCode(); 
 
@@ -258,7 +259,7 @@ internal class BenNiaoPackageService : IDisposable
     /// <summary>
     ///     上传包裹数据
     /// </summary>
-    internal async Task<(bool Success, DateTime UploadTime, string ErrorMessage)> UploadPackageDataAsync(PackageInfo package)
+    internal async Task<(bool Success, DateTime UploadTime, string ErrorMessage)> UploadPackageDataAsync(PackageInfo package, CancellationToken cancellationToken)
     {
         try
         {
@@ -287,7 +288,7 @@ internal class BenNiaoPackageService : IDisposable
             // 使用 JsonContent 替代 PostAsJsonAsync，以便使用自定义序列化选项
             var jsonContent = JsonSerializer.Serialize(request, _jsonOptions);
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync(url, content);
+            var response = await _httpClient.PostAsync(url, content, cancellationToken);
             response.EnsureSuccessStatusCode();
 
             var result = await response.Content.ReadFromJsonAsync<BenNiaoResponse<object>>(_jsonOptions);
