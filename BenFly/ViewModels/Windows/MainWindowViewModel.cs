@@ -4,28 +4,22 @@ using System.IO;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Common.Models.Package;
 using Common.Models.Settings.ChuteRules;
 using Common.Services.Settings;
-using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Scanner;
 using DeviceService.DataSourceDevices.Services;
 using BenFly.Services;
 using Common.Models.Settings.Sort.PendulumSort;
-using Prism.Commands;
-using Prism.Mvvm;
 using Serilog;
 using SharedUI.Models;
 using SortingServices.Pendulum;
 using Common.Services.Audio;
 using Common.Services.Validation;
 using DeviceService.DataSourceDevices.Belt;
-using Prism.Services.Dialogs;
 using Common.Data;
 
 namespace BenFly.ViewModels.Windows;
@@ -41,7 +35,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private readonly IDialogService _dialogService;
     private readonly ISettingsService _settingsService;
     private readonly IPendulumSortService _sortService;
-    private readonly INotificationService _notificationService;
     private readonly IAudioService _audioService;
     private readonly IPackageDataService _packageDataService;
     private readonly IBarcodeValidationService _barcodeValidationService;
@@ -49,7 +42,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private readonly IDisposable? _barcodeSubscription; // Subscription for the barcode stream
 
     private readonly DispatcherTimer _timer;
-    private TaskCompletionSource<string>? _barcodeScanCompletionSource;
 
     private string _currentBarcode = string.Empty;
 
@@ -70,7 +62,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         BenNiaoPackageService benNiaoService,
         BenNiaoPreReportService preReportService,
         ScannerStartupService scannerStartupService,
-        INotificationService notificationService,
         IAudioService audioService,
         BeltSerialService beltSerialService,
         IPackageDataService packageDataService,
@@ -84,7 +75,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         _preReportService = preReportService;
         _packageDataService = packageDataService;
         var scannerService = scannerStartupService.GetScannerService();
-        _notificationService = notificationService;
         _audioService = audioService;
         _beltSerialService = beltSerialService;
         _barcodeValidationService = barcodeValidationService;
@@ -203,7 +193,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private void ExecuteOpenHistory()
     {
-        _dialogService.ShowDialog("HistoryDialog", null, null, "HistoryWindow");
+        _dialogService.ShowDialog("HistoryDialog");
     }
 
     private void Timer_Tick(object? sender, EventArgs e)
@@ -337,95 +327,85 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private void InitializeStatisticsItems()
     {
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "总包裹数",
-            Value = "0",
-            Unit = "个",
-            Description = "累计处理包裹总数",
-            Icon = "CubeMultiple24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            label: "总包裹数",
+            value: "0",
+            unit: "个",
+            description: "累计处理包裹总数",
+            icon: "CubeMultiple24"
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "异常数",
-            Value = "0",
-            Unit = "个",
-            Description = "处理异常的包裹数量",
-            Icon = "AlertOff24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            label: "异常数",
+            value: "0",
+            unit: "个",
+            description: "处理异常的包裹数量",
+            icon: "AlertOff24"
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "预测效率",
-            Value = "0",
-            Unit = "个/小时",
-            Description = "预计每小时处理量",
-            Icon = "ArrowTrending24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            label: "预测效率",
+            value: "0",
+            unit: "个/小时",
+            description: "预计每小时处理量",
+            icon: "ArrowTrending24"
+        ));
 
-        StatisticsItems.Add(new StatisticsItem
-        {
-            Label = "平均处理时间",
-            Value = "0",
-            Unit = "ms",
-            Description = "单个包裹平均处理时间",
-            Icon = "Timer24"
-        });
+        StatisticsItems.Add(new StatisticsItem(
+            label: "平均处理时间",
+            value: "0",
+            unit: "ms",
+            description: "单个包裹平均处理时间",
+            icon: "Timer24"
+        ));
     }
 
     private void InitializePackageInfoItems()
     {
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "重量",
-            Value = "--",
-            Unit = "kg",
-            Description = "包裹重量",
-            Icon = "Scales24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            label: "重量",
+            value: "--",
+            unit: "kg",
+            description: "包裹重量",
+            icon: "Scales24"
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "尺寸",
-            Value = "--",
-            Unit = "cm",
-            Description = "长×宽×高",
-            Icon = "Ruler24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            label: "尺寸",
+            value: "--",
+            unit: "cm",
+            description: "长×宽×高",
+            icon: "Ruler24"
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "段码",
-            Value = "--",
-            Description = "三段码信息",
-            Icon = "BarcodeScanner24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            label: "段码",
+            value: "--",
+            description: "三段码信息",
+            icon: "BarcodeScanner24"
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "分拣口",
-            Value = "--",
-            Description = "目标分拣位置",
-            Icon = "ArrowCircleDown24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            label: "分拣口",
+            value: "--",
+            description: "目标分拣位置",
+            icon: "ArrowCircleDown24"
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "处理时间",
-            Value = "--",
-            Unit = "ms",
-            Description = "系统处理耗时",
-            Icon = "Timer24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            label: "处理时间",
+            value: "--",
+            unit: "ms",
+            description: "系统处理耗时",
+            icon: "Timer24"
+        ));
 
-        PackageInfoItems.Add(new PackageInfoItem
-        {
-            Label = "当前时间",
-            Value = "--:--:--",
-            Description = "包裹处理时间",
-            Icon = "Clock24"
-        });
+        PackageInfoItems.Add(new PackageInfoItem(
+            label: "当前时间",
+            value: "--:--:--",
+            description: "包裹处理时间",
+            icon: "Clock24"
+        ));
     }
 
     private void OnDeviceConnectionStatusChanged(object? sender, (string Name, bool Connected) e)
@@ -462,9 +442,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     // Handles barcodes received from the IObservable stream
     private void HandleBarcodeFromStream(string barcode)
     {
-        // 移除阻止条码更新的条件判断
-        // if (_barcodeScanCompletionSource is null || _barcodeScanCompletionSource.Task.IsCompleted) return;
-
         Log.Information("收到巴枪扫码：{Barcode}", barcode);
 
         // 更新显示
@@ -479,43 +456,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             barcodeItem.Value = barcode;
             barcodeItem.Description = "请按回车键确认";
         });
-
-        // 如果存在等待中的条码输入任务，则完成它
-        if (_barcodeScanCompletionSource is not null && !_barcodeScanCompletionSource.Task.IsCompleted)
-        {
-            _barcodeScanCompletionSource.SetResult(barcode);
-        }
-    }
-
-    /// <summary>
-    ///     查找条码输入控件
-    /// </summary>
-    /// <param name="parent">父控件</param>
-    /// <returns>条码输入控件</returns>
-    private TextBox? FindBarcodeTextBox(DependencyObject parent)
-    {
-        // 获取父控件的所有子控件
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
-        {
-            var child = VisualTreeHelper.GetChild(parent, i);
-
-            // 如果是TextBox且名称或Tag包含Barcode关键字
-            if (child is TextBox textBox)
-            {
-                var name = textBox.Name.ToLowerInvariant();
-                var tag = textBox.Tag?.ToString()?.ToLowerInvariant() ?? string.Empty;
-
-                if (name.Contains("barcode") || tag.Contains("barcode") ||
-                    textBox.Text == CurrentBarcode)
-                    return textBox;
-            }
-
-            // 递归查找子控件
-            var result = FindBarcodeTextBox(child);
-            if (result is not null) return result;
-        }
-
-        return null;
     }
 
     /// <summary>
@@ -523,17 +463,40 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     /// </summary>
     public void OnBarcodeInput()
     {
-        if (_barcodeScanCompletionSource is not { Task.IsCompleted: false }) return;
         var barcode = CurrentBarcode;
         // 移除提示文本
         barcode = barcode.Replace(" (请按回车键确认...)", "").Replace(" (请按回车键继续...)", "");
 
         if (string.IsNullOrWhiteSpace(barcode)) return;
         Log.Information("用户通过输入框确认条码：{Barcode}", barcode);
-        _barcodeScanCompletionSource.SetResult(barcode);
     }
 
     private async void OnPackageInfo(PackageInfo package)
+    {
+        try
+        {
+            await OnPackageInfoAsync(package);
+        }
+        catch (Exception ex)
+        {
+            Log.Fatal(ex, "处理包裹信息时发生未处理的异常：Barcode: {Barcode}, Index: {Index}", package.Barcode, package.Index);
+            try
+            {
+                // 即使出错也尝试更新状态并保存基本信息
+                package.SetStatus(PackageStatus.Error, $"系统严重异常: {ex.Message}");
+                await Application.Current.Dispatcher.InvokeAsync(() => UpdatePackageInfoItems(package));
+            }
+            catch (Exception updateEx)
+            {
+                Log.Fatal(updateEx, "更新包裹状态时也发生异常");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 处理包裹信息的核心逻辑
+    /// </summary>
+    private async Task OnPackageInfoAsync(PackageInfo package)
     {
         try
         {
@@ -554,10 +517,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
             // 暂存原始图像，处理完成后清空
             var originalImage = package.Image;
-            // 标记是否需要上传异常数据
-            var uploadAsNoRead = false;
-            // 标记是否跳过后续处理
-            var skipFurtherProcessing = false;
 
             // 检查条码是否为 noread 或空
             var isNoReadOrEmpty = string.IsNullOrWhiteSpace(package.Barcode) ||
@@ -615,36 +574,33 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 // 根据不同错误类型设置状态和消息
                 if (isBarcodeInvalid)
                 {
-                    uploadAsNoRead = true; // 标记以跳过主要的笨鸟交互
                     var barcodeErrorMsg = $"单号校验失败: {validationResult?.ErrorMessage}";
                     package.SetStatus(PackageStatus.Error, barcodeErrorMsg);
-                    Log.Information("包裹单号校验失败...状态设为Error, ErrorMessage: '{ErrorMessage}'. 将标记为 uploadAsNoRead。", 
-                        package.Barcode, package.Index, barcodeErrorMsg);
+                    Log.Information("包裹单号校验失败...状态设为Error, ErrorMessage: '{ErrorMessage}'. 将标记为 uploadAsNoRead。",
+                        package.Barcode);
                 }
                 else if (isInvalidData)
                 {
-                    uploadAsNoRead = true; // 标记以跳过主要的笨鸟交互
-                    var invalidDataErrorMsg = "包裹重量或体积数据无效";
+                    const string invalidDataErrorMsg = "包裹重量或体积数据无效";
                     package.SetStatus(PackageStatus.Error, invalidDataErrorMsg);
                     Log.Information("包裹数据无效...状态设为Error, ErrorMessage: '{ErrorMessage}'. 将标记为 uploadAsNoRead。", 
-                        package.Barcode, package.Index, invalidDataErrorMsg);
+                        package.Barcode);
                 }
                 else // isNoReadOrEmpty
                 {
-                    uploadAsNoRead = true;
                     if (package.Status != PackageStatus.Error)
                     {
                         package.SetStatus(PackageStatus.NoRead, "未能识别包裹条码(NoRead)");
                     }
                     Log.Information("包裹为 NoRead/Empty...将标记为 uploadAsNoRead。当前状态: {Status}",
-                        package.Barcode, package.Index, package.Status);
+                        package.Barcode);
                 }
             }
             else // 条码和数据有效，开始与笨鸟系统交互
             {
-                bool benNiaoInteractionSuccess = true;
-                string benNiaoErrorMessage = string.Empty;
-                DateTime uploadTime = DateTime.MinValue;
+                var benNiaoInteractionSuccess = true;
+                var benNiaoErrorMessage = string.Empty;
+                var uploadTime = DateTime.MinValue;
 
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
                 var cancellationToken = cts.Token;
@@ -931,7 +887,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         {
             // 根据包裹状态统计异常数量（Error或NoRead状态的包裹）
             var errorCount = PackageHistory.Count(p => 
-                p.Status == PackageStatus.Error || p.Status == PackageStatus.NoRead);
+                p.Status is PackageStatus.Error or PackageStatus.NoRead);
             errorItem.Value = errorCount.ToString();
             errorItem.Description = $"共有 {errorCount} 个异常包裹（包括错误和NoRead）";
         }
@@ -999,7 +955,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private static PackageInfo MergePackageInfos(IList<PackageInfo> buffer)
     {
-        if (!buffer.Any()) throw new ArgumentException("Buffer cannot be empty.", nameof(buffer));
+        if (!buffer.Any()) throw new ArgumentException(@"缓冲区不能为空", nameof(buffer));
 
         var mergedPackage = buffer[0]; // 使用第一个包裹作为基础
 
@@ -1084,7 +1040,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         return mergedPackage;
     }
 
-    protected virtual void Dispose(bool disposing)
+    private void Dispose(bool disposing)
     {
         if (_disposed) return;
 

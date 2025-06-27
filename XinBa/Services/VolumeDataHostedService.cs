@@ -26,18 +26,18 @@ public class VolumeDataHostedService : IHostedService
         try
         {
             var settings = _settingsService.LoadSettings<VolumeCameraSettings>();
-            
+
             if (!string.IsNullOrEmpty(settings.IpAddress) && settings.Port > 0)
             {
-                 _volumeDataService.Start();
-                 Log.Information("VolumeDataHostedService 已尝试启动 VolumeDataService。");
+                _volumeDataService.Start();
+                Log.Information("VolumeDataHostedService 已尝试启动 VolumeDataService。");
             }
             else
             {
                 Log.Warning("VolumeDataHostedService: 体积相机设置无效或未配置，VolumeDataService 未启动。");
             }
 
-           
+
         }
         catch (Exception ex)
         {
@@ -54,12 +54,12 @@ public class VolumeDataHostedService : IHostedService
         {
             // Stop/Dispose the VolumeDataService
             _volumeDataService.Stop(); // Stop calls Dispose internally
-             Log.Information("VolumeDataHostedService 已停止 VolumeDataService。");
+            Log.Information("VolumeDataHostedService 已停止 VolumeDataService。");
         }
         catch (Exception ex)
         {
             Log.Error(ex, "停止 VolumeDataHostedService 时发生错误。");
         }
-         return Task.CompletedTask;
+        return Task.CompletedTask;
     }
-} 
+}

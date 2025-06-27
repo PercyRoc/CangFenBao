@@ -26,6 +26,7 @@ using Timer = System.Timers.Timer;
 using System.Windows.Threading;
 using System.ComponentModel;
 using System.Globalization;
+using Common.Services.Validation;
 using SharedUI.Views.Windows;
 using WPFLocalizeExtension.Engine;
 using WPFLocalizeExtension.Providers;
@@ -76,6 +77,10 @@ public partial class App
 
         // 注册包裹回传服务
         containerRegistry.RegisterSingleton<BenNiaoPackageService>();
+        
+        // 注册单号校验服务
+        containerRegistry.RegisterSingleton<IBarcodeValidationService, BarcodeValidationService>();
+        
         // 注册单摆轮分拣服务
         containerRegistry.RegisterPendulumSortService(PendulumServiceType.Single);
         containerRegistry.RegisterSingleton<IHostedService, PendulumSortHostedService>();
@@ -236,6 +241,22 @@ public partial class App
 
     protected override async void OnExit(ExitEventArgs e)
     {
+        try
+        {
+            await OnExitAsync(e);
+        }
+        catch (Exception ex)
+        {
+            Log.Fatal(ex, "应用程序退出过程中发生未处理的异常");
+            // 即使出错也要确保应用程序能够退出
+        }
+    }
+
+    /// <summary>
+    /// 应用程序退出处理的核心逻辑
+    /// </summary>
+    private async Task OnExitAsync(ExitEventArgs e)
+    {
         Log.Information("应用程序退出处理程序 (OnExit) 开始... ExitCode: {ExitCode}", e.ApplicationExitCode);
         try
         {
@@ -386,6 +407,31 @@ public partial class App
     /// 主窗口关闭事件处理程序
     /// </summary>
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
+    {
+        try
+        {
+            await MainWindowClosingAsync(e);
+        }
+        catch (Exception ex)
+        {
+            Log.Fatal(ex, "主窗口关闭过程中发生未处理的异常");
+            // 确保应用程序能够关闭，即使出错也要执行shutdown
+            try
+            {
+                Current.Shutdown();
+            }
+            catch (Exception shutdownEx)
+            {
+                Log.Fatal(shutdownEx, "强制关闭应用程序时发生异常");
+                Environment.Exit(1); // 最后的手段
+            }
+        }
+    }
+
+    /// <summary>
+    /// 主窗口关闭处理的核心逻辑
+    /// </summary>
+    private async Task MainWindowClosingAsync(CancelEventArgs e)
     {
         Log.Information("MainWindow_Closing 事件触发。 IsShuttingDown: {IsShuttingDown}", _isShuttingDown);
         if (_isShuttingDown)
