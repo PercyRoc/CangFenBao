@@ -1,5 +1,4 @@
 using System.Net.Http;
-using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Web;
@@ -15,16 +14,27 @@ namespace ZtCloudWarehous.Services;
 /// <summary>
 ///     称重服务实现
 /// </summary>
-internal class WeighingService(ISettingsService settingsService) : IWeighingService, IDisposable
+internal class WeighingService(ISettingsService settingsService, HttpClient httpClient) : IWeighingService
 {
-    private readonly HttpClient _httpClient = new();
     private const string UatBaseUrl = "https://scm-gateway-uat.ztocwst.com/edi/service/inbound/bz";
     private const string ProdBaseUrl = "https://scm-openapi.ztocwst.com/edi/service/inbound/bz";
+    
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+    
+    private static readonly JsonSerializerOptions CamelCaseJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = false
+    };
 
     /// <inheritdoc />
     public async Task<WeighingResponse> SendWeightDataAsync(WeighingRequest request)
     {
         var stopwatch = new Stopwatch();
+        long elapsedMs;
         try
         {
             var settings = settingsService.LoadSettings<WeighingSettings>();
@@ -107,10 +117,28 @@ internal class WeighingService(ISettingsService settingsService) : IWeighingServ
 
             // 发送请求 (包含 Body)
             stopwatch.Start();
-            var response = await _httpClient.PostAsync(requestUrl, requestBody);
+            var response = await httpClient.PostAsync(requestUrl, requestBody);
             stopwatch.Stop();
-            Log.Information("称重请求 HttpClient.PostAsync 耗时: {ElapsedMilliseconds}ms for {Barcode}",
-                stopwatch.ElapsedMilliseconds, request.WaybillCode);
+            elapsedMs = stopwatch.ElapsedMilliseconds;
+
+            Log.Information("称重请求完成: Barcode={Barcode}, 耗时={ElapsedMilliseconds}ms",
+                request.WaybillCode, elapsedMs);
+
+            // 记录耗时区间 (使用 Debug 级别，或根据需要调整)
+            string durationCategory;
+            if (elapsedMs < 1000)
+            {
+                durationCategory = "< 1s";
+            }
+            else if (elapsedMs < 2000)
+            {
+                durationCategory = "1s - 2s";
+            }
+            else
+            {
+                durationCategory = ">= 2s";
+            }
+            Log.Debug("称重请求耗时区间: Barcode={Barcode}, 区间={DurationCategory}", request.WaybillCode, durationCategory);
 
             // 读取响应内容
             var responseContent = await response.Content.ReadAsStringAsync();
@@ -120,7 +148,7 @@ internal class WeighingService(ISettingsService settingsService) : IWeighingServ
             {
                 Log.Error("服务器返回错误状态码: {StatusCode}, 响应内容: {Response}", 
                     response.StatusCode, responseContent);
-                throw new HttpRequestException($"服务器返回错误状态码: {response.StatusCode}");
+                throw new HttpRequestException($"服务器返回错误状态码: {response.StatusCode}. 内容: {responseContent}");
             }
 
             try
@@ -128,39 +156,190 @@ internal class WeighingService(ISettingsService settingsService) : IWeighingServ
                 // 尝试解析为错误消息
                 if (!responseContent.StartsWith('{'))
                 {
-                    throw new Exception(responseContent);
+                    Log.Warning("服务器响应非JSON格式: {ResponseContent}", responseContent);
+                    throw new Exception($"服务器响应非JSON格式: {responseContent}");
                 }
 
-                var result = await response.Content.ReadFromJsonAsync<WeighingResponse>();
+                var result = JsonSerializer.Deserialize<WeighingResponse>(responseContent, JsonOptions);
+
                 if (result == null)
                 {
-                    Log.Error("服务器返回空响应");
-                    throw new Exception("服务器返回空响应");
+                    Log.Error("服务器返回 JSON null 或无法反序列化为目标类型: {Response}", responseContent);
+                    throw new Exception("服务器返回 JSON null 或无法反序列化为目标类型");
                 }
 
                 if (!result.Success)
                 {
-                    Log.Warning("称重请求失败: Code={Code}, Message={Message}", result.Code, result.Message);
+                    Log.Warning("称重请求业务失败: Code={Code}, Message={Message}, Barcode={Barcode}", result.Code, result.Message, request.WaybillCode);
+                }
+                else
+                {
+                    Log.Information("称重请求业务成功: Barcode={Barcode}", request.WaybillCode);
                 }
 
                 return result;
             }
             catch (JsonException ex)
             {
-                Log.Error(ex, "解析服务器响应失败: {Response}", responseContent);
-                throw new Exception(responseContent);
+                Log.Error(ex, "解析服务器响应 JSON 失败: {Response}", responseContent);
+                throw new Exception($"解析服务器响应 JSON 失败. 内容: {responseContent}", ex);
             }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "发送称重数据时发生错误，耗时: {ElapsedMilliseconds}ms", stopwatch.ElapsedMilliseconds);
+            // 在 catch 块中获取当前的 stopwatch 耗时
+            stopwatch.Stop(); // 确保 stopwatch 停止计时 (可能已停止)
+            elapsedMs = stopwatch.ElapsedMilliseconds; // 更新耗时变量
+            // 记录错误时包含耗时
+            Log.Error(ex, "发送称重数据时发生错误: Barcode={Barcode}, 耗时={ElapsedMilliseconds}ms (请求可能未完成)", request.WaybillCode, elapsedMs);
+            throw; // 重新抛出异常
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<NewWeighingResponse> SendNewWeightDataAsync(NewWeighingRequest request)
+    {
+        var stopwatch = new Stopwatch();
+        long elapsedMs;
+        try
+        {
+            var settings = settingsService.LoadSettings<WeighingSettings>();
+            
+            var requestUrl = settings.NewWeighingApiUrl;
+
+            // 构建请求体
+            var requestJson = JsonSerializer.Serialize(request, CamelCaseJsonOptions);
+
+            var requestBody = new StringContent(requestJson, Encoding.UTF8, "application/json");
+
+            // 记录请求信息
+            Log.Debug("发送新称重请求 URL: {RequestUrl}", requestUrl);
+            Log.Debug("发送新称重请求 Body: {RequestBody}", requestJson);
+
+            // 发送请求
+            stopwatch.Start();
+            var response = await httpClient.PostAsync(requestUrl, requestBody);
+            stopwatch.Stop();
+            elapsedMs = stopwatch.ElapsedMilliseconds;
+
+            Log.Information("新称重请求完成: WaybillCode={WaybillCode}, Weight={Weight}, 耗时={ElapsedMilliseconds}ms",
+                request.WaybillCode, request.Weight, elapsedMs);
+
+            // 记录耗时区间
+            string durationCategory;
+            if (elapsedMs < 1000)
+            {
+                durationCategory = "< 1s";
+            }
+            else if (elapsedMs < 2000)
+            {
+                durationCategory = "1s - 2s";
+            }
+            else
+            {
+                durationCategory = ">= 2s";
+            }
+            Log.Debug("新称重请求耗时区间: WaybillCode={WaybillCode}, 区间={DurationCategory}", request.WaybillCode, durationCategory);
+
+            // 读取响应内容
+            var responseContent = await response.Content.ReadAsStringAsync();
+            Log.Debug("收到新称重服务器响应: {Response}", responseContent);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Log.Error("新称重服务器返回错误状态码: {StatusCode}, 响应内容: {Response}", 
+                    response.StatusCode, responseContent);
+                throw new HttpRequestException($"新称重服务器返回错误状态码: {response.StatusCode}. 内容: {responseContent}");
+            }
+
+            try
+            {
+                if (!responseContent.StartsWith('{'))
+                {
+                    Log.Warning("新称重服务器响应非JSON格式: {ResponseContent}", responseContent);
+                    throw new Exception($"新称重服务器响应非JSON格式: {responseContent}");
+                }
+
+                var result = JsonSerializer.Deserialize<NewWeighingResponse>(responseContent, JsonOptions);
+
+                if (result == null)
+                {
+                    Log.Error("新称重服务器返回 JSON null 或无法反序列化为目标类型: {Response}", responseContent);
+                    throw new Exception("新称重服务器返回 JSON null 或无法反序列化为目标类型");
+                }
+
+                if (!result.IsSuccess)
+                {
+                    Log.Warning("新称重请求业务失败: Code={Code}, Message={Message}, WaybillCode={WaybillCode}", 
+                        result.Code, result.Msg, request.WaybillCode);
+                }
+                else
+                {
+                    Log.Information("新称重请求业务成功: WaybillCode={WaybillCode}, CarrierCode={CarrierCode}, ProvinceName={ProvinceName}", 
+                        request.WaybillCode, result.Data?.CarrierCode, result.Data?.ProvinceName);
+                }
+
+                return result;
+            }
+            catch (JsonException ex)
+            {
+                Log.Error(ex, "解析新称重服务器响应 JSON 失败: {Response}", responseContent);
+                throw new Exception($"解析新称重服务器响应 JSON 失败. 内容: {responseContent}", ex);
+            }
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            elapsedMs = stopwatch.ElapsedMilliseconds;
+            Log.Error(ex, "发送新称重数据时发生错误: WaybillCode={WaybillCode}, 耗时={ElapsedMilliseconds}ms (请求可能未完成)", 
+                request.WaybillCode, elapsedMs);
             throw;
         }
     }
 
-    public void Dispose()
+    /// <summary>
+    ///     根据配置自动选择称重接口发送数据
+    /// </summary>
+    /// <param name="waybillCode">运单号</param>
+    /// <param name="weight">重量</param>
+    /// <param name="volume">体积（可选，仅旧接口使用）</param>
+    /// <returns>是否成功</returns>
+    public async Task<bool> SendWeightDataAutoAsync(string waybillCode, decimal weight, decimal? volume = null)
     {
-        _httpClient.Dispose();
-        GC.SuppressFinalize(this);
+        try
+        {
+            var settings = settingsService.LoadSettings<WeighingSettings>();
+            
+            if (settings.UseNewWeighingApi)
+            {
+                // 使用新接口
+                var newRequest = new NewWeighingRequest
+                {
+                    WaybillCode = waybillCode,
+                    Weight = weight.ToString("F2")
+                };
+                
+                var newResponse = await SendNewWeightDataAsync(newRequest);
+                return newResponse.IsSuccess;
+            }
+
+            // 使用旧接口
+            var oldRequest = new WeighingRequest
+            {
+                WaybillCode = waybillCode,
+                ActualWeight = weight,
+                ActualVolume = volume ?? 0,
+                PackagingMaterialCode = settings.PackagingMaterialCode,
+                UserId = settings.UserId
+            };
+                
+            var oldResponse = await SendWeightDataAsync(oldRequest);
+            return oldResponse.Success;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "自动发送称重数据时发生错误: WaybillCode={WaybillCode}, Weight={Weight}", waybillCode, weight);
+            return false;
+        }
     }
 }

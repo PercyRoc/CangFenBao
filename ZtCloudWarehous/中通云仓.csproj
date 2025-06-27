@@ -7,7 +7,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
         <UseWPF>true</UseWPF>
-        <AssemblyName>仓分宝-中通云仓</AssemblyName>
+        <AssemblyName>仓分宝-中通云仓中通云仓</AssemblyName>
         <RootNamespace>ZtCloudWarehous</RootNamespace>
     </PropertyGroup>
 
