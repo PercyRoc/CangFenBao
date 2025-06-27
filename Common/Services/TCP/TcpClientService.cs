@@ -45,7 +45,6 @@ public class TcpClientService : IDisposable
         _connectionStatusCallback = connectionStatusCallback;
         _autoReconnect = autoReconnect;
         _receiveBuffer = new byte[1024]; // 初始化接收缓冲区
-        Log.Debug("设备 {DeviceName} 创建TCP客户端服务，IP: {IpAddress}, 端口: {Port}", _deviceName, _ipAddress, _port);
     }
 
     /// <summary>
@@ -65,20 +64,17 @@ public class TcpClientService : IDisposable
         // 先检查是否已释放
         if (_disposed)
         {
-            Log.Warning("设备 {DeviceName} 服务已被释放，无法连接", _deviceName);
             return;
         }
 
         if (_isConnected)
         {
-            Log.Debug("设备 {DeviceName} 已经连接，跳过连接操作", _deviceName);
             return;
         }
 
         // 检查IP地址和端口是否为空或为0
         if (string.IsNullOrEmpty(_ipAddress) || _port == 0)
         {
-            Log.Warning("设备 {DeviceName} 的IP地址或端口未配置，不启动连接", _deviceName);
             return;
         }
 
@@ -89,12 +85,10 @@ public class TcpClientService : IDisposable
                 // 锁内再次检查是否已释放
                 if (_disposed) return;
 
-                Log.Debug("设备 {DeviceName} 开始建立连接...", _deviceName);
                 _client = new TcpClient();
 
                 // 设置连接超时
                 var result = _client.BeginConnect(_ipAddress, _port, null, null);
-                Log.Debug("设备 {DeviceName} 等待连接完成，超时时间: {Timeout}ms", _deviceName, timeoutMs);
 
                 // 添加对取消的支持
                 var waitResult = result.AsyncWaitHandle.WaitOne(timeoutMs);
@@ -103,7 +97,6 @@ public class TcpClientService : IDisposable
                 if (_cts.IsCancellationRequested)
                 {
                     _client.Close();
-                    Log.Information("设备 {DeviceName} 连接操作被取消", _deviceName);
                     throw new OperationCanceledException(_cts.Token);
                 }
 
@@ -115,7 +108,6 @@ public class TcpClientService : IDisposable
                 }
 
                 _client.EndConnect(result);
-                Log.Debug("设备 {DeviceName} TCP连接已建立", _deviceName);
 
                 // 验证连接是否真正建立
                 if (!_client.Connected)
@@ -174,7 +166,6 @@ public class TcpClientService : IDisposable
             // 如果不是初始连接，则启动自动重连
             if (_autoReconnect && !_disposed && !_cts.IsCancellationRequested)
             {
-                Log.Debug("设备 {DeviceName} 启动自动重连", _deviceName);
                 StartReconnectThread();
             }
         }
@@ -192,7 +183,6 @@ public class TcpClientService : IDisposable
         {
             if (_reconnectThread?.IsAlive == true)
             {
-                Log.Debug("设备 {DeviceName} 已有重连线程在运行，跳过", _deviceName);
                 return;
             }
 
@@ -201,8 +191,6 @@ public class TcpClientService : IDisposable
 
             _reconnectThread = new Thread(() =>
             {
-                Log.Information("启动设备 {DeviceName} 的自动重连任务", _deviceName);
-
                 var retryCount = 0;
                 const int maxRetries = 5; // 最大重试次数
 
@@ -215,34 +203,27 @@ public class TcpClientService : IDisposable
                         // 重连前检查取消
                         if (_cts.IsCancellationRequested) break;
 
-                        Log.Information("尝试重新连接设备 {DeviceName} ({IpAddress}:{Port}), 第 {RetryCount} 次尝试",
-                            _deviceName, _ipAddress, _port, retryCount + 1);
-
                         Connect(); // 连接成功后会退出循环
                         return; // 连接成功，退出重连循环
                     }
                     catch (OperationCanceledException)
                     {
-                        Log.Information("设备 {DeviceName} 重连尝试被取消", _deviceName);
                         break; // 取消时退出循环
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
                         retryCount++;
-                        Log.Error(ex, "重新连接设备 {DeviceName} ({IpAddress}:{Port}) 失败", _deviceName, _ipAddress, _port);
 
                         // 等待前检查取消
                         if (_cts.IsCancellationRequested) break;
 
                         // 使用指数退避算法计算等待时间
                         var delayMs = Math.Min(ReconnectInterval * Math.Pow(2, retryCount), 30000); // 最大等待30秒
-                        Log.Debug("设备 {DeviceName} 等待 {Delay}ms 后重试", _deviceName, delayMs);
 
                         // 使用可取消的等待
                         if (_cts.Token.WaitHandle.WaitOne((int)delayMs))
                         {
                             // WaitOne 返回 true 表示令牌被取消
-                            Log.Debug("设备 {DeviceName} 重连等待期间被取消", _deviceName);
                             break;
                         }
                     }
@@ -263,7 +244,6 @@ public class TcpClientService : IDisposable
             };
 
             _reconnectThread.Start();
-            Log.Debug("设备 {DeviceName} 重连线程已启动", _deviceName);
         }
     }
 
@@ -280,7 +260,6 @@ public class TcpClientService : IDisposable
 
         if (data.Length == 0)
         {
-            Log.Warning("设备 {DeviceName} 尝试发送空数据", _deviceName);
             return;
         }
 
@@ -315,7 +294,6 @@ public class TcpClientService : IDisposable
                 // 启动自动重连
                 if (_autoReconnect && !_disposed && !_cts.IsCancellationRequested)
                 {
-                    Log.Debug("设备 {DeviceName} 发送失败后启动自动重连", _deviceName);
                     StartReconnectThread();
                 }
 

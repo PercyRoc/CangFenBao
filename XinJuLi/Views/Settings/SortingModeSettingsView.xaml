@@ -1,0 +1,232 @@
+<UserControl x:Class="XinJuLi.Views.Settings.SortingModeSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:hc="https://handyorg.github.io/handycontrol"
+             xmlns:prism="http://prismlibrary.com/"
+             xmlns:settingsViewModels="clr-namespace:XinJuLi.ViewModels.Settings"
+             xmlns:commonConverters="clr-namespace:Common.Converters;assembly=Common"
+             xmlns:models="clr-namespace:XinJuLi.Models"
+             xmlns:system="clr-namespace:System;assembly=mscorlib"
+             prism:ViewModelLocator.AutoWireViewModel="True"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=settingsViewModels:SortingModeSettingsViewModel}">
+
+    <UserControl.Resources>
+        <commonConverters:EnumDescriptionConverter x:Key="EnumDescriptionConverter" />
+        
+        <!-- 分拣模式选项数据源 -->
+        <ObjectDataProvider x:Key="SortingModeValues" MethodName="GetValues" ObjectType="{x:Type system:Enum}">
+            <ObjectDataProvider.MethodParameters>
+                <x:Type TypeName="models:SortingMode" />
+            </ObjectDataProvider.MethodParameters>
+        </ObjectDataProvider>
+        
+        <!-- 摆动方向选项数据源 -->
+        <ObjectDataProvider x:Key="PendulumDirectionValues" MethodName="GetValues" ObjectType="{x:Type system:Enum}">
+            <ObjectDataProvider.MethodParameters>
+                <x:Type TypeName="models:PendulumDirection" />
+            </ObjectDataProvider.MethodParameters>
+        </ObjectDataProvider>
+    </UserControl.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="16" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="16" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- 页面标题 -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal">
+            <ui:SymbolIcon Symbol="Settings24" 
+                           Margin="0,0,8,0" 
+                           VerticalAlignment="Center" />
+            <TextBlock Text="分拣方式设置"
+                       FontSize="18"
+                       FontWeight="SemiBold"
+                       VerticalAlignment="Center" />
+        </StackPanel>
+
+        <!-- 当前状态信息 -->
+        <Border Grid.Row="2" 
+                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                CornerRadius="8"
+                Padding="16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="当前生效的配置"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,4" />
+                    <TextBlock FontSize="16"
+                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                               Margin="0,0,0,4">
+                        <Run Text="分拣方式: " />
+                        <Run Text="{Binding CurrentModeDisplayName}" FontWeight="SemiBold" />
+                    </TextBlock>
+                    <TextBlock FontSize="16"
+                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                               Margin="0,0,0,8">
+                        <Run Text="摆动方向: " />
+                        <Run Text="{Binding Settings.PendulumDirection, Converter={StaticResource EnumDescriptionConverter}}" FontWeight="SemiBold" />
+                    </TextBlock>
+                    <TextBlock Text="{Binding LastUpdatedDisplay, StringFormat=最后更新: {0}}"
+                               FontSize="12"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+
+                <ui:SymbolIcon Grid.Column="1"
+                               Symbol="CheckmarkCircle24"
+                               FontSize="32"
+                               Foreground="{DynamicResource SystemFillColorSuccessBrush}"
+                               VerticalAlignment="Center" />
+            </Grid>
+        </Border>
+
+        <!-- 分拣方式选择 -->
+        <ui:CardExpander Grid.Row="4"
+                         Header="选择分拣方式"
+                         IsExpanded="True">
+            <ui:CardExpander.Icon>
+                <ui:SymbolIcon Symbol="ArrowSortDownLines24" />
+            </ui:CardExpander.Icon>
+
+            <StackPanel Margin="0,16,0,0">
+                <!-- 分拣模式选择 -->
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="8" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="16" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="8" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- 选择标签 -->
+                    <TextBlock Grid.Row="0"
+                               Text="请选择分拣方式："
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,0" />
+
+                    <!-- 下拉框 -->
+                    <ComboBox Grid.Row="2"
+                              ItemsSource="{Binding Source={StaticResource SortingModeValues}}"
+                              SelectedItem="{Binding Settings.CurrentSortingMode}"
+                              FontSize="14"
+                              Padding="12,8">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Converter={StaticResource EnumDescriptionConverter}}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+
+                    <!-- 当前选择的描述 -->
+                    <Border Grid.Row="4"
+                            Background="{DynamicResource ControlFillColorInputActiveBrush}"
+                            CornerRadius="6"
+                            Padding="12"
+                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="功能说明："
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,0,4" />
+                            <TextBlock Text="{Binding SelectedModeDescription}"
+                                       TextWrapping="Wrap"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 备注输入 -->
+                    <ui:TextBox Grid.Row="6"
+                                PlaceholderText="备注信息（可选）"
+                                Text="{Binding Settings.Remarks, UpdateSourceTrigger=PropertyChanged}"
+                                MaxLines="3"
+                                AcceptsReturn="True">
+                        <ui:TextBox.Icon>
+                            <ui:SymbolIcon Symbol="Note24" />
+                        </ui:TextBox.Icon>
+                    </ui:TextBox>
+                </Grid>
+
+                <!-- 分隔符 -->
+                <Separator Margin="0,20,0,16" />
+
+                <!-- 摆动方向选择 -->
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="8" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="16" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- 摆动方向标签 -->
+                    <TextBlock Grid.Row="0"
+                               Text="请选择摆动方向："
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,0" />
+
+                    <!-- 摆动方向下拉框 -->
+                    <ComboBox Grid.Row="2"
+                              ItemsSource="{Binding Source={StaticResource PendulumDirectionValues}}"
+                              SelectedItem="{Binding Settings.PendulumDirection}"
+                              FontSize="14"
+                              Padding="12,8">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Converter={StaticResource EnumDescriptionConverter}}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+
+                    <!-- 摆动方向说明 -->
+                    <Border Grid.Row="4"
+                            Background="{DynamicResource ControlFillColorInputActiveBrush}"
+                            CornerRadius="6"
+                            Padding="12"
+                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="摆动说明："
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,0,4" />
+                            <TextBlock Text="{Binding PendulumDirectionDescription}"
+                                       TextWrapping="Wrap"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </StackPanel>
+        </ui:CardExpander>
+
+
+
+        <!-- Growl消息容器 -->
+        <StackPanel Name="GrowlPanel"
+                    Grid.Row="0"
+                    Grid.RowSpan="6"
+                    hc:Growl.GrowlParent="True"
+                    hc:Growl.Token="SortingModeSettingsGrowl"
+                    VerticalAlignment="Top"
+                    HorizontalAlignment="Right"
+                    Margin="0,10,10,0"
+                    Panel.ZIndex="1000" />
+    </Grid>
+</UserControl> 

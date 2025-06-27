@@ -91,6 +91,17 @@
                                    Name="RootNavigation">
 
                     <ui:NavigationView.MenuItems>
+                        <!-- 分拣方式设置 -->
+                        <ui:NavigationViewItem Content="分拣方式设置"
+                                               Tag="SortingModeSettings">
+                            <ui:NavigationViewItem.Icon>
+                                <ui:SymbolIcon Symbol="Settings24" />
+                            </ui:NavigationViewItem.Icon>
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="local:SortingModeSettingsView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
+                        
                         <ui:NavigationViewItem Content="ASN HTTP服务"
                                                Tag="ASN">
                             <ui:NavigationViewItem.Icon>

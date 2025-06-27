@@ -170,7 +170,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // 忽略无效重量，并在重量为0时清空缓冲区
             if (currentRawWeightKg <= 0)
             {
-                Log.Debug("忽略零重量或负重量: {Weight}kg，清空历史缓冲区", currentRawWeightKg);
                 _rawWeightBuffer.Clear(); // 清空缓冲区，为下一个物体重置状态
                 return;
             }
@@ -182,9 +181,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 // 2. 核心比较逻辑：检查新值是否与缓冲区中的所有历史值都足够接近
                 bool isStable = _rawWeightBuffer.All(historicalWeight => 
                     Math.Abs(currentRawWeightKg - historicalWeight) < stabilityThresholdKg);
-
-                Log.Debug("稳定性检查: 最新值={New}kg, 历史样本数={Count}, 阈值={Threshold}kg, 是否稳定={IsStable}",
-                    currentRawWeightKg, _rawWeightBuffer.Count, stabilityThresholdKg, isStable);
 
                 if (isStable)
                 {
@@ -200,15 +196,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         {
                             _stableWeightQueue.Dequeue();
                         }
-                        Log.Information("发现稳定重量: {Weight}kg, 时间戳: {Timestamp:HH:mm:ss.fff}, 队列大小: {QueueSize}",
-                            stableWeightKg, currentTimestamp, _stableWeightQueue.Count);
                     }
                 }
-            }
-            else
-            {
-                Log.Debug("历史样本不足 ({Current}/{Required})，仅将新值添加到缓冲区", 
-                    _rawWeightBuffer.Count, stabilityCheckSamples - 1);
             }
 
             // 4. 更新滑动窗口：无论是否稳定，都将新值入队，并保持窗口大小
@@ -342,60 +331,66 @@ public class MainWindowViewModel : BindableBase, IDisposable
     // 将原有的实现移到这个方法中，并设为 internal 以便视图调用
     public async Task ProcessBarcodeAsync(string barcode)
     {
-        // 条码完整性日志
-        Log.Information("开始处理条码: {Barcode}, 长度: {Length}, 字符: [{Characters}]", 
-            barcode, barcode.Length, string.Join(", ", barcode.Select(c => $"'{c}'({(int)c})")));
+        Log.Information("【包裹处理】========== 开始处理包裹条码 ==========");
+        Log.Information("【包裹处理】接收到条码: '{Barcode}', 长度: {Length}", barcode, barcode.Length);
+        Log.Information("【包裹处理】条码字符详情: [{Characters}]", 
+            string.Join(", ", barcode.Select(c => $"'{c}'({(int)c})")));
 
         // 尝试获取处理锁，如果已被占用则直接返回
+        Log.Information("【包裹处理】尝试获取处理锁...");
         if (!await _barcodeProcessingLock.WaitAsync(0)) // 设置超时为0，如果锁不可用则立即返回false
         {
-            Log.Warning("处理单元繁忙，忽略条码: {Barcode}", barcode);
+            Log.Warning("【包裹处理】处理单元繁忙，忽略条码: '{Barcode}'", barcode);
             return;
         }
+        Log.Information("【包裹处理】成功获取处理锁，开始包裹处理流程");
 
         try
         {
             // 播放离开提示音（leave.wav）
+            Log.Information("【包裹处理】播放离开提示音");
             _ = _audioService.PlayPresetAsync(AudioType.Leave);
 
+            Log.Information("【包裹处理】更新UI显示状态");
             await Application.Current.Dispatcher.InvokeAsync(() =>
             {
                 InitializePackageInfoItems();
                 CurrentBarcode = barcode;
-                Log.Information("UI已更新条码: {Barcode}", barcode);
+                Log.Information("【包裹处理】UI已更新显示条码: '{Barcode}'", barcode);
                 var items = PackageInfoItems.ToList();
                 if (items.Count <= 2) return;
                 items[2].Value = DateTime.Now.ToString("HH:mm:ss");
                 PackageInfoItems = [.. items];
+                Log.Information("【包裹处理】UI已更新处理时间显示");
             });
 
             // 加载体积相机配置
+            Log.Information("【包裹处理】加载体积相机配置");
             var cameraOverallSettings = _settingsService.LoadSettings<CameraOverallSettings>();
-            Log.Information("等待处理包裹，延迟: {TimeoutMs}ms", cameraOverallSettings.VolumeCamera.FusionTimeMs);
-
             var fusionMs = cameraOverallSettings.VolumeCamera.FusionTimeMs;
+            Log.Information("【包裹处理】等待融合延迟: {TimeoutMs}ms", fusionMs);
+
             // 等待延迟
             await Task.Delay(fusionMs);
-
-            // 等待阶段已过，进入实际处理阶段，不再响应新条码
-            // 后续原有处理逻辑保持不变
-
-            Log.Information("延迟结束，开始处理包裹: {Barcode}",
-                barcode); // 使用此实例的正确条码进行日志记录
+            Log.Information("【包裹处理】融合延迟结束，开始处理包裹数据");
 
             try // 内部 try 块，处理包裹逻辑并捕获特定异常
             {
-                Log.Information("开始创建包裹对象: {Barcode}", barcode);
+                Log.Information("【包裹处理】开始创建包裹对象: '{Barcode}'", barcode);
 
                 // 确定统一的处理时间戳，在整个处理过程中使用
                 var processingTimestamp = DateTime.Now;
+                Log.Information("【包裹处理】设置处理时间戳: {Timestamp:yyyy-MM-dd HH:mm:ss.fff}", processingTimestamp);
 
                 // 创建新的包裹对象
                 _currentPackage = PackageInfo.Create();
                 _currentPackage.SetBarcode(barcode); // 使用一致的条码
                 _currentPackage.CreateTime = processingTimestamp; // 设置统一的处理时间
+                Log.Information("【包裹处理】包裹对象创建完成，条码: '{Barcode}', 创建时间: {CreateTime:yyyy-MM-dd HH:mm:ss.fff}", 
+                    _currentPackage.Barcode, _currentPackage.CreateTime);
 
                 // 设置当前选中的托盘信息到包裹实例
+                Log.Information("【包裹处理】开始设置托盘信息");
                 if (SelectedPallet != null)
                 {
                     _currentPackage.SetPallet(
@@ -405,27 +400,43 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         SelectedPallet.Width,
                         SelectedPallet.Height);
 
-                    Log.Information("已设置包裹托盘信息: {PalletName}, 重量: {Weight}kg, 尺寸: {Length}×{Width}×{Height}cm",
+                    Log.Information("【包裹处理】已设置包裹托盘信息: {PalletName}, 重量: {Weight}kg, 尺寸: {Length}×{Width}×{Height}cm",
                         SelectedPallet.Name, SelectedPallet.Weight,
                         SelectedPallet.Length, SelectedPallet.Width, SelectedPallet.Height);
+                }
+                else
+                {
+                    Log.Information("【包裹处理】未选择托盘，使用默认设置");
                 }
 
                 try
                 {
+                    Log.Information("【包裹处理】开始串行执行：拍照 -> 称重 -> 体积测量");
                     // 串行执行：先拍照，再称重，最后体积测量
                     BitmapSource? capturedImage = null;
                     var imageLock = new object();
                     {
+                        Log.Information("【包裹处理】开始图像捕获流程");
                         // 订阅图像流，等待一帧图像
                         var tcs = new TaskCompletionSource<BitmapSource?>();
+                        Log.Information("【包裹处理】订阅相机图像流，超时时间: 5秒");
                         using var imageSubscription = _cameraService.ImageStreamWithId
                             .Select(data => data.Image) // 从元组中选择图像
                             .Take(1)
                             .Timeout(TimeSpan.FromSeconds(5))
                             .Subscribe(
-                                onNext: imageData => tcs.TrySetResult(imageData),
-                                onError: ex => tcs.TrySetException(ex),
-                                onCompleted: () => tcs.TrySetResult(null)
+                                onNext: imageData => {
+                                    Log.Information("【包裹处理】接收到图像数据");
+                                    tcs.TrySetResult(imageData);
+                                },
+                                onError: ex => {
+                                    Log.Warning("【包裹处理】图像流发生错误: {Error}", ex.Message);
+                                    tcs.TrySetException(ex);
+                                },
+                                onCompleted: () => {
+                                    Log.Warning("【包裹处理】图像流已完成但未接收到数据");
+                                    tcs.TrySetResult(null);
+                                }
                             );
                         try
                         {
@@ -479,6 +490,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     // 拍照结束
 
                     // 称重
+                    Log.Information("【包裹处理】开始称重流程");
                     try
                     {
                         var weightSettings = _settingsService.LoadSettings<Weight.Models.Settings.WeightSettings>();
@@ -495,28 +507,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         // barcodeScanTime 代表包裹处理流程中，称重逻辑开始执行的时间点
                         var barcodeScanTime = DateTime.Now;
 
-                        Log.Information(
-                            "包裹 {Barcode}: 开始查询稳定重量。查询时间点: {ScanTime:HH:mm:ss.fff}, 初始查询窗口: {QueryWindow}秒。",
-                            _currentPackage.Barcode, barcodeScanTime, stableWeightQueryWindowSeconds);
-
                         StableWeightEntry? bestStableWeight;
                         // 1. 初始查找: 查找在 barcodeScanTime 之前的稳定重量
                         lock (_stableWeightQueue)
                         {
-                            Log.Information("包裹 {Barcode}: 正在进行初始稳定重量查找。队列当前有 {QueueCount} 条数据。",
-                                _currentPackage.Barcode, _stableWeightQueue.Count);
-
-                            // 添加日志：记录队列中的每条数据
-                            if (_stableWeightQueue.Count != 0)
-                            {
-                                Log.Information("包裹 {Barcode}: 初始查找前队列数据详情 (", _currentPackage.Barcode);
-                                foreach (var entry in _stableWeightQueue)
-                                {
-                                    Log.Information("  - 重量: {Weight}kg, 时间戳: {Timestamp:HH:mm:ss.fff}", entry.WeightKg,
-                                        entry.Timestamp);
-                                }
-                            }
-
                             bestStableWeight = _stableWeightQueue
                                 .Where(entry =>
                                     (barcodeScanTime - entry.Timestamp).TotalSeconds < stableWeightQueryWindowSeconds &&
@@ -529,17 +523,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         if (bestStableWeight.HasValue)
                         {
                             weightInKg = bestStableWeight.Value.WeightKg;
-                            Log.Information("包裹 {Barcode}: 使用初始找到的稳定重量: {Weight}kg (时间戳: {Timestamp:HH:mm:ss.fff})",
-                                _currentPackage.Barcode, weightInKg, bestStableWeight.Value.Timestamp);
+                            Log.Information("包裹 {Barcode}: 获取到稳定重量: {Weight}kg", _currentPackage.Barcode, weightInKg);
                         }
                         else
                         {
                             // 2. 等待逻辑: 如果初始查找失败，则等待一段时间查找 barcodeScanTime 之后的重量
-                            Log.Warning(
-                                "包裹 {Barcode}: 初始查找未能在 {QueryWindow}秒内找到稳定重量 (处理时间: {ScanTime:HH:mm:ss.fff})。开始等待最长 {MaxWait}ms 获取后续重量。",
-                                _currentPackage.Barcode, stableWeightQueryWindowSeconds, barcodeScanTime,
-                                maxWaitTimeForWeightMs);
-
                             var sw = Stopwatch.StartNew();
                             while (sw.ElapsedMilliseconds < maxWaitTimeForWeightMs)
                             {
@@ -555,9 +543,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                 if (bestStableWeight.HasValue)
                                 {
                                     weightInKg = bestStableWeight.Value.WeightKg;
-                                    Log.Information(
-                                        "包裹 {Barcode}: Stable weight obtained during wait: {Weight}kg (Timestamp: {Timestamp:HH:mm:ss.fff})",
-                                        _currentPackage.Barcode, weightInKg, bestStableWeight.Value.Timestamp);
+                                    Log.Information("包裹 {Barcode}: 等待后获取到稳定重量: {Weight}kg", _currentPackage.Barcode, weightInKg);
                                     break;
                                 }
 
@@ -568,31 +554,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                             if (!bestStableWeight.HasValue)
                             {
-                                Log.Warning("包裹 {Barcode}: 在最大等待时间 {MaxWait}ms 后仍未能获取稳定重量。", _currentPackage.Barcode,
-                                    maxWaitTimeForWeightMs);
-                            }
-
-                            // 添加日志：如果等待后未找到，再次记录队列数据以便分析
-                            if (!bestStableWeight.HasValue)
-                            {
-                                lock (_stableWeightQueue)
-                                {
-                                    Log.Information("包裹 {Barcode}: 等待后未找到稳定重量。等待结束时队列数据详情 (", _currentPackage.Barcode);
-                                    if (_stableWeightQueue.Count != 0)
-                                    {
-                                        foreach (var entry in _stableWeightQueue)
-                                        {
-                                            Log.Information("  - 重量: {Weight}kg, 时间戳: {Timestamp:HH:mm:ss.fff}",
-                                                entry.WeightKg, entry.Timestamp);
-                                        }
-                                    }
-                                    else
-                                    {
-                                        Log.Information("  队列为空。");
-                                    }
-
-                                    Log.Information(" 包裹 {Barcode}: 等待结束时队列数据详情 )", _currentPackage.Barcode);
-                                }
+                                Log.Warning("包裹 {Barcode}: 在最大等待时间 {MaxWait}ms 后仍未能获取稳定重量", _currentPackage.Barcode, maxWaitTimeForWeightMs);
                             }
                         }
 
@@ -611,8 +573,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
                             {
                                 // 对于Queue，我们需要将其转换为数组来获取最后一个元素
                                 latestRawWeight = _rawWeightBuffer.ToArray().Last();
-                                Log.Information("包裹 {Barcode}: 未找到稳定重量，使用原始重量缓冲区中的最新重量: {Weight}kg", 
-                                    _currentPackage.Barcode, latestRawWeight);
                             }
 
                             if (latestRawWeight.HasValue && latestRawWeight.Value > 0)
@@ -621,12 +581,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                 if (SelectedPallet != null && SelectedPallet.Name != "noPallet")
                                     actualWeight = Math.Max(0, actualWeight - SelectedPallet.Weight);
                                 _currentPackage.Weight = actualWeight;
-                                Log.Information("包裹 {Barcode}: 已使用最新原始重量设置包裹重量: {Weight}kg (扣除托盘后)", 
-                                    _currentPackage.Barcode, actualWeight);
+                                Log.Information("包裹 {Barcode}: 使用原始重量: {Weight}kg", _currentPackage.Barcode, actualWeight);
                             }
                             else
                             {
-                                Log.Warning("包裹 {Barcode}: 最终未能获取包裹重量，原始重量缓冲区也为空或无效。", _currentPackage.Barcode);
+                                Log.Warning("包裹 {Barcode}: 未能获取包裹重量", _currentPackage.Barcode);
                             }
                         }
                     }
@@ -635,13 +594,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         Log.Error(ex, "包裹 {Barcode}: 获取重量数据时发生错误。l", _currentPackage.Barcode);
                     }
 
+                    Log.Information("【包裹处理】开始体积测量流程");
                     try
                     {
                         await TriggerVolumeCamera();
                     }
                     catch (Exception ex)
                     {
-                        Log.Error(ex, "体积测量任务异常");
+                        Log.Error(ex, "【包裹处理】体积测量任务异常");
                     }
 
                     // 体积测量结束
@@ -750,6 +710,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         _currentPackage.Height ?? 0);
 
                     // 检查三个必要条件是否都满足：条码、重量和体积
+                    Log.Information("【包裹处理】开始检查包裹数据完整性");
                     var isBarcodeMissing = string.IsNullOrEmpty(_currentPackage.Barcode);
                     var isWeightMissing = _currentPackage.Weight <= 0;
                     var isVolumeMissing = (_currentPackage.Length ?? 0) <= 0 ||
@@ -757,6 +718,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                           (_currentPackage.Height ?? 0) <= 0;
 
                     var isComplete = !isBarcodeMissing && !isWeightMissing && !isVolumeMissing;
+                    Log.Information("【包裹处理】数据完整性检查结果 - 条码: {BarcodeOK}, 重量: {WeightOK}, 体积: {VolumeOK}, 整体: {Complete}",
+                        !isBarcodeMissing, !isWeightMissing, !isVolumeMissing, isComplete);
 
                     if (!isComplete)
                     {
@@ -904,6 +867,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
 
             // 最后一次性更新所有UI：实时区域状态和历史记录（移到方法末尾）
+            Log.Information("【包裹处理】开始更新UI显示");
             Application.Current.Dispatcher.Invoke(() =>
             {
                 // 1. 先更新实时区域显示
@@ -911,39 +875,42 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 {
                     // Pass the detailed error message for UI display if available, otherwise use StatusDisplay
                     UpdateCurrentPackageUiDisplay(_currentPackage.Status == "Failed" ? _currentPackage.ErrorMessage : _currentPackage.StatusDisplay);
-                    Log.Debug("实时区域显示更新成功");
+                    Log.Information("【包裹处理】实时区域显示更新成功");
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "更新实时区域显示时发生错误，条码: {Barcode}", _currentPackage.Barcode);
+                    Log.Error(ex, "【包裹处理】更新实时区域显示时发生错误，条码: '{Barcode}'", _currentPackage.Barcode);
                 }
 
                 // 2. 然后更新历史记录
                 try
                 {
                     PackageHistory.Insert(0, _currentPackage);
-                    Log.Information("包裹已添加到历史记录：{Barcode}, 状态: {Status}", _currentPackage.Barcode, _currentPackage.Status);
+                    Log.Information("【包裹处理】包裹已添加到历史记录：'{Barcode}', 状态: {Status}", _currentPackage.Barcode, _currentPackage.Status);
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "添加包裹到历史记录时发生错误，条码: {Barcode}", _currentPackage.Barcode);
+                    Log.Error(ex, "【包裹处理】添加包裹到历史记录时发生错误，条码: '{Barcode}'", _currentPackage.Barcode);
                 }
 
                 // 3. 最后更新统计信息
                 try
                 {
                     UpdateStatistics();
-                    Log.Debug("统计信息更新成功");
+                    Log.Information("【包裹处理】统计信息更新成功");
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "更新统计信息时发生错误");
+                    Log.Error(ex, "【包裹处理】更新统计信息时发生错误");
                 }
             });
+            Log.Information("【包裹处理】UI更新完成");
         }
         finally // 关联外层 Try，确保释放信号量
         {
             _barcodeProcessingLock.Release();
+            Log.Information("【包裹处理】释放处理锁");
+            Log.Information("【包裹处理】========== 包裹处理流程结束 ==========");
         }
     }
 
@@ -1778,8 +1745,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
     /// </summary>
     internal void ClearBarcodeBuffer()
     {
+        var previousBarcode = CurrentBarcode;
         CurrentBarcode = string.Empty;
-        Log.Information("手动删除输入框内容，已清空条码输入。");
+        Log.Information("【扫码输入】手动删除输入框内容，清空条码输入。之前的内容: '{PreviousBarcode}'", previousBarcode);
     }
 
     /// <summary>
@@ -1787,10 +1755,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
     /// </summary>
     private void ExecuteHandleScanStart()
     {
+        Log.Information("【扫码输入】检测到扫码开始信号(@)");
+        
         // 检查是否正在处理条码，如果是则忽略新的扫描
         if (!_barcodeProcessingLock.Wait(0))
         {
-            Log.Warning("正在处理条码，忽略新的扫描开始信号");
+            Log.Warning("【扫码输入】正在处理条码，忽略新的扫描开始信号");
             return;
         }
         
@@ -1798,15 +1768,18 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _barcodeProcessingLock.Release();
 
         _isScanningInProgress = true;
+        Log.Information("【扫码输入】开始扫码模式，设置扫码状态为进行中");
 
         // 清空当前条码显示
         CurrentBarcode = string.Empty;
+        Log.Information("【扫码输入】清空当前条码显示");
 
         // 请求View清空输入框并设置焦点
         RequestClearBarcodeInput?.Invoke();
         RequestFocusBarcodeInput?.Invoke();
+        Log.Information("【扫码输入】请求UI清空输入框并设置焦点到条码输入框");
 
-        Log.Information("扫码开始，已重置输入状态");
+        Log.Information("【扫码输入】扫码开始处理完成，等待扫码数据输入");
     }
 
     /// <summary>
@@ -1814,29 +1787,36 @@ public class MainWindowViewModel : BindableBase, IDisposable
     /// </summary>
     private void ExecuteHandleBarcodeComplete()
     {
+        Log.Information("【扫码输入】检测到扫码结束信号(回车/换行)");
+        
         string barcode;
         if (_isScanningInProgress)
         {
             barcode = CurrentBarcode.Trim();
             _isScanningInProgress = false;
-            Log.Information("扫码模式完成，从UI绑定获取条码: {Barcode}", barcode);
+            Log.Information("【扫码输入】扫码模式完成，从UI绑定获取条码: '{Barcode}', 长度: {Length}", barcode, barcode.Length);
         }
         else
         {
             barcode = CurrentBarcode.Trim();
-            Log.Information("手动输入模式完成，从 CurrentBarcode 获取条码: {Barcode}", barcode);
+            Log.Information("【扫码输入】手动输入模式完成，从CurrentBarcode获取条码: '{Barcode}', 长度: {Length}", barcode, barcode.Length);
         }
 
         if (string.IsNullOrWhiteSpace(barcode))
         {
-            Log.Warning("处理完成时条码为空或空白。");
+            Log.Warning("【扫码输入】处理完成时条码为空或空白，终止处理");
             return;
         }
 
+        Log.Information("【扫码输入】原始条码内容: '{Barcode}', 字符详情: [{Characters}]", 
+            barcode, string.Join(", ", barcode.Select(c => $"'{c}'({(int)c})")));
+
         // 移除可能的起始引号或 '@' 符号
+        var originalBarcode = barcode;
         if (barcode.StartsWith('@') || barcode.StartsWith('"'))
         {
             barcode = barcode[1..];
+            Log.Information("【扫码输入】移除起始字符，处理后条码: '{Barcode}'", barcode);
         }
 
         // 防抖动检查：如果是相同的条码且在防抖时间内，则忽略
@@ -1844,7 +1824,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         if (barcode == _lastProcessedBarcode && 
             (currentTime - _lastProcessedTime).TotalMilliseconds < BarcodeDebounceMilliseconds)
         {
-            Log.Information("忽略重复条码（防抖动）: {Barcode}, 距上次处理仅 {Milliseconds}ms", 
+            Log.Information("【扫码输入】忽略重复条码（防抖动）: '{Barcode}', 距上次处理仅 {Milliseconds}ms", 
                 barcode, (currentTime - _lastProcessedTime).TotalMilliseconds);
             return;
         }
@@ -1852,7 +1832,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         // 条码长度验证（可根据实际需求调整）
         if (barcode.Length < 3)
         {
-            Log.Warning("条码长度过短，可能不完整: {Barcode}", barcode);
+            Log.Warning("【扫码输入】条码长度过短，可能不完整: '{Barcode}', 长度: {Length}", barcode, barcode.Length);
             _notificationService.ShowWarning($"Barcode too short: {barcode}. Please scan again.");
             return;
         }
@@ -1860,23 +1840,28 @@ public class MainWindowViewModel : BindableBase, IDisposable
         // 条码字符验证（确保不包含非预期字符）
         if (barcode.Contains('\0') || barcode.Contains('\t'))
         {
-            Log.Warning("条码包含非法字符: {Barcode}", barcode);
+            Log.Warning("【扫码输入】条码包含非法字符: '{Barcode}'", barcode);
             _notificationService.ShowWarning("Invalid barcode format. Please scan again.");
             return;
         }
 
-        Log.Information("处理完成，最终处理条码: {Barcode}", barcode);
+        Log.Information("【扫码输入】条码验证通过，最终处理条码: '{Barcode}', 长度: {Length}", barcode, barcode.Length);
 
         // 更新最后处理的条码和时间
         _lastProcessedBarcode = barcode;
         _lastProcessedTime = currentTime;
+        Log.Information("【扫码输入】更新防抖动记录，上次处理条码: '{LastBarcode}', 时间: {LastTime:HH:mm:ss.fff}", 
+            _lastProcessedBarcode, _lastProcessedTime);
 
         // 更新UI显示的当前条码为最终处理的条码
         CurrentBarcode = barcode;
+        Log.Information("【扫码输入】更新UI显示条码: '{Barcode}'", barcode);
 
         // 请求View将焦点移回窗口
         RequestFocusToWindow?.Invoke();
+        Log.Information("【扫码输入】请求UI将焦点移回主窗口");
 
+        Log.Information("【扫码输入】开始启动后台条码处理任务");
         // 使用Task.Run包装并添加异常处理
         Task.Run(async () =>
         {
@@ -1886,7 +1871,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "处理条码时发生未捕获的异常: {Barcode}", barcode);
+                Log.Error(ex, "【扫码输入】处理条码时发生未捕获的异常: '{Barcode}'", barcode);
                 
                 // 在UI线程上显示错误通知
                 Application.Current.Dispatcher.Invoke(() =>
@@ -1898,11 +1883,13 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     }
                     catch (Exception notifyEx)
                     {
-                        Log.Error(notifyEx, "显示错误通知时发生异常");
+                        Log.Error(notifyEx, "【扫码输入】显示错误通知时发生异常");
                     }
                 });
             }
         });
+        
+        Log.Information("【扫码输入】扫码输入处理完成，后台任务已启动");
     }
 
     /// <summary>

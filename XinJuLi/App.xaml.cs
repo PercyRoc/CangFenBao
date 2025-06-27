@@ -5,6 +5,7 @@ using Serilog;
 using XinJuLi.Services.ASN;
 using XinJuLi.ViewModels;
 using XinJuLi.ViewModels.Dialogs;
+using XinJuLi.ViewModels.Settings;
 using XinJuLi.Views;
 using XinJuLi.Views.Dialogs;
 using XinJuLi.Views.Settings;
@@ -35,7 +36,7 @@ namespace XinJuLi
         {
             // 配置Serilog
             Log.Logger = new LoggerConfiguration()
-                .MinimumLevel.Debug()
+                .MinimumLevel.Information()
                 .WriteTo.Console()
                 .WriteTo.Debug()
                 .WriteTo.File("logs/app-.log",
@@ -119,6 +120,7 @@ namespace XinJuLi
             containerRegistry.RegisterSingleton<IExcelImportService, ExcelImportService>();
             containerRegistry.RegisterSingleton<AsnHttpServer>();
             containerRegistry.RegisterForNavigation<AsnHttpSettingsView, AsnHttpSettingsViewModel>();
+            containerRegistry.RegisterForNavigation<SortingModeSettingsView, SortingModeSettingsViewModel>();
             containerRegistry.RegisterDialog<AsnOrderSelectionDialogView, AsnOrderSelectionDialogViewModel>("AsnOrderSelectionDialog");
             containerRegistry.RegisterDialogWindow<CustomDialogWindow>();
         }

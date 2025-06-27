@@ -12,4 +12,4 @@ namespace XinJuLi.Views.Dialogs
             InitializeComponent();
         }
     }
-} 
+}
