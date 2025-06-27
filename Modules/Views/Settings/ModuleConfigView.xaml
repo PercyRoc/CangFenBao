@@ -9,7 +9,7 @@
       d:DataContext="{d:DesignInstance Type=settings:ModuleConfigViewModel}"
       prism:ViewModelLocator.AutoWireViewModel="True"
       mc:Ignorable="d"
-      Title="模组配置" x:ClassModifier="internal">
+      Title="模组配置">
 
     <!-- 使用网格布局以支持重叠元素 -->
     <Grid>

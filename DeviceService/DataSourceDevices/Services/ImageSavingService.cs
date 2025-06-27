@@ -14,20 +14,18 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
     private readonly ISettingsService _settingsService =
         settingsService ?? throw new ArgumentNullException(nameof(settingsService));
 
-    // 清理计数器，用于控制清理频率
-    private static int _cleanupCounter = 0;
-    private static readonly object _cleanupLock = new object();
-    
-    // 图片保留天数（一周）
-    private const int RetentionDays = 7;
-    
-    // 每保存多少张图片后执行一次清理（避免频繁清理）
-    private const int CleanupInterval = 100;
-
     /// <inheritdoc />
     public string? GenerateImagePath(string? barcode, DateTime timestamp)
     {
         var cameraSettings = _settingsService.LoadSettings<CameraSettings>();
+        
+        // 检查是否是NOREAD条码，如果是则无条件生成路径
+        var isNoRead = string.IsNullOrWhiteSpace(barcode) || barcode.Equals("NOREAD", StringComparison.OrdinalIgnoreCase);
+        if (isNoRead)
+        {
+            return BuildNoreadImagePath(cameraSettings, timestamp);
+        }
+        
         return !cameraSettings.EnableImageSaving
             ? null
             : // 保存已禁用
@@ -39,14 +37,34 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
     {
         var cameraSettings = _settingsService.LoadSettings<CameraSettings>();
 
-        if (!cameraSettings.EnableImageSaving || image == null)
+        // 检查是否是NOREAD条码
+        var isNoRead = string.IsNullOrWhiteSpace(barcode) || barcode.Equals("NOREAD", StringComparison.OrdinalIgnoreCase);
+        
+        // 如果不是NOREAD条码且图像保存功能关闭，则不保存
+        if (!isNoRead && !cameraSettings.EnableImageSaving)
         {
-            return null; // 保存已禁用或未提供图像
+            return null;
+        }
+        
+        // 如果没有提供图像，则不保存
+        if (image == null)
+        {
+            return null;
         }
 
         try
         {
-            var fullPath = BuildImagePath(cameraSettings, barcode, timestamp);
+            string? fullPath;
+            if (isNoRead)
+            {
+                // NOREAD条码使用专门的路径构建逻辑
+                fullPath = BuildNoreadImagePath(cameraSettings, timestamp);
+            }
+            else
+            {
+                // 普通条码使用原有的路径构建逻辑
+                fullPath = BuildImagePath(cameraSettings, barcode, timestamp);
+            }
 
             if (string.IsNullOrEmpty(fullPath))
             {
@@ -89,8 +107,8 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
 
             Log.Information("图像成功保存至 {ImagePath}", fullPath);
             
-            // 定期执行清理任务
-            TriggerPeriodicCleanup(cameraSettings);
+            // 保存成功后检查磁盘空间
+            await CheckAndCleanupDiskSpaceAsync();
             
             return fullPath;
         }
@@ -99,211 +117,6 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
             Log.Error(ex, "保存条码 {Barcode} (时间戳 {Timestamp}) 的图像失败", barcode, timestamp);
             return null;
         }
-    }
-
-    /// <summary>
-    /// 定期触发清理任务
-    /// </summary>
-    private static void TriggerPeriodicCleanup(CameraSettings cameraSettings)
-    {
-        lock (_cleanupLock)
-        {
-            _cleanupCounter++;
-            if (_cleanupCounter >= CleanupInterval)
-            {
-                _cleanupCounter = 0;
-                
-                // 在后台线程执行清理，避免阻塞图片保存
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await CleanupOldImagesInternalAsync(cameraSettings);
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex, "定期清理过期图片时发生错误");
-                    }
-                });
-            }
-        }
-    }
-
-    /// <summary>
-    /// 清理超过指定天数的图片文件（内部静态方法）
-    /// </summary>
-    /// <param name="cameraSettings">相机设置</param>
-    /// <param name="retentionDays">保留天数，默认7天</param>
-    private static async Task CleanupOldImagesInternalAsync(CameraSettings cameraSettings, int retentionDays = RetentionDays)
-    {
-        if (string.IsNullOrEmpty(cameraSettings.ImageSavePath) || !Directory.Exists(cameraSettings.ImageSavePath))
-        {
-            Log.Debug("图片保存路径未配置或不存在，跳过清理");
-            return;
-        }
-
-        var cutoffDate = DateTime.Now.Date.AddDays(-retentionDays);
-        Log.Information("开始清理 {CutoffDate:yyyy-MM-dd} 之前的图片文件，保留天数: {RetentionDays} 天", cutoffDate, retentionDays);
-
-        try
-        {
-            var basePath = cameraSettings.ImageSavePath;
-            var deletedFilesCount = 0;
-            var deletedFoldersCount = 0;
-            var totalSize = 0L;
-
-            // 扫描主目录和 NoRead 子目录
-            var scanPaths = new[]
-            {
-                basePath,
-                Path.Combine(basePath, "NoRead")
-            };
-
-            foreach (var scanPath in scanPaths)
-            {
-                if (!Directory.Exists(scanPath)) continue;
-
-                var result = await CleanupDirectoryAsync(scanPath, cutoffDate);
-                deletedFilesCount += result.FilesDeleted;
-                deletedFoldersCount += result.FoldersDeleted;
-                totalSize += result.TotalSize;
-            }
-
-            if (deletedFilesCount > 0)
-            {
-                Log.Information("图片清理完成: 删除了 {FilesCount} 个文件，{FoldersCount} 个文件夹，释放空间 {Size:F2} MB",
-                    deletedFilesCount, deletedFoldersCount, totalSize / 1024.0 / 1024.0);
-            }
-            else
-            {
-                Log.Debug("图片清理完成: 没有找到需要删除的过期文件");
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "清理过期图片时发生错误");
-        }
-    }
-
-    /// <inheritdoc />
-    public async Task CleanupOldImagesAsync(int? retentionDays = null)
-    {
-        var cameraSettings = _settingsService.LoadSettings<CameraSettings>();
-        var actualRetentionDays = retentionDays ?? RetentionDays;
-        
-        Log.Information("手动触发图片清理，保留天数: {RetentionDays}", actualRetentionDays);
-        await CleanupOldImagesInternalAsync(cameraSettings, actualRetentionDays);
-    }
-
-    /// <summary>
-    /// 递归清理指定目录中的过期文件和空文件夹
-    /// </summary>
-    private static async Task<CleanupResult> CleanupDirectoryAsync(string directoryPath, DateTime cutoffDate)
-    {
-        var result = new CleanupResult();
-
-        if (!Directory.Exists(directoryPath))
-            return result;
-
-        try
-        {
-            var directory = new DirectoryInfo(directoryPath);
-            
-            // 处理子目录
-            var subDirectories = directory.GetDirectories();
-            foreach (var subDir in subDirectories)
-            {
-                var subResult = await CleanupDirectoryAsync(subDir.FullName, cutoffDate);
-                result.FilesDeleted += subResult.FilesDeleted;
-                result.FoldersDeleted += subResult.FoldersDeleted;
-                result.TotalSize += subResult.TotalSize;
-
-                // 如果子目录为空，删除它
-                if (IsDirectoryEmpty(subDir.FullName))
-                {
-                    try
-                    {
-                        subDir.Delete();
-                        result.FoldersDeleted++;
-                        Log.Debug("删除空目录: {DirectoryPath}", subDir.FullName);
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Warning(ex, "删除空目录失败: {DirectoryPath}", subDir.FullName);
-                    }
-                }
-            }
-
-            // 处理当前目录中的文件
-            var files = directory.GetFiles("*.*", SearchOption.TopDirectoryOnly);
-            foreach (var file in files)
-            {
-                try
-                {
-                    // 检查文件是否是图片文件
-                    if (!IsImageFile(file.Extension))
-                        continue;
-
-                    // 检查文件是否过期（基于文件创建时间和修改时间的较早者）
-                    var fileDate = file.CreationTime < file.LastWriteTime ? file.CreationTime : file.LastWriteTime;
-                    
-                    if (fileDate.Date < cutoffDate)
-                    {
-                        var fileSize = file.Length;
-                        file.Delete();
-                        result.FilesDeleted++;
-                        result.TotalSize += fileSize;
-                        
-                        Log.Debug("删除过期图片: {FilePath} (文件日期: {FileDate:yyyy-MM-dd})", 
-                            file.FullName, fileDate);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log.Warning(ex, "删除文件失败: {FilePath}", file.FullName);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "处理目录时发生错误: {DirectoryPath}", directoryPath);
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// 检查目录是否为空（不包含任何文件或子目录）
-    /// </summary>
-    private static bool IsDirectoryEmpty(string directoryPath)
-    {
-        try
-        {
-            return !Directory.EnumerateFileSystemEntries(directoryPath).Any();
-        }
-        catch
-        {
-            return false; // 出错时认为目录不为空，避免误删
-        }
-    }
-
-    /// <summary>
-    /// 检查文件是否是图片文件
-    /// </summary>
-    private static bool IsImageFile(string extension)
-    {
-        var imageExtensions = new[] { ".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif" };
-        return imageExtensions.Contains(extension.ToLowerInvariant());
-    }
-
-    /// <summary>
-    /// 清理结果统计
-    /// </summary>
-    private class CleanupResult
-    {
-        public int FilesDeleted { get; set; }
-        public int FoldersDeleted { get; set; }
-        public long TotalSize { get; set; }
     }
 
     private static BitmapEncoder GetEncoder(ImageFormat format)
@@ -326,6 +139,29 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
             ImageFormat.Tiff => ".tiff",
             _ => ".jpg" // 默认为 Jpeg
         };
+    }
+
+    /// <summary>
+    /// 构建NOREAD图像的专门保存路径，保存到软件根目录的NoreadImage文件夹
+    /// </summary>
+    /// <param name="cameraSettings">相机设置</param>
+    /// <param name="timestamp">时间戳</param>
+    /// <returns>NOREAD图像的完整保存路径</returns>
+    private static string BuildNoreadImagePath(CameraSettings cameraSettings, DateTime timestamp)
+    {
+        // 获取软件根目录（当前应用程序域的基目录）
+        var appBasePath = AppDomain.CurrentDomain.BaseDirectory;
+        
+        var year = timestamp.ToString("yyyy");
+        var month = timestamp.ToString("MM");
+        var day = timestamp.ToString("dd");
+        var timeString = timestamp.ToString("HHmmss");
+
+        var directoryPath = Path.Combine(appBasePath, "NoreadImage", year, month, day);
+        var fileExtension = GetFileExtension(cameraSettings.ImageFormat);
+        var fileName = $"noread{timeString}{fileExtension}";
+
+        return Path.Combine(directoryPath, fileName);
     }
 
     private static string? BuildImagePath(CameraSettings cameraSettings, string? barcode, DateTime timestamp)
@@ -353,5 +189,295 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
         var fileName = $"{effectiveBarcode}_{timestamp:yyyyMMddHHmmssfff}{fileExtension}";
 
         return Path.Combine(directoryPath, fileName);
+    }
+
+    /// <summary>
+    /// 检查磁盘空间并在必要时清理最早的图片，同时清理超过30天的图片
+    /// </summary>
+    private async Task CheckAndCleanupDiskSpaceAsync()
+    {
+        try
+        {
+            var cameraSettings = _settingsService.LoadSettings<CameraSettings>();
+            
+            // 检查普通图片保存路径
+            if (!string.IsNullOrEmpty(cameraSettings.ImageSavePath))
+            {
+                // 清理超过30天的图片
+                await CleanupExpiredImagesAsync(cameraSettings.ImageSavePath);
+                // 检查磁盘空间
+                await CheckAndCleanupDirectoryAsync(cameraSettings.ImageSavePath);
+            }
+            
+            // 检查NoreadImage路径
+            var appBasePath = AppDomain.CurrentDomain.BaseDirectory;
+            var noreadImagePath = Path.Combine(appBasePath, "NoreadImage");
+            // 清理超过30天的图片
+            await CleanupExpiredImagesAsync(noreadImagePath);
+            // 检查磁盘空间
+            await CheckAndCleanupDirectoryAsync(noreadImagePath);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "检查和清理磁盘空间时发生错误");
+        }
+    }
+
+    /// <summary>
+    /// 检查指定目录所在磁盘的空间使用率，如果超过90%则删除最早的图片
+    /// </summary>
+    /// <param name="directoryPath">要检查的目录路径</param>
+    private async Task CheckAndCleanupDirectoryAsync(string directoryPath)
+    {
+        if (!Directory.Exists(directoryPath))
+        {
+            return;
+        }
+
+        try
+        {
+            var diskUsagePercentage = GetDiskUsagePercentage(directoryPath);
+            
+            if (diskUsagePercentage >= 90.0)
+            {
+                Log.Warning("磁盘空间使用率已达到 {UsagePercentage:F1}%，开始清理目录: {DirectoryPath}", 
+                    diskUsagePercentage, directoryPath);
+                
+                await DeleteOldestImagesAsync(directoryPath, diskUsagePercentage);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "检查目录 {DirectoryPath} 的磁盘空间时发生错误", directoryPath);
+        }
+    }
+
+    /// <summary>
+    /// 获取指定路径所在磁盘的使用率百分比
+    /// </summary>
+    /// <param name="path">文件或目录路径</param>
+    /// <returns>磁盘使用率百分比</returns>
+    private static double GetDiskUsagePercentage(string path)
+    {
+        var drive = new DriveInfo(Path.GetPathRoot(path) ?? path);
+        var totalSize = drive.TotalSize;
+        var availableSpace = drive.AvailableFreeSpace;
+        var usedSpace = totalSize - availableSpace;
+        
+        return (double)usedSpace / totalSize * 100;
+    }
+
+    /// <summary>
+    /// 删除指定目录下最早的图片文件，直到磁盘使用率降到85%以下
+    /// </summary>
+    /// <param name="rootPath">根目录路径</param>
+    /// <param name="currentUsagePercentage">当前磁盘使用率</param>
+    private async Task DeleteOldestImagesAsync(string rootPath, double currentUsagePercentage)
+    {
+        const double targetUsagePercentage = 85.0; // 目标使用率
+        const int maxFilesToDelete = 1000; // 单次最多删除文件数量，防止无限循环
+        
+        var deletedCount = 0;
+        var currentUsage = currentUsagePercentage;
+
+        await Task.Run(() =>
+        {
+            while (currentUsage >= targetUsagePercentage && deletedCount < maxFilesToDelete)
+            {
+                var oldestFiles = GetOldestImageFiles(rootPath, 50); // 每次获取50个最早的文件
+                
+                if (oldestFiles.Count == 0)
+                {
+                    Log.Warning("没有找到可删除的图片文件，停止清理");
+                    break;
+                }
+
+                foreach (var file in oldestFiles)
+                {
+                    try
+                    {
+                        File.Delete(file.FullName);
+                        deletedCount++;
+                        
+                        Log.Information("已删除旧图片文件: {FilePath}", file.FullName);
+                        
+                        // 每删除10个文件检查一次磁盘使用率
+                        if (deletedCount % 10 == 0)
+                        {
+                            currentUsage = GetDiskUsagePercentage(rootPath);
+                            if (currentUsage < targetUsagePercentage)
+                            {
+                                break;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "删除图片文件 {FilePath} 时发生错误", file.FullName);
+                    }
+                }
+                
+                // 更新当前使用率
+                currentUsage = GetDiskUsagePercentage(rootPath);
+            }
+        });
+
+        Log.Information("磁盘空间清理完成，共删除 {DeletedCount} 个文件，当前磁盘使用率: {UsagePercentage:F1}%", 
+            deletedCount, GetDiskUsagePercentage(rootPath));
+    }
+
+    /// <summary>
+    /// 获取指定目录下最早的图片文件列表
+    /// </summary>
+    /// <param name="rootPath">根目录路径</param>
+    /// <param name="count">获取文件的数量</param>
+    /// <returns>按创建时间排序的最早文件列表</returns>
+    private static List<FileInfo> GetOldestImageFiles(string rootPath, int count)
+    {
+        var imageExtensions = new[] { ".jpg", ".jpeg", ".png", ".bmp", ".tiff" };
+        
+        try
+        {
+            return Directory.EnumerateFiles(rootPath, "*.*", SearchOption.AllDirectories)
+                .Where(file => imageExtensions.Contains(Path.GetExtension(file).ToLowerInvariant()))
+                .Select(file => new FileInfo(file))
+                .OrderBy(f => f.CreationTime)
+                .Take(count)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "获取目录 {RootPath} 下的图片文件时发生错误", rootPath);
+            return new List<FileInfo>();
+        }
+    }
+
+    /// <summary>
+    /// 清理指定目录下超过30天的图片文件
+    /// </summary>
+    /// <param name="directoryPath">要清理的目录路径</param>
+    private async Task CleanupExpiredImagesAsync(string directoryPath)
+    {
+        if (!Directory.Exists(directoryPath))
+        {
+            return;
+        }
+
+        try
+        {
+            var cutoffDate = DateTime.Now.AddDays(-30); // 30天前的日期
+            var deletedCount = 0;
+
+            await Task.Run(() =>
+            {
+                var expiredFiles = GetExpiredImageFiles(directoryPath, cutoffDate);
+                
+                foreach (var file in expiredFiles)
+                {
+                    try
+                    {
+                        File.Delete(file.FullName);
+                        deletedCount++;
+                        
+                        Log.Information("已删除过期图片文件 (创建于 {CreationTime}): {FilePath}", 
+                            file.CreationTime.ToString("yyyy-MM-dd HH:mm:ss"), file.FullName);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "删除过期图片文件 {FilePath} 时发生错误", file.FullName);
+                    }
+                }
+                
+                // 清理空的日期文件夹
+                CleanupEmptyDirectories(directoryPath);
+            });
+
+            if (deletedCount > 0)
+            {
+                Log.Information("过期图片清理完成，共删除 {DeletedCount} 个超过30天的文件，目录: {DirectoryPath}", 
+                    deletedCount, directoryPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "清理目录 {DirectoryPath} 下的过期图片时发生错误", directoryPath);
+        }
+    }
+
+    /// <summary>
+    /// 获取指定目录下超过指定日期的图片文件列表
+    /// </summary>
+    /// <param name="rootPath">根目录路径</param>
+    /// <param name="cutoffDate">截止日期</param>
+    /// <returns>超过截止日期的图片文件列表</returns>
+    private static List<FileInfo> GetExpiredImageFiles(string rootPath, DateTime cutoffDate)
+    {
+        var imageExtensions = new[] { ".jpg", ".jpeg", ".png", ".bmp", ".tiff" };
+        
+        try
+        {
+            return Directory.EnumerateFiles(rootPath, "*.*", SearchOption.AllDirectories)
+                .Where(file => imageExtensions.Contains(Path.GetExtension(file).ToLowerInvariant()))
+                .Select(file => new FileInfo(file))
+                .Where(f => f.CreationTime < cutoffDate)
+                .OrderBy(f => f.CreationTime)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "获取目录 {RootPath} 下过期图片文件时发生错误", rootPath);
+            return new List<FileInfo>();
+        }
+    }
+
+    /// <summary>
+    /// 递归清理空的日期文件夹
+    /// </summary>
+    /// <param name="rootPath">根目录路径</param>
+    private static void CleanupEmptyDirectories(string rootPath)
+    {
+        try
+        {
+            var directories = Directory.GetDirectories(rootPath, "*", SearchOption.AllDirectories)
+                .OrderByDescending(d => d.Length) // 从最深层的目录开始清理
+                .ToList();
+
+            foreach (var directory in directories)
+            {
+                try
+                {
+                    if (IsDirectoryEmpty(directory))
+                    {
+                        Directory.Delete(directory);
+                        Log.Information("已删除空目录: {DirectoryPath}", directory);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "删除空目录 {DirectoryPath} 时发生错误", directory);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "清理空目录时发生错误，根路径: {RootPath}", rootPath);
+        }
+    }
+
+    /// <summary>
+    /// 判断目录是否为空（不包含任何文件和子目录）
+    /// </summary>
+    /// <param name="directoryPath">目录路径</param>
+    /// <returns>如果目录为空则返回true</returns>
+    private static bool IsDirectoryEmpty(string directoryPath)
+    {
+        try
+        {
+            return !Directory.EnumerateFileSystemEntries(directoryPath).Any();
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

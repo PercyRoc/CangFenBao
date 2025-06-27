@@ -438,6 +438,17 @@ public class HuaRayCameraService : ICameraService
     /// </summary>
     private async Task ProcessPackageInfoAsync(HuaRayCodeEventArgs args)
     {
+        // 日志: 记录从SDK收到的原始事件数据
+        Log.Information("华睿相机SDK接收到事件数据: CameraId={CameraId}, OutputResult={OutputResult}, CodeList={@CodeList}, WeightGrams={WeightGrams}, Volume(L={VLength}mm,W={VWidth}mm,H={VHeight}mm,Vol={VVolume}mm³), TriggerUnixMs={TriggerUnixMs}, OrigImg(W={OiW},H={OiH},T={OiT},S={OiS},HasPtr={OiHasPtr}), WaybillImg(W={WiW},H={WiH},T={WiT},S={WiS},HasPtr={WiHasPtr})",
+            args.CameraId, 
+            args.OutputResult, 
+            args.CodeList, 
+            args.Weight,
+            args.VolumeInfo.length, args.VolumeInfo.width, args.VolumeInfo.height, args.VolumeInfo.volume,
+            args.TriggerTimeTicks,
+            args.OriginalImage.width, args.OriginalImage.height, (HuaRayApiStruct.EImageType)args.OriginalImage.type, args.OriginalImage.dataSize, args.OriginalImage.ImageData != IntPtr.Zero,
+            args.WaybillImage.width, args.WaybillImage.height, (HuaRayApiStruct.EImageType)args.WaybillImage.type, args.WaybillImage.dataSize, args.WaybillImage.ImageData != IntPtr.Zero);
+
         BitmapSource? processedBitmapSource = null;
 
         try

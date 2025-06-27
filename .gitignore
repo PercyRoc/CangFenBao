@@ -13,3 +13,7 @@ riderModule.iml
 /.vs
 /.cursor
 /.idea
+
+# Visual Studio publish profiles
+*.pubxml
+*.pubxml.user

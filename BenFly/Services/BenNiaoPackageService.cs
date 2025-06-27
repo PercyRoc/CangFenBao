@@ -1,3 +1,5 @@
+using System.Drawing;
+using System.Drawing.Text;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -6,9 +8,9 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Windows.Media.Imaging;
 using BenFly.Models.BenNiao;
+using BenFly.Models.Upload;
 using Common.Models.Package;
 using Common.Services.Settings;
-using BenFly.Models.Upload;
 using Renci.SshNet;
 using Renci.SshNet.Common;
 using Serilog;
@@ -203,7 +205,7 @@ internal class BenNiaoPackageService : IDisposable
     ///     实时查询三段码
     /// </summary>
     /// <returns>包含段码和错误消息的元组。如果成功，ErrorMessage 为 null。</returns>
-    internal async Task<(string? SegmentCode, string? ErrorMessage)> GetRealTimeSegmentCodeAsync(string waybillNum)
+    internal async Task<(string? SegmentCode, string? ErrorMessage)> GetRealTimeSegmentCodeAsync(string waybillNum, CancellationToken cancellationToken)
     {
         try
         {
@@ -223,7 +225,7 @@ internal class BenNiaoPackageService : IDisposable
 
             // 使用 StringContent 发送请求
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync(url, content);
+            var response = await _httpClient.PostAsync(url, content, cancellationToken);
             // 不再 EnsureSuccessStatusCode，手动检查并返回错误
             // response.EnsureSuccessStatusCode(); 
 
@@ -256,7 +258,7 @@ internal class BenNiaoPackageService : IDisposable
     /// <summary>
     ///     上传包裹数据
     /// </summary>
-    internal async Task<(bool Success, DateTime UploadTime, string ErrorMessage)> UploadPackageDataAsync(PackageInfo package)
+    internal async Task<(bool Success, DateTime UploadTime, string ErrorMessage)> UploadPackageDataAsync(PackageInfo package, CancellationToken cancellationToken)
     {
         try
         {
@@ -285,7 +287,7 @@ internal class BenNiaoPackageService : IDisposable
             // 使用 JsonContent 替代 PostAsJsonAsync，以便使用自定义序列化选项
             var jsonContent = JsonSerializer.Serialize(request, _jsonOptions);
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync(url, content);
+            var response = await _httpClient.PostAsync(url, content, cancellationToken);
             response.EnsureSuccessStatusCode();
 
             var result = await response.Content.ReadFromJsonAsync<BenNiaoResponse<object>>(_jsonOptions);
@@ -474,8 +476,7 @@ internal class BenNiaoPackageService : IDisposable
     /// <summary>
     ///     将图片保存到临时文件
     /// </summary>
-    internal static string? SaveImageToTempFileAsync(BitmapSource image, string waybillNum,
-        DateTime scanTime)
+    public string? SaveImageToTempFileAsync(BitmapSource image, string waybillNum, DateTime scanTime, PackageInfo package)
     {
         try
         {
@@ -486,11 +487,23 @@ internal class BenNiaoPackageService : IDisposable
             var fileName = $"{waybillNum}_{scanTime:yyyyMMddHHmmss}.jpg";
             var tempPath = Path.Combine(tempDir, fileName);
 
-            // 使用 JpegBitmapEncoder 保存图片
-            using var fileStream = new FileStream(tempPath, FileMode.Create);
-            var encoder = new JpegBitmapEncoder { QualityLevel = 90 }; // 设置JPEG质量
-            encoder.Frames.Add(BitmapFrame.Create(image));
-            encoder.Save(fileStream);
+            // 将 BitmapSource 转换为 Bitmap (System.Drawing.Bitmap)
+            using var bitmap = ConvertBitmapSourceToBitmap(image);
+            if (bitmap == null)
+            {
+                Log.Error("无法将 BitmapSource 转换为 System.Drawing.Bitmap，无法添加水印。");
+                return null;
+            }
+
+            // 获取设备号
+            var uploadConfig = _settingsService.LoadSettings<UploadConfiguration>();
+            var deviceId = uploadConfig.DeviceId;
+
+            // 添加水印
+            AddWatermarkToImage(bitmap, package, deviceId);
+
+            // 保存添加水印后的图片
+            bitmap.Save(tempPath, System.Drawing.Imaging.ImageFormat.Jpeg);
 
             Log.Information("已将包裹 {WaybillNum} 的图片保存到临时文件 {TempPath}", waybillNum, tempPath);
 
@@ -502,6 +515,89 @@ internal class BenNiaoPackageService : IDisposable
             return null;
         }
     }
+
+    /// <summary>
+    /// 将 BitmapSource 转换为 System.Drawing.Bitmap
+    /// </summary>
+    /// <param name="bitmapSource">要转换的 BitmapSource</param>
+    /// <returns>转换后的 Bitmap</returns>
+    private static Bitmap? ConvertBitmapSourceToBitmap(BitmapSource bitmapSource)
+    {
+        try
+        {
+            var width = bitmapSource.PixelWidth;
+            var height = bitmapSource.PixelHeight;
+            var stride = width * ((bitmapSource.Format.BitsPerPixel + 7) / 8);
+            var pixels = new byte[height * stride];
+
+            bitmapSource.CopyPixels(pixels, stride, 0);
+
+            // 创建一个新的 Bitmap 对象
+            var bitmap = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            var bitmapData = bitmap.LockBits(new Rectangle(0, 0, width, height),
+                System.Drawing.Imaging.ImageLockMode.WriteOnly, bitmap.PixelFormat);
+
+            // 将像素数据复制到 Bitmap
+            System.Runtime.InteropServices.Marshal.Copy(pixels, 0, bitmapData.Scan0, pixels.Length);
+            bitmap.UnlockBits(bitmapData);
+
+            return bitmap;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "将 BitmapSource 转换为 System.Drawing.Bitmap 时发生错误");
+            return null;
+        }
+    }
+
+
+    /// <summary>
+    ///     给图片添加水印
+    /// </summary>
+    /// <param name="image">要添加水印的图片</param>
+    /// <param name="package">包裹信息</param>
+    /// <param name="deviceId">设备号</param>
+    private static void AddWatermarkToImage(Bitmap image, PackageInfo package, string deviceId)
+    {
+        try
+        {
+            using var graphics = Graphics.FromImage(image);
+            graphics.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+
+            // 设置字体和颜色
+            var font = new Font("Arial", 20, FontStyle.Bold); // 增大字体
+            var brush = new SolidBrush(Color.Red); // 红色字体
+
+            // 构建水印文本
+            var watermarkText = new StringBuilder();
+            watermarkText.AppendLine($"时间: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+            watermarkText.AppendLine($"条码: {package.Barcode}");
+            watermarkText.AppendLine($"重量: {package.Weight:F2} kg");
+            watermarkText.AppendLine($"尺寸: {package.Length:F0}x{package.Width:F0}x{package.Height:F0} cm");
+            watermarkText.AppendLine($"设备号: {deviceId}");
+
+            // 计算文本大小和位置
+            var lines = watermarkText.ToString().Split(new[] { "\r\n", "\n" }, StringSplitOptions.None); // Split by newline
+            var lineHeight = font.GetHeight(graphics);
+            var yPosition = 10; // 初始Y坐标
+
+            foreach (var line in lines)
+            {
+                graphics.MeasureString(line, font);
+                const int xPosition = 10; // 距离左边10像素
+
+                graphics.DrawString(line, font, brush, xPosition, yPosition);
+                yPosition += (int)lineHeight + 5; // 每行增加5像素间距
+            }
+
+            Log.Information("已为图片添加水印。");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "为图片添加水印时发生错误。");
+        }
+    }
+
 
     /// <summary>
     ///     上传异常数据（Noread或空条码）

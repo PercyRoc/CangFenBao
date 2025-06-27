@@ -8,13 +8,11 @@ namespace ShanghaiModuleBelt.ViewModels;
 /// <summary>
 ///     TCP设置视图模型
 /// </summary>
-internal class TcpSettingsViewModel : BindableBase
+public class TcpSettingsViewModel : BindableBase
 {
     private readonly INotificationService _notificationService;
-    private readonly TcpSettings _settings;
     private readonly ISettingsService _settingsService;
-    private string _address;
-    private int _port;
+    private TcpSettings _config;
 
     /// <summary>
     ///     初始化TCP设置视图模型
@@ -27,32 +25,19 @@ internal class TcpSettingsViewModel : BindableBase
         _notificationService = notificationService;
 
         // 加载设置
-        _settings = _settingsService.LoadSettings<TcpSettings>();
-
-        // 初始化属性
-        _address = _settings.Address;
-        _port = _settings.Port;
+        _config = _settingsService.LoadSettings<TcpSettings>();
 
         // 初始化命令
         SaveConfigurationCommand = new DelegateCommand(ExecuteSaveCommand);
     }
 
     /// <summary>
-    ///     TCP地址
+    ///     TCP设置
     /// </summary>
-    public string Address
+    public TcpSettings Config
     {
-        get => _address;
-        set => SetProperty(ref _address, value);
-    }
-
-    /// <summary>
-    ///     端口号
-    /// </summary>
-    public int Port
-    {
-        get => _port;
-        set => SetProperty(ref _port, value);
+        get => _config;
+        set => SetProperty(ref _config, value);
     }
 
     /// <summary>
@@ -67,12 +52,8 @@ internal class TcpSettingsViewModel : BindableBase
     {
         try
         {
-            // 更新设置
-            _settings.Address = _address;
-            _settings.Port = _port;
-
             // 保存设置
-            var validationResults = _settingsService.SaveSettings(_settings, true);
+            var validationResults = _settingsService.SaveSettings(_config, true);
 
             if (validationResults.Length > 0)
             {
@@ -82,7 +63,7 @@ internal class TcpSettingsViewModel : BindableBase
                 return;
             }
 
-            Log.Information("TCP设置已保存: {Address}:{Port}", _address, _port);
+            Log.Information("TCP设置已保存: {Address}:{Port}", _config.Address, _config.Port);
         }
         catch (Exception ex)
         {
