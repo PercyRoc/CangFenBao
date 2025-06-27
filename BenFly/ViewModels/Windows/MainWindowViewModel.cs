@@ -929,14 +929,11 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         var errorItem = StatisticsItems.FirstOrDefault(static x => x.Label == "异常数");
         if (errorItem != null)
         {
-            // 加载格口规则以获取异常口
-            var segmentCodeRules = _settingsService.LoadSettings<SegmentCodeRules>();
-            var exceptionChute = segmentCodeRules.ExceptionChute;
-            
-            // 计算被分配到异常口的包裹数量
-            var errorCount = PackageHistory.Count(p => p.ChuteNumber == exceptionChute);
+            // 根据包裹状态统计异常数量（Error或NoRead状态的包裹）
+            var errorCount = PackageHistory.Count(p => 
+                p.Status == PackageStatus.Error || p.Status == PackageStatus.NoRead);
             errorItem.Value = errorCount.ToString();
-            errorItem.Description = $"共有 {errorCount} 个异常包裹";
+            errorItem.Description = $"共有 {errorCount} 个异常包裹（包括错误和NoRead）";
         }
 
         var efficiencyItem = StatisticsItems.FirstOrDefault(static x => x.Label == "预测效率");

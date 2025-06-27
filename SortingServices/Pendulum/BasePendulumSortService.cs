@@ -195,9 +195,12 @@ public abstract class BasePendulumSortService : IPendulumSortService
         if (photoelectricName != null)
         {
             var photoelectricConfig = GetPhotoelectricConfig(photoelectricName);
-            // 设置超时时间为时间范围上限 + 500ms
-            timeoutInterval = photoelectricConfig.TimeRangeUpper + 500;
-            timeoutReason = $"光电配置上限 {photoelectricConfig.TimeRangeUpper}ms + 500ms";
+            // 设置超时时间为分拣时间范围上限 + 500ms，与验证逻辑保持一致
+            var timeRangeUpper = photoelectricConfig is SortPhotoelectric
+                ? photoelectricConfig.TimeRangeUpper
+                : photoelectricConfig.SortingTimeRangeUpper;
+            timeoutInterval = timeRangeUpper + 500;
+            timeoutReason = $"分拣光电配置上限 {timeRangeUpper}ms + 500ms";
         }
         else
         {
@@ -528,9 +531,9 @@ public abstract class BasePendulumSortService : IPendulumSortService
 
         // 如果循环完成没有找到匹配的包裹，则执行以下逻辑
         var pendulumState = PendulumStates.TryGetValue(photoelectricName, out var state) ? state : null;
-        if (pendulumState != null && pendulumState.GetCurrentState() == "Swing")
+        if (pendulumState != null && pendulumState.GetCurrentState() == "Swing" && !pendulumState.IsInResetDelay())
         {
-            Log.Information("分拣光电 {Name} 未找到匹配包裹，且摆轮当前为 {PendulumState} 状态。将尝试发送两次回正命令。", photoelectricName, pendulumState.GetCurrentState());
+            Log.Information("分拣光电 {Name} 未找到匹配包裹，且摆轮当前为 {PendulumState} 状态且不在回正延迟期间。将尝试发送两次回正命令。", photoelectricName, pendulumState.GetCurrentState());
             var client = GetSortingClient(photoelectricName);
             if (client != null && client.IsConnected())
             {
@@ -561,6 +564,10 @@ public abstract class BasePendulumSortService : IPendulumSortService
                 // pendulumState.ForceReset();
             }
         }
+        else if (pendulumState != null && pendulumState.GetCurrentState() == "Swing" && pendulumState.IsInResetDelay())
+        {
+            Log.Debug("分拣光电 {Name} 未找到匹配包裹，摆轮当前为Swing状态但正在回正延迟期间，跳过立即回正", photoelectricName);
+        }
 
         Log.Debug("分拣光电 {Name} 没有找到符合条件的待分拣包裹", photoelectricName);
         return null;
@@ -590,7 +597,14 @@ public abstract class BasePendulumSortService : IPendulumSortService
     {
         var pendulumState = PendulumStates[photoelectricName]; 
 
-        pendulumState.CancelPendingReset();
+        // 检查是否在回正延迟期间，如果是则忽略此次分拣信号
+        if (pendulumState.IsInResetDelay())
+        {
+            Log.Information("摆轮 {PhotoelectricName} 正在回正延迟期间，忽略包裹 {Barcode} 的分拣信号", 
+                photoelectricName, package.Barcode);
+            ProcessingPackages.TryRemove(package.Barcode, out _);
+            return;
+        }
 
         try
         {
@@ -841,6 +855,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
     protected class PendulumState : IDisposable
     {
         private bool _isInReset = true;
+        private bool _isInResetDelay = false; // 标记是否在回正延迟期间
         public int LastSlot { get; private set; }
         private Timer? _pendingResetTimer; // Timer for delayed reset
         private readonly string _photoelectricName; 
@@ -873,10 +888,19 @@ public abstract class BasePendulumSortService : IPendulumSortService
             return _isInReset ? "Reset" : "Swing";
         }
 
+        /// <summary>
+        /// 检查是否在回正延迟期间
+        /// </summary>
+        public bool IsInResetDelay()
+        {
+            return _isInResetDelay;
+        }
+
         public void ForceReset()
         {
             CancelPendingReset();
             _isInReset = true;
+            _isInResetDelay = false;
             Log.Information("Pendulum state for {PhotoelectricName} forced to Reset.", _photoelectricName);
         }
 
@@ -888,7 +912,8 @@ public abstract class BasePendulumSortService : IPendulumSortService
                 _pendingResetTimer.Elapsed -= OnPendingResetTimerElapsed; 
                 _pendingResetTimer.Dispose();
                 _pendingResetTimer = null;
-                Log.Debug("Pending reset timer cancelled for {PhotoelectricName}.", _photoelectricName);
+                _isInResetDelay = false; // 清除回正延迟标记
+                Log.Debug("Pending reset timer cancelled for {PhotoelectricName}. 退出回正延迟期间。", _photoelectricName);
             }
         }
 
@@ -897,6 +922,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
             CancelPendingReset(); 
 
             _resetActionAsync = resetActionAsync ?? throw new ArgumentNullException(nameof(resetActionAsync));
+            _isInResetDelay = true; // 标记进入回正延迟期间
 
             _pendingResetTimer = new Timer(interval)
             {
@@ -904,7 +930,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
             };
             _pendingResetTimer.Elapsed += OnPendingResetTimerElapsed;
             _pendingResetTimer.Start();
-            Log.Debug("Scheduled delayed reset for {PhotoelectricName} in {Interval}ms.", _photoelectricName, interval);
+            Log.Debug("Scheduled delayed reset for {PhotoelectricName} in {Interval}ms. 进入回正延迟期间，将忽略新的分拣信号。", _photoelectricName, interval);
         }
 
         private async void OnPendingResetTimerElapsed(object? sender, ElapsedEventArgs e)
@@ -963,6 +989,8 @@ public abstract class BasePendulumSortService : IPendulumSortService
             finally
             {
                 _resetActionAsync = null; // Clear the action after execution
+                _isInResetDelay = false; // 回正完成，退出回正延迟期间
+                Log.Debug("Delayed reset completed for {PhotoelectricName}. 退出回正延迟期间，现在可以接受新的分拣信号。", _photoelectricName);
             }
         }
 
