@@ -103,14 +103,20 @@ public class PackageInfo : IDisposable
     /// <summary>
     ///     重量显示
     /// </summary>
-    public string WeightDisplay => $"{Weight:F2}kg";
+    public string WeightDisplay
+    {
+        get => $"{Weight:F2}kg";
+    }
 
     /// <summary>
     ///     体积显示
     /// </summary>
-    public string VolumeDisplay => Length.HasValue && Width.HasValue && Height.HasValue 
-        ? $"{Length:F1}cm*{Width:F1}cm*{Height:F1}cm"
-        : string.Empty;
+    public string VolumeDisplay
+    {
+        get => Length.HasValue && Width.HasValue && Height.HasValue
+            ? $"{Length:F1}cm*{Width:F1}cm*{Height:F1}cm"
+            : string.Empty;
+    }
 
     /// <summary>
     ///     格口号
@@ -217,7 +223,7 @@ public class PackageInfo : IDisposable
     ///     如果为 true，则意味着上一个包裹特意没有回正，为本包裹保留了摆轮状态。
     ///     这是"责任接力棒"机制的核心，用于解决连续相同格口包裹的状态传递问题。
     /// </summary>
-    public bool IsChuteContinuation { get; set; } = false;
+    public bool IsChuteContinuation { get; set; }
 
     /// <summary>
     ///     释放资源

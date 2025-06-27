@@ -11,9 +11,7 @@
              xmlns:settings2="clr-namespace:ZtCloudWarehous.Views.Settings"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
-             d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}"
-             Height="720"
-             Width="1280">
+             d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}">
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>

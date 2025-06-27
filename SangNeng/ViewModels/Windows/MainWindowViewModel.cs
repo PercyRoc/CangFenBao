@@ -360,83 +360,83 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     BitmapSource? capturedImage = null;
                     var imageLock = new object();
 
-                    if (_cameraService is HikvisionIndustrialCameraService hikvisionCamera)
-                    {
-                        // 订阅图像流，等待一帧图像
-                        var imageTask = Task.Run(async () =>
-                        {
-                            var tcs = new TaskCompletionSource<BitmapSource?>();
-
-                            using var imageSubscription = hikvisionCamera.ImageStream
-                                .Take(1) // 只取一帧
-                                .Timeout(TimeSpan.FromSeconds(5)) // 5秒超时
-                                .Subscribe(
-                                    onNext: imageData => tcs.TrySetResult(imageData), // Signal completion with image data
-                                    onError: ex => tcs.TrySetException(ex),           // Signal error
-                                    onCompleted: () => tcs.TrySetResult(null)         // Signal completion if stream ends before Take(1)
-                                );
-
-                            try
-                            {
-                                // Wait for the image or timeout/cancellation
-                                await using (cts.Token.Register(() => tcs.TrySetCanceled()))
-                                {
-                                    var receivedImageData = await tcs.Task; // Wait for image data from subscribe
-
-                                    if (receivedImageData != null)
-                                    {
-                                        BitmapSource? frozenClone = null;
-                                        // Switch to UI thread to clone and freeze
-                                        await Application.Current.Dispatcher.InvokeAsync(() =>
-                                        {
-                                            try
-                                            {
-                                                var clone = receivedImageData.Clone();
-                                                clone.Freeze(); // Freeze makes it thread-safe
-                                                frozenClone = clone;
-                                                CurrentImage = clone; // Update UI on UI thread
-                                                Log.Information("已在UI线程克隆并冻结图像");
-                                            }
-                                            catch (Exception uiEx)
-                                            {
-                                                Log.Error(uiEx, "在UI线程克隆/冻结图像时出错");
-                                            }
-                                        });
-
-                                        if (frozenClone != null)
-                                        {
-                                            lock (imageLock)
-                                            {
-                                                capturedImage = frozenClone; // Store the frozen clone
-                                            }
-
-                                            Log.Information("已从图像流获取并处理一帧图像");
-                                            return true; // Success
-                                        }
-                                    }
-
-                                    Log.Warning("未能从图像流获取有效图像数据");
-                                    return false; // Failed to get image data
-                                }
-                            }
-                            catch (TimeoutException)
-                            {
-                                Log.Warning("获取图像流超时");
-                                return false;
-                            }
-                            catch (Exception ex)
-                            {
-                                Log.Error(ex, "从图像流获取图像失败");
-                                return false;
-                            }
-                        }, cts.Token); // Pass token to Task.Run
-
-                        photoTask = imageTask;
-                    }
-                    else
-                    {
-                        photoTask = Task.FromResult(false);
-                    }
+                    // if (_cameraService is HikvisionIndustrialCameraService hikvisionCamera)
+                    // {
+                    //     // 订阅图像流，等待一帧图像
+                    //     var imageTask = Task.Run(async () =>
+                    //     {
+                    //         var tcs = new TaskCompletionSource<BitmapSource?>();
+                    //
+                    //         using var imageSubscription = hikvisionCamera.ImageStream
+                    //             .Take(1) // 只取一帧
+                    //             .Timeout(TimeSpan.FromSeconds(5)) // 5秒超时
+                    //             .Subscribe(
+                    //                 onNext: imageData => tcs.TrySetResult(imageData), // Signal completion with image data
+                    //                 onError: ex => tcs.TrySetException(ex),           // Signal error
+                    //                 onCompleted: () => tcs.TrySetResult(null)         // Signal completion if stream ends before Take(1)
+                    //             );
+                    //
+                    //         try
+                    //         {
+                    //             // Wait for the image or timeout/cancellation
+                    //             await using (cts.Token.Register(() => tcs.TrySetCanceled()))
+                    //             {
+                    //                 var receivedImageData = await tcs.Task; // Wait for image data from subscribe
+                    //
+                    //                 if (receivedImageData != null)
+                    //                 {
+                    //                     BitmapSource? frozenClone = null;
+                    //                     // Switch to UI thread to clone and freeze
+                    //                     await Application.Current.Dispatcher.InvokeAsync(() =>
+                    //                     {
+                    //                         try
+                    //                         {
+                    //                             var clone = receivedImageData.Clone();
+                    //                             clone.Freeze(); // Freeze makes it thread-safe
+                    //                             frozenClone = clone;
+                    //                             CurrentImage = clone; // Update UI on UI thread
+                    //                             Log.Information("已在UI线程克隆并冻结图像");
+                    //                         }
+                    //                         catch (Exception uiEx)
+                    //                         {
+                    //                             Log.Error(uiEx, "在UI线程克隆/冻结图像时出错");
+                    //                         }
+                    //                     });
+                    //
+                    //                     if (frozenClone != null)
+                    //                     {
+                    //                         lock (imageLock)
+                    //                         {
+                    //                             capturedImage = frozenClone; // Store the frozen clone
+                    //                         }
+                    //
+                    //                         Log.Information("已从图像流获取并处理一帧图像");
+                    //                         return true; // Success
+                    //                     }
+                    //                 }
+                    //
+                    //                 Log.Warning("未能从图像流获取有效图像数据");
+                    //                 return false; // Failed to get image data
+                    //             }
+                    //         }
+                    //         catch (TimeoutException)
+                    //         {
+                    //             Log.Warning("获取图像流超时");
+                    //             return false;
+                    //         }
+                    //         catch (Exception ex)
+                    //         {
+                    //             Log.Error(ex, "从图像流获取图像失败");
+                    //             return false;
+                    //         }
+                    //     }, cts.Token); // Pass token to Task.Run
+                    //
+                    //     photoTask = imageTask;
+                    // }
+                    // else
+                    // {
+                    //     photoTask = Task.FromResult(false);
+                    // }
 
                     // 使用 cts.Token，虽然没有超时，但保留以便将来可能的其他取消逻辑
                     var volumeTask = TriggerVolumeCamera(cts.Token);
@@ -471,7 +471,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     }, weightCancellationToken); // 使用复制的Token
 
                     // 等待所有任务完成
-                    await Task.WhenAll(photoTask, volumeTask, weightTask);
+                    // await Task.WhenAll(photoTask, volumeTask, weightTask);
 
                     // --- BEGIN: Save Dimension Images Logic ---
                     try

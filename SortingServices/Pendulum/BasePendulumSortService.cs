@@ -1098,15 +1098,18 @@ public abstract class BasePendulumSortService : IPendulumSortService
     protected readonly struct PendulumCommands
     {
         // 二代模块命令，使用静态属性
-        public static PendulumCommands Module2 => new()
+        public static PendulumCommands Module2
         {
-            Start = "AT+STACH1=1",
-            Stop = "AT+STACH1=0",
-            SwingLeft = "AT+STACH2=1",
-            ResetLeft = "AT+STACH2=0",
-            SwingRight = "AT+STACH3=1",
-            ResetRight = "AT+STACH3=0"
-        };
+            get => new()
+            {
+                Start = "AT+STACH1=1",
+                Stop = "AT+STACH1=0",
+                SwingLeft = "AT+STACH2=1",
+                ResetLeft = "AT+STACH2=0",
+                SwingRight = "AT+STACH3=1",
+                ResetRight = "AT+STACH3=0"
+            };
+        }
 
         public string Start { get; private init; }
         public string Stop { get; private init; }
@@ -1328,8 +1331,8 @@ public abstract class BasePendulumSortService : IPendulumSortService
         try
         {
             // 检查当前状态，如果已经是复位状态，仍然发送一次回正命令确保状态同步
-            var resetCommand = string.Empty;
-            var resetDirection = "通用";
+            string resetCommand;
+            string resetDirection;
 
             // 根据当前状态选择合适的回正命令，如果状态未知则发送两个回正命令
             if (pendulumState.CurrentDirection == PendulumDirection.SwingingLeft)
@@ -1346,14 +1349,14 @@ public abstract class BasePendulumSortService : IPendulumSortService
             {
                 // 状态未知或已经复位，发送双重回正命令以确保安全
                 Log.Debug("摆轮状态未知或已复位，发送双重回正命令确保安全");
-                
+
                 var resetLeftBytes = GetCommandBytes(PendulumCommands.Module2.ResetLeft);
                 var resetRightBytes = GetCommandBytes(PendulumCommands.Module2.ResetRight);
-                
+
                 await SendCommandWithRetryAsync(client, resetLeftBytes, photoelectricName, maxRetries: 1);
                 await Task.Delay(10); // 短暂延迟
                 await SendCommandWithRetryAsync(client, resetRightBytes, photoelectricName, maxRetries: 1);
-                
+
                 pendulumState.SetReset();
                 Log.Information("预防性双重回正命令发送完成 (光电: {Name})", photoelectricName);
                 return;
