@@ -213,6 +213,13 @@ public class PackageInfo : IDisposable
     public PackageSortState SortState { get; private set; }
 
     /// <summary>
+    ///     标记此包裹是否是前一个相同格口包裹的延续。
+    ///     如果为 true，则意味着上一个包裹特意没有回正，为本包裹保留了摆轮状态。
+    ///     这是"责任接力棒"机制的核心，用于解决连续相同格口包裹的状态传递问题。
+    /// </summary>
+    public bool IsChuteContinuation { get; set; } = false;
+
+    /// <summary>
     ///     释放资源
     /// </summary>
     public void Dispose()

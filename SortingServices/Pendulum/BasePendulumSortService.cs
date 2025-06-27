@@ -956,6 +956,12 @@ public abstract class BasePendulumSortService : IPendulumSortService
             {
                 Log.Information("检测到连续相同格口包裹 {NextIndex}|{NextBarcode} (格口: {NextChute})，将跳过回正.",
                     nextPackage.Index, nextPackage.Barcode, nextPackage.ChuteNumber);
+                
+                // --- 新增逻辑：传递责任接力棒 ---
+                // 明确告知下一个包裹，它是一个延续。
+                nextPackage.IsChuteContinuation = true;
+                Log.Debug("已为包裹 {NextIndex}|{NextBarcode} 设置 IsChuteContinuation 标记.", nextPackage.Index, nextPackage.Barcode);
+                
                 return true;
             }
 
@@ -997,8 +1003,14 @@ public abstract class BasePendulumSortService : IPendulumSortService
         // 2. 检查格口关系
         if (nextPackage.ChuteNumber == currentPackage.ChuteNumber)
         {
-            Log.Information("新包裹与当前包裹格口相同 (格口: {Chute})，跳过回正，直接处理新包裹",
+            Log.Information("新包裹与当前包裹格口相同 (格口: {Chute})，将跳过回正，并传递状态.",
                 nextPackage.ChuteNumber);
+                
+            // --- 新增逻辑：传递责任接力棒 ---
+            // 明确告知下一个包裹，它是一个延续。
+            nextPackage.IsChuteContinuation = true;
+            Log.Debug("已为包裹 {NextIndex}|{NextBarcode} 设置 IsChuteContinuation 标记.", nextPackage.Index, nextPackage.Barcode);
+
             // 因为摆轮状态不变，直接将新包裹的动作入队即可
             EnqueueSortingAction(nextPackage, photoelectricName);
         }
@@ -1279,7 +1291,17 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// </summary>
     private async Task ExecutePreventiveReset(TcpClientService client, PendulumState pendulumState, string photoelectricName, PackageInfo package)
     {
+        // --- 新增逻辑：检查责任接力棒 ---
+        if (package.IsChuteContinuation)
+        {
+            Log.Information("包裹 {Index}|{Barcode} 是连续包 (IsChuteContinuation=true)，跳过预防性回正，继承上一个包裹的摆轮状态.", 
+                package.Index, package.Barcode);
+            // 因为是延续，所以不需要做任何操作，直接返回。
+            return;
+        }
+
         // === 智能预防性回正优化 ===
+        // (注意：这部分逻辑现在只对非连续包生效，这是正确的)
         // 检查新包裹的摆动方向是否与摆轮当前状态一致
         if (ShouldSwingLeft(package.ChuteNumber) && pendulumState.CurrentDirection == PendulumDirection.SwingingLeft)
         {
