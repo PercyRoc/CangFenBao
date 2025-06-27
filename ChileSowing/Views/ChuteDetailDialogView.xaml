@@ -7,6 +7,7 @@
                  mc:Ignorable="d"
                  xmlns:local="clr-namespace:ChileSowing.ViewModels"
                  xmlns:mvvm="http://prismlibrary.com/"
+                 xmlns:lex="http://wpflocalizeextension.codeplex.com"
                  d:DataContext="{d:DesignInstance local:ChuteDetailDialogViewModel}"
                  mvvm:ViewModelLocator.AutoWireViewModel="True">
     
@@ -33,7 +34,7 @@
         <StackPanel Grid.Row="2" 
                     Orientation="Horizontal" 
                     HorizontalAlignment="Right">
-            <ui:Button Content="Close"
+            <ui:Button Content="{lex:Loc Button_Close}"
                        Appearance="Primary"
                        Command="{Binding CloseCommand}"/>
         </StackPanel>

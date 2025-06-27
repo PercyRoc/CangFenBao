@@ -9,6 +9,7 @@
              xmlns:viewModels="clr-namespace:ChileSowing.ViewModels"
              xmlns:settings="clr-namespace:SowingSorting.Views.Settings;assembly=SowingSorting"
              xmlns:commonViews="clr-namespace:Common.Views.Settings.ChuteRules;assembly=Common"
+             xmlns:lex="http://wpflocalizeextension.codeplex.com"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
              d:DesignWidth="1280"
@@ -32,14 +33,14 @@
                                    Name="RootNavigation">
 
                     <ui:NavigationView.MenuItems>
-                        <ui:NavigationViewItem Content="TCP Modbus Settings"
+                        <ui:NavigationViewItem Content="{lex:Loc Settings_ModbusTcp}"
                                                Tag="ModulesTcpSettingsView"
                                                Icon="{ui:SymbolIcon NetworkCheck24}">
                             <ui:NavigationViewItem.TargetPageType>
                                 <x:Type Type="settings:ModbusTcpSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
-                        <ui:NavigationViewItem Content="Chute Rule Settings"
+                        <ui:NavigationViewItem Content="{lex:Loc Settings_ChuteRule}"
                                                Tag="ChuteRuleSettingsView"
                                                Icon="{ui:SymbolIcon Filter24}">
                             <ui:NavigationViewItem.TargetPageType>
@@ -59,14 +60,14 @@
                                Margin="0,0,8,0">
                         <StackPanel Orientation="Horizontal">
                             <ui:SymbolIcon Symbol="Save24" Margin="0,0,8,0" />
-                            <TextBlock Text="保存" />
+                            <TextBlock Text="{lex:Loc Button_Save}" />
                         </StackPanel>
                     </ui:Button>
                     <ui:Button Appearance="Secondary"
                                Command="{Binding CancelCommand}">
                         <StackPanel Orientation="Horizontal">
                             <ui:SymbolIcon Symbol="Dismiss24" Margin="0,0,8,0" />
-                            <TextBlock Text="取消" />
+                            <TextBlock Text="{lex:Loc Button_Cancel}" />
                         </StackPanel>
                     </ui:Button>
                 </StackPanel>

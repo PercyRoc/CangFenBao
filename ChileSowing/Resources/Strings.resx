@@ -116,4 +116,32 @@
     <data name="Tooltip_History" xml:space="preserve">
         <value>历史</value>
     </data>
+    
+    <!-- 设置对话框 -->
+    <data name="Settings_ModbusTcp" xml:space="preserve">
+        <value>TCP Modbus 设置</value>
+    </data>
+    <data name="Settings_ChuteRule" xml:space="preserve">
+        <value>格口规则设置</value>
+    </data>
+    <data name="Button_Save" xml:space="preserve">
+        <value>保存</value>
+    </data>
+    <data name="Button_Cancel" xml:space="preserve">
+        <value>取消</value>
+    </data>
+    <data name="Button_Close" xml:space="preserve">
+        <value>关闭</value>
+    </data>
+    
+    <!-- 语言设置 -->
+    <data name="Menu_Language" xml:space="preserve">
+        <value>语言</value>
+    </data>
+    <data name="Language_English" xml:space="preserve">
+        <value>English</value>
+    </data>
+    <data name="Language_Chinese" xml:space="preserve">
+        <value>简体中文</value>
+    </data>
 </root> 

@@ -9,6 +9,8 @@ using History.Data;
 using Common.Services.Ui;
 using System.Diagnostics;
 using Common.Models;
+using ChileSowing.Services;
+using System.Globalization;
 
 namespace ChileSowing.ViewModels;
 
@@ -19,6 +21,7 @@ public class MainViewModel : BindableBase, IDisposable
     private readonly ISettingsService _settingsService;
     private readonly IPackageHistoryDataService _historyService;
     private readonly INotificationService _notificationService;
+    private readonly ILanguageService _languageService;
     private readonly DispatcherTimer _timer;
     private bool _disposed;
     private string _currentSkuInput = string.Empty;
@@ -45,18 +48,20 @@ public class MainViewModel : BindableBase, IDisposable
     private const string DefaultChuteColor = "#FFFFFF"; // 白色
     private const string HighlightChuteColor = "#4CAF50"; // 绿色
 
-    public MainViewModel(IDialogService dialogService, IModbusTcpService modbusTcpService, ISettingsService settingsService, IPackageHistoryDataService historyService, INotificationService notificationService)
+    public MainViewModel(IDialogService dialogService, IModbusTcpService modbusTcpService, ISettingsService settingsService, IPackageHistoryDataService historyService, INotificationService notificationService, ILanguageService languageService)
     {
         _dialogService = dialogService;
         _modbusTcpService = modbusTcpService;
         _settingsService = settingsService;
         _historyService = historyService;
         _notificationService = notificationService;
+        _languageService = languageService;
 
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
         ViewHistoryCommand = new DelegateCommand(ExecuteViewHistory);
         ProcessSkuCommand = new DelegateCommand<string>(ExecuteProcessSku);
         ShowChutePackagesCommand = new DelegateCommand<ChuteViewModel>(ShowChutePackages);
+        ChangeLanguageCommand = new DelegateCommand<string>(ExecuteChangeLanguage);
 
         InitializeChutes();
         InitializePackageInfo();
@@ -122,12 +127,23 @@ public class MainViewModel : BindableBase, IDisposable
 
     public ICommand ShowChutePackagesCommand { get; }
 
+    /// <summary>
+    /// 当前语言
+    /// </summary>
+    public CultureInfo CurrentLanguage => _languageService.CurrentLanguage;
+
+    /// <summary>
+    /// 支持的语言列表
+    /// </summary>
+    public Dictionary<string, string> SupportedLanguages => _languageService.SupportedLanguages;
+
     #endregion
 
     #region 命令
 
     public ICommand OpenSettingsCommand { get; }
     public DelegateCommand ViewHistoryCommand { get; }
+    public ICommand ChangeLanguageCommand { get; }
 
     #endregion
 
@@ -172,6 +188,25 @@ public class MainViewModel : BindableBase, IDisposable
             { "skus", chute.Skus }
         };
         _dialogService.ShowDialog("ChuteDetailDialogView", parameters, _ => { });
+    }
+
+    private void ExecuteChangeLanguage(string languageCode)
+    {
+        if (string.IsNullOrEmpty(languageCode)) return;
+        
+        try
+        {
+            _languageService.ChangeLanguage(languageCode);
+            _notificationService.ShowSuccess($"Language changed to {_languageService.SupportedLanguages[languageCode]}");
+            
+            // 通知属性变更
+            RaisePropertyChanged(nameof(CurrentLanguage));
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to change language to {LanguageCode}", languageCode);
+            _notificationService.ShowError("Failed to change language");
+        }
     }
 
     #endregion

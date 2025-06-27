@@ -71,4 +71,32 @@
     <data name="Tooltip_History" xml:space="preserve">
         <value>History</value>
     </data>
+    
+    <!-- Settings Dialog -->
+    <data name="Settings_ModbusTcp" xml:space="preserve">
+        <value>TCP Modbus Settings</value>
+    </data>
+    <data name="Settings_ChuteRule" xml:space="preserve">
+        <value>Chute Rule Settings</value>
+    </data>
+    <data name="Button_Save" xml:space="preserve">
+        <value>Save</value>
+    </data>
+    <data name="Button_Cancel" xml:space="preserve">
+        <value>Cancel</value>
+    </data>
+    <data name="Button_Close" xml:space="preserve">
+        <value>Close</value>
+    </data>
+    
+    <!-- Language Settings -->
+    <data name="Menu_Language" xml:space="preserve">
+        <value>Language</value>
+    </data>
+    <data name="Language_English" xml:space="preserve">
+        <value>English</value>
+    </data>
+    <data name="Language_Chinese" xml:space="preserve">
+        <value>简体中文</value>
+    </data>
 </root> 

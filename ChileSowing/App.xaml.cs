@@ -11,6 +11,7 @@ using SowingSorting.Services;
 using WPFLocalizeExtension.Engine;
 using System.Globalization;
 using Common;
+using ChileSowing.Services;
 
 namespace ChileSowing;
 
@@ -48,30 +49,7 @@ public partial class App
             Environment.Exit(0);
         }
 
-        // 设置WPFLocalizeExtension默认语言为英文
-        try
-        {
-            var culture = new CultureInfo("en-US");
-            LocalizeDictionary.Instance.Culture = culture;
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "设置WPFLocalizeExtension默认语言时发生错误");
-        }
-
         base.OnStartup(e);
-
-        // Set application culture to English
-        try
-        {
-            var culture = new CultureInfo("en-US");
-            LocalizeDictionary.Instance.Culture = culture;
-            Log.Information("Application culture set to {CultureName}", culture.Name);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "Error setting application culture");
-        }
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -126,6 +104,7 @@ public partial class App
         containerRegistry.RegisterSingleton<ISettingsService, SettingsService>();
         containerRegistry.RegisterSingleton<INotificationService, NotificationService>();
         containerRegistry.RegisterSingleton<IModbusTcpService, ModbusTcpService>();
+        containerRegistry.RegisterSingleton<ILanguageService, LanguageService>();
     }
 
     protected override void ConfigureModuleCatalog(IModuleCatalog moduleCatalog)
@@ -141,6 +120,11 @@ public partial class App
     protected override async void OnInitialized()
     {
         base.OnInitialized();
+        
+        // 初始化语言服务
+        var languageService = Container.Resolve<ILanguageService>();
+        Log.Information("Language service initialized with current language: {Language}", languageService.CurrentLanguage.Name);
+        
         var historyService = Container.Resolve<History.Data.IPackageHistoryDataService>();
         await historyService.InitializeAsync();
     }
