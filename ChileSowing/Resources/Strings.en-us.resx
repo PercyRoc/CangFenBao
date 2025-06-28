@@ -55,10 +55,10 @@
     
     <!-- Status Bar -->
     <data name="Status_CPU" xml:space="preserve">
-        <value>CPU: {0:F1}%</value>
+        <value>CPU: </value>
     </data>
     <data name="Status_Memory" xml:space="preserve">
-        <value>Memory: {0:F1}%</value>
+        <value>Memory: </value>
     </data>
     <data name="Status_Uptime" xml:space="preserve">
         <value>Uptime: </value>
@@ -87,16 +87,5 @@
     </data>
     <data name="Button_Close" xml:space="preserve">
         <value>Close</value>
-    </data>
-    
-    <!-- Language Settings -->
-    <data name="Menu_Language" xml:space="preserve">
-        <value>Language</value>
-    </data>
-    <data name="Language_English" xml:space="preserve">
-        <value>English</value>
-    </data>
-    <data name="Language_Chinese" xml:space="preserve">
-        <value>简体中文</value>
     </data>
 </root> 

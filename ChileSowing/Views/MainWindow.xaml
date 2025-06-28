@@ -33,7 +33,6 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
@@ -66,30 +65,8 @@
                 </StackPanel>
             </ui:Button>
 
-            <!-- Language Menu -->
-            <ui:Button Grid.Column="3" Appearance="Secondary" Margin="0,0,8,0" Padding="8,6" ToolTip="{lex:Loc Menu_Language}">
-                <ui:Button.Flyout>
-                    <ui:MenuFlyout>
-                        <ui:MenuItem Header="{lex:Loc Language_English}" Command="{Binding ChangeLanguageCommand}" CommandParameter="en-US">
-                            <ui:MenuItem.Icon>
-                                <ui:SymbolIcon Symbol="LocalLanguage24" />
-                            </ui:MenuItem.Icon>
-                        </ui:MenuItem>
-                        <ui:MenuItem Header="{lex:Loc Language_Chinese}" Command="{Binding ChangeLanguageCommand}" CommandParameter="zh-CN">
-                            <ui:MenuItem.Icon>
-                                <ui:SymbolIcon Symbol="LocalLanguage24" />
-                            </ui:MenuItem.Icon>
-                        </ui:MenuItem>
-                    </ui:MenuFlyout>
-                </ui:Button.Flyout>
-                <StackPanel Orientation="Horizontal">
-                    <ui:SymbolIcon Symbol="LocalLanguage24" Margin="0,0,8,0" />
-                    <TextBlock Text="{lex:Loc Menu_Language}" VerticalAlignment="Center" />
-                </StackPanel>
-            </ui:Button>
-
             <!-- Title -->
-            <TextBlock Grid.Column="4" Text="{lex:Loc Window_Title}" HorizontalAlignment="Center" VerticalAlignment="Center"
+            <TextBlock Grid.Column="3" Text="{lex:Loc Window_Title}" HorizontalAlignment="Center" VerticalAlignment="Center"
                        Margin="0,0,8,0" FontSize="20" FontFamily="Microsoft YaHei" FontWeight="SemiBold"
                        TextOptions.TextFormattingMode="Display" Foreground="black"
                        TextOptions.TextRenderingMode="ClearType">
@@ -99,9 +76,9 @@
             </TextBlock>
 
             <!-- TitleBar Controls -->
-            <ui:TitleBar Grid.Column="5" Title="" ShowMaximize="True" ShowMinimize="True" ShowClose="True" />
+            <ui:TitleBar Grid.Column="4" Title="" ShowMaximize="True" ShowMinimize="True" ShowClose="True" />
 
-            <Border Grid.Column="0" Grid.ColumnSpan="6" Height="1" VerticalAlignment="Bottom"
+            <Border Grid.Column="0" Grid.ColumnSpan="5" Height="1" VerticalAlignment="Bottom"
                     Background="#20008080" BorderBrush="#40FFFFFF" BorderThickness="0,0,0,1" />
         </Grid>
 
@@ -322,18 +299,22 @@
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="8,0">
                     <ui:SymbolIcon Symbol="DeviceEq24" FontSize="14" Margin="0,0,4,0"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                    <TextBlock Text="{Binding SystemStatusObj.CpuUsage, StringFormat={x:Static lex:Loc Status_CPU}}"
-                               VerticalAlignment="Center" FontSize="12"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <TextBlock VerticalAlignment="Center" FontSize="12"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                        <Run Text="{lex:Loc Status_CPU}" />
+                        <Run Text="{Binding SystemStatusObj.CpuUsage, StringFormat={}{0:F1}%}" />
+                    </TextBlock>
                 </StackPanel>
 
                 <!-- Memory Status -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0">
                     <ui:SymbolIcon Symbol="Memory16" FontSize="14" Margin="0,0,4,0"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                    <TextBlock Text="{Binding SystemStatusObj.MemoryUsage, StringFormat={x:Static lex:Loc Status_Memory}}"
-                               VerticalAlignment="Center" FontSize="12"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <TextBlock VerticalAlignment="Center" FontSize="12"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                        <Run Text="{lex:Loc Status_Memory}" />
+                        <Run Text="{Binding SystemStatusObj.MemoryUsage, StringFormat={}{0:F1}%}" />
+                    </TextBlock>
                 </StackPanel>
 
                 <!-- Disk Status -->

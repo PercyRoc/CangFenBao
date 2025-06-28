@@ -100,10 +100,10 @@
     
     <!-- 状态栏 -->
     <data name="Status_CPU" xml:space="preserve">
-        <value>CPU：{0:F1}%</value>
+        <value>CPU: </value>
     </data>
     <data name="Status_Memory" xml:space="preserve">
-        <value>内存：{0:F1}%</value>
+        <value>内存: </value>
     </data>
     <data name="Status_Uptime" xml:space="preserve">
         <value>运行时间：</value>
@@ -132,16 +132,5 @@
     </data>
     <data name="Button_Close" xml:space="preserve">
         <value>关闭</value>
-    </data>
-    
-    <!-- 语言设置 -->
-    <data name="Menu_Language" xml:space="preserve">
-        <value>语言</value>
-    </data>
-    <data name="Language_English" xml:space="preserve">
-        <value>English</value>
-    </data>
-    <data name="Language_Chinese" xml:space="preserve">
-        <value>简体中文</value>
     </data>
 </root> 
