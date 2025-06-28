@@ -30,6 +30,9 @@ using Common.Services.Validation;
 using SharedUI.Views.Windows;
 using WPFLocalizeExtension.Engine;
 using WPFLocalizeExtension.Providers;
+using System.Text;
+using SharedUI.ViewModels;
+using SharedUI.Views.Dialogs;
 
 namespace BenFly;
 
@@ -65,6 +68,8 @@ public partial class App
 
         // 注册串口服务
         containerRegistry.RegisterSingleton<BeltSerialService>();
+        containerRegistry.RegisterDialog<HistoryDialogView, HistoryDialogViewModel>("HistoryDialog");
+        containerRegistry.RegisterDialogWindow<HistoryDialogWindow>();
 
         // 注册 HttpClient
         var services = new ServiceCollection();
@@ -127,8 +132,8 @@ public partial class App
         catch (Exception ex)
         {
             // Mutex创建或获取失败
-            Log.Error(ex, "检查应用程序实例时发生错误");
-            MessageBox.Show($"启动程序时发生错误: {ex.Message}", "错误", MessageBoxButton.OK,
+            LogUnhandledException(ex, "Mutex Creation/Check Error");
+            MessageBox.Show($"Startup error: {ex.Message}", "Error", MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Current.Shutdown();
             return null!;
@@ -162,7 +167,9 @@ public partial class App
 
         // 注册全局异常处理
         DispatcherUnhandledException += App_DispatcherUnhandledException;
-        Log.Information("DispatcherUnhandledException handler attached.");
+        AppDomain.CurrentDomain.UnhandledException += App_UnhandledException;
+        TaskScheduler.UnobservedTaskException += App_UnobservedTaskException;
+        Log.Information("全局异常处理程序已注册 (DispatcherUnhandledException, UnhandledException, UnobservedTaskException)");
         
         // 手动启动后台服务
         StartBackgroundServices(); 
@@ -247,7 +254,7 @@ public partial class App
         }
         catch (Exception ex)
         {
-            Log.Fatal(ex, "应用程序退出过程中发生未处理的异常");
+            LogUnhandledException(ex, "Application Exit Error", true);
             // 即使出错也要确保应用程序能够退出
         }
     }
@@ -269,7 +276,7 @@ public partial class App
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "调用 base.OnExit 或停止清理定时器时发生错误");
+            LogUnhandledException(ex, "Base OnExit or Timer Stop Error");
         }
         finally
         {
@@ -289,7 +296,7 @@ public partial class App
                 }
             }
             catch (Exception ex)
-            { Log.Error(ex, "释放Mutex时发生错误"); }
+            { LogUnhandledException(ex, "Mutex Release Error"); }
             
             // 等待所有日志写入完成
             await Log.CloseAndFlushAsync();
@@ -310,13 +317,120 @@ public partial class App
     }
 
     /// <summary>
-    /// 全局未处理异常处理程序
+    /// 全局未处理异常处理程序 (UI线程)
     /// </summary>
     private static void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
-        Log.Fatal(e.Exception, "Unhandled Dispatcher Exception Caught by App.xaml.cs"); // 使用 Fatal 级别
-        MessageBox.Show($"发生未处理的严重错误: {e.Exception.Message}\n\n应用程序可能不稳定，建议重启。请联系技术支持并提供日志文件。", "应用程序错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        LogUnhandledException(e.Exception, "Unhandled Dispatcher Exception");
+        MessageBox.Show($"An unhandled error occurred: {e.Exception.Message}\n\nApplication may be unstable. Please restart and contact technical support with log files.", "Application Error", MessageBoxButton.OK, MessageBoxImage.Error);
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// 应用程序域未处理异常处理程序 (非UI线程)
+    /// </summary>
+    private static void App_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+    {
+        var exception = e.ExceptionObject as Exception ?? new Exception($"Unknown exception object: {e.ExceptionObject}");
+        LogUnhandledException(exception, "Unhandled AppDomain Exception", e.IsTerminating);
+        
+        if (e.IsTerminating)
+        {
+            // 应用程序即将终止，尝试显示错误信息
+            try
+            {
+                MessageBox.Show($"A fatal error occurred: {exception.Message}\n\nApplication will terminate. Please contact technical support with log files.", "Fatal Application Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            catch
+            {
+                // 如果无法显示MessageBox，忽略错误
+            }
+        }
+    }
+
+    /// <summary>
+    /// Task未观察异常处理程序
+    /// </summary>
+    private static void App_UnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    {
+        LogUnhandledException(e.Exception, "Unobserved Task Exception");
+        e.SetObserved(); // 标记异常已被观察，防止应用程序崩溃
+    }
+
+    /// <summary>
+    /// 统一的异常日志记录方法，包含备份日志记录机制
+    /// </summary>
+    private static void LogUnhandledException(Exception exception, string source, bool isTerminating = false)
+    {
+        var logMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {source} - IsTerminating: {isTerminating}\n" +
+                        $"Exception Type: {exception.GetType().FullName}\n" +
+                        $"Message: {exception.Message}\n" +
+                        $"StackTrace:\n{exception.StackTrace}\n";
+
+        if (exception.InnerException != null)
+        {
+            logMessage += $"Inner Exception: {exception.InnerException.GetType().FullName}\n" +
+                         $"Inner Message: {exception.InnerException.Message}\n" +
+                         $"Inner StackTrace:\n{exception.InnerException.StackTrace}\n";
+        }
+
+        logMessage += new string('=', 80) + "\n";
+
+        // 尝试使用Serilog记录异常
+        try
+        {
+            Log.Fatal(exception, "{Source} - IsTerminating: {IsTerminating}", source, isTerminating);
+        }
+        catch
+        {
+            // Serilog记录失败，使用备份日志
+        }
+
+        // 备份日志记录机制 - 直接写入文件
+        WriteToBackupLog(logMessage);
+    }
+
+    /// <summary>
+    /// 备份日志记录方法，当Serilog无法工作时使用
+    /// </summary>
+    private static void WriteToBackupLog(string logMessage)
+    {
+        try
+        {
+            var logDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs");
+            Directory.CreateDirectory(logDirectory);
+            
+            var backupLogFile = Path.Combine(logDirectory, $"unhandled-exceptions-{DateTime.Now:yyyy-MM-dd}.log");
+            
+            // 使用FileStream确保线程安全的写入
+            using var fileStream = new FileStream(backupLogFile, FileMode.Append, FileAccess.Write, FileShare.Read);
+            using var writer = new StreamWriter(fileStream, Encoding.UTF8);
+            writer.WriteLine(logMessage);
+            writer.Flush();
+        }
+        catch
+        {
+            // 如果备份日志也无法写入，尝试写入Windows事件日志
+            try
+            {
+                var eventLog = new EventLog("Application");
+                eventLog.Source = "BenFly Application";
+                eventLog.WriteEntry($"Failed to write to backup log. Original message:\n{logMessage}", EventLogEntryType.Error);
+            }
+            catch
+            {
+                // 最后的手段：尝试写入临时文件
+                try
+                {
+                    var tempLogFile = Path.Combine(Path.GetTempPath(), $"BenFly_CriticalError_{DateTime.Now:yyyyMMdd_HHmmss}.log");
+                    File.WriteAllText(tempLogFile, logMessage, Encoding.UTF8);
+                }
+                catch
+                {
+                    // 如果所有方法都失败，只能放弃记录
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -345,12 +459,12 @@ public partial class App
             // 启动相机托管服务
             var cameraStartupService = Container.Resolve<CameraStartupService>();
             _ = Task.Run(() => cameraStartupService.StartAsync(CancellationToken.None))
-                   .ContinueWith(t => Log.Error(t.Exception, "启动 CameraStartupService 时出错"), TaskContinuationOptions.OnlyOnFaulted);
+                   .ContinueWith(t => LogUnhandledException(t.Exception!, "CameraStartupService Start Error"), TaskContinuationOptions.OnlyOnFaulted);
 
             // 启动摆轮分拣托管服务
             var pendulumHostedService = Container.Resolve<PendulumSortHostedService>();
             _ = Task.Run(() => pendulumHostedService.StartAsync(CancellationToken.None))
-                   .ContinueWith(t => Log.Error(t.Exception, "启动 PendulumSortHostedService 时出错"), TaskContinuationOptions.OnlyOnFaulted);
+                   .ContinueWith(t => LogUnhandledException(t.Exception!, "PendulumSortHostedService Start Error"), TaskContinuationOptions.OnlyOnFaulted);
 
             // 获取皮带设置并启动串口托管服务（如果启用）
             var settingsService = Container.Resolve<Common.Services.Settings.ISettingsService>();
@@ -371,8 +485,8 @@ public partial class App
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "解析或发起后台服务启动时出错。可能无法启动部分或全部服务。");
-            MessageBox.Show($"启动后台服务时发生错误: {ex.Message}\n请检查配置和设备连接。", "启动错误", MessageBoxButton.OK, MessageBoxImage.Warning);
+            LogUnhandledException(ex, "Background Services Startup Error");
+            MessageBox.Show($"Error starting background services: {ex.Message}\n\nPlease check configuration and device connections.", "Startup Error", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         finally
         {            
@@ -414,7 +528,7 @@ public partial class App
         }
         catch (Exception ex)
         {
-            Log.Fatal(ex, "主窗口关闭过程中发生未处理的异常");
+            LogUnhandledException(ex, "MainWindow Closing Error", true);
             // 确保应用程序能够关闭，即使出错也要执行shutdown
             try
             {
@@ -422,7 +536,7 @@ public partial class App
             }
             catch (Exception shutdownEx)
             {
-                Log.Fatal(shutdownEx, "强制关闭应用程序时发生异常");
+                LogUnhandledException(shutdownEx, "Forced Shutdown Error", true);
                 Environment.Exit(1); // 最后的手段
             }
         }
@@ -466,7 +580,7 @@ public partial class App
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "执行后台清理任务时发生错误");
+            LogUnhandledException(ex, "Background Cleanup Error");
             // 即使出错，也要尝试关闭
         }
         finally
@@ -503,7 +617,7 @@ public partial class App
             if (pendulumHostedService != null)
             {
                 tasks.Add(Task.Run(() => pendulumHostedService.StopAsync(CancellationToken.None))
-                           .ContinueWith(t => Log.Error(t.Exception, "停止 PendulumSortHostedService 时出错"), TaskContinuationOptions.OnlyOnFaulted));
+                           .ContinueWith(t => LogUnhandledException(t.Exception!, "PendulumSortHostedService Stop Error"), TaskContinuationOptions.OnlyOnFaulted));
             }
 
             // 停止相机托管服务
@@ -511,7 +625,7 @@ public partial class App
             if (cameraStartupService != null)
             {
                 tasks.Add(Task.Run(() => cameraStartupService.StopAsync(CancellationToken.None))
-                           .ContinueWith(t => Log.Error(t.Exception, "停止 CameraStartupService 时出错"), TaskContinuationOptions.OnlyOnFaulted));
+                           .ContinueWith(t => LogUnhandledException(t.Exception!, "CameraStartupService Stop Error"), TaskContinuationOptions.OnlyOnFaulted));
             }
 
             // 获取皮带设置并停止串口托管服务（如果启用）
@@ -522,7 +636,7 @@ public partial class App
             {
                 // StopBelt 可能不是异步的
                 try { beltSerialService.StopBelt(); Log.Information("皮带串口服务已停止"); }
-                catch (Exception ex) { Log.Error(ex, "停止 BeltSerialService 时出错"); }
+                catch (Exception ex) { LogUnhandledException(ex, "BeltSerialService Stop Error"); }
             }
             else
             {
@@ -546,7 +660,7 @@ public partial class App
             }
             catch(Exception ex) 
             { 
-                Log.Error(ex, "清理相机或串口资源时出错"); 
+                LogUnhandledException(ex, "Camera/Serial Resources Cleanup Error"); 
             }
 
             if (tasks.Count != 0 && waitForCompletion)
@@ -566,15 +680,26 @@ public partial class App
                 }
                 catch (AggregateException aex)
                 {
-                    Log.Error(aex, "等待后台服务停止时发生聚合错误。");
-                    foreach(var innerEx in aex.InnerExceptions)
+                    // 检查是否所有内部异常都是任务取消异常
+                    var allCanceled = aex.InnerExceptions.All(ex => ex is TaskCanceledException or OperationCanceledException);
+                    
+                    if (allCanceled)
                     {
-                        Log.Error(innerEx, "  内部停止错误:");
+                        Log.Information("后台服务停止时任务被正常取消，这是应用程序关闭时的预期行为");
+                    }
+                    else
+                    {
+                        // 记录非取消类型的异常
+                        LogUnhandledException(aex, "Background Services Stop Aggregate Error");
+                        foreach(var innerEx in aex.InnerExceptions.Where(ex => ex is not TaskCanceledException and not OperationCanceledException))
+                        {
+                            LogUnhandledException(innerEx, "Background Services Stop Inner Error");
+                        }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "等待后台服务停止时发生错误。");
+                    LogUnhandledException(ex, "Background Services Stop Wait Error");
                 }
             }
             else if (!waitForCompletion)
@@ -584,7 +709,7 @@ public partial class App
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "解析或发起后台服务停止时出错。可能无法完全停止服务。");
+            LogUnhandledException(ex, "Background Services Stop Error");
         }
         Log.Information("StopBackgroundServices 方法执行完毕。 ");
     }

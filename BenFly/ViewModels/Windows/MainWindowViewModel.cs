@@ -53,6 +53,10 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private readonly BeltSerialService _beltSerialService;
 
+    // 统计计数器 - 使用线程安全的方式
+    private long _totalPackageCount = 0;
+    private long _errorPackageCount = 0;
+
     public MainWindowViewModel(
         IDialogService dialogService,
         ICameraService cameraService,
@@ -721,6 +725,13 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
             // ****** 更新UI和数据库 ******
 
+            // 更新统计计数器（线程安全）
+            Interlocked.Increment(ref _totalPackageCount);
+            if (package.Status is PackageStatus.Error or PackageStatus.NoRead)
+            {
+                Interlocked.Increment(ref _errorPackageCount);
+            }
+
             // 更新UI显示
             await Application.Current.Dispatcher.InvokeAsync(() =>
             {
@@ -876,8 +887,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         var totalItem = StatisticsItems.FirstOrDefault(static x => x.Label == "总包裹数");
         if (totalItem != null)
         {
-            // 计算所有已处理的包裹总数
-            var totalCount = PackageHistory.Count;
+            // 使用线程安全的计数器统计总数
+            var totalCount = Interlocked.Read(ref _totalPackageCount);
             totalItem.Value = totalCount.ToString();
             totalItem.Description = $"累计处理 {totalCount} 个包裹";
         }
@@ -885,9 +896,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         var errorItem = StatisticsItems.FirstOrDefault(static x => x.Label == "异常数");
         if (errorItem != null)
         {
-            // 根据包裹状态统计异常数量（Error或NoRead状态的包裹）
-            var errorCount = PackageHistory.Count(p => 
-                p.Status is PackageStatus.Error or PackageStatus.NoRead);
+            // 使用线程安全的计数器统计异常数
+            var errorCount = Interlocked.Read(ref _errorPackageCount);
             errorItem.Value = errorCount.ToString();
             errorItem.Description = $"共有 {errorCount} 个异常包裹（包括错误和NoRead）";
         }

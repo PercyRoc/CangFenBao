@@ -19,9 +19,6 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
     // 记录光电信号状态的字典，true 表示高电平，false 表示低电平
     private readonly ConcurrentDictionary<string, bool> _photoelectricSignalStates = new();
 
-    // 记录上一次信号状态的字典
-    private readonly ConcurrentDictionary<string, bool> _previousPhotoelectricSignalStates = new();
-
     public override Task InitializeAsync(PendulumSortConfig configuration)
     {
         // 初始化触发光电连接
@@ -48,7 +45,6 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
 
         // 初始化光电信号状态
         _photoelectricSignalStates["触发光电"] = false;
-        _previousPhotoelectricSignalStates["触发光电"] = false;
 
         Log.Information("单光电单摆轮分拣服务初始化完成");
         return Task.CompletedTask;
@@ -282,8 +278,13 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
 
     protected override string? GetPhotoelectricNameBySlot(int slot)
     {
-        // 单光电单摆轮模式下，所有格口都属于同一个光电
-        return "默认";
+        // 单光电单摆轮模式下，只处理1号和2号格口。其他格口为直行。
+        if (slot is 1 or 2)
+        {
+            return "默认";
+        }
+        // 对于所有其他格口，返回null，这些包裹将被视为直行包裹
+        return null;
     }
 
     protected override bool TryGetActionChannel(string photoelectricName, out ChannelWriter<Func<Task>>? writer)
@@ -312,36 +313,19 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
     /// <param name="isHighLevel">是否为高电平</param>
     private void UpdatePhotoelectricSignalState(string photoelectricName, bool isHighLevel)
     {
-        // 获取上一次的信号状态
-        _previousPhotoelectricSignalStates.TryGetValue(photoelectricName, out var previousState);
+        // 获取当前记录的信号状态，如果不存在则默认为false（低电平）
+        var currentState = _photoelectricSignalStates.GetValueOrDefault(photoelectricName, false);
 
-        // 如果当前是低电平，且上一次也是低电平，将第二次低电平视为高电平处理
-        if (!isHighLevel && !previousState)
+        // 检查是否为连续两次低电平：当前记录状态为低电平，且新信号也是低电平
+        if (!currentState && !isHighLevel)
         {
-            Log.Warning("光电 {Name} 连续收到两个低电平信号，将第二次低电平视为一次高电平处理", photoelectricName);
-            
-            try
-            {
-                // 构造一个模拟的高电平信号数据
-                var fakeHighLevelMsg = "OCCH2:1"; // 单摆轮使用OCCH2:1作为分拣信号
-                var fakeHighLevelData = Encoding.ASCII.GetBytes(fakeHighLevelMsg);
-                
-                Log.Information("光电 {Name} 模拟高电平信号: {Signal}", photoelectricName, fakeHighLevelMsg);
-                
-                // 调用数据处理逻辑，模拟高电平触发
-                ProcessTriggerData(fakeHighLevelData);
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "光电 {Name} 处理模拟高电平信号失败", photoelectricName);
-            }
+            Log.Error("【光电信号异常】光电 {Name} 连续收到两次低电平信号，可能存在硬件故障或信号传输问题。请检查光电设备状态。", photoelectricName);
         }
 
         // 记录当前信号状态
         Log.Debug("光电 {Name} 信号状态: {State}", photoelectricName, isHighLevel ? "高电平" : "低电平");
 
         // 更新状态记录
-        _previousPhotoelectricSignalStates[photoelectricName] = _photoelectricSignalStates[photoelectricName];
         _photoelectricSignalStates[photoelectricName] = isHighLevel;
     }
 }
