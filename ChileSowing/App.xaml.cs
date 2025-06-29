@@ -8,10 +8,7 @@ using ChileSowing.ViewModels;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using SowingSorting.Services;
-using WPFLocalizeExtension.Engine;
-using System.Globalization;
 using Common;
-using ChileSowing.Services;
 
 namespace ChileSowing;
 
@@ -104,7 +101,6 @@ public partial class App
         containerRegistry.RegisterSingleton<ISettingsService, SettingsService>();
         containerRegistry.RegisterSingleton<INotificationService, NotificationService>();
         containerRegistry.RegisterSingleton<IModbusTcpService, ModbusTcpService>();
-        containerRegistry.RegisterSingleton<ILanguageService, LanguageService>();
     }
 
     protected override void ConfigureModuleCatalog(IModuleCatalog moduleCatalog)
@@ -118,7 +114,6 @@ public partial class App
     }
 
     protected override async void OnInitialized()
-    {
         base.OnInitialized();
         
         // 初始化语言服务
