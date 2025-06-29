@@ -50,40 +50,31 @@ public partial class MainWindow
     {
         try
         {
-            e.Cancel = true;
+            // 显示确认对话框
             var result = HandyControl.Controls.MessageBox.Show(
                 "确定要关闭程序吗？",
                 "关闭确认",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Question);
 
-            if (result != MessageBoxResult.Yes) return;
+            if (result != MessageBoxResult.Yes)
+            {
+                // 用户点击"否"，取消关闭操作
+                e.Cancel = true;
+                Log.Information("用户取消了关闭操作");
+                return;
+            }
 
-            // 释放MainWindowViewModel
-            if (DataContext is MainWindowViewModel viewModel)
-                // 在后台线程中执行Dispose操作，避免UI线程阻塞
-                Task.Run(() =>
-                {
-                    try
-                    {
-                        viewModel.Dispose();
-                        Log.Information("主窗口ViewModel已释放");
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex, "释放ViewModel时发生错误");
-                    }
-                });
-
-            e.Cancel = false;
-            Application.Current.Shutdown();
+            Log.Information("用户确认关闭程序，开始执行关闭流程");
+            // 用户确认关闭，让App.xaml.cs中的关闭处理程序接管
+            // 不设置e.Cancel，让关闭事件继续传播到App.xaml.cs
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "关闭程序时发生错误");
+            Log.Error(ex, "处理关闭确认时发生错误");
             e.Cancel = true;
             HandyControl.Controls.MessageBox.Show(
-                "关闭程序时发生错误，请重试",
+                "处理关闭确认时发生错误，请重试",
                 "错误",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

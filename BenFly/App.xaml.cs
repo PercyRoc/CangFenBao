@@ -547,7 +547,15 @@ public partial class App
     /// </summary>
     private async Task MainWindowClosingAsync(CancelEventArgs e)
     {
-        Log.Information("MainWindow_Closing 事件触发。 IsShuttingDown: {IsShuttingDown}", _isShuttingDown);
+        Log.Information("MainWindow_Closing 事件触发。 IsShuttingDown: {IsShuttingDown}, EventCanceled: {EventCanceled}", _isShuttingDown, e.Cancel);
+        
+        // 如果关闭事件已被取消（用户点击了"否"），则不执行关闭流程
+        if (e.Cancel)
+        {
+            Log.Information("关闭操作已被用户取消，停止执行关闭流程");
+            return;
+        }
+        
         if (_isShuttingDown)
         {
             Log.Debug("已在关闭过程中，取消本次关闭事件处理。");
@@ -556,27 +564,51 @@ public partial class App
 
         _isShuttingDown = true;
         e.Cancel = true; // 接管关闭流程
-        Log.Information("取消默认关闭，开始执行清理并显示等待窗口...");
+        Log.Information("用户确认关闭，开始执行清理流程...");
 
-        ProgressIndicatorWindow? progressWindow = null;
         try
         {
-            // 在UI线程显示进度窗口
-            await Current.Dispatcher.InvokeAsync(() =>
+            Log.Information("开始清理任务...");
+            
+            // 首先释放MainWindowViewModel
+            try
             {
-                Log.Debug("在 UI 线程上创建并显示 ProgressIndicatorWindow...");
-                progressWindow = new ProgressIndicatorWindow("正在关闭应用程序，请稍候...")
+                if (Current.MainWindow?.DataContext is IDisposable viewModel)
                 {
-                    Owner = Current.MainWindow // 设置所有者
-                };
-                progressWindow.Show();
-                Log.Debug("ProgressIndicatorWindow 已显示。");
-            });
-
-            Log.Information("开始后台清理任务...");
-            // 在后台线程停止服务并执行清理
-            await Task.Run(() => StopBackgroundServices(true));
-            Log.Information("后台清理任务完成。");
+                    await Task.Run(() =>
+                    {
+                        try
+                        {
+                            viewModel.Dispose();
+                            Log.Information("主窗口ViewModel已释放");
+                        }
+                        catch (Exception ex)
+                        {
+                            LogUnhandledException(ex, "ViewModel Dispose Error");
+                        }
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                LogUnhandledException(ex, "ViewModel Access Error");
+            }
+            
+            // 然后停止后台服务
+            await Task.Run(() => 
+            {
+                try
+                {
+                    StopBackgroundServices(true);
+                    Log.Information("后台服务停止完成");
+                }
+                catch (Exception ex)
+                {
+                    LogUnhandledException(ex, "StopBackgroundServices Error");
+                }
+            }).ConfigureAwait(false);
+            
+            Log.Information("所有清理任务完成。");
         }
         catch (Exception ex)
         {
@@ -585,20 +617,22 @@ public partial class App
         }
         finally
         {
-            Log.Information("准备关闭等待窗口并真正关闭应用程序...");
-            // 在UI线程关闭进度窗口
-            await Current.Dispatcher.InvokeAsync(() =>
+            try
             {
-                progressWindow?.Close();
-                Log.Debug("ProgressIndicatorWindow 已关闭 (如果存在)。");
-            });
-
-            // 确保在 UI 线程上调用 Shutdown
-            await Current.Dispatcher.InvokeAsync(() =>
+                Log.Information("准备真正关闭应用程序...");
+                // 确保在 UI 线程上调用 Shutdown
+                await Current.Dispatcher.InvokeAsync(() =>
+                {
+                    Log.Information("调用 Application.Current.Shutdown()...");
+                    Current.Shutdown(); // 真正关闭应用程序
+                });
+            }
+            catch (Exception ex)
             {
-                Log.Information("调用 Application.Current.Shutdown()...");
-                Current.Shutdown(); // 真正关闭应用程序
-            });
+                LogUnhandledException(ex, "Final Shutdown Error");
+                // 最后的保险措施
+                Environment.Exit(0);
+            }
         }
     }
 
@@ -608,55 +642,126 @@ public partial class App
     /// <param name="waitForCompletion">是否等待服务停止完成。</param>
     private void StopBackgroundServices(bool waitForCompletion)
     {
-        Log.Information("手动停止后台服务... Wait for completion: {WaitForCompletion}", waitForCompletion);
+        Log.Information("=== 开始手动停止后台服务... Wait for completion: {WaitForCompletion} ===", waitForCompletion);
         var tasks = new List<Task>();
         try
         {
+            Log.Information("正在解析容器中的服务...");
+            
             // 停止摆轮分拣托管服务
-            var pendulumHostedService = Container?.Resolve<PendulumSortHostedService>();
-            if (pendulumHostedService != null)
+            try
             {
-                tasks.Add(Task.Run(() => pendulumHostedService.StopAsync(CancellationToken.None))
-                           .ContinueWith(t => LogUnhandledException(t.Exception!, "PendulumSortHostedService Stop Error"), TaskContinuationOptions.OnlyOnFaulted));
+                var pendulumHostedService = Container?.Resolve<PendulumSortHostedService>();
+                if (pendulumHostedService != null)
+                {
+                    Log.Information("找到摆轮分拣托管服务，正在停止...");
+                    tasks.Add(Task.Run(async () => 
+                    {
+                        try
+                        {
+                            await pendulumHostedService.StopAsync(CancellationToken.None);
+                            Log.Information("摆轮分拣托管服务已停止");
+                        }
+                        catch (Exception ex)
+                        {
+                            LogUnhandledException(ex, "PendulumSortHostedService Stop Error");
+                        }
+                    }));
+                }
+                else
+                {
+                    Log.Warning("未找到摆轮分拣托管服务");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogUnhandledException(ex, "PendulumSortHostedService Resolve Error");
             }
 
             // 停止相机托管服务
-            var cameraStartupService = Container?.Resolve<CameraStartupService>();
-            if (cameraStartupService != null)
+            try
             {
-                tasks.Add(Task.Run(() => cameraStartupService.StopAsync(CancellationToken.None))
-                           .ContinueWith(t => LogUnhandledException(t.Exception!, "CameraStartupService Stop Error"), TaskContinuationOptions.OnlyOnFaulted));
+                var cameraStartupService = Container?.Resolve<CameraStartupService>();
+                if (cameraStartupService != null)
+                {
+                    Log.Information("找到相机托管服务，正在停止...");
+                    tasks.Add(Task.Run(async () => 
+                    {
+                        try
+                        {
+                            await cameraStartupService.StopAsync(CancellationToken.None);
+                            Log.Information("相机托管服务已停止");
+                        }
+                        catch (Exception ex)
+                        {
+                            LogUnhandledException(ex, "CameraStartupService Stop Error");
+                        }
+                    }));
+                }
+                else
+                {
+                    Log.Warning("未找到相机托管服务");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogUnhandledException(ex, "CameraStartupService Resolve Error");
             }
 
             // 获取皮带设置并停止串口托管服务（如果启用）
-            var settingsService = Container?.Resolve<Common.Services.Settings.ISettingsService>();
-            var beltSettings = settingsService?.LoadSettings<BeltSerialParams>(); // Use null-conditional
-            var beltSerialService = Container?.Resolve<BeltSerialService>();
-            if (beltSettings is { IsEnabled: true } && beltSerialService != null)
+            try
             {
-                // StopBelt 可能不是异步的
-                try { beltSerialService.StopBelt(); Log.Information("皮带串口服务已停止"); }
-                catch (Exception ex) { LogUnhandledException(ex, "BeltSerialService Stop Error"); }
+                var settingsService = Container?.Resolve<Common.Services.Settings.ISettingsService>();
+                var beltSettings = settingsService?.LoadSettings<BeltSerialParams>();
+                var beltSerialService = Container?.Resolve<BeltSerialService>();
+                
+                if (beltSettings is { IsEnabled: true } && beltSerialService != null)
+                {
+                    Log.Information("皮带控制已启用，正在停止串口服务...");
+                    try 
+                    { 
+                        beltSerialService.StopBelt(); 
+                        Log.Information("皮带串口服务已停止"); 
+                    }
+                    catch (Exception ex) 
+                    { 
+                        LogUnhandledException(ex, "BeltSerialService Stop Error"); 
+                    }
+                }
+                else
+                {
+                    Log.Information("皮带控制已禁用或服务不可用，跳过串口停止");
+                }
             }
-            else
+            catch (Exception ex)
             {
-                Log.Information("皮带控制已禁用或服务不可用，跳过串口停止");
+                LogUnhandledException(ex, "Belt Service Resolve/Stop Error");
             }
             
             // 清理相机相关资源 (移到这里确保在服务停止后执行)
+            Log.Information("开始清理相机和串口资源...");
             try
             {
                 var cameraFactory = Container?.Resolve<CameraFactory>();
-                cameraFactory?.Dispose();
-                Log.Information("相机工厂已释放");
+                if (cameraFactory != null)
+                {
+                    cameraFactory.Dispose();
+                    Log.Information("相机工厂已释放");
+                }
 
                 var cameraService = Container?.Resolve<ICameraService>();
-                cameraService?.Dispose();
-                Log.Information("相机服务已释放");
+                if (cameraService != null)
+                {
+                    cameraService.Dispose();
+                    Log.Information("相机服务已释放");
+                }
                 
                 var beltService = Container?.Resolve<BeltSerialService>();
-                beltService?.Dispose(); 
-                Log.Information("串口服务已释放 (Dispose)");
+                if (beltService != null)
+                {
+                    beltService.Dispose(); 
+                    Log.Information("串口服务已释放 (Dispose)");
+                }
             }
             catch(Exception ex) 
             { 
@@ -665,17 +770,17 @@ public partial class App
 
             if (tasks.Count != 0 && waitForCompletion)
             {
-                Log.Debug("等待 {Count} 个后台服务停止任务完成...", tasks.Count);
+                Log.Information("等待 {Count} 个后台服务停止任务完成...", tasks.Count);
                 try
                 {
                     // 等待异步服务停止完成，设置超时
-                    if (!Task.WhenAll(tasks).Wait(TimeSpan.FromSeconds(10))) // 增加超时时间
+                    if (!Task.WhenAll(tasks).Wait(TimeSpan.FromSeconds(15))) // 增加超时时间到15秒
                     {
-                        Log.Warning("一个或多个后台服务未在超时时间内正常停止。");
+                        Log.Warning("一个或多个后台服务未在15秒超时时间内正常停止。");
                     }
                     else
                     {
-                        Log.Information("后台服务已停止 (异步部分)。");
+                        Log.Information("所有后台服务已成功停止 (异步部分)。");
                     }
                 }
                 catch (AggregateException aex)
@@ -706,11 +811,15 @@ public partial class App
             {
                 Log.Information("后台服务停止已发起 (不等待完成)。");
             }
+            else
+            {
+                Log.Information("没有后台服务需要停止。");
+            }
         }
         catch (Exception ex)
         {
             LogUnhandledException(ex, "Background Services Stop Error");
         }
-        Log.Information("StopBackgroundServices 方法执行完毕。 ");
+        Log.Information("=== StopBackgroundServices 方法执行完毕。 ===");
     }
 }
