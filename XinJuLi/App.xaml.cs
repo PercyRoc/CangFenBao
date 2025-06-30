@@ -16,6 +16,7 @@ using History;
 using Camera.Interface;
 using BalanceSorting.Service;
 using Common.Views.Settings.ChuteRules;
+using XinJuLi.Services;
 
 // 添加 Timer 引用
 
@@ -119,6 +120,9 @@ namespace XinJuLi
             containerRegistry.RegisterSingleton<IHttpForwardService, HttpForwardService>();
             containerRegistry.RegisterSingleton<IExcelImportService, ExcelImportService>();
             containerRegistry.RegisterSingleton<AsnHttpServer>();
+
+            // 注册设备状态通知服务
+            containerRegistry.RegisterSingleton<IDeviceStatusNotificationService, DeviceStatusNotificationService>();
             containerRegistry.RegisterForNavigation<AsnHttpSettingsView, AsnHttpSettingsViewModel>();
             containerRegistry.RegisterForNavigation<SortingModeSettingsView, SortingModeSettingsViewModel>();
             containerRegistry.RegisterDialog<AsnOrderSelectionDialogView, AsnOrderSelectionDialogViewModel>("AsnOrderSelectionDialog");
@@ -202,6 +206,35 @@ namespace XinJuLi
                 catch (Exception ex)
                 {
                     Log.Error(ex, "停止摆轮分拣服务时发生错误");
+                }
+
+                // 停止设备状态通知服务
+                try
+                {
+                    if (Container.IsRegistered<IDeviceStatusNotificationService>())
+                    {
+                        var deviceStatusService = Container.Resolve<IDeviceStatusNotificationService>();
+                        if (deviceStatusService.IsRunning)
+                        {
+                            var stopTask = deviceStatusService.StopAsync();
+                            var timeoutTask = Task.Delay(TimeSpan.FromSeconds(3));
+                            var completedTask = Task.WhenAny(stopTask, timeoutTask).Result;
+
+                            if (completedTask == stopTask)
+                                Log.Information("设备状态通知服务已停止");
+                            else
+                                Log.Warning("设备状态通知服务停止超时");
+                        }
+                        if (deviceStatusService is IDisposable disposableNotificationService)
+                        {
+                            disposableNotificationService.Dispose();
+                            Log.Information("设备状态通知服务资源已释放");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "停止设备状态通知服务时发生错误");
                 }
 
                 // 等待所有日志写入完成

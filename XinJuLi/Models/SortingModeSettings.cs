@@ -53,6 +53,38 @@ public class SortingModeSettings : BindableBase
         set => SetProperty(ref _remarks, value);
     }
 
+    // 设备ID配置
+    private string _skuSortDeviceId = "SKU_SORT_DEVICE_1";
+    private string _scanCheckDeviceId = "SCAN_CHECK_DEVICE_1";
+    private string _regionSortDeviceId = "REGION_SORT_DEVICE_1";
+
+    /// <summary>
+    /// SKU分拣设备ID
+    /// </summary>
+    public string SkuSortDeviceId
+    {
+        get => _skuSortDeviceId;
+        set => SetProperty(ref _skuSortDeviceId, value);
+    }
+
+    /// <summary>
+    /// 扫码复核设备ID
+    /// </summary>
+    public string ScanCheckDeviceId
+    {
+        get => _scanCheckDeviceId;
+        set => SetProperty(ref _scanCheckDeviceId, value);
+    }
+
+    /// <summary>
+    /// 大区分拣设备ID
+    /// </summary>
+    public string RegionSortDeviceId
+    {
+        get => _regionSortDeviceId;
+        set => SetProperty(ref _regionSortDeviceId, value);
+    }
+
     /// <summary>
     /// 获取当前分拣方式的显示名称
     /// </summary>
@@ -79,6 +111,21 @@ public class SortingModeSettings : BindableBase
             PendulumDirection.Left => "左摆",
             PendulumDirection.Right => "右摆",
             _ => "未知方向"
+        };
+    }
+
+    /// <summary>
+    /// 获取当前分拣模式对应的设备ID
+    /// </summary>
+    /// <returns>当前模式的设备ID</returns>
+    public string GetCurrentDeviceId()
+    {
+        return CurrentSortingMode switch
+        {
+            SortingMode.AsnOrderSorting => SkuSortDeviceId,
+            SortingMode.ScanReviewSorting => ScanCheckDeviceId,
+            SortingMode.AreaCodeSorting => RegionSortDeviceId,
+            _ => "UNKNOWN_DEVICE"
         };
     }
 

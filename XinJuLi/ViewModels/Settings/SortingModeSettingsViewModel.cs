@@ -77,6 +77,11 @@ public class SortingModeSettingsViewModel : BindableBase
     }
 
     /// <summary>
+    /// 当前生效设备ID显示
+    /// </summary>
+    public string CurrentDeviceIdDisplay => _settings.GetCurrentDeviceId();
+
+    /// <summary>
     /// 加载设置
     /// </summary>
     private void LoadSettings()
@@ -106,6 +111,7 @@ public class SortingModeSettingsViewModel : BindableBase
             Log.Information("分拣模式已更改为: {Mode}", _settings.CurrentSortingMode);
             RaisePropertyChanged(nameof(SelectedModeDescription));
             RaisePropertyChanged(nameof(CurrentModeDisplayName));
+            RaisePropertyChanged(nameof(CurrentDeviceIdDisplay));
         }
         else if (e.PropertyName == nameof(SortingModeSettings.PendulumDirection))
         {
@@ -115,6 +121,16 @@ public class SortingModeSettingsViewModel : BindableBase
         else if (e.PropertyName == nameof(SortingModeSettings.LastUpdated))
         {
             RaisePropertyChanged(nameof(LastUpdatedDisplay));
+        }
+        else if (e.PropertyName == nameof(SortingModeSettings.SkuSortDeviceId) ||
+                 e.PropertyName == nameof(SortingModeSettings.ScanCheckDeviceId) ||
+                 e.PropertyName == nameof(SortingModeSettings.RegionSortDeviceId))
+        {
+            Log.Information("设备ID已更改: {PropertyName} = {Value}", e.PropertyName, 
+                e.PropertyName == nameof(SortingModeSettings.SkuSortDeviceId) ? _settings.SkuSortDeviceId :
+                e.PropertyName == nameof(SortingModeSettings.ScanCheckDeviceId) ? _settings.ScanCheckDeviceId :
+                _settings.RegionSortDeviceId);
+            RaisePropertyChanged(nameof(CurrentDeviceIdDisplay));
         }
     }
 

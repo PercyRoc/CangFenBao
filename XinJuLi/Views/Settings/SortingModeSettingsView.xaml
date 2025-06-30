@@ -213,6 +213,91 @@
                         </StackPanel>
                     </Border>
                 </Grid>
+
+                <!-- 分隔符 -->
+                <Separator Margin="0,20,0,16" />
+
+                <!-- 设备ID配置 -->
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="8" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="16" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="8" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="8" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- 设备ID标签 -->
+                    <TextBlock Grid.Row="0"
+                               Text="设备ID配置："
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,0" />
+
+                    <!-- SKU分拣设备ID -->
+                    <StackPanel Grid.Row="2">
+                        <TextBlock Text="SKU分拣设备ID" 
+                                   FontWeight="SemiBold" 
+                                   Margin="0,0,0,4" />
+                        <ui:TextBox PlaceholderText="请输入SKU分拣设备ID"
+                                    Text="{Binding Settings.SkuSortDeviceId, UpdateSourceTrigger=PropertyChanged}"
+                                    FontSize="14">
+                            <ui:TextBox.Icon>
+                                <ui:SymbolIcon Symbol="Box24" />
+                            </ui:TextBox.Icon>
+                        </ui:TextBox>
+                    </StackPanel>
+
+                    <!-- 扫码复核设备ID -->
+                    <StackPanel Grid.Row="4">
+                        <TextBlock Text="扫码复核设备ID" 
+                                   FontWeight="SemiBold" 
+                                   Margin="0,0,0,4" />
+                        <ui:TextBox PlaceholderText="请输入扫码复核设备ID"
+                                    Text="{Binding Settings.ScanCheckDeviceId, UpdateSourceTrigger=PropertyChanged}"
+                                    FontSize="14">
+                            <ui:TextBox.Icon>
+                                <ui:SymbolIcon Symbol="ScanCamera24" />
+                            </ui:TextBox.Icon>
+                        </ui:TextBox>
+                    </StackPanel>
+
+                    <!-- 大区分拣设备ID -->
+                    <StackPanel Grid.Row="6">
+                        <TextBlock Text="大区分拣设备ID" 
+                                   FontWeight="SemiBold" 
+                                   Margin="0,0,0,4" />
+                        <ui:TextBox PlaceholderText="请输入大区分拣设备ID"
+                                    Text="{Binding Settings.RegionSortDeviceId, UpdateSourceTrigger=PropertyChanged}"
+                                    FontSize="14">
+                            <ui:TextBox.Icon>
+                                <ui:SymbolIcon Symbol="Globe24" />
+                            </ui:TextBox.Icon>
+                        </ui:TextBox>
+                    </StackPanel>
+
+                    <!-- 当前生效设备ID说明 -->
+                    <Border Grid.Row="8"
+                            Background="{DynamicResource ControlFillColorInputActiveBrush}"
+                            CornerRadius="6"
+                            Padding="12"
+                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="当前生效设备ID："
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,0,4" />
+                            <TextBlock Text="{Binding CurrentDeviceIdDisplay, Mode=OneWay}"
+                                       TextWrapping="Wrap"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                       FontWeight="SemiBold" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
             </StackPanel>
         </ui:CardExpander>
 

@@ -21,6 +21,7 @@ using XinJuLi.Services.ASN;
 using XinJuLi.Events;
 using XinJuLi.Models;
 using Microsoft.Win32;
+using XinJuLi.Services;
 
 namespace XinJuLi.ViewModels;
 
@@ -32,6 +33,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly ISettingsService _settingsService;
     private readonly IPendulumSortService _sortService;
     private readonly IPackageHistoryDataService _packageHistoryDataService;
+    private readonly IDeviceStatusNotificationService _deviceStatusNotificationService;
 
     private readonly IExcelImportService _excelImportService;
     private readonly IAsnCacheService _asnCacheService;
@@ -84,6 +86,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         INotificationService notificationService,
         IEventAggregator eventAggregator,
         IPackageHistoryDataService packageHistoryDataService,
+        IDeviceStatusNotificationService deviceStatusNotificationService,
         IAsnCacheService asnCacheService,
         IAsnStorageService asnStorageService,
         IExcelImportService excelImportService,
@@ -95,6 +98,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _sortService = sortService;
         _notificationService = notificationService;
         _packageHistoryDataService = packageHistoryDataService;
+        _deviceStatusNotificationService = deviceStatusNotificationService;
         _asnCacheService = asnCacheService;
         _asnStorageService = asnStorageService;
         _excelImportService = excelImportService;
@@ -187,6 +191,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         // 根据分拣模式加载相应配置
         InitializeSortingModeConfiguration();
+
+        // 启动设备状态通知服务
+        _ = Task.Run(InitializeDeviceStatusNotificationAsync);
     }
 
     /// <summary>
@@ -208,6 +215,33 @@ public class MainWindowViewModel : BindableBase, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "初始化ASN信息时发生错误");
+        }
+    }
+
+    /// <summary>
+    /// 初始化设备状态通知服务
+    /// </summary>
+    private async Task InitializeDeviceStatusNotificationAsync()
+    {
+        try
+        {
+            Log.Information("正在启动设备状态通知服务...");
+
+            // 启动WebSocket服务器
+            await _deviceStatusNotificationService.StartAsync(8080);
+
+            // 获取当前分拣模式配置
+            var sortingSettings = _settingsService.LoadSettings<SortingModeSettings>();
+            var currentDeviceId = sortingSettings.GetCurrentDeviceId();
+
+            // 发送设备上线通知
+            await _deviceStatusNotificationService.NotifyDeviceOnlineAsync(currentDeviceId);
+
+            Log.Information("设备状态通知服务启动成功，设备ID: {DeviceId}", currentDeviceId);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "启动设备状态通知服务失败");
         }
     }
 
@@ -729,6 +763,69 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
+    /// 生成包裹ID
+    /// </summary>
+    /// <param name="barcode">条码</param>
+    /// <returns>包裹ID</returns>
+    private string GeneratePackageId(string barcode)
+    {
+        try
+        {
+            // 格式：PKG_YYYYMMDD_HHMMSS_序列号
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var sequence = (_totalPackageCount + 1).ToString("D3");
+            return $"PKG_{timestamp}_{sequence}";
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "生成包裹ID时发生错误，使用备用格式");
+            return $"PKG_{DateTime.Now.Ticks}";
+        }
+    }
+
+    /// <summary>
+    /// 根据分拣模式获取源设备ID
+    /// </summary>
+    /// <param name="sortingMode">分拣模式</param>
+    /// <returns>源设备ID</returns>
+    private string GetSourceDeviceId(SortingMode sortingMode)
+    {
+        return sortingMode switch
+        {
+            SortingMode.AsnOrderSorting => "CAM_SKU_01", // SKU分拣相机
+            SortingMode.ScanReviewSorting => "CAM_SCAN_01", // 扫码复核相机
+            SortingMode.AreaCodeSorting => "CAM_REG_01", // 大区分拣相机
+            _ => "CAM_UNKNOWN"
+        };
+    }
+
+    /// <summary>
+    /// 发送包裹报告到前端
+    /// </summary>
+    /// <param name="package">包裹信息</param>
+    /// <param name="sortingMode">分拣模式</param>
+    /// <returns>发送任务</returns>
+    private async Task SendPackageReportAsync(PackageInfo package, SortingMode sortingMode)
+    {
+        try
+        {
+            var packageId = GeneratePackageId(package.Barcode);
+            var sourceDeviceId = GetSourceDeviceId(sortingMode);
+            var sortCode = package.ChuteNumber;
+
+            await _deviceStatusNotificationService.NotifyPackageCreatedAsync(packageId, sourceDeviceId, sortCode);
+
+            Log.Debug("包裹报告已发送: 包裹ID={PackageId}, 条码={Barcode}, 源设备={SourceDeviceId}, 格口={SortCode}", 
+                packageId, package.Barcode, sourceDeviceId, sortCode);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "发送包裹报告时发生错误: 条码={Barcode}, 格口={ChuteNumber}", 
+                package.Barcode, package.ChuteNumber);
+        }
+    }
+
+    /// <summary>
     /// 检查条码是否为NoRead标识（空值或特殊NoRead字符串）
     /// </summary>
     /// <param name="barcode">条码</param>
@@ -888,21 +985,26 @@ public class MainWindowViewModel : BindableBase, IDisposable
     /// <summary>
     /// 处理NoRead包裹
     /// </summary>
-    private Task ProcessNoReadPackage(PackageInfo package)
+    private async Task ProcessNoReadPackage(PackageInfo package)
     {
+        var sortingSettings = _settingsService.LoadSettings<SortingModeSettings>();
+        
         // 无条码，分配到异常格口
         package.SetStatus("无条码");
         package.ErrorMessage = "无法读取条码";
         package.SetChute(1); // 异常分到格口1
 
         Log.Warning("包裹条码为NoRead标识 '{Barcode}'，分配到异常格口: 1", package.Barcode);
+
+        // 发送包裹报告到前端
+        await SendPackageReportAsync(package, sortingSettings.CurrentSortingMode);
+        
         ProcessPackageWithError(package, 1, "无条码");
         SavePackage(package);
         
         _totalPackageCount++;
         _failedPackageCount++;
         UpdateStatisticsItems();
-        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -957,6 +1059,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
         // 设置包裹格口
         package.SetChute(targetChute);
 
+        // 发送包裹报告到前端
+        await SendPackageReportAsync(package, SortingMode.ScanReviewSorting);
+
         // 更新UI显示
         var statusText = isSuccess ? $"复核成功（{(pendulumDirection == PendulumDirection.Left ? "左" : "右")}摆）" : "复核异常";
         UpdatePackageInfoItemsWithChute(targetChute, statusText);
@@ -984,7 +1089,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     /// <summary>
     /// 处理SKU分拣（基于ASN单）
     /// </summary>
-    private Task ProcessSkuSortingPackage(PackageInfo package)
+    private async Task ProcessSkuSortingPackage(PackageInfo package)
     {
         // 查找或创建SKU的分拣规则
         var sku = package.Barcode; // 使用条码作为SKU
@@ -998,13 +1103,17 @@ public class MainWindowViewModel : BindableBase, IDisposable
             package.SetStatus("SKU不匹配");
             package.ErrorMessage = $"SKU不在ASN单 {CurrentAsnOrderCode} 中";
             package.SetChute(1);
+
+            // 发送包裹报告到前端
+            await SendPackageReportAsync(package, SortingMode.AsnOrderSorting);
+            
             ProcessPackageWithError(package, 1, "SKU不匹配");
             SavePackage(package);
             
             _totalPackageCount++;
             _failedPackageCount++;
             UpdateStatisticsItems();
-            return Task.CompletedTask;
+            return;
         }
         
         // 尝试查找已有的SKU分配
@@ -1027,13 +1136,17 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 package.SetStatus("无可用格口");
                 package.ErrorMessage = "所有格口已满，无法分配";
                 package.SetChute(1);
+
+                // 发送包裹报告到前端
+                await SendPackageReportAsync(package, SortingMode.AsnOrderSorting);
+                
                 ProcessPackageWithError(package, 1, "无可用格口");
                 SavePackage(package);
                 
                 _totalPackageCount++;
                 _failedPackageCount++;
                 UpdateStatisticsItems();
-                return Task.CompletedTask;
+                return;
             }
             
             Log.Information("包裹 {Barcode} 分配到新格口: {Chute}", package.Barcode, targetChute);
@@ -1043,6 +1156,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
         package.SetChute(targetChute);
         package.SetStatus("成功");
         package.ErrorMessage = string.Empty;
+
+        // 发送包裹报告到前端
+        await SendPackageReportAsync(package, SortingMode.AsnOrderSorting);
 
         // 更新UI显示（成功状态）
         UpdatePackageInfoItemsWithCategory(sku, targetChute);
@@ -1060,13 +1176,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         Log.Information("包裹 {Barcode} SKU分拣处理完成，分配到格口 {ChuteNumber}，SKU: {Sku}", 
             package.Barcode, targetChute, sku);
-        return Task.CompletedTask;
     }
 
     /// <summary>
     /// 处理大区分拣（基于条码大区编码）
     /// </summary>
-    private Task ProcessAreaCodeSortingPackage(PackageInfo package)
+    private async Task ProcessAreaCodeSortingPackage(PackageInfo package)
     {
         // 获取摆动方向设置
         var sortingSettings = _settingsService.LoadSettings<SortingModeSettings>();
@@ -1082,13 +1197,17 @@ public class MainWindowViewModel : BindableBase, IDisposable
             package.SetStatus("无大区编码");
             package.ErrorMessage = "条码格式不正确，无法提取大区编码";
             package.SetChute(1);
+
+            // 发送包裹报告到前端
+            await SendPackageReportAsync(package, SortingMode.AreaCodeSorting);
+            
             ProcessPackageWithError(package, 1, "无大区编码");
             SavePackage(package);
             
             _totalPackageCount++;
             _failedPackageCount++;
             UpdateStatisticsItems();
-            return Task.CompletedTask;
+            return;
         }
 
         // 查找大区编码对应的格口
@@ -1105,6 +1224,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
             package.SetChute(targetChute);
             package.SetStatus("成功");
             package.ErrorMessage = string.Empty;
+
+            // 发送包裹报告到前端
+            await SendPackageReportAsync(package, SortingMode.AreaCodeSorting);
 
             // 更新UI显示
             var directionText = pendulumDirection == PendulumDirection.Left ? "左摆" : "右摆";
@@ -1131,6 +1253,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
             package.SetStatus("大区未配置");
             package.ErrorMessage = $"大区编码 {areaCode} 没有对应的格口配置";
             package.SetChute(1);
+
+            // 发送包裹报告到前端
+            await SendPackageReportAsync(package, SortingMode.AreaCodeSorting);
+            
             ProcessPackageWithError(package, 1, "大区未配置");
             SavePackage(package);
             
@@ -1138,20 +1264,24 @@ public class MainWindowViewModel : BindableBase, IDisposable
             _failedPackageCount++;
             UpdateStatisticsItems();
         }
-        return Task.CompletedTask;
     }
 
     /// <summary>
     /// 处理异常包裹
     /// </summary>
-    private Task ProcessExceptionPackage(PackageInfo package, Exception ex)
+    private async Task ProcessExceptionPackage(PackageInfo package, Exception ex)
     {
         try
         {
+            var sortingSettings = _settingsService.LoadSettings<SortingModeSettings>();
+            
             // 发生异常，分配到异常格口
             package.SetChute(1);
             package.SetStatus("处理异常");
             package.ErrorMessage = $"处理发生异常: {ex.Message}";
+
+            // 发送包裹报告到前端
+            await SendPackageReportAsync(package, sortingSettings.CurrentSortingMode);
 
             ProcessPackageWithError(package, 1, "处理异常");
             SavePackage(package);
@@ -1164,7 +1294,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
         {
             Log.Error(innerEx, "处理包裹异常时发生二次错误");
         }
-        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -2391,6 +2520,31 @@ public class MainWindowViewModel : BindableBase, IDisposable
         if (disposing)
             try
             {
+                // 发送设备下线通知并停止WebSocket服务器
+                try
+                {
+                    var sortingSettings = _settingsService.LoadSettings<SortingModeSettings>();
+                    var currentDeviceId = sortingSettings.GetCurrentDeviceId();
+
+                    // 发送设备下线通知
+                    _deviceStatusNotificationService.NotifyDeviceOfflineAsync(currentDeviceId).Wait(3000);
+
+                    // 停止WebSocket服务器
+                    _deviceStatusNotificationService.StopAsync().Wait(3000);
+
+                    Log.Information("设备状态通知服务已停止，设备ID: {DeviceId}", currentDeviceId);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "停止设备状态通知服务时发生错误");
+                }
+
+                // 释放设备状态通知服务
+                if (_deviceStatusNotificationService is IDisposable disposableNotificationService)
+                {
+                    disposableNotificationService.Dispose();
+                }
+
                 // 停止定时器（UI线程操作）
                 if (Application.Current != null && !Application.Current.Dispatcher.CheckAccess())
                     Application.Current.Dispatcher.Invoke(_timer.Stop);
