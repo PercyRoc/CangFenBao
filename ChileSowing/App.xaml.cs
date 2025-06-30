@@ -9,6 +9,11 @@ using Common.Services.Settings;
 using Common.Services.Ui;
 using SowingSorting.Services;
 using Common;
+using ChileSowing.Services;
+using System.Net.Http;
+using ChileSowing.ViewModels.Settings;
+using System.Globalization;
+using WPFLocalizeExtension.Engine;
 
 namespace ChileSowing;
 
@@ -36,6 +41,11 @@ public partial class App
             .CreateLogger();
 
         Log.Information("Serilog Logger 已通过 appsettings.json 配置初始化。");
+
+        // 设置本地化为中文
+        LocalizeDictionary.Instance.SetCurrentThreadCulture = true;
+        LocalizeDictionary.Instance.Culture = new CultureInfo("zh-CN");
+        Log.Information("本地化语言设置为中文 (zh-CN)");
 
         // 单实例互斥体
         _mutex = new Mutex(true, MutexName, out var createdNew);
@@ -101,6 +111,13 @@ public partial class App
         containerRegistry.RegisterSingleton<ISettingsService, SettingsService>();
         containerRegistry.RegisterSingleton<INotificationService, NotificationService>();
         containerRegistry.RegisterSingleton<IModbusTcpService, ModbusTcpService>();
+        
+        // 注册HttpClient和快手API服务
+        containerRegistry.RegisterSingleton<HttpClient>();
+        containerRegistry.RegisterSingleton<IKuaiShouApiService, KuaiShouApiService>();
+        
+        // 注册KuaiShouSettingsViewModel
+        containerRegistry.RegisterSingleton<KuaiShouSettingsViewModel>();
     }
 
     protected override void ConfigureModuleCatalog(IModuleCatalog moduleCatalog)
@@ -114,11 +131,10 @@ public partial class App
     }
 
     protected override async void OnInitialized()
+    {
         base.OnInitialized();
-        
-        // 初始化语言服务
-        var languageService = Container.Resolve<ILanguageService>();
-        Log.Information("Language service initialized with current language: {Language}", languageService.CurrentLanguage.Name);
+        // 语言设置硬编码为中文（简体）
+        Log.Information("Language set to Chinese (Simplified)");
         
         var historyService = Container.Resolve<History.Data.IPackageHistoryDataService>();
         await historyService.InitializeAsync();

@@ -7,7 +7,7 @@ namespace ChileSowing.ViewModels;
 public class ChuteDetailDialogViewModel : BindableBase, IDialogAware
 {
     private string _title = null!;
-    private ObservableCollection<ChutePackageItem> _skus = null!;
+    private ObservableCollection<ChutePackageItem>? _skus;
 
     public ChuteDetailDialogViewModel()
     {
@@ -17,13 +17,13 @@ public class ChuteDetailDialogViewModel : BindableBase, IDialogAware
     public string Title
     {
         get => _title;
-        set => SetProperty(ref _title, value);
+        private set => SetProperty(ref _title, value);
     }
 
-    public ObservableCollection<ChutePackageItem> Skus
+    public ObservableCollection<ChutePackageItem>? Skus
     {
         get => _skus;
-        set => SetProperty(ref _skus, value);
+        private set => SetProperty(ref _skus, value);
     }
 
     public ICommand CloseCommand { get; }
@@ -50,9 +50,9 @@ public class ChuteDetailDialogViewModel : BindableBase, IDialogAware
         foreach(var item in receivedSkus)
         {
             Skus.Add(item);
-            Log.Information($"- SKU: {item.Sku} at {item.Timestamp}");
+            Log.Information("- SKU: {ItemSku} at {ItemTimestamp}", item.Sku, item.Timestamp);
         }
-        Log.Information($"对话框打开，接收到 {receivedSkus?.Count ?? 0} 个 SKU。");
+        Log.Information("对话框打开，接收到 {ReceivedSkusCount} 个 SKU。", receivedSkus?.Count ?? 0);
     }
 
     private void ExecuteClose()

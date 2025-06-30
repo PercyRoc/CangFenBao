@@ -1,5 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
 <root>
+    <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+        <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+        <xsd:element name="root" msdata:IsDataSet="true">
+            <xsd:complexType>
+                <xsd:choice maxOccurs="unbounded">
+                    <xsd:element name="metadata">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+                            </xsd:sequence>
+                            <xsd:attribute name="name" use="required" type="xsd:string" />
+                            <xsd:attribute name="type" type="xsd:string" />
+                            <xsd:attribute name="mimetype" type="xsd:string" />
+                            <xsd:attribute ref="xml:space" />
+                        </xsd:complexType>
+                    </xsd:element>
+                    <xsd:element name="assembly">
+                        <xsd:complexType>
+                            <xsd:attribute name="alias" type="xsd:string" />
+                            <xsd:attribute name="name" type="xsd:string" />
+                        </xsd:complexType>
+                    </xsd:element>
+                    <xsd:element name="data">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+                            </xsd:sequence>
+                            <xsd:attribute name="name" use="required" type="xsd:string" />
+                            <xsd:attribute name="type" type="xsd:string" />
+                            <xsd:attribute name="mimetype" type="xsd:string" />
+                            <xsd:attribute ref="xml:space" />
+                        </xsd:complexType>
+                    </xsd:element>
+                    <xsd:element name="resheader">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                            </xsd:sequence>
+                            <xsd:attribute name="name" use="required" type="xsd:string" />
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:choice>
+            </xsd:complexType>
+        </xsd:element>
+    </xsd:schema>
     <resheader name="resmimetype">
         <value>text/microsoft-resx</value>
     </resheader>
@@ -15,7 +61,7 @@
     
     <!-- Window Title -->
     <data name="Window_Title" xml:space="preserve">
-        <value>Sowing Wall</value>
+        <value>Chile Sowing Wall System</value>
     </data>
     
     <!-- Button Text -->
@@ -42,7 +88,7 @@
     
     <!-- Information Panel -->
     <data name="Label_PackageInfo" xml:space="preserve">
-        <value>Package Info</value>
+        <value>Package Information</value>
     </data>
     <data name="Label_Statistics" xml:space="preserve">
         <value>Statistics</value>
@@ -50,31 +96,31 @@
     
     <!-- Chute Monitoring -->
     <data name="Label_ChuteMonitoring" xml:space="preserve">
-        <value>Chute Monitoring (Total: 80)</value>
+        <value>Chute Monitoring</value>
     </data>
     
     <!-- Status Bar -->
     <data name="Status_CPU" xml:space="preserve">
-        <value>CPU: </value>
+        <value>CPU</value>
     </data>
     <data name="Status_Memory" xml:space="preserve">
-        <value>Memory: </value>
+        <value>Memory</value>
     </data>
     <data name="Status_Uptime" xml:space="preserve">
-        <value>Uptime: </value>
+        <value>Uptime</value>
     </data>
     
     <!-- Tooltips -->
     <data name="Tooltip_Settings" xml:space="preserve">
-        <value>Settings</value>
+        <value>Open Settings</value>
     </data>
     <data name="Tooltip_History" xml:space="preserve">
-        <value>History</value>
+        <value>View History</value>
     </data>
     
     <!-- Settings Dialog -->
     <data name="Settings_ModbusTcp" xml:space="preserve">
-        <value>TCP Modbus Settings</value>
+        <value>Modbus TCP</value>
     </data>
     <data name="Settings_ChuteRule" xml:space="preserve">
         <value>Chute Rule Settings</value>
@@ -87,5 +133,8 @@
     </data>
     <data name="Button_Close" xml:space="preserve">
         <value>Close</value>
+    </data>
+    <data name="Settings_KuaiShou" xml:space="preserve">
+        <value>YunDa KuaiShou API</value>
     </data>
 </root> 

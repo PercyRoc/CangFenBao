@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <root>
     <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+        <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
         <xsd:element name="root" msdata:IsDataSet="true">
             <xsd:complexType>
                 <xsd:choice maxOccurs="unbounded">
@@ -24,8 +25,8 @@
                     <xsd:element name="data">
                         <xsd:complexType>
                             <xsd:sequence>
-                                <xsd:element name="value" type="xsd:string" minOccurs="0"/>
-                                <xsd:element name="comment" type="xsd:string" minOccurs="0"/>
+                                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1"/>
+                                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2"/>
                             </xsd:sequence>
                             <xsd:attribute name="name" use="required" type="xsd:string"/>
                             <xsd:attribute name="type" type="xsd:string"/>
@@ -36,7 +37,7 @@
                     <xsd:element name="resheader">
                         <xsd:complexType>
                             <xsd:sequence>
-                                <xsd:element name="value" type="xsd:string" minOccurs="0"/>
+                                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1"/>
                             </xsd:sequence>
                             <xsd:attribute name="name" use="required" type="xsd:string"/>
                         </xsd:complexType>
@@ -60,7 +61,7 @@
     
     <!-- 窗口标题 -->
     <data name="Window_Title" xml:space="preserve">
-        <value>播种墙</value>
+        <value>播种墙系统</value>
     </data>
     
     <!-- 按钮文本 -->
@@ -68,21 +69,21 @@
         <value>设置</value>
     </data>
     <data name="Button_History" xml:space="preserve">
-        <value>历史</value>
+        <value>历史记录</value>
     </data>
     
     <!-- 输入区域 -->
     <data name="Label_ScanProductSku" xml:space="preserve">
-        <value>扫描产品SKU</value>
+        <value>扫描商品SKU</value>
     </data>
     <data name="Placeholder_EnterScanSku" xml:space="preserve">
-        <value>输入或扫描SKU</value>
+        <value>请扫描或输入SKU码</value>
     </data>
     <data name="Label_ScanWaveNumber" xml:space="preserve">
         <value>扫描波次号</value>
     </data>
     <data name="Placeholder_EnterScanWaveNumber" xml:space="preserve">
-        <value>输入或扫描波次号</value>
+        <value>请扫描或输入波次号</value>
     </data>
     
     <!-- 信息面板 -->
@@ -95,31 +96,31 @@
     
     <!-- 格口监控 -->
     <data name="Label_ChuteMonitoring" xml:space="preserve">
-        <value>格口监控（总计：80）</value>
+        <value>格口监控</value>
     </data>
     
     <!-- 状态栏 -->
     <data name="Status_CPU" xml:space="preserve">
-        <value>CPU: </value>
+        <value>CPU</value>
     </data>
     <data name="Status_Memory" xml:space="preserve">
-        <value>内存: </value>
+        <value>内存</value>
     </data>
     <data name="Status_Uptime" xml:space="preserve">
-        <value>运行时间：</value>
+        <value>运行时间</value>
     </data>
     
     <!-- 工具提示 -->
     <data name="Tooltip_Settings" xml:space="preserve">
-        <value>设置</value>
+        <value>打开设置</value>
     </data>
     <data name="Tooltip_History" xml:space="preserve">
-        <value>历史</value>
+        <value>查看历史记录</value>
     </data>
     
     <!-- 设置对话框 -->
     <data name="Settings_ModbusTcp" xml:space="preserve">
-        <value>TCP Modbus 设置</value>
+        <value>Modbus TCP</value>
     </data>
     <data name="Settings_ChuteRule" xml:space="preserve">
         <value>格口规则设置</value>
@@ -132,5 +133,8 @@
     </data>
     <data name="Button_Close" xml:space="preserve">
         <value>关闭</value>
+    </data>
+    <data name="Settings_KuaiShou" xml:space="preserve">
+        <value>韵达快手接口</value>
     </data>
 </root> 

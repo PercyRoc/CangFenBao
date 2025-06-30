@@ -7,7 +7,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
         <RootNamespace>ChileSowing</RootNamespace>
-        <ApplicationIcon>..\Common\logo.ico</ApplicationIcon>
+        <ApplicationIcon>logo.ico</ApplicationIcon>
         <AssemblyName>ChileSowing</AssemblyName>
     </PropertyGroup>
 
@@ -56,10 +56,19 @@
         <None Update="appsettings.json">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
-        <None Include="..\Common\logo.ico">
-          <Link>logo.ico</Link>
+        <None Update="logo.ico">
           <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
+    </ItemGroup>
+
+    <ItemGroup>
+        <EmbeddedResource Update="Resources\Strings.resx">
+            <Generator>ResXFileCodeGenerator</Generator>
+            <LastGenOutput>Strings.Designer.cs</LastGenOutput>
+        </EmbeddedResource>
+        <EmbeddedResource Update="Resources\Strings.en-us.resx">
+            <DependentUpon>Strings.resx</DependentUpon>
+        </EmbeddedResource>
     </ItemGroup>
 
 </Project>

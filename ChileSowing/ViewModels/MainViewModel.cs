@@ -10,7 +10,6 @@ using Common.Services.Ui;
 using System.Diagnostics;
 using Common.Models;
 using ChileSowing.Services;
-using System.Globalization;
 
 namespace ChileSowing.ViewModels;
 
@@ -21,7 +20,7 @@ public class MainViewModel : BindableBase, IDisposable
     private readonly ISettingsService _settingsService;
     private readonly IPackageHistoryDataService _historyService;
     private readonly INotificationService _notificationService;
-    private readonly ILanguageService _languageService;
+    private readonly IKuaiShouApiService _kuaiShouApiService;
     private readonly DispatcherTimer _timer;
     private bool _disposed;
     private string _currentSkuInput = string.Empty;
@@ -48,14 +47,14 @@ public class MainViewModel : BindableBase, IDisposable
     private const string DefaultChuteColor = "#FFFFFF"; // 白色
     private const string HighlightChuteColor = "#4CAF50"; // 绿色
 
-    public MainViewModel(IDialogService dialogService, IModbusTcpService modbusTcpService, ISettingsService settingsService, IPackageHistoryDataService historyService, INotificationService notificationService, ILanguageService languageService)
+    public MainViewModel(IDialogService dialogService, IModbusTcpService modbusTcpService, ISettingsService settingsService, IPackageHistoryDataService historyService, INotificationService notificationService, IKuaiShouApiService kuaiShouApiService)
     {
         _dialogService = dialogService;
         _modbusTcpService = modbusTcpService;
         _settingsService = settingsService;
         _historyService = historyService;
         _notificationService = notificationService;
-        _languageService = languageService;
+        _kuaiShouApiService = kuaiShouApiService;
 
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
         ViewHistoryCommand = new DelegateCommand(ExecuteViewHistory);
@@ -78,7 +77,7 @@ public class MainViewModel : BindableBase, IDisposable
         };
         _timer.Tick += Timer_Tick;
         _timer.Start();
-        
+
         // Update command canExecute
         ViewHistoryCommand.RaiseCanExecuteChanged();
     }
@@ -140,7 +139,8 @@ public class MainViewModel : BindableBase, IDisposable
     private void ExecuteOpenSettings()
     {
         _dialogService.ShowDialog("SettingsDialog", new DialogParameters(), _ =>
-        {});
+        {
+        });
         OperationStatusText = "Settings opened.";
     }
 
@@ -148,17 +148,19 @@ public class MainViewModel : BindableBase, IDisposable
     {
         var dialogParams = new DialogParameters
         {
-            { "title", "Chile Sowing Wall - Package History" }
+            {
+                "title", "播种墙 - 包裹历史记录"
+            }
         };
 
         _dialogService.ShowDialog("PackageHistoryDialogView", dialogParams, result =>
         {
             if (result.Result == ButtonResult.OK)
             {
-                OperationStatusText = "History view closed.";
+                OperationStatusText = "历史记录窗口已关闭";
             }
         });
-        OperationStatusText = "History view opened.";
+        OperationStatusText = "历史记录窗口已打开";
     }
 
     private void ExecuteProcessSku(string sku)
@@ -172,8 +174,12 @@ public class MainViewModel : BindableBase, IDisposable
         if (chute == null) return;
         var parameters = new DialogParameters
         {
-            { "title", $"Chute {chute.ChuteNumber} Package List" },
-            { "skus", chute.Skus }
+            {
+                "title", $"格口 {chute.ChuteNumber} 包裹列表"
+            },
+            {
+                "skus", chute.Skus
+            }
         };
         _dialogService.ShowDialog("ChuteDetailDialogView", parameters, _ => { });
     }
@@ -185,7 +191,6 @@ public class MainViewModel : BindableBase, IDisposable
     private async void ProcessSkuInput(string sku)
     {
         var stopwatch = Stopwatch.StartNew(); // 开始计时
-        int chuteNumber; // 初始化为无效值
 
         try
         {
@@ -196,47 +201,62 @@ public class MainViewModel : BindableBase, IDisposable
                 return;
             }
 
-            // 每次用到配置都获取最新
-            var chuteSettings = _settingsService.LoadSettings<Common.Models.Settings.ChuteRules.ChuteSettings>();
-            if (chuteSettings == null)
-            {
-                OperationStatusText = "未找到格口规则配置";
-                _notificationService.ShowError("未找到格口规则配置");
-                return;
-            }
-
             // 检查SKU是否已分配过格口
-            if (_skuChuteMapping.TryGetValue(sku, out int assignedChute))
+            var chuteNumber = 0; // 初始化为无效值
+            if (_skuChuteMapping.TryGetValue(sku, out var assignedChute))
             {
                 chuteNumber = assignedChute;
                 Log.Information("SKU {Sku} 已分配过格口 {ChuteNumber}，直接使用。", sku, chuteNumber);
             }
             else
             {
-                // 规则匹配分配
-                var matchedChute = chuteSettings.FindMatchingChute(sku);
-                if (matchedChute.HasValue)
+                // 调用韵达接口获取格口信息
+                var kuaiShouResponse = await _kuaiShouApiService.CommitScanMsgAsync(sku);
+                if (kuaiShouResponse is { IsSuccess: true })
                 {
-                    chuteNumber = matchedChute.Value;
-                    _skuChuteMapping[sku] = chuteNumber;
-                    Log.Information("SKU {Sku} 规则匹配分配到格口 {ChuteNumber}", sku, chuteNumber);
+                    // 解析物理格口字段，如果多个格口用|分割，取第一个
+                    string physicalChute = kuaiShouResponse.Chute;
+                    if (!string.IsNullOrEmpty(physicalChute))
+                    {
+                        var chuteNumbers = physicalChute.Split('|');
+                        if (chuteNumbers.Length > 0 && int.TryParse(chuteNumbers[0].Trim(), out int parsedChute))
+                        {
+                            chuteNumber = parsedChute;
+                            _skuChuteMapping[sku] = chuteNumber;
+                            Log.Information("SKU {Sku} 韵达接口分配到格口 {ChuteNumber}，物理格口: {PhysicalChute}", 
+                                sku, chuteNumber, physicalChute);
+                        }
+                        else
+                        {
+                            Log.Warning("SKU {Sku} 韵达接口返回的格口号无法解析: {PhysicalChute}", sku, physicalChute);
+                        }
+                    }
+                    else
+                    {
+                        Log.Warning("SKU {Sku} 韵达接口返回空的格口号", sku);
+                    }
                 }
                 else
                 {
-                    // 未匹配到，优先NoReadChuteNumber，其次ErrorChuteNumber
-                    chuteNumber = chuteSettings.NoReadChuteNumber > 0 ? chuteSettings.NoReadChuteNumber : chuteSettings.ErrorChuteNumber;
+                    Log.Warning("SKU {Sku} 韵达接口调用失败或返回错误", sku);
+                }
+
+                // 如果韵达接口未能分配格口，使用默认格口
+                if (chuteNumber <= 0)
+                {
+                    chuteNumber = 1; // 默认格口，可以从配置中获取
                     _skuChuteMapping[sku] = chuteNumber;
-                    OperationStatusText = $"SKU {sku} 未匹配任何规则，分配到兜底格口 {chuteNumber}";
-                    _notificationService.ShowWarning($"SKU {sku} 未匹配任何规则，分配到兜底格口 {chuteNumber}");
-                    Log.Warning("SKU {Sku} 未匹配任何规则，分配到兜底格口 {ChuteNumber}", sku, chuteNumber);
+                    OperationStatusText = $"SKU {sku} 韵达接口未能分配格口，使用默认格口 {chuteNumber}";
+                    _notificationService.ShowWarning($"SKU {sku} 使用默认格口 {chuteNumber}");
+                    Log.Warning("SKU {Sku} 韵达接口未能分配格口，使用默认格口 {ChuteNumber}", sku, chuteNumber);
                 }
             }
 
-            // 确保 chuteNumber 已经被赋值
+            // 确保 chuteNumber 有效
             if (chuteNumber <= 0 || chuteNumber > Chutes.Count)
             {
-                OperationStatusText = "格口分配逻辑错误。";
-                _notificationService.ShowError("格口分配失败，请检查规则配置和格口数量。");
+                OperationStatusText = "格口分配错误：超出有效范围。";
+                _notificationService.ShowError($"格口分配失败：格口 {chuteNumber} 超出有效范围 (1-{Chutes.Count})");
                 stopwatch.Stop();
                 return;
             }
@@ -364,6 +384,47 @@ public class MainViewModel : BindableBase, IDisposable
                 Status = "Unknown",
                 StatusColor = "#FFC107"
             });
+            DeviceStatuses.Add(new DeviceStatus
+            {
+                Name = "KuaiShou API",
+                Icon = "CloudSync24",
+                Status = _kuaiShouApiService.IsEnabled ? "Unknown" : "Disabled",
+                StatusColor = _kuaiShouApiService.IsEnabled ? "#FFC107" : "#9E9E9E"
+            });
+            
+            // 测试快手API连接
+            if (_kuaiShouApiService.IsEnabled)
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var isConnected = await _kuaiShouApiService.TestConnectionAsync();
+                        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                        {
+                            var kuaiShouStatus = DeviceStatuses.FirstOrDefault(d => d.Name == "KuaiShou API");
+                            if (kuaiShouStatus != null)
+                            {
+                                kuaiShouStatus.Status = isConnected ? "Connected" : "Failed";
+                                kuaiShouStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
+                            }
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "Failed to test KuaiShou API connection");
+                        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                        {
+                            var kuaiShouStatus = DeviceStatuses.FirstOrDefault(d => d.Name == "KuaiShou API");
+                            if (kuaiShouStatus != null)
+                            {
+                                kuaiShouStatus.Status = "Error";
+                                kuaiShouStatus.StatusColor = "#F44336";
+                            }
+                        });
+                    }
+                });
+            }
         }
         catch (Exception ex)
         {
@@ -374,17 +435,29 @@ public class MainViewModel : BindableBase, IDisposable
     private void InitializePackageInfo()
     {
         PackageInfoItems.Clear();
-        PackageInfoItems.Add(new PackageInfoItem("Current SKU", "N/A", "", "Currently scanned SKU", "BarcodeScanner24"));
-        PackageInfoItems.Add(new PackageInfoItem("Chute Number", "N/A", "", "Current chute number", "BranchFork24"));
+        PackageInfoItems.Add(new PackageInfoItem("当前SKU", "N/A", "", "当前扫描的SKU码", "BarcodeScanner24"));
+        PackageInfoItems.Add(new PackageInfoItem("格口号", "N/A", "", "当前分配的格口编号", "BranchFork24"));
     }
 
     private void InitializeStatistics()
     {
         StatisticsItems.Clear();
-        StatisticsItems.Add(new PackageInfoItem("Total Packages", "0", "pcs", "Total packages processed", "Package24") { StatusColor = "#4CAF50" });
-        StatisticsItems.Add(new PackageInfoItem("Error Count", "0", "pcs", "Total error packages", "ErrorCircle24") { StatusColor = "#4CAF50" });
-        StatisticsItems.Add(new PackageInfoItem("Efficiency", "0", "p/h", "Processing efficiency", "SpeedHigh24") { StatusColor = "#4CAF50" });
-        StatisticsItems.Add(new PackageInfoItem("Avg. Time", "0", "ms", "Average processing time", "Timer24") { StatusColor = "#4CAF50" });
+        StatisticsItems.Add(new PackageInfoItem("处理总数", "0", "件", "今日处理的包裹总数", "Package24")
+        {
+            StatusColor = "#4CAF50"
+        });
+        StatisticsItems.Add(new PackageInfoItem("异常数量", "0", "件", "今日异常包裹数量", "ErrorCircle24")
+        {
+            StatusColor = "#4CAF50"
+        });
+        StatisticsItems.Add(new PackageInfoItem("处理效率", "0", "件/时", "每小时处理包裹数量", "SpeedHigh24")
+        {
+            StatusColor = "#4CAF50"
+        });
+        StatisticsItems.Add(new PackageInfoItem("平均耗时", "0", "秒", "平均处理时间", "Timer24")
+        {
+            StatusColor = "#4CAF50"
+        });
     }
 
     private void UpdateStatistics()

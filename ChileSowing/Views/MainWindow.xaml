@@ -9,6 +9,9 @@
                  xmlns:prism="http://prismlibrary.com/"
                  xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
                  xmlns:lex="http://wpflocalizeextension.codeplex.com"
+                 lex:LocalizeDictionary.DesignCulture="en-US"
+                 lex:ResxLocalizationProvider.DefaultAssembly="ChileSowing"
+                 lex:ResxLocalizationProvider.DefaultDictionary="Resources.Strings"
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=viewModels:MainViewModel, IsDesignTimeCreatable=True}"
                  Title="{lex:Loc Window_Title}"
@@ -302,7 +305,7 @@
                     <TextBlock VerticalAlignment="Center" FontSize="12"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                         <Run Text="{lex:Loc Status_CPU}" />
-                        <Run Text="{Binding SystemStatusObj.CpuUsage, StringFormat={}{0:F1}%}" />
+                        <Run Text="{Binding SystemStatusObj.CpuUsage, Mode=OneWay, StringFormat={}{0:F1}%}" />
                     </TextBlock>
                 </StackPanel>
 
@@ -313,7 +316,7 @@
                     <TextBlock VerticalAlignment="Center" FontSize="12"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                         <Run Text="{lex:Loc Status_Memory}" />
-                        <Run Text="{Binding SystemStatusObj.MemoryUsage, StringFormat={}{0:F1}%}" />
+                        <Run Text="{Binding SystemStatusObj.MemoryUsage, Mode=OneWay, StringFormat={}{0:F1}%}" />
                     </TextBlock>
                 </StackPanel>
 
@@ -327,14 +330,14 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <StackPanel Orientation="Horizontal" Margin="8,0"
-                                        Visibility="{Binding IsReady, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        Visibility="{Binding IsReady, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
                                 <ui:SymbolIcon Symbol="HardDrive24" FontSize="14" Margin="0,0,4,0"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                 <TextBlock VerticalAlignment="Center" FontSize="12"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                                     <Run Text="{Binding Name, Mode=OneWay}" />
                                     <Run Text=": " />
-                                    <Run Text="{Binding UsagePercentage, StringFormat={}{0:F1}%, Mode=OneWay}" />
+                                    <Run Text="{Binding UsagePercentage, Mode=OneWay, StringFormat={}{0:F1}%}" />
                                 </TextBlock>
                             </StackPanel>
                         </DataTemplate>

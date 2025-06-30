@@ -8,6 +8,9 @@
                  xmlns:local="clr-namespace:ChileSowing.ViewModels"
                  xmlns:mvvm="http://prismlibrary.com/"
                  xmlns:lex="http://wpflocalizeextension.codeplex.com"
+                 lex:LocalizeDictionary.DesignCulture="en-US"
+                 lex:ResxLocalizationProvider.DefaultAssembly="ChileSowing"
+                 lex:ResxLocalizationProvider.DefaultDictionary="Resources.Strings"
                  d:DataContext="{d:DesignInstance local:ChuteDetailDialogViewModel}"
                  mvvm:ViewModelLocator.AutoWireViewModel="True">
     
@@ -28,7 +31,18 @@
         <DataGrid Grid.Row="1" 
                   ItemsSource="{Binding Skus}"
                   Margin="0,0,0,12"
-                  AutoGenerateColumns="True" MaxColumnWidth="300" MaxWidth="380" IsReadOnly="True"/>
+                  AutoGenerateColumns="False" MaxColumnWidth="300" MaxWidth="380" IsReadOnly="True"
+                  VirtualizingPanel.IsVirtualizing="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling"
+                  VirtualizingPanel.IsContainerVirtualizable="True"
+                  EnableRowVirtualization="True"
+                  EnableColumnVirtualization="True"
+                  ScrollViewer.CanContentScroll="True">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="SKU码" Binding="{Binding Sku}" Width="*"/>
+                <DataGridTextColumn Header="扫描时间" Binding="{Binding Timestamp, StringFormat='yyyy-MM-dd HH:mm:ss'}" Width="140"/>
+            </DataGrid.Columns>
+        </DataGrid>
 
         <!-- Buttons -->
         <StackPanel Grid.Row="2" 

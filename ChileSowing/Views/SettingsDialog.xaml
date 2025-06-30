@@ -8,8 +8,11 @@
              xmlns:hc="https://handyorg.github.io/handycontrol"
              xmlns:viewModels="clr-namespace:ChileSowing.ViewModels"
              xmlns:settings="clr-namespace:SowingSorting.Views.Settings;assembly=SowingSorting"
-             xmlns:commonViews="clr-namespace:Common.Views.Settings.ChuteRules;assembly=Common"
+             xmlns:kuaiShouViews="clr-namespace:ChileSowing.Views.Settings"
              xmlns:lex="http://wpflocalizeextension.codeplex.com"
+             lex:LocalizeDictionary.DesignCulture="en-US"
+             lex:ResxLocalizationProvider.DefaultAssembly="ChileSowing"
+             lex:ResxLocalizationProvider.DefaultDictionary="Resources.Strings"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
              d:DesignWidth="1280"
@@ -40,11 +43,11 @@
                                 <x:Type Type="settings:ModbusTcpSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
-                        <ui:NavigationViewItem Content="{lex:Loc Settings_ChuteRule}"
-                                               Tag="ChuteRuleSettingsView"
-                                               Icon="{ui:SymbolIcon Filter24}">
+                        <ui:NavigationViewItem Content="{lex:Loc Settings_KuaiShou}"
+                                               Tag="KuaiShouSettingsView"
+                                               Icon="{ui:SymbolIcon CloudSync24}">
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="commonViews:ChuteRuleSettingsView" />
+                                <x:Type Type="kuaiShouViews:KuaiShouSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>

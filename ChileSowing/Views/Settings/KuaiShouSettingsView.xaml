@@ -1,0 +1,245 @@
+<UserControl x:Class="ChileSowing.Views.Settings.KuaiShouSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:hc="https://handyorg.github.io/handycontrol"
+             xmlns:lex="http://wpflocalizeextension.codeplex.com"
+             lex:LocalizeDictionary.DesignCulture="en-US"
+             lex:ResxLocalizationProvider.DefaultAssembly="ChileSowing"
+             lex:ResxLocalizationProvider.DefaultDictionary="Resources.Strings"
+             mc:Ignorable="d"
+             d:DesignHeight="800" d:DesignWidth="800">
+    
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="20">
+            
+            <!-- 标题 -->
+            <TextBlock Text="韵达快手接口设置" 
+                       FontSize="24" 
+                       FontWeight="Bold" 
+                       Margin="0,0,0,20"/>
+
+            <!-- 基本设置 -->
+            <hc:Card Padding="15" Margin="0,0,0,15">
+                <StackPanel>
+                    <TextBlock Text="基本设置" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" Margin="0,0,0,10"/>
+                    
+                    <!-- 启用状态 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="启用接口:" VerticalAlignment="Center"/>
+                        <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding Settings.IsEnabled}" />
+                    </Grid>
+
+                    <!-- API 地址 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="API 地址:" VerticalAlignment="Center"/>
+                        <ui:TextBox Grid.Column="1" Text="{Binding Settings.ApiUrl, UpdateSourceTrigger=PropertyChanged}" 
+                                    PlaceholderText="http://10.20.160.36:7001/ydadl/public/common/new/commitScanMsg.do"/>
+                    </Grid>
+
+                    <!-- 设备号 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="设备号:" VerticalAlignment="Center"/>
+                        <ui:TextBox Grid.Column="1" Text="{Binding Settings.DeviceNum, UpdateSourceTrigger=PropertyChanged}" 
+                                    PlaceholderText="ChileSowing001"/>
+                    </Grid>
+
+                    <!-- 扫描人员 -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="扫描人员:" VerticalAlignment="Center"/>
+                        <ui:TextBox Grid.Column="1" Text="{Binding Settings.ScanPerson, UpdateSourceTrigger=PropertyChanged}" 
+                                    PlaceholderText="System"/>
+                    </Grid>
+                </StackPanel>
+            </hc:Card>
+
+            <!-- 系统参数 -->
+            <hc:Card Padding="15" Margin="0,0,0,15">
+                <StackPanel>
+                    <TextBlock Text="系统参数" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" Margin="0,0,0,10"/>
+                    
+                    <!-- 扫描类型 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="扫描类型:" VerticalAlignment="Center"/>
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.ScanType}" Minimum="1" Maximum="99"/>
+                    </Grid>
+
+                    <!-- 供件台ID -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="供件台ID:" VerticalAlignment="Center"/>
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.InductionId}" Minimum="1" Maximum="999"/>
+                    </Grid>
+
+                    <!-- 生产线编码 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="生产线编码:" VerticalAlignment="Center"/>
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.ProdLine}" Minimum="1" Maximum="999"/>
+                    </Grid>
+
+                    <!-- 交叉带设备ID -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="交叉带设备ID:" VerticalAlignment="Center"/>
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.EquipmentId}" Minimum="1" Maximum="999"/>
+                    </Grid>
+
+                    <!-- 场地编码 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="场地编码:" VerticalAlignment="Center"/>
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.PlaceCode}" Minimum="1" Maximum="999"/>
+                    </Grid>
+
+                    <!-- 片区编码 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="片区编码:" VerticalAlignment="Center"/>
+                        <ui:TextBox Grid.Column="1" Text="{Binding Settings.AreaCode, UpdateSourceTrigger=PropertyChanged}" 
+                                    PlaceholderText="DEFAULT"/>
+                    </Grid>
+
+                    <!-- 产品类型 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="产品类型:" VerticalAlignment="Center"/>
+                        <ui:TextBox Grid.Column="1" Text="{Binding Settings.ExpProdType, UpdateSourceTrigger=PropertyChanged}" 
+                                    PlaceholderText="STANDARD"/>
+                    </Grid>
+
+                    <!-- 货样编码 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="货样编码:" VerticalAlignment="Center"/>
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.ObjId}" Minimum="1" Maximum="999"/>
+                    </Grid>
+
+                    <!-- 默认重量 -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="默认重量(kg):" VerticalAlignment="Center"/>
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.DefaultWeight}" 
+                                      Minimum="0.1" Maximum="50" SmallChange="0.1" LargeChange="1.0"/>
+                    </Grid>
+                </StackPanel>
+            </hc:Card>
+
+            <!-- 连接设置 -->
+            <hc:Card Padding="15" Margin="0,0,0,15">
+                <StackPanel>
+                    <TextBlock Text="连接设置" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" Margin="0,0,0,10"/>
+                    
+                    <!-- 超时时间 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="超时时间(ms):" VerticalAlignment="Center"/>
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.TimeoutMs}" 
+                                      Minimum="1000" Maximum="30000" SmallChange="1000" LargeChange="5000"/>
+                    </Grid>
+
+                    <!-- 重试次数 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="重试次数:" VerticalAlignment="Center"/>
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.RetryCount}" Minimum="1" Maximum="10"/>
+                    </Grid>
+
+                    <!-- 重试间隔 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="重试间隔(ms):" VerticalAlignment="Center"/>
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.RetryDelayMs}" 
+                                      Minimum="500" Maximum="10000" SmallChange="500" LargeChange="1000"/>
+                    </Grid>
+
+                    <!-- 详细日志 -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="详细日志:" VerticalAlignment="Center"/>
+                        <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding Settings.EnableDetailedLogging}" />
+                    </Grid>
+                </StackPanel>
+            </hc:Card>
+
+            <!-- 操作按钮 -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,20,0,0">
+                <ui:Button Appearance="Primary" 
+                           Command="{Binding TestConnectionCommand}"
+                           Margin="0,0,15,0">
+                    <StackPanel Orientation="Horizontal">
+                        <ui:SymbolIcon Symbol="NetworkCheck24" Margin="0,0,8,0" />
+                        <TextBlock Text="测试连接" />
+                    </StackPanel>
+                </ui:Button>
+                
+                <ui:Button Appearance="Secondary" Command="{Binding ResetToDefaultCommand}">
+                    <StackPanel Orientation="Horizontal">
+                        <ui:SymbolIcon Symbol="ArrowReset24" Margin="0,0,8,0" />
+                        <TextBlock Text="恢复默认" />
+                    </StackPanel>
+                </ui:Button>
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+    
+</UserControl> 

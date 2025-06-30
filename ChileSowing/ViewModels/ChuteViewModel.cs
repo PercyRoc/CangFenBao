@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System;
 
 namespace ChileSowing.ViewModels
 {
@@ -34,7 +33,7 @@ namespace ChileSowing.ViewModels
         public string Quantity
         {
             get => _quantity;
-            set => SetProperty(ref _quantity, value);
+            private set => SetProperty(ref _quantity, value);
         }
 
         public bool IsTargetChute
@@ -55,7 +54,9 @@ namespace ChileSowing.ViewModels
             set => SetProperty(ref _statusColor, value);
         }
 
-        public ObservableCollection<ChutePackageItem> Skus { get; } = new();
+        public ObservableCollection<ChutePackageItem> Skus { get; } =
+        [
+        ];
 
         public void AddSku(string sku)
         {
