@@ -1,7 +1,0 @@
-2025-06-17 11:22:55.610 +08:00 [INF] Serilog Logger 已通过 appsettings.json 配置初始化。
-2025-06-17 11:22:55.664 +08:00 [INF] Application culture set to zh-CN
-2025-06-17 11:22:56.880 +08:00 [ERR] Modbus TCP 客户端连接失败: IP=127.0.0.1, Port=502, UnitId=1
-EasyModbus.Exceptions.ConnectionException: connection timed out
-   at EasyModbus.ModbusClient.Connect()
-   at SowingSorting.Services.ModbusTcpService.<>c__DisplayClass9_0.<ConnectAsync>b__0() in D:\RiderProjects\CangFenBao\SowingSorting\Services\ModbusTcpService.cs:line 52
-2025-06-17 11:22:59.708 +08:00 [INF] PackageDbContext.OnModelCreating: Configuring entity for table Package_202506
