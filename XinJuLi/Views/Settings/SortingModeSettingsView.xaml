@@ -72,7 +72,7 @@
                                Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
                                Margin="0,0,0,4">
                         <Run Text="分拣方式: " />
-                        <Run Text="{Binding CurrentModeDisplayName}" FontWeight="SemiBold" />
+                        <Run Text="{Binding CurrentModeDisplayName, Mode=OneWay}" FontWeight="SemiBold" />
                     </TextBlock>
                     <TextBlock FontSize="16"
                                Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
@@ -80,7 +80,7 @@
                         <Run Text="摆动方向: " />
                         <Run Text="{Binding Settings.PendulumDirection, Converter={StaticResource EnumDescriptionConverter}}" FontWeight="SemiBold" />
                     </TextBlock>
-                    <TextBlock Text="{Binding LastUpdatedDisplay, StringFormat=最后更新: {0}}"
+                    <TextBlock Text="{Binding LastUpdatedDisplay, StringFormat=最后更新: {0}, Mode=OneWay}"
                                FontSize="12"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
@@ -144,7 +144,7 @@
                             <TextBlock Text="功能说明："
                                        FontWeight="SemiBold"
                                        Margin="0,0,0,4" />
-                            <TextBlock Text="{Binding SelectedModeDescription}"
+                            <TextBlock Text="{Binding SelectedModeDescription, Mode=OneWay}"
                                        TextWrapping="Wrap"
                                        FontSize="12"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -206,7 +206,7 @@
                             <TextBlock Text="摆动说明："
                                        FontWeight="SemiBold"
                                        Margin="0,0,0,4" />
-                            <TextBlock Text="{Binding PendulumDirectionDescription}"
+                            <TextBlock Text="{Binding PendulumDirectionDescription, Mode=OneWay}"
                                        TextWrapping="Wrap"
                                        FontSize="12"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
