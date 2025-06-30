@@ -214,6 +214,11 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
     /// </summary>
     protected override void HandleSecondPhotoelectric(string data)
     {
+        var sortingTime = DateTime.Now;
+        
+        // 触发分拣光电信号事件
+        RaiseSortingPhotoelectricSignal("默认", sortingTime);
+
         // 使用基类的匹配逻辑
         var package = MatchPackageForSorting("默认");
         if (package == null) return;

@@ -40,6 +40,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
@@ -91,8 +92,21 @@
                 </StackPanel>
             </ui:Button>
 
+            <!-- 标定按钮 -->
+            <ui:Button Grid.Column="3"
+                       Appearance="Info"
+                       Command="{Binding OpenCalibrationCommand}"
+                       Margin="0,0,8,0"
+                       Padding="8,6"
+                       ToolTip="分拣时间标定">
+                <StackPanel Orientation="Horizontal">
+                    <ui:SymbolIcon Symbol="Target24" Margin="0,0,8,0" />
+                    <TextBlock Text="标定" VerticalAlignment="Center" />
+                </StackPanel>
+            </ui:Button>
+
             <!-- 标题 -->
-            <TextBlock Grid.Column="3"
+            <TextBlock Grid.Column="4"
                        Text="仓分宝-笨鸟"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
@@ -112,7 +126,7 @@
             </TextBlock>
 
             <!-- TitleBar -->
-            <ui:TitleBar Grid.Column="4"
+            <ui:TitleBar Grid.Column="5"
                          Title=""
                          ButtonsForeground="#FF008891"
                          ShowMaximize="True"
@@ -120,7 +134,7 @@
                          ShowClose="True" />
 
             <Border Grid.Column="0"
-                    Grid.ColumnSpan="5"
+                    Grid.ColumnSpan="6"
                     Height="1"
                     VerticalAlignment="Bottom"
                     Background="#20008080"
@@ -283,13 +297,13 @@
                         <ItemsControl Grid.Row="1" ItemsSource="{Binding StatisticsItems}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
-                                    <UniformGrid Columns="2" />
+                                    <UniformGrid Columns="3" />
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Border Margin="4"
-                                            Height="100"
+                                            Height="85"
                                             CornerRadius="8"
                                             Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                                             BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
@@ -326,7 +340,7 @@
                                                         VerticalAlignment="Center">
                                                 <DockPanel>
                                                     <TextBlock Text="{Binding Value}"
-                                                               FontSize="28"
+                                                               FontSize="22"
                                                                FontWeight="SemiBold"
                                                                Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
                                                     <TextBlock Text="{Binding Unit}"

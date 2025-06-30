@@ -11,6 +11,16 @@ public interface IPendulumSortService : IDisposable
     event EventHandler<(string Name, bool Connected)> DeviceConnectionStatusChanged;
 
     /// <summary>
+    ///     触发光电信号事件
+    /// </summary>
+    event EventHandler<DateTime> TriggerPhotoelectricSignal;
+
+    /// <summary>
+    ///     分拣光电信号事件
+    /// </summary>
+    event EventHandler<(string PhotoelectricName, DateTime SignalTime)> SortingPhotoelectricSignal;
+
+    /// <summary>
     ///     初始化分检服务
     /// </summary>
     /// <param name="configuration">分检配置</param>

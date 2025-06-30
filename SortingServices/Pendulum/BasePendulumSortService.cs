@@ -44,6 +44,9 @@ public abstract class BasePendulumSortService : IPendulumSortService
 
     public event EventHandler<(string Name, bool Connected)>? DeviceConnectionStatusChanged;
 
+    public event EventHandler<DateTime>? TriggerPhotoelectricSignal;
+    public event EventHandler<(string PhotoelectricName, DateTime SignalTime)>? SortingPhotoelectricSignal;
+
     public abstract Task InitializeAsync(PendulumSortConfig configuration);
 
     public abstract Task StartAsync();
@@ -470,6 +473,16 @@ public abstract class BasePendulumSortService : IPendulumSortService
     {
         var triggerTime = DateTime.Now;
         Log.Debug("收到触发信号: {Signal}，记录触发时间: {TriggerTime:HH:mm:ss.fff}", data, triggerTime);
+
+        // 触发光电信号事件
+        try
+        {
+            TriggerPhotoelectricSignal?.Invoke(this, triggerTime);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "触发光电信号事件时发生错误");
+        }
 
         lock (_triggerTimes)
         {
@@ -1186,6 +1199,21 @@ public abstract class BasePendulumSortService : IPendulumSortService
         {
             Log.Error(ex, "执行立即回正时发生错误 (光电: {Name})", photoelectricName);
             pendulumState.ForceReset();
+        }
+    }
+
+    /// <summary>
+    ///     触发分拣光电信号事件
+    /// </summary>
+    protected void RaiseSortingPhotoelectricSignal(string photoelectricName, DateTime signalTime)
+    {
+        try
+        {
+            SortingPhotoelectricSignal?.Invoke(this, (photoelectricName, signalTime));
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "触发分拣光电信号事件时发生错误，光电: {PhotoelectricName}", photoelectricName);
         }
     }
 }

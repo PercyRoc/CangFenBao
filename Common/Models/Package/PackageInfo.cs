@@ -219,6 +219,11 @@ public class PackageInfo : IDisposable
     public PackageSortState SortState { get; private set; }
 
     /// <summary>
+    ///     是否已上传到笨鸟系统
+    /// </summary>
+    public bool IsUploadedToBenNiao { get; private set; }
+
+    /// <summary>
     ///     标记此包裹是否是前一个相同格口包裹的延续。
     ///     如果为 true，则意味着上一个包裹特意没有回正，为本包裹保留了摆轮状态。
     ///     这是"责任接力棒"机制的核心，用于解决连续相同格口包裹的状态传递问题。
@@ -369,5 +374,14 @@ public class PackageInfo : IDisposable
     public void SetSortState(PackageSortState sortState)
     {
         SortState = sortState;
+    }
+
+    /// <summary>
+    ///     设置笨鸟上传状态
+    /// </summary>
+    /// <param name="isUploaded">是否已上传</param>
+    public void SetBenNiaoUploadStatus(bool isUploaded)
+    {
+        IsUploadedToBenNiao = isUploaded;
     }
 }

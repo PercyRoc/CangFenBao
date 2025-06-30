@@ -403,7 +403,11 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
                 return;
             }
 
+            var sortingTime = DateTime.Now;
             Log.Information("分拣光电 {Name} 收到上升沿信号，开始匹配包裹", photoelectricName);
+            
+            // 触发分拣光电信号事件
+            RaiseSortingPhotoelectricSignal(photoelectricName, sortingTime);
             
             // 使用基类的匹配逻辑
             var newPackage = MatchPackageForSorting(photoelectricName);

@@ -65,6 +65,7 @@ public partial class App
         containerRegistry.RegisterForNavigation<BeltSettingsView, BeltSettingsViewModel>();
 
         containerRegistry.RegisterDialog<SettingsDialogs, SettingsDialogViewModel>("SettingsDialog");
+        containerRegistry.RegisterDialog<CalibrationDialogView, CalibrationDialogViewModel>("CalibrationDialog");
 
         // 注册串口服务
         containerRegistry.RegisterSingleton<BeltSerialService>();

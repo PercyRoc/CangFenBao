@@ -56,6 +56,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     // 统计计数器 - 使用线程安全的方式
     private long _totalPackageCount = 0;
     private long _errorPackageCount = 0;
+    private long _noReadPackageCount = 0;
+    private long _chuteAllocationErrorCount = 0;
+    private long _uploadErrorCount = 0;
 
     public MainWindowViewModel(
         IDialogService dialogService,
@@ -99,6 +102,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         // 初始化命令
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
         OpenHistoryCommand = new DelegateCommand(ExecuteOpenHistory);
+        OpenCalibrationCommand = new DelegateCommand(ExecuteOpenCalibration);
 
         // 初始化系统状态更新定时器
         _timer = new DispatcherTimer
@@ -156,10 +160,14 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     Log.Error(ex, "处理图像流时发生错误");
                 }
             }));
+
+        // 记录新功能启用
+        Log.Information("已启用新的分类异常统计功能：NoRead异常、格口分配异常、上传异常分别统计");
     }
 
     public DelegateCommand OpenSettingsCommand { get; }
     public DelegateCommand OpenHistoryCommand { get; }
+    public DelegateCommand OpenCalibrationCommand { get; }
 
     public string CurrentBarcode
     {
@@ -198,6 +206,19 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private void ExecuteOpenHistory()
     {
         _dialogService.ShowDialog("HistoryDialog");
+    }
+
+    private void ExecuteOpenCalibration()
+    {
+        try
+        {
+            Log.Information("用户打开分拣时间标定对话框");
+            _dialogService.ShowDialog("CalibrationDialog");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "打开标定对话框时发生错误");
+        }
     }
 
     private void Timer_Tick(object? sender, EventArgs e)
@@ -340,11 +361,27 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         ));
 
         StatisticsItems.Add(new StatisticsItem(
-            label: "异常数",
+            label: "NoRead异常",
             value: "0",
             unit: "个",
-            description: "处理异常的包裹数量",
-            icon: "AlertOff24"
+            description: "无法识别条码的包裹数量",
+            icon: "ScanCamera24"
+        ));
+
+        StatisticsItems.Add(new StatisticsItem(
+            label: "格口分配异常",
+            value: "0",
+            unit: "个",
+            description: "已上传但格口分配失败的包裹",
+            icon: "LocationOff24"
+        ));
+
+        StatisticsItems.Add(new StatisticsItem(
+            label: "上传异常",
+            value: "0",
+            unit: "个",
+            description: "无法上传到笨鸟系统的包裹",
+            icon: "CloudOff24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
@@ -657,6 +694,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                             uploadTime = time;
                             Log.Information("笨鸟数据上传成功: Barcode: {Barcode}, Index: {Index}", package.Barcode, package.Index);
                             package.SetStatus(PackageStatus.Success); // 初始状态设为成功
+                            package.SetBenNiaoUploadStatus(true); // 标记为已上传到笨鸟系统
                         }
                     }
                 }
@@ -727,7 +765,28 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
             // 更新统计计数器（线程安全）
             Interlocked.Increment(ref _totalPackageCount);
-            if (package.Status is PackageStatus.Error or PackageStatus.NoRead)
+            
+            // 分别统计不同类型的异常
+            if (package.Status == PackageStatus.NoRead)
+            {
+                Interlocked.Increment(ref _noReadPackageCount);
+            }
+            else if (package.Status == PackageStatus.Error)
+            {
+                if (!package.IsUploadedToBenNiao)
+                {
+                    // 上传异常：无法上传到笨鸟系统
+                    Interlocked.Increment(ref _uploadErrorCount);
+                }
+                else
+                {
+                    // 格口分配异常：已上传但后续处理失败
+                    Interlocked.Increment(ref _chuteAllocationErrorCount);
+                }
+            }
+            
+            // 保持原有的总异常数计算（兼容性）
+            if ((package.Status is PackageStatus.Error or PackageStatus.NoRead) && !package.IsUploadedToBenNiao)
             {
                 Interlocked.Increment(ref _errorPackageCount);
             }
@@ -755,6 +814,10 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     Log.Error(ex, "最终更新UI时发生错误。Barcode: {Barcode}, Index: {Index}", package.Barcode, package.Index);
                 }
             });
+
+            // 记录包裹最终状态用于问题排查
+            Log.Information("包裹处理完成 - Barcode: {Barcode}, Index: {Index}, Status: {Status}, IsUploadedToBenNiao: {IsUploadedToBenNiao}, Chute: {Chute}", 
+                package.Barcode, package.Index, package.Status, package.IsUploadedToBenNiao, package.ChuteNumber);
 
             // 异步保存数据到数据库
             try
@@ -868,7 +931,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             chuteItem.Description = package.ChuteNumber == 0 ? "等待分配..." : "目标分拣位置";
         }
 
-        var timeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "时间");
+        var timeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "当前时间");
         if (timeItem != null)
         {
             timeItem.Value = package.CreateTime.ToString("HH:mm:ss");
@@ -893,13 +956,31 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             totalItem.Description = $"累计处理 {totalCount} 个包裹";
         }
 
-        var errorItem = StatisticsItems.FirstOrDefault(static x => x.Label == "异常数");
-        if (errorItem != null)
+        // 更新NoRead异常统计
+        var noReadItem = StatisticsItems.FirstOrDefault(static x => x.Label == "NoRead异常");
+        if (noReadItem != null)
         {
-            // 使用线程安全的计数器统计异常数
-            var errorCount = Interlocked.Read(ref _errorPackageCount);
-            errorItem.Value = errorCount.ToString();
-            errorItem.Description = $"共有 {errorCount} 个异常包裹（包括错误和NoRead）";
+            var noReadCount = Interlocked.Read(ref _noReadPackageCount);
+            noReadItem.Value = noReadCount.ToString();
+            noReadItem.Description = $"共有 {noReadCount} 个无法识别条码的包裹";
+        }
+
+        // 更新格口分配异常统计
+        var chuteErrorItem = StatisticsItems.FirstOrDefault(static x => x.Label == "格口分配异常");
+        if (chuteErrorItem != null)
+        {
+            var chuteErrorCount = Interlocked.Read(ref _chuteAllocationErrorCount);
+            chuteErrorItem.Value = chuteErrorCount.ToString();
+            chuteErrorItem.Description = $"共有 {chuteErrorCount} 个已上传但格口分配失败的包裹";
+        }
+
+        // 更新上传异常统计
+        var uploadErrorItem = StatisticsItems.FirstOrDefault(static x => x.Label == "上传异常");
+        if (uploadErrorItem != null)
+        {
+            var uploadErrorCount = Interlocked.Read(ref _uploadErrorCount);
+            uploadErrorItem.Value = uploadErrorCount.ToString();
+            uploadErrorItem.Description = $"共有 {uploadErrorCount} 个无法上传到笨鸟系统的包裹";
         }
 
         var efficiencyItem = StatisticsItems.FirstOrDefault(static x => x.Label == "预测效率");
