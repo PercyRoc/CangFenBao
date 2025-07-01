@@ -137,4 +137,126 @@
     <data name="Settings_KuaiShou" xml:space="preserve">
         <value>韵达快手接口</value>
     </data>
+    
+    <!-- 性能监控面板 -->
+    <data name="Label_PerformanceMonitor" xml:space="preserve">
+        <value>性能监控</value>
+    </data>
+    <data name="Label_ProcessingStatus" xml:space="preserve">
+        <value>处理状态</value>
+    </data>
+    <data name="Label_LastProcessed" xml:space="preserve">
+        <value>最后处理</value>
+    </data>
+    <data name="Label_SuccessRate" xml:space="preserve">
+        <value>成功率</value>
+    </data>
+    <data name="Label_RealtimeSpeed" xml:space="preserve">
+        <value>实时速度</value>
+    </data>
+    <data name="Status_Processing" xml:space="preserve">
+        <value>处理中</value>
+    </data>
+    <data name="Status_Idle" xml:space="preserve">
+        <value>空闲</value>
+    </data>
+    <data name="Status_None" xml:space="preserve">
+        <value>无</value>
+    </data>
+    <data name="Unit_PcsPerMin" xml:space="preserve">
+        <value>件/分钟</value>
+    </data>
+    <data name="Description_CurrentOperationState" xml:space="preserve">
+        <value>当前操作状态</value>
+    </data>
+    <data name="Description_ProcessingSuccessRate" xml:space="preserve">
+        <value>处理成功率</value>
+    </data>
+    <data name="Description_BasedOnRecentProcessing" xml:space="preserve">
+        <value>基于最近处理时间</value>
+    </data>
+    
+    <!-- 包裹信息项 -->
+    <data name="PackageInfo_CurrentSku" xml:space="preserve">
+        <value>当前SKU</value>
+    </data>
+    <data name="PackageInfo_ChuteNumber" xml:space="preserve">
+        <value>格口号</value>
+    </data>
+    <data name="PackageInfo_CurrentSkuDesc" xml:space="preserve">
+        <value>当前扫描的SKU码</value>
+    </data>
+    <data name="PackageInfo_ChuteNumberDesc" xml:space="preserve">
+        <value>当前分配的格口编号</value>
+    </data>
+    
+    <!-- 统计信息项 -->
+    <data name="Statistics_TotalProcessed" xml:space="preserve">
+        <value>处理总数</value>
+    </data>
+    <data name="Statistics_ErrorCount" xml:space="preserve">
+        <value>异常数量</value>
+    </data>
+    <data name="Statistics_ProcessingEfficiency" xml:space="preserve">
+        <value>处理效率</value>
+    </data>
+    <data name="Statistics_AverageTime" xml:space="preserve">
+        <value>平均耗时</value>
+    </data>
+    <data name="Statistics_TotalProcessedDesc" xml:space="preserve">
+        <value>今日处理的包裹总数</value>
+    </data>
+    <data name="Statistics_ErrorCountDesc" xml:space="preserve">
+        <value>今日异常包裹数量</value>
+    </data>
+    <data name="Statistics_ProcessingEfficiencyDesc" xml:space="preserve">
+        <value>每小时处理包裹数量</value>
+    </data>
+    <data name="Statistics_AverageTimeDesc" xml:space="preserve">
+        <value>平均处理时间</value>
+    </data>
+    
+    <!-- 单位 -->
+    <data name="Unit_Pieces" xml:space="preserve">
+        <value>件</value>
+    </data>
+    <data name="Unit_PiecesPerHour" xml:space="preserve">
+        <value>件/时</value>
+    </data>
+    <data name="Unit_Seconds" xml:space="preserve">
+        <value>秒</value>
+    </data>
+    
+    <!-- 格口详情对话框 -->
+    <data name="Dialog_ChutePackages_Title" xml:space="preserve">
+        <value>格口包裹列表</value>
+    </data>
+    <data name="DataGrid_Header_SkuCode" xml:space="preserve">
+        <value>SKU码</value>
+    </data>
+    <data name="DataGrid_Header_ScanTime" xml:space="preserve">
+        <value>扫描时间</value>
+    </data>
+    
+    <!-- 消息提示 -->
+    <data name="Message_PreviousRequestProcessing" xml:space="preserve">
+        <value>上一个请求仍在处理中...</value>
+    </data>
+    <data name="Message_EnterValidSku" xml:space="preserve">
+        <value>请输入有效的SKU</value>
+    </data>
+    <data name="Message_PlcNotConnected" xml:space="preserve">
+        <value>PLC未连接</value>
+    </data>
+    <data name="Message_TestingConnection" xml:space="preserve">
+        <value>正在测试连接...</value>
+    </data>
+    
+    <!-- 占位符文本 -->
+    <data name="Placeholder_None" xml:space="preserve">
+        <value>无</value>
+    </data>
+    <data name="Placeholder_NotApplicable" xml:space="preserve">
+        <value>N/A</value>
+    </data>
 </root> 

@@ -1,0 +1,87 @@
+<UserControl x:Class="ChileSowing.Views.UserControls.InputPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:hc="https://handyorg.github.io/handycontrol"
+             xmlns:lex="http://wpflocalizeextension.codeplex.com"
+             lex:LocalizeDictionary.DesignCulture="en-US"
+             lex:ResxLocalizationProvider.DefaultAssembly="ChileSowing"
+             lex:ResxLocalizationProvider.DefaultDictionary="Resources.Strings"
+             mc:Ignorable="d"
+             d:DesignHeight="800" d:DesignWidth="400">
+    
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/ChileSowing;component/Resources/Styles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <hc:Card Margin="10" Padding="20">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+                <!-- SKU Input -->
+                <TextBlock Text="{lex:Loc Label_ScanProductSku}"
+                          Style="{StaticResource SectionHeaderStyle}" />
+                <ui:TextBox Icon="BarcodeScanner24" 
+                           Text="{Binding CurrentSkuInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                           FontSize="20" 
+                           FontWeight="Bold" 
+                           PlaceholderText="{lex:Loc Placeholder_EnterScanSku}" 
+                           Margin="0,8,0,20">
+                    <ui:TextBox.InputBindings>
+                        <KeyBinding Key="Return" Command="{Binding ProcessSkuCommand}" 
+                                  CommandParameter="{Binding CurrentSkuInput}"/>
+                    </ui:TextBox.InputBindings>
+                </ui:TextBox>
+
+                <!-- Wave Number Input -->
+                <TextBlock Text="{lex:Loc Label_ScanWaveNumber}"
+                          Style="{StaticResource SectionHeaderStyle}" />
+                <ui:TextBox Icon="BranchFork24" 
+                           Text="{Binding CurrentWaveInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                           FontSize="20" 
+                           FontWeight="Bold" 
+                           PlaceholderText="{lex:Loc Placeholder_EnterScanWaveNumber}" 
+                           Margin="0,8,0,20" />
+
+                <!-- Package Info -->
+                <Border Style="{StaticResource InfoCardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="{lex:Loc Label_PackageInfo}"
+                                  Style="{StaticResource SectionHeaderStyle}"
+                                  Margin="0,0,0,10" />
+                        <ItemsControl ItemsSource="{Binding PackageInfoItems}"
+                                     ItemTemplate="{StaticResource InfoItemTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Columns="2" Rows="1" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <!-- Statistics -->
+                <Border Style="{StaticResource InfoCardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="{lex:Loc Label_Statistics}"
+                                  Style="{StaticResource SectionHeaderStyle}"
+                                  Margin="0,0,0,10" />
+                        <ItemsControl ItemsSource="{Binding StatisticsItems}"
+                                     ItemTemplate="{StaticResource InfoItemTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Columns="2" Rows="2" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </hc:Card>
+</UserControl> 

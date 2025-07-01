@@ -10,6 +10,8 @@ using Common.Services.Ui;
 using System.Diagnostics;
 using Common.Models;
 using ChileSowing.Services;
+using WPFLocalizeExtension.Engine;
+using System.Globalization;
 
 namespace ChileSowing.ViewModels;
 
@@ -47,6 +49,13 @@ public class MainViewModel : BindableBase, IDisposable
     private const string DefaultChuteColor = "#FFFFFF"; // 白色
     private const string HighlightChuteColor = "#4CAF50"; // 绿色
 
+    // 新增字段用于性能监控
+    private bool _isProcessing;
+    private string _lastProcessedSku = string.Empty;
+    private DateTime _lastProcessTime = DateTime.MinValue;
+    private readonly Queue<TimeSpan> _recentProcessingTimes = new();
+    private const int MaxRecentTimesToKeep = 50;
+
     public MainViewModel(IDialogService dialogService, IModbusTcpService modbusTcpService, ISettingsService settingsService, IPackageHistoryDataService historyService, INotificationService notificationService, IKuaiShouApiService kuaiShouApiService)
     {
         _dialogService = dialogService;
@@ -62,8 +71,6 @@ public class MainViewModel : BindableBase, IDisposable
         ShowChutePackagesCommand = new DelegateCommand<ChuteViewModel>(ShowChutePackages);
 
         InitializeChutes();
-        InitializePackageInfo();
-        InitializeStatistics();
 
         // 订阅 Modbus TCP 连接状态变化事件
         _modbusTcpService.ConnectionStatusChanged += ModbusTcpService_ConnectionStatusChanged;
@@ -125,6 +132,64 @@ public class MainViewModel : BindableBase, IDisposable
 
     public ICommand ShowChutePackagesCommand { get; }
 
+    // 新增属性
+    public bool IsProcessing
+    {
+        get => _isProcessing;
+        private set => SetProperty(ref _isProcessing, value);
+    }
+
+    public string LastProcessedSku
+    {
+        get => _lastProcessedSku;
+        private set => SetProperty(ref _lastProcessedSku, value);
+    }
+
+    public DateTime LastProcessTime
+    {
+        get => _lastProcessTime;
+        private set => SetProperty(ref _lastProcessTime, value);
+    }
+
+    // 成功率属性
+    public double SuccessRate
+    {
+        get
+        {
+            var totalAttempts = _packagesProcessedToday + _errorCount;
+            if (totalAttempts == 0) return 100.0;
+            return (double)_packagesProcessedToday / totalAttempts * 100.0;
+        }
+    }
+
+    // 实时处理速度 (包裹/分钟)
+    public double RealtimeSpeed
+    {
+        get
+        {
+            if (_recentProcessingTimes.Count < 2) return 0;
+            
+            var averageTimePerPackage = _recentProcessingTimes.Average(t => t.TotalMilliseconds);
+            if (averageTimePerPackage == 0) return 0;
+            
+            // 转换为每分钟处理的包裹数
+            return 60000.0 / averageTimePerPackage;
+        }
+    }
+
+    #endregion
+
+    #region 公共方法
+
+    /// <summary>
+    /// 初始化本地化内容，需要在应用完全启动后调用
+    /// </summary>
+    public void InitializeLocalization()
+    {
+        InitializePackageInfo();
+        InitializeStatistics();
+    }
+
     #endregion
 
     #region 命令
@@ -175,7 +240,7 @@ public class MainViewModel : BindableBase, IDisposable
         var parameters = new DialogParameters
         {
             {
-                "title", $"格口 {chute.ChuteNumber} 包裹列表"
+                "title", $"{GetLocalizedString("Dialog_ChutePackages_Title")} - {chute.ChuteNumber}"
             },
             {
                 "skus", chute.Skus
@@ -190,14 +255,27 @@ public class MainViewModel : BindableBase, IDisposable
 
     private async void ProcessSkuInput(string sku)
     {
+        if (IsProcessing)
+        {
+            _notificationService.ShowWarning(GetLocalizedString("Message_PreviousRequestProcessing"));
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(sku))
+        {
+            _notificationService.ShowWarning(GetLocalizedString("Message_EnterValidSku"));
+            return;
+        }
+
+        IsProcessing = true;
         var stopwatch = Stopwatch.StartNew(); // 开始计时
 
         try
         {
             if (!_modbusTcpService.IsConnected)
             {
-                OperationStatusText = "PLC not connected";
-                _notificationService.ShowError("PLC 未连接");
+                OperationStatusText = GetLocalizedString("Message_PlcNotConnected");
+                _notificationService.ShowError(GetLocalizedString("Message_PlcNotConnected"));
                 return;
             }
 
@@ -298,6 +376,15 @@ public class MainViewModel : BindableBase, IDisposable
                     _processingTimes.RemoveAt(0);
                 }
 
+                // 更新性能监控信息
+                _recentProcessingTimes.Enqueue(stopwatch.Elapsed);
+                if (_recentProcessingTimes.Count > MaxRecentTimesToKeep)
+                {
+                    _recentProcessingTimes.Dequeue();
+                }
+                LastProcessedSku = sku;
+                LastProcessTime = DateTime.Now;
+
                 // 添加历史记录
                 var historyRecord = new PackageHistoryRecord
                 {
@@ -307,9 +394,9 @@ public class MainViewModel : BindableBase, IDisposable
                     Status = "Sorted",
                 };
                 await _historyService.AddPackageAsync(historyRecord);
-                Log.Information("SKU {Sku} 已添加到历史记录，格口 {ChuteNumber}", sku, chuteNumber);
+                Log.Information("SKU {Sku} added to history, assigned to chute {ChuteNumber}", sku, chuteNumber);
 
-                _notificationService.ShowSuccess($"SKU {sku} 已分配到格口 {chuteNumber}");
+                _notificationService.ShowSuccess($"SKU {sku} assigned to chute {chuteNumber}");
 
                 // 高亮当前分配的格口
                 selectedChute.StatusColor = HighlightChuteColor;
@@ -333,6 +420,7 @@ public class MainViewModel : BindableBase, IDisposable
         }
         finally
         {
+            IsProcessing = false;
             CurrentSkuInput = string.Empty;
             UpdateStatistics();
         }
@@ -435,26 +523,56 @@ public class MainViewModel : BindableBase, IDisposable
     private void InitializePackageInfo()
     {
         PackageInfoItems.Clear();
-        PackageInfoItems.Add(new PackageInfoItem("当前SKU", "N/A", "", "当前扫描的SKU码", "BarcodeScanner24"));
-        PackageInfoItems.Add(new PackageInfoItem("格口号", "N/A", "", "当前分配的格口编号", "BranchFork24"));
+        PackageInfoItems.Add(new PackageInfoItem(
+            GetLocalizedString("PackageInfo_CurrentSku"), 
+            GetLocalizedString("Placeholder_NotApplicable"), 
+            "", 
+            GetLocalizedString("PackageInfo_CurrentSkuDesc"), 
+            "BarcodeScanner24"));
+        PackageInfoItems.Add(new PackageInfoItem(
+            GetLocalizedString("PackageInfo_ChuteNumber"), 
+            GetLocalizedString("Placeholder_NotApplicable"), 
+            "", 
+            GetLocalizedString("PackageInfo_ChuteNumberDesc"), 
+            "BranchFork24"));
     }
 
     private void InitializeStatistics()
     {
         StatisticsItems.Clear();
-        StatisticsItems.Add(new PackageInfoItem("处理总数", "0", "件", "今日处理的包裹总数", "Package24")
+        StatisticsItems.Add(new PackageInfoItem(
+            GetLocalizedString("Statistics_TotalProcessed"), 
+            "0", 
+            GetLocalizedString("Unit_Pieces"), 
+            GetLocalizedString("Statistics_TotalProcessedDesc"), 
+            "Package24")
         {
             StatusColor = "#4CAF50"
         });
-        StatisticsItems.Add(new PackageInfoItem("异常数量", "0", "件", "今日异常包裹数量", "ErrorCircle24")
+        StatisticsItems.Add(new PackageInfoItem(
+            GetLocalizedString("Statistics_ErrorCount"), 
+            "0", 
+            GetLocalizedString("Unit_Pieces"), 
+            GetLocalizedString("Statistics_ErrorCountDesc"), 
+            "ErrorCircle24")
         {
             StatusColor = "#4CAF50"
         });
-        StatisticsItems.Add(new PackageInfoItem("处理效率", "0", "件/时", "每小时处理包裹数量", "SpeedHigh24")
+        StatisticsItems.Add(new PackageInfoItem(
+            GetLocalizedString("Statistics_ProcessingEfficiency"), 
+            "0", 
+            GetLocalizedString("Unit_PiecesPerHour"), 
+            GetLocalizedString("Statistics_ProcessingEfficiencyDesc"), 
+            "SpeedHigh24")
         {
             StatusColor = "#4CAF50"
         });
-        StatisticsItems.Add(new PackageInfoItem("平均耗时", "0", "秒", "平均处理时间", "Timer24")
+        StatisticsItems.Add(new PackageInfoItem(
+            GetLocalizedString("Statistics_AverageTime"), 
+            "0", 
+            GetLocalizedString("Unit_Seconds"), 
+            GetLocalizedString("Statistics_AverageTimeDesc"), 
+            "Timer24")
         {
             StatusColor = "#4CAF50"
         });
@@ -479,6 +597,10 @@ public class MainViewModel : BindableBase, IDisposable
         double totalHours = SystemStatusObj.RunningTime.TotalHours;
         double efficiency = totalHours > 0 ? _packagesProcessedToday / totalHours : 0;
         StatisticsItems[2].Value = efficiency.ToString("F0"); // 显示每小时包裹数，取整
+
+        // 通知性能监控属性更新
+        RaisePropertyChanged(nameof(SuccessRate));
+        RaisePropertyChanged(nameof(RealtimeSpeed));
     }
 
     private void Timer_Tick(object? sender, EventArgs e)
@@ -490,6 +612,28 @@ public class MainViewModel : BindableBase, IDisposable
         catch (Exception ex)
         {
             Log.Warning(ex, "更新系统状态失败。");
+        }
+    }
+
+    /// <summary>
+    /// 获取本地化字符串
+    /// </summary>
+    /// <param name="key">资源键</param>
+    /// <returns>本地化字符串</returns>
+    private string GetLocalizedString(string key)
+    {
+        try
+        {
+            var result = LocalizeDictionary.Instance.GetLocalizedObject(
+                "ChileSowing:Resources.Strings:" + key, 
+                null, 
+                CultureInfo.CurrentUICulture);
+            return result?.ToString() ?? key;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "获取本地化字符串失败: {Key}", key);
+            return key;
         }
     }
 

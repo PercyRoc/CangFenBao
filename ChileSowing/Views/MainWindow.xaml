@@ -9,6 +9,7 @@
                  xmlns:prism="http://prismlibrary.com/"
                  xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
                  xmlns:lex="http://wpflocalizeextension.codeplex.com"
+                 xmlns:local="clr-namespace:ChileSowing.Views.UserControls"
                  lex:LocalizeDictionary.DesignCulture="en-US"
                  lex:ResxLocalizationProvider.DefaultAssembly="ChileSowing"
                  lex:ResxLocalizationProvider.DefaultDictionary="Resources.Strings"
@@ -18,8 +19,10 @@
                  WindowStartupLocation="CenterScreen">
     <ui:FluentWindow.Resources>
         <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/ChileSowing;component/Resources/Styles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
-            <DropShadowEffect x:Key="CardDropShadowEffect" ShadowDepth="2" BlurRadius="8" Color="#FFCCCCCC" Opacity="0.3"/>
         </ResourceDictionary>
     </ui:FluentWindow.Resources>
 
@@ -67,6 +70,21 @@
                     <TextBlock Text="{lex:Loc Button_History}" VerticalAlignment="Center" />
                 </StackPanel>
             </ui:Button>
+            
+            <!-- Language Switcher -->
+            <ComboBox Grid.Column="3" 
+                      Name="LanguageComboBox" 
+                      Width="80" 
+                      Height="26"
+                      HorizontalAlignment="Left"
+                      VerticalAlignment="Center"
+                      Margin="8,0,0,0"
+                      SelectedIndex="0"
+                      ToolTip="切换语言 / Switch Language"
+                      SelectionChanged="LanguageComboBox_SelectionChanged">
+                <ComboBoxItem Content="中文" Tag="zh-CN"/>
+                <ComboBoxItem Content="English" Tag="en-US"/>
+            </ComboBox>
 
             <!-- Title -->
             <TextBlock Grid.Column="3" Text="{lex:Loc Window_Title}" HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -87,204 +105,27 @@
 
         <!-- Main Content -->
         <Grid Grid.Row="1">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/> <!-- Left Panel -->
-                <ColumnDefinition Width="3*" /> <!-- Right Panel -->
-            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" /> <!-- Performance Monitor -->
+                <RowDefinition Height="*" /> <!-- Main Content -->
+            </Grid.RowDefinitions>
 
-            <!-- Left Panel -->
-            <hc:Card Grid.Column="0" Margin="10" Padding="20">
-                <StackPanel>
-                    <!-- SKU Input -->
-                    <TextBlock Text="{lex:Loc Label_ScanProductSku}"
-                              Margin="8,0,0,0"
-                              FontSize="16"
-                              FontWeight="SemiBold"
-                              Foreground="{DynamicResource AccentBrush}"
-                              VerticalAlignment="Center" />
-                    <ui:TextBox Icon="BarcodeScanner24" 
-                               Text="{Binding CurrentSkuInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                               FontSize="20" 
-                               FontWeight="Bold" 
-                               PlaceholderText="{lex:Loc Placeholder_EnterScanSku}" 
-                               Margin="0,0,0,20">
-                        <ui:TextBox.InputBindings>
-                            <KeyBinding Key="Return" Command="{Binding ProcessSkuCommand}" 
-                                      CommandParameter="{Binding CurrentSkuInput}"/>
-                        </ui:TextBox.InputBindings>
-                    </ui:TextBox>
+            <!-- Performance Monitor Panel -->
+            <local:PerformanceMonitorPanel Grid.Row="0" DataContext="{Binding}" />
 
-                    <!-- Wave Number Input -->
-                    <TextBlock Text="{lex:Loc Label_ScanWaveNumber}"
-                              Margin="8,0,0,0"
-                              FontSize="16"
-                              FontWeight="SemiBold"
-                              Foreground="{DynamicResource AccentBrush}"
-                              VerticalAlignment="Center" />
-                    <ui:TextBox Icon="BranchFork24" Text="{Binding CurrentWaveInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                               FontSize="20" FontWeight="Bold" PlaceholderText="{lex:Loc Placeholder_EnterScanWaveNumber}" Margin="0,0,0,20" />
+            <!-- Main Content Grid -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/> <!-- Left Panel -->
+                    <ColumnDefinition Width="3*" /> <!-- Right Panel -->
+                </Grid.ColumnDefinitions>
 
-                    <!-- Package Info -->
-                    <Border BorderBrush="{DynamicResource TextControlBorderBrush}" BorderThickness="1" CornerRadius="4" 
-                            Margin="0,20,0,20" Padding="10" Background="{DynamicResource LayerFillColorDefaultBrush}">
-                        <StackPanel>
-                            <TextBlock Text="{lex:Loc Label_PackageInfo}"
-                                      Margin="8,0,0,0"
-                                      FontSize="16"
-                                      FontWeight="SemiBold"
-                                      Foreground="{DynamicResource AccentBrush}"
-                                      VerticalAlignment="Center" />
-                            <ItemsControl ItemsSource="{Binding PackageInfoItems}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <UniformGrid Columns="2" Rows="1" />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Margin="4" Padding="8" CornerRadius="4" 
-                                                Background="{DynamicResource LayerFillColorDefaultBrush}"
-                                                BorderBrush="{Binding StatusColor}"
-                                                BorderThickness="1">
-                                            <StackPanel>
-                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                                    <ui:SymbolIcon Symbol="{Binding Icon}" Margin="0,0,4,0" />
-                                                    <TextBlock Text="{Binding Label}" FontSize="12" 
-                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                                </StackPanel>
-                                                <TextBlock>
-                                                    <Run Text="{Binding Value}" FontSize="16" FontWeight="SemiBold" />
-                                                    <Run Text="{Binding Unit, Mode=OneWay}" FontSize="12" 
-                                                         Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                                </TextBlock>
-                                                <TextBlock Text="{Binding Description}" FontSize="11" 
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                           TextWrapping="Wrap" Margin="0,4,0,0" />
-                                            </StackPanel>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
-                    </Border>
+                <!-- Left Panel - 输入面板 -->
+                <local:InputPanel Grid.Column="0" DataContext="{Binding}" />
 
-                    <!-- Statistics -->
-                    <Border BorderBrush="{DynamicResource TextControlBorderBrush}" BorderThickness="1" CornerRadius="4" 
-                            Margin="0,0,0,20" Padding="10" Background="{DynamicResource LayerFillColorDefaultBrush}">
-                        <StackPanel>
-                            <TextBlock Text="{lex:Loc Label_Statistics}"
-                                      Margin="8,0,0,0"
-                                      FontSize="16"
-                                      FontWeight="SemiBold"
-                                      Foreground="{DynamicResource AccentBrush}"
-                                      VerticalAlignment="Center" />
-                            <ItemsControl ItemsSource="{Binding StatisticsItems}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <UniformGrid Columns="2" Rows="2" />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Margin="4" Padding="8" CornerRadius="4" 
-                                                Background="{DynamicResource LayerFillColorDefaultBrush}"
-                                                BorderBrush="{Binding StatusColor}"
-                                                BorderThickness="1">
-                                            <StackPanel>
-                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                                    <ui:SymbolIcon Symbol="{Binding Icon}" Margin="0,0,4,0" />
-                                                    <TextBlock Text="{Binding Label}" FontSize="12" 
-                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                                </StackPanel>
-                                                <TextBlock>
-                                                    <Run Text="{Binding Value}" FontSize="16" FontWeight="SemiBold" />
-                                                    <Run Text="{Binding Unit, Mode=OneWay}" FontSize="12" 
-                                                         Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                                </TextBlock>
-                                                <TextBlock Text="{Binding Description}" FontSize="11" 
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                           TextWrapping="Wrap" Margin="0,4,0,0" />
-                                            </StackPanel>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
-            </hc:Card>
-
-            <!-- Right Panel -->
-            <hc:Card Grid.Column="1" Margin="10" Padding="10">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-                    <TextBlock Text="{lex:Loc Label_ChuteMonitoring}"
-                              Margin="8,0,0,0"
-                              FontSize="16"
-                              FontWeight="SemiBold"
-                              Foreground="{DynamicResource AccentBrush}"
-                              VerticalAlignment="Center" />
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                        <ItemsControl ItemsSource="{Binding Chutes}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <UniformGrid Columns="10" Rows="8" />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Width="100" Height="70" Background="{Binding StatusColor, FallbackValue=WhiteSmoke}"
-                                            CornerRadius="12" Padding="6" Margin="6,6,6,6" Effect="{StaticResource CardDropShadowEffect}"
-                                            Cursor="Hand">
-                                        <b:Interaction.Triggers>
-                                            <b:EventTrigger EventName="MouseLeftButtonUp">
-                                                <prism:InvokeCommandAction Command="{Binding DataContext.ShowChutePackagesCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                         CommandParameter="{Binding}" />
-                                            </b:EventTrigger>
-                                        </b:Interaction.Triggers>
-                                        <Border.Style>
-                                            <Style TargetType="Border">
-                                                <Setter Property="BorderBrush" Value="#FFB0BEC5"/>
-                                                <Setter Property="BorderThickness" Value="1"/>
-                                                <Style.Triggers>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentColorLight1}"/>
-                                                        <Setter Property="BorderThickness" Value="2"/>
-                                                    </Trigger>
-                                                    <DataTrigger Binding="{Binding IsTargetChute}" Value="True">
-                                                        <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentColorDark1}"/>
-                                                        <Setter Property="BorderThickness" Value="2.5"/>
-                                                        <Setter Property="Background">
-                                                            <Setter.Value>
-                                                                <SolidColorBrush Color="{DynamicResource SystemAccentColor}" Opacity="0.2"/>
-                                                            </Setter.Value>
-                                                        </Setter>
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding IsErrorState}" Value="True">
-                                                        <Setter Property="BorderBrush" Value="{DynamicResource SystemFillColorCritical}"/>
-                                                        <Setter Property="BorderThickness" Value="2.5"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Border.Style>
-                                        <Grid>
-                                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                                <TextBlock Text="{Binding ChuteNumber}" FontSize="22" FontWeight="Bold"
-                                                           HorizontalAlignment="Center" Foreground="#222" />
-                                                <TextBlock Text="{Binding Quantity, FallbackValue='0/0'}" FontSize="12"
-                                                           HorizontalAlignment="Center" Foreground="#888" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-                </Grid>
-            </hc:Card>
+                <!-- Right Panel - 格口监控面板 -->
+                <local:ChuteMonitorPanel Grid.Column="1" DataContext="{Binding}" />
+            </Grid>
         </Grid>
 
         <!-- Status Bar -->
@@ -345,26 +186,15 @@
                 </ItemsControl>
 
                 <!-- Device Statuses -->
-                <ItemsControl Grid.Column="3" ItemsSource="{Binding DeviceStatuses}" Margin="8,0">
+                <ItemsControl Grid.Column="3" 
+                             ItemsSource="{Binding DeviceStatuses}" 
+                             ItemTemplate="{StaticResource DeviceStatusTemplate}"
+                             Margin="8,0">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <StackPanel Orientation="Horizontal" />
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal" Margin="8,0">
-                                <ui:SymbolIcon Symbol="{Binding Icon}" FontSize="14" Margin="0,0,4,0"
-                                               Foreground="{Binding StatusColor}" />
-                                <TextBlock VerticalAlignment="Center" FontSize="12">
-                                    <Run Text="{Binding Name}"
-                                         Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                    <Run Text=": " Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                    <Run Text="{Binding Status}" Foreground="{Binding StatusColor}" />
-                                </TextBlock>
-                            </StackPanel>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
                 <!-- Uptime -->

@@ -43,8 +43,14 @@ public partial class App
         Log.Information("Serilog Logger 已通过 appsettings.json 配置初始化。");
 
         // 设置本地化为中文
+        var culture = new CultureInfo("zh-CN");
+        Thread.CurrentThread.CurrentCulture = culture;
+        Thread.CurrentThread.CurrentUICulture = culture;
+        CultureInfo.DefaultThreadCurrentCulture = culture;
+        CultureInfo.DefaultThreadCurrentUICulture = culture;
+        
         LocalizeDictionary.Instance.SetCurrentThreadCulture = true;
-        LocalizeDictionary.Instance.Culture = new CultureInfo("zh-CN");
+        LocalizeDictionary.Instance.Culture = culture;
         Log.Information("本地化语言设置为中文 (zh-CN)");
 
         // 单实例互斥体
@@ -118,6 +124,9 @@ public partial class App
         
         // 注册KuaiShouSettingsViewModel
         containerRegistry.RegisterSingleton<KuaiShouSettingsViewModel>();
+        
+        // 注册本地化服务
+        containerRegistry.RegisterSingleton<ILocalizationService, LocalizationService>();
     }
 
     protected override void ConfigureModuleCatalog(IModuleCatalog moduleCatalog)
