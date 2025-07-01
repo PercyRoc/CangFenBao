@@ -17,14 +17,10 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
     private readonly ConcurrentDictionary<string, TcpClientService> _sortingClients = new();
     private readonly SemaphoreSlim _initializationLock = new(1, 1);
     private bool _isInitialized;
-    private readonly ISettingsService _settingsService = settingsService;
 
     // 为每个光电创建一个动作队列和处理任务
     private readonly ConcurrentDictionary<string, Channel<Func<Task>>> _actionChannels = new();
     private readonly ConcurrentDictionary<string, Task> _actionProcessorTasks = new();
-
-    // 管理等待任务的字典，用于可中断延迟
-    private readonly ConcurrentDictionary<string, TaskCompletionSource<PackageInfo>> _waitingTasks = new();
 
     // 缓存配置以避免重复加载
     private PendulumSortConfig _config = new();
@@ -395,7 +391,23 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
         {
             var message = Encoding.ASCII.GetString(data);
             
-            // 只对上升沿信号（OCCH1:1）做出反应
+            // 增加防抖逻辑，与触发光电保持一致
+            var config = _settingsService.LoadSettings<PendulumSortConfig>();
+            var debounceTime = config.GlobalDebounceTime;
+            var now = DateTime.Now;
+
+            if (_lastSignalTimes.TryGetValue(photoelectricName, out var lastSignalTime))
+            {
+                if ((now - lastSignalTime).TotalMilliseconds < debounceTime)
+                {
+                    Log.Debug("分拣光电 {PhotoelectricName} 在 {DebounceTime}ms 防抖时间内收到重复信号 '{Signal}'，已忽略.",
+                        photoelectricName, debounceTime, message);
+                    return; // 忽略此信号
+                }
+            }
+            _lastSignalTimes[photoelectricName] = now; // 更新上次信号时间
+            
+            // 只对上升沿信号（OCCH2:1）做出反应
             if (!message.Contains("OCCH2:1")) 
             {
                 // 记录Debug日志表示收到了其他信号，但不会处理
@@ -418,29 +430,6 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
 
             Log.Information("分拣光电 {Name} 匹配到包裹 {Index}|{Barcode} (耗时: {MatchDuration:F2}ms)",
                 photoelectricName, newPackage.Index, newPackage.Barcode, timeSinceTrigger.TotalMilliseconds);
-            
-            // 尝试唤醒正在等待的任务
-            if (_waitingTasks.TryRemove(photoelectricName, out var tcs))
-            {
-                // 如果成功移除了一个TCS，说明有任务正在等待
-                // 通过SetResult将新包裹信息传递给它，从而唤醒它
-                if (tcs.TrySetResult(newPackage))
-                {
-                    Log.Information("光电 {Name} 发现一个等待中的任务，已发送新包裹 {Index}|{Barcode} 进行唤醒",
-                        photoelectricName, newPackage.Index, newPackage.Barcode);
-                    // 唤醒后，这个新包裹的使命已经完成，不需要再入队
-                    return; 
-                }
-                else
-                {
-                    Log.Warning("尝试唤醒等待任务失败，将按正常流程处理包裹 {Index}|{Barcode}",
-                        newPackage.Index, newPackage.Barcode);
-                }
-            }
-
-            // 如果没有任务在等待，或者唤醒失败，则正常将新包裹的动作入队
-            Log.Information("光电 {Name} 未发现等待任务，将包裹 {Index}|{Barcode} 的动作正常入队",
-                photoelectricName, newPackage.Index, newPackage.Barcode);
             
             // 将 ExecuteSortingAction 的调用包装成一个 Func<Task> 并放入队列
             if (_actionChannels.TryGetValue(photoelectricName, out var channel))
@@ -562,28 +551,5 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
         return photoelectric?.Name;
     }
 
-    protected override bool TryGetActionChannel(string photoelectricName, out ChannelWriter<Func<Task>>? writer)
-    {
-        if (_actionChannels.TryGetValue(photoelectricName, out var channel))
-        {
-            writer = channel.Writer;
-            return true;
-        }
-        writer = null;
-        return false;
-    }
 
-    protected override void RegisterWaitingTask(string photoelectricName, TaskCompletionSource<PackageInfo> tcs)
-    {
-        _waitingTasks[photoelectricName] = tcs;
-        Log.Debug("已注册等待任务 (光电: {Name})", photoelectricName);
-    }
-
-    protected override void UnregisterWaitingTask(string photoelectricName)
-    {
-        if (_waitingTasks.TryRemove(photoelectricName, out _))
-        {
-            Log.Debug("已取消注册等待任务 (光电: {Name})", photoelectricName);
-        }
-    }
 }

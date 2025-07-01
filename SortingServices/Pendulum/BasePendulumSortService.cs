@@ -18,7 +18,7 @@ namespace SortingServices.Pendulum;
 public abstract class BasePendulumSortService : IPendulumSortService
 {
     private readonly ConcurrentDictionary<string, bool> _deviceConnectionStates = new();
-    private readonly ISettingsService _settingsService;
+    protected readonly ISettingsService _settingsService;
     private readonly Queue<DateTime> _triggerTimes = new();
     protected readonly ConcurrentDictionary<string, PackageInfo> MatchedPackages = new();
     protected readonly ConcurrentDictionary<int, Timer> PackageTimers = new();
@@ -27,7 +27,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
     protected readonly ConcurrentDictionary<string, ProcessingStatus> ProcessingPackages = new();
     protected readonly Timer TimeoutCheckTimer;
     private bool _disposed;
-    private readonly ConcurrentDictionary<string, DateTime> _lastSignalTimes = new(); // 用于存储上次收到信号的时间
+    protected readonly ConcurrentDictionary<string, DateTime> _lastSignalTimes = new(); // 用于存储上次收到信号的时间
     protected CancellationTokenSource? CancellationTokenSource;
     protected bool IsRunningFlag;
     protected TcpClientService? TriggerClient;
@@ -256,26 +256,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// </summary>
     protected abstract Task ReconnectAsync();
 
-    /// <summary>
-    ///     尝试获取指定光电的动作队列写入器
-    /// </summary>
-    /// <param name="photoelectricName">光电名称</param>
-    /// <param name="writer">动作队列写入器</param>
-    /// <returns>是否成功获取</returns>
-    protected abstract bool TryGetActionChannel(string photoelectricName, out ChannelWriter<Func<Task>>? writer);
 
-    /// <summary>
-    ///     注册等待任务，用于可中断延迟
-    /// </summary>
-    /// <param name="photoelectricName">光电名称</param>
-    /// <param name="tcs">任务完成源</param>
-    protected abstract void RegisterWaitingTask(string photoelectricName, TaskCompletionSource<PackageInfo> tcs);
-
-    /// <summary>
-    ///     取消注册等待任务
-    /// </summary>
-    /// <param name="photoelectricName">光电名称</param>
-    protected abstract void UnregisterWaitingTask(string photoelectricName);
 
     /// <summary>
     ///     处理包裹超时

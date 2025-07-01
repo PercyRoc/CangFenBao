@@ -1,7 +1,5 @@
 using System.Collections.Concurrent;
 using System.Text;
-using System.Threading.Channels;
-using Common.Models.Package;
 using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.TCP;
@@ -14,7 +12,6 @@ namespace SortingServices.Pendulum;
 /// </summary>
 public class SinglePendulumSortService(ISettingsService settingsService) : BasePendulumSortService(settingsService)
 {
-    private readonly ISettingsService _settingsService = settingsService;
 
     // 记录光电信号状态的字典，true 表示高电平，false 表示低电平
     private readonly ConcurrentDictionary<string, bool> _photoelectricSignalStates = new();
@@ -231,10 +228,10 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
     {
         try
         {
+            var config = _settingsService.LoadSettings<PendulumSortConfig>();
             // 检查触发光电配置是否有效
-            if (string.IsNullOrEmpty(_settingsService.LoadSettings<PendulumSortConfig>().TriggerPhotoelectric
-                    .IpAddress) ||
-                _settingsService.LoadSettings<PendulumSortConfig>().TriggerPhotoelectric.Port == 0)
+            if (string.IsNullOrEmpty(config.TriggerPhotoelectric.IpAddress) ||
+                config.TriggerPhotoelectric.Port == 0)
             {
                 Log.Warning("触发光电未配置，跳过重连");
                 return;
@@ -243,8 +240,8 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
             // 重新创建触发光电客户端
             TriggerClient = new TcpClientService(
                 "触发光电",
-                _settingsService.LoadSettings<PendulumSortConfig>().TriggerPhotoelectric.IpAddress,
-                _settingsService.LoadSettings<PendulumSortConfig>().TriggerPhotoelectric.Port,
+                config.TriggerPhotoelectric.IpAddress,
+                config.TriggerPhotoelectric.Port,
                 ProcessTriggerData,
                 connected => UpdateDeviceConnectionState("触发光电", connected)
             );
@@ -292,24 +289,7 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
         return null;
     }
 
-    protected override bool TryGetActionChannel(string photoelectricName, out ChannelWriter<Func<Task>>? writer)
-    {
-        // 单摆轮服务没有使用 Channel 队列模型，返回 false
-        writer = null;
-        return false;
-    }
 
-    protected override void RegisterWaitingTask(string photoelectricName, TaskCompletionSource<PackageInfo> tcs)
-    {
-        // 单摆轮服务没有使用可中断延迟机制，空实现
-        Log.Debug("单摆轮服务不支持等待任务注册");
-    }
-
-    protected override void UnregisterWaitingTask(string photoelectricName)
-    {
-        // 单摆轮服务没有使用可中断延迟机制，空实现
-        Log.Debug("单摆轮服务不支持等待任务取消注册");
-    }
 
     /// <summary>
     /// 更新光电信号状态并检测异常情况
