@@ -230,7 +230,23 @@ public partial class MainWindow
             return;
         }
 
-        Log.Information("【扫码UI】检测到手动输入回车键，当前文本: '{CurrentText}'", textBox.Text);
+        // 检查是否为扫码模式
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            if (viewModel.IsScanningInProgress)
+            {
+                Log.Information("【扫码UI】✅ 检测到扫码枪结束键(Enter)，当前文本: '{CurrentText}'", textBox.Text);
+            }
+            else
+            {
+                Log.Information("【扫码UI】❌ 检测到手动输入回车键，当前文本: '{CurrentText}'", textBox.Text);
+            }
+        }
+        else
+        {
+            Log.Information("【扫码UI】检测到回车键，当前文本: '{CurrentText}'", textBox.Text);
+        }
+        
         // 处理条码输入完成
         ProcessBarcodeComplete();
     }
@@ -268,14 +284,15 @@ public partial class MainWindow
         switch (e.Text)
         {
             case SCANNER_START_CHAR:
-                Log.Information("【扫码UI】检测到扫码枪开始字符(@)，触发扫码开始处理");
+                Log.Information("【扫码UI】✅ 检测到扫码枪开始字符(@)，触发扫码开始处理");
+                Log.Information("【扫码UI】当前焦点元素: {FocusedElement}", Keyboard.FocusedElement?.GetType().Name ?? "None");
                 // 扫码枪输入开始
                 viewModel.HandleScanStartCommand.Execute();
                 e.Handled = true;
-                Log.Information("【扫码UI】扫码开始字符已处理，事件标记为已处理");
+                Log.Information("【扫码UI】✅ 扫码开始字符已处理，事件标记为已处理，@符号不会进入TextBox");
                 break;
             case SCANNER_END_CHAR_CR:
-                Log.Information("【扫码UI】检测到扫码枪结束字符(CR \\r)，触发条码完成处理");
+                Log.Information("【扫码UI】✅ 检测到扫码枪结束字符(CR \\r)，当前输入框内容: '{TextBoxContent}'", ManualBarcodeTextBox.Text);
                 // 扫码枪输入结束
                 e.Handled = true;
 
@@ -283,7 +300,7 @@ public partial class MainWindow
                 ProcessBarcodeComplete();
                 break;
             case SCANNER_END_CHAR_LF:
-                Log.Information("【扫码UI】检测到扫码枪结束字符(LF \\n)，触发条码完成处理");
+                Log.Information("【扫码UI】✅ 检测到扫码枪结束字符(LF \\n)，当前输入框内容: '{TextBoxContent}'", ManualBarcodeTextBox.Text);
                 // 扫码枪输入结束
                 e.Handled = true;
 

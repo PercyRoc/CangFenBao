@@ -1,10 +1,11 @@
 ﻿using System.Windows;
+using System.Windows.Controls;
 using Camera.Views;
 using Common.Services.Ui;
 
 namespace Rookie.Views.Dialogs;
 
-public partial class SettingsDialogs
+public partial class SettingsDialogs : UserControl
 {
     public SettingsDialogs(INotificationService notificationService)
     {

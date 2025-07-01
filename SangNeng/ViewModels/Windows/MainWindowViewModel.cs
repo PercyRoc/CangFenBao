@@ -863,9 +863,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 _ = _audioService.PlayPresetAsync(AudioType.SystemError);
             }
             // --- 原始逻辑结束 ---
-
-
-
             // 最后一次性更新所有UI：实时区域状态和历史记录（移到方法末尾）
             Log.Information("【包裹处理】开始更新UI显示");
             Application.Current.Dispatcher.Invoke(() =>
@@ -1412,6 +1409,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
         set => SetProperty(ref _errorMessage, value);
     }
 
+    /// <summary>
+    /// 当前是否正在进行扫码输入（用于UI判断输入模式）
+    /// </summary>
+    public bool IsScanningInProgress => _isScanningInProgress;
+
     #endregion
 
     #region Private Methods // 私有方法区域
@@ -1757,17 +1759,21 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         Log.Information("【扫码输入】检测到扫码开始信号(@)");
         
-        // 检查是否正在处理条码，如果是则忽略新的扫描
+        // 检查是否正在处理条码，如果是则记录但仍然设置扫码状态
         if (!_barcodeProcessingLock.Wait(0))
         {
-            Log.Warning("【扫码输入】正在处理条码，忽略新的扫描开始信号");
-            return;
+            Log.Warning("【扫码输入】正在处理条码，但仍设置扫码状态以正确识别后续输入");
+            // 不要直接返回，而是继续设置扫码状态
         }
-        
-        // 立即释放锁，因为我们只是检查状态
-        _barcodeProcessingLock.Release();
+        else
+        {
+            // 立即释放锁，因为我们只是检查状态
+            _barcodeProcessingLock.Release();
+            Log.Information("【扫码输入】条码处理锁当前可用");
+        }
 
         _isScanningInProgress = true;
+        RaisePropertyChanged(nameof(IsScanningInProgress));
         Log.Information("【扫码输入】开始扫码模式，设置扫码状态为进行中");
 
         // 清空当前条码显示
@@ -1788,18 +1794,20 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private void ExecuteHandleBarcodeComplete()
     {
         Log.Information("【扫码输入】检测到扫码结束信号(回车/换行)");
+        Log.Information("【扫码输入】当前扫码状态: _isScanningInProgress = {ScanningInProgress}", _isScanningInProgress);
         
         string barcode;
         if (_isScanningInProgress)
         {
             barcode = CurrentBarcode.Trim();
             _isScanningInProgress = false;
-            Log.Information("【扫码输入】扫码模式完成，从UI绑定获取条码: '{Barcode}', 长度: {Length}", barcode, barcode.Length);
+            RaisePropertyChanged(nameof(IsScanningInProgress));
+            Log.Information("【扫码输入】✅ 扫码模式完成，从UI绑定获取条码: '{Barcode}', 长度: {Length}", barcode, barcode.Length);
         }
         else
         {
             barcode = CurrentBarcode.Trim();
-            Log.Information("【扫码输入】手动输入模式完成，从CurrentBarcode获取条码: '{Barcode}', 长度: {Length}", barcode, barcode.Length);
+            Log.Information("【扫码输入】❌ 手动输入模式完成，从CurrentBarcode获取条码: '{Barcode}', 长度: {Length}", barcode, barcode.Length);
         }
 
         if (string.IsNullOrWhiteSpace(barcode))
