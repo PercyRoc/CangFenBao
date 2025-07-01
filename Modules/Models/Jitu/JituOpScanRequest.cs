@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace Modules.Models.Jitu
+namespace ShanghaiModuleBelt.Models.Jitu
 {
     public class JituOpScanRequest
     {
@@ -28,4 +28,4 @@ namespace Modules.Models.Jitu
         [JsonProperty("imgpath")]
         public string Imgpath { get; set; }
     }
-} 
+}

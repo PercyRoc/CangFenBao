@@ -1,10 +1,10 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using Modules.Models.Jitu;
 using Modules.Services.Jitu;
 using Serilog;
 using ShanghaiModuleBelt.Data;
 using ShanghaiModuleBelt.Models;
+using ShanghaiModuleBelt.Models.Jitu;
 using ShanghaiModuleBelt.Models.Sto;
 using ShanghaiModuleBelt.Models.Yunda;
 using ShanghaiModuleBelt.Models.Zto;

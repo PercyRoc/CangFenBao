@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using Modules.Models.Jitu;
+using ShanghaiModuleBelt.Models.Jitu;
 
 namespace Modules.Services.Jitu
 {

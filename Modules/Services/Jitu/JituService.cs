@@ -6,6 +6,7 @@ using Modules.Models.Jitu;
 using Modules.Models.Jitu.Settings;
 using Newtonsoft.Json;
 using Serilog;
+using ShanghaiModuleBelt.Models.Jitu;
 
 namespace Modules.Services.Jitu
 {
