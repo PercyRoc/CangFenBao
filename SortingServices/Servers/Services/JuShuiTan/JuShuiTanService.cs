@@ -18,8 +18,8 @@ public class JuShuiTanService : IJuShuiTanService
     private const string DevelopmentUrl = "https://dev-api.jushuitan.com";
     private const string WeightSendEndpoint = "/open/orders/weight/send/upload";
     private readonly HttpClient _httpClient;
-    private readonly ISettingsService _settingsService;
     private readonly JsonSerializerOptions _jsonOptions;
+    private readonly ISettingsService _settingsService;
     private JushuitanSettings _settings;
 
     public JuShuiTanService(
@@ -29,7 +29,7 @@ public class JuShuiTanService : IJuShuiTanService
         _httpClient = httpClient;
         _settingsService = settingsService;
         _settings = _settingsService.LoadSettings<JushuitanSettings>();
-        
+
         // 配置 JSON 序列化选项
         _jsonOptions = new JsonSerializerOptions
         {
@@ -37,35 +37,6 @@ public class JuShuiTanService : IJuShuiTanService
             WriteIndented = false,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
-    }
-
-    /// <summary>
-    ///     下划线命名策略
-    /// </summary>
-    private class SnakeCaseNamingPolicy : JsonNamingPolicy
-    {
-        public override string ConvertName(string name)
-        {
-            if (string.IsNullOrEmpty(name)) return name;
-
-            var builder = new StringBuilder();
-            builder.Append(char.ToLowerInvariant(name[0]));
-
-            for (var i = 1; i < name.Length; i++)
-            {
-                if (char.IsUpper(name[i]))
-                {
-                    builder.Append('_');
-                    builder.Append(char.ToLowerInvariant(name[i]));
-                }
-                else
-                {
-                    builder.Append(name[i]);
-                }
-            }
-
-            return builder.ToString();
-        }
     }
 
     /// <inheritdoc />
@@ -92,12 +63,24 @@ public class JuShuiTanService : IJuShuiTanService
             // 构建请求参数
             var parameters = new Dictionary<string, string>
             {
-                { "app_key", _settings.AppKey },
-                { "access_token", _settings.AccessToken },
-                { "timestamp", timestamp.ToString() },
-                { "charset", "utf-8" },
-                { "version", "2" },
-                { "biz", JsonSerializer.Serialize(requestArray, _jsonOptions) }
+                {
+                    "app_key", _settings.AppKey
+                },
+                {
+                    "access_token", _settings.AccessToken
+                },
+                {
+                    "timestamp", timestamp.ToString()
+                },
+                {
+                    "charset", "utf-8"
+                },
+                {
+                    "version", "2"
+                },
+                {
+                    "biz", JsonSerializer.Serialize(requestArray, _jsonOptions)
+                }
             };
 
             // 计算签名
@@ -170,6 +153,35 @@ public class JuShuiTanService : IJuShuiTanService
         {
             Log.Error(ex, "计算聚水潭API签名时发生错误");
             throw;
+        }
+    }
+
+    /// <summary>
+    ///     下划线命名策略
+    /// </summary>
+    private class SnakeCaseNamingPolicy : JsonNamingPolicy
+    {
+        public override string ConvertName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return name;
+
+            var builder = new StringBuilder();
+            builder.Append(char.ToLowerInvariant(name[0]));
+
+            for (var i = 1; i < name.Length; i++)
+            {
+                if (char.IsUpper(name[i]))
+                {
+                    builder.Append('_');
+                    builder.Append(char.ToLowerInvariant(name[i]));
+                }
+                else
+                {
+                    builder.Append(name[i]);
+                }
+            }
+
+            return builder.ToString();
         }
     }
 }

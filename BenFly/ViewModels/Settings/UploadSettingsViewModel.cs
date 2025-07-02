@@ -1,5 +1,5 @@
-using Common.Services.Settings;
 using BenFly.Models.Upload;
+using Common.Services.Settings;
 
 namespace BenFly.ViewModels.Settings;
 
@@ -27,12 +27,12 @@ internal class UploadSettingsViewModel : BindableBase
 
     public IEnumerable<BenNiaoEnvironment> BenNiaoEnvironments { get; }
 
+    internal DelegateCommand SaveConfigurationCommand { get; }
+
     private static IEnumerable<BenNiaoEnvironment> GetBenNiaoEnvironments()
     {
         return Enum.GetValues<BenNiaoEnvironment>();
     }
-
-    internal DelegateCommand SaveConfigurationCommand { get; }
 
     private void ExecuteSaveConfiguration()
     {

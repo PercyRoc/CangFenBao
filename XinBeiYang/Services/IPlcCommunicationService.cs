@@ -1,6 +1,6 @@
-namespace XinBeiYang.Services;
+using XinBeiYang.Models.Communication;
 
-using Models.Communication;
+namespace XinBeiYang.Services;
 
 /// <summary>
 ///     PLC通讯服务接口
@@ -48,7 +48,7 @@ public interface IPlcCommunicationService : IDisposable
         string barcode1D, string barcode2D, ulong scanTimestamp, CancellationToken cancellationToken);
 
     /// <summary>
-    /// 等待指定命令ID的上包最终结果。
+    ///     等待指定命令ID的上包最终结果。
     /// </summary>
     /// <param name="commandId">要等待结果的命令ID。</param>
     /// <param name="cancellationToken">取消令牌。</param>

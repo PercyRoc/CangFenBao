@@ -3,18 +3,18 @@ using Common.Services.Settings;
 namespace XinBa.Services.Models;
 
 /// <summary>
-/// 体积相机设置
+///     体积相机设置
 /// </summary>
 [Configuration("VolumeCameraSettings")]
 public class VolumeCameraSettings : BindableBase
 {
     private string _ipAddress = "192.168.1.100";
-    private int _port = 9001;
-    private int _minFusionTimeMs = 50;
     private int _maxFusionTimeMs = 500;
+    private int _minFusionTimeMs = 50;
+    private int _port = 9001;
 
     /// <summary>
-    /// IP地址
+    ///     IP地址
     /// </summary>
     public string IpAddress
     {
@@ -23,7 +23,7 @@ public class VolumeCameraSettings : BindableBase
     }
 
     /// <summary>
-    /// 端口号
+    ///     端口号
     /// </summary>
     public int Port
     {
@@ -32,7 +32,7 @@ public class VolumeCameraSettings : BindableBase
     }
 
     /// <summary>
-    /// 最小融合时间 (毫秒)
+    ///     最小融合时间 (毫秒)
     /// </summary>
     public int MinFusionTimeMs
     {
@@ -41,7 +41,7 @@ public class VolumeCameraSettings : BindableBase
     }
 
     /// <summary>
-    /// 最大融合时间 (毫秒)
+    ///     最大融合时间 (毫秒)
     /// </summary>
     public int MaxFusionTimeMs
     {

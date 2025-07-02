@@ -1,11 +1,14 @@
-﻿using System.IO;
+﻿using System.Diagnostics;
+using System.IO;
 using System.Net.Http;
 using System.Windows;
 using System.Windows.Threading;
 using Common.Extensions;
+using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
+using KuaiLv.Models.Settings.Warning;
 using KuaiLv.Services.DWS;
 using KuaiLv.Services.Warning;
 using KuaiLv.ViewModels;
@@ -17,10 +20,8 @@ using KuaiLv.Views.Settings;
 using Serilog;
 using SharedUI.Extensions;
 using SharedUI.ViewModels;
-using System.Diagnostics;
 using SharedUI.Views.Dialogs;
 using Timer = System.Timers.Timer;
-using Common.Services.Settings;
 
 namespace KuaiLv;
 
@@ -29,10 +30,10 @@ namespace KuaiLv;
 /// </summary>
 internal partial class App
 {
-    private static Mutex? _mutex;
     private const string MutexName = "Global\\KuaiLv_App_Mutex";
-    private bool _ownsMutex;
+    private static Mutex? _mutex;
     private Timer? _cleanupTimer;
+    private bool _ownsMutex;
     internal bool IsShuttingDown;
 
     /// <summary>
@@ -66,11 +67,8 @@ internal partial class App
                 Environment.Exit(0);
                 return null!;
             }
-            else
-            {
-                _ownsMutex = true;
-                return Container.Resolve<MainWindow>();
-            }
+            _ownsMutex = true;
+            return Container.Resolve<MainWindow>();
         }
         catch (Exception ex)
         {
@@ -181,7 +179,7 @@ internal partial class App
             // 启动警示灯托管服务
             var settingsService = Container.Resolve<ISettingsService>();
             var warningLightConfiguration =
-                settingsService.LoadSettings<Models.Settings.Warning.WarningLightConfiguration>();
+                settingsService.LoadSettings<WarningLightConfiguration>();
 
             if (warningLightConfiguration.IsEnabled)
             {

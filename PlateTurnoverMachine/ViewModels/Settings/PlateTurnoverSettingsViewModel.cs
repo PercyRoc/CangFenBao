@@ -1,29 +1,28 @@
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Net;
-using System.Collections.ObjectModel;
+using System.Windows;
 using Common.Services.Settings;
 using Common.Services.Ui;
-using Microsoft.Win32;
-using Serilog;
-using DongtaiFlippingBoardMachine.Models;
-using System.Globalization;
 using DongtaiFlippingBoardMachine.Events;
+using DongtaiFlippingBoardMachine.Models;
+using Microsoft.Win32;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
-using Prism.Events;
-using System.ComponentModel;
-using System.Collections.Specialized;
-using System.Windows;
+using Serilog;
 
 namespace DongtaiFlippingBoardMachine.ViewModels.Settings;
 
 internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
 {
+    private readonly IEventAggregator _eventAggregator;
     private readonly INotificationService _notificationService;
     private readonly ISettingsService _settingsService;
-    private readonly IEventAggregator _eventAggregator;
-    private PlateTurnoverSettings _settings = new();
     private CancellationTokenSource? _autoSaveCts;
+    private PlateTurnoverSettings _settings = new();
 
     public PlateTurnoverSettingsViewModel(
         ISettingsService settingsService,
@@ -88,9 +87,12 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
         {
             Log.Error(ex, "加载翻板机配置失败");
             // 初始化为空集合，避免 NullReferenceException
-            Settings = new PlateTurnoverSettings { Items = new ObservableCollection<PlateTurnoverItem>() };
+            Settings = new PlateTurnoverSettings
+            {
+                Items = new ObservableCollection<PlateTurnoverItem>()
+            };
         }
-        
+
         // 确保为加载的配置项订阅深度监听
         SubscribeToItemChanges(Settings.Items);
     }
@@ -161,8 +163,11 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
         {
             Log.Information("检测到94格口，应用特殊配置生成规则：12个控制盒，首尾各7个IO点，中间各8个。");
             const int totalBoxes = 12;
-            var baseIpParts = new byte[] { 192, 168, 0, 100 };
-            int chuteCursor = 1;
+            var baseIpParts = new byte[]
+            {
+                192, 168, 0, 100
+            };
+            var chuteCursor = 1;
 
             for (var boxIndex = 0; boxIndex < totalBoxes; boxIndex++)
             {
@@ -202,7 +207,10 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
 
             const int itemsPerIp = 8;
             var ipCount = (int)Math.Ceiling(chuteCount / (double)itemsPerIp);
-            var baseIpParts = new byte[] { 192, 168, 0, 100 };
+            var baseIpParts = new byte[]
+            {
+                192, 168, 0, 100
+            };
 
             for (var i = 0; i < ipCount; i++)
             {
@@ -281,10 +289,10 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
                         // 第1列是序号，我们重新生成，不读取
                         // Index = GetSafeStringCellValue(row.GetCell(0)), // 序号列 (A)
                         TcpAddress = GetSafeStringCellValue(row.GetCell(1)), // TCP模块 (B)
-                        IoPoint = GetSafeStringCellValue(row.GetCell(2)),    // IO点位 (C)
+                        IoPoint = GetSafeStringCellValue(row.GetCell(2)), // IO点位 (C)
                         MappingChute = (int)GetSafeNumericCellValue(row.GetCell(3)), // 映射格口 (D)
-                        Distance = GetSafeNumericCellValue(row.GetCell(4)),      // 距离 (E)
-                        DelayFactor = GetSafeNumericCellValue(row.GetCell(5)),   // 延迟系数 (F)
+                        Distance = GetSafeNumericCellValue(row.GetCell(4)), // 距离 (E)
+                        DelayFactor = GetSafeNumericCellValue(row.GetCell(5)), // 延迟系数 (F)
                         MagnetTime = (int)GetSafeNumericCellValue(row.GetCell(6)),
                         Index = (importedItems.Count + 1).ToString() // 重新生成序号
                         // 磁铁时间 (G)
@@ -321,62 +329,65 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
     // --- NPOI Export ---
     private void ExecuteExportToExcel()
     {
-         var dialog = new SaveFileDialog
-         {
-             Filter = "Excel 文件|*.xlsx",
-             Title = "选择导出位置",
-             FileName = $"翻板机配置_{DateTime.Now:yyyyMMddHHmmss}.xlsx"
-         };
+        var dialog = new SaveFileDialog
+        {
+            Filter = "Excel 文件|*.xlsx",
+            Title = "选择导出位置",
+            FileName = $"翻板机配置_{DateTime.Now:yyyyMMddHHmmss}.xlsx"
+        };
 
-         if (dialog.ShowDialog() != true) return;
+        if (dialog.ShowDialog() != true) return;
 
-         try
-         {
-             var workbook = new XSSFWorkbook();
-             var sheet = workbook.CreateSheet("翻板机配置");
+        try
+        {
+            var workbook = new XSSFWorkbook();
+            var sheet = workbook.CreateSheet("翻板机配置");
 
-             // 创建表头
-             var headerRow = sheet.CreateRow(0);
-             var headers = new[] { "序号", "TCP模块", "IO点位", "映射格口", "距离当前点位位置", "分拣延迟系数(0-1)", "磁铁吸合时间(ms)" };
-             for (var i = 0; i < headers.Length; i++)
-             {
-                 var cell = headerRow.CreateCell(i);
-                 cell.SetCellValue(headers[i]);
-                 // 可以设置表头样式
-             }
+            // 创建表头
+            var headerRow = sheet.CreateRow(0);
+            var headers = new[]
+            {
+                "序号", "TCP模块", "IO点位", "映射格口", "距离当前点位位置", "分拣延迟系数(0-1)", "磁铁吸合时间(ms)"
+            };
+            for (var i = 0; i < headers.Length; i++)
+            {
+                var cell = headerRow.CreateCell(i);
+                cell.SetCellValue(headers[i]);
+                // 可以设置表头样式
+            }
 
-             // 写入数据 (数据行从索引1开始)
-             for (var i = 0; i < Settings.Items.Count; i++)
-             {
-                 var item = Settings.Items[i];
-                 var dataRow = sheet.CreateRow(i + 1);
+            // 写入数据 (数据行从索引1开始)
+            for (var i = 0; i < Settings.Items.Count; i++)
+            {
+                var item = Settings.Items[i];
+                var dataRow = sheet.CreateRow(i + 1);
 
-                 dataRow.CreateCell(0).SetCellValue(i + 1); // 序号
-                 dataRow.CreateCell(1).SetCellValue(item.TcpAddress);
-                 dataRow.CreateCell(2).SetCellValue(item.IoPoint);
-                 dataRow.CreateCell(3).SetCellValue(item.MappingChute);
-                 dataRow.CreateCell(4).SetCellValue(item.Distance);
-                 dataRow.CreateCell(5).SetCellValue(item.DelayFactor);
-                 dataRow.CreateCell(6).SetCellValue(item.MagnetTime);
-             }
+                dataRow.CreateCell(0).SetCellValue(i + 1); // 序号
+                dataRow.CreateCell(1).SetCellValue(item.TcpAddress);
+                dataRow.CreateCell(2).SetCellValue(item.IoPoint);
+                dataRow.CreateCell(3).SetCellValue(item.MappingChute);
+                dataRow.CreateCell(4).SetCellValue(item.Distance);
+                dataRow.CreateCell(5).SetCellValue(item.DelayFactor);
+                dataRow.CreateCell(6).SetCellValue(item.MagnetTime);
+            }
 
-             // 自动调整列宽 (可选, 可能影响性能)
-             // for (int i = 0; i < headers.Length; i++) {
-             //     sheet.AutoSizeColumn(i);
-             // }
+            // 自动调整列宽 (可选, 可能影响性能)
+            // for (int i = 0; i < headers.Length; i++) {
+            //     sheet.AutoSizeColumn(i);
+            // }
 
-             // 保存文件
-             using var stream = new FileStream(dialog.FileName, FileMode.Create, FileAccess.Write);
-             workbook.Write(stream);
+            // 保存文件
+            using var stream = new FileStream(dialog.FileName, FileMode.Create, FileAccess.Write);
+            workbook.Write(stream);
 
-             _notificationService.ShowSuccess("配置已成功导出到 Excel");
-             Log.Information("翻板机配置已导出到: {FilePath}", dialog.FileName);
-         }
-         catch (Exception ex)
-         {
-             Log.Error(ex, "导出 Excel 失败");
-             _notificationService.ShowError($"导出 Excel 文件失败: {ex.Message}");
-         }
+            _notificationService.ShowSuccess("配置已成功导出到 Excel");
+            Log.Information("翻板机配置已导出到: {FilePath}", dialog.FileName);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "导出 Excel 失败");
+            _notificationService.ShowError($"导出 Excel 文件失败: {ex.Message}");
+        }
     }
 
     private async Task SaveSettingsAsync()
@@ -384,8 +395,8 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
         try
         {
             await Task.Run(() => _settingsService.SaveSettings(Settings));
-            
-            Application.Current.Dispatcher.Invoke(() => 
+
+            Application.Current.Dispatcher.Invoke(() =>
             {
                 _notificationService.ShowSuccessWithToken("翻板机配置已自动保存", "SettingWindowGrowl");
             });
@@ -397,7 +408,7 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "自动保存翻板机配置失败");
-            Application.Current.Dispatcher.Invoke(() => 
+            Application.Current.Dispatcher.Invoke(() =>
             {
                 _notificationService.ShowErrorWithToken("自动保存配置失败: " + ex.Message, "SettingWindowGrowl");
             });
@@ -415,22 +426,22 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
             CellType.Numeric => cell.NumericCellValue.ToString(CultureInfo.InvariantCulture), // 数字也转为字符串
             CellType.Boolean => cell.BooleanCellValue.ToString(),
             CellType.Formula => GetFormulaCellValue(cell), // 处理公式
-            _ => cell.ToString() ?? string.Empty, // 其他类型尝试ToString
+            _ => cell.ToString() ?? string.Empty // 其他类型尝试ToString
         };
     }
 
-     private static double GetSafeNumericCellValue(ICell? cell)
-     {
-         if (cell == null) return 0;
+    private static double GetSafeNumericCellValue(ICell? cell)
+    {
+        if (cell == null) return 0;
 
-         return cell.CellType switch
-         {
-             CellType.Numeric => cell.NumericCellValue,
-             CellType.String => double.TryParse(cell.StringCellValue, out var value) ? value : 0, // 尝试转换字符串
-             CellType.Formula => GetFormulaNumericValue(cell), // 处理公式
-             _ => 0 // 其他类型返回0
-         };
-     }
+        return cell.CellType switch
+        {
+            CellType.Numeric => cell.NumericCellValue,
+            CellType.String => double.TryParse(cell.StringCellValue, out var value) ? value : 0, // 尝试转换字符串
+            CellType.Formula => GetFormulaNumericValue(cell), // 处理公式
+            _ => 0 // 其他类型返回0
+        };
+    }
 
     // 辅助方法：获取公式单元格的计算结果（字符串）
     private static string GetFormulaCellValue(ICell cell)
@@ -454,26 +465,26 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
             }
         }
     }
-        // 辅助方法：获取公式单元格的计算结果（数字）
+    // 辅助方法：获取公式单元格的计算结果（数字）
     private static double GetFormulaNumericValue(ICell cell)
     {
         try
         {
             // 尝试获取公式计算后的数字值
-             return cell.NumericCellValue;
+            return cell.NumericCellValue;
         }
         catch
         {
-             try
-             {
-                 // 如果数字失败，尝试获取字符串并解析
-                 return double.TryParse(cell.StringCellValue, out var value) ? value : 0;
-             }
-             catch
-             {
-                 // 都失败则返回0
-                 return 0;
-             }
+            try
+            {
+                // 如果数字失败，尝试获取字符串并解析
+                return double.TryParse(cell.StringCellValue, out var value) ? value : 0;
+            }
+            catch
+            {
+                // 都失败则返回0
+                return 0;
+            }
         }
     }
 
@@ -482,7 +493,7 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
     {
         DebouncedAutoSave();
     }
-    
+
     // --- 深度监听逻辑 ---
 
     private void SubscribeToItemChanges(ObservableCollection<PlateTurnoverItem> items)
@@ -504,7 +515,7 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
             item.PropertyChanged -= OnItemPropertyChanged;
         }
     }
-    
+
     private void OnItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (e.OldItems != null)
@@ -519,7 +530,7 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
         }
         DebouncedAutoSave();
     }
-    
+
     private void OnItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         DebouncedAutoSave();
@@ -568,23 +579,22 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
             _autoSaveCts.Dispose();
             _autoSaveCts = null; // 确保被清理
         }
-        
+
         GC.SuppressFinalize(this); // 通知GC不需要调用Finalize
         Log.Debug("PlateTurnoverSettingsViewModel disposed.");
     }
 
-     // 处理 Settings 对象本身被替换的情况，重新订阅事件
-     private void Settings_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-     {
-         if (e.PropertyName == nameof(PlateTurnoverSettings.ChuteCount))
-         {
-             // 改为手动触发，但当其他直接属性（如ErrorChute）变更时，我们仍需发布更新
-         }
-         
-         // 任何直接在Settings对象上的属性变更都应触发更新
-         DebouncedAutoSave();
-     }
+    // 处理 Settings 对象本身被替换的情况，重新订阅事件
+    private void Settings_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(PlateTurnoverSettings.ChuteCount))
+        {
+            // 改为手动触发，但当其他直接属性（如ErrorChute）变更时，我们仍需发布更新
+        }
 
+        // 任何直接在Settings对象上的属性变更都应触发更新
+        DebouncedAutoSave();
+    }
 
     #endregion
 }

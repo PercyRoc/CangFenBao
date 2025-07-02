@@ -10,7 +10,6 @@ namespace DongtaiFlippingBoardMachine.Models;
 /// <param name="receivedTime">接收时间</param>
 public class TcpDataReceivedEventArgs(byte[]? data, DateTime receivedTime) : EventArgs
 {
-
     /// <summary>
     ///     接收到的数据
     /// </summary>

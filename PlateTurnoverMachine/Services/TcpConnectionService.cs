@@ -47,7 +47,10 @@ internal class TcpConnectionService : ITcpConnectionService
     /// <summary>
     ///     获取TCP模块客户端字典
     /// </summary>
-    public IReadOnlyDictionary<TcpConnectionConfig, TcpClient> TcpModuleClients => _tcpModuleClients;
+    public IReadOnlyDictionary<TcpConnectionConfig, TcpClient> TcpModuleClients
+    {
+        get => _tcpModuleClients;
+    }
 
     /// <summary>
     ///     触发光电数据接收事件
@@ -157,7 +160,7 @@ internal class TcpConnectionService : ITcpConnectionService
 
         var uniqueDesiredConfigs = desiredConfigs.Distinct().ToList();
         var currentClients = _tcpModuleClients.Keys.ToList();
-        
+
         // 2. 识别需要断开的模块（当前已连接，但不在新的期望列表中）
         var configsToDisconnect = currentClients
             .Where(c => !uniqueDesiredConfigs.Contains(c))
@@ -167,14 +170,14 @@ internal class TcpConnectionService : ITcpConnectionService
         {
             Log.Information("配置已移除，正在断开TCP模块: {Config}", config.IpAddress);
             if (_tcpModuleClients.TryGetValue(config, out var client))
-        {
+            {
                 await StopListeningTcpModuleAsync(config);
-            client.Close();
+                client.Close();
                 _tcpModuleClients.Remove(config);
-            OnTcpModuleConnectionChanged(config, false);
+                OnTcpModuleConnectionChanged(config, false);
+            }
         }
-        }
-        
+
         // 1. 识别需要连接的模块（在期望列表中，但当前未连接或已断开）
         var configsToConnect = uniqueDesiredConfigs
             .Where(c => !_tcpModuleClients.TryGetValue(c, out var client) || !client.Connected)
@@ -201,10 +204,10 @@ internal class TcpConnectionService : ITcpConnectionService
 
                 var client = new TcpClient();
                 await client.ConnectAsync(config.GetIpEndPoint());
-                
+
                 _tcpModuleClients.Add(config, client);
                 newConnections.Add(config, client);
-                
+
                 Log.Information("成功连接到TCP模块: {Config}", config.IpAddress);
                 OnTcpModuleConnectionChanged(config, true);
 
@@ -272,7 +275,7 @@ internal class TcpConnectionService : ITcpConnectionService
                     try
                     {
                         Log.Debug("触发光电: 等待数据...");
-                        int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, localCts.Token);
+                        var bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, localCts.Token);
                         var receivedTime = DateTime.Now;
 
                         if (bytesRead == 0)
@@ -418,7 +421,7 @@ internal class TcpConnectionService : ITcpConnectionService
                     try
                     {
                         Log.Debug("TCP模块 {Config}: 等待数据...", localConfig.IpAddress);
-                        int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token);
+                        var bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token);
                         var receivedTime = DateTime.Now;
 
                         if (bytesRead == 0)
@@ -502,7 +505,7 @@ internal class TcpConnectionService : ITcpConnectionService
 
             if (_tcpModuleListeningTasks.TryGetValue(config, out var task))
             {
-                if (task.IsCompleted == false)
+                if (!task.IsCompleted)
                 {
                     Log.Debug("等待TCP模块监听任务结束: {Config}", config.IpAddress);
                     try

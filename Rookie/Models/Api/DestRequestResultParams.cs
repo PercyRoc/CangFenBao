@@ -22,4 +22,4 @@ public class DestRequestResultParams
 
     [JsonPropertyName("errorCode")]
     public int ErrorCode { get; set; } // 0: Normal, 1: No Rule, 2: No Task, 3: Weight Ex, 4: Biz Intercept
-} 
+}

@@ -417,63 +417,72 @@
                                 <DataGridTemplateColumn Header="序号" Width="60">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding Index}" VerticalAlignment="Center" TextAlignment="Left" Padding="4,0" />
+                                            <TextBlock Text="{Binding Index}" VerticalAlignment="Center"
+                                                       TextAlignment="Left" Padding="4,0" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                
+
                                 <DataGridTemplateColumn Header="条码" Width="160">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding Barcode}" VerticalAlignment="Center" TextAlignment="Left" Padding="4,0" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{Binding Barcode}" VerticalAlignment="Center"
+                                                       TextAlignment="Left" Padding="4,0"
+                                                       TextTrimming="CharacterEllipsis" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                
+
                                 <DataGridTemplateColumn Header="重量" Width="80">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding WeightDisplay}" VerticalAlignment="Center" TextAlignment="Right" Padding="4,0" />
+                                            <TextBlock Text="{Binding WeightDisplay}" VerticalAlignment="Center"
+                                                       TextAlignment="Right" Padding="4,0" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                
+
                                 <DataGridTemplateColumn Header="尺寸" Width="120">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding VolumeDisplay}" VerticalAlignment="Center" TextAlignment="Right" Padding="4,0" />
+                                            <TextBlock Text="{Binding VolumeDisplay}" VerticalAlignment="Center"
+                                                       TextAlignment="Right" Padding="4,0" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                
+
                                 <DataGridTemplateColumn Header="格口" Width="100">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding ChuteNumber}" VerticalAlignment="Center" TextAlignment="Center" Padding="4,0" />
+                                            <TextBlock Text="{Binding ChuteNumber}" VerticalAlignment="Center"
+                                                       TextAlignment="Center" Padding="4,0" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                
+
                                 <DataGridTemplateColumn Header="状态" Width="80">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding StatusDisplay}" VerticalAlignment="Center" TextAlignment="Center" Padding="4,0" />
+                                            <TextBlock Text="{Binding StatusDisplay}" VerticalAlignment="Center"
+                                                       TextAlignment="Center" Padding="4,0" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                
+
                                 <DataGridTemplateColumn Header="处理时间" Width="100">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding ProcessingTime, StringFormat={}{0:0}ms}" VerticalAlignment="Center" TextAlignment="Right" Padding="4,0" />
+                                            <TextBlock Text="{Binding ProcessingTime, StringFormat={}{0:0}ms}"
+                                                       VerticalAlignment="Center" TextAlignment="Right" Padding="4,0" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                
+
                                 <DataGridTemplateColumn Header="时间" Width="100">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding CreateTime, StringFormat={}{0:HH:mm:ss}}" VerticalAlignment="Center" TextAlignment="Center" Padding="4,0" />
+                                            <TextBlock Text="{Binding CreateTime, StringFormat={}{0:HH:mm:ss}}"
+                                                       VerticalAlignment="Center" TextAlignment="Center" Padding="4,0" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>

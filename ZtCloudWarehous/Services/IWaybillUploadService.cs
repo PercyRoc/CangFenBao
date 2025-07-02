@@ -19,4 +19,4 @@ public interface IWaybillUploadService
     /// <param name="package">要上传的包裹信息。</param>
     /// <returns>一个表示异步上传操作的任务。</returns>
     Task UploadPackageAndWaitAsync(PackageInfo package);
-} 
+}

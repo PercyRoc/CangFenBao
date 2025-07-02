@@ -4,6 +4,7 @@ using System.Windows.Input;
 using Common.Services.Ui;
 using Serilog;
 using ZtCloudWarehous.ViewModels;
+using MessageBox = HandyControl.Controls.MessageBox;
 
 namespace ZtCloudWarehous.Views;
 
@@ -53,7 +54,7 @@ public partial class MainWindow
             e.Cancel = true; // 先阻止关闭
 
             // 使用 HandyControl 的 MessageBox 显示确认对话框
-            var result = HandyControl.Controls.MessageBox.Show(
+            var result = MessageBox.Show(
                 "确定要关闭程序吗？",
                 "关闭确认",
                 MessageBoxButton.YesNo,
@@ -91,7 +92,7 @@ public partial class MainWindow
             e.Cancel = true; // 发生错误，阻止关闭
 
             // 使用 HandyControl 的 MessageBox 显示错误对话框
-            HandyControl.Controls.MessageBox.Show(
+            MessageBox.Show(
                 "关闭程序时发生错误，请重试",
                 "错误",
                 MessageBoxButton.OK,

@@ -16,8 +16,10 @@
     <ui:FluentWindow.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="pack://application:,,,/SharedUI;component/Resources/Styles/DataGridStyles.xaml" />
-                <ResourceDictionary Source="pack://application:,,,/SharedUI;component/Resources/Styles/ColorStyles.xaml" />
+                <ResourceDictionary
+                    Source="pack://application:,,,/SharedUI;component/Resources/Styles/DataGridStyles.xaml" />
+                <ResourceDictionary
+                    Source="pack://application:,,,/SharedUI;component/Resources/Styles/ColorStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </ui:FluentWindow.Resources>
@@ -65,32 +67,30 @@
                       ItemsSource="{Binding ChuteStatistics}"
                       CanUserAddRows="False"
                       CanUserDeleteRows="False"
-                      GridLinesVisibility="Horizontal"
-                      AutoGenerateColumns="False"
-                      IsReadOnly="True">
+                      GridLinesVisibility="Horizontal">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="格口号" 
-                                        Binding="{Binding ChuteNumber}" 
+                    <DataGridTextColumn Header="格口号"
+                                        Binding="{Binding ChuteNumber}"
                                         Width="*">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
-                                <Setter Property="HorizontalAlignment" Value="Center"/>
-                                <Setter Property="FontWeight" Value="SemiBold"/>
-                                <Setter Property="FontSize" Value="18"/>
-                                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                                <Setter Property="HorizontalAlignment" Value="Center" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                                <Setter Property="FontSize" Value="18" />
+                                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
-                    
-                    <DataGridTextColumn Header="包裹总数" 
-                                        Binding="{Binding PackageCount}" 
+
+                    <DataGridTextColumn Header="包裹总数"
+                                        Binding="{Binding PackageCount}"
                                         Width="*">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
-                                <Setter Property="HorizontalAlignment" Value="Center"/>
-                                <Setter Property="FontWeight" Value="SemiBold"/>
-                                <Setter Property="FontSize" Value="18"/>
-                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                <Setter Property="HorizontalAlignment" Value="Center" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                                <Setter Property="FontSize" Value="18" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
@@ -109,9 +109,9 @@
         </StackPanel>
 
         <!-- 底部按钮 -->
-        <StackPanel Grid.Row="4" 
-                    Orientation="Horizontal" 
-                    HorizontalAlignment="Right" 
+        <StackPanel Grid.Row="4"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
                     Margin="0,16,0,0">
             <ui:Button Content="关闭"
                        Click="CloseButton_Click"
@@ -119,4 +119,4 @@
                        Padding="20,8" />
         </StackPanel>
     </Grid>
-</ui:FluentWindow> 
+</ui:FluentWindow>

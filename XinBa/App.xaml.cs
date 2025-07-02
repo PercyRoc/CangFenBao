@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.ComponentModel;
+using System.IO;
 using System.Net.Http;
 using System.Windows;
 using System.Windows.Threading;
@@ -11,27 +12,26 @@ using Serilog;
 using SharedUI.Extensions;
 using SharedUI.ViewModels.Settings;
 using SharedUI.Views.Settings;
+using SharedUI.Views.Windows;
 using XinBa.Services;
 using XinBa.ViewModels;
 using XinBa.ViewModels.Settings;
 using XinBa.Views;
 using XinBa.Views.Settings;
-using System.ComponentModel;
-using SharedUI.Views.Windows;
 
 namespace XinBa;
 
 /// <summary>
-/// Interaction logic for App.xaml
+///     Interaction logic for App.xaml
 /// </summary>
 public partial class App
 {
-    private static Mutex? _mutex;
     private const string MutexName = "Global\\XinBa_App_Mutex";
+    private static Mutex? _mutex;
     private static bool _isShuttingDown;
 
     /// <summary>
-    /// 创建主窗口 (返回 MainWindow)
+    ///     创建主窗口 (返回 MainWindow)
     /// </summary>
     protected override Window CreateShell()
     {
@@ -50,7 +50,7 @@ public partial class App
     }
 
     /// <summary>
-    /// 注册服务
+    ///     注册服务
     /// </summary>
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
@@ -59,7 +59,7 @@ public partial class App
         containerRegistry.AddShardUi();
 
         // 注册 XinBa 需要的设备服务启动配置
-        containerRegistry.AddPhotoCamera(); 
+        containerRegistry.AddPhotoCamera();
         containerRegistry.AddWeightScale();
 
         // 注册 HttpClientFactory
@@ -96,7 +96,7 @@ public partial class App
     }
 
     /// <summary>
-    /// 应用程序初始化完成后，显示登录对话框并启动后台服务
+    ///     应用程序初始化完成后，显示登录对话框并启动后台服务
     /// </summary>
     protected override void OnInitialized()
     {
@@ -224,7 +224,7 @@ public partial class App
                                 newMainVm.LogoutRequested += OnLogoutRequested;
                             }
                             // 重启后台服务
-                            StartBackgroundServices(); 
+                            StartBackgroundServices();
                         }
                         else
                         {
@@ -247,7 +247,7 @@ public partial class App
     }
 
     /// <summary>
-    /// 主窗口关闭事件处理程序
+    ///     主窗口关闭事件处理程序
     /// </summary>
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
@@ -303,7 +303,7 @@ public partial class App
     }
 
     /// <summary>
-    /// 尝试登出 API 用户
+    ///     尝试登出 API 用户
     /// </summary>
     private async Task LogoutApiUserAsync()
     {
@@ -346,7 +346,7 @@ public partial class App
         Log.Information("应用程序退出处理程序 (OnExit) 开始... ExitCode: {ExitCode}", e.ApplicationExitCode);
         try
         {
-             base.OnExit(e);
+            base.OnExit(e);
         }
         catch (Exception ex)
         {
@@ -371,7 +371,7 @@ public partial class App
     }
 
     /// <summary>
-    /// 手动启动已注册的后台服务。
+    ///     手动启动已注册的后台服务。
     /// </summary>
     private void StartBackgroundServices()
     {
@@ -383,9 +383,21 @@ public partial class App
             var volumeStarter = Container.Resolve<VolumeDataHostedService>();
 
             // 使用 Task.Run 在后台启动，避免阻塞 UI
-            _ = Task.Run(() => { try { cameraStarter.StartAsync(CancellationToken.None).Wait(); } catch (Exception ex) { Log.Error(ex, "启动 CameraStartupService 时出错 "); } });
-            _ = Task.Run(() => { try { weightStarter.StartAsync(CancellationToken.None).Wait(); } catch (Exception ex) { Log.Error(ex, "启动 WeightStartupService 时出错 "); } });
-            _ = Task.Run(() => { try { volumeStarter.StartAsync(CancellationToken.None).Wait(); } catch (Exception ex) { Log.Error(ex, "启动 VolumeDataHostedService 时出错 "); } });
+            _ = Task.Run(() =>
+            {
+                try { cameraStarter.StartAsync(CancellationToken.None).Wait(); }
+                catch (Exception ex) { Log.Error(ex, "启动 CameraStartupService 时出错 "); }
+            });
+            _ = Task.Run(() =>
+            {
+                try { weightStarter.StartAsync(CancellationToken.None).Wait(); }
+                catch (Exception ex) { Log.Error(ex, "启动 WeightStartupService 时出错 "); }
+            });
+            _ = Task.Run(() =>
+            {
+                try { volumeStarter.StartAsync(CancellationToken.None).Wait(); }
+                catch (Exception ex) { Log.Error(ex, "启动 VolumeDataHostedService 时出错 "); }
+            });
 
             Log.Information("后台服务启动已发起。 ");
         }
@@ -396,7 +408,7 @@ public partial class App
     }
 
     /// <summary>
-    /// 手动停止已注册的后台服务。
+    ///     手动停止已注册的后台服务。
     /// </summary>
     /// <param name="waitForCompletion">是否等待服务停止完成。</param>
     private void StopBackgroundServices(bool waitForCompletion)
@@ -409,9 +421,24 @@ public partial class App
             var volumeStarter = Container?.Resolve<VolumeDataHostedService>();
 
             var tasks = new List<Task>();
-            if (cameraStarter != null) tasks.Add(Task.Run(() => { try { cameraStarter.StopAsync(CancellationToken.None).Wait(); } catch (Exception ex) { Log.Error(ex, "停止 CameraStartupService 时出错 "); } }));
-            if (weightStarter != null) tasks.Add(Task.Run(() => { try { weightStarter.StopAsync(CancellationToken.None).Wait(); } catch (Exception ex) { Log.Error(ex, "停止 WeightStartupService 时出错 "); } }));
-            if (volumeStarter != null) tasks.Add(Task.Run(() => { try { volumeStarter.StopAsync(CancellationToken.None).Wait(); } catch (Exception ex) { Log.Error(ex, "停止 VolumeDataHostedService 时出错 "); } }));
+            if (cameraStarter != null)
+                tasks.Add(Task.Run(() =>
+                {
+                    try { cameraStarter.StopAsync(CancellationToken.None).Wait(); }
+                    catch (Exception ex) { Log.Error(ex, "停止 CameraStartupService 时出错 "); }
+                }));
+            if (weightStarter != null)
+                tasks.Add(Task.Run(() =>
+                {
+                    try { weightStarter.StopAsync(CancellationToken.None).Wait(); }
+                    catch (Exception ex) { Log.Error(ex, "停止 WeightStartupService 时出错 "); }
+                }));
+            if (volumeStarter != null)
+                tasks.Add(Task.Run(() =>
+                {
+                    try { volumeStarter.StopAsync(CancellationToken.None).Wait(); }
+                    catch (Exception ex) { Log.Error(ex, "停止 VolumeDataHostedService 时出错 "); }
+                }));
 
             if (tasks.Count != 0 && waitForCompletion)
             {
@@ -430,7 +457,7 @@ public partial class App
                 catch (AggregateException aex)
                 {
                     Log.Error(aex, "等待后台服务停止时发生聚合错误。 ");
-                    foreach(var innerEx in aex.InnerExceptions)
+                    foreach (var innerEx in aex.InnerExceptions)
                     {
                         Log.Error(innerEx, "  内部停止错误: ");
                     }

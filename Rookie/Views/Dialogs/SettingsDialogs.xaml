@@ -11,7 +11,7 @@
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=dialogs:SettingsDialogViewModel}">
-   <UserControl.Resources>
+    <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary
@@ -113,7 +113,8 @@
                                 <ui:SymbolIcon Symbol="BranchFork24" />
                             </ui:NavigationViewItem.Icon>
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="settings1:RookieApiSettingsView" xmlns:settings1="clr-namespace:Rookie.Views.Settings" />
+                                <x:Type Type="settings1:RookieApiSettingsView"
+                                        xmlns:settings1="clr-namespace:Rookie.Views.Settings" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>

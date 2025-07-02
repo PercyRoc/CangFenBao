@@ -3,6 +3,7 @@ using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Timers;
 using Serilog;
 using Timer = System.Timers.Timer;
 
@@ -15,24 +16,7 @@ internal class UsbScannerService : IScannerService
 {
     // 扫描枪输入超时时间 (毫秒)
     private const int ScannerTimeout = 200;
-    private readonly StringBuilder _barcodeBuilder = new(); // 用于构建条码字符串
-    private readonly LowLevelKeyboardProc _proc; // 低级键盘钩子回调函数
-    private readonly Queue<string> _barcodeQueue = new(); // 条码处理队列
-    private readonly object _lock = new(); // 队列锁
-    private readonly Timer _processTimer; // 条码队列处理定时器
-    private readonly Subject<string> _barcodeSubject = new(); // 用于发布条码的 Reactive Subject
-    private IntPtr _hookId = IntPtr.Zero; // 键盘钩子句柄
-    private bool _isRunning; // 服务运行状态标志
-    private DateTime _lastKeyTime = DateTime.MinValue; // 上次按键时间
-    private bool _isShiftPressed; // 新增：追踪Shift键状态
-
-    // 添加最后处理条码的记录
-    private string _lastBarcode = string.Empty; // 上一个成功处理的条码
-    private DateTime _lastBarcodeTime = DateTime.MinValue; // 上一个条码的处理时间
     private const int DuplicateBarcodeIntervalMs = 3000; // 重复条码过滤时间间隔 (毫秒)
-
-    // 添加拦截控制开关
-    private bool _interceptAllInput = true; // 控制是否拦截所有扫码枪输入 (防止字符进入输入框)
 
     // WinAPI 常量
     private const int WhKeyboardLl = 13; // 低级键盘钩子类型
@@ -43,16 +27,22 @@ internal class UsbScannerService : IScannerService
     private const short VkRshift = 0xA1; // 右 Shift 虚拟键码
     private const short VkReturn = 0x0D; // Enter 虚拟键码
     private const short VkOemMinus = 0xBD; // OEM_MINUS 虚拟键码
+    private readonly StringBuilder _barcodeBuilder = new(); // 用于构建条码字符串
+    private readonly Queue<string> _barcodeQueue = new(); // 条码处理队列
+    private readonly Subject<string> _barcodeSubject = new(); // 用于发布条码的 Reactive Subject
+    private readonly object _lock = new(); // 队列锁
+    private readonly LowLevelKeyboardProc _proc; // 低级键盘钩子回调函数
+    private readonly Timer _processTimer; // 条码队列处理定时器
+    private IntPtr _hookId = IntPtr.Zero; // 键盘钩子句柄
 
+    // 添加拦截控制开关
+    private bool _isRunning; // 服务运行状态标志
+    private bool _isShiftPressed; // 新增：追踪Shift键状态
 
-    /// <summary>
-    /// 获取或设置是否拦截所有扫码枪输入，防止字符进入输入框
-    /// </summary>
-    public bool InterceptAllInput
-    {
-        get => _interceptAllInput;
-        set => _interceptAllInput = value;
-    }
+    // 添加最后处理条码的记录
+    private string _lastBarcode = string.Empty; // 上一个成功处理的条码
+    private DateTime _lastBarcodeTime = DateTime.MinValue; // 上一个条码的处理时间
+    private DateTime _lastKeyTime = DateTime.MinValue; // 上次按键时间
 
     public UsbScannerService()
     {
@@ -63,13 +53,22 @@ internal class UsbScannerService : IScannerService
         _processTimer.Elapsed += ProcessBarcodeQueue;
     }
 
-    /// <summary>
-    /// 提供条码事件流
-    /// </summary>
-    public IObservable<string> BarcodeStream => _barcodeSubject.AsObservable();
 
     /// <summary>
-    /// 启动扫码枪服务
+    ///     获取或设置是否拦截所有扫码枪输入，防止字符进入输入框
+    /// </summary>
+    public bool InterceptAllInput { get; set; } = true;
+
+    /// <summary>
+    ///     提供条码事件流
+    /// </summary>
+    public IObservable<string> BarcodeStream
+    {
+        get => _barcodeSubject.AsObservable();
+    }
+
+    /// <summary>
+    ///     启动扫码枪服务
     /// </summary>
     /// <returns>启动是否成功</returns>
     public bool Start()
@@ -98,7 +97,7 @@ internal class UsbScannerService : IScannerService
     }
 
     /// <summary>
-    /// 停止扫码枪服务
+    ///     停止扫码枪服务
     /// </summary>
     public void Stop()
     {
@@ -125,7 +124,7 @@ internal class UsbScannerService : IScannerService
     }
 
     /// <summary>
-    /// 释放资源
+    ///     释放资源
     /// </summary>
     public void Dispose()
     {
@@ -136,7 +135,7 @@ internal class UsbScannerService : IScannerService
     }
 
     /// <summary>
-    /// 设置 Windows 钩子
+    ///     设置 Windows 钩子
     /// </summary>
     /// <param name="proc">钩子回调函数</param>
     /// <returns>钩子句柄，失败则返回 IntPtr.Zero</returns>
@@ -149,7 +148,7 @@ internal class UsbScannerService : IScannerService
     }
 
     /// <summary>
-    /// 低级键盘钩子回调函数
+    ///     低级键盘钩子回调函数
     /// </summary>
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
@@ -161,7 +160,8 @@ internal class UsbScannerService : IScannerService
         var currentTime = DateTime.Now;
 
         // --- 添加全局按键日志 ---
-        string messageType = wParam == WmKeydown ? "KeyDown" : (wParam == WmKeyup ? "KeyUp" : $"Other({wParam})");
+        var messageType = wParam == WmKeydown ? "KeyDown" :
+            wParam == WmKeyup ? "KeyUp" : $"Other({wParam})";
         Log.Debug("[全局日志] 收到按键事件: 类型={MsgType}, VKCode={VKCode} (十六进制: {VKCodeHex}), ScanCode={ScanCode}",
             messageType, vkCode, $"0x{vkCode:X2}", scanCode);
         // --- 全局日志结束 ---
@@ -169,7 +169,7 @@ internal class UsbScannerService : IScannerService
         // --- 扩展 Shift 状态追踪 (包含左右 Shift) --- 
         if (vkCode == VkShift || vkCode == VkLshift || vkCode == VkRshift)
         {
-            bool previousShiftState = _isShiftPressed;
+            var previousShiftState = _isShiftPressed;
             if (wParam == WmKeydown)
             {
                 _isShiftPressed = true;
@@ -215,13 +215,10 @@ internal class UsbScannerService : IScannerService
                     Log.Debug("条码有效，已入队：{Barcode}", barcode);
                     return 1;
                 }
-                else
+                Log.Warning("条码无效（回车触发）：{Barcode}，长度: {Length}", barcode, barcode.Length);
+                if (barcode.Length >= 3)
                 {
-                    Log.Warning("条码无效（回车触发）：{Barcode}，长度: {Length}", barcode, barcode.Length);
-                    if (barcode.Length >= 3)
-                    {
-                        return 1;
-                    }
+                    return 1;
                 }
 
                 return CallNextHookEx(_hookId, nCode, wParam, lParam);
@@ -232,11 +229,11 @@ internal class UsbScannerService : IScannerService
             if (!GetKeyboardState(keyboardState))
             {
                 Log.Warning("GetKeyboardState 调用失败。VKCode={VKCode}", vkCode);
-                return _interceptAllInput ? 1 : CallNextHookEx(_hookId, nCode, wParam, lParam);
+                return InterceptAllInput ? 1 : CallNextHookEx(_hookId, nCode, wParam, lParam);
             }
 
             // *** 使用追踪的 Shift 状态修正 keyboardState ***
-            bool originalShiftStateGks = (keyboardState[VkShift] & 0x80) != 0; // 仅用于日志比较
+            var originalShiftStateGks = (keyboardState[VkShift] & 0x80) != 0; // 仅用于日志比较
             if (_isShiftPressed)
             {
                 keyboardState[VkShift] |= 0x80; // 强制 Shift 按下
@@ -250,8 +247,8 @@ internal class UsbScannerService : IScannerService
             // *** 修正结束 ***
 
             // 记录最终使用的 Shift 状态
-            bool shiftStateToUse = (keyboardState[VkShift] & 0x80) != 0;
-            bool capsState = (keyboardState[0x14 /*VK_CAPITAL*/] & 0x01) != 0;
+            var shiftStateToUse = (keyboardState[VkShift] & 0x80) != 0;
+            var capsState = (keyboardState[0x14 /*VK_CAPITAL*/] & 0x01) != 0;
             Log.Debug("准备调用 ToUnicodeEx: Shift={ShiftState}, Caps={CapsState}, VKCode={VKCode}", shiftStateToUse,
                 capsState, vkCode);
 
@@ -272,7 +269,7 @@ internal class UsbScannerService : IScannerService
             }
 
             // 大写字母强制 (逻辑保留)
-            bool forceUppercase = vkCode is >= 0x41 and <= 0x5A;
+            var forceUppercase = vkCode is >= 0x41 and <= 0x5A;
 
             var hkl = GetKeyboardLayout(0);
             var sb = new StringBuilder(2);
@@ -281,7 +278,7 @@ internal class UsbScannerService : IScannerService
             // --- 详细日志 for VK_OEM_MINUS (保持) ---
             if (vkCode == VkOemMinus)
             {
-                string producedChars = (result > 0) ? sb.ToString(0, result) : "[无]";
+                var producedChars = result > 0 ? sb.ToString(0, result) : "[无]";
                 Log.Debug(
                     "[VK_OEM_MINUS 详细日志] ToUnicodeEx 结果: 产生字符='{Produced}', 返回码={ResultCode}, 使用的Shift状态={UsedShift}",
                     producedChars, result, shiftStateToUse);
@@ -290,11 +287,11 @@ internal class UsbScannerService : IScannerService
 
             if (result > 0)
             {
-                char charFromToUnicodeEx = sb[0];
-                char charToAdd = charFromToUnicodeEx;
+                var charFromToUnicodeEx = sb[0];
+                var charToAdd = charFromToUnicodeEx;
                 if (forceUppercase)
                 {
-                    char forcedUpperChar = (char)vkCode;
+                    var forcedUpperChar = (char)vkCode;
                     if (charToAdd != forcedUpperChar)
                     {
                         Log.Warning("强制将 VKCode {VKCode} 的 ToUnicodeEx 结果 '{OriginalChar}' 改为大写 '{ForcedChar}'", vkCode,
@@ -305,36 +302,28 @@ internal class UsbScannerService : IScannerService
 
                 _barcodeBuilder.Append(charToAdd);
                 Log.Debug("添加字符 '{Char}' (VKCode: {VKCode}) 到缓冲区. 当前模式: {Mode}",
-                    charToAdd, vkCode, _interceptAllInput ? "扫描枪(拦截)" : "手动(不拦截)");
+                    charToAdd, vkCode, InterceptAllInput ? "扫描枪(拦截)" : "手动(不拦截)");
 
-                if (_interceptAllInput)
+                if (InterceptAllInput)
                 {
                     Log.Debug("拦截按键 (扫描枪模式): '{Char}'", charToAdd);
                     return 1;
                 }
-                else
-                {
-                    Log.Debug("不拦截按键 (手动模式): '{Char}'", charToAdd);
-                    return CallNextHookEx(_hookId, nCode, wParam, lParam);
-                }
+                Log.Debug("不拦截按键 (手动模式): '{Char}'", charToAdd);
+                return CallNextHookEx(_hookId, nCode, wParam, lParam);
             }
-            else // ToUnicodeEx 转换失败
+            // ToUnicodeEx 转换失败
+            Log.Debug("ToUnicodeEx 转换失败或未产生字符 (VKCode: {VKCode}, Result: {Result})", vkCode, result);
+            if (InterceptAllInput)
             {
-                Log.Debug("ToUnicodeEx 转换失败或未产生字符 (VKCode: {VKCode}, Result: {Result})", vkCode, result);
-                if (_interceptAllInput)
-                {
-                    Log.Debug("拦截按键 (扫描枪模式, ToUnicodeEx失败): VKCode {VKCode}", vkCode);
-                    return 1;
-                }
-                else
-                {
-                    Log.Debug("不拦截按键 (手动模式, ToUnicodeEx失败): VKCode {VKCode}", vkCode);
-                    return CallNextHookEx(_hookId, nCode, wParam, lParam);
-                }
+                Log.Debug("拦截按键 (扫描枪模式, ToUnicodeEx失败): VKCode {VKCode}", vkCode);
+                return 1;
             }
+            Log.Debug("不拦截按键 (手动模式, ToUnicodeEx失败): VKCode {VKCode}", vkCode);
+            return CallNextHookEx(_hookId, nCode, wParam, lParam);
         } // 结束 if (wParam == WM_KEYDOWN)
         // --- 处理非 Shift 键的 KeyUp 事件 ---
-        else if (wParam == WmKeyup)
+        if (wParam == WmKeyup)
         {
             Log.Debug("传递非 Shift KeyUp 事件: VKCode={VKCode}", vkCode);
             return CallNextHookEx(_hookId, nCode, wParam, lParam);
@@ -346,9 +335,9 @@ internal class UsbScannerService : IScannerService
     }
 
     /// <summary>
-    /// 定时处理条码队列
+    ///     定时处理条码队列
     /// </summary>
-    private void ProcessBarcodeQueue(object? sender, System.Timers.ElapsedEventArgs e)
+    private void ProcessBarcodeQueue(object? sender, ElapsedEventArgs e)
     {
         lock (_lock) // 加锁访问队列
         {
@@ -384,7 +373,7 @@ internal class UsbScannerService : IScannerService
     }
 
     /// <summary>
-    /// 验证条码的基本有效性 (非空且长度大于等于3)
+    ///     验证条码的基本有效性 (非空且长度大于等于3)
     /// </summary>
     /// <param name="barcode">待验证的条码</param>
     /// <returns>是否有效</returns>
@@ -395,14 +384,14 @@ internal class UsbScannerService : IScannerService
     }
 
     /// <summary>
-    /// 低级键盘钩子过程委托
+    ///     低级键盘钩子过程委托
     /// </summary>
     private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
 
     #region Native Methods (WinAPI P/Invoke) - WinAPI 函数导入
 
     /// <summary>
-    /// 低级键盘输入事件结构
+    ///     低级键盘输入事件结构
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     private struct Kbdllhookstruct
@@ -415,26 +404,26 @@ internal class UsbScannerService : IScannerService
     }
 
     /// <summary>
-    /// 安装一个应用程序定义的钩子过程到一个钩子链。
+    ///     安装一个应用程序定义的钩子过程到一个钩子链。
     /// </summary>
     [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
     private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
 
     /// <summary>
-    /// 移除一个安装在系统钩子链中的钩子过程。
+    ///     移除一个安装在系统钩子链中的钩子过程。
     /// </summary>
     [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool UnhookWindowsHookEx(IntPtr hhk);
 
     /// <summary>
-    /// 将钩子信息传递到当前钩子链中的下一个钩子过程。
+    ///     将钩子信息传递到当前钩子链中的下一个钩子过程。
     /// </summary>
     [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
     private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
 
     /// <summary>
-    /// 检索指定模块的模块句柄。模块必须已被当前进程加载。
+    ///     检索指定模块的模块句柄。模块必须已被当前进程加载。
     /// </summary>
     [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
     private static extern IntPtr GetModuleHandle(string? lpModuleName); // 传递 null 获取当前应用程序的句柄
@@ -443,25 +432,24 @@ internal class UsbScannerService : IScannerService
 
     // 添加了 ToUnicodeEx 必需的函数
     /// <summary>
-    /// 将虚拟键码和键盘状态翻译成相应的 Unicode 字符。
+    ///     将虚拟键码和键盘状态翻译成相应的 Unicode 字符。
     /// </summary>
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetKeyboardState(byte[] lpKeyState); // 获取当前键盘状态
 
     /// <summary>
-    /// 检索活动线程的输入区域设置标识符（以前称为键盘布局）。
+    ///     检索活动线程的输入区域设置标识符（以前称为键盘布局）。
     /// </summary>
     [DllImport("user32.dll")]
     private static extern IntPtr GetKeyboardLayout(uint idThread); // 传递 0 获取当前线程的布局
 
     /// <summary>
-    /// 将指定的虚拟键代码和键盘状态转换为相应的一个或多个 Unicode 字符。
+    ///     将指定的虚拟键代码和键盘状态转换为相应的一个或多个 Unicode 字符。
     /// </summary>
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] // 使用 Unicode 字符集以配合 StringBuilder
     private static extern int ToUnicodeEx(uint wVirtKey, uint wScanCode, byte[] lpKeyState,
-        [Out, MarshalAs(UnmanagedType.LPWStr, SizeConst = 4)]
-        StringBuilder pwszBuff, // 使用 StringBuilder 接收输出
+        [Out] [MarshalAs(UnmanagedType.LPWStr, SizeConst = 4)] StringBuilder pwszBuff, // 使用 StringBuilder 接收输出
         int cchBuff, uint wFlags, IntPtr dwhkl); // dwhkl: 要使用的键盘布局句柄
 
     // 新增 GetAsyncKeyState

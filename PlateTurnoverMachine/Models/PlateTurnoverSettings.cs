@@ -9,17 +9,12 @@ namespace DongtaiFlippingBoardMachine.Models;
 [Configuration("PlateTurnoverSettings")]
 public class PlateTurnoverSettings : BindableBase
 {
+    private int _chuteCount = 1; // 格口总数
     private double _defaultInterval = 200; // 默认间隔时间（毫秒）
     private int _errorChute; // 异常格口号
     private ObservableCollection<PlateTurnoverItem> _items = [];
     private string _triggerPhotoelectricIp = "192.168.1.100"; // 默认IP地址
     private int _triggerPhotoelectricPort = 2000; // 默认端口号
-    private int _chuteCount = 1; // 格口总数
-
-    /// <summary>
-    ///     配置变更事件
-    /// </summary>
-    public event EventHandler? SettingsChanged;
 
     /// <summary>
     ///     格口总数
@@ -134,7 +129,7 @@ public class PlateTurnoverSettings : BindableBase
     ///     中通小车编码
     /// </summary>
     public string ZtoTrayCode { get; set; } = string.Empty;
-    
+
     /// <summary>
     ///     已配置的最大光电触发次数（即最远格口的距离）
     /// </summary>
@@ -145,6 +140,11 @@ public class PlateTurnoverSettings : BindableBase
             return Items.Count == 0 ? 0 : (int)Items.Max(static item => item.Distance);
         }
     }
+
+    /// <summary>
+    ///     配置变更事件
+    /// </summary>
+    public event EventHandler? SettingsChanged;
 
     /// <summary>
     ///     触发配置变更事件

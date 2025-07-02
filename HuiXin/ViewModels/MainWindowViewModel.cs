@@ -1,18 +1,18 @@
-﻿using Common.Data;
-using Common.Models.Package;
-using Common.Services.Settings;
-using DeviceService.DataSourceDevices.Camera;
-using DeviceService.DataSourceDevices.Services;
-using SharedUI.Models;
+﻿using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
-using Serilog;
+using Common.Data;
+using Common.Models.Package;
 using Common.Models.Settings.ChuteRules;
-using System.Collections.ObjectModel;
-using System.Globalization;
+using Common.Services.Settings;
+using DeviceService.DataSourceDevices.Camera;
+using DeviceService.DataSourceDevices.Services;
+using Serilog;
+using SharedUI.Models;
 using SortingServices.Car.Service;
 using SortingServices.Servers.Services.JuShuiTan;
 
@@ -21,11 +21,11 @@ namespace HuiXin.ViewModels;
 public class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly ICameraService _cameraService;
+    private readonly CarSortService _carSortService;
     private readonly IDialogService _dialogService;
+    private readonly IJuShuiTanService _juShuiTanService;
     private readonly IPackageDataService _packageDataService;
     private readonly ISettingsService _settingsService;
-    private readonly IJuShuiTanService _juShuiTanService;
-    private readonly CarSortService _carSortService;
     private readonly List<IDisposable> _subscriptions = [];
 
     private readonly DispatcherTimer _timer;
@@ -34,9 +34,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     private BitmapSource? _currentImage;
 
-    private bool _disposed;
-
     private int _currentPackageIndex;
+
+    private bool _disposed;
 
     private SystemStatus _systemStatus = new();
 
@@ -163,7 +163,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private void Timer_Tick(object? sender, EventArgs e)
     {
         SystemStatus = SystemStatus.GetCurrentStatus();
-        
+
         // 更新小车连接状态
         UpdateCarStatus(_carSortService.IsConnected, _carSortService.IsRunning);
     }
@@ -178,7 +178,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 // 启动服务
                 var started = await _carSortService.StartAsync();
-                Log.Information("小车分拣服务初始化状态: {Initialized}, 启动状态: {Started}", 
+                Log.Information("小车分拣服务初始化状态: {Initialized}, 启动状态: {Started}",
                     initialized, started);
                 UpdateCarStatus(_carSortService.IsConnected, started);
             }
@@ -206,7 +206,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 Icon = "Camera24",
                 StatusColor = "#F44336" // 红色表示未连接
             });
-            
+
             DeviceStatuses.Add(new DeviceStatus
             {
                 Name = "小车",
@@ -224,81 +224,81 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private void InitializeStatisticsItems()
     {
         StatisticsItems.Add(new StatisticsItem(
-            label: "总包裹数",
-            value: "0",
-            unit: "个",
-            description: "累计处理包裹总数",
-            icon: "BoxMultiple24"
+            "总包裹数",
+            "0",
+            "个",
+            "累计处理包裹总数",
+            "BoxMultiple24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
-            label: "异常数",
-            value: "0",
-            unit: "个",
-            description: "处理异常的包裹数量",
-            icon: "ErrorCircle24"
+            "异常数",
+            "0",
+            "个",
+            "处理异常的包裹数量",
+            "ErrorCircle24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
-            label: "预测效率",
-            value: "0",
-            unit: "个/小时",
-            description: "预计每小时处理量",
-            icon: "ArrowTrendingLines24"
+            "预测效率",
+            "0",
+            "个/小时",
+            "预计每小时处理量",
+            "ArrowTrendingLines24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
-            label: "平均处理时间",
-            value: "0",
-            unit: "ms",
-            description: "单个包裹平均处理时间",
-            icon: "Timer24"
+            "平均处理时间",
+            "0",
+            "ms",
+            "单个包裹平均处理时间",
+            "Timer24"
         ));
     }
 
     private void InitializePackageInfoItems()
     {
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "条码",
-            value: "--",
+            "条码",
+            "--",
             description: "包裹条码信息",
             icon: "BarcodeScanner24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "重量",
-            value: "--",
-            unit: "kg",
-            description: "包裹重量",
-            icon: "Scales24"
+            "重量",
+            "--",
+            "kg",
+            "包裹重量",
+            "Scales24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "尺寸",
-            value: "--",
-            unit: "cm",
-            description: "长×宽×高",
-            icon: "Ruler24"
+            "尺寸",
+            "--",
+            "cm",
+            "长×宽×高",
+            "Ruler24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "格口",
-            value: "--",
+            "格口",
+            "--",
             description: "目标分拣位置",
             icon: "ArrowCircleDown24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "处理时间",
-            value: "--",
-            unit: "ms",
-            description: "系统处理耗时",
-            icon: "Timer24"
+            "处理时间",
+            "--",
+            "ms",
+            "系统处理耗时",
+            "Timer24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "时间",
-            value: "--:--:--",
+            "时间",
+            "--:--:--",
             description: "包裹处理时间",
             icon: "Clock24"
         ));
@@ -321,7 +321,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             Application.Current.Dispatcher.Invoke(() => { CurrentBarcode = package.Barcode; });
-            
+
             // 获取格口规则配置
             var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
 
@@ -347,14 +347,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         Weight = (decimal)package.Weight,
                         Type = 5
                     };
-                    
+
                     Log.Information("上传包裹 {Barcode} 到聚水潭", package.Barcode);
                     var response = await _juShuiTanService.WeightAndSendAsync(weightSendRequest);
-                    
+
                     if (response.Code == 0)
                     {
                         Log.Information("聚水潭上传成功: {Barcode}", package.Barcode);
-                        
+
                         // 尝试匹配格口规则
                         var matchedChute = chuteSettings.FindMatchingChute(package.Barcode);
 
@@ -377,7 +377,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         // 聚水潭响应异常，使用异常口
                         package.SetChute(chuteSettings.ErrorChuteNumber);
                         package.SetStatus(PackageStatus.Failed, $"聚水潭错误: {response.Message}");
-                        Log.Error("聚水潭上传失败: {Code}, {Message}, 使用异常口: {ErrorChute}", 
+                        Log.Error("聚水潭上传失败: {Code}, {Message}, 使用异常口: {ErrorChute}",
                             response.Code, response.Message, chuteSettings.ErrorChuteNumber);
                     }
                 }
@@ -432,7 +432,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 Log.Error(ex, "保存包裹记录到数据库时发生错误：{Barcode}", package.Barcode);
             }
-            
+
             // 添加到小车分拣队列
             if (package.ChuteNumber <= 0) return;
             {
@@ -440,7 +440,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 {
                     // 添加到分拣队列
                     var added = await _carSortService.ProcessPackageSortingAsync(package);
-                    
+
                     if (added)
                     {
                         Log.Information("包裹 {Barcode} 已成功添加到分拣队列", package.Barcode);
@@ -466,7 +466,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             package.ReleaseImage(); // 确保包裹被释放
         }
     }
-    
+
     private void UpdateCarStatus(bool isConnected, bool isRunning)
     {
         Application.Current.Dispatcher.Invoke(() =>

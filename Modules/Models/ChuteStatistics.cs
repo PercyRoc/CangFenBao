@@ -1,9 +1,7 @@
-using Prism.Mvvm;
-
 namespace ShanghaiModuleBelt.Models;
 
 /// <summary>
-/// 格口统计信息模型
+///     格口统计信息模型
 /// </summary>
 public class ChuteStatistics : BindableBase
 {
@@ -11,7 +9,7 @@ public class ChuteStatistics : BindableBase
     private int _packageCount;
 
     /// <summary>
-    /// 格口号
+    ///     格口号
     /// </summary>
     public int ChuteNumber
     {
@@ -20,11 +18,11 @@ public class ChuteStatistics : BindableBase
     }
 
     /// <summary>
-    /// 包裹总数
+    ///     包裹总数
     /// </summary>
     public int PackageCount
     {
         get => _packageCount;
         set => SetProperty(ref _packageCount, value);
     }
-} 
+}

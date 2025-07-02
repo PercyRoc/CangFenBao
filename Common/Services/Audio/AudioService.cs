@@ -38,32 +38,32 @@ public enum AudioType
     ///     通用成功音效
     /// </summary>
     Success,
-    
+
     /// <summary>
     ///     PLC未连接
     /// </summary>
     PlcDisconnected,
-    
+
     /// <summary>
     ///     等待扫码
     /// </summary>
     WaitingScan,
-    
+
     /// <summary>
     ///     等待上包
     /// </summary>
     WaitingForLoading,
-    
+
     /// <summary>
     ///     上包超时
     /// </summary>
     LoadingTimeout,
-    
+
     /// <summary>
     ///     拒绝上包
     /// </summary>
     LoadingRejected,
-    
+
     /// <summary>
     ///     上包成功
     /// </summary>
@@ -102,16 +102,36 @@ public class AudioService : IAudioService, IDisposable
         var audioDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Audio");
         _presetAudios = new Dictionary<AudioType, string>
         {
-            { AudioType.SystemError, Path.Combine(audioDirectory, "error.wav") },
-            { AudioType.Success, Path.Combine(audioDirectory, "success.wav") },
-            { AudioType.PlcDisconnected, Path.Combine(audioDirectory, "PLC未连接.wav") },
-            { AudioType.WaitingScan, Path.Combine(audioDirectory, "等待扫码.wav") },
-            { AudioType.WaitingForLoading, Path.Combine(audioDirectory, "等待上包.wav") },
-            { AudioType.LoadingTimeout, Path.Combine(audioDirectory, "超时.wav") },
-            { AudioType.LoadingRejected, Path.Combine(audioDirectory, "拒绝上包.wav") },
-            { AudioType.LoadingSuccess, Path.Combine(audioDirectory, "上包成功.wav") },
-            { AudioType.VolumeAbnormal, Path.Combine(audioDirectory, "体积异常.wav") },
-            { AudioType.WeightAbnormal, Path.Combine(audioDirectory, "重量异常.wav") }
+            {
+                AudioType.SystemError, Path.Combine(audioDirectory, "error.wav")
+            },
+            {
+                AudioType.Success, Path.Combine(audioDirectory, "success.wav")
+            },
+            {
+                AudioType.PlcDisconnected, Path.Combine(audioDirectory, "PLC未连接.wav")
+            },
+            {
+                AudioType.WaitingScan, Path.Combine(audioDirectory, "等待扫码.wav")
+            },
+            {
+                AudioType.WaitingForLoading, Path.Combine(audioDirectory, "等待上包.wav")
+            },
+            {
+                AudioType.LoadingTimeout, Path.Combine(audioDirectory, "超时.wav")
+            },
+            {
+                AudioType.LoadingRejected, Path.Combine(audioDirectory, "拒绝上包.wav")
+            },
+            {
+                AudioType.LoadingSuccess, Path.Combine(audioDirectory, "上包成功.wav")
+            },
+            {
+                AudioType.VolumeAbnormal, Path.Combine(audioDirectory, "体积异常.wav")
+            },
+            {
+                AudioType.WeightAbnormal, Path.Combine(audioDirectory, "重量异常.wav")
+            }
         };
 
         // 确保音频目录存在

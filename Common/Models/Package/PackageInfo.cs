@@ -40,21 +40,41 @@ public enum PackageSortState
 public class PackageInfo : IDisposable
 {
     private static int _currentIndex;
-    private bool _disposed;
 
     private static readonly Dictionary<PackageStatus, string> DefaultStatusDisplays = new()
     {
-        { PackageStatus.Created, "已创建" },
-        { PackageStatus.Success, "分拣成功" },
-        { PackageStatus.Failed, "分拣失败" },
-        { PackageStatus.Timeout, "处理超时" },
-        { PackageStatus.Offline, "设备离线" },
-        { PackageStatus.Error, "异常" },
-        { PackageStatus.WaitingForLoading, "等待上包" },
-        { PackageStatus.LoadingRejected, "拒绝上包" },
-        { PackageStatus.LoadingSuccess, "上包成功" },
-        { PackageStatus.LoadingTimeout, "上包超时" }
+        {
+            PackageStatus.Created, "已创建"
+        },
+        {
+            PackageStatus.Success, "分拣成功"
+        },
+        {
+            PackageStatus.Failed, "分拣失败"
+        },
+        {
+            PackageStatus.Timeout, "处理超时"
+        },
+        {
+            PackageStatus.Offline, "设备离线"
+        },
+        {
+            PackageStatus.Error, "异常"
+        },
+        {
+            PackageStatus.WaitingForLoading, "等待上包"
+        },
+        {
+            PackageStatus.LoadingRejected, "拒绝上包"
+        },
+        {
+            PackageStatus.LoadingSuccess, "上包成功"
+        },
+        {
+            PackageStatus.LoadingTimeout, "上包超时"
+        }
     };
+    private bool _disposed;
 
     /// <summary>
     ///     构造函数
@@ -63,21 +83,6 @@ public class PackageInfo : IDisposable
     {
         CreateTime = DateTime.Now;
         SortState = PackageSortState.Pending; // 初始化分拣状态
-    }
-
-    /// <summary>
-    ///     创建 PackageInfo 的新实例并自动递增序号。
-    /// </summary>
-    /// <returns>新的 PackageInfo 实例。</returns>
-    public static PackageInfo Create()
-    {
-        var newIndex = Interlocked.Increment(ref _currentIndex);
-        var package = new PackageInfo
-        {
-            Index = newIndex
-        };
-        package.SetStatus(PackageStatus.Created);
-        return package;
     }
 
     /// <summary>
@@ -243,6 +248,21 @@ public class PackageInfo : IDisposable
     }
 
     /// <summary>
+    ///     创建 PackageInfo 的新实例并自动递增序号。
+    /// </summary>
+    /// <returns>新的 PackageInfo 实例。</returns>
+    public static PackageInfo Create()
+    {
+        var newIndex = Interlocked.Increment(ref _currentIndex);
+        var package = new PackageInfo
+        {
+            Index = newIndex
+        };
+        package.SetStatus(PackageStatus.Created);
+        return package;
+    }
+
+    /// <summary>
     ///     释放图像资源
     /// </summary>
     /// <remarks>
@@ -314,8 +334,8 @@ public class PackageInfo : IDisposable
     {
         Status = status;
         StatusDisplay = !string.IsNullOrEmpty(statusDisplay)
-                        ? statusDisplay
-                        : DefaultStatusDisplays.GetValueOrDefault(status, status.ToString()); // Use default or enum name as fallback
+            ? statusDisplay
+            : DefaultStatusDisplays.GetValueOrDefault(status, status.ToString()); // Use default or enum name as fallback
         if (status == PackageStatus.Error && string.IsNullOrEmpty(ErrorMessage))
         {
             ErrorMessage = StatusDisplay;

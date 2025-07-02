@@ -5,9 +5,9 @@ namespace SortingServices.Servers.Models;
 [Configuration("jushuitanSettings")]
 public class JushuitanSettings : BindableBase
 {
+    private string _accessToken = string.Empty;
     private string _appKey = string.Empty;
     private string _appSecret = string.Empty;
-    private string _accessToken = string.Empty;
     private bool _isProduction;
 
     /// <summary>

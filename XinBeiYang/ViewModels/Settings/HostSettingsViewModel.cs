@@ -57,7 +57,7 @@ public class HostSettingsViewModel : BindableBase
             }
 
             _settingsService.SaveSettings(Configuration);
-            Log.Information("主机配置已保存: AckTimeout={AckTimeout}s, ResultTimeout={ResultTimeout}s", 
+            Log.Information("主机配置已保存: AckTimeout={AckTimeout}s, ResultTimeout={ResultTimeout}s",
                 Configuration.UploadAckTimeoutSeconds, Configuration.UploadResultTimeoutSeconds);
             _notificationService.ShowSuccess("配置保存成功");
         }

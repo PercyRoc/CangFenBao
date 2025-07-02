@@ -1,7 +1,7 @@
 ﻿using Common.Services.Ui;
 using Serilog;
-using SharedUI.ViewModels.Settings;
 using SharedUI.ViewModels;
+using SharedUI.ViewModels.Settings;
 
 namespace ChongqingYekelai.ViewModels;
 
@@ -29,7 +29,7 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
         _balanceSortSettingsViewModel = containerProvider.Resolve<BalanceSortSettingsViewModel>();
         _barcodeChuteSettingsViewModel = containerProvider.Resolve<BarcodeChuteSettingsViewModel>();
         _jushuitanSettingsViewModel = containerProvider.Resolve<JushuitanSettingsViewModel>();
-        
+
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
     }
@@ -37,7 +37,10 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
     public DelegateCommand SaveCommand { get; }
     public DelegateCommand CancelCommand { get; }
 
-    public string Title => "系统设置";
+    public string Title
+    {
+        get => "系统设置";
+    }
 
     // Prism 9.0+ 要求
     public DialogCloseListener RequestClose { get; }
@@ -55,6 +58,12 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
 
     public void OnDialogOpened(IDialogParameters parameters)
     {
+    }
+
+    // 实现 IDisposable 接口
+    public void Dispose()
+    {
+        GC.SuppressFinalize(this);
     }
 
     private void ExecuteSave()
@@ -82,11 +91,5 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
     {
         // 更新调用方式
         RequestClose.Invoke(new DialogResult(ButtonResult.Cancel));
-    }
-
-    // 实现 IDisposable 接口
-    public void Dispose()
-    {
-        GC.SuppressFinalize(this);
     }
 }

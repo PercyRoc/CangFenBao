@@ -4,12 +4,12 @@ using System.Windows.Data;
 namespace SharedUI.Converters;
 
 /// <summary>
-/// 基于转换器参数将枚举值转换为布尔值。
+///     基于转换器参数将枚举值转换为布尔值。
 /// </summary>
 public class EnumToBooleanConverter : IValueConverter
 {
     /// <summary>
-    /// 如果枚举值与参数匹配，则将其转换为true，否则为false。
+    ///     如果枚举值与参数匹配，则将其转换为true，否则为false。
     /// </summary>
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
@@ -25,7 +25,7 @@ public class EnumToBooleanConverter : IValueConverter
     }
 
     /// <summary>
-    /// 将true转换回参数指定的枚举值。
+    ///     将true转换回参数指定的枚举值。
     /// </summary>
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
     {

@@ -160,7 +160,7 @@ public class ChutePackageRecordService(HttpClient httpClient, ISettingsService s
             using var request = new HttpRequestMessage(HttpMethod.Post, ApiUrl);
             request.Headers.Add("equickToken", _config.Token);
             request.Content = content;
-            
+
             var response = await httpClient.SendAsync(request, cts.Token);
 
             // 检查响应状态

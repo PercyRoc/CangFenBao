@@ -8,32 +8,32 @@
         <UseWPF>true</UseWPF>
         <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
         <AssemblyName>仓分宝-快驴</AssemblyName>
-		<RootNamespace>KuaiLv</RootNamespace>
+        <RootNamespace>KuaiLv</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Common\基础服务.csproj" />
-        <ProjectReference Include="..\DeviceService\设备服务.csproj" />
-        <ProjectReference Include="..\SharedUI\UI组件.csproj" />
+        <ProjectReference Include="..\Common\基础服务.csproj"/>
+        <ProjectReference Include="..\DeviceService\设备服务.csproj"/>
+        <ProjectReference Include="..\SharedUI\UI组件.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
         <!-- Prism -->
-        <PackageReference Include="Prism.Wpf" />
+        <PackageReference Include="Prism.Wpf"/>
 
         <!-- Serilog -->
-        <PackageReference Include="Serilog" />
-        <PackageReference Include="Serilog.Sinks.Console" />
-        <PackageReference Include="Serilog.Sinks.File" />
-        <PackageReference Include="Serilog.Sinks.Debug" />
-        <PackageReference Include="Serilog.Extensions.Logging" />
+        <PackageReference Include="Serilog"/>
+        <PackageReference Include="Serilog.Sinks.Console"/>
+        <PackageReference Include="Serilog.Sinks.File"/>
+        <PackageReference Include="Serilog.Sinks.Debug"/>
+        <PackageReference Include="Serilog.Extensions.Logging"/>
 
         <!-- UI Framework -->
-        <PackageReference Include="MahApps.Metro.IconPacks.Material" />
-        <PackageReference Include="Microsoft.Extensions.Http" />
-        <PackageReference Include="FluentFTP" />
-        <PackageReference Include="WPF-UI" />
-        <PackageReference Include="HandyControl" />
+        <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
+        <PackageReference Include="Microsoft.Extensions.Http"/>
+        <PackageReference Include="FluentFTP"/>
+        <PackageReference Include="WPF-UI"/>
+        <PackageReference Include="HandyControl"/>
     </ItemGroup>
 
     <ItemGroup>

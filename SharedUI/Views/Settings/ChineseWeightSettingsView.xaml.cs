@@ -1,10 +1,9 @@
-namespace SharedUI.Views.Settings
+namespace SharedUI.Views.Settings;
+
+public partial class ChineseWeightSettingsView
 {
-    public partial class ChineseWeightSettingsView
+    public ChineseWeightSettingsView()
     {
-        public ChineseWeightSettingsView()
-        {
-            InitializeComponent();
-        }
+        InitializeComponent();
     }
-} 
+}

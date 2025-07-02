@@ -1,13 +1,12 @@
-namespace SharedUI.Views.Settings
+namespace SharedUI.Views.Settings;
+
+/// <summary>
+///     CarSequenceView.xaml 的交互逻辑
+/// </summary>
+public partial class CarSequenceView
 {
-    /// <summary>
-    /// CarSequenceView.xaml 的交互逻辑
-    /// </summary>
-    public partial class CarSequenceView
+    public CarSequenceView()
     {
-        public CarSequenceView()
-        {
-            InitializeComponent();
-        }
+        InitializeComponent();
     }
-} 
+}

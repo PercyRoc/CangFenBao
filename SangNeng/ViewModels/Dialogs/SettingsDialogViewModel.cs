@@ -37,7 +37,10 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
     public DelegateCommand SaveCommand { get; }
     public DelegateCommand CancelCommand { get; }
 
-    public string Title => "System Settings";
+    public string Title
+    {
+        get => "System Settings";
+    }
 
     // Prism 9.0+ 要求
     public DialogCloseListener RequestClose { get; }
@@ -55,6 +58,12 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
 
     public void OnDialogOpened(IDialogParameters parameters)
     {
+    }
+
+    // 实现 IDisposable 接口
+    public void Dispose()
+    {
+        GC.SuppressFinalize(this);
     }
 
     private void ExecuteSave()
@@ -84,11 +93,5 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
     {
         // 更新调用方式
         RequestClose.Invoke(new DialogResult(ButtonResult.Cancel));
-    }
-
-    // 实现 IDisposable 接口
-    public void Dispose()
-    {
-        GC.SuppressFinalize(this);
     }
 }

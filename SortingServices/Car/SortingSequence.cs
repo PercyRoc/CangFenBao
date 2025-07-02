@@ -1,7 +1,7 @@
 namespace SortingServices.Car;
 
 /// <summary>
-/// 小车分拣序列
+///     小车分拣序列
 /// </summary>
 public class SortingSequence
 {
@@ -19,4 +19,4 @@ public class SortingSequence
     ///     指令延迟时间（毫秒）
     /// </summary>
     public int CommandDelay { get; set; }
-} 
+}

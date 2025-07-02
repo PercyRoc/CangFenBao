@@ -2,10 +2,10 @@ namespace SharedUI.Models;
 
 public class StatisticsItem : BindableBase
 {
-    private string _description = string.Empty;
-    private string _icon = string.Empty;
     private readonly string _label = string.Empty;
     private readonly string _unit = string.Empty;
+    private string _description = string.Empty;
+    private string _icon = string.Empty;
     private string _value = string.Empty;
 
     public StatisticsItem(string label, string value, string unit = "", string description = "", string icon = "")

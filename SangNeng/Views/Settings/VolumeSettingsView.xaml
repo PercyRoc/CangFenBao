@@ -23,8 +23,8 @@
         </ResourceDictionary>
     </Page.Resources>
     <Grid>
-        <StackPanel MaxWidth="800" 
-                    Margin="16" 
+        <StackPanel MaxWidth="800"
+                    Margin="16"
                     HorizontalAlignment="Center">
             <TextBlock Text="RenJia Camera Settings"
                        HorizontalAlignment="Center"
@@ -59,15 +59,15 @@
                     </StackPanel>
 
                     <!-- Add Image Save Path Setting -->
-                    <StackPanel Orientation="Horizontal" Margin="0,16,0,0"> 
-                        <TextBlock Text="Image Save Path:" 
-                                   VerticalAlignment="Center" 
+                    <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                        <TextBlock Text="Image Save Path:"
+                                   VerticalAlignment="Center"
                                    Margin="0,0,8,0" />
-                        <TextBox Width="400" 
+                        <TextBox Width="400"
                                  Text="{Binding ImageSavePath, UpdateSourceTrigger=PropertyChanged}" />
-                        <Button Content="Browse..." 
+                        <Button Content="Browse..."
                                 Command="{Binding BrowseFolderCommand}"
-                                Margin="8,0,0,0"/>
+                                Margin="8,0,0,0" />
                     </StackPanel>
 
                     <!-- Add Image Save Mode Selection -->

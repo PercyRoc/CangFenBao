@@ -2,7 +2,6 @@ using System.ComponentModel.DataAnnotations;
 using System.Text.RegularExpressions;
 using Common.Services.Settings;
 using Serilog;
-using System.Linq;
 
 namespace Common.Models.Settings.ChuteRules;
 
@@ -12,8 +11,8 @@ public class ChuteSettings : BindableBase
     private int _chuteCount = 1;
     private Dictionary<int, BarcodeMatchRule> _chuteRules = [];
     private int _errorChuteNumber;
-    private int _timeoutChuteNumber;
     private int _noReadChuteNumber;
+    private int _timeoutChuteNumber;
     private int _weightMismatchChuteNumber;
 
     [Range(1, 100, ErrorMessage = "格口数量必须在1-100之间")]
@@ -192,7 +191,7 @@ public class BarcodeMatchRule : BindableBase
                string.IsNullOrEmpty(Contains) &&
                string.IsNullOrEmpty(NotContains) &&
                (string.IsNullOrEmpty(RegexPattern) || RegexPattern == "(?=.*(?))");
-    } 
+    }
 
     /// <summary>
     ///     检查当前规则是否为"仅字符类型"的规则（只设置了字符类型条件，其他都是默认值）

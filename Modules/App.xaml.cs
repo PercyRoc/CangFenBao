@@ -5,7 +5,8 @@ using Common.Extensions;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
-using Microsoft.EntityFrameworkCore;
+using Modules.Services.Jitu;
+using Modules.ViewModels.Jitu.Settings;
 using Serilog;
 using ShanghaiModuleBelt.Data;
 using ShanghaiModuleBelt.Services;
@@ -16,18 +17,16 @@ using ShanghaiModuleBelt.ViewModels;
 using ShanghaiModuleBelt.ViewModels.Settings;
 using ShanghaiModuleBelt.ViewModels.Sto.Settings;
 using ShanghaiModuleBelt.ViewModels.Yunda.Settings;
+using ShanghaiModuleBelt.ViewModels.Zto.Settings;
 using ShanghaiModuleBelt.Views;
+using ShanghaiModuleBelt.Views.Jitu.Settings;
 using ShanghaiModuleBelt.Views.Settings;
 using ShanghaiModuleBelt.Views.Sto.Settings;
 using ShanghaiModuleBelt.Views.Yunda.Settings;
-using ShanghaiModuleBelt.ViewModels.Zto.Settings;
 using ShanghaiModuleBelt.Views.Zto.Settings;
 using SharedUI.Extensions;
 using SharedUI.ViewModels.Settings;
 using SharedUI.Views.Settings;
-using Modules.Services.Jitu;
-using Modules.ViewModels.Jitu.Settings;
-using ShanghaiModuleBelt.Views.Jitu.Settings;
 
 namespace ShanghaiModuleBelt;
 
@@ -36,8 +35,8 @@ namespace ShanghaiModuleBelt;
 /// </summary>
 public partial class App
 {
-    private static Mutex? _mutex;
     private const string MutexName = "Global\\Modules_App_Mutex";
+    private static Mutex? _mutex;
     private bool _ownsMutex;
 
     /// <summary>
@@ -74,12 +73,9 @@ public partial class App
                 Environment.Exit(0); // 直接退出进程
                 return null!; // 虽然不会执行到这里，但需要满足返回类型
             }
-            else
-            {
-                // 可以获取Mutex，说明前一个实例可能异常退出但Mutex已被释放
-                _ownsMutex = true;
-                return Container.Resolve<MainWindow>();
-            }
+            // 可以获取Mutex，说明前一个实例可能异常退出但Mutex已被释放
+            _ownsMutex = true;
+            return Container.Resolve<MainWindow>();
         }
         catch (Exception ex)
         {
@@ -93,7 +89,7 @@ public partial class App
     }
 
     /// <summary>
-    /// 检查是否已有相同名称的应用程序实例在运行
+    ///     检查是否已有相同名称的应用程序实例在运行
     /// </summary>
     private static bool IsApplicationAlreadyRunning()
     {
@@ -141,7 +137,7 @@ public partial class App
 
         // 注册申通自动揽收服务
         containerRegistry.RegisterSingleton<IStoAutoReceiveService, StoAutoReceiveService>();
-        
+
         // 注册韵达上传重量服务
         containerRegistry.RegisterSingleton<IYundaUploadWeightService, YundaUploadWeightService>();
 

@@ -1,15 +1,14 @@
-using Common.Data;
-using Common.Services.Ui;
-using Microsoft.Win32;
-using Serilog;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows.Input;
-using Common.Models.Package;
-using static Common.Models.Package.PackageStatus;
+using Common.Data;
+using Common.Services.Ui;
+using Microsoft.Win32;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
+using Serilog;
+using static Common.Models.Package.PackageStatus;
 
 namespace Sunnen.ViewModels.Windows;
 
@@ -145,7 +144,10 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
         }
     }
 
-    public string Title => "Package History";
+    public string Title
+    {
+        get => "Package History";
+    }
 
     // Prism 9.0+ 要求
     public DialogCloseListener RequestClose { get; }
@@ -208,7 +210,7 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
                     return SelectedStatus switch
                     {
                         "Success" => r.Status == Success,
-                        "Failed" => r.Status is Failed or PackageStatus.Error,
+                        "Failed" => r.Status is Failed or Error,
                         _ => true // "All" or unexpected value
                     };
                 }).ToList(); // 确保这里也执行 ToList
@@ -256,7 +258,10 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
             if (File.Exists(imagePath))
             {
                 // 使用 ShellExecute 打开文件，让操作系统决定如何处理
-                var psi = new ProcessStartInfo(imagePath) { UseShellExecute = true };
+                var psi = new ProcessStartInfo(imagePath)
+                {
+                    UseShellExecute = true
+                };
                 Process.Start(psi);
             }
             else
@@ -303,8 +308,7 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
             var headerRow = sheet.CreateRow(0);
             var headers = new[]
             {
-                "No.", "Barcode", "Chute", "Weight(kg)", "Length(cm)", "Width(cm)", "Height(cm)",
-                "Volume(cm³)", "Pallet Name", "Status", "Note", "Create Time"
+                "No.", "Barcode", "Chute", "Weight(kg)", "Length(cm)", "Width(cm)", "Height(cm)", "Volume(cm³)", "Pallet Name", "Status", "Note", "Create Time"
             };
 
             // --- 设置表头样式 --- 
@@ -366,7 +370,7 @@ public class HistoryWindowViewModel : BindableBase, IDialogAware
             }
 
             // --- 自动调整列宽 --- (在填充数据后执行)
-            for (int i = 0; i < headers.Length; i++)
+            for (var i = 0; i < headers.Length; i++)
             {
                 sheet.AutoSizeColumn(i);
             }

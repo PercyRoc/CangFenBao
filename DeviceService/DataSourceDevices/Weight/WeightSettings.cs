@@ -37,7 +37,7 @@ public class WeightSettings
     ///     时间范围上限（毫秒）
     /// </summary>
     public int TimeRangeUpper { get; set; } = 2000;
-    
+
     /// <summary>
     ///     最小重量（克）
     /// </summary>

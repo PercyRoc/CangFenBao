@@ -29,7 +29,7 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
         _sortSettingsViewModel = containerProvider.Resolve<BalanceSortSettingsViewModel>();
         _weighingSettingsViewModel = containerProvider.Resolve<WeighingSettingsViewModel>();
         _barcodeChuteSettingsViewModel = containerProvider.Resolve<BarcodeChuteSettingsViewModel>();
-        _xiyiguAPiSettingsViewModel =  containerProvider.Resolve<XiyiguAPiSettingsViewModel>();
+        _xiyiguAPiSettingsViewModel = containerProvider.Resolve<XiyiguAPiSettingsViewModel>();
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
     }
@@ -37,7 +37,10 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
     public DelegateCommand SaveCommand { get; }
     public DelegateCommand CancelCommand { get; }
 
-    public string Title => "系统设置";
+    public string Title
+    {
+        get => "系统设置";
+    }
 
     // Prism 9.0+ 要求
     public DialogCloseListener RequestClose { get; }

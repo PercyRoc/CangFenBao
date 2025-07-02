@@ -25,10 +25,10 @@ namespace XinBeiYang;
 /// </summary>
 public partial class App
 {
-    private static Mutex? _mutex;
     private const string MutexName = "Global\\XinBeiYang_App_Mutex";
-    private bool _ownsMutex;
+    private static Mutex? _mutex;
     private Timer? _cleanupTimer;
+    private bool _ownsMutex;
 
     protected override Window CreateShell()
     {
@@ -58,11 +58,8 @@ public partial class App
                 Environment.Exit(0);
                 return null!;
             }
-            else
-            {
-                _ownsMutex = true;
-                return Container.Resolve<MainWindow>();
-            }
+            _ownsMutex = true;
+            return Container.Resolve<MainWindow>();
         }
         catch (Exception ex)
         {
@@ -86,7 +83,7 @@ public partial class App
     {
         var configuration = new ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)
-            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+            .AddJsonFile("appsettings.json", false, true)
             .Build();
         containerRegistry.RegisterInstance<IConfiguration>(configuration);
 
@@ -119,7 +116,7 @@ public partial class App
     protected override void OnStartup(StartupEventArgs e)
     {
         Log.Information("应用程序启动 (OnStartup)");
-        
+
         StartCleanupTask();
 
         TaskScheduler.UnobservedTaskException += (_, args) =>
@@ -142,7 +139,7 @@ public partial class App
                         "启动错误",
                         MessageBoxButton.OK,
                         MessageBoxImage.Error);
-                        
+
                     Current.Shutdown();
                 });
             });
@@ -155,14 +152,14 @@ public partial class App
             var cameraStartupService = Container.Resolve<CameraStartupService>();
             await cameraStartupService.StartAsync(CancellationToken.None);
             Log.Information("相机托管服务启动成功");
-            
+
             var weightStartupService = Container.Resolve<WeightStartupService>();
             await weightStartupService.StartAsync(CancellationToken.None);
             Log.Information("重量称服务启动成功");
-            
+
             var hostedService = Container.Resolve<PlcCommunicationHostedService>();
             await hostedService.StartAsync(CancellationToken.None);
-            
+
             var jdWcsService = Container.Resolve<IJdWcsCommunicationService>();
             jdWcsService.Start();
             Log.Information("京东WCS通信服务启动成功");
@@ -256,14 +253,21 @@ public partial class App
 
             // 异步执行关闭操作，不阻塞主线程
             // 主线程退出时，DI容器应负责调用单例服务的Dispose
-            _ = ShutdownServicesAsync(); 
+            _ = ShutdownServicesAsync();
             // 等待日志刷新完成
             Log.CloseAndFlush();
         }
         catch (Exception ex)
         {
             // 尝试记录最后的错误
-            try { Log.Error(ex, "应用程序关闭时发生错误"); Log.CloseAndFlush(); } catch { /* ignored */ }
+            try
+            {
+                Log.Error(ex, "应用程序关闭时发生错误");
+                Log.CloseAndFlush();
+            }
+            catch
+            { /* ignored */
+            }
         }
         finally
         {
@@ -274,7 +278,14 @@ public partial class App
                 {
                     if (_ownsMutex && _mutex.SafeWaitHandle is { IsClosed: false, IsInvalid: false })
                     {
-                        try { _mutex.ReleaseMutex(); Log.Information("Mutex已释放"); } catch { /* ignored */ }
+                        try
+                        {
+                            _mutex.ReleaseMutex();
+                            Log.Information("Mutex已释放");
+                        }
+                        catch
+                        { /* ignored */
+                        }
                     }
                     _mutex.Dispose();
                     _mutex = null;
@@ -282,7 +293,14 @@ public partial class App
             }
             catch (Exception ex)
             {
-                try { Log.Error(ex, "释放Mutex时发生错误"); Log.CloseAndFlush(); } catch { /* ignored */ }
+                try
+                {
+                    Log.Error(ex, "释放Mutex时发生错误");
+                    Log.CloseAndFlush();
+                }
+                catch
+                { /* ignored */
+                }
             }
             base.OnExit(e);
         }
@@ -300,7 +318,7 @@ public partial class App
             var cameraStartupService = Container.Resolve<CameraStartupService>();
             await cameraStartupService.StopAsync(CancellationToken.None);
             Log.Information("相机托管服务已停止");
-            
+
             // 停止重量称服务
             var weightStartupService = Container.Resolve<WeightStartupService>();
             await weightStartupService.StopAsync(CancellationToken.None);
@@ -310,7 +328,7 @@ public partial class App
             var hostedService = Container.Resolve<PlcCommunicationHostedService>();
             await hostedService.StopAsync(CancellationToken.None);
             Log.Information("PLC托管服务已停止");
-            
+
             // 移除手动停止 JdWcsCommunicationService 的调用
             // 让 DI 容器在程序退出时调用其 Dispose 方法
             // var jdWcsService = Container.Resolve<JdWcsCommunicationService>();

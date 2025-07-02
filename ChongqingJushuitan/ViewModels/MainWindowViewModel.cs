@@ -89,23 +89,23 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         _subscriptions.Add(_cameraService.ImageStream
             .ObserveOn(Scheduler.CurrentThread) // 直接在 UI 线程观察
             .Subscribe(imageData => // imageData is a tuple (BitmapSource image, IReadOnlyList<BarcodeLocation> barcodes)
-            {
-                try
                 {
-                    // 确保 BitmapSource 可以在 UI 线程之外访问（如果需要跨线程访问）
-                    if (imageData is { CanFreeze: true, IsFrozen: false })
+                    try
                     {
-                        imageData.Freeze();
+                        // 确保 BitmapSource 可以在 UI 线程之外访问（如果需要跨线程访问）
+                        if (imageData is { CanFreeze: true, IsFrozen: false })
+                        {
+                            imageData.Freeze();
+                        }
+                        // 更新UI
+                        CurrentImage = imageData;
                     }
-                    // 更新UI
-                    CurrentImage = imageData;
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "处理 BitmapSource 或更新 UI 时发生错误");
-                }
-            },
-            ex => Log.Error(ex, "处理图像流时发生未处理的异常"))); // 添加错误处理
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "处理 BitmapSource 或更新 UI 时发生错误");
+                    }
+                },
+                ex => Log.Error(ex, "处理图像流时发生未处理的异常"))); // 添加错误处理
     }
 
     public DelegateCommand OpenSettingsCommand { get; }
@@ -219,35 +219,35 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private void InitializeStatisticsItems()
     {
         StatisticsItems.Add(new StatisticsItem(
-            label: "总包裹数",
-            value: "0",
-            unit: "个",
-            description: "累计处理包裹总数",
-            icon: "CubeOutline24"
+            "总包裹数",
+            "0",
+            "个",
+            "累计处理包裹总数",
+            "CubeOutline24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
-            label: "异常数",
-            value: "0",
-            unit: "个",
-            description: "处理异常的包裹数量",
-            icon: "AlertOutline24"
+            "异常数",
+            "0",
+            "个",
+            "处理异常的包裹数量",
+            "AlertOutline24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
-            label: "预测效率",
-            value: "0",
-            unit: "个/小时",
-            description: "预计每小时处理量",
-            icon: "TrendingUp24"
+            "预测效率",
+            "0",
+            "个/小时",
+            "预计每小时处理量",
+            "TrendingUp24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
-            label: "平均处理时间",
-            value: "0",
-            unit: "ms",
-            description: "单个包裹平均处理时间",
-            icon: "TimerOutline24"
+            "平均处理时间",
+            "0",
+            "ms",
+            "单个包裹平均处理时间",
+            "TimerOutline24"
         ));
     }
 
@@ -255,39 +255,39 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     {
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "重量",
-            value: "--",
-            unit: "kg",
-            description: "包裹重量",
-            icon: "ScaleBalance24"
+            "重量",
+            "--",
+            "kg",
+            "包裹重量",
+            "ScaleBalance24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "尺寸",
-            value: "--",
-            unit: "cm",
-            description: "长×宽×高",
-            icon: "RulerSquare24"
+            "尺寸",
+            "--",
+            "cm",
+            "长×宽×高",
+            "RulerSquare24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "分拣口",
-            value: "--",
+            "分拣口",
+            "--",
             description: "目标分拣位置",
             icon: "ArrowSplitHorizontal24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "处理时间",
-            value: "--",
-            unit: "ms",
-            description: "系统处理耗时",
-            icon: "Timer24"
+            "处理时间",
+            "--",
+            "ms",
+            "系统处理耗时",
+            "Timer24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "时间",
-            value: "--:--:--",
+            "时间",
+            "--:--:--",
             description: "包裹处理时间",
             icon: "Clock24"
         ));
@@ -358,7 +358,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                         package.Barcode, chuteSettings.ErrorChuteNumber);
                 }
             }
-            
+
             _sortService.ProcessPackage(package);
             // 上传包裹数据到聚水潭
             try
@@ -376,7 +376,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     LogisticsId = package.Barcode,
                     Weight = Convert.ToDecimal(package.Weight),
                     IsUnLid = false, // 根据实际情况设置
-                    Type = 5,
+                    Type = 5
                 };
 
                 Log.Debug("准备上传包裹数据到聚水潭: {@Request}", request);
@@ -394,7 +394,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                         {
                             Log.Warning("包裹 {Barcode} 数据上传到聚水潭返回错误: {ErrorMessage}",
                                 package.Barcode, data.Message);
-                            package.SetStatus(PackageStatus.Error,$"{data.Message}");
+                            package.SetStatus(PackageStatus.Error, $"{data.Message}");
                             package.SetChute(_settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber);
                         }
                         else
@@ -409,14 +409,14 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 {
                     Log.Warning("包裹 {Barcode} 数据上传到聚水潭失败: {ErrorCode} - {ErrorMessage}",
                         package.Barcode, response.Code, response.Message);
-                    package.SetStatus(PackageStatus.Error,$"{response.Message}");
+                    package.SetStatus(PackageStatus.Error, $"{response.Message}");
                     package.SetChute(_settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber);
                 }
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "上传包裹 {Barcode} 数据到聚水潭时发生错误", package.Barcode);
-                package.SetStatus(PackageStatus.Error,$"{ex.Message}");
+                package.SetStatus(PackageStatus.Error, $"{ex.Message}");
                 package.SetChute(_settingsService.LoadSettings<ChuteSettings>().ErrorChuteNumber);
             }
 
@@ -443,7 +443,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "处理包裹信息时发生错误：{Barcode}", package.Barcode);
-            package.SetStatus(PackageStatus.Error,$"{ex.Message}");
+            package.SetStatus(PackageStatus.Error, $"{ex.Message}");
         }
     }
 

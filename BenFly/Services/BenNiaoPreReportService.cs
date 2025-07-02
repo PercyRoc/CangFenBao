@@ -4,8 +4,8 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using BenFly.Models.BenNiao;
-using Common.Services.Settings;
 using BenFly.Models.Upload;
+using Common.Services.Settings;
 using Serilog;
 using Timer = System.Timers.Timer;
 
@@ -17,6 +17,8 @@ namespace BenFly.Services;
 internal class BenNiaoPreReportService : IDisposable
 {
     private const string SettingsKey = "UploadSettings";
+    private readonly UploadConfiguration _config;
+    private readonly HttpClient _httpClient;
     private readonly IHttpClientFactory _httpClientFactory;
 
     // 创建JSON序列化选项，避免中文转义
@@ -27,9 +29,7 @@ internal class BenNiaoPreReportService : IDisposable
     };
 
     private readonly Timer _updateTimer;
-    private readonly UploadConfiguration _config;
     private bool _disposed;
-    private readonly HttpClient _httpClient;
     private List<PreReportDataResponse>? _preReportData;
 
     public BenNiaoPreReportService(
@@ -126,7 +126,10 @@ internal class BenNiaoPreReportService : IDisposable
             const string url = "/api/openApi/dataDownload";
 
             // 构建请求参数
-            var requestBody = new { netWorkName = _config.BenNiaoDistributionCenterName };
+            var requestBody = new
+            {
+                netWorkName = _config.BenNiaoDistributionCenterName
+            };
 
             // 创建签名请求
             var request = BenNiaoSignHelper.CreateRequest(

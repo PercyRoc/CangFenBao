@@ -1,32 +1,38 @@
+using System.Globalization;
 using System.Text;
+using Common.Models.Package;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.TCP;
 using Serilog;
 using XinBa.Services.Models;
-using System.Globalization;
-using Common.Models.Package;
 
 namespace XinBa.Services;
 
 /// <summary>
-/// Represents a single volume measurement record with its timestamp.
+///     Represents a single volume measurement record with its timestamp.
 /// </summary>
 public record VolumeRecord(DateTime Timestamp, double Length, double Width, double Height);
 
 /// <summary>
-/// 连接体积测量设备并接收数据的服务。
+///     连接体积测量设备并接收数据的服务。
 /// </summary>
 public class VolumeDataService : IDisposable
 {
-    private readonly ISettingsService _settingsService;
-    private TcpClientService? _tcpClientService;
-    private VolumeCameraSettings? _settings;
-    private bool _disposed;
-    private bool _isConnected;
-    private readonly object _lock = new();
-    private readonly List<VolumeRecord> _volumeCache = [];
     private const int MaxCacheSize = 500;
     private static readonly TimeSpan CacheExpiry = TimeSpan.FromSeconds(30);
+    private readonly object _lock = new();
+    private readonly ISettingsService _settingsService;
+    private readonly List<VolumeRecord> _volumeCache = [];
+    private bool _disposed;
+    private bool _isConnected;
+    private VolumeCameraSettings? _settings;
+    private TcpClientService? _tcpClientService;
+
+    public VolumeDataService(ISettingsService settingsService)
+    {
+        _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        Log.Information("体积数据服务已创建。");
+    }
 
     public bool IsConnected
     {
@@ -50,13 +56,13 @@ public class VolumeDataService : IDisposable
         }
     }
 
-    public event Action<bool>? ConnectionChanged;
-
-    public VolumeDataService(ISettingsService settingsService)
+    public void Dispose()
     {
-        _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
-        Log.Information("体积数据服务已创建。");
+        Dispose(true);
+        GC.SuppressFinalize(this);
     }
+
+    public event Action<bool>? ConnectionChanged;
 
     private bool Initialize()
     {
@@ -75,12 +81,12 @@ public class VolumeDataService : IDisposable
             Log.Information("使用设置初始化体积数据服务: IP={IpAddress}, Port={Port}", _settings.IpAddress, _settings.Port);
 
             _tcpClientService = new TcpClientService(
-                deviceName: "VolumeCamera",
-                ipAddress: _settings.IpAddress,
-                port: _settings.Port,
-                dataReceivedCallback: HandleDataReceived,
-                connectionStatusCallback: HandleConnectionStatusChanged,
-                autoReconnect: true
+                "VolumeCamera",
+                _settings.IpAddress,
+                _settings.Port,
+                HandleDataReceived,
+                HandleConnectionStatusChanged,
+                true
             );
             return true;
         }
@@ -242,12 +248,6 @@ public class VolumeDataService : IDisposable
         var overflow = _volumeCache.Count - MaxCacheSize;
         _volumeCache.RemoveRange(0, overflow);
         Log.Debug("体积缓存超过最大尺寸，清理了 {Count} 条最旧的记录。", overflow);
-    }
-
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
     }
 
     private void Dispose(bool disposing)

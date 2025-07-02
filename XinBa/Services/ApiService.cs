@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -76,13 +75,13 @@ public class ApiService : IApiService
     // API认证信息
     private const string DefaultApiUsername = "test_dws";
     private const string DefaultApiPassword = "testWds";
-    private readonly HttpClient _httpClient;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true
     };
+    private readonly HttpClient _httpClient;
 
     private readonly INotificationService _notificationService;
     private readonly ISettingsService _settingsService;

@@ -1,9 +1,10 @@
+using System.IO;
+using System.Windows.Forms;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera.Models.Camera;
 using DeviceService.DataSourceDevices.Camera.Models.Camera.Enums;
 using Serilog;
-using System.Windows.Forms;
 using DialogResult = System.Windows.Forms.DialogResult;
 
 namespace SharedUI.ViewModels.Settings;
@@ -34,9 +35,18 @@ public class CameraSettingsViewModel : BindableBase
         private set => SetProperty(ref _configuration, value);
     }
 
-    public static Array Manufacturers => Enum.GetValues(typeof(CameraManufacturer));
-    public static Array CameraTypes => Enum.GetValues(typeof(CameraType));
-    public static Array ImageFormats => Enum.GetValues(typeof(ImageFormat));
+    public static Array Manufacturers
+    {
+        get => Enum.GetValues(typeof(CameraManufacturer));
+    }
+    public static Array CameraTypes
+    {
+        get => Enum.GetValues(typeof(CameraType));
+    }
+    public static Array ImageFormats
+    {
+        get => Enum.GetValues(typeof(ImageFormat));
+    }
 
     public DelegateCommand SaveConfigurationCommand { get; }
     public DelegateCommand BrowseImagePathCommand { get; }
@@ -64,7 +74,7 @@ public class CameraSettingsViewModel : BindableBase
                 ShowNewFolderButton = true
             };
 
-            if (!string.IsNullOrEmpty(Configuration.ImageSavePath) && System.IO.Directory.Exists(Configuration.ImageSavePath))
+            if (!string.IsNullOrEmpty(Configuration.ImageSavePath) && Directory.Exists(Configuration.ImageSavePath))
             {
                 dialog.SelectedPath = Configuration.ImageSavePath;
             }

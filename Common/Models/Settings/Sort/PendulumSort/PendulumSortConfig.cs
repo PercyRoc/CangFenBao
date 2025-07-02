@@ -10,9 +10,11 @@ namespace Common.Models.Settings.Sort.PendulumSort;
 [Configuration("PendulumSort")]
 public class PendulumSortConfig : BindableBase
 {
-    private ObservableCollection<SortPhotoelectric> _sortingPhotoelectrics = [];
-    private TriggerPhotoelectric _triggerPhotoelectric = new();
     private int _globalDebounceTime;
+    private ObservableCollection<SortPhotoelectric> _sortingPhotoelectrics = [];
+
+    private double _straightThroughTimeout = 20000; // 默认20秒
+    private TriggerPhotoelectric _triggerPhotoelectric = new();
 
     /// <summary>
     ///     触发光电配置
@@ -41,8 +43,6 @@ public class PendulumSortConfig : BindableBase
         get => _globalDebounceTime;
         set => SetProperty(ref _globalDebounceTime, value);
     }
-
-    private double _straightThroughTimeout = 20000; // 默认20秒
 
     /// <summary>
     ///     直行包裹的超时时间（毫秒）。

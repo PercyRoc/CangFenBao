@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text;
 using System.Threading.Channels;
-using Common.Models.Package;
 using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.TCP;
@@ -14,16 +13,15 @@ namespace SortingServices.Pendulum;
 /// </summary>
 public class MultiPendulumSortService(ISettingsService settingsService) : BasePendulumSortService(settingsService)
 {
-    private readonly ConcurrentDictionary<string, TcpClientService> _sortingClients = new();
-    private readonly SemaphoreSlim _initializationLock = new(1, 1);
-    private bool _isInitialized;
-
     // 为每个光电创建一个动作队列和处理任务
     private readonly ConcurrentDictionary<string, Channel<Func<Task>>> _actionChannels = new();
     private readonly ConcurrentDictionary<string, Task> _actionProcessorTasks = new();
+    private readonly SemaphoreSlim _initializationLock = new(1, 1);
+    private readonly ConcurrentDictionary<string, TcpClientService> _sortingClients = new();
 
     // 缓存配置以避免重复加载
     private PendulumSortConfig _config = new();
+    private bool _isInitialized;
 
     public override async Task InitializeAsync(PendulumSortConfig configuration)
     {
@@ -225,12 +223,12 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
     }
 
     /// <summary>
-    /// 为每个摆轮处理动作队列的专用方法
+    ///     为每个摆轮处理动作队列的专用方法
     /// </summary>
     private async Task ProcessActionQueueAsync(string photoelectricName, ChannelReader<Func<Task>> reader, CancellationToken token)
     {
         Log.Debug("开始处理分拣光电 {Name} 的动作队列", photoelectricName);
-        
+
         try
         {
             await foreach (var action in reader.ReadAllAsync(token))
@@ -390,7 +388,7 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
         try
         {
             var message = Encoding.ASCII.GetString(data);
-            
+
             // 增加防抖逻辑，与触发光电保持一致
             var config = _settingsService.LoadSettings<PendulumSortConfig>();
             var debounceTime = config.GlobalDebounceTime;
@@ -406,9 +404,9 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
                 }
             }
             _lastSignalTimes[photoelectricName] = now; // 更新上次信号时间
-            
+
             // 只对上升沿信号（OCCH2:1）做出反应
-            if (!message.Contains("OCCH2:1")) 
+            if (!message.Contains("OCCH2:1"))
             {
                 // 记录Debug日志表示收到了其他信号，但不会处理
                 Log.Debug("收到分拣光电 {Name} 的非上升沿信号: {Message}，已忽略", photoelectricName, message);
@@ -417,27 +415,27 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
 
             var sortingTime = DateTime.Now;
             Log.Information("分拣光电 {Name} 收到上升沿信号，开始匹配包裹", photoelectricName);
-            
+
             // 触发分拣光电信号事件
             RaiseSortingPhotoelectricSignal(photoelectricName, sortingTime);
-            
+
             // 使用基类的匹配逻辑
             var newPackage = MatchPackageForSorting(photoelectricName);
             if (newPackage == null) return;
-            
+
             var matchTime = DateTime.Now;
             var timeSinceTrigger = matchTime - newPackage.TriggerTimestamp;
 
             Log.Information("分拣光电 {Name} 匹配到包裹 {Index}|{Barcode} (耗时: {MatchDuration:F2}ms)",
                 photoelectricName, newPackage.Index, newPackage.Barcode, timeSinceTrigger.TotalMilliseconds);
-            
+
             // 将 ExecuteSortingAction 的调用包装成一个 Func<Task> 并放入队列
             if (_actionChannels.TryGetValue(photoelectricName, out var channel))
             {
                 // 注意，这里传递的是当时的数据快照，避免闭包问题
-                var packageSnapshot = newPackage; 
+                var packageSnapshot = newPackage;
                 var success = channel.Writer.TryWrite(async () => await ExecuteSortingAction(packageSnapshot, photoelectricName));
-                
+
                 if (!success)
                 {
                     Log.Error("无法将分拣动作加入队列，光电 {Name} 的队列可能已关闭", photoelectricName);
@@ -550,6 +548,4 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
         var photoelectric = _config.SortingPhotoelectrics.ElementAtOrDefault(index);
         return photoelectric?.Name;
     }
-
-
 }

@@ -1,13 +1,12 @@
-namespace XinJuLi.Views.Settings
+namespace XinJuLi.Views.Settings;
+
+/// <summary>
+///     AsnHttpSettingsView.xaml 的交互逻辑
+/// </summary>
+public partial class AsnHttpSettingsView
 {
-    /// <summary>
-    /// AsnHttpSettingsView.xaml 的交互逻辑
-    /// </summary>
-    public partial class AsnHttpSettingsView
+    public AsnHttpSettingsView()
     {
-        public AsnHttpSettingsView()
-        {
-            InitializeComponent();
-        }
+        InitializeComponent();
     }
-} 
+}

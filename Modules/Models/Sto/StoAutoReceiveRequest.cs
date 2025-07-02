@@ -3,7 +3,7 @@ using Newtonsoft.Json;
 namespace ShanghaiModuleBelt.Models.Sto;
 
 /// <summary>
-/// 申通仓客户出库自动揽收接口请求模型
+///     申通仓客户出库自动揽收接口请求模型
 /// </summary>
 public class StoAutoReceiveRequest
 {
@@ -17,11 +17,11 @@ public class StoAutoReceiveRequest
     public required string UserCode { get; set; }
 
     [JsonProperty("packages")]
-    public required List<Package> Packages { get; set; } = new List<Package>();
+    public required List<Package> Packages { get; set; } = new();
 }
 
 /// <summary>
-/// 包裹信息
+///     包裹信息
 /// </summary>
 public class Package
 {
@@ -33,4 +33,4 @@ public class Package
 
     [JsonProperty("opTime")]
     public required string OpTime { get; set; } // 揽收时间
-} 
+}

@@ -1,14 +1,15 @@
-﻿using Common.Services.Ui;
+﻿using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
-using Serilog;
-using System.ComponentModel;
+using Common.Services.Ui;
 using HuiXin.ViewModels;
+using Serilog;
+using MessageBox = HandyControl.Controls.MessageBox;
 
 namespace HuiXin.Views;
 
 /// <summary>
-/// Interaction logic for MainWindow.xaml
+///     Interaction logic for MainWindow.xaml
 /// </summary>
 public partial class MainWindow
 {
@@ -49,7 +50,7 @@ public partial class MainWindow
         try
         {
             e.Cancel = true;
-            var result = HandyControl.Controls.MessageBox.Show(
+            var result = MessageBox.Show(
                 "确定要关闭程序吗？",
                 "关闭确认",
                 MessageBoxButton.YesNo,
@@ -80,7 +81,7 @@ public partial class MainWindow
         {
             Log.Error(ex, "关闭程序时发生错误");
             e.Cancel = true;
-            HandyControl.Controls.MessageBox.Show(
+            MessageBox.Show(
                 "关闭程序时发生错误，请重试",
                 "错误",
                 MessageBoxButton.OK,

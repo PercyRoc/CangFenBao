@@ -16,7 +16,7 @@ public partial class SettingsDialog
     }
     private void OnUserControlLoaded(object sender, RoutedEventArgs e)
     {
-        RootNavigation?.Navigate(typeof(CameraSettingsView)); 
+        RootNavigation?.Navigate(typeof(CameraSettingsView));
         Log.Information("SettingsDialog UserControl 已加载，并导航到 CameraSettingsView");
     }
 }

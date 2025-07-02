@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Input;
 using Common.Services.Ui;
 using Serilog;
+using MessageBox = HandyControl.Controls.MessageBox;
 
 namespace DongtaiFlippingBoardMachine.Views;
 
@@ -41,7 +42,7 @@ internal partial class MainWindow
         e.Cancel = true;
 
         // 2. 弹出确认对话框
-        var result = HandyControl.Controls.MessageBox.Show(
+        var result = MessageBox.Show(
             "确定要关闭程序吗？",
             "关闭确认",
             MessageBoxButton.YesNo,

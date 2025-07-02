@@ -29,5 +29,8 @@ public class ApiResponse
     ///     是否成功
     /// </summary>
     [JsonIgnore]
-    public bool IsSuccess => Code == 200;
-} 
+    public bool IsSuccess
+    {
+        get => Code == 200;
+    }
+}

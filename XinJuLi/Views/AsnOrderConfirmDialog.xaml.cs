@@ -1,13 +1,12 @@
-namespace XinJuLi.Views
+namespace XinJuLi.Views;
+
+/// <summary>
+///     AsnOrderConfirmDialog.xaml 的交互逻辑
+/// </summary>
+public partial class AsnOrderConfirmDialog
 {
-    /// <summary>
-    /// AsnOrderConfirmDialog.xaml 的交互逻辑
-    /// </summary>
-    public partial class AsnOrderConfirmDialog
+    public AsnOrderConfirmDialog()
     {
-        public AsnOrderConfirmDialog()
-        {
-            InitializeComponent();
-        }
+        InitializeComponent();
     }
-} 
+}

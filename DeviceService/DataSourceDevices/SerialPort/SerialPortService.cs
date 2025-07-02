@@ -1,30 +1,31 @@
 using System.IO.Ports;
 using System.Text;
-using DeviceService.DataSourceDevices.Weight; // Assuming SerialPortParams is here or accessible
+using DeviceService.DataSourceDevices.Weight;
 using Serilog;
+// Assuming SerialPortParams is here or accessible
 
 namespace DeviceService.DataSourceDevices.SerialPort;
 
 /// <summary>
-/// 通用串口通信服务
+///     通用串口通信服务
 /// </summary>
 public class SerialPortService : IDisposable
 {
     private const int ReadBufferSize = 8192;
     private const int MaxSendChunkSize = 4096; // 发送数据分块大小
     private const int MaxReadLoopIterations = 100; // 防止无限循环
+    private readonly CancellationTokenSource _cts = new();
     private readonly string _deviceName;
     private readonly object _lock = new();
     private readonly byte[] _readBuffer = new byte[ReadBufferSize];
-    private readonly CancellationTokenSource _cts = new();
+    private readonly SerialPortParams _serialPortParams;
 
     private bool _disposed;
     private bool _isConnected;
     private System.IO.Ports.SerialPort? _serialPort;
-    private readonly SerialPortParams _serialPortParams;
 
     /// <summary>
-    /// 构造函数
+    ///     构造函数
     /// </summary>
     /// <param name="deviceName">设备名称 (用于日志)</param>
     /// <param name="portParams">串口配置参数</param>
@@ -36,17 +37,7 @@ public class SerialPortService : IDisposable
     }
 
     /// <summary>
-    /// 当接收到数据时触发
-    /// </summary>
-    public event Action<byte[]>? DataReceived;
-
-    /// <summary>
-    /// 当连接状态改变时触发
-    /// </summary>
-    public event Action<bool>? ConnectionChanged;
-
-    /// <summary>
-    /// 获取当前连接状态
+    ///     获取当前连接状态
     /// </summary>
     public bool IsConnected
     {
@@ -63,8 +54,28 @@ public class SerialPortService : IDisposable
         }
     }
 
+
     /// <summary>
-    /// 连接到串口设备
+    ///     释放资源
+    /// </summary>
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    ///     当接收到数据时触发
+    /// </summary>
+    public event Action<byte[]>? DataReceived;
+
+    /// <summary>
+    ///     当连接状态改变时触发
+    /// </summary>
+    public event Action<bool>? ConnectionChanged;
+
+    /// <summary>
+    ///     连接到串口设备
     /// </summary>
     /// <returns>如果启动连接过程成功则返回 true，否则 false</returns>
     public bool Connect()
@@ -188,7 +199,7 @@ public class SerialPortService : IDisposable
     }
 
     /// <summary>
-    /// 断开串口连接
+    ///     断开串口连接
     /// </summary>
     public void Disconnect()
     {
@@ -199,7 +210,7 @@ public class SerialPortService : IDisposable
     }
 
     /// <summary>
-    /// 内部断开连接逻辑
+    ///     内部断开连接逻辑
     /// </summary>
     /// <param name="triggerEvent">是否触发 ConnectionChanged 事件</param>
     private void DisconnectInternal(bool triggerEvent)
@@ -316,7 +327,7 @@ public class SerialPortService : IDisposable
     }
 
     /// <summary>
-    /// 发送数据
+    ///     发送数据
     /// </summary>
     /// <param name="data">要发送的字节数组</param>
     public bool Send(byte[] data)
@@ -344,10 +355,10 @@ public class SerialPortService : IDisposable
                 if (data.Length > MaxSendChunkSize)
                 {
                     Log.Debug("设备 {DeviceName} 数据长度超过 {MaxSize} 字节，将分块发送", _deviceName, MaxSendChunkSize);
-                    int offset = 0;
+                    var offset = 0;
                     while (offset < data.Length)
                     {
-                        int chunkSize = Math.Min(MaxSendChunkSize, data.Length - offset);
+                        var chunkSize = Math.Min(MaxSendChunkSize, data.Length - offset);
                         _serialPort.Write(data, offset, chunkSize);
                         offset += chunkSize;
                         Log.Verbose("设备 {DeviceName} 已发送 {Offset}/{Total} 字节", _deviceName, offset, data.Length);
@@ -379,7 +390,7 @@ public class SerialPortService : IDisposable
     }
 
     /// <summary>
-    /// 发送字符串数据 (使用串口的默认编码)
+    ///     发送字符串数据 (使用串口的默认编码)
     /// </summary>
     /// <param name="text">要发送的字符串</param>
     public bool Send(string text)
@@ -401,16 +412,16 @@ public class SerialPortService : IDisposable
             try
             {
                 // 对长字符串只记录前50个字符避免日志过大
-                string logText = text.Length > 50 ? text.Substring(0, 50) + "..." : text;
+                var logText = text.Length > 50 ? text.Substring(0, 50) + "..." : text;
                 Log.Debug("设备 {DeviceName} 正在发送字符串: {Text}", _deviceName, logText);
 
                 // 对长字符串进行分块发送
                 if (text.Length > MaxSendChunkSize / 2) // 考虑到字符编码可能导致字节数增加
                 {
-                    int chunkSize = MaxSendChunkSize / 2;
-                    for (int i = 0; i < text.Length; i += chunkSize)
+                    var chunkSize = MaxSendChunkSize / 2;
+                    for (var i = 0; i < text.Length; i += chunkSize)
                     {
-                        string chunk = text.Substring(i, Math.Min(chunkSize, text.Length - i));
+                        var chunk = text.Substring(i, Math.Min(chunkSize, text.Length - i));
                         _serialPort.Write(chunk);
                     }
                 }
@@ -439,7 +450,7 @@ public class SerialPortService : IDisposable
 
 
     /// <summary>
-    /// 串口数据接收事件处理
+    ///     串口数据接收事件处理
     /// </summary>
     private void OnDataReceivedHandler(object sender, SerialDataReceivedEventArgs e)
     {
@@ -604,7 +615,7 @@ public class SerialPortService : IDisposable
             if (receivedDataList.Count > 0)
             {
                 var receivedBytes = receivedDataList.ToArray();
-                
+
                 // 触发外部事件，使用防御性复制
                 var handler = DataReceived;
                 if (handler == null) return;
@@ -646,7 +657,7 @@ public class SerialPortService : IDisposable
     }
 
     /// <summary>
-    /// 串口错误事件处理
+    ///     串口错误事件处理
     /// </summary>
     private void OnErrorReceivedHandler(object sender, SerialErrorReceivedEventArgs e)
     {
@@ -705,7 +716,7 @@ public class SerialPortService : IDisposable
     }
 
     /// <summary>
-    /// 检查串口是否被其他程序占用
+    ///     检查串口是否被其他程序占用
     /// </summary>
     /// <param name="portName">串口名称</param>
     /// <returns>如果被占用则返回 true</returns>
@@ -738,18 +749,8 @@ public class SerialPortService : IDisposable
         }
     }
 
-
     /// <summary>
-    /// 释放资源
-    /// </summary>
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    /// <summary>
-    /// 实际的资源释放逻辑
+    ///     实际的资源释放逻辑
     /// </summary>
     private void Dispose(bool disposing)
     {
@@ -772,7 +773,7 @@ public class SerialPortService : IDisposable
                 }
 
                 // 然后释放 CancellationTokenSource
-                try 
+                try
                 {
                     _cts.Dispose();
                 }

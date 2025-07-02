@@ -1,67 +1,79 @@
+using System.Buffers;
+using System.Diagnostics;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
+using System.Runtime.InteropServices;
+using System.Threading.Channels;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Common.Models.Package;
 using DeviceService.DataSourceDevices.Camera.Models;
 using Microsoft.Extensions.ObjectPool;
 using Serilog;
-using TurboJpegWrapper;
-using System.Runtime.InteropServices;
-using System.Diagnostics;
-using System.Windows.Media.Imaging;
-using System.Windows.Media;
-using System.Threading.Channels;
-using System.Buffers;
 using Serilog.Context;
+using TurboJpegWrapper;
 
 namespace DeviceService.DataSourceDevices.Camera.HuaRay;
 
 /// <summary>
-/// 华睿相机服务实现类
+///     华睿相机服务实现类
 /// </summary>
 public class HuaRayCameraService : ICameraService
 {
+    #region 构造函数
+
+    /// <summary>
+    ///     构造函数
+    /// </summary>
+    internal HuaRayCameraService()
+    {
+        _huaRayWrapper = HuaRayWrapper.Instance;
+    }
+
+    #endregion
+
     #region 私有字段
 
     /// <summary>
-    /// JPEG解压缩器对象池
+    ///     JPEG解压缩器对象池
     /// </summary>
     private static readonly DefaultObjectPool<TJDecompressor> DecompressorPool =
         new(new DefaultPooledObjectPolicy<TJDecompressor>(), Environment.ProcessorCount);
 
     /// <summary>
-    /// 图像处理信号量 - 限制 ProcessPackageInfoAsync 内部的图像处理并发
+    ///     图像处理信号量 - 限制 ProcessPackageInfoAsync 内部的图像处理并发
     /// </summary>
     private readonly SemaphoreSlim _imageProcessingSemaphore =
         new(Math.Max(1, Environment.ProcessorCount / 2), Math.Max(1, Environment.ProcessorCount / 2));
 
     /// <summary>
-    /// 图像数据流
+    ///     图像数据流
     /// </summary>
     private readonly Subject<(BitmapSource bitmapSource, string cameraId)>
         _imageSubject = new();
 
     /// <summary>
-    /// 华睿相机包装器实例
+    ///     华睿相机包装器实例
     /// </summary>
     private readonly HuaRayWrapper _huaRayWrapper;
 
     /// <summary>
-    /// 包裹信息流
+    ///     包裹信息流
     /// </summary>
     private readonly Subject<PackageInfo> _packageSubject = new();
 
     /// <summary>
-    /// 资源释放标志
+    ///     资源释放标志
     /// </summary>
     private bool _disposed;
 
     /// <summary>
-    /// 缓存的配置文件路径
+    ///     缓存的配置文件路径
     /// </summary>
     private static string? _cachedConfigPath;
 
     /// <summary>
-    /// 配置文件路径存储文件
+    ///     配置文件路径存储文件
     /// </summary>
     private static readonly string ConfigPathStorageFile =
         Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "huaray_config_path.txt");
@@ -77,46 +89,42 @@ public class HuaRayCameraService : ICameraService
     #region 公共属性
 
     /// <summary>
-    /// 服务启动事件
+    ///     服务启动事件
     /// </summary>
     public event Action? ServiceStarted;
 
     /// <summary>
-    /// 相机连接状态变化事件
+    ///     相机连接状态变化事件
     /// </summary>
     public event Action<string, bool>? ConnectionChanged;
 
     /// <summary>
-    /// 相机连接状态
+    ///     相机连接状态
     /// </summary>
     public bool IsConnected { get; private set; }
 
     /// <summary>
-    /// 包裹信息流
+    ///     包裹信息流
     /// </summary>
-    public IObservable<PackageInfo> PackageStream => _packageSubject.AsObservable();
-
-    /// <summary>
-    /// 图像信息流
-    /// </summary>
-    IObservable<BitmapSource> ICameraService.ImageStream =>
-        _imageSubject.Select(tuple => (tuple.bitmapSource));
-
-    /// <summary>
-    /// 带相机ID的图像信息流
-    /// </summary>
-    public IObservable<(BitmapSource Image, string CameraId)> ImageStreamWithId => _imageSubject.AsObservable();
-
-    #endregion
-
-    #region 构造函数
-
-    /// <summary>
-    /// 构造函数
-    /// </summary>
-    internal HuaRayCameraService()
+    public IObservable<PackageInfo> PackageStream
     {
-        _huaRayWrapper = HuaRayWrapper.Instance;
+        get => _packageSubject.AsObservable();
+    }
+
+    /// <summary>
+    ///     图像信息流
+    /// </summary>
+    IObservable<BitmapSource> ICameraService.ImageStream
+    {
+        get => _imageSubject.Select(tuple => (tuple.bitmapSource));
+    }
+
+    /// <summary>
+    ///     带相机ID的图像信息流
+    /// </summary>
+    public IObservable<(BitmapSource Image, string CameraId)> ImageStreamWithId
+    {
+        get => _imageSubject.AsObservable();
     }
 
     #endregion
@@ -124,7 +132,7 @@ public class HuaRayCameraService : ICameraService
     #region 公共方法
 
     /// <summary>
-    /// 释放资源
+    ///     释放资源
     /// </summary>
     public void Dispose()
     {
@@ -140,7 +148,7 @@ public class HuaRayCameraService : ICameraService
     }
 
     /// <summary>
-    /// 启动相机服务
+    ///     启动相机服务
     /// </summary>
     /// <returns>启动结果</returns>
     public bool Start()
@@ -149,7 +157,7 @@ public class HuaRayCameraService : ICameraService
     }
 
     /// <summary>
-    /// 停止相机服务
+    ///     停止相机服务
     /// </summary>
     /// <returns>停止结果</returns>
     public bool Stop()
@@ -159,7 +167,7 @@ public class HuaRayCameraService : ICameraService
     }
 
     /// <summary>
-    /// 获取工作相机列表
+    ///     获取工作相机列表
     /// </summary>
     /// <returns>相机信息列表</returns>
     public List<HuaRayApiStruct.CameraInfo> GetCameras()
@@ -169,7 +177,7 @@ public class HuaRayCameraService : ICameraService
     }
 
     /// <summary>
-    /// 获取所有可用的相机基本信息
+    ///     获取所有可用的相机基本信息
     /// </summary>
     /// <returns>相机基本信息列表</returns>
     public IEnumerable<CameraBasicInfo> GetAvailableCameras()
@@ -180,9 +188,8 @@ public class HuaRayCameraService : ICameraService
         return huaRayCameras.Select((camera, index) =>
         {
             // 构造与事件/ViewModel中使用的相机ID格式一致的ID
-            var constructedCameraId = (!string.IsNullOrWhiteSpace(camera.camDevVendor) && !string.IsNullOrWhiteSpace(camera.camDevSerialNumber))
-                                       ? $"{camera.camDevVendor}:{camera.camDevSerialNumber}"
-                                       : (!string.IsNullOrEmpty(camera.camDevID) ? camera.camDevID : $"fallback_{index}");
+            var constructedCameraId = !string.IsNullOrWhiteSpace(camera.camDevVendor) && !string.IsNullOrWhiteSpace(camera.camDevSerialNumber) ? $"{camera.camDevVendor}:{camera.camDevSerialNumber}" :
+                !string.IsNullOrEmpty(camera.camDevID) ? camera.camDevID : $"fallback_{index}";
 
             var cameraName = string.IsNullOrEmpty(camera.camDevSerialNumber)
                 ? $"相机 {index + 1}"
@@ -203,7 +210,7 @@ public class HuaRayCameraService : ICameraService
     #region 私有方法
 
     /// <summary>
-    /// 启动相机服务
+    ///     启动相机服务
     /// </summary>
     /// <param name="configurationPath">配置文件路径</param>
     /// <returns>启动结果</returns>
@@ -273,7 +280,7 @@ public class HuaRayCameraService : ICameraService
     }
 
     /// <summary>
-    /// 停止相机服务
+    ///     停止相机服务
     /// </summary>
     private void StopService()
     {
@@ -324,7 +331,7 @@ public class HuaRayCameraService : ICameraService
     }
 
     /// <summary>
-    /// 注册事件
+    ///     注册事件
     /// </summary>
     private void RegisterEvents()
     {
@@ -333,7 +340,7 @@ public class HuaRayCameraService : ICameraService
     }
 
     /// <summary>
-    /// 注销事件
+    ///     注销事件
     /// </summary>
     private void UnregisterEvents()
     {
@@ -342,7 +349,7 @@ public class HuaRayCameraService : ICameraService
     }
 
     /// <summary>
-    /// 事件处理器 - 写入 Channel (Producer)
+    ///     事件处理器 - 写入 Channel (Producer)
     /// </summary>
     private async void OnCodeHandle(object? sender, HuaRayCodeEventArgs args)
     {
@@ -375,7 +382,7 @@ public class HuaRayCameraService : ICameraService
     }
 
     /// <summary>
-    /// 后台任务 - 读取 Channel 并处理 (Consumer)
+    ///     后台任务 - 读取 Channel 并处理 (Consumer)
     /// </summary>
     private async Task ConsumeChannelAsync(CancellationToken cancellationToken)
     {
@@ -423,7 +430,7 @@ public class HuaRayCameraService : ICameraService
     }
 
     /// <summary>
-    /// 相机断线事件处理
+    ///     相机断线事件处理
     /// </summary>
     private void OnCameraDisconnect(object? sender, CameraStatusArgs args)
     {
@@ -434,15 +441,16 @@ public class HuaRayCameraService : ICameraService
     }
 
     /// <summary>
-    /// 处理包裹信息 (Called by Consumer)
+    ///     处理包裹信息 (Called by Consumer)
     /// </summary>
     private async Task ProcessPackageInfoAsync(HuaRayCodeEventArgs args)
     {
         // 日志: 记录从SDK收到的原始事件数据
-        Log.Information("华睿相机SDK接收到事件数据: CameraId={CameraId}, OutputResult={OutputResult}, CodeList={@CodeList}, WeightGrams={WeightGrams}, Volume(L={VLength}mm,W={VWidth}mm,H={VHeight}mm,Vol={VVolume}mm³), TriggerUnixMs={TriggerUnixMs}, OrigImg(W={OiW},H={OiH},T={OiT},S={OiS},HasPtr={OiHasPtr}), WaybillImg(W={WiW},H={WiH},T={WiT},S={WiS},HasPtr={WiHasPtr})",
-            args.CameraId, 
-            args.OutputResult, 
-            args.CodeList, 
+        Log.Information(
+            "华睿相机SDK接收到事件数据: CameraId={CameraId}, OutputResult={OutputResult}, CodeList={@CodeList}, WeightGrams={WeightGrams}, Volume(L={VLength}mm,W={VWidth}mm,H={VHeight}mm,Vol={VVolume}mm³), TriggerUnixMs={TriggerUnixMs}, OrigImg(W={OiW},H={OiH},T={OiT},S={OiS},HasPtr={OiHasPtr}), WaybillImg(W={WiW},H={WiH},T={WiT},S={WiS},HasPtr={WiHasPtr})",
+            args.CameraId,
+            args.OutputResult,
+            args.CodeList,
             args.Weight,
             args.VolumeInfo.length, args.VolumeInfo.width, args.VolumeInfo.height, args.VolumeInfo.volume,
             args.TriggerTimeTicks,
@@ -528,8 +536,9 @@ public class HuaRayCameraService : ICameraService
                             packageInfo.SetTriggerTimestamp(triggerTime);
                             Log.Debug("设置触发时间戳: {TriggerTimestamp}", triggerTime);
                         }
-                        else {
-                             Log.Warning("相机事件触发时间戳 Ticks 为 0 或无效.");
+                        else
+                        {
+                            Log.Warning("相机事件触发时间戳 Ticks 为 0 或无效.");
                         }
                     }
                     catch (ArgumentOutOfRangeException ex)
@@ -560,7 +569,7 @@ public class HuaRayCameraService : ICameraService
                             packageInfo.SetDimensions(lengthCm, widthCm, heightCm);
                             packageInfo.SetVolume(volumeCm3);
                             Log.Debug("设置包裹尺寸: L={LengthCm}cm W={WidthCm}cm H={HeightCm}cm, Vol={VolumeCm3}cm³",
-                                         lengthCm, widthCm, heightCm, volumeCm3); // 使用 Debug 级别
+                                lengthCm, widthCm, heightCm, volumeCm3); // 使用 Debug 级别
                         }
                     }
                     catch (Exception ex)
@@ -591,8 +600,8 @@ public class HuaRayCameraService : ICameraService
         }
         catch (Exception ex)
         {
-           // 这个 catch 块在 LogContext 之外，不会有 PackageContext
-           Log.Error(ex, "处理华睿相机条码事件时发生未预期的错误 (ProcessPackageInfoAsync): {Message}, CameraId: {CameraId}", ex.Message,
+            // 这个 catch 块在 LogContext 之外，不会有 PackageContext
+            Log.Error(ex, "处理华睿相机条码事件时发生未预期的错误 (ProcessPackageInfoAsync): {Message}, CameraId: {CameraId}", ex.Message,
                 args.CameraId);
         }
         finally
@@ -602,7 +611,7 @@ public class HuaRayCameraService : ICameraService
     }
 
     /// <summary>
-    /// 处理JPEG图像数据
+    ///     处理JPEG图像数据
     /// </summary>
     private static BitmapSource? ProcessJpegImagePointerToBitmapSource(
         IntPtr jpegDataPtr, int dataSize)
@@ -659,7 +668,7 @@ public class HuaRayCameraService : ICameraService
     }
 
     /// <summary>
-    /// 处理非JPEG图像数据
+    ///     处理非JPEG图像数据
     /// </summary>
     private static BitmapSource? ProcessNonJpegImagePointerToBitmapSource(
         IntPtr imageDataPtr, int dataSize, int width, int height,
@@ -698,7 +707,7 @@ public class HuaRayCameraService : ICameraService
                     bytesPerPixel = 3;
                     break;
                 case HuaRayApiStruct.EImageType.EImageTypeNormal:
-                    // EImageTypeJpeg 不应在此处处理，但作为默认情况包含
+                // EImageTypeJpeg 不应在此处处理，但作为默认情况包含
                 case HuaRayApiStruct.EImageType.EImageTypeJpeg:
                 default:
                     pixelFormat = PixelFormats.Gray8;
@@ -711,7 +720,7 @@ public class HuaRayCameraService : ICameraService
             // 使用 long 防止 stride * height 溢出 int
             var calculatedStride = (long)width * bytesPerPixel;
             var calculatedBufferSize = calculatedStride * height;
-            
+
             var bufferSize = (int)calculatedBufferSize;
             var stride = (int)calculatedStride;
 
@@ -760,14 +769,14 @@ public class HuaRayCameraService : ICameraService
         {
             // BitmapSource.Create 可能因 stride 不匹配等原因抛出 ArgumentException
             Log.Error(argEx, "ProcessNonJpeg: 创建 BitmapSource 时参数错误. Width={Width}, Height={Height}, ExpectedStride={ExpectedStride}",
-                      width, height, (long)width * bytesPerPixel); // 使用已声明的 bytesPerPixel
+                width, height, (long)width * bytesPerPixel); // 使用已声明的 bytesPerPixel
             return null;
         }
         catch (OutOfMemoryException oomEx)
         {
             // 即使有检查和 ArrayPool，极端情况下仍可能发生 OOM
             Log.Error(oomEx, "ProcessNonJpeg: 处理图像时内存不足. Width={Width}, Height={Height}, ExpectedBufferSize={ExpectedBufferSize}",
-                      width, height, (long)width * bytesPerPixel * height); // 使用已声明的 bytesPerPixel
+                width, height, (long)width * bytesPerPixel * height); // 使用已声明的 bytesPerPixel
             return null;
         }
         catch (Exception ex)
@@ -786,7 +795,7 @@ public class HuaRayCameraService : ICameraService
     }
 
     /// <summary>
-    /// 获取配置文件路径
+    ///     获取配置文件路径
     /// </summary>
     private static string? GetConfigPath()
     {
@@ -817,7 +826,7 @@ public class HuaRayCameraService : ICameraService
     }
 
     /// <summary>
-    /// 加载缓存的配置文件路径
+    ///     加载缓存的配置文件路径
     /// </summary>
     private static string? LoadCachedConfigPath()
     {
@@ -838,7 +847,7 @@ public class HuaRayCameraService : ICameraService
     }
 
     /// <summary>
-    /// 保存配置文件路径
+    ///     保存配置文件路径
     /// </summary>
     private static void SaveConfigPath(string configPath)
     {
@@ -853,7 +862,7 @@ public class HuaRayCameraService : ICameraService
     }
 
     /// <summary>
-    /// 搜索配置文件
+    ///     搜索配置文件
     /// </summary>
     private static string? SearchForConfigFile()
     {
@@ -1044,7 +1053,7 @@ public class HuaRayCameraService : ICameraService
     }
 
     /// <summary>
-    /// 查找LP目录下的配置文件
+    ///     查找LP目录下的配置文件
     /// </summary>
     private static void FindLpDirsWithConfig(string directory, List<string> foundFiles, int currentDepth, int maxDepth)
     {
@@ -1104,7 +1113,7 @@ public class HuaRayCameraService : ICameraService
     }
 
     /// <summary>
-    /// 查找LP相关快捷方式
+    ///     查找LP相关快捷方式
     /// </summary>
     private static List<string> FindLpShortcuts(string directory)
     {
@@ -1142,7 +1151,7 @@ public class HuaRayCameraService : ICameraService
     }
 
     /// <summary>
-    /// 获取快捷方式目标路径
+    ///     获取快捷方式目标路径
     /// </summary>
     private static string? GetShortcutTargetPath(string shortcutPath)
     {

@@ -40,8 +40,8 @@
     </UserControl.Resources>
 
     <Grid>
-        <StackPanel MaxWidth="800" 
-                    Margin="16" 
+        <StackPanel MaxWidth="800"
+                    Margin="16"
                     HorizontalAlignment="Center">
             <TextBlock Text="重量设置"
                        HorizontalAlignment="Center"
@@ -78,7 +78,7 @@
                             </ComboBox.ItemTemplate>
                         </ComboBox>
                     </StackPanel>
-                    
+
                     <!-- Minimum Weight -->
                     <StackPanel Style="{StaticResource InputContainerStyle}">
                         <TextBlock Text="最小重量:"
@@ -207,4 +207,4 @@
             </ui:Card>
         </StackPanel>
     </Grid>
-</UserControl> 
+</UserControl>

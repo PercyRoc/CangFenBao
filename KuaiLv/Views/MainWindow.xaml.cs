@@ -89,7 +89,7 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
-             Log.Error(ex, "检查离线包裹时发生错误，允许继续关闭。");
+            Log.Error(ex, "检查离线包裹时发生错误，允许继续关闭。");
         }
 
         // 没有离线包裹，或检查出错，继续执行关闭流程

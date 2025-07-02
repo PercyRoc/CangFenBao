@@ -1,12 +1,12 @@
 using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera.HuaRay;
-// using DeviceService.DataSourceDevices.Camera.Hikvision;
-// using DeviceService.DataSourceDevices.Camera.HikvisionSmartSdk;
 using DeviceService.DataSourceDevices.Camera.Models.Camera;
 using DeviceService.DataSourceDevices.Camera.Models.Camera.Enums;
 using DeviceService.DataSourceDevices.Camera.TCP;
 using Serilog;
+// using DeviceService.DataSourceDevices.Camera.Hikvision;
+// using DeviceService.DataSourceDevices.Camera.HikvisionSmartSdk;
 
 namespace DeviceService.DataSourceDevices.Camera;
 
@@ -121,7 +121,10 @@ public class CameraFactory : IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "加载相机设置失败，使用默认设置");
-            return new CameraSettings { Manufacturer = CameraManufacturer.HuaRay };
+            return new CameraSettings
+            {
+                Manufacturer = CameraManufacturer.HuaRay
+            };
         }
     }
 }

@@ -180,7 +180,7 @@
                                         FontWeight="Bold"
                                         Foreground="{StaticResource AccentBrush}"
                                         PlaceholderText="Waiting for scan..."
-                                        Tag="barcode"/>
+                                        Tag="barcode" />
                         </StackPanel>
 
                         <!-- 信息卡片网格 -->
@@ -407,8 +407,8 @@
                                     Margin="0,0,0,8">
                             <ui:SymbolIcon Symbol="History24"
                                            Margin="0,0,8,0"
-                                           VerticalAlignment="Center" 
-                                           Foreground="{StaticResource AccentBrush}"/>
+                                           VerticalAlignment="Center"
+                                           Foreground="{StaticResource AccentBrush}" />
                             <TextBlock Text="Package History"
                                        Foreground="{StaticResource AccentBrush}"
                                        FontSize="16"
@@ -427,13 +427,20 @@
                                   CanUserDeleteRows="False"
                                   GridLinesVisibility="Horizontal">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Index" Binding="{Binding Index}" MinWidth="50" Width="SizeToCells" />
-                                <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" MinWidth="120" Width="SizeToCells" />
-                                <DataGridTextColumn Header="Segment Code" Binding="{Binding SegmentCode}" MinWidth="120" Width="SizeToCells" />
-                                <DataGridTextColumn Header="Weight" Binding="{Binding WeightDisplay}" MinWidth="60" Width="SizeToCells" />
-                                <DataGridTextColumn Header="Dimensions" Binding="{Binding VolumeDisplay}" MinWidth="100" Width="SizeToCells" />
-                                <DataGridTextColumn Header="Chute" Binding="{Binding ChuteNumber}" MinWidth="50" Width="SizeToCells" />
-                                <DataGridTextColumn Header="Status" Binding="{Binding StatusDisplay}" MinWidth="70" Width="SizeToCells" />
+                                <DataGridTextColumn Header="Index" Binding="{Binding Index}" MinWidth="50"
+                                                    Width="SizeToCells" />
+                                <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" MinWidth="120"
+                                                    Width="SizeToCells" />
+                                <DataGridTextColumn Header="Segment Code" Binding="{Binding SegmentCode}"
+                                                    MinWidth="120" Width="SizeToCells" />
+                                <DataGridTextColumn Header="Weight" Binding="{Binding WeightDisplay}" MinWidth="60"
+                                                    Width="SizeToCells" />
+                                <DataGridTextColumn Header="Dimensions" Binding="{Binding VolumeDisplay}"
+                                                    MinWidth="100" Width="SizeToCells" />
+                                <DataGridTextColumn Header="Chute" Binding="{Binding ChuteNumber}" MinWidth="50"
+                                                    Width="SizeToCells" />
+                                <DataGridTextColumn Header="Status" Binding="{Binding StatusDisplay}" MinWidth="70"
+                                                    Width="SizeToCells" />
                                 <DataGridTextColumn Header="Proc. Time"
                                                     Binding="{Binding ProcessingTime, StringFormat={}{0:0}ms}"
                                                     MinWidth="80" Width="SizeToCells" />
@@ -446,7 +453,7 @@
                 </Border>
             </Grid>
         </Grid>
-   <!-- 状态栏 -->
+        <!-- 状态栏 -->
         <Border Grid.Row="2"
                 Background="{StaticResource SecondaryBrush}"
                 Opacity="0.8"
@@ -562,7 +569,7 @@
                                FontSize="12"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                         <Run Text="Uptime: " />
-                       <Run Text="{Binding SystemStatus.RunningTime, Mode=OneWay, StringFormat={}{0:hh\\:mm\\:ss}}" />
+                        <Run Text="{Binding SystemStatus.RunningTime, Mode=OneWay, StringFormat={}{0:hh\\:mm\\:ss}}" />
                     </TextBlock>
                 </StackPanel>
             </Grid>

@@ -64,12 +64,12 @@ public class ChuteMappingService(HttpClient httpClient, ISettingsService setting
 
             // 发送请求
             Log.Information("正在请求格口号: {Barcode}", package.Barcode);
-            
+
             // 设置请求头
             using var request = new HttpRequestMessage(HttpMethod.Post, ApiUrl);
             request.Headers.Add("equickToken", config.Token);
             request.Content = content;
-            
+
             var response = await httpClient.SendAsync(request, cts.Token);
 
             // 检查响应状态

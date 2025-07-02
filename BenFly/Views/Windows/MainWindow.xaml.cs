@@ -4,6 +4,7 @@ using System.Windows.Input;
 using BenFly.ViewModels.Windows;
 using Common.Services.Ui;
 using Serilog;
+using MessageBox = HandyControl.Controls.MessageBox;
 using MessageBoxResult = System.Windows.MessageBoxResult;
 
 namespace BenFly.Views.Windows;
@@ -51,7 +52,7 @@ public partial class MainWindow
         try
         {
             // 显示确认对话框
-            var result = HandyControl.Controls.MessageBox.Show(
+            var result = MessageBox.Show(
                 "确定要关闭程序吗？",
                 "关闭确认",
                 MessageBoxButton.YesNo,
@@ -73,7 +74,7 @@ public partial class MainWindow
         {
             Log.Error(ex, "处理关闭确认时发生错误");
             e.Cancel = true;
-            HandyControl.Controls.MessageBox.Show(
+            MessageBox.Show(
                 "处理关闭确认时发生错误，请重试",
                 "错误",
                 MessageBoxButton.OK,
@@ -84,7 +85,7 @@ public partial class MainWindow
     private void BarcodeTextBox_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter) return;
-        
+
         if (DataContext is MainWindowViewModel viewModel)
         {
             viewModel.OnBarcodeInput();

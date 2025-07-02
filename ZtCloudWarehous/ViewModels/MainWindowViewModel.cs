@@ -1,4 +1,6 @@
 ﻿using System.Collections.ObjectModel;
+using System.Reactive.Concurrency;
+using System.Reactive.Linq;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -11,15 +13,12 @@ using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using Serilog;
+using Serilog.Context;
 using SharedUI.Models;
 using SortingServices.Pendulum;
-using ZtCloudWarehous.Models;
 using ZtCloudWarehous.Services;
 using ZtCloudWarehous.ViewModels.Settings;
-using System.Reactive.Concurrency;
-using System.Reactive.Linq;
 using static Common.Models.Package.PackageStatus;
-using Serilog.Context;
 
 namespace ZtCloudWarehous.ViewModels;
 
@@ -33,28 +32,28 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private readonly IPendulumSortService _sortService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
-    private readonly IWeighingService _weighingService;
     private readonly IWaybillUploadService _waybillUploadService;
+    private readonly IWeighingService _weighingService;
     private string _currentBarcode = string.Empty;
     private BitmapSource? _currentImage;
     private bool _disposed;
-    private SystemStatus _systemStatus = new();
-
-    // Add persistent counters
-    private long _totalPackageCount;
-    private long _successPackageCount;
 
     private long _failedPackageCount;
-
-    // 添加详细异常计数
-    private long _timeoutCount;
     private long _noReadCount;
-    private long _weightErrorCount;
 
     private long _otherErrorCount;
 
     // 添加峰值效率记录
     private long _peakRate;
+    private long _successPackageCount;
+    private SystemStatus _systemStatus = new();
+
+    // 添加详细异常计数
+    private long _timeoutCount;
+
+    // Add persistent counters
+    private long _totalPackageCount;
+    private long _weightErrorCount;
 
     public MainWindowViewModel(IDialogService dialogService,
         ICameraService cameraService,
@@ -225,98 +224,98 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private void InitializeStatisticsItems()
     {
         StatisticsItems.Add(new StatisticsItem(
-            label: "总包裹数",
-            value: "0",
-            unit: "个",
-            description: "累计处理包裹总数",
-            icon: "BoxMultiple24"
+            "总包裹数",
+            "0",
+            "个",
+            "累计处理包裹总数",
+            "BoxMultiple24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
-            label: "成功数",
-            value: "0",
-            unit: "个",
-            description: "处理成功的包裹数量",
-            icon: "CheckmarkCircle24"
+            "成功数",
+            "0",
+            "个",
+            "处理成功的包裹数量",
+            "CheckmarkCircle24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
-            label: "超时响应",
-            value: "0",
-            unit: "个",
-            description: "数据上传超时的包裹数量",
-            icon: "Timer24"
+            "超时响应",
+            "0",
+            "个",
+            "数据上传超时的包裹数量",
+            "Timer24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
-            label: "未读包裹",
-            value: "0",
-            unit: "个",
-            description: "条码无法识别的包裹数量",
-            icon: "ErrorCircle24"
+            "未读包裹",
+            "0",
+            "个",
+            "条码无法识别的包裹数量",
+            "ErrorCircle24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
-            label: "重量异常",
-            value: "0",
-            unit: "个",
-            description: "重量不匹配的包裹数量",
-            icon: "Scales24"
+            "重量异常",
+            "0",
+            "个",
+            "重量不匹配的包裹数量",
+            "Scales24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
-            label: "其他异常",
-            value: "0",
-            unit: "个",
-            description: "其他异常包裹数量",
-            icon: "Alert24"
+            "其他异常",
+            "0",
+            "个",
+            "其他异常包裹数量",
+            "Alert24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
-            label: "处理速率",
-            value: "0",
-            unit: "个/小时",
-            description: "每小时处理包裹数量",
-            icon: "ArrowTrendingLines24"
+            "处理速率",
+            "0",
+            "个/小时",
+            "每小时处理包裹数量",
+            "ArrowTrendingLines24"
         ));
 
         // 添加峰值效率统计
         StatisticsItems.Add(new StatisticsItem(
-            label: "峰值效率",
-            value: "0",
-            unit: "个/小时",
-            description: "最高处理速率",
-            icon: "Trophy24"
+            "峰值效率",
+            "0",
+            "个/小时",
+            "最高处理速率",
+            "Trophy24"
         ));
     }
 
     private void InitializePackageInfoItems()
     {
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "重量",
-            value: "0.00",
-            unit: "kg",
-            description: "包裹重量",
-            icon: "Scales24"
+            "重量",
+            "0.00",
+            "kg",
+            "包裹重量",
+            "Scales24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "格口",
-            value: "--",
+            "格口",
+            "--",
             description: "目标分拣位置",
             icon: "ArrowCircleDown24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "时间",
-            value: "--:--:--",
+            "时间",
+            "--:--:--",
             description: "处理时间",
             icon: "Timer24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "状态",
-            value: "等待",
+            "状态",
+            "等待",
             description: "处理状态",
             icon: "Alert24"
         ));
@@ -403,8 +402,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     try
                     {
                         var uploadTask = _weighingService.SendWeightDataAutoAsync(
-                            package.Barcode, 
-                            Convert.ToDecimal(package.Weight), 
+                            package.Barcode,
+                            Convert.ToDecimal(package.Weight),
                             package.Volume.HasValue ? Convert.ToDecimal(package.Volume.Value) : null);
                         var timeoutTask = Task.Delay(500);
 
@@ -443,7 +442,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                                 {
                                     // 无规则匹配
                                     package.SetChute(chuteSettings.ErrorChuteNumber);
-                                    package.SetStatus(PackageStatus.Error, "未匹配规则");
+                                    package.SetStatus(Error, "未匹配规则");
                                     Interlocked.Increment(ref _otherErrorCount);
                                     Log.Warning("未匹配到规则，分配到异常口: {ErrorChute}", chuteSettings.ErrorChuteNumber);
                                 }
@@ -452,14 +451,14 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                             {
                                 Log.Warning("上传称重数据API返回失败.");
                                 _notificationService.ShowWarning($"上传称重数据失败: {package.Barcode}");
-                                
+
                                 // 统一分配到异常口
                                 var targetChute = chuteSettings.ErrorChuteNumber;
                                 Interlocked.Increment(ref _otherErrorCount);
                                 Log.Warning("分配到异常口: {TargetChute}", targetChute);
 
                                 package.SetChute(targetChute);
-                                package.SetStatus(PackageStatus.Error, "上传失败");
+                                package.SetStatus(Error, "上传失败");
                             }
                         }
                     }
@@ -468,7 +467,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                         Log.Error(ex, "上传称重数据时发生异常.");
                         _notificationService.ShowError($"上传称重数据异常: {ex.Message}");
                         package.SetChute(chuteSettings.ErrorChuteNumber);
-                        package.SetStatus(PackageStatus.Error, $"上传异常: {ex.Message}");
+                        package.SetStatus(Error, $"上传异常: {ex.Message}");
                         Interlocked.Increment(ref _otherErrorCount);
                         Log.Warning("分配到异常口: {ErrorChute}", chuteSettings.ErrorChuteNumber);
                     }
@@ -480,7 +479,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 Interlocked.Increment(ref _totalPackageCount);
 
                 // 步骤 6: 更新统计和最终状态
-                if (package.Status != PackageStatus.Error && package.Status != PackageStatus.Timeout)
+                if (package.Status != Error && package.Status != PackageStatus.Timeout)
                 {
                     Interlocked.Increment(ref _successPackageCount);
                     // 如果之前是 Success，可以不再设置或设置更具体的成功状态如 SortSuccess
@@ -624,7 +623,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         {
             Success
                 => "#4CAF50", // Green for success
-            PackageStatus.Error or PackageStatus.Timeout
+            Error or PackageStatus.Timeout
                 => "#F44336", // Red for error/timeout/failure
             _ => "#2196F3" // Blue for other states (e.g., processing, waiting)
         };

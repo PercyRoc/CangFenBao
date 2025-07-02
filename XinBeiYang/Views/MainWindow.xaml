@@ -82,12 +82,12 @@
                     <TextBlock Text="系统设置" VerticalAlignment="Center" />
                 </StackPanel>
             </ui:Button>
-            
+
             <!-- 条码模式选择区 -->
-            <Border Grid.Column="2" 
-                    Margin="0,0,8,0" 
-                    CornerRadius="4" 
-                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" 
+            <Border Grid.Column="2"
+                    Margin="0,0,8,0"
+                    CornerRadius="4"
+                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
                     BorderThickness="1"
                     Background="{DynamicResource ControlFillColorDefaultBrush}">
                 <Grid>
@@ -95,21 +95,21 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    
+
                     <!-- 条码模式标签 -->
-                    <StackPanel Grid.Column="0" 
-                                Orientation="Horizontal" 
+                    <StackPanel Grid.Column="0"
+                                Orientation="Horizontal"
                                 Margin="8,0,4,0"
                                 VerticalAlignment="Center">
-                        <ui:SymbolIcon Symbol="BarcodeScanner24" 
-                                       FontSize="16" 
-                                       Margin="0,0,4,0" 
+                        <ui:SymbolIcon Symbol="BarcodeScanner24"
+                                       FontSize="16"
+                                       Margin="0,0,4,0"
                                        VerticalAlignment="Center" />
-                        <TextBlock Text="条码模式:" 
-                                   VerticalAlignment="Center" 
+                        <TextBlock Text="条码模式:"
+                                   VerticalAlignment="Center"
                                    FontSize="12" />
                     </StackPanel>
-                    
+
                     <!-- 条码模式下拉菜单 - 改用ComboBox -->
                     <ComboBox Grid.Column="1"
                               Margin="0,2,4,2"
@@ -297,12 +297,12 @@
                         Padding="16,8"
                         Visibility="{Binding IsNextPackageWaiting, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                        <ui:SymbolIcon Symbol="ArrowCircleRight24" Foreground="#0D47A1" Margin="0,0,8,0" FontSize="20"/>
+                        <ui:SymbolIcon Symbol="ArrowCircleRight24" Foreground="#0D47A1" Margin="0,0,8,0" FontSize="20" />
                         <TextBlock Text="下一包裹等待处理"
                                    Foreground="#0D47A1"
                                    FontWeight="Bold"
                                    FontSize="16"
-                                   VerticalAlignment="Center"/>
+                                   VerticalAlignment="Center" />
                     </StackPanel>
                 </Border>
 
@@ -434,7 +434,7 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
-                            
+
                             <!-- PLC状态 -->
                             <Border Grid.Row="0"
                                     Padding="16,12"
@@ -474,7 +474,7 @@
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                 </Grid>
                             </Border>
-                            
+
                             <!-- 京东WCS状态 -->
                             <Border Grid.Row="1"
                                     Margin="0,16,0,0"
@@ -575,7 +575,7 @@
                                             </Grid.RowDefinitions>
 
                                             <!-- 相机名称 -->
-                                            <TextBlock Grid.Row="0" 
+                                            <TextBlock Grid.Row="0"
                                                        Text="{Binding CameraName}"
                                                        FontWeight="SemiBold"
                                                        Margin="8,4"
@@ -659,69 +659,69 @@
                     </Grid>
                 </Border>
             </Grid>
-            
+
             <!-- PLC拒绝警告覆盖层 -->
             <Border Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
-                    Background="#AA000000" 
+                    Background="#AA000000"
                     Visibility="{Binding IsPlcRejectWarningVisible, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}"
                     Panel.ZIndex="10">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <ui:SymbolIcon Symbol="ErrorCircle48" Foreground="Red" FontSize="80" Margin="0,0,0,20" />
-                    <TextBlock Text="PLC 上包拒绝！" 
-                               Foreground="White" 
+                    <TextBlock Text="PLC 上包拒绝！"
+                               Foreground="White"
                                FontSize="40"
                                FontWeight="Bold"
                                HorizontalAlignment="Center"
-                               Margin="0,0,0,10"/>
-                    <TextBlock Text="请勿放置新包裹！" 
-                               Foreground="White" 
-                               FontSize="24" 
-                               HorizontalAlignment="Center"/>
+                               Margin="0,0,0,10" />
+                    <TextBlock Text="请勿放置新包裹！"
+                               Foreground="White"
+                               FontSize="24"
+                               HorizontalAlignment="Center" />
                 </StackPanel>
             </Border>
-            
+
             <!-- PLC异常状态警告覆盖层 -->
             <Border Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
-                    Background="#AA333300" 
+                    Background="#AA333300"
                     Visibility="{Binding IsPlcAbnormalWarningVisible, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}"
-                    Panel.ZIndex="9"> 
+                    Panel.ZIndex="9">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <ui:SymbolIcon Symbol="Warning24" Foreground="Yellow" FontSize="80" Margin="0,0,0,20" />
-                    <TextBlock Text="PLC 状态异常！" 
-                               Foreground="White" 
-                               FontSize="40" 
-                               FontWeight="Bold" 
-                               HorizontalAlignment="Center" 
-                               Margin="0,0,0,10"/>
-                    <TextBlock Text="当前状态: " 
-                               Foreground="White" 
-                               FontSize="24" 
-                               HorizontalAlignment="Center"/>
-                    <TextBlock Text="{Binding DeviceStatusText}" 
-                               Foreground="Yellow" 
-                               FontSize="24" 
+                    <TextBlock Text="PLC 状态异常！"
+                               Foreground="White"
+                               FontSize="40"
+                               FontWeight="Bold"
+                               HorizontalAlignment="Center"
+                               Margin="0,0,0,10" />
+                    <TextBlock Text="当前状态: "
+                               Foreground="White"
+                               FontSize="24"
+                               HorizontalAlignment="Center" />
+                    <TextBlock Text="{Binding DeviceStatusText}"
+                               Foreground="Yellow"
+                               FontSize="24"
                                FontWeight="SemiBold"
-                               HorizontalAlignment="Center" 
-                               Margin="0,5,0,10"/>
-                    <TextBlock Text="包裹处理已暂停，请等待状态恢复正常..." 
-                               Foreground="White" 
-                               FontSize="24" 
-                               HorizontalAlignment="Center"/>
+                               HorizontalAlignment="Center"
+                               Margin="0,5,0,10" />
+                    <TextBlock Text="包裹处理已暂停，请等待状态恢复正常..."
+                               Foreground="White"
+                               FontSize="24"
+                               HorizontalAlignment="Center" />
                 </StackPanel>
             </Border>
-            
+
             <!-- 上包倒计时覆盖层 -->
             <Border Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
-                    Background="#88000000" 
+                    Background="#88000000"
                     Visibility="{Binding IsUploadCountdownVisible, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}"
                     Panel.ZIndex="8"> <!-- Lower ZIndex than warnings -->
                 <Viewbox Stretch="Uniform">
-                    <TextBlock Text="{Binding UploadCountdownValue}" 
+                    <TextBlock Text="{Binding UploadCountdownValue}"
                                Foreground="LimeGreen"
                                FontWeight="Bold"
                                Margin="20">
                         <TextBlock.Effect>
-                            <DropShadowEffect Color="Black" ShadowDepth="3" BlurRadius="5" Opacity="0.8"/>
+                            <DropShadowEffect Color="Black" ShadowDepth="3" BlurRadius="5" Opacity="0.8" />
                         </TextBlock.Effect>
                     </TextBlock>
                 </Viewbox>

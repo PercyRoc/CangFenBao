@@ -1,4 +1,3 @@
-using System;
 using System.IO;
 using Microsoft.EntityFrameworkCore;
 using ShanghaiModuleBelt.Models;
@@ -41,4 +40,4 @@ public class ApplicationDbContext : DbContext
             optionsBuilder.UseSqlite($"Data Source={dbPath}");
         }
     }
-} 
+}

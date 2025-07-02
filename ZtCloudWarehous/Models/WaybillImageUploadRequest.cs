@@ -48,4 +48,4 @@ public class WaybillImageData
     /// </summary>
     [JsonPropertyName("weightTime")]
     public string WeightTime { get; set; } = string.Empty;
-} 
+}

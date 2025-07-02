@@ -42,4 +42,4 @@ public class WangDianTongSettingsViewModel : BindableBase
     {
         _settingsService.SaveSettings(Configuration, true);
     }
-} 
+}

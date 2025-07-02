@@ -7,12 +7,12 @@ using Serilog;
 namespace XinBeiYang.Services;
 
 /// <summary>
-/// 实现 IImageStorageService 接口，将图像保存到本地文件系统。
+///     实现 IImageStorageService 接口，将图像保存到本地文件系统。
 /// </summary>
 public class LocalImageStorageService : IImageStorageService
 {
-    private readonly string _baseStoragePath;
     private const double DISK_SPACE_THRESHOLD = 90.0; // 磁盘空间占用率阈值（百分比）
+    private readonly string _baseStoragePath;
 
     public LocalImageStorageService()
     {
@@ -22,56 +22,13 @@ public class LocalImageStorageService : IImageStorageService
     }
 
     /// <summary>
-    /// 使用指定的基础路径初始化 LocalImageStorageService 类的新实例。
+    ///     使用指定的基础路径初始化 LocalImageStorageService 类的新实例。
     /// </summary>
     /// <param name="baseStoragePath">存储图像的根目录。</param>
     public LocalImageStorageService(string baseStoragePath)
     {
         _baseStoragePath = baseStoragePath;
         Log.Information("本地图像存储路径设置为: {Path}", _baseStoragePath);
-    }
-
-    /// <summary>
-    /// 检查磁盘空间并清理最早的数据
-    /// </summary>
-    private void CheckAndCleanupDiskSpace()
-    {
-        try
-        {
-            var driveInfo = new DriveInfo(Path.GetPathRoot(_baseStoragePath)!);
-            var diskSpaceUsedPercentage = 100 - ((double)driveInfo.AvailableFreeSpace / driveInfo.TotalSize * 100);
-
-            if (diskSpaceUsedPercentage >= DISK_SPACE_THRESHOLD)
-            {
-                Log.Warning("磁盘空间使用率超过 {Threshold}%，当前使用率: {UsedPercentage}%，开始清理最早的数据",
-                    DISK_SPACE_THRESHOLD, diskSpaceUsedPercentage);
-
-                // 获取所有日期文件夹并按日期排序
-                var dateFolders = Directory.GetDirectories(_baseStoragePath)
-                    .Select(d => new DirectoryInfo(d))
-                    .OrderBy(d => d.CreationTime)
-                    .ToList();
-
-                if (dateFolders.Any())
-                {
-                    // 删除最早的文件夹
-                    var oldestFolder = dateFolders.First();
-                    try
-                    {
-                        Directory.Delete(oldestFolder.FullName, true);
-                        Log.Information("已删除最早的图像文件夹: {Folder}", oldestFolder.FullName);
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex, "删除文件夹失败: {Folder}", oldestFolder.FullName);
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "检查磁盘空间时发生错误");
-        }
     }
 
     /// <inheritdoc />
@@ -115,24 +72,24 @@ public class LocalImageStorageService : IImageStorageService
             await using (var fileStream = new FileStream(filePath, FileMode.Create))
             {
                 // 将 Encoder 创建、Frame 添加和 Save 操作都放到后台线程执行
-                await Task.Run(() => 
+                await Task.Run(() =>
                 {
-                     try
-                     {
-                         var encoder = new JpegBitmapEncoder(); // 在后台线程创建 Encoder
-                         // 确保传入的 image 是线程安全的
-                         encoder.Frames.Add(BitmapFrame.Create(image)); // 在后台线程添加 Frame
-                         encoder.Save(fileStream); // 在后台线程保存
-                     }
-                     catch (Exception ex)
-                     {
-                         // 如果 Task.Run 内部发生错误，需要一种方式来传播或记录它
-                         // 这里直接记录错误，因为 Task.Run 外部的 catch 块可能无法捕获它
-                         Log.Error(ex, "在后台线程 Task.Run 中 encoder.Save 失败，条码 {Barcode}", barcode);
-                         // 抛出异常可能导致应用程序崩溃，取决于外部如何处理Task
-                         // 更好的方法可能是设置一个标志或返回特定值指示失败
-                         throw; // 重新抛出，让外部 catch 捕获（如果可能）
-                     }
+                    try
+                    {
+                        var encoder = new JpegBitmapEncoder(); // 在后台线程创建 Encoder
+                        // 确保传入的 image 是线程安全的
+                        encoder.Frames.Add(BitmapFrame.Create(image)); // 在后台线程添加 Frame
+                        encoder.Save(fileStream); // 在后台线程保存
+                    }
+                    catch (Exception ex)
+                    {
+                        // 如果 Task.Run 内部发生错误，需要一种方式来传播或记录它
+                        // 这里直接记录错误，因为 Task.Run 外部的 catch 块可能无法捕获它
+                        Log.Error(ex, "在后台线程 Task.Run 中 encoder.Save 失败，条码 {Barcode}", barcode);
+                        // 抛出异常可能导致应用程序崩溃，取决于外部如何处理Task
+                        // 更好的方法可能是设置一个标志或返回特定值指示失败
+                        throw; // 重新抛出，让外部 catch 捕获（如果可能）
+                    }
                 });
                 // 移除 Dispatcher 调用
                 /*
@@ -170,8 +127,8 @@ public class LocalImageStorageService : IImageStorageService
         }
         catch (IOException ioEx)
         {
-             Log.Error(ioEx, "保存图像时发生IO错误，条码 {Barcode}: {Message}", barcode, ioEx.Message);
-             return null;
+            Log.Error(ioEx, "保存图像时发生IO错误，条码 {Barcode}: {Message}", barcode, ioEx.Message);
+            return null;
         }
         catch (Exception ex)
         {
@@ -181,7 +138,50 @@ public class LocalImageStorageService : IImageStorageService
     }
 
     /// <summary>
-    /// 移除或替换文件名中的非法字符。
+    ///     检查磁盘空间并清理最早的数据
+    /// </summary>
+    private void CheckAndCleanupDiskSpace()
+    {
+        try
+        {
+            var driveInfo = new DriveInfo(Path.GetPathRoot(_baseStoragePath)!);
+            var diskSpaceUsedPercentage = 100 - (double)driveInfo.AvailableFreeSpace / driveInfo.TotalSize * 100;
+
+            if (diskSpaceUsedPercentage >= DISK_SPACE_THRESHOLD)
+            {
+                Log.Warning("磁盘空间使用率超过 {Threshold}%，当前使用率: {UsedPercentage}%，开始清理最早的数据",
+                    DISK_SPACE_THRESHOLD, diskSpaceUsedPercentage);
+
+                // 获取所有日期文件夹并按日期排序
+                var dateFolders = Directory.GetDirectories(_baseStoragePath)
+                    .Select(d => new DirectoryInfo(d))
+                    .OrderBy(d => d.CreationTime)
+                    .ToList();
+
+                if (dateFolders.Any())
+                {
+                    // 删除最早的文件夹
+                    var oldestFolder = dateFolders.First();
+                    try
+                    {
+                        Directory.Delete(oldestFolder.FullName, true);
+                        Log.Information("已删除最早的图像文件夹: {Folder}", oldestFolder.FullName);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "删除文件夹失败: {Folder}", oldestFolder.FullName);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "检查磁盘空间时发生错误");
+        }
+    }
+
+    /// <summary>
+    ///     移除或替换文件名中的非法字符。
     /// </summary>
     private static string SanitizeFileName(string fileName)
     {
@@ -189,4 +189,4 @@ public class LocalImageStorageService : IImageStorageService
         // 如有需要可以添加更具体的清理规则
         return Path.GetInvalidFileNameChars().Aggregate(fileName, (current, c) => current.Replace(c.ToString(), "_"));
     }
-} 
+}

@@ -5,7 +5,7 @@ using System.Windows.Data;
 namespace XinBeiYang.Converters;
 
 /// <summary>
-/// 布尔值取反并转换为可见性的转换器
+///     布尔值取反并转换为可见性的转换器
 /// </summary>
 public class InvertBooleanToVisibilityConverter : IValueConverter
 {
@@ -26,4 +26,4 @@ public class InvertBooleanToVisibilityConverter : IValueConverter
         }
         return false;
     }
-} 
+}

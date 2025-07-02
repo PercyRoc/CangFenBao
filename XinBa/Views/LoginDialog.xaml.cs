@@ -1,8 +1,8 @@
 // Remove Prism.Services.Dialogs using if IDialogAware logic is fully in ViewModel
 // using Prism.Services.Dialogs;
 using Serilog;
-// Add using for UserControl
 using XinBa.ViewModels;
+// Add using for UserControl
 
 namespace XinBa.Views;
 

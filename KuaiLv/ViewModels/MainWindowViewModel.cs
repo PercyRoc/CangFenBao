@@ -1,7 +1,10 @@
 ﻿using System.Collections.ObjectModel;
+using System.Reactive.Concurrency;
+using System.Reactive.Linq;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Common.Data;
 using Common.Models.Package;
 using Common.Services.Audio;
 using Common.Services.Settings;
@@ -12,9 +15,6 @@ using KuaiLv.Services.DWS;
 using KuaiLv.Services.Warning;
 using Serilog;
 using SharedUI.Models;
-using System.Reactive.Concurrency;
-using System.Reactive.Linq;
-using Common.Data;
 
 namespace KuaiLv.ViewModels;
 
@@ -27,12 +27,12 @@ public class CameraDisplayInfo : BindableBase
 {
     private readonly string _cameraId = string.Empty;
     private readonly string _cameraName = string.Empty;
-    private bool _isOnline;
-    private BitmapSource? _currentImage;
-    private readonly int _row;
     private readonly int _column;
-    private int _rowSpan = 1;
+    private readonly int _row;
     private int _columnSpan = 1;
+    private BitmapSource? _currentImage;
+    private bool _isOnline;
+    private int _rowSpan = 1;
 
     /// <summary>
     ///     相机ID
@@ -115,19 +115,19 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
     private readonly IDwsService _dwsService;
-    private readonly ISettingsService _settingsService;
     private readonly IPackageDataService _packageDataService;
+    private readonly ISettingsService _settingsService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
     private readonly IWarningLightService _warningLightService;
     private string _currentBarcode = string.Empty;
     private bool _disposed;
-    private SystemStatus _systemStatus = new();
-    private int _selectedScenario; // 默认为0，称重模式
-    
+    private int _gridColumns = 1;
+
     // 新增: 相机布局属性
     private int _gridRows = 1;
-    private int _gridColumns = 1;
+    private int _selectedScenario; // 默认为0，称重模式
+    private SystemStatus _systemStatus = new();
 
     public MainWindowViewModel(
         IDialogService dialogService,
@@ -214,7 +214,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                                 // Optionally handle image from unknown camera ID
                                 // Log.Debug("Received image from unknown camera ID: {CameraId}", cameraId);
                                 // Maybe update the first camera as a fallback?
-                                if(Cameras.Count > 0) Cameras[0].CurrentImage = image;
+                                if (Cameras.Count > 0) Cameras[0].CurrentImage = image;
                             }
                         }
                         catch (Exception ex)
@@ -269,7 +269,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     public ObservableCollection<StatisticsItem> StatisticsItems { get; } = [];
     public ObservableCollection<DeviceStatus> DeviceStatuses { get; } = [];
     public ObservableCollection<PackageInfoItem> PackageInfoItems { get; } = [];
-    
+
     // 新增: 相机集合和布局属性
     public ObservableCollection<CameraDisplayInfo> Cameras { get; } = [];
 
@@ -394,66 +394,66 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private void InitializeStatisticsItems()
     {
         StatisticsItems.Add(new StatisticsItem(
-            label: "总包裹数",
-            value: "0",
-            unit: "个",
-            description: "累计处理包裹总数",
-            icon: "BoxMultiple24"
+            "总包裹数",
+            "0",
+            "个",
+            "累计处理包裹总数",
+            "BoxMultiple24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
-            label: "成功数",
-            value: "0",
-            unit: "个",
-            description: "处理成功的包裹数量",
-            icon: "CheckmarkCircle24"
+            "成功数",
+            "0",
+            "个",
+            "处理成功的包裹数量",
+            "CheckmarkCircle24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
-            label: "失败数",
-            value: "0",
-            unit: "个",
-            description: "处理失败的包裹数量",
-            icon: "ErrorCircle24"
+            "失败数",
+            "0",
+            "个",
+            "处理失败的包裹数量",
+            "ErrorCircle24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
-            label: "处理速率",
-            value: "0",
-            unit: "个/小时",
-            description: "每小时处理包裹数量",
-            icon: "ArrowTrendingLines24"
+            "处理速率",
+            "0",
+            "个/小时",
+            "每小时处理包裹数量",
+            "ArrowTrendingLines24"
         ));
     }
 
     private void InitializePackageInfoItems()
     {
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "重量",
-            value: "0.00",
-            unit: "斤",
-            description: "包裹重量",
-            icon: "Scale24"
+            "重量",
+            "0.00",
+            "斤",
+            "包裹重量",
+            "Scale24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "尺寸",
-            value: "0 × 0 × 0",
-            unit: "mm",
-            description: "长 × 宽 × 高",
-            icon: "Ruler24"
+            "尺寸",
+            "0 × 0 × 0",
+            "mm",
+            "长 × 宽 × 高",
+            "Ruler24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "时间",
-            value: "--:--:--",
+            "时间",
+            "--:--:--",
             description: "处理时间",
             icon: "Timer24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "状态",
-            value: "等待",
+            "状态",
+            "等待",
             description: "处理状态",
             icon: "AlertCircle24"
         ));
@@ -467,54 +467,54 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             var cameraStatus = DeviceStatuses.FirstOrDefault(static x => x.Name == "相机");
             if (cameraStatus != null)
             {
-                 Application.Current.Dispatcher.Invoke(() =>
-                 {
-                     // Reflect the status of the specific camera if ID is provided, or overall status
-                     if (!string.IsNullOrEmpty(deviceId))
-                     {
-                         var targetCamera = Cameras.FirstOrDefault(c => c.CameraId == deviceId);
-                         if (targetCamera != null)
-                         {
-                             targetCamera.IsOnline = isConnected;
-                             Log.Information("相机 {CameraId} 连接状态更新: {IsConnected}", deviceId, isConnected);
-                             
-                             // Update overall status based on all cameras
-                             var allConnected = Cameras.All(c => c.IsOnline);
-                             var anyConnected = Cameras.Any(c => c.IsOnline);
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    // Reflect the status of the specific camera if ID is provided, or overall status
+                    if (!string.IsNullOrEmpty(deviceId))
+                    {
+                        var targetCamera = Cameras.FirstOrDefault(c => c.CameraId == deviceId);
+                        if (targetCamera != null)
+                        {
+                            targetCamera.IsOnline = isConnected;
+                            Log.Information("相机 {CameraId} 连接状态更新: {IsConnected}", deviceId, isConnected);
 
-                             if (allConnected)
-                             {
+                            // Update overall status based on all cameras
+                            var allConnected = Cameras.All(c => c.IsOnline);
+                            var anyConnected = Cameras.Any(c => c.IsOnline);
+
+                            if (allConnected)
+                            {
                                 cameraStatus.Status = "全部已连接";
                                 cameraStatus.StatusColor = "#4CAF50";
-                             }
-                             else if(anyConnected)
-                             {
+                            }
+                            else if (anyConnected)
+                            {
                                 cameraStatus.Status = "部分连接";
                                 cameraStatus.StatusColor = "#FFC107"; // Yellow for partial
-                             }
-                             else
-                             {
+                            }
+                            else
+                            {
                                 cameraStatus.Status = "全部断开";
                                 cameraStatus.StatusColor = "#F44336";
-                             }
-                         }
-                         else
-                         {
+                            }
+                        }
+                        else
+                        {
                             Log.Warning("OnCameraConnectionChanged: Received status for unknown CameraId: {CameraId}", deviceId);
-                            
-                         }
-                     }
-                     else 
-                     {
-                         cameraStatus.Status = isConnected ? "已连接" : "已断开";
-                         cameraStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
-                         foreach(var cam in Cameras)
-                         {
-                             cam.IsOnline = isConnected;
-                         }
-                         Log.Information("相机总体连接状态更新: {IsConnected}", isConnected);
-                     }
-                 });
+
+                        }
+                    }
+                    else
+                    {
+                        cameraStatus.Status = isConnected ? "已连接" : "已断开";
+                        cameraStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
+                        foreach (var cam in Cameras)
+                        {
+                            cam.IsOnline = isConnected;
+                        }
+                        Log.Information("相机总体连接状态更新: {IsConnected}", isConnected);
+                    }
+                });
             }
         }
         catch (Exception ex)
@@ -609,7 +609,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         {
             PackageStatus.Success
                 => "#4CAF50", // 绿色表示成功
-            PackageStatus.Timeout 
+            PackageStatus.Timeout
                 => "#FFC107", // 黄色表示超时
             PackageStatus.Error
                 => "#F44336", // 红色表示错误
@@ -757,11 +757,11 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     }
 
     #endregion
-    
+
     #region Camera Layout Methods
 
     /// <summary>
-    /// 初始化相机列表和布局
+    ///     初始化相机列表和布局
     /// </summary>
     private void InitializeCameras()
     {
@@ -784,7 +784,10 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     CameraId = "Placeholder_0",
                     CameraName = "无相机",
                     IsOnline = false,
-                    Row = r, Column = c, RowSpan = rs, ColumnSpan = cs
+                    Row = r,
+                    Column = c,
+                    RowSpan = rs,
+                    ColumnSpan = cs
                 });
             }
             else
@@ -805,8 +808,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                         ColumnSpan = columnSpan
                     };
                     Cameras.Add(displayInfo);
-                     Log.Information("添加相机视图: ID={Id}, Name={Name}, Row={Row}, Col={Col}", 
-                                      displayInfo.CameraId, displayInfo.CameraName, displayInfo.Row, displayInfo.Column);
+                    Log.Information("添加相机视图: ID={Id}, Name={Name}, Row={Row}, Col={Col}",
+                        displayInfo.CameraId, displayInfo.CameraName, displayInfo.Row, displayInfo.Column);
                 }
             }
             // Initial update of the general camera status in DeviceStatuses
@@ -814,21 +817,29 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
         }
         catch (Exception ex)
-        {   
+        {
             Log.Error(ex, "初始化相机列表时发生错误");
             // Ensure at least one placeholder on error
             if (Cameras.Count == 0)
             {
                 CalculateOptimalLayout(1);
                 var (r, c, rs, cs) = GetCameraPosition(0, 1);
-                Cameras.Add(new CameraDisplayInfo { CameraId = "Error_Fallback", CameraName = "错误", Row=r, Column=c, RowSpan=rs, ColumnSpan=cs });
+                Cameras.Add(new CameraDisplayInfo
+                {
+                    CameraId = "Error_Fallback",
+                    CameraName = "错误",
+                    Row = r,
+                    Column = c,
+                    RowSpan = rs,
+                    ColumnSpan = cs
+                });
                 UpdateOverallCameraDeviceStatus();
             }
         }
     }
-    
+
     /// <summary>
-    /// Helper method to update the overall camera status display in the DeviceStatuses list.
+    ///     Helper method to update the overall camera status display in the DeviceStatuses list.
     /// </summary>
     private void UpdateOverallCameraDeviceStatus()
     {
@@ -843,7 +854,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 cameraStatus.StatusColor = "#F44336";
                 return;
             }
-            
+
             var allConnected = Cameras.All(c => c.IsOnline);
             var anyConnected = Cameras.Any(c => c.IsOnline);
 
@@ -866,7 +877,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 根据相机数量计算最佳布局
+    ///     根据相机数量计算最佳布局
     /// </summary>
     /// <param name="cameraCount">相机数量</param>
     private void CalculateOptimalLayout(int cameraCount)
@@ -908,7 +919,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 获取指定相机在网格中的位置
+    ///     获取指定相机在网格中的位置
     /// </summary>
     /// <param name="cameraIndex">相机索引 (从0开始)</param>
     /// <param name="cameraCount">相机总数</param>
@@ -916,9 +927,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private (int row, int column, int rowSpan, int columnSpan) GetCameraPosition(int cameraIndex, int cameraCount)
     {
         if (cameraCount <= 0) return (0, 0, 1, 1); // Default for no cameras
-        
+
         // 与 XinBeiYang 保持一致的定位逻辑
-         switch (cameraCount)
+        switch (cameraCount)
         {
             case 1:
                 return (0, 0, GridRows, GridColumns); // 单个相机填满
@@ -930,10 +941,10 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
         var row = cameraIndex / GridColumns;
         var column = cameraIndex % GridColumns;
-        
+
         if (row >= GridRows) row = GridRows - 1;
         if (column >= GridColumns) column = GridColumns - 1;
-        
+
         return (row, column, 1, 1); // 默认占一个单元格
     }
 

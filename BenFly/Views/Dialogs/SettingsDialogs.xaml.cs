@@ -21,4 +21,4 @@ public partial class SettingsDialogs
         // 导航到相机设置页面
         RootNavigation?.Navigate(typeof(CameraSettingsView));
     }
-} 
+}

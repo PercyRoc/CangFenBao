@@ -1,12 +1,12 @@
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using System.Text;
+using System.Windows.Media.Imaging;
 using Common.Models.Package;
 using DeviceService.DataSourceDevices.Camera.Models;
 using DeviceService.DataSourceDevices.Camera.Models.Camera;
 using DeviceService.DataSourceDevices.TCP;
 using Serilog;
-using System.Windows.Media.Imaging;
 
 namespace DeviceService.DataSourceDevices.Camera.TCP;
 
@@ -17,15 +17,15 @@ internal class TcpCameraService : ICameraService
 {
     private const int MinProcessInterval = 1000; // 最小处理间隔（毫秒）
     private const int MaxBufferSize = 1024 * 1024; // 最大缓冲区大小（1MB）
+    private readonly string _host;
 
     private readonly Subject<PackageInfo> _packageSubject = new();
+    private readonly int _port;
     private readonly object _processLock = new(); // 处理锁，确保同一时间只处理一个包裹
     private readonly Subject<BitmapSource> _realtimeImageSubject = new(); // 保留，但当前未使用
+    private readonly StringBuilder _receiveBuffer = new(); // 用于累积接收数据的缓冲区
 
     private readonly TcpClientService _tcpClientService;
-    private readonly string _host;
-    private readonly int _port;
-    private readonly StringBuilder _receiveBuffer = new(); // 用于累积接收数据的缓冲区
 
     private string _lastProcessedData = string.Empty; // 用于记录上一次处理的数据，避免重复处理
     private DateTime _lastProcessedTime = DateTime.MinValue; // 用于记录上一次处理数据的时间
@@ -37,12 +37,12 @@ internal class TcpCameraService : ICameraService
         _port = port;
 
         _tcpClientService = new TcpClientService(
-            deviceName: $"TcpCamera-{host}-{port}",
-            ipAddress: _host,
-            port: _port,
-            dataReceivedCallback: HandleDataReceived,
-            connectionStatusCallback: HandleConnectionStatusChanged,
-            autoReconnect: true // 启用自动重连
+            $"TcpCamera-{host}-{port}",
+            _host,
+            _port,
+            HandleDataReceived,
+            HandleConnectionStatusChanged,
+            true // 启用自动重连
         );
 
         Log.Information("TCP相机服务已创建，将使用 TcpClientService 连接到 {Host}:{Port}", _host, _port);
@@ -50,14 +50,21 @@ internal class TcpCameraService : ICameraService
 
     public bool IsConnected { get; private set; }
 
-    public IObservable<PackageInfo> PackageStream => _packageSubject.AsObservable();
+    public IObservable<PackageInfo> PackageStream
+    {
+        get => _packageSubject.AsObservable();
+    }
 
-    public IObservable<BitmapSource> ImageStream =>
-        _realtimeImageSubject.AsObservable(); // 保留，但当前未使用
+    public IObservable<BitmapSource> ImageStream
+    {
+        get => _realtimeImageSubject.AsObservable(); // 保留，但当前未使用
+    }
 
     // 实现 ImageStreamWithId，返回空流
-    public IObservable<(BitmapSource Image, string CameraId)> ImageStreamWithId =>
-        Observable.Empty<(BitmapSource Image, string CameraId)>();
+    public IObservable<(BitmapSource Image, string CameraId)> ImageStreamWithId
+    {
+        get => Observable.Empty<(BitmapSource Image, string CameraId)>();
+    }
 
     public event Action<string, bool>? ConnectionChanged;
 
@@ -68,20 +75,6 @@ internal class TcpCameraService : ICameraService
         _packageSubject.Dispose();
         _realtimeImageSubject.Dispose();
         Log.Debug("TCP相机服务 (TcpCameraService) Dispose 完成");
-    }
-
-    public IEnumerable<DeviceCameraInfo> GetCameraInfos()
-    {
-        return
-        [
-            new DeviceCameraInfo
-            {
-                SerialNumber = $"TCP_{_host}_{_port}", // 使用成员变量
-                Model = "TCP Camera (via TcpClientService)", // 更新模型名称
-                IpAddress = _host,
-                MacAddress = "N/A"
-            }
-        ];
     }
 
     public bool Start()
@@ -117,6 +110,39 @@ internal class TcpCameraService : ICameraService
             Log.Error(ex, "停止 TCP相机服务时发生错误");
             return false;
         }
+    }
+
+    // 实现 GetAvailableCameras，返回占位符
+    public IEnumerable<CameraBasicInfo> GetAvailableCameras()
+    {
+        // TCP service might not represent a specific camera model
+        // Return a placeholder if connected
+        if (IsConnected)
+        {
+            return new List<CameraBasicInfo>
+            {
+                new()
+                {
+                    Id = $"TCP_{_host}_{_port}",
+                    Name = "TCP 数据源"
+                }
+            };
+        }
+        return [];
+    }
+
+    public IEnumerable<DeviceCameraInfo> GetCameraInfos()
+    {
+        return
+        [
+            new DeviceCameraInfo
+            {
+                SerialNumber = $"TCP_{_host}_{_port}", // 使用成员变量
+                Model = "TCP Camera (via TcpClientService)", // 更新模型名称
+                IpAddress = _host,
+                MacAddress = "N/A"
+            }
+        ];
     }
 
     private void HandleConnectionStatusChanged(bool isConnected)
@@ -385,20 +411,5 @@ internal class TcpCameraService : ICameraService
         {
             Log.Error(ex, "处理单个包裹数据时发生错误: {Data}", packetData);
         }
-    }
-
-    // 实现 GetAvailableCameras，返回占位符
-    public IEnumerable<CameraBasicInfo> GetAvailableCameras()
-    {
-        // TCP service might not represent a specific camera model
-        // Return a placeholder if connected
-        if (IsConnected)
-        {
-            return new List<CameraBasicInfo>
-            {
-                new() { Id = $"TCP_{_host}_{_port}", Name = "TCP 数据源" }
-            };
-        }
-        return [];
     }
 }

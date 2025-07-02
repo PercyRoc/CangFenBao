@@ -44,7 +44,7 @@ public class SegmentCodeRules : BindableBase
 
         // 找到所有匹配一段码的规则
         var matchedFirstSegmentRules = Rules.Where(rule =>
-            !string.IsNullOrWhiteSpace(rule.FirstSegment) && 
+            !string.IsNullOrWhiteSpace(rule.FirstSegment) &&
             rule.FirstSegment.Split(',', StringSplitOptions.RemoveEmptyEntries)
                 .Select(static s => s.Trim())
                 .Any(part => firstSegmentParts.Contains(part))).ToList();
@@ -75,7 +75,7 @@ public class SegmentCodeRules : BindableBase
                     if (segments.Length < 1) continue;
                     // 先尝试匹配第一部分 (如C01-N01-00中的C01)
                     var matchedRule = Rules.FirstOrDefault(rule =>
-                        !string.IsNullOrWhiteSpace(rule.SecondSegment) && 
+                        !string.IsNullOrWhiteSpace(rule.SecondSegment) &&
                         rule.SecondSegment.Split(',', StringSplitOptions.RemoveEmptyEntries)
                             .Select(static s => s.Trim())
                             .Contains(segments[0]));
@@ -92,7 +92,7 @@ public class SegmentCodeRules : BindableBase
 
                     {
                         matchedRule = Rules.FirstOrDefault(rule =>
-                            !string.IsNullOrWhiteSpace(rule.SecondSegment) && 
+                            !string.IsNullOrWhiteSpace(rule.SecondSegment) &&
                             rule.SecondSegment.Split(',', StringSplitOptions.RemoveEmptyEntries)
                                 .Select(static s => s.Trim())
                                 .Contains(segments[1]));
@@ -109,7 +109,7 @@ public class SegmentCodeRules : BindableBase
                 {
                     // 如果不包含横杠，直接匹配
                     var matchedRule = Rules.FirstOrDefault(rule =>
-                        !string.IsNullOrWhiteSpace(rule.SecondSegment) && 
+                        !string.IsNullOrWhiteSpace(rule.SecondSegment) &&
                         rule.SecondSegment.Split(',', StringSplitOptions.RemoveEmptyEntries)
                             .Select(static s => s.Trim())
                             .Contains(part));
@@ -147,7 +147,7 @@ public class SegmentCodeRules : BindableBase
                 if (segments.Length < 1) continue;
                 // 先尝试使用第一部分在匹配了一段码的规则中查找
                 var perfectMatch = matchedFirstSegmentRules.FirstOrDefault(rule =>
-                    !string.IsNullOrWhiteSpace(rule.SecondSegment) && 
+                    !string.IsNullOrWhiteSpace(rule.SecondSegment) &&
                     rule.SecondSegment.Split(',', StringSplitOptions.RemoveEmptyEntries)
                         .Select(static s => s.Trim())
                         .Contains(segments[0]));
@@ -164,7 +164,7 @@ public class SegmentCodeRules : BindableBase
 
                 {
                     perfectMatch = matchedFirstSegmentRules.FirstOrDefault(rule =>
-                        !string.IsNullOrWhiteSpace(rule.SecondSegment) && 
+                        !string.IsNullOrWhiteSpace(rule.SecondSegment) &&
                         rule.SecondSegment.Split(',', StringSplitOptions.RemoveEmptyEntries)
                             .Select(static s => s.Trim())
                             .Contains(segments[1]));
@@ -181,7 +181,7 @@ public class SegmentCodeRules : BindableBase
             {
                 // 如果不包含横杠，在匹配了一段码的规则中查找完全匹配的规则
                 var perfectMatch = matchedFirstSegmentRules.FirstOrDefault(rule =>
-                    !string.IsNullOrWhiteSpace(rule.SecondSegment) && 
+                    !string.IsNullOrWhiteSpace(rule.SecondSegment) &&
                     rule.SecondSegment.Split(',', StringSplitOptions.RemoveEmptyEntries)
                         .Select(static s => s.Trim())
                         .Contains(part));

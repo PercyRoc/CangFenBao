@@ -5,8 +5,11 @@ using Common.Models.Settings.ChuteRules;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using Microsoft.Win32;
-using NPOI.SS.UserModel; // NPOI Core Interface
-using NPOI.XSSF.UserModel; // NPOI implementation for .xlsx
+using NPOI.SS.UserModel;
+using NPOI.XSSF.UserModel;
+// NPOI Core Interface
+
+// NPOI implementation for .xlsx
 // For CellRangeAddress if needed, though not explicitly used here for styling range
 
 // For LINQ validation message access
@@ -99,7 +102,7 @@ internal class ChuteSettingsViewModel : BindableBase
                     string.IsNullOrWhiteSpace(thirdSegment))
                     continue;
 
-                if (!int.TryParse(chuteStr, out int chuteValue))
+                if (!int.TryParse(chuteStr, out var chuteValue))
                 {
                     _notificationService.ShowWarningWithToken($"第{rowIndex + 1}行: 格口号 '{chuteStr}' 必须是有效的数字。", NotificationToken);
                     return;
@@ -135,12 +138,12 @@ internal class ChuteSettingsViewModel : BindableBase
         }
         catch (Exception ex)
         {
-             _notificationService.ShowWarningWithToken($"Excel导入失败: {ex.GetType().Name} - {ex.Message}", NotificationToken);
+            _notificationService.ShowWarningWithToken($"Excel导入失败: {ex.GetType().Name} - {ex.Message}", NotificationToken);
             // Consider logging the full exception ex here for debugging
         }
     }
 
-     private void ExecuteExportExcel()
+    private void ExecuteExportExcel()
     {
         var dialog = new SaveFileDialog
         {
@@ -192,10 +195,18 @@ internal class ChuteSettingsViewModel : BindableBase
                 var rule = Configuration.Rules[i];
                 var dataRow = worksheet.CreateRow(i + 1); // Start data from second row (index 1)
 
-                var cell0 = dataRow.CreateCell(0); cell0.SetCellValue(rule.Chute); cell0.CellStyle = dataStyle;
-                var cell1 = dataRow.CreateCell(1); cell1.SetCellValue(rule.FirstSegment); cell1.CellStyle = dataStyle;
-                var cell2 = dataRow.CreateCell(2); cell2.SetCellValue(rule.SecondSegment); cell2.CellStyle = dataStyle;
-                var cell3 = dataRow.CreateCell(3); cell3.SetCellValue(rule.ThirdSegment); cell3.CellStyle = dataStyle;
+                var cell0 = dataRow.CreateCell(0);
+                cell0.SetCellValue(rule.Chute);
+                cell0.CellStyle = dataStyle;
+                var cell1 = dataRow.CreateCell(1);
+                cell1.SetCellValue(rule.FirstSegment);
+                cell1.CellStyle = dataStyle;
+                var cell2 = dataRow.CreateCell(2);
+                cell2.SetCellValue(rule.SecondSegment);
+                cell2.CellStyle = dataStyle;
+                var cell3 = dataRow.CreateCell(3);
+                cell3.SetCellValue(rule.ThirdSegment);
+                cell3.CellStyle = dataStyle;
             }
 
             // --- Auto Adjust Column Widths ---
@@ -224,7 +235,7 @@ internal class ChuteSettingsViewModel : BindableBase
         var validationResults = new List<ValidationResult>();
         if (!Validator.TryValidateObject(Configuration, validationContext, validationResults, true))
         {
-             _notificationService.ShowWarningWithToken(validationResults.FirstOrDefault()?.ErrorMessage ?? "配置验证失败", NotificationToken);
+            _notificationService.ShowWarningWithToken(validationResults.FirstOrDefault()?.ErrorMessage ?? "配置验证失败", NotificationToken);
             return;
         }
 
@@ -240,7 +251,7 @@ internal class ChuteSettingsViewModel : BindableBase
         }
 
         _settingsService.SaveSettings(Configuration);
-         _notificationService.ShowSuccessWithToken("格口规则已保存", NotificationToken); // Add save confirmation
+        _notificationService.ShowSuccessWithToken("格口规则已保存", NotificationToken); // Add save confirmation
     }
 
     private void LoadSettings()

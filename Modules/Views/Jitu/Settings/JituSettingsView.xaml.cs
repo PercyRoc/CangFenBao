@@ -1,13 +1,12 @@
-namespace ShanghaiModuleBelt.Views.Jitu.Settings
+namespace ShanghaiModuleBelt.Views.Jitu.Settings;
+
+/// <summary>
+///     JituSettingsView.xaml 的交互逻辑
+/// </summary>
+public partial class JituSettingsView
 {
-    /// <summary>
-    /// JituSettingsView.xaml 的交互逻辑
-    /// </summary>
-    public partial class JituSettingsView
+    public JituSettingsView()
     {
-        public JituSettingsView()
-        {
-            InitializeComponent();
-        }
+        InitializeComponent();
     }
 }

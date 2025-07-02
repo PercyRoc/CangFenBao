@@ -338,9 +338,9 @@
                         </ItemsControl>
 
                         <!-- 格口统计按钮 -->
-                        <StackPanel Grid.Row="2" 
-                                    Orientation="Horizontal" 
-                                    HorizontalAlignment="Center" 
+                        <StackPanel Grid.Row="2"
+                                    Orientation="Horizontal"
+                                    HorizontalAlignment="Center"
                                     Margin="0,16,0,0">
                             <ui:Button Command="{Binding ShowChuteStatisticsCommand}"
                                        Appearance="Primary"
@@ -356,7 +356,7 @@
             <!-- 右侧面板 -->
             <Grid Grid.Row="0" Grid.Column="1" Margin="16,0,0,0">
                 <!-- 历史包裹信息 -->
-                <Border  Margin="16"
+                <Border Margin="16"
                         Style="{StaticResource CardStyle}">
                     <Grid Margin="16">
                         <Grid.RowDefinitions>

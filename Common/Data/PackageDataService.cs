@@ -92,12 +92,12 @@ public interface IPackageDataService
 /// </summary>
 internal class PackageDataService : IPackageDataService
 {
+    private readonly string _connectionString;
     private readonly string _dbPath;
+    private readonly SemaphoreSlim _initializationLock = new(1, 1);
     private readonly DbContextOptions<PackageDbContext> _options;
     private readonly ConcurrentDictionary<string, bool> _tableExistsCache = new();
-    private readonly string _connectionString;
-    private bool _isInitialized = false;
-    private readonly SemaphoreSlim _initializationLock = new(1, 1);
+    private bool _isInitialized;
 
     /// <summary>
     ///     构造函数（轻量级，不执行耗时操作）
@@ -113,45 +113,6 @@ internal class PackageDataService : IPackageDataService
         if (!Directory.Exists(dbDirectory))
         {
             Directory.CreateDirectory(dbDirectory!);
-        }
-    }
-
-    /// <summary>
-    ///     异步初始化数据库（线程安全）
-    /// </summary>
-    private async Task InitializeAsync()
-    {
-        await _initializationLock.WaitAsync();
-        try
-        {
-            if (_isInitialized) return;
-
-            Log.Information("正在异步初始化包裹数据库...");
-
-            // 创建当月和下月的表
-            var currentMonth = DateTime.Today;
-            var nextMonth = currentMonth.AddMonths(1);
-
-            await EnsureMonthlyTableExists(currentMonth);
-            await EnsureMonthlyTableExists(nextMonth);
-
-            // 检查并修复所有现有表的结构
-            await FixAllTablesStructureAsync();
-
-            // 清理过期的表（保留近6个月的数据）
-            await CleanupOldTables(6);
-
-            _isInitialized = true;
-            Log.Information("包裹数据库异步初始化完成");
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "异步初始化包裹数据库时发生错误");
-            throw;
-        }
-        finally
-        {
-            _initializationLock.Release();
         }
     }
 
@@ -240,13 +201,13 @@ internal class PackageDataService : IPackageDataService
             insertCommand.Parameters.Add(
                 new SqliteParameter("@PalletName", record.PalletName as object ?? DBNull.Value));
             insertCommand.Parameters.Add(new SqliteParameter("@PalletWeight",
-                 record.PalletWeight.HasValue ? record.PalletWeight.Value : DBNull.Value));
+                record.PalletWeight.HasValue ? record.PalletWeight.Value : DBNull.Value));
             insertCommand.Parameters.Add(new SqliteParameter("@PalletLength",
-                 record.PalletLength.HasValue ? record.PalletLength.Value : DBNull.Value));
+                record.PalletLength.HasValue ? record.PalletLength.Value : DBNull.Value));
             insertCommand.Parameters.Add(new SqliteParameter("@PalletWidth",
-                 record.PalletWidth.HasValue ? record.PalletWidth.Value : DBNull.Value));
+                record.PalletWidth.HasValue ? record.PalletWidth.Value : DBNull.Value));
             insertCommand.Parameters.Add(new SqliteParameter("@PalletHeight",
-                 record.PalletHeight.HasValue ? record.PalletHeight.Value : DBNull.Value));
+                record.PalletHeight.HasValue ? record.PalletHeight.Value : DBNull.Value));
 
             await insertCommand.ExecuteNonQueryAsync();
 
@@ -316,42 +277,6 @@ internal class PackageDataService : IPackageDataService
         }
     }
 
-    /// <summary>
-    ///     从指定表中获取包裹记录
-    /// </summary>
-    private async Task<PackageRecord?> GetPackageRecordFromTableAsync(string tableName, string barcode)
-    {
-        try
-        {
-            // 检查表是否存在
-            if (!await TableExistsAsync(tableName))
-            {
-                return null;
-            }
-
-            await using var dbContext = CreateDbContext();
-
-            // 使用原始SQL查询
-            var sql = $"SELECT * FROM {tableName} WHERE Barcode = @barcode";
-            try
-            {
-                return await dbContext.Set<PackageRecord>()
-                    .FromSqlRaw(sql, new SqliteParameter("@barcode", barcode))
-                    .FirstOrDefaultAsync();
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "查询表 {TableName} 中的记录时出错", tableName);
-                return null;
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "从表 {TableName} 获取条码 {Barcode} 的记录时发生错误", tableName, barcode);
-            return null;
-        }
-    }
-
     /// <inheritdoc />
     public async Task<List<PackageRecord>> GetPackagesInTimeRangeAsync(DateTime startTime, DateTime endTime)
     {
@@ -393,14 +318,14 @@ internal class PackageDataService : IPackageDataService
             }
 
             // 构建一个巨大的 UNION ALL 查询语句，将多次I/O合并为单次I/O
-            var sqlBuilder = new System.Text.StringBuilder();
+            var sqlBuilder = new StringBuilder();
             for (var i = 0; i < existingTableNames.Count; i++)
             {
                 if (i > 0)
                 {
                     sqlBuilder.AppendLine("UNION ALL");
                 }
-                
+
                 // 在每个子查询中就进行时间过滤，减少数据传输量
                 sqlBuilder.AppendLine($@"
                     SELECT Id, PackageIndex, Barcode, SegmentCode, Weight, ChuteNumber, Status, StatusDisplay,
@@ -482,7 +407,10 @@ internal class PackageDataService : IPackageDataService
             }
 
             // 构建WHERE条件
-            var whereClauses = new List<string> { "CreateTime >= @startTime AND CreateTime <= @endTime" };
+            var whereClauses = new List<string>
+            {
+                "CreateTime >= @startTime AND CreateTime <= @endTime"
+            };
             if (!string.IsNullOrWhiteSpace(queryParams.Barcode))
             {
                 whereClauses.Add("Barcode LIKE @barcode");
@@ -506,7 +434,7 @@ internal class PackageDataService : IPackageDataService
                 {
                     sqlBuilder.AppendLine("UNION ALL");
                 }
-                
+
                 // 在每个子查询中应用所有WHERE条件，让数据库引擎进行优化
                 sqlBuilder.AppendLine($@"
                     SELECT Id, PackageIndex, Barcode, SegmentCode, Weight, ChuteNumber, Status, StatusDisplay,
@@ -524,11 +452,11 @@ internal class PackageDataService : IPackageDataService
             await connection.OpenAsync();
 
             await using var command = new SqliteCommand(sqlBuilder.ToString(), connection);
-            
+
             // 设置参数
             command.Parameters.AddWithValue("@startTime", queryParams.StartTime.ToString("yyyy-MM-dd HH:mm:ss"));
             command.Parameters.AddWithValue("@endTime", queryParams.EndTime.ToString("yyyy-MM-dd HH:mm:ss"));
-            
+
             if (!string.IsNullOrWhiteSpace(queryParams.Barcode))
             {
                 command.Parameters.AddWithValue("@barcode", $"%{queryParams.Barcode}%");
@@ -551,14 +479,14 @@ internal class PackageDataService : IPackageDataService
                 allResults.Add(record);
             }
 
-            Log.Information("高效查询完成，从 {TableCount} 个分表中获取了 {RecordCount} 条记录", 
+            Log.Information("高效查询完成，从 {TableCount} 个分表中获取了 {RecordCount} 条记录",
                 existingTableNames.Count, allResults.Count);
             return allResults;
         }
         catch (Exception ex)
         {
             Log.Error(ex, "高效查询包裹失败：{StartTime} - {EndTime}",
-                queryParams.StartTime.ToString("yyyy-MM-dd HH:mm:ss"), 
+                queryParams.StartTime.ToString("yyyy-MM-dd HH:mm:ss"),
                 queryParams.EndTime.ToString("yyyy-MM-dd HH:mm:ss"));
             return []; // 发生错误时返回空列表
         }
@@ -758,6 +686,81 @@ internal class PackageDataService : IPackageDataService
     }
 
     /// <summary>
+    ///     异步初始化数据库（线程安全）
+    /// </summary>
+    private async Task InitializeAsync()
+    {
+        await _initializationLock.WaitAsync();
+        try
+        {
+            if (_isInitialized) return;
+
+            Log.Information("正在异步初始化包裹数据库...");
+
+            // 创建当月和下月的表
+            var currentMonth = DateTime.Today;
+            var nextMonth = currentMonth.AddMonths(1);
+
+            await EnsureMonthlyTableExists(currentMonth);
+            await EnsureMonthlyTableExists(nextMonth);
+
+            // 检查并修复所有现有表的结构
+            await FixAllTablesStructureAsync();
+
+            // 清理过期的表（保留近6个月的数据）
+            await CleanupOldTables(6);
+
+            _isInitialized = true;
+            Log.Information("包裹数据库异步初始化完成");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "异步初始化包裹数据库时发生错误");
+            throw;
+        }
+        finally
+        {
+            _initializationLock.Release();
+        }
+    }
+
+    /// <summary>
+    ///     从指定表中获取包裹记录
+    /// </summary>
+    private async Task<PackageRecord?> GetPackageRecordFromTableAsync(string tableName, string barcode)
+    {
+        try
+        {
+            // 检查表是否存在
+            if (!await TableExistsAsync(tableName))
+            {
+                return null;
+            }
+
+            await using var dbContext = CreateDbContext();
+
+            // 使用原始SQL查询
+            var sql = $"SELECT * FROM {tableName} WHERE Barcode = @barcode";
+            try
+            {
+                return await dbContext.Set<PackageRecord>()
+                    .FromSqlRaw(sql, new SqliteParameter("@barcode", barcode))
+                    .FirstOrDefaultAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "查询表 {TableName} 中的记录时出错", tableName);
+                return null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "从表 {TableName} 获取条码 {Barcode} 的记录时发生错误", tableName, barcode);
+            return null;
+        }
+    }
+
+    /// <summary>
     ///     尝试在指定月份表中更新包裹状态
     /// </summary>
     private async Task<bool> TryUpdatePackageStatusInTableAsync(string barcode, PackageStatus status,
@@ -855,7 +858,6 @@ internal class PackageDataService : IPackageDataService
     }
 
 
-
     /// <summary>
     ///     检查并修复所有现有表的结构
     /// </summary>
@@ -865,7 +867,7 @@ internal class PackageDataService : IPackageDataService
         {
             Log.Information("正在检查所有表结构...");
             var tableNames = await GetAllPackageTableNamesAsync();
-            
+
             foreach (var tableName in tableNames)
             {
                 if (TryParseDateFromTableName(tableName, out var tableDate))
@@ -874,7 +876,7 @@ internal class PackageDataService : IPackageDataService
                     await FixTableStructureAsync(tableDate);
                 }
             }
-            
+
             Log.Information("所有表结构检查完成");
         }
         catch (Exception ex)
@@ -986,7 +988,7 @@ internal class PackageDataService : IPackageDataService
 
             // 创建联合索引
             var createIndexSql = $"""
-                                  
+
                                                   CREATE INDEX IX_{tableName}_CreateTime_Barcode 
                                                   ON {tableName}(CreateTime, Barcode)
                                   """;
@@ -1054,7 +1056,7 @@ internal class PackageDataService : IPackageDataService
             var checkTableSql = $"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='{tableName}'";
             var connection = dbContext.Database.GetDbConnection();
             await connection.OpenAsync();
-            
+
             bool tableExists;
             // 使用单独的命令检查表是否存在
             await using (var checkTableCommand = connection.CreateCommand())
@@ -1075,7 +1077,7 @@ internal class PackageDataService : IPackageDataService
             // 获取表的列信息
             var columns = new List<string>();
             var checkColumnSql = $"PRAGMA table_info({tableName})";
-            
+
             // 使用单独的命令获取列信息
             await using (var checkColumnCommand = connection.CreateCommand())
             {
@@ -1090,31 +1092,73 @@ internal class PackageDataService : IPackageDataService
             // 定义所有必需的列
             var requiredColumns = new Dictionary<string, string>
             {
-                { "Id", "INTEGER PRIMARY KEY AUTOINCREMENT" },
-                { "PackageIndex", "INTEGER NOT NULL" },
-                { "Barcode", "TEXT(50) NOT NULL" },
-                { "SegmentCode", "TEXT(50)" },
-                { "Weight", "REAL" },
-                { "ChuteNumber", "INTEGER" },
-                { "Status", "INTEGER" },
-                { "StatusDisplay", "TEXT(50)" },
-                { "CreateTime", "TEXT" },
-                { "Length", "REAL" },
-                { "Width", "REAL" },
-                { "Height", "REAL" },
-                { "Volume", "REAL" },
-                { "Information", "TEXT(500)" },
-                { "ErrorMessage", "TEXT(500)" },
-                { "ImagePath", "TEXT(255)" },
-                { "PalletName", "TEXT(50)" },
-                { "PalletWeight", "REAL" },
-                { "PalletLength", "REAL" },
-                { "PalletWidth", "REAL" },
-                { "PalletHeight", "REAL" }
+                {
+                    "Id", "INTEGER PRIMARY KEY AUTOINCREMENT"
+                },
+                {
+                    "PackageIndex", "INTEGER NOT NULL"
+                },
+                {
+                    "Barcode", "TEXT(50) NOT NULL"
+                },
+                {
+                    "SegmentCode", "TEXT(50)"
+                },
+                {
+                    "Weight", "REAL"
+                },
+                {
+                    "ChuteNumber", "INTEGER"
+                },
+                {
+                    "Status", "INTEGER"
+                },
+                {
+                    "StatusDisplay", "TEXT(50)"
+                },
+                {
+                    "CreateTime", "TEXT"
+                },
+                {
+                    "Length", "REAL"
+                },
+                {
+                    "Width", "REAL"
+                },
+                {
+                    "Height", "REAL"
+                },
+                {
+                    "Volume", "REAL"
+                },
+                {
+                    "Information", "TEXT(500)"
+                },
+                {
+                    "ErrorMessage", "TEXT(500)"
+                },
+                {
+                    "ImagePath", "TEXT(255)"
+                },
+                {
+                    "PalletName", "TEXT(50)"
+                },
+                {
+                    "PalletWeight", "REAL"
+                },
+                {
+                    "PalletLength", "REAL"
+                },
+                {
+                    "PalletWidth", "REAL"
+                },
+                {
+                    "PalletHeight", "REAL"
+                }
             };
 
             // 检查并添加缺失的列
-            bool hasColumnChanges = false;
+            var hasColumnChanges = false;
             foreach (var column in requiredColumns)
             {
                 if (!columns.Contains(column.Key))
@@ -1131,7 +1175,7 @@ internal class PackageDataService : IPackageDataService
             {
                 Log.Information("表 {TableName} 包含已废弃的ChuteName列，将进行结构重建", tableName);
                 hasColumnChanges = true;
-                
+
                 // 由于SQLite不支持直接删除列，我们需要创建一个新表并迁移数据
                 var tempTableName = $"{tableName}_temp";
 
@@ -1185,7 +1229,7 @@ internal class PackageDataService : IPackageDataService
             // 创建索引（如果不存在）
             bool indexExists;
             var checkIndexSql = $"SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='IX_{tableName}_CreateTime_Barcode'";
-            
+
             // 使用单独的命令检查索引是否存在
             await using (var checkIndexCommand = connection.CreateCommand())
             {
@@ -1212,7 +1256,7 @@ internal class PackageDataService : IPackageDataService
                 await dbContext.Database.ExecuteSqlRawAsync(createIndexSql);
                 Log.Information("已创建索引：IX_{TableName}_CreateTime_Barcode", tableName);
             }
-            
+
             if (hasColumnChanges)
             {
                 Log.Information("表 {TableName} 的结构更新完成", tableName);
@@ -1280,7 +1324,7 @@ internal class PackageDataService : IPackageDataService
     private static PackageRecord MapReaderToPackageRecord(SqliteDataReader reader)
     {
         var record = new PackageRecord();
-        string currentBarcode = "<N/A>"; // 用于错误日志记录
+        var currentBarcode = "<N/A>"; // 用于错误日志记录
         try
         {
             // 先获取 Barcode 用于可能的错误日志
@@ -1307,7 +1351,7 @@ internal class PackageDataService : IPackageDataService
                 // 尝试多种可能的格式进行解析，增加健壮性
                 if (DateTime.TryParse(dateString, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var parsedDate) ||
                     DateTime.TryParseExact(dateString, "yyyy-MM-dd HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out parsedDate) || // 带7位小数秒
-                    DateTime.TryParseExact(dateString, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out parsedDate))     // 不带小数秒
+                    DateTime.TryParseExact(dateString, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out parsedDate)) // 不带小数秒
                 {
                     record.CreateTime = parsedDate;
                 }
@@ -1355,7 +1399,7 @@ internal class PackageDataService : IPackageDataService
         return reader.GetString(ordinal); // 假设不为 null
     }
 
-     private static double GetDouble(SqliteDataReader reader, string columnName)
+    private static double GetDouble(SqliteDataReader reader, string columnName)
     {
         var ordinal = reader.GetOrdinal(columnName);
         // 根据实际情况决定，如果可能为 NULL，则使用 GetNullableDouble
@@ -1368,7 +1412,7 @@ internal class PackageDataService : IPackageDataService
         return reader.IsDBNull(ordinal) ? null : reader.GetDouble(ordinal);
     }
 
-     private static int? GetNullableInt32(SqliteDataReader reader, string columnName)
+    private static int? GetNullableInt32(SqliteDataReader reader, string columnName)
     {
         var ordinal = reader.GetOrdinal(columnName);
         return reader.IsDBNull(ordinal) ? null : reader.GetInt32(ordinal);

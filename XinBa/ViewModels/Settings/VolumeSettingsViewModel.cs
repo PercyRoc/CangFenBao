@@ -7,8 +7,8 @@ namespace XinBa.ViewModels.Settings;
 
 public class VolumeSettingsViewModel : BindableBase
 {
-    private readonly ISettingsService _settingsService;
     private readonly INotificationService _notificationService;
+    private readonly ISettingsService _settingsService;
 
     private VolumeCameraSettings _settings = new(); // 初始化确保非空
 
@@ -39,11 +39,11 @@ public class VolumeSettingsViewModel : BindableBase
             Log.Information("VolumeCameraSettings loaded successfully.");
         }
         catch (Exception ex)
-        {   
+        {
             Log.Error(ex, "Failed to load VolumeCameraSettings.");
             _notificationService.ShowError("Failed to load volume camera settings. Defaults will be used.");
             // 加载失败时使用默认构造函数创建的实例
-            Settings = new VolumeCameraSettings(); 
+            Settings = new VolumeCameraSettings();
         }
     }
 
@@ -52,7 +52,7 @@ public class VolumeSettingsViewModel : BindableBase
         try
         {
             // 直接保存 Settings 属性引用的实例
-            _settingsService.SaveSettings(Settings); 
+            _settingsService.SaveSettings(Settings);
             Log.Information("VolumeCameraSettings saved successfully.");
             _notificationService.ShowSuccess("Volume camera settings saved successfully.");
         }
@@ -62,4 +62,4 @@ public class VolumeSettingsViewModel : BindableBase
             _notificationService.ShowError("Failed to save volume camera settings.");
         }
     }
-} 
+}

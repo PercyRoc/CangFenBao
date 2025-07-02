@@ -18,7 +18,7 @@ public class RookieApiSettingsViewModel : BindableBase
     public string BcrName
     {
         get => _settings.BcrName;
-        set 
+        set
         {
             if (_settings.BcrName != value)
             {
@@ -31,7 +31,7 @@ public class RookieApiSettingsViewModel : BindableBase
     public string BcrCode
     {
         get => _settings.BcrCode;
-        set 
+        set
         {
             if (_settings.BcrCode != value)
             {
@@ -44,7 +44,7 @@ public class RookieApiSettingsViewModel : BindableBase
     public string ApiBaseUrl
     {
         get => _settings.ApiBaseUrl;
-        set 
+        set
         {
             if (_settings.ApiBaseUrl != value)
             {

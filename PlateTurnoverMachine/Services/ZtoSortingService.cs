@@ -10,7 +10,7 @@ using Serilog;
 namespace DongtaiFlippingBoardMachine.Services;
 
 /// <summary>
-/// 中通分拣服务实现
+///     中通分拣服务实现
 /// </summary>
 public class ZtoSortingService : IZtoSortingService, IDisposable
 {
@@ -19,7 +19,7 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
     private bool _disposed;
 
     /// <summary>
-    /// 中通分拣服务构造函数
+    ///     中通分拣服务构造函数
     /// </summary>
     /// <param name="settingsService">设置服务</param>
     public ZtoSortingService(ISettingsService settingsService)
@@ -29,12 +29,21 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
         {
             Timeout = TimeSpan.FromSeconds(30)
         };
-        
+
         Log.Information("中通分拣服务已初始化");
     }
 
     /// <summary>
-    /// 配置服务参数
+    ///     释放资源
+    /// </summary>
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    ///     配置服务参数
     /// </summary>
     /// <param name="apiUrl">API地址</param>
     /// <param name="companyId">公司ID</param>
@@ -46,12 +55,12 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
         settings.ZtoCompanyId = companyId;
         settings.ZtoSecretKey = secretKey;
         _settingsService.SaveSettings(settings);
-        
+
         Log.Information("已更新中通分拣服务配置并保存到设置中");
     }
 
     /// <summary>
-    /// 上报流水线开停状态
+    ///     上报流水线开停状态
     /// </summary>
     /// <param name="pipeline">分拣线编码</param>
     /// <param name="status">流水线状态: start | stop | synchronization</param>
@@ -83,7 +92,7 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
     }
 
     /// <summary>
-    /// 获取分拣方案
+    ///     获取分拣方案
     /// </summary>
     /// <param name="pipeline">分拣线编码</param>
     /// <returns>分拣方案列表</returns>
@@ -108,7 +117,7 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
     }
 
     /// <summary>
-    /// 获取面单规则
+    ///     获取面单规则
     /// </summary>
     /// <returns>面单规则</returns>
     public async Task<BillRuleResponse> GetBillRuleAsync()
@@ -127,7 +136,7 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
     }
 
     /// <summary>
-    /// 获取分拣信息
+    ///     获取分拣信息
     /// </summary>
     /// <param name="billCode">运单编号</param>
     /// <param name="pipeline">分拣线编码</param>
@@ -161,7 +170,7 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
     }
 
     /// <summary>
-    /// 推送分拣结果
+    ///     推送分拣结果
     /// </summary>
     /// <param name="package">包裹信息</param>
     /// <param name="pipeline">分拣线编码</param>
@@ -195,7 +204,7 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
     }
 
     /// <summary>
-    /// 校验服务器时间
+    ///     校验服务器时间
     /// </summary>
     /// <returns>服务器时间</returns>
     public async Task<TimeInspectionResponse> InspectTimeAsync()
@@ -214,7 +223,7 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
     }
 
     /// <summary>
-    /// 发送请求到中通服务
+    ///     发送请求到中通服务
     /// </summary>
     /// <typeparam name="T">返回类型</typeparam>
     /// <param name="msgType">消息类型</param>
@@ -229,20 +238,20 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
             var apiUrl = settings.ZtoApiUrl;
             var companyId = settings.ZtoCompanyId;
             var secretKey = settings.ZtoSecretKey;
-            
+
             // 构建请求参数
             var requestData = data ?? string.Empty;
             var dataDigest = CalculateMd5(requestData + secretKey);
 
             // 不使用URL编码，直接拼接请求字符串
             var requestBodyStr = $"data={requestData}&data_digest={dataDigest}&msg_type={msgType}&company_id={companyId}";
-            
+
             // 使用@符号标记原始字符串，避免Serilog错误解析大括号
             Log.Debug("发送中通请求 -> URL: {ApiUrl}, MsgType: {MsgType}, Body: {@RequestBody}", apiUrl, msgType, requestBodyStr);
 
             // 创建表单内容
             var content = new StringContent(requestBodyStr, Encoding.UTF8, "application/x-www-form-urlencoded");
-            
+
             var response = await _httpClient.PostAsync(apiUrl, content);
             response.EnsureSuccessStatusCode();
 
@@ -260,7 +269,7 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
     }
 
     /// <summary>
-    /// 计算MD5
+    ///     计算MD5
     /// </summary>
     /// <param name="input">输入字符串</param>
     /// <returns>MD5哈希值</returns>
@@ -279,27 +288,18 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
     }
 
     /// <summary>
-    /// 释放资源
-    /// </summary>
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    /// <summary>
-    /// 释放资源
+    ///     释放资源
     /// </summary>
     /// <param name="disposing">是否正在dispose</param>
     protected virtual void Dispose(bool disposing)
     {
         if (_disposed) return;
-        
+
         if (disposing)
         {
             _httpClient.Dispose();
         }
-        
+
         _disposed = true;
     }
-} 
+}

@@ -1,8 +1,6 @@
 using System.Collections.ObjectModel;
 using Common.Services.Settings;
 using Common.Services.Ui;
-using Prism.Commands;
-using Prism.Mvvm;
 using Serilog;
 using ShanghaiModuleBelt.Models;
 
@@ -35,9 +33,21 @@ public class ModuleConfigViewModel : BindableBase
 
     public ObservableCollection<SiteOption> SiteOptions { get; } =
     [
-        new() { Value = "1001", Display = "1001-上海" },
-        new() { Value = "1001-2", Display = "1001-2上海" },
-        new() { Value = "1002", Display = "1002-深圳" }
+        new()
+        {
+            Value = "1001",
+            Display = "1001-上海"
+        },
+        new()
+        {
+            Value = "1001-2",
+            Display = "1001-2上海"
+        },
+        new()
+        {
+            Value = "1002",
+            Display = "1002-深圳"
+        }
     ];
 
     internal DelegateCommand SaveConfigurationCommand { get; }

@@ -25,8 +25,8 @@ namespace ChongqingYekelai;
 /// </summary>
 internal partial class App
 {
-    private static Mutex? _mutex;
     private const string MutexName = "ChongqingJushuitan_App_Mutex";
+    private static Mutex? _mutex;
 
     /// <summary>
     ///     创建主窗口

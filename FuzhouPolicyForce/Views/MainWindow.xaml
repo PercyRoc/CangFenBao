@@ -434,10 +434,14 @@
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="序号" Binding="{Binding Index}" Width="Auto" MinWidth="60" />
                                 <DataGridTextColumn Header="条码" Binding="{Binding Barcode}" Width="Auto" MinWidth="160" />
-                                <DataGridTextColumn Header="重量" Binding="{Binding WeightDisplay}" Width="Auto" MinWidth="80" />
-                                <DataGridTextColumn Header="尺寸" Binding="{Binding VolumeDisplay}" Width="Auto" MinWidth="120" />
-                                <DataGridTextColumn Header="格口" Binding="{Binding ChuteNumber}" Width="Auto" MinWidth="60" />
-                                <DataGridTextColumn Header="状态" Binding="{Binding StatusDisplay}" Width="*" MinWidth="100" />
+                                <DataGridTextColumn Header="重量" Binding="{Binding WeightDisplay}" Width="Auto"
+                                                    MinWidth="80" />
+                                <DataGridTextColumn Header="尺寸" Binding="{Binding VolumeDisplay}" Width="Auto"
+                                                    MinWidth="120" />
+                                <DataGridTextColumn Header="格口" Binding="{Binding ChuteNumber}" Width="Auto"
+                                                    MinWidth="60" />
+                                <DataGridTextColumn Header="状态" Binding="{Binding StatusDisplay}" Width="*"
+                                                    MinWidth="100" />
                                 <DataGridTextColumn Header="处理时间"
                                                     Binding="{Binding ProcessingTime, StringFormat={}{0:0}ms}"
                                                     Width="Auto" MinWidth="100" />

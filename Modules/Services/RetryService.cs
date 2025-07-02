@@ -16,13 +16,13 @@ namespace ShanghaiModuleBelt.Services;
 
 public class RetryService : IDisposable
 {
+    private const int CleanupDays = 30;
     private readonly ApplicationDbContext _dbContext;
+    private readonly IJituService _jituService;
     private readonly IStoAutoReceiveService _stoService;
     private readonly IYundaUploadWeightService _yundaService;
     private readonly IZtoApiService _ztoService;
-    private readonly IJituService _jituService;
     private bool _disposed;
-    private const int CleanupDays = 30;
 
     public RetryService(
         ApplicationDbContext dbContext,
@@ -36,6 +36,13 @@ public class RetryService : IDisposable
         _yundaService = yundaService;
         _ztoService = ztoService;
         _jituService = jituService;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+
+        _disposed = true;
     }
 
     public async Task AddRetryRecordAsync(string barcode, string company, object requestData, string? errorMessage = null)
@@ -86,7 +93,7 @@ public class RetryService : IDisposable
                 {
                     record.ErrorMessage = null;
 
-                    bool success = false;
+                    var success = false;
                     switch (record.Company)
                     {
                         case "申通":
@@ -161,7 +168,7 @@ public class RetryService : IDisposable
         try
         {
             Log.Information("开始执行清理过期重传记录任务");
-            
+
             var cutoffDate = DateTime.Today.AddDays(-CleanupDays);
             var recordsToDelete = await _dbContext.RetryRecords
                 .Where(r => r.CreateTime < cutoffDate && r.IsRetried)
@@ -182,12 +189,5 @@ public class RetryService : IDisposable
         {
             Log.Error(ex, "执行清理过期记录任务时发生错误");
         }
-    }
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-        
-        _disposed = true;
     }
 }

@@ -1,17 +1,16 @@
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
+using Common.Services.Settings;
 using Newtonsoft.Json;
 using Serilog;
 using ShanghaiModuleBelt.Models.Sto;
 using ShanghaiModuleBelt.Models.Sto.Settings;
-using Common.Services.Settings;
-using System.Web;
 
 namespace ShanghaiModuleBelt.Services.Sto;
 
 /// <summary>
-/// 申通仓客户出库自动揽收接口服务实现
+///     申通仓客户出库自动揽收接口服务实现
 /// </summary>
 public class StoAutoReceiveService(
     HttpClient httpClient,
@@ -19,7 +18,7 @@ public class StoAutoReceiveService(
     : IStoAutoReceiveService
 {
     /// <summary>
-    /// 发送自动揽收请求
+    ///     发送自动揽收请求
     /// </summary>
     /// <param name="request">申通自动揽收请求</param>
     /// <returns>申通自动揽收响应</returns>
@@ -100,8 +99,8 @@ public class StoAutoReceiveService(
     }
 
     /// <summary>
-    /// 计算 data_digest 签名
-    /// 根据申通官方文档：content + secretKey 的 MD5 哈希后进行 Base64 编码
+    ///     计算 data_digest 签名
+    ///     根据申通官方文档：content + secretKey 的 MD5 哈希后进行 Base64 编码
     /// </summary>
     /// <param name="content">业务报文体JSON字符串</param>
     /// <param name="appSecret">AppSecret</param>
@@ -110,14 +109,14 @@ public class StoAutoReceiveService(
     {
         // 按照申通官方文档的签名算法：content + secretKey
         var toSignContent = content + appSecret;
-        
+
         Log.Information("申通签名原始字符串：{SignSource}", toSignContent);
-        
+
         var hashBytes = MD5.HashData(Encoding.UTF8.GetBytes(toSignContent));
         var base64String = Convert.ToBase64String(hashBytes);
-        
+
         Log.Information("申通签名结果：Base64={Base64}", base64String);
-        
+
         return base64String; // 不进行 URL 编码，让 HttpClient 自动处理
     }
-} 
+}

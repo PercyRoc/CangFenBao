@@ -16,4 +16,4 @@ public class DestRequestParams
     // Although doc says required, often this might not be available. Defaulting to "NoRead".
     [JsonPropertyName("itemBarcode")]
     public string ItemBarcode { get; set; } = "NoRead";
-} 
+}

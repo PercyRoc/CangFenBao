@@ -3,19 +3,10 @@ using Serilog;
 
 namespace ZtCloudWarehous.ViewModels.Settings;
 
-public class XiyiguAPiSettingsViewModel: BindableBase
+public class XiyiguAPiSettingsViewModel : BindableBase
 {
     private readonly ISettingsService _settingsService;
     private XiyiguApiSettings _xiyiguApiSettings = new();
-    
-    /// <summary>
-    ///     API设置
-    /// </summary>
-    public XiyiguApiSettings XiyiguApiSettings
-    {
-        get => _xiyiguApiSettings;
-        private set => SetProperty(ref _xiyiguApiSettings, value);
-    }
 
 
     /// <summary>
@@ -31,7 +22,16 @@ public class XiyiguAPiSettingsViewModel: BindableBase
 
         LoadSettings();
     }
-    
+
+    /// <summary>
+    ///     API设置
+    /// </summary>
+    public XiyiguApiSettings XiyiguApiSettings
+    {
+        get => _xiyiguApiSettings;
+        private set => SetProperty(ref _xiyiguApiSettings, value);
+    }
+
     /// <summary>
     ///     保存配置命令
     /// </summary>
@@ -52,7 +52,7 @@ public class XiyiguAPiSettingsViewModel: BindableBase
             Log.Error(ex, "加载API设置时发生错误");
         }
     }
-    
+
     /// <summary>
     ///     执行保存配置
     /// </summary>

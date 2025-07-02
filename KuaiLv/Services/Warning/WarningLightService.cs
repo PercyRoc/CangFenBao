@@ -123,13 +123,13 @@ internal class WarningLightService(
             return;
         }
 
-        bool wasConnected = IsConnected; // Record state before changing
+        var wasConnected = IsConnected; // Record state before changing
 
         // 1. 立即更新状态并清除内部引用，防止新命令使用旧资源
         //    ConnectionChanged 事件会在这里触发
         IsConnected = false;
-        NetworkStream? streamToDispose = _networkStream;
-        TcpClient? clientToDispose = _tcpClient;
+        var streamToDispose = _networkStream;
+        var clientToDispose = _tcpClient;
         _networkStream = null; // Nullify references early
         _tcpClient = null;
 
@@ -276,8 +276,8 @@ internal class WarningLightService(
 
             // 同步释放拥有的资源，以防 DisconnectAsync 未被调用或未完全执行
             // 直接检查实例字段，因为 DisconnectAsync 会将其设为 null
-            NetworkStream? currentStream = _networkStream;
-            TcpClient? currentClient = _tcpClient;
+            var currentStream = _networkStream;
+            var currentClient = _tcpClient;
 
             // 在 Dispose 之前立即将字段设为 null，减少竞争条件窗口
             _networkStream = null;

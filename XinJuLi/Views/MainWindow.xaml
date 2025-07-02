@@ -123,7 +123,7 @@
                     BorderBrush="#40FFFFFF"
                     BorderThickness="0,0,0,1" />
         </Grid>
-    <!-- 主要内容区域 -->
+        <!-- 主要内容区域 -->
         <Grid Grid.Row="1" Background="{StaticResource MainBackground}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="2*" />

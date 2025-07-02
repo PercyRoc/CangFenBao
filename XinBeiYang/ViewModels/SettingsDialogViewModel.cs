@@ -9,10 +9,10 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
 {
     // 保存各个设置页面的ViewModel实例
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
+    private readonly ChineseWeightSettingsViewModel _chineseWeightSettingsViewModel;
     private readonly HostSettingsViewModel _hostSettingsViewModel;
     private readonly INotificationService _notificationService;
-    private readonly ChineseWeightSettingsViewModel _chineseWeightSettingsViewModel;
-    
+
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
         INotificationService notificationService)
@@ -28,11 +28,14 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
     }
-    
+
     public DelegateCommand SaveCommand { get; }
     public DelegateCommand CancelCommand { get; }
 
-    public string Title => "系统设置";
+    public string Title
+    {
+        get => "系统设置";
+    }
 
     public DialogCloseListener RequestClose { get; }
 
@@ -48,6 +51,11 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
 
     public void OnDialogOpened(IDialogParameters parameters)
     {
+    }
+
+    public void Dispose()
+    {
+        GC.SuppressFinalize(this);
     }
 
     private void ExecuteSave()
@@ -72,10 +80,4 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
     {
         RequestClose.Invoke(new DialogResult(ButtonResult.Cancel));
     }
-
-    public void Dispose()
-    {
-        GC.SuppressFinalize(this);
-    }
-    
 }

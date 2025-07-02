@@ -17,7 +17,7 @@
     <ui:ContentDialog.Resources>
         <!-- 空值到可见性转换器 -->
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
-        
+
         <Style x:Key="CalibrationCardStyle" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
@@ -51,17 +51,17 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <ui:SymbolIcon Grid.Column="0" Symbol="Info24" 
+                <ui:SymbolIcon Grid.Column="0" Symbol="Info24"
                                Foreground="{DynamicResource InfoBarForegroundBrush}"
-                               VerticalAlignment="Center" 
+                               VerticalAlignment="Center"
                                Margin="0,0,12,0" />
-                
-                <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" 
+
+                <TextBlock Grid.Column="1" Text="{Binding StatusMessage}"
                            VerticalAlignment="Center"
                            TextWrapping="Wrap"
                            Foreground="{DynamicResource InfoBarForegroundBrush}" />
-                
-                <ui:ToggleSwitch Grid.Column="2" Content="标定模式" 
+
+                <ui:ToggleSwitch Grid.Column="2" Content="标定模式"
                                  IsChecked="{Binding IsCalibrationMode}"
                                  Foreground="{DynamicResource InfoBarForegroundBrush}"
                                  VerticalAlignment="Center" />
@@ -78,11 +78,11 @@
                         <TextBlock Text="光电选择" Style="{StaticResource SectionHeaderStyle}" />
                         <ComboBox ItemsSource="{Binding AvailablePhotoelectrics}"
                                   SelectedItem="{Binding SelectedPhotoelectric}"
-                                  MinWidth="300" 
+                                  MinWidth="300"
                                   HorizontalAlignment="Left" />
-                        <TextBlock Text="请选择要标定的光电设备" 
-                                   FontSize="12" 
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" 
+                        <TextBlock Text="请选择要标定的光电设备"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    Margin="0,8,0,0" />
                     </StackPanel>
                 </Border>
@@ -92,12 +92,12 @@
                     <StackPanel>
                         <TextBlock Text="使用说明" Style="{StaticResource SectionHeaderStyle}" />
                         <StackPanel>
-                            <TextBlock Text="1. 选择要标定的光电设备" FontSize="12" Margin="0,0,0,4"/>
-                            <TextBlock Text="2. 启用标定模式" FontSize="12" Margin="0,0,0,4"/>
-                            <TextBlock Text="3. 让包裹正常通过分拣设备" FontSize="12" Margin="0,0,0,4"/>
-                            <TextBlock Text="4. 系统将自动记录触发和分拣时间" FontSize="12" Margin="0,0,0,4"/>
-                            <TextBlock Text="5. 重复测量多次以获得准确数据" FontSize="12" Margin="0,0,0,4"/>
-                            <TextBlock Text="6. 点击应用推荐设置自动优化参数" FontSize="12"/>
+                            <TextBlock Text="1. 选择要标定的光电设备" FontSize="12" Margin="0,0,0,4" />
+                            <TextBlock Text="2. 启用标定模式" FontSize="12" Margin="0,0,0,4" />
+                            <TextBlock Text="3. 让包裹正常通过分拣设备" FontSize="12" Margin="0,0,0,4" />
+                            <TextBlock Text="4. 系统将自动记录触发和分拣时间" FontSize="12" Margin="0,0,0,4" />
+                            <TextBlock Text="5. 重复测量多次以获得准确数据" FontSize="12" Margin="0,0,0,4" />
+                            <TextBlock Text="6. 点击应用推荐设置自动优化参数" FontSize="12" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
@@ -109,31 +109,36 @@
                         <TextBlock Text="当前测量" Style="{StaticResource SectionHeaderStyle}" />
                         <Grid>
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            
+
                             <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,8,8">
-                                <TextBlock Text="触发时间" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                <TextBlock Text="{Binding TriggerTime, StringFormat='{}{0:HH:mm:ss.fff}'}" FontWeight="Medium"/>
+                                <TextBlock Text="触发时间" FontSize="12"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <TextBlock Text="{Binding TriggerTime, StringFormat='{}{0:HH:mm:ss.fff}'}"
+                                           FontWeight="Medium" />
                             </StackPanel>
-                            
+
                             <StackPanel Grid.Row="0" Grid.Column="1" Margin="8,0,0,8">
-                                <TextBlock Text="分拣时间" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                <TextBlock Text="{Binding SortingTime, StringFormat='{}{0:HH:mm:ss.fff}'}" FontWeight="Medium"/>
+                                <TextBlock Text="分拣时间" FontSize="12"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <TextBlock Text="{Binding SortingTime, StringFormat='{}{0:HH:mm:ss.fff}'}"
+                                           FontWeight="Medium" />
                             </StackPanel>
-                            
+
                             <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Grid.Column="0" Margin="0,8,0,0">
-                                <TextBlock Text="时间差" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                <TextBlock Text="{Binding MeasuredDelay, StringFormat='{}{0:F1} ms'}" 
-                                           FontWeight="Medium" 
+                                <TextBlock Text="时间差" FontSize="12"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <TextBlock Text="{Binding MeasuredDelay, StringFormat='{}{0:F1} ms'}"
+                                           FontWeight="Medium"
                                            FontSize="18"
-                                           Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
+                                           Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
                             </StackPanel>
                         </Grid>
                     </StackPanel>
@@ -144,51 +149,52 @@
                     <StackPanel>
                         <Grid Margin="0,0,0,12">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            
-                            <TextBlock Grid.Column="0" Text="标定历史" Style="{StaticResource SectionHeaderStyle}" Margin="0"/>
-                            
-                            <ui:Button Grid.Column="1" Content="应用推荐设置" 
+
+                            <TextBlock Grid.Column="0" Text="标定历史" Style="{StaticResource SectionHeaderStyle}"
+                                       Margin="0" />
+
+                            <ui:Button Grid.Column="1" Content="应用推荐设置"
                                        Command="{Binding ApplyRecommendedSettingsCommand}"
                                        Icon="Lightbulb24"
                                        Appearance="Secondary" />
                         </Grid>
-                        
+
                         <ListBox ItemsSource="{Binding CalibrationHistory}"
                                  MaxHeight="200"
                                  Background="Transparent"
                                  BorderThickness="0">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Background="{DynamicResource LayerFillColorDefaultBrush}" 
-                                            CornerRadius="4" 
+                                    <Border Background="{DynamicResource LayerFillColorDefaultBrush}"
+                                            CornerRadius="4"
                                             Margin="0,2"
                                             Padding="8">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
-                                            
-                                            <TextBlock Grid.Column="0" 
-                                                       Text="{Binding Timestamp, StringFormat='{}{0:HH:mm:ss}'}" 
-                                                       FontSize="12" 
-                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" 
-                                                       VerticalAlignment="Center"/>
-                                            
-                                            <TextBlock Grid.Column="1" 
-                                                       Text="{Binding PhotoelectricName}" 
-                                                       Margin="8,0" 
-                                                       VerticalAlignment="Center"/>
-                                            
-                                            <TextBlock Grid.Column="2" 
-                                                       Text="{Binding MeasuredDelay, StringFormat='{}{0:F1}ms'}" 
-                                                       FontWeight="Medium" 
-                                                       Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" 
-                                                       VerticalAlignment="Center"/>
+
+                                            <TextBlock Grid.Column="0"
+                                                       Text="{Binding Timestamp, StringFormat='{}{0:HH:mm:ss}'}"
+                                                       FontSize="12"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                       VerticalAlignment="Center" />
+
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding PhotoelectricName}"
+                                                       Margin="8,0"
+                                                       VerticalAlignment="Center" />
+
+                                            <TextBlock Grid.Column="2"
+                                                       Text="{Binding MeasuredDelay, StringFormat='{}{0:F1}ms'}"
+                                                       FontWeight="Medium"
+                                                       Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                       VerticalAlignment="Center" />
                                         </Grid>
                                     </Border>
                                 </DataTemplate>
@@ -215,9 +221,10 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="时间范围下限：" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                    <hc:NumericUpDown Grid.Column="1" Value="{Binding TimeRangeLower}" 
-                                                      Minimum="0" Maximum="10000" 
+                                    <TextBlock Grid.Column="0" Text="时间范围下限：" VerticalAlignment="Center"
+                                               Margin="0,0,8,0" />
+                                    <hc:NumericUpDown Grid.Column="1" Value="{Binding TimeRangeLower}"
+                                                      Minimum="0" Maximum="10000"
                                                       HorizontalAlignment="Stretch" />
                                     <TextBlock Grid.Column="2" Text="ms" VerticalAlignment="Center" Margin="8,0,0,0" />
                                 </Grid>
@@ -228,9 +235,10 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="时间范围上限：" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                    <hc:NumericUpDown Grid.Column="1" Value="{Binding TimeRangeUpper}" 
-                                                      Minimum="0" Maximum="10000" 
+                                    <TextBlock Grid.Column="0" Text="时间范围上限：" VerticalAlignment="Center"
+                                               Margin="0,0,8,0" />
+                                    <hc:NumericUpDown Grid.Column="1" Value="{Binding TimeRangeUpper}"
+                                                      Minimum="0" Maximum="10000"
                                                       HorizontalAlignment="Stretch" />
                                     <TextBlock Grid.Column="2" Text="ms" VerticalAlignment="Center" Margin="8,0,0,0" />
                                 </Grid>
@@ -245,8 +253,8 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="分拣延迟：" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                    <hc:NumericUpDown Grid.Column="1" Value="{Binding SortingDelay}" 
-                                                      Minimum="0" Maximum="5000" 
+                                    <hc:NumericUpDown Grid.Column="1" Value="{Binding SortingDelay}"
+                                                      Minimum="0" Maximum="5000"
                                                       HorizontalAlignment="Stretch" />
                                     <TextBlock Grid.Column="2" Text="ms" VerticalAlignment="Center" Margin="8,0,0,0" />
                                 </Grid>
@@ -258,8 +266,8 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="回正延迟：" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                    <hc:NumericUpDown Grid.Column="1" Value="{Binding ResetDelay}" 
-                                                      Minimum="0" Maximum="5000" 
+                                    <hc:NumericUpDown Grid.Column="1" Value="{Binding ResetDelay}"
+                                                      Minimum="0" Maximum="5000"
                                                       HorizontalAlignment="Stretch" />
                                     <TextBlock Grid.Column="2" Text="ms" VerticalAlignment="Center" Margin="8,0,0,0" />
                                 </Grid>
@@ -272,18 +280,19 @@
         </ScrollViewer>
 
         <!-- 底部按钮 -->
-        <Border Grid.Row="2" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" Padding="0,16,0,0">
+        <Border Grid.Row="2" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                Padding="0,16,0,0">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <ui:Button Content="保存设置" 
+                <ui:Button Content="保存设置"
                            Command="{Binding SaveCommand}"
                            Icon="Save24"
                            Appearance="Primary"
                            Margin="0,0,8,0" />
-                <ui:Button Content="取消" 
+                <ui:Button Content="取消"
                            Command="{Binding CancelCommand}"
                            Icon="Dismiss24"
                            Appearance="Secondary" />
             </StackPanel>
         </Border>
     </Grid>
-</ui:ContentDialog> 
+</ui:ContentDialog>

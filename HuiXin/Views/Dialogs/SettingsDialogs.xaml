@@ -109,8 +109,7 @@
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
 
-                        
-                        
+
                         <ui:NavigationViewItem Content="小车配置"
                                                Tag="CarConfig">
                             <ui:NavigationViewItem.Icon>
@@ -120,7 +119,7 @@
                                 <x:Type Type="settings:CarConfigView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
-                        
+
                         <ui:NavigationViewItem Content="小车分拣序列"
                                                Tag="CarSequence">
                             <ui:NavigationViewItem.Icon>
@@ -130,7 +129,7 @@
                                 <x:Type Type="settings:CarSequenceView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
-                        
+
                         <ui:NavigationViewItem Content="格口设置"
                                                Tag="ChuteSettings">
                             <ui:NavigationViewItem.Icon>
@@ -140,7 +139,7 @@
                                 <x:Type Type="settings:BarcodeChuteSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
-                        
+
                         <ui:NavigationViewItem Content="串口通讯设置"
                                                Tag="SerialPort">
                             <ui:NavigationViewItem.Icon>
@@ -150,7 +149,7 @@
                                 <x:Type Type="settings:SerialPortSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
-                        
+
                         <ui:NavigationViewItem Content="聚水潭设置"
                                                Tag="Chute">
                             <ui:NavigationViewItem.Icon>

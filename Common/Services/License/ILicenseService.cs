@@ -14,4 +14,4 @@ public interface ILicenseService
     ///     获取授权过期时间
     /// </summary>
     Task<DateTime> GetExpirationDateAsync();
-} 
+}

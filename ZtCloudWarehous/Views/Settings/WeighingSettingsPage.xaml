@@ -20,15 +20,15 @@
     <Grid>
         <StackPanel MaxWidth="500" Margin="16" VerticalAlignment="Top">
             <TextBlock Text="称重服务配置"
-                     Style="{DynamicResource SubtitleTextBlockStyle}"
-                     HorizontalAlignment="Center"
-                     Margin="0,0,0,16" />
+                       Style="{DynamicResource SubtitleTextBlockStyle}"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,16" />
 
             <ui:Card>
                 <StackPanel Margin="16">
                     <TextBlock Text="称重服务配置"
-                             Style="{DynamicResource SubtitleTextBlockStyle}"
-                             Margin="0,0,0,16" />
+                               Style="{DynamicResource SubtitleTextBlockStyle}"
+                               Margin="0,0,0,16" />
 
                     <!-- 环境选择 -->
                     <Grid Margin="0,0,0,8">
@@ -38,17 +38,17 @@
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Text="环境选择："
-                                 Grid.Column="0"
-                                 VerticalAlignment="Center"
-                                 HorizontalAlignment="Right"
-                                 Margin="0,0,8,0" />
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
                         <StackPanel Grid.Column="1" Orientation="Horizontal">
                             <RadioButton Content="正式环境"
-                                       IsChecked="{Binding Settings.IsProduction}"
-                                       Margin="0,0,16,0" />
+                                         IsChecked="{Binding Settings.IsProduction}"
+                                         Margin="0,0,16,0" />
                             <RadioButton Content="测试环境"
-                                       IsChecked="{Binding Settings.IsProduction, Converter={StaticResource InverseBooleanConverter}}" />
+                                         IsChecked="{Binding Settings.IsProduction, Converter={StaticResource InverseBooleanConverter}}" />
                         </StackPanel>
                     </Grid>
 
@@ -60,14 +60,14 @@
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Text="接口名称："
-                                 Grid.Column="0"
-                                 VerticalAlignment="Center"
-                                 HorizontalAlignment="Right"
-                                 Margin="0,0,8,0" />
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
                         <ui:TextBox Grid.Column="1"
-                                  Text="{Binding Settings.Api, UpdateSourceTrigger=PropertyChanged}"
-                                  PlaceholderText="请输入接口名称" />
+                                    Text="{Binding Settings.Api, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="请输入接口名称" />
                     </Grid>
 
                     <!-- 公司代码 -->
@@ -78,14 +78,14 @@
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Text="公司代码："
-                                 Grid.Column="0"
-                                 VerticalAlignment="Center"
-                                 HorizontalAlignment="Right"
-                                 Margin="0,0,8,0" />
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
                         <ui:TextBox Grid.Column="1"
-                                  Text="{Binding Settings.CompanyCode, UpdateSourceTrigger=PropertyChanged}"
-                                  PlaceholderText="请输入公司代码" />
+                                    Text="{Binding Settings.CompanyCode, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="请输入公司代码" />
                     </Grid>
 
                     <!-- AppKey -->
@@ -96,14 +96,14 @@
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Text="AppKey："
-                                 Grid.Column="0"
-                                 VerticalAlignment="Center"
-                                 HorizontalAlignment="Right"
-                                 Margin="0,0,8,0" />
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
                         <ui:TextBox Grid.Column="1"
-                                  Text="{Binding Settings.AppKey, UpdateSourceTrigger=PropertyChanged}"
-                                  PlaceholderText="请输入AppKey" />
+                                    Text="{Binding Settings.AppKey, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="请输入AppKey" />
                     </Grid>
 
                     <!-- Secret -->
@@ -114,14 +114,14 @@
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Text="Secret："
-                                 Grid.Column="0"
-                                 VerticalAlignment="Center"
-                                 HorizontalAlignment="Right"
-                                 Margin="0,0,8,0" />
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
                         <ui:TextBox Grid.Column="1"
-                                  Text="{Binding Settings.Secret, UpdateSourceTrigger=PropertyChanged}"
-                                  PlaceholderText="请输入Secret" />
+                                    Text="{Binding Settings.Secret, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="请输入Secret" />
                     </Grid>
 
                     <!-- 签名 -->
@@ -132,14 +132,14 @@
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Text="签名："
-                                 Grid.Column="0"
-                                 VerticalAlignment="Center"
-                                 HorizontalAlignment="Right"
-                                 Margin="0,0,8,0" />
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
                         <ui:TextBox Grid.Column="1"
-                                  Text="{Binding Settings.Sign, UpdateSourceTrigger=PropertyChanged}"
-                                  PlaceholderText="请输入签名" />
+                                    Text="{Binding Settings.Sign, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="请输入签名" />
                     </Grid>
 
                     <!-- 租户ID -->
@@ -150,14 +150,14 @@
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Text="租户ID："
-                                 Grid.Column="0"
-                                 VerticalAlignment="Center"
-                                 HorizontalAlignment="Right"
-                                 Margin="0,0,8,0" />
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
                         <ui:TextBox Grid.Column="1"
-                                  Text="{Binding Settings.TenantId, UpdateSourceTrigger=PropertyChanged}"
-                                  PlaceholderText="请输入租户ID" />
+                                    Text="{Binding Settings.TenantId, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="请输入租户ID" />
                     </Grid>
 
                     <!-- 仓库编码 -->
@@ -168,14 +168,14 @@
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Text="仓库编码："
-                                 Grid.Column="0"
-                                 VerticalAlignment="Center"
-                                 HorizontalAlignment="Right"
-                                 Margin="0,0,8,0" />
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
                         <ui:TextBox Grid.Column="1"
-                                  Text="{Binding Settings.WarehouseCode, UpdateSourceTrigger=PropertyChanged}"
-                                  PlaceholderText="请输入仓库编码" />
+                                    Text="{Binding Settings.WarehouseCode, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="请输入仓库编码" />
                     </Grid>
 
                     <!-- 设备编码 -->
@@ -186,14 +186,14 @@
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Text="设备编码："
-                                 Grid.Column="0"
-                                 VerticalAlignment="Center"
-                                 HorizontalAlignment="Right"
-                                 Margin="0,0,8,0" />
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
                         <ui:TextBox Grid.Column="1"
-                                  Text="{Binding Settings.EquipmentCode, UpdateSourceTrigger=PropertyChanged}"
-                                  PlaceholderText="请输入设备编码" />
+                                    Text="{Binding Settings.EquipmentCode, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="请输入设备编码" />
                     </Grid>
 
                     <!-- 包装材料编码 -->
@@ -204,14 +204,14 @@
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Text="包装材料编码："
-                                 Grid.Column="0"
-                                 VerticalAlignment="Center"
-                                 HorizontalAlignment="Right"
-                                 Margin="0,0,8,0" />
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
                         <ui:TextBox Grid.Column="1"
-                                  Text="{Binding Settings.PackagingMaterialCode, UpdateSourceTrigger=PropertyChanged}"
-                                  PlaceholderText="请输入包装材料编码" />
+                                    Text="{Binding Settings.PackagingMaterialCode, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="请输入包装材料编码" />
                     </Grid>
 
                     <!-- 用户ID -->
@@ -222,14 +222,14 @@
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Text="用户ID："
-                                 Grid.Column="0"
-                                 VerticalAlignment="Center"
-                                 HorizontalAlignment="Right"
-                                 Margin="0,0,8,0" />
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
                         <ui:TextBox Grid.Column="1"
-                                  Text="{Binding Settings.UserId, UpdateSourceTrigger=PropertyChanged}"
-                                  PlaceholderText="请输入用户ID" />
+                                    Text="{Binding Settings.UserId, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="请输入用户ID" />
                     </Grid>
 
                     <!-- 用户名 -->
@@ -240,14 +240,14 @@
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Text="用户名："
-                                 Grid.Column="0"
-                                 VerticalAlignment="Center"
-                                 HorizontalAlignment="Right"
-                                 Margin="0,0,8,0" />
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
                         <ui:TextBox Grid.Column="1"
-                                  Text="{Binding Settings.UserRealName, UpdateSourceTrigger=PropertyChanged}"
-                                  PlaceholderText="请输入用户名" />
+                                    Text="{Binding Settings.UserRealName, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="请输入用户名" />
                     </Grid>
 
                     <!-- 预设重量 -->
@@ -258,10 +258,10 @@
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Text="预设重量："
-                                 Grid.Column="0"
-                                 VerticalAlignment="Center"
-                                 HorizontalAlignment="Right"
-                                 Margin="0,0,8,0" />
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
                         <Grid Grid.Column="1">
                             <Grid.ColumnDefinitions>
@@ -270,14 +270,14 @@
                             </Grid.ColumnDefinitions>
 
                             <ui:NumberBox Grid.Column="0"
-                                         Value="{Binding Settings.DefaultWeight, UpdateSourceTrigger=PropertyChanged}"
-                                         PlaceholderText="请输入预设重量"
-                                         SpinButtonPlacementMode="Inline"
-                                         SmallChange="0.01"
-                                         LargeChange="0.1"
-                                         Minimum="0"
-                                         Maximum="100"
-                                         Margin="0,0,4,0" /> 
+                                          Value="{Binding Settings.DefaultWeight, UpdateSourceTrigger=PropertyChanged}"
+                                          PlaceholderText="请输入预设重量"
+                                          SpinButtonPlacementMode="Inline"
+                                          SmallChange="0.01"
+                                          LargeChange="0.1"
+                                          Minimum="0"
+                                          Maximum="100"
+                                          Margin="0,0,4,0" />
 
                             <TextBlock Grid.Column="1"
                                        Text="kg"
@@ -291,8 +291,8 @@
             <ui:Card Margin="0,16,0,0">
                 <StackPanel Margin="16">
                     <TextBlock Text="新称重接口配置"
-                             Style="{DynamicResource SubtitleTextBlockStyle}"
-                             Margin="0,0,0,16" />
+                               Style="{DynamicResource SubtitleTextBlockStyle}"
+                               Margin="0,0,0,16" />
 
                     <!-- 启用新接口 -->
                     <Grid Margin="0,0,0,8">
@@ -302,14 +302,14 @@
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Text="启用新接口："
-                                 Grid.Column="0"
-                                 VerticalAlignment="Center"
-                                 HorizontalAlignment="Right"
-                                 Margin="0,0,8,0" />
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
                         <CheckBox Grid.Column="1"
-                                Content="启用新称重接口"
-                                IsChecked="{Binding Settings.UseNewWeighingApi}" />
+                                  Content="启用新称重接口"
+                                  IsChecked="{Binding Settings.UseNewWeighingApi}" />
                     </Grid>
 
                     <!-- 新接口环境选择 -->
@@ -320,14 +320,14 @@
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Text="接口环境："
-                                 Grid.Column="0"
-                                 VerticalAlignment="Center"
-                                 HorizontalAlignment="Right"
-                                 Margin="0,0,8,0" />
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
                         <ComboBox Grid.Column="1"
-                                SelectedValue="{Binding Settings.NewWeighingEnvironment, UpdateSourceTrigger=PropertyChanged}"
-                                SelectedValuePath="Tag">
+                                  SelectedValue="{Binding Settings.NewWeighingEnvironment, UpdateSourceTrigger=PropertyChanged}"
+                                  SelectedValuePath="Tag">
                             <ComboBoxItem Content="UAT环境" Tag="uat" />
                             <ComboBoxItem Content="VER环境" Tag="ver" />
                             <ComboBoxItem Content="PROD环境" Tag="prod" />
@@ -342,16 +342,16 @@
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Text="接口地址："
-                                 Grid.Column="0"
-                                 VerticalAlignment="Center"
-                                 HorizontalAlignment="Right"
-                                 Margin="0,0,8,0" />
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
                         <TextBlock Grid.Column="1"
-                                 Text="{Binding Settings.NewWeighingApiUrl}"
-                                 VerticalAlignment="Center"
-                                 TextWrapping="Wrap"
-                                 Foreground="{DynamicResource SystemAccentBrush}" />
+                                   Text="{Binding Settings.NewWeighingApiUrl}"
+                                   VerticalAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource SystemAccentBrush}" />
                     </Grid>
 
                     <!-- 测试按钮 -->
@@ -362,16 +362,16 @@
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Text="接口测试："
-                                 Grid.Column="0"
-                                 VerticalAlignment="Center"
-                                 HorizontalAlignment="Right"
-                                 Margin="0,0,8,0" />
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
                         <ui:Button Grid.Column="1"
-                                 Content="测试新称重接口"
-                                 Command="{Binding TestNewWeighingApiCommand}"
-                                 HorizontalAlignment="Left"
-                                 Appearance="Primary" />
+                                   Content="测试新称重接口"
+                                   Command="{Binding TestNewWeighingApiCommand}"
+                                   HorizontalAlignment="Left"
+                                   Appearance="Primary" />
                     </Grid>
                 </StackPanel>
             </ui:Card>

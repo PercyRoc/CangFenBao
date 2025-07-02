@@ -161,7 +161,8 @@
 
                         <!-- Barcode Info -->
                         <StackPanel Grid.Row="1" Margin="0,0,0,16">
-                            <TextBlock Text="Barcode" Margin="0,0,0,8" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" />
+                            <TextBlock Text="Barcode" Margin="0,0,0,8" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource AccentBrush}" />
 
                             <!-- Combined TextBox for Display and Input -->
                             <Grid>
@@ -173,17 +174,18 @@
                                             x:Name="ManualBarcodeTextBox"
                                             Text="{Binding CurrentBarcode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                             hc:InfoElement.Placeholder="Scan barcode or enter manually..."
-                                            Height="50" 
-                                            FontSize="20" 
-                                            FontWeight="Bold" 
+                                            Height="50"
+                                            FontSize="20"
+                                            FontWeight="Bold"
                                             VerticalAlignment="Center"
                                             Padding="10,0"
                                             KeyDown="ManualBarcodeTextBox_KeyDown" />
 
                                 <!-- Manual Input Toggle -->
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0" VerticalAlignment="Center">
-                                    <CheckBox x:Name="BlockScannerInput" 
-                                              Content="Enable Manual Input" 
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0"
+                                            VerticalAlignment="Center">
+                                    <CheckBox x:Name="BlockScannerInput"
+                                              Content="Enable Manual Input"
                                               IsChecked="False"
                                               Checked="BlockScannerInput_CheckedChanged"
                                               Unchecked="BlockScannerInput_CheckedChanged"

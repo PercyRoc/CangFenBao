@@ -5,8 +5,8 @@ using System.Windows.Data;
 namespace KuaiLv.Converters;
 
 /// <summary>
-/// Converts a boolean value to its inverse Visibility representation.
-/// True becomes Collapsed, False becomes Visible.
+///     Converts a boolean value to its inverse Visibility representation.
+///     True becomes Collapsed, False becomes Visible.
 /// </summary>
 public class InvertBooleanToVisibilityConverter : IValueConverter
 {
@@ -20,4 +20,4 @@ public class InvertBooleanToVisibilityConverter : IValueConverter
     {
         throw new NotImplementedException();
     }
-} 
+}

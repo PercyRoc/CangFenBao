@@ -1,4 +1,7 @@
-﻿using System.IO;
+﻿using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Threading;
 using Common.Extensions;
@@ -8,23 +11,20 @@ using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.Extensions;
 using FuzhouPolicyForce.ViewModels;
+using FuzhouPolicyForce.ViewModels.Settings;
 using FuzhouPolicyForce.Views;
 using FuzhouPolicyForce.Views.Settings;
+using FuzhouPolicyForce.WangDianTong;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using SharedUI.Extensions;
 using SharedUI.ViewModels.Settings;
+using SharedUI.Views.Settings;
 using SortingServices.Pendulum;
 using SortingServices.Pendulum.Extensions;
-using Timer = System.Timers.Timer;
-using System.Diagnostics;
-using FuzhouPolicyForce.ViewModels.Settings;
-using FuzhouPolicyForce.WangDianTong;
-using SharedUI.Views.Settings;
-using System.Globalization;
-using System.Net.Http;
 using WPFLocalizeExtension.Engine;
 using WPFLocalizeExtension.Providers;
+using Timer = System.Timers.Timer;
 
 namespace FuzhouPolicyForce;
 
@@ -33,11 +33,11 @@ namespace FuzhouPolicyForce;
 /// </summary>
 internal partial class App
 {
-    private static Mutex? _mutex;
     private const string MutexName = "Global\\FuzhouPolicyForce_App_Mutex";
+    private static Mutex? _mutex;
     private Timer? _cleanupTimer;
     private bool _ownsMutex;
-    
+
     private static ResxLocalizationProvider ResxProvider { get; } = ResxLocalizationProvider.Instance;
 
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
@@ -101,12 +101,9 @@ internal partial class App
                 Current.Shutdown();
                 return null!;
             }
-            else
-            {
-                // 可以获取Mutex，说明前一个实例可能异常退出但Mutex已被释放
-                _ownsMutex = true;
-                return Container.Resolve<MainWindow>();
-            }
+            // 可以获取Mutex，说明前一个实例可能异常退出但Mutex已被释放
+            _ownsMutex = true;
+            return Container.Resolve<MainWindow>();
         }
         catch (Exception ex)
         {
@@ -119,7 +116,7 @@ internal partial class App
     }
 
     /// <summary>
-    /// 检查是否已有相同名称的应用程序实例在运行
+    ///     检查是否已有相同名称的应用程序实例在运行
     /// </summary>
     private static bool IsApplicationAlreadyRunning()
     {
@@ -135,9 +132,9 @@ internal partial class App
         try
         {
             // Set the static instance as the default provider (optional but good practice)
-            LocalizeDictionary.Instance.DefaultProvider = ResxProvider; 
+            LocalizeDictionary.Instance.DefaultProvider = ResxProvider;
             // Force English culture for testing
-            var culture = new CultureInfo("zh-CN"); 
+            var culture = new CultureInfo("zh-CN");
             LocalizeDictionary.Instance.Culture = culture;
 
             // 配置Serilog

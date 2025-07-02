@@ -10,38 +10,38 @@ namespace BenFly.ViewModels.Dialogs;
 
 public class CalibrationDialogViewModel : BindableBase, IDialogAware
 {
+    private readonly PendulumSortConfig _config;
     private readonly ISettingsService _settingsService;
     private readonly IPendulumSortService _sortService;
-    private readonly PendulumSortConfig _config;
-    
-    private string _title = "分拣时间标定";
-    private DateTime? _triggerTime;
-    private DateTime? _sortingTime;
-    private double _measuredDelay;
-    private string _statusMessage = "等待触发光电信号...";
     private bool _isCalibrationMode;
+    private double _measuredDelay;
+    private double _resetDelay = 1000;
     private string _selectedPhotoelectric = "触发光电";
-    
+    private double _sortingDelay = 50;
+    private DateTime? _sortingTime;
+    private string _statusMessage = "等待触发光电信号...";
+
     // 配置参数
     private double _timeRangeLower = 1000;
     private double _timeRangeUpper = 3000;
-    private double _sortingDelay = 50;
-    private double _resetDelay = 1000;
+
+    private string _title = "分拣时间标定";
+    private DateTime? _triggerTime;
 
     public CalibrationDialogViewModel(ISettingsService settingsService, IPendulumSortService sortService)
     {
         _settingsService = settingsService;
         _sortService = sortService;
-        
+
         // 加载当前配置
         _config = _settingsService.LoadSettings<PendulumSortConfig>();
-        
+
         // 初始化可用光电列表
         InitializePhotoelectrics();
-        
+
         // 加载当前选中光电的配置
         LoadSelectedPhotoelectricConfig();
-        
+
         // 初始化命令
         ToggleCalibrationModeCommand = new DelegateCommand(() => IsCalibrationMode = !IsCalibrationMode);
         ApplyRecommendedSettingsCommand = new DelegateCommand(ExecuteApplyRecommendedSettings, CanApplyRecommendedSettings);
@@ -51,7 +51,7 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
         // 订阅光电信号事件
         _sortService.TriggerPhotoelectricSignal += OnTriggerPhotoelectricSignal;
         _sortService.SortingPhotoelectricSignal += OnSortingPhotoelectricSignal;
-        
+
         Log.Information("标定对话框已订阅光电信号事件");
     }
 
@@ -64,13 +64,13 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
     }
 
     /// <summary>
-    /// 触发时间 - 用于XAML数据绑定
+    ///     触发时间 - 用于XAML数据绑定
     /// </summary>
     public DateTime? TriggerTime
     {
         [UsedImplicitly] get => _triggerTime;
         private set
-        { 
+        {
             if (SetProperty(ref _triggerTime, value))
             {
                 RaisePropertyChanged(nameof(IsTriggerTimeVisible));
@@ -79,7 +79,7 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
     }
 
     /// <summary>
-    /// 分拣时间 - 用于XAML数据绑定
+    ///     分拣时间 - 用于XAML数据绑定
     /// </summary>
     public DateTime? SortingTime
     {
@@ -126,8 +126,8 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
     public string SelectedPhotoelectric
     {
         [UsedImplicitly] get => _selectedPhotoelectric;
-        set 
-        { 
+        set
+        {
             if (SetProperty(ref _selectedPhotoelectric, value))
             {
                 LoadSelectedPhotoelectricConfig();
@@ -161,7 +161,7 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
 
     [UsedImplicitly]
     public ObservableCollection<string> AvailablePhotoelectrics { get; } = new();
-    
+
     [UsedImplicitly]
     public ObservableCollection<CalibrationResult> CalibrationHistory { get; } = new();
 
@@ -182,7 +182,7 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
     {
         AvailablePhotoelectrics.Clear();
         AvailablePhotoelectrics.Add("触发光电");
-        
+
         foreach (var photoelectric in _config.SortingPhotoelectrics)
         {
             AvailablePhotoelectrics.Add($"{photoelectric.Name} (格口: {GetPhotoelectricSlots(photoelectric.Name)})");
@@ -238,7 +238,7 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
             SortingTime = null;
             MeasuredDelay = 0;
             StatusMessage = $"已记录触发时间: {triggerTime:HH:mm:ss.fff}，等待分拣光电信号...";
-            
+
             Log.Information("标定模式：记录触发时间 {TriggerTime:HH:mm:ss.fff}", triggerTime);
         });
     }
@@ -259,9 +259,9 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
             SortingTime = args.SignalTime;
             var delay = (args.SignalTime - TriggerTime.Value).TotalMilliseconds;
             MeasuredDelay = delay;
-            
+
             StatusMessage = $"测量完成！时间差: {delay:F1}ms (触发: {TriggerTime:HH:mm:ss.fff} → 分拣: {args.SignalTime:HH:mm:ss.fff})";
-            
+
             // 添加到历史记录
             var result = new CalibrationResult
             {
@@ -271,17 +271,17 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
                 SortingTime = args.SignalTime,
                 MeasuredDelay = delay
             };
-            
+
             CalibrationHistory.Insert(0, result);
-            
+
             // 限制历史记录数量
             while (CalibrationHistory.Count > 20)
             {
                 CalibrationHistory.RemoveAt(CalibrationHistory.Count - 1);
             }
-            
+
             ApplyRecommendedSettingsCommand.RaiseCanExecuteChanged();
-            
+
             Log.Information("标定测量完成 - 光电: {PhotoelectricName}, 延迟: {Delay:F1}ms", args.PhotoelectricName, delay);
         });
     }
@@ -306,15 +306,15 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
             var avgDelay = recentResults.Average(r => r.MeasuredDelay);
             var minDelay = recentResults.Min(r => r.MeasuredDelay);
             var maxDelay = recentResults.Max(r => r.MeasuredDelay);
-            
+
             // 基于测量结果推荐参数
             TimeRangeLower = Math.Max(0, minDelay - 100);
             TimeRangeUpper = maxDelay + 100;
             SortingDelay = Math.Max(0, avgDelay - 50);
-            
+
             StatusMessage = $"已应用推荐设置 (基于最近{recentResults.Count}次测量): 范围 {TimeRangeLower:F0}-{TimeRangeUpper:F0}ms, 延迟 {SortingDelay:F0}ms";
-            
-            Log.Information("应用推荐设置: 时间范围 {Lower:F0}-{Upper:F0}ms, 分拣延迟 {Delay:F0}ms", 
+
+            Log.Information("应用推荐设置: 时间范围 {Lower:F0}-{Upper:F0}ms, 分拣延迟 {Delay:F0}ms",
                 TimeRangeLower, TimeRangeUpper, SortingDelay);
         }
         catch (Exception ex)
@@ -349,14 +349,14 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
                     photoelectric.ResetDelay = (int)ResetDelay;
                 }
             }
-            
+
             _settingsService.SaveSettings(_config);
-            
-            Log.Information("标定配置已保存: 光电 {PhotoelectricName}, 时间范围 {Lower:F0}-{Upper:F0}ms, 分拣延迟 {SortingDelay:F0}ms, 回正延迟 {ResetDelay:F0}ms", 
+
+            Log.Information("标定配置已保存: 光电 {PhotoelectricName}, 时间范围 {Lower:F0}-{Upper:F0}ms, 分拣延迟 {SortingDelay:F0}ms, 回正延迟 {ResetDelay:F0}ms",
                 SelectedPhotoelectric, TimeRangeLower, TimeRangeUpper, SortingDelay, ResetDelay);
-            
+
             StatusMessage = "配置已保存并生效";
-            
+
             // 自动关闭对话框
             RequestClose.Invoke(new DialogResult(ButtonResult.OK));
         }
@@ -376,19 +376,22 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
 
     #region IDialogAware
 
-    public DialogCloseListener RequestClose { get; private set; } = new DialogCloseListener();
+    public DialogCloseListener RequestClose { get; } = new();
 
-    public bool CanCloseDialog() => true;
+    public bool CanCloseDialog()
+    {
+        return true;
+    }
 
     public void OnDialogClosed()
     {
         // 退出标定模式
         IsCalibrationMode = false;
-        
+
         // 取消订阅事件
         _sortService.TriggerPhotoelectricSignal -= OnTriggerPhotoelectricSignal;
         _sortService.SortingPhotoelectricSignal -= OnSortingPhotoelectricSignal;
-        
+
         Log.Information("标定对话框已关闭并取消订阅光电信号事件");
     }
 
@@ -405,16 +408,16 @@ public class CalibrationResult
 {
     [UsedImplicitly]
     public DateTime Timestamp { get; set; }
-    
+
     [UsedImplicitly]
     public string PhotoelectricName { get; set; } = string.Empty;
-    
+
     [UsedImplicitly]
     public DateTime TriggerTime { get; set; }
-    
+
     [UsedImplicitly]
     public DateTime SortingTime { get; set; }
-    
+
     [UsedImplicitly]
     public double MeasuredDelay { get; set; }
 }

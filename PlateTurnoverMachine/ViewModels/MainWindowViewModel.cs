@@ -2,7 +2,6 @@
 using System.Globalization;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
-using System.Text;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -10,12 +9,11 @@ using Common.Models.Package;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
+using DongtaiFlippingBoardMachine.Events;
 using DongtaiFlippingBoardMachine.Models;
 using DongtaiFlippingBoardMachine.Services;
 using Serilog;
 using SharedUI.Models;
-using DongtaiFlippingBoardMachine.Events;
-using Prism.Events;
 
 namespace DongtaiFlippingBoardMachine.ViewModels;
 
@@ -23,19 +21,19 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
+    private readonly IEventAggregator _eventAggregator;
+    private readonly ISettingsService _settingsService;
     private readonly SortingService _sortingService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly ITcpConnectionService _tcpConnectionService;
     private readonly DispatcherTimer _timer;
+    private readonly IZtoSortingService _ztoSortingService;
     private string _currentBarcode = string.Empty;
     private BitmapSource? _currentImage;
     private bool _disposed;
-    private SystemStatus _systemStatus = new();
-    private readonly ISettingsService _settingsService;
-    private readonly IZtoSortingService _ztoSortingService;
-    private readonly IEventAggregator _eventAggregator;
-    private PlateTurnoverSettings _settings;
     private int _historyIndexCounter;
+    private PlateTurnoverSettings _settings;
+    private SystemStatus _systemStatus = new();
 
     public MainWindowViewModel(
         IDialogService dialogService,
@@ -86,7 +84,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
         // 订阅TCP模块连接状态变化
         _tcpConnectionService.TcpModuleConnectionChanged += OnTcpModuleConnectionChanged;
-        
+
         // 订阅配置更新事件
         _eventAggregator.GetEvent<PlateTurnoverSettingsUpdatedEvent>().Subscribe(OnSettingsUpdated);
 
@@ -276,7 +274,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "处理包裹信息时发生错误：{Barcode}", package.Barcode);
-            package.SetStatus(PackageStatus.Error,$"处理失败：{ex.Message}");
+            package.SetStatus(PackageStatus.Error, $"处理失败：{ex.Message}");
         }
     }
 
@@ -445,7 +443,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             status.Status = $"{connectedModules}/{totalModules}";
             status.StatusColor = totalModules > 0 && connectedModules == totalModules ? "#4CAF50" :
                 connectedModules > 0 ? "#FFA500" : "#F44336";
-            
+
             Log.Debug("TCP模块状态更新为：{Status}, 已连接：{Connected}, 总数(配置)：{Total}",
                 status.Status, connectedModules, totalModules);
         }

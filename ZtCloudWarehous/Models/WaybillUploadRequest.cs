@@ -30,4 +30,4 @@ public class WaybillUploadRequest
     /// </summary>
     [JsonPropertyName("signature")]
     public string Signature { get; set; } = string.Empty;
-} 
+}

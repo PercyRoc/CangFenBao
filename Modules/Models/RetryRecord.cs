@@ -1,5 +1,3 @@
-using System;
-
 namespace ShanghaiModuleBelt.Models;
 
 public class RetryRecord
@@ -14,4 +12,4 @@ public class RetryRecord
     public bool IsRetried { get; set; }
     public int RetryCount { get; set; }
     public string? ErrorMessage { get; set; }
-} 
+}

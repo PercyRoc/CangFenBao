@@ -1,22 +1,19 @@
 ﻿using System.Collections.ObjectModel;
-using System.Globalization;
-using System.IO;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Windows;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Common.Models.Package;
+using DeviceService.DataSourceDevices.Camera;
+using DeviceService.DataSourceDevices.Services;
+using DeviceService.DataSourceDevices.Weight;
 using Serilog;
 using SharedUI.Models;
 using XinBa.Services;
-using DeviceService.DataSourceDevices.Services;
-using DeviceService.DataSourceDevices.Camera;
+using XinBa.Services.Models;
 using MessageBox = HandyControl.Controls.MessageBox;
 using MessageBoxImage = System.Windows.MessageBoxImage;
-using System.Windows.Media.Imaging;
-using DeviceService.DataSourceDevices.Weight;
-using System.Windows.Media;
-using XinBa.Services.Models;
 
 namespace XinBa.ViewModels;
 
@@ -26,15 +23,16 @@ namespace XinBa.ViewModels;
 public class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly IApiService _apiService;
-    private readonly IDialogService _dialogService;
     private readonly ICameraService _cameraService;
+    private readonly IDialogService _dialogService;
+    private readonly List<IDisposable> _subscriptions = [];
+    private readonly ITareAttributesApiService _tareAttributesApiService;
+    private readonly DispatcherTimer _timer;
     private readonly VolumeDataService _volumeDataService;
     private readonly SerialPortWeightService? _weightService;
-    private readonly ITareAttributesApiService _tareAttributesApiService;
-    private readonly List<IDisposable> _subscriptions = [];
-    private readonly DispatcherTimer _timer;
     private string _currentBarcode = string.Empty;
     private string _currentEmployeeInfo = string.Empty;
+    private BitmapSource? _currentImage;
     private bool _disposed;
     private int _failedPackages;
     private DateTime _lastRateCalculationTime = DateTime.Now;
@@ -42,7 +40,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private int _processingRate;
     private int _successPackages;
     private int _totalPackages;
-    private BitmapSource? _currentImage;
 
     public MainWindowViewModel(
         IDialogService dialogService,
@@ -224,28 +221,28 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // 添加相机状态 - Revert to property initializers
             DeviceStatuses.Add(new DeviceStatus
             {
-                 Name = "Camera",
-                 Status = "Disconnected",
-                 Icon = "Camera24",
-                 StatusColor = "#F44336"
+                Name = "Camera",
+                Status = "Disconnected",
+                Icon = "Camera24",
+                StatusColor = "#F44336"
             });
 
             // 添加重量设备状态 - Revert to property initializers
             DeviceStatuses.Add(new DeviceStatus
             {
-                 Name = "Weight",
-                 Status = "Disconnected",
-                 Icon = "Scales24",
-                 StatusColor = "#F44336"
+                Name = "Weight",
+                Status = "Disconnected",
+                Icon = "Scales24",
+                StatusColor = "#F44336"
             });
 
             // 添加体积相机状态 - Revert to property initializers
             DeviceStatuses.Add(new DeviceStatus
             {
-                 Name = "Volume Camera",
-                 Status = "Disconnected",
-                 Icon = "ScanObject24",
-                 StatusColor = "#F44336"
+                Name = "Volume Camera",
+                Status = "Disconnected",
+                Icon = "ScanObject24",
+                StatusColor = "#F44336"
             });
 
             Log.Information("设备状态列表初始化完成, 总计 {Count} 个设备", DeviceStatuses.Count);
@@ -388,7 +385,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 if (volume.HasValue)
                 {
                     package.SetDimensions(volume.Value.Length, volume.Value.Width, volume.Value.Height);
-                    Log.Information("为包裹 {Index} 找到并设置体积: L={Length}, W={Width}, H={Height}", 
+                    Log.Information("为包裹 {Index} 找到并设置体积: L={Length}, W={Width}, H={Height}",
                         package.Index, package.Length, package.Width, package.Height);
                 }
                 else
@@ -411,23 +408,22 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 // 将包裹数据转换为API所需的单位和类型
                 // 包裹数据通常以厘米和千克为单位，需要转换为毫米和毫克/克
                 var heightMm = (int)(package.Height.Value * 10); // 厘米转毫米
-                var lengthMm = (int)(package.Length.Value * 10);  // 厘米转毫米
-                var widthMm = (int)(package.Width.Value * 10);    // 厘米转毫米
-                var weightMg = (int)(package.Weight * 1000000);   // 千克转毫克
-                var weightG = (int)(package.Weight * 1000);       // 千克转克
+                var lengthMm = (int)(package.Length.Value * 10); // 厘米转毫米
+                var widthMm = (int)(package.Width.Value * 10); // 厘米转毫米
+                var weightMg = (int)(package.Weight * 1000000); // 千克转毫克
+                var weightG = (int)(package.Weight * 1000); // 千克转克
 
                 // 提交到 Dimensions Machine API
                 var dimensionsSuccess = await _apiService.SubmitDimensionsAsync(
                     package.Barcode,
                     heightMm,
-                    lengthMm, 
+                    lengthMm,
                     widthMm,
-                    weightMg,
-                    null); // 不提交图片数据
+                    weightMg); // 不提交图片数据
 
                 if (dimensionsSuccess)
                 {
-                    Log.Information("Dimensions Machine API 提交成功: Barcode={Barcode}, H={Height}mm, L={Length}mm, W={Width}mm, Weight={Weight}mg", 
+                    Log.Information("Dimensions Machine API 提交成功: Barcode={Barcode}, H={Height}mm, L={Length}mm, W={Width}mm, Weight={Weight}mg",
                         package.Barcode, heightMm, lengthMm, widthMm, weightMg);
                 }
                 else
@@ -439,10 +435,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 var tareRequest = new TareAttributesRequest
                 {
                     TareSticker = package.Barcode,
-                    SizeAMm = lengthMm,  // 长度
-                    SizeBMm = widthMm,   // 宽度
-                    SizeCMm = heightMm,  // 高度
-                    WeightG = weightG    // 重量（克）
+                    SizeAMm = lengthMm, // 长度
+                    SizeBMm = widthMm, // 宽度
+                    SizeCMm = heightMm, // 高度
+                    WeightG = weightG // 重量（克）
                     // OfficeId 和 PlaceId 使用默认硬编码值
                     // VolumeMm 将通过 CalculateVolume() 自动计算
                 };
@@ -451,7 +447,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                 if (tareSuccess)
                 {
-                    Log.Information("Tare Attributes API 提交成功: Barcode={Barcode}, Size={Length}x{Width}x{Height}mm, Weight={Weight}g", 
+                    Log.Information("Tare Attributes API 提交成功: Barcode={Barcode}, Size={Length}x{Width}x{Height}mm, Weight={Weight}g",
                         package.Barcode, lengthMm, widthMm, heightMm, weightG);
                 }
                 else
@@ -461,7 +457,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             }
             else
             {
-                Log.Warning("包裹缺少必要的尺寸或重量信息，无法提交到API: Barcode={Barcode}, Length={Length}, Width={Width}, Height={Height}, Weight={Weight}", 
+                Log.Warning("包裹缺少必要的尺寸或重量信息，无法提交到API: Barcode={Barcode}, Length={Length}, Width={Width}, Height={Height}, Weight={Weight}",
                     package.Barcode, package.Length, package.Width, package.Height, package.Weight);
             }
         }
@@ -471,8 +467,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
         finally
         {
-             // 即使不上传图片，也保持释放资源（如果PackageInfo中有其他可释放资源）
-             package.ReleaseImage(); 
+            // 即使不上传图片，也保持释放资源（如果PackageInfo中有其他可释放资源）
+            package.ReleaseImage();
         }
     }
 
@@ -610,9 +606,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
             const int maxHistoryItems = 1000;
             while (PackageHistory.Count > maxHistoryItems)
             {
-               var removedPackage = PackageHistory[^1];
-               PackageHistory.RemoveAt(PackageHistory.Count - 1);
-               removedPackage.Dispose();
+                var removedPackage = PackageHistory[^1];
+                PackageHistory.RemoveAt(PackageHistory.Count - 1);
+                removedPackage.Dispose();
             }
         }
         catch (Exception ex)
@@ -622,7 +618,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 处理相机连接状态变化
+    ///     处理相机连接状态变化
     /// </summary>
     private void OnCameraConnectionChanged(string? cameraId, bool isConnected)
     {
@@ -631,7 +627,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 处理体积服务连接状态变化
+    ///     处理体积服务连接状态变化
     /// </summary>
     private void OnVolumeConnectionChanged(bool isConnected)
     {
@@ -641,7 +637,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
     // --- 修改: 处理重量服务连接状态变化 (调整签名) ---
     /// <summary>
-    /// 处理重量服务连接状态变化
+    ///     处理重量服务连接状态变化
     /// </summary>
     /// <param name="deviceName">设备名 (来自事件)</param>
     /// <param name="isConnected">连接状态</param>

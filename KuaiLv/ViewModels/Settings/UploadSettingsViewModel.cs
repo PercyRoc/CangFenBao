@@ -26,7 +26,10 @@ internal class UploadSettingsViewModel : BindableBase
         private set => SetProperty(ref _configuration, value);
     }
 
-    public static Array Environments => Enum.GetValues(typeof(UploadEnvironment));
+    public static Array Environments
+    {
+        get => Enum.GetValues(typeof(UploadEnvironment));
+    }
 
     internal DelegateCommand SaveConfigurationCommand { get; }
 

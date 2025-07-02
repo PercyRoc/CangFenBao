@@ -22,4 +22,4 @@ public class SortReportParams
     [JsonPropertyName("errorReason")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ErrorReason { get; set; }
-} 
+}

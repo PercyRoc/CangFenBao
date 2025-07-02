@@ -426,8 +426,8 @@
                                     Margin="0,0,0,8">
                             <ui:SymbolIcon Symbol="History24"
                                            Margin="0,0,8,0"
-                                           VerticalAlignment="Center" 
-                                           Foreground="{StaticResource AccentBrush}"/>
+                                           VerticalAlignment="Center"
+                                           Foreground="{StaticResource AccentBrush}" />
                             <TextBlock Text="历史包裹信息"
                                        Foreground="{StaticResource AccentBrush}"
                                        FontSize="16"
@@ -446,13 +446,20 @@
                                   CanUserDeleteRows="False"
                                   GridLinesVisibility="Horizontal">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="序号" Binding="{Binding Index}" MinWidth="50" Width="SizeToCells" />
-                                <DataGridTextColumn Header="条码" Binding="{Binding Barcode}" MinWidth="120" Width="SizeToCells" />
-                                <DataGridTextColumn Header="段码" Binding="{Binding SegmentCode}" MinWidth="120" Width="SizeToCells" />
-                                <DataGridTextColumn Header="重量" Binding="{Binding WeightDisplay}" MinWidth="60" Width="SizeToCells" />
-                                <DataGridTextColumn Header="尺寸" Binding="{Binding VolumeDisplay}" MinWidth="100" Width="SizeToCells" />
-                                <DataGridTextColumn Header="格口" Binding="{Binding ChuteNumber}" MinWidth="50" Width="SizeToCells" />
-                                <DataGridTextColumn Header="状态" Binding="{Binding StatusDisplay}" MinWidth="70" Width="SizeToCells" />
+                                <DataGridTextColumn Header="序号" Binding="{Binding Index}" MinWidth="50"
+                                                    Width="SizeToCells" />
+                                <DataGridTextColumn Header="条码" Binding="{Binding Barcode}" MinWidth="120"
+                                                    Width="SizeToCells" />
+                                <DataGridTextColumn Header="段码" Binding="{Binding SegmentCode}" MinWidth="120"
+                                                    Width="SizeToCells" />
+                                <DataGridTextColumn Header="重量" Binding="{Binding WeightDisplay}" MinWidth="60"
+                                                    Width="SizeToCells" />
+                                <DataGridTextColumn Header="尺寸" Binding="{Binding VolumeDisplay}" MinWidth="100"
+                                                    Width="SizeToCells" />
+                                <DataGridTextColumn Header="格口" Binding="{Binding ChuteNumber}" MinWidth="50"
+                                                    Width="SizeToCells" />
+                                <DataGridTextColumn Header="状态" Binding="{Binding StatusDisplay}" MinWidth="70"
+                                                    Width="SizeToCells" />
                                 <DataGridTextColumn Header="处理时间"
                                                     Binding="{Binding ProcessingTime, StringFormat={}{0:0}ms}"
                                                     MinWidth="80" Width="SizeToCells" />

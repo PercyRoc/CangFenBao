@@ -2,9 +2,9 @@
 
 public class PackageInfoItem : BindableBase
 {
+    private readonly string _label = string.Empty;
     private string _description = string.Empty;
     private string _icon = string.Empty;
-    private readonly string _label = string.Empty;
     private string _statusColor = "#4CAF50";
     private string _unit = string.Empty;
     private string _value = string.Empty;

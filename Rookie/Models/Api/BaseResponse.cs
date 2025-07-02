@@ -26,4 +26,4 @@ public class CommandResult
     // Use JsonElement to delay parsing until we know the command type
     [JsonPropertyName("params")]
     public JsonElement Params { get; set; }
-} 
+}

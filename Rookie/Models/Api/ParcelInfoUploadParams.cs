@@ -39,4 +39,4 @@ public class ParcelInfoUploadParams
     [JsonPropertyName("pictureOssPath")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? PictureOssPath { get; set; }
-} 
+}

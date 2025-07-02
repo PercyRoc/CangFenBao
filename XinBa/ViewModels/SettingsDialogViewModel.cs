@@ -8,10 +8,10 @@ namespace XinBa.ViewModels;
 public class SettingsDialogViewModel : BindableBase, IDialogAware
 {
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
-    private readonly WeightSettingsViewModel _weightSettingsViewModel;
+    private readonly INotificationService _notificationService;
 
     private readonly VolumeSettingsViewModel _volumeSettingsViewModel;
-    private readonly INotificationService _notificationService;
+    private readonly WeightSettingsViewModel _weightSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
@@ -30,9 +30,12 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
     public DelegateCommand SaveCommand { get; }
     public DelegateCommand CancelCommand { get; }
 
-    public string Title => "System Settings";
+    public string Title
+    {
+        get => "System Settings";
+    }
 
-    public DialogCloseListener RequestClose { get; private set; } = default!;
+    public DialogCloseListener RequestClose { get; } = default!;
 
     public bool CanCloseDialog()
     {

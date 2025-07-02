@@ -15,23 +15,23 @@
 
     <Grid>
         <ScrollViewer VerticalScrollBarVisibility="Auto">
-            <StackPanel MaxWidth="800" 
-                    Margin="16" 
-                    HorizontalAlignment="Center">
+            <StackPanel MaxWidth="800"
+                        Margin="16"
+                        HorizontalAlignment="Center">
                 <TextBlock Text="主机设置"
-                       HorizontalAlignment="Center"
-                       FontSize="20"
-                       FontWeight="SemiBold"
-                       Margin="0,0,0,16" />
+                           HorizontalAlignment="Center"
+                           FontSize="20"
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,16" />
 
                 <!-- 设备基本配置卡片 -->
                 <ui:Card Margin="0,0,0,16">
                     <StackPanel Margin="16">
                         <TextBlock Text="设备基本配置"
-                               FontSize="16"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,16"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,16"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
 
                         <!-- 设备编号 -->
                         <Grid Margin="0,0,0,16">
@@ -41,14 +41,14 @@
                             </Grid.ColumnDefinitions>
 
                             <TextBlock Text="设备编号："
-                                   Grid.Column="0"
-                                   VerticalAlignment="Center"
-                                   HorizontalAlignment="Right"
-                                   Margin="0,0,8,0" />
+                                       Grid.Column="0"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Right"
+                                       Margin="0,0,8,0" />
 
                             <ui:TextBox Grid.Column="1"
-                                    Text="{Binding Configuration.DeviceId, UpdateSourceTrigger=PropertyChanged}"
-                                    PlaceholderText="请输入设备编号" />
+                                        Text="{Binding Configuration.DeviceId, UpdateSourceTrigger=PropertyChanged}"
+                                        PlaceholderText="请输入设备编号" />
                         </Grid>
                         <!-- 本地图片URL前缀 -->
                     </StackPanel>
@@ -58,11 +58,11 @@
                 <ui:Card Margin="0,0,0,16">
                     <StackPanel Margin="16">
                         <TextBlock Text="PLC配置"
-                               FontSize="16"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,8"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                        
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,8"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+
                         <!-- 超时设置说明 -->
                         <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
                                 CornerRadius="4"
@@ -70,13 +70,13 @@
                                 Margin="0,0,0,16">
                             <StackPanel>
                                 <TextBlock Text="💡 超时设置说明"
-                                       FontWeight="SemiBold"
-                                       FontSize="13"
-                                       Margin="0,0,0,8"
-                                       Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                           FontWeight="SemiBold"
+                                           FontSize="13"
+                                           Margin="0,0,0,8"
+                                           Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
                                 <TextBlock TextWrapping="Wrap"
-                                       FontSize="12"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                                     <Run Text="• 初始确认超时：等待PLC响应是否接受包裹的时间，建议设置为5-15秒" />
                                     <LineBreak />
                                     <Run Text="• 最终结果超时：等待PLC处理完包裹并返回最终结果的时间，建议设置为30-120秒" />
@@ -94,14 +94,14 @@
                             </Grid.ColumnDefinitions>
 
                             <TextBlock Text="IP地址："
-                                   Grid.Column="0"
-                                   VerticalAlignment="Center"
-                                   HorizontalAlignment="Right"
-                                   Margin="0,0,8,0" />
+                                       Grid.Column="0"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Right"
+                                       Margin="0,0,8,0" />
 
                             <ui:TextBox Grid.Column="1"
-                                    Text="{Binding Configuration.PlcIpAddress, UpdateSourceTrigger=PropertyChanged}"
-                                    PlaceholderText="请输入PLC服务IP地址" />
+                                        Text="{Binding Configuration.PlcIpAddress, UpdateSourceTrigger=PropertyChanged}"
+                                        PlaceholderText="请输入PLC服务IP地址" />
                         </Grid>
 
                         <!-- PLC端口号 -->
@@ -112,16 +112,16 @@
                             </Grid.ColumnDefinitions>
 
                             <TextBlock Text="端口号："
-                                   Grid.Column="0"
-                                   VerticalAlignment="Center"
-                                   HorizontalAlignment="Right"
-                                   Margin="0,0,8,0" />
+                                       Grid.Column="0"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Right"
+                                       Margin="0,0,8,0" />
 
                             <ui:NumberBox Grid.Column="1"
-                                      Width="120"
-                                      HorizontalAlignment="Left"
-                                      ClearButtonEnabled="False"
-                                      Value="{Binding Configuration.PlcPort, UpdateSourceTrigger=PropertyChanged}" />
+                                          Width="120"
+                                          HorizontalAlignment="Left"
+                                          ClearButtonEnabled="False"
+                                          Value="{Binding Configuration.PlcPort, UpdateSourceTrigger=PropertyChanged}" />
                         </Grid>
 
                         <!-- 初始确认超时时间 -->
@@ -133,25 +133,25 @@
                             </Grid.ColumnDefinitions>
 
                             <TextBlock Text="初始确认超时："
-                                   Grid.Column="0"
-                                   VerticalAlignment="Center"
-                                   HorizontalAlignment="Right"
-                                   Margin="0,0,8,0" />
+                                       Grid.Column="0"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Right"
+                                       Margin="0,0,8,0" />
 
                             <ui:NumberBox Grid.Column="1"
-                                      Width="120"
-                                      HorizontalAlignment="Left"
-                                      ClearButtonEnabled="False"
-                                      Minimum="1"
-                                      Maximum="300"
-                                      Value="{Binding Configuration.UploadAckTimeoutSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                            
+                                          Width="120"
+                                          HorizontalAlignment="Left"
+                                          ClearButtonEnabled="False"
+                                          Minimum="1"
+                                          Maximum="300"
+                                          Value="{Binding Configuration.UploadAckTimeoutSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
                             <TextBlock Grid.Column="2"
-                                   Text="秒 (等待PLC初始确认的超时时间)"
-                                   VerticalAlignment="Center"
-                                   Margin="8,0,0,0"
-                                   FontSize="12"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                       Text="秒 (等待PLC初始确认的超时时间)"
+                                       VerticalAlignment="Center"
+                                       Margin="8,0,0,0"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                         </Grid>
 
                         <!-- 最终结果超时时间 -->
@@ -163,25 +163,25 @@
                             </Grid.ColumnDefinitions>
 
                             <TextBlock Text="最终结果超时："
-                                   Grid.Column="0"
-                                   VerticalAlignment="Center"
-                                   HorizontalAlignment="Right"
-                                   Margin="0,0,8,0" />
+                                       Grid.Column="0"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Right"
+                                       Margin="0,0,8,0" />
 
                             <ui:NumberBox Grid.Column="1"
-                                      Width="120"
-                                      HorizontalAlignment="Left"
-                                      ClearButtonEnabled="False"
-                                      Minimum="10"
-                                      Maximum="600"
-                                      Value="{Binding Configuration.UploadResultTimeoutSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                            
+                                          Width="120"
+                                          HorizontalAlignment="Left"
+                                          ClearButtonEnabled="False"
+                                          Minimum="10"
+                                          Maximum="600"
+                                          Value="{Binding Configuration.UploadResultTimeoutSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
                             <TextBlock Grid.Column="2"
-                                   Text="秒 (等待PLC最终处理结果的超时时间)"
-                                   VerticalAlignment="Center"
-                                   Margin="8,0,0,0"
-                                   FontSize="12"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                       Text="秒 (等待PLC最终处理结果的超时时间)"
+                                       VerticalAlignment="Center"
+                                       Margin="8,0,0,0"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                         </Grid>
 
                         <!-- 向后兼容的超时时间 (隐藏或标记为已弃用) -->
@@ -192,16 +192,16 @@
                             </Grid.ColumnDefinitions>
 
                             <TextBlock Text="超时时间(旧)："
-                                   Grid.Column="0"
-                                   VerticalAlignment="Center"
-                                   HorizontalAlignment="Right"
-                                   Margin="0,0,8,0" />
+                                       Grid.Column="0"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Right"
+                                       Margin="0,0,8,0" />
 
                             <ui:NumberBox Grid.Column="1"
-                                      Width="120"
-                                      HorizontalAlignment="Left"
-                                      ClearButtonEnabled="False"
-                                      Value="{Binding Configuration.UploadTimeoutSeconds,Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                          Width="120"
+                                          HorizontalAlignment="Left"
+                                          ClearButtonEnabled="False"
+                                          Value="{Binding Configuration.UploadTimeoutSeconds,Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         </Grid>
 
                         <!-- 上包倒计时 -->
@@ -225,25 +225,25 @@
                                           Minimum="0"
                                           Maximum="60"
                                           Value="{Binding Configuration.UploadCountdownSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                            
+
                             <TextBlock Grid.Column="2"
-                                   Text="秒 (上包过程中的倒计时显示时间)"
-                                   VerticalAlignment="Center"
-                                   Margin="8,0,0,0"
-                                   FontSize="12"
-                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                       Text="秒 (上包过程中的倒计时显示时间)"
+                                       VerticalAlignment="Center"
+                                       Margin="8,0,0,0"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                         </Grid>
                     </StackPanel>
                 </ui:Card>
-                
+
                 <!-- 京东服务配置卡片 -->
                 <ui:Card>
                     <StackPanel Margin="16">
                         <TextBlock Text="京东服务配置"
-                               FontSize="16"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,16"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,16"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
 
                         <!-- 京东 IP地址 -->
                         <Grid Margin="0,0,0,16">
@@ -253,14 +253,14 @@
                             </Grid.ColumnDefinitions>
 
                             <TextBlock Text="IP地址："
-                                   Grid.Column="0"
-                                   VerticalAlignment="Center"
-                                   HorizontalAlignment="Right"
-                                   Margin="0,0,8,0" />
+                                       Grid.Column="0"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Right"
+                                       Margin="0,0,8,0" />
 
                             <ui:TextBox Grid.Column="1"
-                                    Text="{Binding Configuration.JdIpAddress, UpdateSourceTrigger=PropertyChanged}"
-                                    PlaceholderText="请输入京东服务IP地址" />
+                                        Text="{Binding Configuration.JdIpAddress, UpdateSourceTrigger=PropertyChanged}"
+                                        PlaceholderText="请输入京东服务IP地址" />
                         </Grid>
 
                         <!-- 京东端口号 -->
@@ -271,18 +271,18 @@
                             </Grid.ColumnDefinitions>
 
                             <TextBlock Text="端口号："
-                                   Grid.Column="0"
-                                   VerticalAlignment="Center"
-                                   HorizontalAlignment="Right"
-                                   Margin="0,0,8,0" />
+                                       Grid.Column="0"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Right"
+                                       Margin="0,0,8,0" />
 
                             <ui:NumberBox Grid.Column="1"
-                                      Width="120"
-                                      HorizontalAlignment="Left"
-                                      ClearButtonEnabled="False"
-                                      Value="{Binding Configuration.JdPort, UpdateSourceTrigger=PropertyChanged}" />
+                                          Width="120"
+                                          HorizontalAlignment="Left"
+                                          ClearButtonEnabled="False"
+                                          Value="{Binding Configuration.JdPort, UpdateSourceTrigger=PropertyChanged}" />
                         </Grid>
-                        
+
                         <!-- 京东本地图片URL前缀 -->
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -291,14 +291,14 @@
                             </Grid.ColumnDefinitions>
 
                             <TextBlock Text="图片URL前缀："
-                                   Grid.Column="0"
-                                   VerticalAlignment="Center"
-                                   HorizontalAlignment="Right"
-                                   Margin="0,0,8,0" />
+                                       Grid.Column="0"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Right"
+                                       Margin="0,0,8,0" />
 
                             <ui:TextBox Grid.Column="1"
-                                    Text="{Binding Configuration.JdLocalHttpUrlPrefix, UpdateSourceTrigger=PropertyChanged}"
-                                    PlaceholderText="请输入本地图片URL前缀 (例如 http://localhost:8080/)" />
+                                        Text="{Binding Configuration.JdLocalHttpUrlPrefix, UpdateSourceTrigger=PropertyChanged}"
+                                        PlaceholderText="请输入本地图片URL前缀 (例如 http://localhost:8080/)" />
                         </Grid>
                     </StackPanel>
                 </ui:Card>

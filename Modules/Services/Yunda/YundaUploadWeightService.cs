@@ -1,16 +1,16 @@
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
+using Common.Services.Settings;
 using Newtonsoft.Json;
 using Serilog;
 using ShanghaiModuleBelt.Models.Yunda;
 using ShanghaiModuleBelt.Models.Yunda.Settings;
-using Common.Services.Settings;
 
 namespace ShanghaiModuleBelt.Services.Yunda;
 
 /// <summary>
-/// 韵达上传重量接口服务实现
+///     韵达上传重量接口服务实现
 /// </summary>
 public class YundaUploadWeightService(
     HttpClient httpClient,
@@ -18,7 +18,7 @@ public class YundaUploadWeightService(
     : IYundaUploadWeightService
 {
     /// <summary>
-    /// 发送上传重量请求
+    ///     发送上传重量请求
     /// </summary>
     /// <param name="request">韵达上传重量请求</param>
     /// <returns>韵达上传重量响应</returns>
@@ -30,9 +30,9 @@ public class YundaUploadWeightService(
             string.IsNullOrEmpty(settings.AppSecret) || string.IsNullOrEmpty(settings.PartnerId) ||
             string.IsNullOrEmpty(settings.Password) || string.IsNullOrEmpty(settings.Rc4Key))
         {
-            Log.Error("韵达API配置不完整，请检查ApiUrl, AppKey, AppSecret, PartnerId, Password, Rc4Key。"+
+            Log.Error("韵达API配置不完整，请检查ApiUrl, AppKey, AppSecret, PartnerId, Password, Rc4Key。" +
                       "当前配置：ApiUrl={ApiUrl}, AppKey={AppKey}, AppSecret={AppSecret}, PartnerId={PartnerId}, Password={Password}, Rc4Key={Rc4Key}",
-                      settings.ApiUrl, settings.AppKey, settings.AppSecret, settings.PartnerId, settings.Password, settings.Rc4Key);
+                settings.ApiUrl, settings.AppKey, settings.AppSecret, settings.PartnerId, settings.Password, settings.Rc4Key);
             return new YundaUploadWeightResponse
             {
                 Result = false,
@@ -112,11 +112,11 @@ public class YundaUploadWeightService(
     }
 
     /// <summary>
-    /// 计算 sign 签名
-    /// TODO: 详细签名规则待韵达文档确认，目前使用 MD5 + Base64 占位
-    /// 韵达鉴权说明：所有报文体（包括公共参数、业务参数、sign）都拼接成一个字符串（JSON），
-    /// 然后使用 partnerid+password+rc4Key 对该字符串进行RC4加密。
-    /// 鉴于RC4在.NET Core中需要额外实现或库，此处暂用MD5+Base64占位
+    ///     计算 sign 签名
+    ///     TODO: 详细签名规则待韵达文档确认，目前使用 MD5 + Base64 占位
+    ///     韵达鉴权说明：所有报文体（包括公共参数、业务参数、sign）都拼接成一个字符串（JSON），
+    ///     然后使用 partnerid+password+rc4Key 对该字符串进行RC4加密。
+    ///     鉴于RC4在.NET Core中需要额外实现或库，此处暂用MD5+Base64占位
     /// </summary>
     /// <param name="content">业务报文体JSON字符串</param>
     /// <param name="appSecret">AppSecret</param>
@@ -135,4 +135,4 @@ public class YundaUploadWeightService(
         }
         return sb.ToString();
     }
-} 
+}

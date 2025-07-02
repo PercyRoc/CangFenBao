@@ -5,12 +5,12 @@ using SharedUI.ViewModels.Settings;
 
 namespace Rookie.ViewModels.Windows.Dialogs;
 
-public class SettingsDialogViewModel: BindableBase, IDialogAware
+public class SettingsDialogViewModel : BindableBase, IDialogAware
 {
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
-    private readonly RookieApiSettingsViewModel _rookieApiSettingsViewModel;
     private readonly INotificationService _notificationService;
-    
+    private readonly RookieApiSettingsViewModel _rookieApiSettingsViewModel;
+
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
         INotificationService notificationService)
@@ -20,14 +20,14 @@ public class SettingsDialogViewModel: BindableBase, IDialogAware
         // 创建各个设置页面的ViewModel实例
         _cameraSettingsViewModel = containerProvider.Resolve<CameraSettingsViewModel>();
         _rookieApiSettingsViewModel = containerProvider.Resolve<RookieApiSettingsViewModel>();
-        
+
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
     }
     public DelegateCommand SaveCommand { get; }
     public DelegateCommand CancelCommand { get; }
-    
-    public DialogCloseListener RequestClose { get; private set; } = default!;
+
+    public DialogCloseListener RequestClose { get; } = default!;
 
     public bool CanCloseDialog()
     {

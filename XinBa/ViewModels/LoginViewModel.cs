@@ -111,12 +111,15 @@ internal class LoginViewModel : BindableBase, IDialogAware
     /// <summary>
     ///     对话框标题
     /// </summary>
-    public string Title => "Employee Login";
+    public string Title
+    {
+        get => "Employee Login";
+    }
 
     /// <summary>
     ///     请求关闭对话框事件 (Prism 9 style)
     /// </summary>
-    public DialogCloseListener RequestClose { get; private set; } = default!;
+    public DialogCloseListener RequestClose { get; } = default!;
 
     /// <summary>
     ///     是否可以关闭对话框

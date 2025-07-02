@@ -2,10 +2,10 @@ using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Windows.Media.Imaging;
 using Common.Models.Package;
 using DeviceService.DataSourceDevices.Camera.Models;
 using Serilog;
-using System.Windows.Media.Imaging;
 
 namespace DeviceService.DataSourceDevices.Camera.RenJia;
 
@@ -26,7 +26,7 @@ public record DimensionImagesResult(
     bool IsSuccess,
     string? ErrorMessage = null,
     BitmapSource? VerticalViewImage = null, // 俯视图
-    BitmapSource? SideViewImage = null      // 侧视图
+    BitmapSource? SideViewImage = null // 侧视图
 );
 
 /// <summary>
@@ -54,11 +54,20 @@ public class RenJiaCameraService : ICameraService
         }
     }
 
-    public IObservable<PackageInfo> PackageStream => _packageSubject.AsObservable();
+    public IObservable<PackageInfo> PackageStream
+    {
+        get => _packageSubject.AsObservable();
+    }
 
-    public IObservable<BitmapSource> ImageStream => _imageSubject.Select(tuple => tuple.Image);
+    public IObservable<BitmapSource> ImageStream
+    {
+        get => _imageSubject.Select(tuple => tuple.Image);
+    }
 
-    public IObservable<(BitmapSource Image, string CameraId)> ImageStreamWithId => _imageSubject.AsObservable();
+    public IObservable<(BitmapSource Image, string CameraId)> ImageStreamWithId
+    {
+        get => _imageSubject.AsObservable();
+    }
 
     public bool Start()
     {
@@ -197,6 +206,25 @@ public class RenJiaCameraService : ICameraService
         GC.SuppressFinalize(this);
     }
 
+    // Implement the GetAvailableCameras method
+    public IEnumerable<CameraBasicInfo> GetAvailableCameras()
+    {
+        // RenJia typically represents a single volume measurement device.
+        // Return a list containing one entry if connected.
+        if (IsConnected)
+        {
+            return new List<CameraBasicInfo>
+            {
+                new()
+                {
+                    Id = "RenJia_0",
+                    Name = "人加体积相机"
+                } // Provide default info
+            };
+        }
+        return []; // Return empty list if not connected
+    }
+
     /// <summary>
     ///     触发一次测量
     /// </summary>
@@ -273,8 +301,8 @@ public class RenJiaCameraService : ICameraService
                     }
                     catch (NotSupportedException nex)
                     {
-                         Log.Warning(nex, "转换来自 GetDmsResult 的图像数据失败，确认数据是否为有效的 JPEG 格式 (大小: {Size})", len);
-                         // Log prefix if helpful
+                        Log.Warning(nex, "转换来自 GetDmsResult 的图像数据失败，确认数据是否为有效的 JPEG 格式 (大小: {Size})", len);
+                        // Log prefix if helpful
                         var prefix = string.Empty;
                         const int prefixLength = 32;
                         try { prefix = Convert.ToBase64String(imageDataBuffer, 0, Math.Min(len, prefixLength)); }
@@ -284,7 +312,7 @@ public class RenJiaCameraService : ICameraService
                         }
 
                         Log.Warning("Data Prefix (Base64): {Prefix}", prefix);
-                         // Image processing failed, but dimensions might still be valid
+                        // Image processing failed, but dimensions might still be valid
                     }
                     catch (Exception ex)
                     {
@@ -293,7 +321,7 @@ public class RenJiaCameraService : ICameraService
                     }
 
                     // Check dimensions validity again *after* trying image processing
-                     if (dimensionData.Any(static d => float.IsNaN(d) || float.IsInfinity(d) || d is <= 0 or > 2000))
+                    if (dimensionData.Any(static d => float.IsNaN(d) || float.IsInfinity(d) || d is <= 0 or > 2000))
                     {
                         var error = $"测量结果无效：L={dimensionData[0]}, W={dimensionData[1]}, H={dimensionData[2]}";
                         return new MeasureResult(false, error);
@@ -381,21 +409,6 @@ public class RenJiaCameraService : ICameraService
         }
     }
 
-    // Implement the GetAvailableCameras method
-    public IEnumerable<CameraBasicInfo> GetAvailableCameras()
-    {
-        // RenJia typically represents a single volume measurement device.
-        // Return a list containing one entry if connected.
-        if (IsConnected)
-        {
-            return new List<CameraBasicInfo>
-            {
-                new() { Id = "RenJia_0", Name = "人加体积相机" } // Provide default info
-            };
-        }
-        return []; // Return empty list if not connected
-    }
-
     /// <summary>
     ///     异步获取尺寸刻度图 (俯视图和侧视图)
     /// </summary>
@@ -456,14 +469,11 @@ public class RenJiaCameraService : ICameraService
                 if (verticalImage != null || sideImage != null)
                 {
                     Log.Information("成功获取尺寸刻度图 (俯视图: {VStatus}, 侧视图: {SStatus})",
-                         verticalImage != null ? "成功" : "失败",
-                         sideImage != null ? "成功" : "失败");
+                        verticalImage != null ? "成功" : "失败",
+                        sideImage != null ? "成功" : "失败");
                     return new DimensionImagesResult(true, conversionError, verticalImage, sideImage);
                 }
-                else
-                {
-                    return new DimensionImagesResult(false, conversionError ?? "无法转换任何图像");
-                }
+                return new DimensionImagesResult(false, conversionError ?? "无法转换任何图像");
 
             });
         }
@@ -492,20 +502,23 @@ public class RenJiaCameraService : ICameraService
         {
             // Plausible check for PNG signature anyway if size looks wrong
             const int pngSignatureOffset = headerSize; // Expected offset of PNG signature
-            var signatureBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47 }; // PNG signature
+            var signatureBytes = new byte[]
+            {
+                0x89, 0x50, 0x4E, 0x47
+            }; // PNG signature
             if (buffer.Length >= pngSignatureOffset + signatureBytes.Length &&
                 buffer.Skip(pngSignatureOffset).Take(signatureBytes.Length).SequenceEqual(signatureBytes))
             {
-                 Log.Warning("读取的 {ImageName} 图像大小无效 ({Size}), 但在偏移量 {Offset} 处找到PNG签名。尝试直接从签名开始解码整个剩余缓冲区。",
+                Log.Warning("读取的 {ImageName} 图像大小无效 ({Size}), 但在偏移量 {Offset} 处找到PNG签名。尝试直接从签名开始解码整个剩余缓冲区。",
                     imageNameForLogging, imageSize, pngSignatureOffset);
-                 // Fallback: Try decoding from the PNG signature onwards, using the rest of the buffer. Might still fail.
-                 imageSize = remainingBufferSize; // Use the maximum possible size as a guess
-                 // If this still fails, the data is likely corrupt or the size interpretation is wrong.
+                // Fallback: Try decoding from the PNG signature onwards, using the rest of the buffer. Might still fail.
+                imageSize = remainingBufferSize; // Use the maximum possible size as a guess
+                // If this still fails, the data is likely corrupt or the size interpretation is wrong.
             }
             else
             {
                 Log.Warning("读取的 {ImageName} 图像大小无效或超出缓冲区范围 (Size: {Size}, Buffer Remaining: {Remaining}), 且未找到PNG签名。无法解码。",
-                   imageNameForLogging, imageSize, remainingBufferSize);
+                    imageNameForLogging, imageSize, remainingBufferSize);
                 return null;
             }
 
@@ -535,7 +548,9 @@ public class RenJiaCameraService : ICameraService
                 {
                     prefix = Convert.ToBase64String(buffer, headerSize, Math.Min(imageSize, prefixLength));
                 }
-                catch { /* Ignore potential errors during prefix generation */ }
+                catch
+                { /* Ignore potential errors during prefix generation */
+                }
             }
             Log.Warning(nex, "转换 {ImageName} 图像数据失败 (在偏移量 {Offset}, 尝试长度 {Length})，可能格式无效或数据损坏。Segment Prefix (Base64): {Prefix}",
                 imageNameForLogging, headerSize, imageSize, prefix);
@@ -583,7 +598,7 @@ internal static class NativeMethods
     [DllImport("VolumeMeasurementDll.dll", EntryPoint = "GetDmsResult", CallingConvention = CallingConvention.Cdecl)]
     public static extern int GetDmsResult(
         [Out] float[] dimensionData,
-        [Out, MarshalAs(UnmanagedType.LPArray)] // Use MarshalAs like example, removed SizeConst
+        [Out] [MarshalAs(UnmanagedType.LPArray)] // Use MarshalAs like example, removed SizeConst
         byte[] imageData);
 
     // 获取体积测量结果错误信息
@@ -601,6 +616,6 @@ internal static class NativeMethods
     // 获取尺寸刻度图，参数verticalViewImage存储俯视图，参数sideViewImage用于存储侧视图
     [DllImport("VolumeMeasurementDll.dll", EntryPoint = "GetDimensionImage", CallingConvention = CallingConvention.Cdecl)]
     public static extern int GetDimensionImage(
-        [Out, MarshalAs(UnmanagedType.LPArray)] byte[] verticalViewImage, // Use MarshalAs like example
-        [Out, MarshalAs(UnmanagedType.LPArray)] byte[] sideViewImage); // Use MarshalAs like example
+        [Out] [MarshalAs(UnmanagedType.LPArray)] byte[] verticalViewImage, // Use MarshalAs like example
+        [Out] [MarshalAs(UnmanagedType.LPArray)] byte[] sideViewImage); // Use MarshalAs like example
 }

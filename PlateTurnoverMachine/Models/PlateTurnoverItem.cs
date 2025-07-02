@@ -5,13 +5,13 @@ namespace DongtaiFlippingBoardMachine.Models;
 /// </summary>
 public class PlateTurnoverItem : BindableBase
 {
+    private double _delayFactor = 0.5;
+    private double _distance;
     private string _index = string.Empty;
+    private string? _ioPoint;
+    private int _magnetTime = 200;
     private int _mappingChute;
     private string? _tcpAddress;
-    private string? _ioPoint;
-    private double _distance;
-    private double _delayFactor = 0.5;
-    private int _magnetTime = 200;
 
     /// <summary>
     ///     序号

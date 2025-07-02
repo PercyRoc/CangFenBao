@@ -1,6 +1,8 @@
-﻿using System.Diagnostics;
+﻿using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Threading;
 using Common.Extensions;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.Extensions;
@@ -13,25 +15,23 @@ using SharedUI.Extensions;
 using SharedUI.ViewModels;
 using SharedUI.ViewModels.Settings;
 using SharedUI.Views.Settings;
-using SortingServices.Servers.Services.JuShuiTan;
-using Timer = System.Timers.Timer;
-using System.ComponentModel;
-using System.Windows.Threading;
 using SharedUI.Views.Windows;
 using SortingServices.Car.Service;
+using SortingServices.Servers.Services.JuShuiTan;
+using Timer = System.Timers.Timer;
 
 namespace HuiXin;
 
 /// <summary>
-/// Interaction logic for App.xaml
+///     Interaction logic for App.xaml
 /// </summary>
 public partial class App
 {
-    private static Mutex? _mutex;
     private const string MutexName = "Global\\HuiXin_App_Mutex";
+    private static Mutex? _mutex;
     private Timer? _cleanupTimer;
-    private bool _ownsMutex;
     private bool _isShuttingDown;
+    private bool _ownsMutex;
 
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
@@ -95,12 +95,9 @@ public partial class App
                 Environment.Exit(0); // 直接退出进程
                 return null!; // 虽然不会执行到这里，但需要满足返回类型
             }
-            else
-            {
-                // 可以获取Mutex，说明前一个实例可能异常退出但Mutex已被释放
-                _ownsMutex = true;
-                return Container.Resolve<MainWindow>();
-            }
+            // 可以获取Mutex，说明前一个实例可能异常退出但Mutex已被释放
+            _ownsMutex = true;
+            return Container.Resolve<MainWindow>();
         }
         catch (Exception ex)
         {
@@ -114,7 +111,7 @@ public partial class App
     }
 
     /// <summary>
-    /// 检查是否已有相同名称的应用程序实例在运行
+    ///     检查是否已有相同名称的应用程序实例在运行
     /// </summary>
     private static bool IsApplicationAlreadyRunning()
     {
@@ -140,10 +137,10 @@ public partial class App
 
         // 启动DUMP文件清理任务
         StartCleanupTask();
-        
+
         // 调用基类方法初始化容器等
         base.OnStartup(e);
-        
+
         // 注册全局异常处理
         DispatcherUnhandledException += App_DispatcherUnhandledException;
         Log.Information("DispatcherUnhandledException handler attached.");
@@ -153,7 +150,7 @@ public partial class App
     }
 
     /// <summary>
-    /// 全局未处理异常处理程序
+    ///     全局未处理异常处理程序
     /// </summary>
     private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
@@ -163,7 +160,7 @@ public partial class App
     }
 
     /// <summary>
-    /// 手动启动后台服务
+    ///     手动启动后台服务
     /// </summary>
     private void StartBackgroundServices()
     {
@@ -187,8 +184,8 @@ public partial class App
             // 启动相机托管服务
             var cameraStartupService = Container.Resolve<CameraStartupService>();
             _ = Task.Run(() => cameraStartupService.StartAsync(CancellationToken.None))
-                   .ContinueWith(t => Log.Error(t.Exception, "启动 CameraStartupService 时出错"), TaskContinuationOptions.OnlyOnFaulted);
-            
+                .ContinueWith(t => Log.Error(t.Exception, "启动 CameraStartupService 时出错"), TaskContinuationOptions.OnlyOnFaulted);
+
             Log.Information("后台服务启动已全部发起。");
         }
         catch (Exception ex)
@@ -197,7 +194,7 @@ public partial class App
             MessageBox.Show($"启动后台服务时发生错误: {ex.Message}\n请检查配置和设备连接。", "启动错误", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         finally
-        {            
+        {
             // 在 UI 线程关闭启动进度窗口
             Current.Dispatcher.InvokeAsync(() =>
             {
@@ -286,7 +283,7 @@ public partial class App
             _cleanupTimer?.Stop();
             _cleanupTimer?.Dispose();
             Log.Debug("清理定时器已停止。");
-            
+
             // 调用基类 OnExit
             base.OnExit(e);
         }
@@ -312,8 +309,10 @@ public partial class App
                 }
             }
             catch (Exception ex)
-            { Log.Error(ex, "释放Mutex时发生错误"); }
-            
+            {
+                Log.Error(ex, "释放Mutex时发生错误");
+            }
+
             // 等待所有日志写入完成
             await Log.CloseAndFlushAsync();
         }
@@ -339,7 +338,7 @@ public partial class App
     }
 
     /// <summary>
-    /// 主窗口关闭事件处理程序
+    ///     主窗口关闭事件处理程序
     /// </summary>
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
@@ -399,7 +398,7 @@ public partial class App
     }
 
     /// <summary>
-    /// 手动停止后台服务
+    ///     手动停止后台服务
     /// </summary>
     /// <param name="waitForCompletion">是否等待服务停止完成。</param>
     private void StopBackgroundServices(bool waitForCompletion)
@@ -413,9 +412,9 @@ public partial class App
             if (cameraStartupService != null)
             {
                 tasks.Add(Task.Run(() => cameraStartupService.StopAsync(CancellationToken.None))
-                           .ContinueWith(t => Log.Error(t.Exception, "停止 CameraStartupService 时出错"), TaskContinuationOptions.OnlyOnFaulted));
+                    .ContinueWith(t => Log.Error(t.Exception, "停止 CameraStartupService 时出错"), TaskContinuationOptions.OnlyOnFaulted));
             }
-            
+
             // 清理相机相关资源
             try
             {
@@ -427,9 +426,9 @@ public partial class App
                 cameraService?.Dispose();
                 Log.Information("相机服务已释放");
             }
-            catch(Exception ex) 
-            { 
-                Log.Error(ex, "清理相机或服务资源时出错"); 
+            catch (Exception ex)
+            {
+                Log.Error(ex, "清理相机或服务资源时出错");
             }
 
             if (tasks.Count != 0 && waitForCompletion)
@@ -450,7 +449,7 @@ public partial class App
                 catch (AggregateException aex)
                 {
                     Log.Error(aex, "等待后台服务停止时发生聚合错误。");
-                    foreach(var innerEx in aex.InnerExceptions)
+                    foreach (var innerEx in aex.InnerExceptions)
                     {
                         Log.Error(innerEx, "  内部停止错误:");
                     }

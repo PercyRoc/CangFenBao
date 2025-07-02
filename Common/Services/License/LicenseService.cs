@@ -74,7 +74,7 @@ public class LicenseService : ILicenseService
 
     private (bool IsValid, string? Message) ValidateLicenseData(DateLimitConfig config)
     {
-        if (config.IsValid == false)
+        if (!config.IsValid)
         {
             Log.Warning("授权已失效");
             return (false, "软件授权已失效，请联系厂家重新授权。");
@@ -171,4 +171,4 @@ public class LicenseService : ILicenseService
         if (key.Length > 32) key = key[..32];
         return Encoding.UTF8.GetBytes(key);
     }
-} 
+}

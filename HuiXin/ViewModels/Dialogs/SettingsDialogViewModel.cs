@@ -13,9 +13,9 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
     // 保存各个设置页面的ViewModel实例
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
     private readonly CarConfigViewModel _carConfigViewModel;
-    private readonly SerialPortSettingsViewModel _serialPortSettingsViewModel;
-    private readonly INotificationService _notificationService;
     private readonly JushuitanSettingsViewModel _jushuitanSettingsViewModel;
+    private readonly INotificationService _notificationService;
+    private readonly SerialPortSettingsViewModel _serialPortSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
@@ -30,7 +30,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
         _barcodeChuteSettingsViewModel = containerProvider.Resolve<BarcodeChuteSettingsViewModel>();
         _serialPortSettingsViewModel = containerProvider.Resolve<SerialPortSettingsViewModel>();
         _jushuitanSettingsViewModel = containerProvider.Resolve<JushuitanSettingsViewModel>();
-        
+
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
     }
@@ -38,9 +38,12 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
     public DelegateCommand SaveCommand { get; }
     public DelegateCommand CancelCommand { get; }
 
-    public string Title => "系统设置";
+    public string Title
+    {
+        get => "系统设置";
+    }
 
-    public DialogCloseListener RequestClose { get; private set; } = default!;
+    public DialogCloseListener RequestClose { get; } = default!;
 
     public bool CanCloseDialog()
     {

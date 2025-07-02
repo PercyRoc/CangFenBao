@@ -35,7 +35,8 @@
                                    VerticalAlignment="Center"
                                    HorizontalAlignment="Right"
                                    Margin="0,0,8,0" />
-                        <ui:TextBox Grid.Column="1" Text="{Binding XiyiguApiSettings.BaseUrl}" PlaceholderText="请输入API基础URL" />
+                        <ui:TextBox Grid.Column="1" Text="{Binding XiyiguApiSettings.BaseUrl}"
+                                    PlaceholderText="请输入API基础URL" />
                     </Grid>
 
                     <!-- AES密钥 -->
@@ -49,7 +50,8 @@
                                    VerticalAlignment="Center"
                                    HorizontalAlignment="Right"
                                    Margin="0,0,8,0" />
-                        <ui:TextBox Grid.Column="1" Text="{Binding XiyiguApiSettings.AesKey}" PlaceholderText="请输入AES密钥" />
+                        <ui:TextBox Grid.Column="1" Text="{Binding XiyiguApiSettings.AesKey}"
+                                    PlaceholderText="请输入AES密钥" />
                     </Grid>
 
                     <!-- 设备编号 -->
@@ -63,7 +65,8 @@
                                    VerticalAlignment="Center"
                                    HorizontalAlignment="Right"
                                    Margin="0,0,8,0" />
-                        <ui:TextBox Grid.Column="1" Text="{Binding XiyiguApiSettings.MachineMx}" PlaceholderText="请输入设备编号" />
+                        <ui:TextBox Grid.Column="1" Text="{Binding XiyiguApiSettings.MachineMx}"
+                                    PlaceholderText="请输入设备编号" />
                     </Grid>
                 </StackPanel>
             </ui:Card>

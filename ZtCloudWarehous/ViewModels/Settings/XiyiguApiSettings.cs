@@ -3,7 +3,7 @@
 namespace ZtCloudWarehous.ViewModels.Settings;
 
 [Configuration("XiyiguApiSettings")]
-public class XiyiguApiSettings: BindableBase
+public class XiyiguApiSettings : BindableBase
 {
     private string _aesKey = "H1ToUe8qCdz2sfIZ";
     private string _baseUrl = "http://dx.y-open.com/dxiotmobile";

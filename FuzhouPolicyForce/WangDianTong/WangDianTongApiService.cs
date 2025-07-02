@@ -10,18 +10,18 @@ using Serilog;
 namespace FuzhouPolicyForce.WangDianTong;
 
 /// <summary>
-/// 旺店通API服务实现
+///     旺店通API服务实现
 /// </summary>
 public class WangDianTongApiService(HttpClient httpClient, ISettingsService settingsService) : IWangDianTongApiService
 {
     /// <summary>
-    /// 重量回传
+    ///     重量回传
     /// </summary>
     public async Task<WeightPushResponse> PushWeightAsync(
-        string logisticsNo, 
-        decimal weight, 
-        bool isCheckWeight = true, 
-        bool isCheckTradeStatus = false, 
+        string logisticsNo,
+        decimal weight,
+        bool isCheckWeight = true,
+        bool isCheckTradeStatus = false,
         string packagerNo = "")
     {
         Dictionary<string, string> requestParams = [];
@@ -29,18 +29,32 @@ public class WangDianTongApiService(HttpClient httpClient, ISettingsService sett
         {
             // 获取旺店通配置
             var settings = settingsService.LoadSettings<WangDianTongSettings>();
-            
+
             // 构建请求参数
             var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             requestParams = new Dictionary<string, string>
             {
-                { "sid", settings.SellerAccount },
-                { "appkey", settings.ApiAccount },
-                { "timestamp", timestamp.ToString() },
-                { "logistics_no", logisticsNo },
-                { "weight", weight.ToString(CultureInfo.CurrentCulture) },
-                { "is_setting", isCheckWeight ? "1" : "0" },
-                { "is_check_trade_status", isCheckTradeStatus ? "1" : "0" }
+                {
+                    "sid", settings.SellerAccount
+                },
+                {
+                    "appkey", settings.ApiAccount
+                },
+                {
+                    "timestamp", timestamp.ToString()
+                },
+                {
+                    "logistics_no", logisticsNo
+                },
+                {
+                    "weight", weight.ToString(CultureInfo.CurrentCulture)
+                },
+                {
+                    "is_setting", isCheckWeight ? "1" : "0"
+                },
+                {
+                    "is_check_trade_status", isCheckTradeStatus ? "1" : "0"
+                }
             };
 
             // 如果有打包员编号，则添加
@@ -56,24 +70,24 @@ public class WangDianTongApiService(HttpClient httpClient, ISettingsService sett
             // 构建请求URL
             var apiUrl = $"{settings.GetApiBaseUrl()}open_api/service.php";
             // var apiUrl = $"{settings.GetApiBaseUrl()}vip_stockout_sales_weight_push.php";
-            
+
             // 记录请求详情
-            Log.Information("旺店通重量回传请求: URL={Url}, 参数={@Params}", 
-                apiUrl, 
+            Log.Information("旺店通重量回传请求: URL={Url}, 参数={@Params}",
+                apiUrl,
                 requestParams.Where(p => p.Key != "sign").ToDictionary(p => p.Key, p => p.Value));
 
             // 构建表单内容
             var formContent = new FormUrlEncodedContent(requestParams);
-            
+
             // 发送请求
             var response = await httpClient.PostAsync(apiUrl, formContent);
-            
+
             // 确保请求成功
             response.EnsureSuccessStatusCode();
-            
+
             // 解析响应
             var result = await response.Content.ReadFromJsonAsync<WeightPushResponse>();
-            
+
             // 记录响应详情
             if (result!.IsSuccess)
             {
@@ -85,13 +99,13 @@ public class WangDianTongApiService(HttpClient httpClient, ISettingsService sett
                 Log.Warning("旺店通重量回传失败: 物流单号={LogisticsNo}, 重量={Weight}kg, 错误码={Code}, 错误信息={Message}, 响应数据={@Response}",
                     logisticsNo, weight, result.Code, result.Message, result);
             }
-            
+
             return result;
         }
         catch (HttpRequestException ex)
         {
-            Log.Error(ex, "旺店通重量回传HTTP请求异常: 物流单号={LogisticsNo}, 请求URL={Url}, 请求参数={@Params}", 
-                logisticsNo, 
+            Log.Error(ex, "旺店通重量回传HTTP请求异常: 物流单号={LogisticsNo}, 请求URL={Url}, 请求参数={@Params}",
+                logisticsNo,
                 $"{settingsService.LoadSettings<WangDianTongSettings>().GetApiBaseUrl()}vip_stockout_sales_weight_push.php",
                 requestParams.Where(p => p.Key != "sign").ToDictionary(p => p.Key, p => p.Value));
             return new WeightPushResponse
@@ -100,10 +114,10 @@ public class WangDianTongApiService(HttpClient httpClient, ISettingsService sett
                 Message = $"HTTP请求异常: {ex.Message}"
             };
         }
-        catch (Exception ex) 
+        catch (Exception ex)
         {
-            Log.Error(ex, "旺店通重量回传发生异常: 物流单号={LogisticsNo}, 请求URL={Url}, 请求参数={@Params}", 
-                logisticsNo, 
+            Log.Error(ex, "旺店通重量回传发生异常: 物流单号={LogisticsNo}, 请求URL={Url}, 请求参数={@Params}",
+                logisticsNo,
                 $"{settingsService.LoadSettings<WangDianTongSettings>().GetApiBaseUrl()}vip_stockout_sales_weight_push.php",
                 requestParams.Where(p => p.Key != "sign").ToDictionary(p => p.Key, p => p.Value));
             return new WeightPushResponse
@@ -115,7 +129,7 @@ public class WangDianTongApiService(HttpClient httpClient, ISettingsService sett
     }
 
     /// <summary>
-    /// 计算API签名
+    ///     计算API签名
     /// </summary>
     private static string CalculateSign(Dictionary<string, string> parameters, string secret)
     {
@@ -147,4 +161,4 @@ public class WangDianTongApiService(HttpClient httpClient, ISettingsService sett
 
         return md5String;
     }
-} 
+}

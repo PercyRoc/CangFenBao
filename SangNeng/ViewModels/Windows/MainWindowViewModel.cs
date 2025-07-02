@@ -1,10 +1,17 @@
+using System.Collections.ObjectModel;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.IO;
+using System.Windows;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Common.Data;
 using Common.Models.Package;
 using Common.Services.Audio;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
-// using DeviceService.DataSourceDevices.Camera.Hikvision;
 using DeviceService.DataSourceDevices.Camera.Models.Camera;
 using DeviceService.DataSourceDevices.Camera.Models.Camera.Enums;
 using DeviceService.DataSourceDevices.Camera.RenJia;
@@ -16,14 +23,7 @@ using Sunnen.Events;
 using Sunnen.Models;
 using Sunnen.Services;
 using Sunnen.ViewModels.Settings;
-using System.Collections.ObjectModel;
-using System.Drawing;
-using System.Drawing.Drawing2D;
-using System.IO;
-using System.Windows;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
+// using DeviceService.DataSourceDevices.Camera.Hikvision;
 using Color = System.Drawing.Color;
 using Timer = System.Timers.Timer;
 
@@ -34,18 +34,20 @@ namespace Sunnen.ViewModels.Windows;
 /// </summary>
 public class MainWindowViewModel : BindableBase, IDisposable
 {
+    private const int DuplicateBarcodeIntervalMs = 500;
     private readonly IAudioService _audioService;
+    private readonly SemaphoreSlim _barcodeProcessingLock = new(1, 1);
+    private readonly IDisposable? _barcodeSubscription;
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
     private readonly SemaphoreSlim _measurementLock = new(1, 1);
+    private readonly INotificationService _notificationService;
     private readonly IPackageDataService _packageDataService;
     private readonly ISangNengService _sangNengService;
     private readonly ISettingsService _settingsService;
     private readonly Timer _timer;
     private readonly RenJiaCameraService _volumeCamera;
     private readonly SerialPortWeightService _weightService;
-    private readonly IDisposable? _barcodeSubscription;
-    private readonly INotificationService _notificationService;
     private ObservableCollection<SelectablePalletModel> _availablePallets;
     private string _currentBarcode = string.Empty;
     private ImageSource? _currentImage;
@@ -53,16 +55,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private ObservableCollection<DeviceStatus> _deviceStatuses = [];
     private bool _disposed;
     private bool _hasPlayedErrorSound;
+    private string _lastProcessedBarcode = string.Empty;
+    private DateTime _lastProcessedTime = DateTime.MinValue;
     private ObservableCollection<PackageInfo> _packageHistory = [];
     private ObservableCollection<PackageInfoItem> _packageInfoItems = [];
     private SelectablePalletModel? _selectedPallet;
     private ObservableCollection<StatisticsItem> _statisticsItems = [];
     private SystemStatus _systemStatus = SystemStatus.GetCurrentStatus();
     private ImageSource? _volumeImage;
-    private string _lastProcessedBarcode = string.Empty;
-    private DateTime _lastProcessedTime = DateTime.MinValue;
-    private const int DuplicateBarcodeIntervalMs = 500;
-    private readonly SemaphoreSlim _barcodeProcessingLock = new(1, 1);
 
     /// <summary>
     ///     构造函数
@@ -116,7 +116,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _timer = new Timer(1000);
         _timer.Elapsed += (_, _) => { SystemStatus = SystemStatus.GetCurrentStatus(); };
         _timer.Start();
- 
+
         // 订阅体积相机图像流
         _volumeCamera.ImageStream
             .Subscribe(imageData =>
@@ -205,10 +205,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                     var stride = (int)(width * 4); // 假设为 Bgra32
                     var pixelData = new byte[stride * (int)height];
-                    
+
                     // 不需要缩放，直接复制
                     image.CopyPixels(new Int32Rect(0, 0, (int)width, (int)height), pixelData, stride, 0);
-                    
+
 
                     // 在UI线程创建WriteableBitmap (使用原始尺寸)
                     var bitmap = new WriteableBitmap((int)width, (int)height, 96, 96, PixelFormats.Bgra32, null);
@@ -310,8 +310,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 if (!string.IsNullOrEmpty(_lastProcessedBarcode) &&
                     (now - _lastProcessedTime).TotalMilliseconds < DuplicateBarcodeIntervalMs)
                 {
-                    if ((_lastProcessedBarcode.Contains(currentBarcodeToProcess) && currentBarcodeToProcess.Length > 5) ||
-                        (currentBarcodeToProcess.Contains(_lastProcessedBarcode) && _lastProcessedBarcode.Length > 5))
+                    if (_lastProcessedBarcode.Contains(currentBarcodeToProcess) && currentBarcodeToProcess.Length > 5 ||
+                        currentBarcodeToProcess.Contains(_lastProcessedBarcode) && _lastProcessedBarcode.Length > 5)
                     {
                         isDuplicate = true;
                     }
@@ -490,7 +490,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                                 var sanitizedBarcode = string.Join("_", _currentPackage.Barcode.Split(Path.GetInvalidFileNameChars()));
                                 var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff");
-                                ImageFormat saveFormat = ImageFormat.Jpeg; // Or read from settings if needed
+                                var saveFormat = ImageFormat.Jpeg; // Or read from settings if needed
 
                                 // Save Vertical View
                                 if ((volumeSettings.ImageSaveMode == DimensionImageSaveMode.Vertical || volumeSettings.ImageSaveMode == DimensionImageSaveMode.Both) && dimensionImagesResult.VerticalViewImage != null)
@@ -507,7 +507,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                                     var fileName = $"{sanitizedBarcode}_{timestamp}_Side.jpg"; // Assuming Jpeg
                                     var filePath = Path.Combine(fullDirectoryPath, fileName);
                                     await SaveDimensionImageAsync(dimensionImagesResult.SideViewImage, filePath, saveFormat);
-                                     Log.Information("已保存侧视图: {FilePath}", filePath);
+                                    Log.Information("已保存侧视图: {FilePath}", filePath);
                                 }
                                 Log.Debug("已释放尺寸刻度图 BitmapSource 引用");
                             }
@@ -518,10 +518,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         }
                         else if (_currentPackage?.Length <= 0)
                         {
-                             Log.Debug("体积测量未成功，跳过获取尺寸刻度图");
+                            Log.Debug("体积测量未成功，跳过获取尺寸刻度图");
                         }
                     }
-                    catch(Exception imgEx)
+                    catch (Exception imgEx)
                     {
                         Log.Error(imgEx, "获取或保存尺寸刻度图时发生错误");
                     }
@@ -767,7 +767,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 保存图像到文件，添加水印，并返回Base64编码的图像和名称
+    ///     保存图像到文件，添加水印，并返回Base64编码的图像和名称
     /// </summary>
     private static async Task<(string base64Image, string imageName)?> SaveImageAsync(BitmapSource image,
         CameraSettings settings, PackageInfo package,
@@ -808,11 +808,17 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     // 使用BitmapEncoder保存BitmapSource
                     BitmapEncoder encoder = settings.ImageFormat switch
                     {
-                        ImageFormat.Jpeg => new JpegBitmapEncoder { QualityLevel = 90 },
+                        ImageFormat.Jpeg => new JpegBitmapEncoder
+                        {
+                            QualityLevel = 90
+                        },
                         ImageFormat.Png => new PngBitmapEncoder(),
                         ImageFormat.Bmp => new BmpBitmapEncoder(),
                         ImageFormat.Tiff => new TiffBitmapEncoder(),
-                        _ => new JpegBitmapEncoder { QualityLevel = 90 }
+                        _ => new JpegBitmapEncoder
+                        {
+                            QualityLevel = 90
+                        }
                     };
 
                     encoder.Frames.Add(BitmapFrame.Create(image));
@@ -842,10 +848,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         var watermarkLines = new[]
                         {
                             $"Barcode: {package.Barcode}", // 水印中仍显示原始条码
-                            $"Size: {package.Length:F1}cm × {package.Width:F1}cm × {package.Height:F1}cm",
-                            $"Weight: {package.Weight:F3}kg",
-                            $"Volume: {package.Volume / 1000.0:N0}cm³",
-                            $"Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}"
+                            $"Size: {package.Length:F1}cm × {package.Width:F1}cm × {package.Height:F1}cm", $"Weight: {package.Weight:F3}kg", $"Volume: {package.Volume / 1000.0:N0}cm³", $"Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}"
                         };
 
                         // 如果有使用托盘，添加托盘信息到水印
@@ -922,7 +925,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 更新当前包裹处理结果的UI显示（重量、尺寸、时间、状态）
+    ///     更新当前包裹处理结果的UI显示（重量、尺寸、时间、状态）
     /// </summary>
     private void UpdateCurrentPackageUiDisplay(PackageStatus status, string customDisplay)
     {
@@ -1134,9 +1137,27 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         DeviceStatuses =
         [
-            new DeviceStatus { Name = "Photo Camera", Status = "Offline", Icon = "Camera24", StatusColor = "#FFA500" },
-            new DeviceStatus { Name = "Volume Camera", Status = "Offline", Icon = "Cube24", StatusColor = "#FFA500" },
-            new DeviceStatus { Name = "Weight Scale", Status = "Offline", Icon = "Scales24", StatusColor = "#FFA500" }
+            new DeviceStatus
+            {
+                Name = "Photo Camera",
+                Status = "Offline",
+                Icon = "Camera24",
+                StatusColor = "#FFA500"
+            },
+            new DeviceStatus
+            {
+                Name = "Volume Camera",
+                Status = "Offline",
+                Icon = "Cube24",
+                StatusColor = "#FFA500"
+            },
+            new DeviceStatus
+            {
+                Name = "Weight Scale",
+                Status = "Offline",
+                Icon = "Scales24",
+                StatusColor = "#FFA500"
+            }
         ];
     }
 
@@ -1280,7 +1301,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     // --- 新增结束 ---
 
     /// <summary>
-    /// Asynchronously saves a BitmapSource to a file.
+    ///     Asynchronously saves a BitmapSource to a file.
     /// </summary>
     /// <param name="image">The BitmapSource to save.</param>
     /// <param name="filePath">The full path where the image will be saved.</param>
@@ -1294,11 +1315,17 @@ public class MainWindowViewModel : BindableBase, IDisposable
             {
                 BitmapEncoder encoder = format switch
                 {
-                    ImageFormat.Jpeg => new JpegBitmapEncoder { QualityLevel = 90 },
+                    ImageFormat.Jpeg => new JpegBitmapEncoder
+                    {
+                        QualityLevel = 90
+                    },
                     ImageFormat.Png => new PngBitmapEncoder(),
                     ImageFormat.Bmp => new BmpBitmapEncoder(),
                     ImageFormat.Tiff => new TiffBitmapEncoder(),
-                    _ => new JpegBitmapEncoder { QualityLevel = 90 }
+                    _ => new JpegBitmapEncoder
+                    {
+                        QualityLevel = 90
+                    }
                 };
 
                 encoder.Frames.Add(BitmapFrame.Create(image));
@@ -1314,9 +1341,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     Log.Error(ioEx, "保存尺寸图像到文件时发生IO错误: {FilePath}", filePath);
                     // Re-throw or handle as needed, here we just log
                 }
-                 catch (UnauthorizedAccessException uaEx)
+                catch (UnauthorizedAccessException uaEx)
                 {
-                     Log.Error(uaEx, "保存尺寸图像到文件时权限不足: {FilePath}", filePath);
+                    Log.Error(uaEx, "保存尺寸图像到文件时权限不足: {FilePath}", filePath);
                 }
             });
         }

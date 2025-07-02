@@ -1,7 +1,7 @@
 namespace SortingServices.Car.Models;
 
 /// <summary>
-/// 小车配置模型
+///     小车配置模型
 /// </summary>
 public class CarConfig : BindableBase
 {
@@ -65,4 +65,4 @@ public class CarConfig : BindableBase
         get => _time;
         set => SetProperty(ref _time, value);
     }
-} 
+}

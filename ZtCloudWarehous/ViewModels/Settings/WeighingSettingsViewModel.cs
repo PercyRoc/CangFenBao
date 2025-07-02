@@ -1,8 +1,8 @@
 using Common.Services.Settings;
 using Common.Services.Ui;
 using Serilog;
-using ZtCloudWarehous.Services;
 using ZtCloudWarehous.Models;
+using ZtCloudWarehous.Services;
 
 namespace ZtCloudWarehous.ViewModels.Settings;
 
@@ -20,7 +20,7 @@ internal class WeighingSettingsViewModel : BindableBase
         _settingsService = settingsService;
         _notificationService = notificationService;
         _weighingService = weighingService;
-        
+
         // 加载配置
         try
         {
@@ -36,7 +36,7 @@ internal class WeighingSettingsViewModel : BindableBase
 
         SaveConfigurationCommand = new DelegateCommand(ExecuteSaveConfiguration);
         TestNewWeighingApiCommand = new DelegateCommand(ExecuteTestNewWeighingApi, CanExecuteTestNewWeighingApi);
-        
+
         // 监听UseNewWeighingApi属性变化，更新测试命令的可执行状态
         Settings.PropertyChanged += (_, args) =>
         {
@@ -84,7 +84,7 @@ internal class WeighingSettingsViewModel : BindableBase
         try
         {
             _notificationService.ShowSuccess("正在测试新称重接口...");
-            
+
             var testRequest = new NewWeighingRequest
             {
                 WaybillCode = "TEST" + DateTime.Now.ToString("yyyyMMddHHmmss"),
@@ -92,17 +92,17 @@ internal class WeighingSettingsViewModel : BindableBase
             };
 
             var response = await _weighingService.SendNewWeightDataAsync(testRequest);
-            
+
             if (response.IsSuccess)
             {
                 _notificationService.ShowSuccess($"新称重接口测试成功！\n承运商代码: {response.Data?.CarrierCode}\n省份名称: {response.Data?.ProvinceName}");
-                Log.Information("新称重接口测试成功: WaybillCode={WaybillCode}, CarrierCode={CarrierCode}, ProvinceName={ProvinceName}", 
+                Log.Information("新称重接口测试成功: WaybillCode={WaybillCode}, CarrierCode={CarrierCode}, ProvinceName={ProvinceName}",
                     testRequest.WaybillCode, response.Data?.CarrierCode, response.Data?.ProvinceName);
             }
             else
             {
                 _notificationService.ShowWarning($"新称重接口测试失败！\n错误代码: {response.Code}\n错误消息: {response.Msg}");
-                Log.Warning("新称重接口测试失败: WaybillCode={WaybillCode}, Code={Code}, Message={Message}", 
+                Log.Warning("新称重接口测试失败: WaybillCode={WaybillCode}, Code={Code}, Message={Message}",
                     testRequest.WaybillCode, response.Code, response.Msg);
             }
         }

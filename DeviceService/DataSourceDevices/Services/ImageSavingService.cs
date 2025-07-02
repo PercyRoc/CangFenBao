@@ -7,7 +7,7 @@ using Serilog;
 namespace DeviceService.DataSourceDevices.Services;
 
 /// <summary>
-/// 负责根据配置将图像保存到本地磁盘的服务。
+///     负责根据配置将图像保存到本地磁盘的服务。
 /// </summary>
 public class ImageSavingService(ISettingsService settingsService) : IImageSavingService
 {
@@ -57,8 +57,8 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
             var fullPath =
                 // NOREAD条码使用专门的路径构建逻辑
                 isNoRead ? BuildNoreadImagePath(cameraSettings, timestamp) :
-                // 普通条码使用原有的路径构建逻辑
-                BuildImagePath(cameraSettings, barcode, timestamp);
+                    // 普通条码使用原有的路径构建逻辑
+                    BuildImagePath(cameraSettings, barcode, timestamp);
 
             if (string.IsNullOrEmpty(fullPath))
             {
@@ -113,6 +113,36 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
         }
     }
 
+    /// <inheritdoc />
+    public async Task CleanupOldImagesAsync(int? retentionDays = null)
+    {
+        const int defaultRetentionDays = 7; // 默认保留7天
+        var effectiveRetentionDays = retentionDays ?? defaultRetentionDays;
+
+        try
+        {
+            var cameraSettings = _settingsService.LoadSettings<CameraSettings>();
+
+            // 清理普通图片保存路径
+            if (!string.IsNullOrEmpty(cameraSettings.ImageSavePath))
+            {
+                await CleanupExpiredImagesAsync(cameraSettings.ImageSavePath, effectiveRetentionDays);
+            }
+
+            // 清理NoreadImage路径
+            var appBasePath = AppDomain.CurrentDomain.BaseDirectory;
+            var noreadImagePath = Path.Combine(appBasePath, "NoreadImage");
+            await CleanupExpiredImagesAsync(noreadImagePath, effectiveRetentionDays);
+
+            Log.Information("手动清理过期图片完成，保留天数: {RetentionDays}", effectiveRetentionDays);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "手动清理过期图片时发生错误，保留天数: {RetentionDays}", effectiveRetentionDays);
+            throw;
+        }
+    }
+
     private static BitmapEncoder GetEncoder(ImageFormat format)
     {
         return format switch
@@ -136,7 +166,7 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
     }
 
     /// <summary>
-    /// 构建NOREAD图像的专门保存路径，保存到软件根目录的NoreadImage文件夹
+    ///     构建NOREAD图像的专门保存路径，保存到软件根目录的NoreadImage文件夹
     /// </summary>
     /// <param name="cameraSettings">相机设置</param>
     /// <param name="timestamp">时间戳</param>
@@ -186,7 +216,7 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
     }
 
     /// <summary>
-    /// 检查磁盘空间并在必要时清理最早的图片，同时清理超过30天的图片
+    ///     检查磁盘空间并在必要时清理最早的图片，同时清理超过30天的图片
     /// </summary>
     private async Task CheckAndCleanupDiskSpaceAsync()
     {
@@ -218,7 +248,7 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
     }
 
     /// <summary>
-    /// 检查指定目录所在磁盘的空间使用率，如果超过90%则删除最早的图片
+    ///     检查指定目录所在磁盘的空间使用率，如果超过90%则删除最早的图片
     /// </summary>
     /// <param name="directoryPath">要检查的目录路径</param>
     private async Task CheckAndCleanupDirectoryAsync(string directoryPath)
@@ -247,7 +277,7 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
     }
 
     /// <summary>
-    /// 获取指定路径所在磁盘的使用率百分比
+    ///     获取指定路径所在磁盘的使用率百分比
     /// </summary>
     /// <param name="path">文件或目录路径</param>
     /// <returns>磁盘使用率百分比</returns>
@@ -262,7 +292,7 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
     }
 
     /// <summary>
-    /// 删除指定目录下最早的图片文件，直到磁盘使用率降到85%以下
+    ///     删除指定目录下最早的图片文件，直到磁盘使用率降到85%以下
     /// </summary>
     /// <param name="rootPath">根目录路径</param>
     /// <param name="currentUsagePercentage">当前磁盘使用率</param>
@@ -321,7 +351,7 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
     }
 
     /// <summary>
-    /// 获取指定目录下最早的图片文件列表
+    ///     获取指定目录下最早的图片文件列表
     /// </summary>
     /// <param name="rootPath">根目录路径</param>
     /// <param name="count">获取文件的数量</param>
@@ -350,7 +380,7 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
     }
 
     /// <summary>
-    /// 清理指定目录下超过指定天数的图片文件
+    ///     清理指定目录下超过指定天数的图片文件
     /// </summary>
     /// <param name="directoryPath">要清理的目录路径</param>
     /// <param name="retentionDays">保留天数</param>
@@ -403,7 +433,7 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
     }
 
     /// <summary>
-    /// 获取指定目录下超过指定日期的图片文件列表
+    ///     获取指定目录下超过指定日期的图片文件列表
     /// </summary>
     /// <param name="rootPath">根目录路径</param>
     /// <param name="cutoffDate">截止日期</param>
@@ -432,7 +462,7 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
     }
 
     /// <summary>
-    /// 递归清理空的日期文件夹
+    ///     递归清理空的日期文件夹
     /// </summary>
     /// <param name="rootPath">根目录路径</param>
     private static void CleanupEmptyDirectories(string rootPath)
@@ -466,7 +496,7 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
     }
 
     /// <summary>
-    /// 判断目录是否为空（不包含任何文件和子目录）
+    ///     判断目录是否为空（不包含任何文件和子目录）
     /// </summary>
     /// <param name="directoryPath">目录路径</param>
     /// <returns>如果目录为空则返回true</returns>
@@ -479,36 +509,6 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
         catch
         {
             return false;
-        }
-    }
-
-    /// <inheritdoc />
-    public async Task CleanupOldImagesAsync(int? retentionDays = null)
-    {
-        const int defaultRetentionDays = 7; // 默认保留7天
-        var effectiveRetentionDays = retentionDays ?? defaultRetentionDays;
-
-        try
-        {
-            var cameraSettings = _settingsService.LoadSettings<CameraSettings>();
-
-            // 清理普通图片保存路径
-            if (!string.IsNullOrEmpty(cameraSettings.ImageSavePath))
-            {
-                await CleanupExpiredImagesAsync(cameraSettings.ImageSavePath, effectiveRetentionDays);
-            }
-
-            // 清理NoreadImage路径
-            var appBasePath = AppDomain.CurrentDomain.BaseDirectory;
-            var noreadImagePath = Path.Combine(appBasePath, "NoreadImage");
-            await CleanupExpiredImagesAsync(noreadImagePath, effectiveRetentionDays);
-
-            Log.Information("手动清理过期图片完成，保留天数: {RetentionDays}", effectiveRetentionDays);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "手动清理过期图片时发生错误，保留天数: {RetentionDays}", effectiveRetentionDays);
-            throw;
         }
     }
 }

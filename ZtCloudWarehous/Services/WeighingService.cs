@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Net.Http;
+using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
 using System.Web;
@@ -7,7 +9,6 @@ using Serilog;
 using ZtCloudWarehous.Models;
 using ZtCloudWarehous.Utils;
 using ZtCloudWarehous.ViewModels.Settings;
-using System.Diagnostics;
 
 namespace ZtCloudWarehous.Services;
 
@@ -18,12 +19,12 @@ internal class WeighingService(ISettingsService settingsService, HttpClient http
 {
     private const string UatBaseUrl = "https://scm-gateway-uat.ztocwst.com/edi/service/inbound/bz";
     private const string ProdBaseUrl = "https://scm-openapi.ztocwst.com/edi/service/inbound/bz";
-    
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
     };
-    
+
     private static readonly JsonSerializerOptions CamelCaseJsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -38,7 +39,7 @@ internal class WeighingService(ISettingsService settingsService, HttpClient http
         try
         {
             var settings = settingsService.LoadSettings<WeighingSettings>();
-            
+
             var baseUrl = settings.IsProduction ? ProdBaseUrl : UatBaseUrl;
 
             // 设置公共参数
@@ -61,12 +62,20 @@ internal class WeighingService(ISettingsService settingsService, HttpClient http
             // 构建 URL 查询参数 (公共参数 + 签名)
             var queryParameters = new Dictionary<string, string>
             {
-                { "api", request.Api },
-                { "customerId", request.CustomerId },
-                { "appkey", request.AppKey },
-                { "sign", request.Sign }
+                {
+                    "api", request.Api
+                },
+                {
+                    "customerId", request.CustomerId
+                },
+                {
+                    "appkey", request.AppKey
+                },
+                {
+                    "sign", request.Sign
+                }
             };
-            
+
             // 对 Query 参数进行 UTF-8 URL 编码
             var encodedQueryParameters = queryParameters.ToDictionary(
                 kvp => HttpUtility.UrlEncode(kvp.Key, Encoding.UTF8),
@@ -79,8 +88,7 @@ internal class WeighingService(ISettingsService settingsService, HttpClient http
             // ** 在这里重新构建业务 JSON，确保与签名使用的 JSON 一致 **
             var businessParamNamesInOrder = new[]
             {
-                "tenantId", "warehouseCode", "waybillCode", "packagingMaterialCode",
-                "actualVolume", "actualWeight", "weighingEquipment", "userId", "userRealName"
+                "tenantId", "warehouseCode", "waybillCode", "packagingMaterialCode", "actualVolume", "actualWeight", "weighingEquipment", "userId", "userRealName"
             };
             var businessJsonBuilder = new StringBuilder("{");
             var isFirst = true;
@@ -110,7 +118,7 @@ internal class WeighingService(ISettingsService settingsService, HttpClient http
             var businessParamsJsonForBody = businessJsonBuilder.ToString();
             // ** 结束重新构建业务 JSON **
 
-            var requestBody = new StringContent(businessParamsJsonForBody, Encoding.UTF8, System.Net.Mime.MediaTypeNames.Application.Json); // 使用 MediaTypeNames 修正类型
+            var requestBody = new StringContent(businessParamsJsonForBody, Encoding.UTF8, MediaTypeNames.Application.Json); // 使用 MediaTypeNames 修正类型
             // 记录请求 URL 和 Body
             Log.Debug("发送称重请求 URL: {RequestUrl}", requestUrl);
             Log.Debug("发送称重请求 Body: {RequestBody}", businessParamsJsonForBody);
@@ -146,7 +154,7 @@ internal class WeighingService(ISettingsService settingsService, HttpClient http
 
             if (!response.IsSuccessStatusCode)
             {
-                Log.Error("服务器返回错误状态码: {StatusCode}, 响应内容: {Response}", 
+                Log.Error("服务器返回错误状态码: {StatusCode}, 响应内容: {Response}",
                     response.StatusCode, responseContent);
                 throw new HttpRequestException($"服务器返回错误状态码: {response.StatusCode}. 内容: {responseContent}");
             }
@@ -204,7 +212,7 @@ internal class WeighingService(ISettingsService settingsService, HttpClient http
         try
         {
             var settings = settingsService.LoadSettings<WeighingSettings>();
-            
+
             var requestUrl = settings.NewWeighingApiUrl;
 
             // 构建请求体
@@ -247,7 +255,7 @@ internal class WeighingService(ISettingsService settingsService, HttpClient http
 
             if (!response.IsSuccessStatusCode)
             {
-                Log.Error("新称重服务器返回错误状态码: {StatusCode}, 响应内容: {Response}", 
+                Log.Error("新称重服务器返回错误状态码: {StatusCode}, 响应内容: {Response}",
                     response.StatusCode, responseContent);
                 throw new HttpRequestException($"新称重服务器返回错误状态码: {response.StatusCode}. 内容: {responseContent}");
             }
@@ -270,12 +278,12 @@ internal class WeighingService(ISettingsService settingsService, HttpClient http
 
                 if (!result.IsSuccess)
                 {
-                    Log.Warning("新称重请求业务失败: Code={Code}, Message={Message}, WaybillCode={WaybillCode}", 
+                    Log.Warning("新称重请求业务失败: Code={Code}, Message={Message}, WaybillCode={WaybillCode}",
                         result.Code, result.Msg, request.WaybillCode);
                 }
                 else
                 {
-                    Log.Information("新称重请求业务成功: WaybillCode={WaybillCode}, CarrierCode={CarrierCode}, ProvinceName={ProvinceName}", 
+                    Log.Information("新称重请求业务成功: WaybillCode={WaybillCode}, CarrierCode={CarrierCode}, ProvinceName={ProvinceName}",
                         request.WaybillCode, result.Data?.CarrierCode, result.Data?.ProvinceName);
                 }
 
@@ -291,7 +299,7 @@ internal class WeighingService(ISettingsService settingsService, HttpClient http
         {
             stopwatch.Stop();
             elapsedMs = stopwatch.ElapsedMilliseconds;
-            Log.Error(ex, "发送新称重数据时发生错误: WaybillCode={WaybillCode}, 耗时={ElapsedMilliseconds}ms (请求可能未完成)", 
+            Log.Error(ex, "发送新称重数据时发生错误: WaybillCode={WaybillCode}, 耗时={ElapsedMilliseconds}ms (请求可能未完成)",
                 request.WaybillCode, elapsedMs);
             throw;
         }
@@ -309,7 +317,7 @@ internal class WeighingService(ISettingsService settingsService, HttpClient http
         try
         {
             var settings = settingsService.LoadSettings<WeighingSettings>();
-            
+
             if (settings.UseNewWeighingApi)
             {
                 // 使用新接口
@@ -318,25 +326,22 @@ internal class WeighingService(ISettingsService settingsService, HttpClient http
                     WaybillCode = waybillCode,
                     Weight = weight.ToString("F2")
                 };
-                
+
                 var newResponse = await SendNewWeightDataAsync(newRequest);
                 return newResponse.IsSuccess;
             }
-            else
+            // 使用旧接口
+            var oldRequest = new WeighingRequest
             {
-                // 使用旧接口
-                var oldRequest = new WeighingRequest
-                {
-                    WaybillCode = waybillCode,
-                    ActualWeight = weight,
-                    ActualVolume = volume ?? 0,
-                    PackagingMaterialCode = settings.PackagingMaterialCode,
-                    UserId = settings.UserId
-                };
-                
-                var oldResponse = await SendWeightDataAsync(oldRequest);
-                return oldResponse.Success;
-            }
+                WaybillCode = waybillCode,
+                ActualWeight = weight,
+                ActualVolume = volume ?? 0,
+                PackagingMaterialCode = settings.PackagingMaterialCode,
+                UserId = settings.UserId
+            };
+
+            var oldResponse = await SendWeightDataAsync(oldRequest);
+            return oldResponse.Success;
         }
         catch (Exception ex)
         {

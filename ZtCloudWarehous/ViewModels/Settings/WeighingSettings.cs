@@ -5,15 +5,21 @@ namespace ZtCloudWarehous.ViewModels.Settings;
 [Configuration("weighing")]
 internal class WeighingSettings : BindableBase
 {
+    private const string UatBaseUrl = "https://scm-gateway-uat.ztocwst.com/edi/service/inbound/bz";
+    private const string ProdBaseUrl = "https://scm-openapi.ztocwst.com/edi/service/inbound/bz";
     // 公共参数
     private string _api = "shanhaitong.wms.dws.weight";
 
     private string _appKey = "d8318f010e97988a0bcfd8910a133812";
 
     private string _companyCode = "MXKJ";
+    private decimal _defaultWeight;
 
     private string _equipmentCode = string.Empty;
     private bool _isProduction;
+    private string _newWeighingEnvironment = "uat"; // uat, ver, prod
+
+    private string _packagingMaterialCode = string.Empty;
 
     private string _secret = "20a0c2e787cec2e887069aa79927f2c5";
 
@@ -21,17 +27,13 @@ internal class WeighingSettings : BindableBase
 
     private string _tenantId = string.Empty;
 
+    // 新称重接口配置
+    private bool _useNewWeighingApi;
+    private string _userId = string.Empty;
+
     private string _userRealName = string.Empty;
 
     private string _warehouseCode = string.Empty;
-
-    private string _packagingMaterialCode = string.Empty;
-    private string _userId = string.Empty;
-    private decimal _defaultWeight;
-
-    // 新称重接口配置
-    private bool _useNewWeighingApi = false;
-    private string _newWeighingEnvironment = "uat"; // uat, ver, prod
 
     public bool IsProduction
     {
@@ -129,19 +131,22 @@ internal class WeighingSettings : BindableBase
         set => SetProperty(ref _newWeighingEnvironment, value);
     }
 
-    public string ApiUrl => IsProduction ? ProdBaseUrl : UatBaseUrl;
+    public string ApiUrl
+    {
+        get => IsProduction ? ProdBaseUrl : UatBaseUrl;
+    }
 
     /// <summary>
     ///     新称重接口URL
     /// </summary>
-    public string NewWeighingApiUrl => NewWeighingEnvironment.ToLower() switch
+    public string NewWeighingApiUrl
     {
-        "uat" => "https://anapi-uat.annto.com/bop/T201904230000000014/xjyc/weighing",
-        "ver" => "https://anapi-ver.annto.com/bop/T201904230000000014/xjyc/weighing",
-        "prod" => "https://anapi.annto.com/bop/T201904230000000014/xjyc/weighing",
-        _ => "https://anapi-uat.annto.com/bop/T201904230000000014/xjyc/weighing"
-    };
-
-    private const string UatBaseUrl = "https://scm-gateway-uat.ztocwst.com/edi/service/inbound/bz";
-    private const string ProdBaseUrl = "https://scm-openapi.ztocwst.com/edi/service/inbound/bz";
+        get => NewWeighingEnvironment.ToLower() switch
+        {
+            "uat" => "https://anapi-uat.annto.com/bop/T201904230000000014/xjyc/weighing",
+            "ver" => "https://anapi-ver.annto.com/bop/T201904230000000014/xjyc/weighing",
+            "prod" => "https://anapi.annto.com/bop/T201904230000000014/xjyc/weighing",
+            _ => "https://anapi-uat.annto.com/bop/T201904230000000014/xjyc/weighing"
+        };
+    }
 }

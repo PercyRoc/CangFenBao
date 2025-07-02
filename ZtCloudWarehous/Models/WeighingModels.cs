@@ -123,7 +123,10 @@ public class NewWeighingResponse
     /// <summary>
     ///     是否成功（code为"0"表示成功）
     /// </summary>
-    public bool IsSuccess => Code == "0";
+    public bool IsSuccess
+    {
+        get => Code == "0";
+    }
 }
 
 /// <summary>

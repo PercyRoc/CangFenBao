@@ -6,7 +6,6 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Configuration;
-using System.Threading;
 
 namespace Common.Services.Settings;
 
@@ -61,7 +60,7 @@ public class SettingsService : ISettingsService
             return cachedSettings;
 
         var filePath = GetSettingsFilePath(settingsKey);
-        
+
         _fileAccessLock.Wait();
         try
         {
@@ -103,25 +102,6 @@ public class SettingsService : ISettingsService
     }
 
     /// <summary>
-    ///     注册配置变更回调
-    /// </summary>
-    /// <typeparam name="T">配置类型</typeparam>
-    /// <param name="callback">回调方法</param>
-    public void OnSettingsChanged<T>(Action<T>? callback) where T : class, new()
-    {
-        if (callback == null) return;
-
-        var type = typeof(T);
-        if (!_changeCallbacks.TryGetValue(type, out var value))
-        {
-            value = [];
-            _changeCallbacks[type] = value;
-        }
-
-        value.Add(obj => callback((T)obj));
-    }
-
-    /// <summary>
     ///     保存配置
     /// </summary>
     /// <typeparam name="T">配置类型</typeparam>
@@ -156,6 +136,37 @@ public class SettingsService : ISettingsService
     }
 
     /// <summary>
+    ///     释放资源
+    /// </summary>
+    public void Dispose()
+    {
+        foreach (var token in _changeTokens.Values) token.Dispose();
+
+        _changeTokens.Clear();
+
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    ///     注册配置变更回调
+    /// </summary>
+    /// <typeparam name="T">配置类型</typeparam>
+    /// <param name="callback">回调方法</param>
+    public void OnSettingsChanged<T>(Action<T>? callback) where T : class, new()
+    {
+        if (callback == null) return;
+
+        var type = typeof(T);
+        if (!_changeCallbacks.TryGetValue(type, out var value))
+        {
+            value = [];
+            _changeCallbacks[type] = value;
+        }
+
+        value.Add(obj => callback((T)obj));
+    }
+
+    /// <summary>
     ///     校验配置
     /// </summary>
     /// <typeparam name="T">配置类型</typeparam>
@@ -167,18 +178,6 @@ public class SettingsService : ISettingsService
         var validationContext = new ValidationContext(settings);
         Validator.TryValidateObject(settings, validationContext, results, true);
         return [.. results];
-    }
-
-    /// <summary>
-    ///     释放资源
-    /// </summary>
-    public void Dispose()
-    {
-        foreach (var token in _changeTokens.Values) token.Dispose();
-
-        _changeTokens.Clear();
-
-        GC.SuppressFinalize(this);
     }
 
     private void SetupChangeToken<T>(IConfiguration configuration) where T : class, new()
@@ -276,7 +275,7 @@ public class SettingsService : ISettingsService
         ArgumentNullException.ThrowIfNull(configuration);
         var filePath = GetSettingsFilePath(key);
         var json = JsonSerializer.Serialize(configuration, JsonOptions);
-        
+
         _fileAccessLock.Wait();
         try
         {

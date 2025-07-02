@@ -1,4 +1,6 @@
 ﻿using System.Collections.ObjectModel;
+using System.Reactive.Concurrency;
+using System.Reactive.Linq;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -8,12 +10,10 @@ using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
+using Rookie.Models.Api;
+using Rookie.Services;
 using Serilog;
 using SharedUI.Models;
-using System.Reactive.Concurrency;
-using System.Reactive.Linq;
-using Rookie.Services;
-using Rookie.Models.Api;
 
 namespace Rookie.ViewModels.Windows;
 
@@ -23,21 +23,21 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private readonly IDialogService _dialogService;
     private readonly INotificationService _notificationService;
     private readonly IPackageDataService _packageDataService;
-    private readonly ISettingsService _settingsService;
     private readonly IRookieApiService _rookieApiService;
+    private readonly ISettingsService _settingsService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
 
     private string _currentBarcode = string.Empty;
     private BitmapSource? _currentImage;
     private bool _disposed;
+    private long _failedPackageCount;
+    private long _peakRate;
+    private long _successPackageCount;
     private SystemStatus _systemStatus = new();
 
     // Statistics Counters
     private long _totalPackageCount;
-    private long _successPackageCount;
-    private long _failedPackageCount;
-    private long _peakRate;
 
     public MainWindowViewModel(
         IDialogService dialogService,
@@ -91,10 +91,10 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // Corrected: Use Dispatcher.BeginInvoke inside Subscribe like ZtCloudWarehous
             _subscriptions.Add(packageTransferService.PackageStream
                 .Subscribe(package =>
-                {
-                    Application.Current?.Dispatcher.BeginInvoke(() => OnPackageInfo(package));
-                },
-                ex => Log.Error(ex, "Error in package stream subscription.")));
+                    {
+                        Application.Current?.Dispatcher.BeginInvoke(() => OnPackageInfo(package));
+                    },
+                    ex => Log.Error(ex, "Error in package stream subscription.")));
         }
         else
         {
@@ -102,11 +102,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
 
         Log.Information("Rookie MainWindowViewModel initialized.");
-    }
-
-    ~MainWindowViewModel()
-    {
-        Dispose(false);
     }
 
     public DelegateCommand OpenSettingsCommand { get; }
@@ -135,10 +130,21 @@ public class MainWindowViewModel : BindableBase, IDisposable
     public ObservableCollection<DeviceStatus> DeviceStatuses { get; } = [];
     public ObservableCollection<PackageInfoItem> PackageInfoItems { get; } = [];
 
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    ~MainWindowViewModel()
+    {
+        Dispose(false);
+    }
+
     private void ExecuteOpenSettings()
     {
         _dialogService.ShowDialog("SettingsDialog", new DialogParameters(), _ => { });
-        
+
     }
 
     private void ExecuteOpenHistory()
@@ -185,43 +191,43 @@ public class MainWindowViewModel : BindableBase, IDisposable
             StatisticsItems.Clear();
 
             StatisticsItems.Add(new StatisticsItem(
-                label: "Total Packages",
-                value: "0",
-                unit: "pcs",
-                description: "Total packages processed",
-                icon: "BoxMultiple24"
+                "Total Packages",
+                "0",
+                "pcs",
+                "Total packages processed",
+                "BoxMultiple24"
             ));
 
             StatisticsItems.Add(new StatisticsItem(
-                label: "Success",
-                value: "0",
-                unit: "pcs",
-                description: "Successfully processed packages",
-                icon: "CheckmarkCircle24"
+                "Success",
+                "0",
+                "pcs",
+                "Successfully processed packages",
+                "CheckmarkCircle24"
             ));
 
             StatisticsItems.Add(new StatisticsItem(
-                label: "Failed",
-                value: "0",
-                unit: "pcs",
-                description: "Failed packages (errors, timeouts)",
-                icon: "ErrorCircle24"
+                "Failed",
+                "0",
+                "pcs",
+                "Failed packages (errors, timeouts)",
+                "ErrorCircle24"
             ));
 
             StatisticsItems.Add(new StatisticsItem(
-                label: "Processing Rate",
-                value: "0",
-                unit: "pcs/hr",
-                description: "Packages processed per hour",
-                icon: "ArrowTrendingLines24"
+                "Processing Rate",
+                "0",
+                "pcs/hr",
+                "Packages processed per hour",
+                "ArrowTrendingLines24"
             ));
 
             StatisticsItems.Add(new StatisticsItem(
-                label: "Peak Rate",
-                value: "0",
-                unit: "pcs/hr",
-                description: "Highest processing rate",
-                icon: "Trophy24"
+                "Peak Rate",
+                "0",
+                "pcs/hr",
+                "Highest processing rate",
+                "Trophy24"
             ));
 
         }
@@ -238,23 +244,23 @@ public class MainWindowViewModel : BindableBase, IDisposable
             PackageInfoItems.Clear();
 
             PackageInfoItems.Add(new PackageInfoItem(
-                label: "Weight",
-                value: "0.00",
-                unit: "kg",
-                description: "Package weight",
-                icon: "Scales24"
+                "Weight",
+                "0.00",
+                "kg",
+                "Package weight",
+                "Scales24"
             ));
 
             PackageInfoItems.Add(new PackageInfoItem(
-                label: "Time",
-                value: "--:--:--",
+                "Time",
+                "--:--:--",
                 description: "Processing time",
                 icon: "Timer24"
             ));
 
             PackageInfoItems.Add(new PackageInfoItem(
-                label: "Status",
-                value: "Waiting",
+                "Status",
+                "Waiting",
                 description: "Processing status",
                 icon: "Info24"
             ));
@@ -300,14 +306,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         Log.Information("开始处理包裹: {Barcode}", package.Barcode);
         DestRequestResultParams? destinationResult;
-        string finalChute = "ERR"; // Default error chute for reporting if needed
-        string finalErrorMessage = "处理失败"; // Default error message
+        var finalChute = "ERR"; // Default error chute for reporting if needed
+        var finalErrorMessage = "处理失败"; // Default error message
 
         try
         {
             // --- 1. 上报包裹信息 ---
             Log.Debug("上报包裹信息: {Barcode}", package.Barcode ?? "NoRead");
-            bool uploadSuccess = await _rookieApiService.UploadParcelInfoAsync(package);
+            var uploadSuccess = await _rookieApiService.UploadParcelInfoAsync(package);
             if (!uploadSuccess)
             {
                 Log.Error("上传包裹信息失败: {Barcode}", package.Barcode ?? "NoRead");
@@ -337,8 +343,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                     if (!string.IsNullOrWhiteSpace(destinationResult.FinalBarcode) && destinationResult.FinalBarcode != package.Barcode)
                     {
-                         Log.Information("DCS 返回不同的最终条码: {OldBarcode} -> {NewBarcode}", package.Barcode, destinationResult.FinalBarcode);
-                         // package.SetBarcode(destinationResult.FinalBarcode); // Use SetBarcode if needed
+                        Log.Information("DCS 返回不同的最终条码: {OldBarcode} -> {NewBarcode}", package.Barcode, destinationResult.FinalBarcode);
+                        // package.SetBarcode(destinationResult.FinalBarcode); // Use SetBarcode if needed
                     }
 
                     if (destinationResult.ErrorCode == 0) // 0 = 正常
@@ -347,7 +353,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         {
                             package.SetChute(chuteNumber);
                             package.SetStatus(PackageStatus.Success);
-                            package.ErrorMessage = null; 
+                            package.ErrorMessage = null;
                             finalChute = destinationResult.ChuteCode;
                             Log.Information("包裹 {Barcode} 分配到格口: {Chute}", package.Barcode ?? "NoRead", finalChute);
                         }
@@ -363,12 +369,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     {
                         var dcsError = MapDcsErrorCodeToString(destinationResult.ErrorCode);
                         Log.Error("DCS 目的地请求错误: {Barcode}, ErrorCode: {ErrorCode} ({ErrorString})",
-                                  package.Barcode ?? "NoRead", destinationResult.ErrorCode, dcsError);
-                        var mappedStatus = MapDcsErrorCodeToPackageStatus(destinationResult.ErrorCode); 
+                            package.Barcode ?? "NoRead", destinationResult.ErrorCode, dcsError);
+                        var mappedStatus = MapDcsErrorCodeToPackageStatus(destinationResult.ErrorCode);
                         package.SetStatus(mappedStatus, dcsError);
                         package.ErrorMessage = dcsError;
                         finalErrorMessage = package.ErrorMessage;
-                        finalChute = destinationResult.ChuteCode ?? "ERR"; 
+                        finalChute = destinationResult.ChuteCode ?? "ERR";
                     }
                 }
             }
@@ -376,8 +382,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // --- 3. 上报分拣结果 ---
             // Note: We now use package.Status which reflects the outcome of the destination request
             Log.Debug("上报分拣结果: {Barcode}, Chute: {Chute}, Success: {StatusBool}",
-                      package.Barcode ?? "NoRead", finalChute, package.Status == PackageStatus.Success);
-            bool reportSuccess = await _rookieApiService.ReportSortResultAsync(
+                package.Barcode ?? "NoRead", finalChute, package.Status == PackageStatus.Success);
+            var reportSuccess = await _rookieApiService.ReportSortResultAsync(
                 package.Barcode ?? "NoRead",
                 finalChute,
                 package.Status == PackageStatus.Success, // Report based on final PackageStatus
@@ -396,49 +402,51 @@ public class MainWindowViewModel : BindableBase, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "处理包裹 {Barcode} 时发生意外错误。", package.Barcode ?? "NoRead");
-            try 
+            try
             {
-                finalErrorMessage = $"处理异常: {ex.Message.Split(['\r', '\n'])[0]}";
-                package.SetStatus(PackageStatus.Error, finalErrorMessage); 
+                finalErrorMessage = $"处理异常: {ex.Message.Split('\r', '\n')[0]}";
+                package.SetStatus(PackageStatus.Error, finalErrorMessage);
                 package.ErrorMessage = finalErrorMessage;
-            } 
-            catch { /* Ignore */ }
-            
+            }
+            catch
+            { /* Ignore */
+            }
+
             // Attempt to report failure after exception
             try
             {
                 Log.Debug("尝试在异常后上报失败结果: {Barcode}, Chute: {Chute}", package.Barcode ?? "NoRead", finalChute);
                 await _rookieApiService.ReportSortResultAsync(
                     package.Barcode ?? "NoRead",
-                    finalChute, 
-                    false,      
+                    finalChute,
+                    false,
                     finalErrorMessage);
             }
-            catch(Exception reportEx)
+            catch (Exception reportEx)
             {
                 Log.Error(reportEx, "在主处理异常后上报分拣结果也失败: {Barcode}", package.Barcode ?? "NoRead");
             }
         }
         finally
         {
-             Application.Current?.Dispatcher.InvokeAsync(() =>
+            Application.Current?.Dispatcher.InvokeAsync(() =>
             {
                 // Update UI elements based on final package status
-                UpdatePackageInfoItems(package); 
+                UpdatePackageInfoItems(package);
 
                 // Update statistics counters based on final package status
-                if (package.Status == PackageStatus.Success) 
-                { 
-                    Interlocked.Increment(ref _successPackageCount); 
+                if (package.Status == PackageStatus.Success)
+                {
+                    Interlocked.Increment(ref _successPackageCount);
                 }
-                else 
-                { 
+                else
+                {
                     Interlocked.Increment(ref _failedPackageCount);
                 }
                 UpdateStatistics();
 
                 // Add package to history list AFTER all processing and UI updates
-                PackageHistory.Insert(0, package); 
+                PackageHistory.Insert(0, package);
                 if (PackageHistory.Count > 500)
                 {
                     PackageHistory.RemoveAt(PackageHistory.Count - 1);
@@ -446,7 +454,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
             });
 
-            package.ReleaseImage(); 
+            package.ReleaseImage();
             Log.Information("包裹 {Barcode} 处理流程结束, 最终状态: {Status}", package.Barcode ?? "NoRead", package.Status);
         }
     }
@@ -463,7 +471,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             _ => $"未知错误码 ({errorCode})"
         };
     }
-    
+
     // Helper to map DCS error codes to PackageStatus enum
     private static PackageStatus MapDcsErrorCodeToPackageStatus(int errorCode)
     {
@@ -473,7 +481,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             2 => PackageStatus.Failed, // No Task
             3 => PackageStatus.Error, // Weight Exception
             4 => PackageStatus.Failed, // Business Intercept
-            _ => PackageStatus.Error   // Default to Error for unknown codes
+            _ => PackageStatus.Error // Default to Error for unknown codes
         };
     }
 
@@ -529,12 +537,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
             var peakRateItem = StatisticsItems.FirstOrDefault(i => i.Label == "Peak Rate");
             if (peakRateItem != null) peakRateItem.Value = _peakRate.ToString();
         }
-    }
-
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
     }
 
     private void Dispose(bool disposing)

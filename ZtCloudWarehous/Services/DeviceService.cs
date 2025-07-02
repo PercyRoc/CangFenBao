@@ -41,12 +41,20 @@ public class DeviceService : IDeviceService
             response.EnsureSuccessStatusCode();
 
             var result = await response.Content.ReadFromJsonAsync<DeviceResponse>();
-            return result ?? new DeviceResponse { Code = 1, Msg = "注册失败：响应为空" };
+            return result ?? new DeviceResponse
+            {
+                Code = 1,
+                Msg = "注册失败：响应为空"
+            };
         }
         catch (Exception ex)
         {
             Log.Error(ex, "设备注册失败");
-            return new DeviceResponse { Code = 1, Msg = $"注册失败：{ex.Message}" };
+            return new DeviceResponse
+            {
+                Code = 1,
+                Msg = $"注册失败：{ex.Message}"
+            };
         }
     }
 
@@ -59,12 +67,20 @@ public class DeviceService : IDeviceService
             response.EnsureSuccessStatusCode();
 
             var result = await response.Content.ReadFromJsonAsync<DeviceResponse>();
-            return result ?? new DeviceResponse { Code = 1, Msg = "上线通知失败：响应为空" };
+            return result ?? new DeviceResponse
+            {
+                Code = 1,
+                Msg = "上线通知失败：响应为空"
+            };
         }
         catch (Exception ex)
         {
             Log.Error(ex, "设备上线通知失败");
-            return new DeviceResponse { Code = 1, Msg = $"上线通知失败：{ex.Message}" };
+            return new DeviceResponse
+            {
+                Code = 1,
+                Msg = $"上线通知失败：{ex.Message}"
+            };
         }
     }
 
@@ -77,12 +93,20 @@ public class DeviceService : IDeviceService
             response.EnsureSuccessStatusCode();
 
             var result = await response.Content.ReadFromJsonAsync<DeviceResponse>();
-            return result ?? new DeviceResponse { Code = 1, Msg = "下线通知失败：响应为空" };
+            return result ?? new DeviceResponse
+            {
+                Code = 1,
+                Msg = "下线通知失败：响应为空"
+            };
         }
         catch (Exception ex)
         {
             Log.Error(ex, "设备下线通知失败");
-            return new DeviceResponse { Code = 1, Msg = $"下线通知失败：{ex.Message}" };
+            return new DeviceResponse
+            {
+                Code = 1,
+                Msg = $"下线通知失败：{ex.Message}"
+            };
         }
     }
 
@@ -95,12 +119,20 @@ public class DeviceService : IDeviceService
             response.EnsureSuccessStatusCode();
 
             var result = await response.Content.ReadFromJsonAsync<DeviceResponse>();
-            return result ?? new DeviceResponse { Code = 1, Msg = "心跳通知失败：响应为空" };
+            return result ?? new DeviceResponse
+            {
+                Code = 1,
+                Msg = "心跳通知失败：响应为空"
+            };
         }
         catch (Exception ex)
         {
             Log.Error(ex, "设备心跳通知失败");
-            return new DeviceResponse { Code = 1, Msg = $"心跳通知失败：{ex.Message}" };
+            return new DeviceResponse
+            {
+                Code = 1,
+                Msg = $"心跳通知失败：{ex.Message}"
+            };
         }
     }
 
@@ -113,12 +145,20 @@ public class DeviceService : IDeviceService
             response.EnsureSuccessStatusCode();
 
             var result = await response.Content.ReadFromJsonAsync<DeviceResponse>();
-            return result ?? new DeviceResponse { Code = 1, Msg = "动作数据同步失败：响应为空" };
+            return result ?? new DeviceResponse
+            {
+                Code = 1,
+                Msg = "动作数据同步失败：响应为空"
+            };
         }
         catch (Exception ex)
         {
             Log.Error(ex, "设备动作数据同步失败");
-            return new DeviceResponse { Code = 1, Msg = $"动作数据同步失败：{ex.Message}" };
+            return new DeviceResponse
+            {
+                Code = 1,
+                Msg = $"动作数据同步失败：{ex.Message}"
+            };
         }
     }
 
@@ -131,12 +171,20 @@ public class DeviceService : IDeviceService
             response.EnsureSuccessStatusCode();
 
             var result = await response.Content.ReadFromJsonAsync<DeviceResponse>();
-            return result ?? new DeviceResponse { Code = 1, Msg = "业务数据同步失败：响应为空" };
+            return result ?? new DeviceResponse
+            {
+                Code = 1,
+                Msg = "业务数据同步失败：响应为空"
+            };
         }
         catch (Exception ex)
         {
             Log.Error(ex, "业务数据同步失败");
-            return new DeviceResponse { Code = 1, Msg = $"业务数据同步失败：{ex.Message}" };
+            return new DeviceResponse
+            {
+                Code = 1,
+                Msg = $"业务数据同步失败：{ex.Message}"
+            };
         }
     }
 

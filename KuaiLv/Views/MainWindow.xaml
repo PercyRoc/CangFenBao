@@ -117,14 +117,14 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                
-                <TextBlock Grid.Column="0" 
+
+                <TextBlock Grid.Column="0"
                            Text="操作模式:"
                            VerticalAlignment="Center"
                            Margin="0,0,4,0"
                            FontSize="13"
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                
+
                 <ComboBox Grid.Column="1"
                           MinWidth="120"
                           ItemsSource="{Binding Scenarios}"
@@ -435,7 +435,7 @@
                                             </Grid.RowDefinitions>
 
                                             <!-- 相机名称 -->
-                                            <TextBlock Grid.Row="0" 
+                                            <TextBlock Grid.Row="0"
                                                        Text="{Binding CameraName}"
                                                        FontWeight="SemiBold"
                                                        Margin="8,4"

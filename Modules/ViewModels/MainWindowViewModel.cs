@@ -2,19 +2,27 @@
 using System.Windows;
 using System.Windows.Threading;
 using Common.Models.Package;
+using Common.Models.Settings.ChuteRules;
 using Common.Services.Settings;
+using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
+using Modules.Models.Jitu.Settings;
+using Modules.Services.Jitu;
 using Serilog;
+using ShanghaiModuleBelt.Models.Jitu;
 using ShanghaiModuleBelt.Models.Sto;
 using ShanghaiModuleBelt.Models.Sto.Settings;
 using ShanghaiModuleBelt.Models.Yunda;
+using ShanghaiModuleBelt.Models.Yunda.Settings;
+using ShanghaiModuleBelt.Models.Zto;
+using ShanghaiModuleBelt.Models.Zto.Settings;
 using ShanghaiModuleBelt.Services;
 using ShanghaiModuleBelt.Services.Sto;
 using ShanghaiModuleBelt.Services.Yunda;
+using ShanghaiModuleBelt.Services.Zto;
+using ShanghaiModuleBelt.Views;
 using SharedUI.Models;
-using Modules.Services.Jitu;
-using Common.Services.Ui;
 
 namespace ShanghaiModuleBelt.ViewModels;
 
@@ -22,26 +30,26 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly ICameraService _cameraService;
 
+    // 格口统计计数器 - 维护完整的统计数据
+    private readonly Dictionary<int, int> _chutePackageCount = new();
+
     // 格口锁定状态字典
     // private readonly ChuteMappingService _chuteMappingService;
     private readonly IDialogService _dialogService;
-    private readonly INotificationService _notificationService;
+    private readonly IJituService _jituService;
     // private readonly LockingService _lockingService;
     private readonly IModuleConnectionService _moduleConnectionService;
+    private readonly INotificationService _notificationService;
+    private readonly RetryService _retryService;
     private readonly ISettingsService _settingsService;
     private readonly IStoAutoReceiveService _stoAutoReceiveService;
-    private readonly IYundaUploadWeightService _yundaUploadWeightService;
-    private readonly Services.Zto.IZtoApiService _ztoApiService;
-    private readonly IJituService _jituService;
-    private readonly RetryService _retryService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
+    private readonly IYundaUploadWeightService _yundaUploadWeightService;
+    private readonly IZtoApiService _ztoApiService;
     private string _currentBarcode = string.Empty;
     private bool _disposed;
     private SystemStatus _systemStatus = new();
-
-    // 格口统计计数器 - 维护完整的统计数据
-    private readonly Dictionary<int, int> _chutePackageCount = new();
 
     public MainWindowViewModel(IDialogService dialogService,
         INotificationService notificationService,
@@ -50,7 +58,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         IModuleConnectionService moduleConnectionService,
         IStoAutoReceiveService stoAutoReceiveService,
         IYundaUploadWeightService yundaUploadWeightService,
-        Services.Zto.IZtoApiService ztoApiService,
+        IZtoApiService ztoApiService,
         IJituService jituService,
         RetryService retryService)
     {
@@ -104,7 +112,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         // 初始检查锁格设备状态
         // UpdateLockingDeviceStatus(_lockingService.IsConnected());
     }
-    
+
     public DelegateCommand OpenSettingsCommand { get; }
     public DelegateCommand ShowChuteStatisticsCommand { get; }
     public string CurrentBarcode
@@ -139,15 +147,15 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            var dialog = new Views.ChuteStatisticsDialog();
+            var dialog = new ChuteStatisticsDialog();
             var viewModel = new ChuteStatisticsDialogViewModel(_notificationService, _retryService);
-            
+
             // 更新统计数据
             viewModel.UpdateStatistics(_chutePackageCount);
-            
+
             // 设置数据上下文
             dialog.DataContext = viewModel;
-            
+
             // 设置刷新动作的处理逻辑
             viewModel.RefreshAction = () =>
             {
@@ -156,7 +164,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     viewModel.UpdateStatistics(_chutePackageCount);
                 });
             };
-            
+
             // 设置父窗口并显示对话框
             dialog.Owner = Application.Current.MainWindow;
             dialog.ShowDialog();
@@ -326,7 +334,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             Log.Information("收到包裹信息: {Barcode}, 序号={Index}", package.Barcode, package.Index);
 
             // 从 ChuteSettings 获取格口配置
-            var chuteSettings = _settingsService.LoadSettings<Common.Models.Settings.ChuteRules.ChuteSettings>();
+            var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
 
             // 检查条码是否包含异常字符（|或逗号）
             if (package.Barcode.Contains('|') || package.Barcode.Contains(','))
@@ -387,7 +395,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     UserCode = stoApiSettings.UserCode,
                     Packages =
                     [
-                        new Package()
+                        new Package
                         {
                             WaybillNo = package.Barcode,
                             Weight = package.Weight.ToString("F2"),
@@ -419,7 +427,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             }
 
             // 获取韵达API配置
-            var yundaApiSettings = _settingsService.LoadSettings<Models.Yunda.Settings.YundaApiSettings>();
+            var yundaApiSettings = _settingsService.LoadSettings<YundaApiSettings>();
             var yundaPrefixes = yundaApiSettings.BarcodePrefixes.Split(';', StringSplitOptions.RemoveEmptyEntries).ToList();
 
             // 根据配置的条码前缀上传韵达重量
@@ -473,20 +481,20 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             }
 
             // 获取中通API配置
-            var ztoApiSettings = _settingsService.LoadSettings<ShanghaiModuleBelt.Models.Zto.Settings.ZtoApiSettings>();
+            var ztoApiSettings = _settingsService.LoadSettings<ZtoApiSettings>();
             var ztoPrefixes = ztoApiSettings.BarcodePrefixes.Split(';', StringSplitOptions.RemoveEmptyEntries).ToList();
 
             // 根据配置的条码前缀上传中通揽收
             if (ztoPrefixes.Any(package.Barcode.StartsWith))
             {
-                var ztoRequest = new Models.Zto.CollectUploadRequest
+                var ztoRequest = new CollectUploadRequest
                 {
                     CollectUploadDTOS =
                     [
-                        new Models.Zto.CollectUploadDTO
+                        new CollectUploadDTO
                         {
                             BillCode = package.Barcode,
-                            Weight = (decimal)package.Weight,
+                            Weight = (decimal)package.Weight
                         }
                     ]
                 };
@@ -515,13 +523,13 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             }
 
             // 获取极兔API配置
-            var jituApiSettings = _settingsService.LoadSettings<Modules.Models.Jitu.Settings.JituApiSettings>();
+            var jituApiSettings = _settingsService.LoadSettings<JituApiSettings>();
             var jituPrefixes = jituApiSettings.BarcodePrefixes.Split(';', StringSplitOptions.RemoveEmptyEntries).ToList();
 
             // 根据配置的条码前缀上传极兔OpScan
-            if (jituPrefixes.Any(prefix => package.Barcode.StartsWith(prefix)))
+            if (jituPrefixes.Any(package.Barcode.StartsWith))
             {
-                var jituRequest = new Modules.Models.Jitu.JituOpScanRequest
+                var jituRequest = new JituOpScanRequest
                 {
                     Billcode = package.Barcode,
                     Weight = package.Weight,
@@ -591,7 +599,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "处理包裹信息时发生错误：{Barcode}", package.Barcode);
-            package.SetStatus(PackageStatus.Error,$"处理失败：{ex.Message}");
+            package.SetStatus(PackageStatus.Error, $"处理失败：{ex.Message}");
         }
     }
 

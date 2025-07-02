@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace Rookie.Models.Api;
@@ -25,4 +24,4 @@ public class CommandData
 
     [JsonPropertyName("params")]
     public object Params { get; set; } = new(); // Use object for flexibility, specific types below
-} 
+}

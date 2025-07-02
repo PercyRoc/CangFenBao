@@ -1,33 +1,29 @@
-﻿namespace FuzhouPolicyForce.WangDianTong;
-using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Linq;
-using System.Net.Http;
+﻿using System.Net.Http;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
-using Common.Services.Settings;
-using Models;
-using Serilog;
-using System.Web;
 using System.Text.Json.Serialization;
+using System.Web;
+using Common.Services.Settings;
+using FuzhouPolicyForce.Models;
+using Serilog;
+
+namespace FuzhouPolicyForce.WangDianTong;
 
 /// <summary>
-/// 旺店通API服务实现V2 (符合新文档)
+///     旺店通API服务实现V2 (符合新文档)
 /// </summary>
 public class WangDianTongApiServiceImplV2(HttpClient httpClient, ISettingsService settingsService) : IWangDianTongApiServiceV2
 {
     // Cache JsonSerializerOptions for performance
-    private static readonly JsonSerializerOptions _jsonSerializerOptions = new JsonSerializerOptions
+    private static readonly JsonSerializerOptions _jsonSerializerOptions = new()
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull // 排除null值
     };
 
     /// <summary>
-    /// 重量回传接口，符合旺店通新文档
+    ///     重量回传接口，符合旺店通新文档
     /// </summary>
     /// <param name="request">重量回传请求参数</param>
     /// <returns>重量回传响应结果</returns>
@@ -44,28 +40,40 @@ public class WangDianTongApiServiceImplV2(HttpClient httpClient, ISettingsServic
             // 构建公共参数字典 (不含sign)
             var publicParameters = new Dictionary<string, string>
             {
-                { "sid", settings.SellerAccount },
-                { "appkey", settings.ApiAccount },
-                { "timestamp", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString() },
-                { "method", "trade.weight"}, // *** 注意：这个值需要根据实际文档确认！***
-                { "sign_method", "md5" },
-                { "format", "json" }
+                {
+                    "sid", settings.SellerAccount
+                },
+                {
+                    "appkey", settings.ApiAccount
+                },
+                {
+                    "timestamp", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()
+                },
+                {
+                    "method", "trade.weight"
+                }, // *** 注意：这个值需要根据实际文档确认！***
+                {
+                    "sign_method", "md5"
+                },
+                {
+                    "format", "json"
+                }
             };
 
             // 构建业务参数对象 (只包含非空和必要的业务参数，将null字段排除以减少签名计算的复杂性)
-             // 直接使用 request 对象作为业务参数，System.Text.Json 会处理 null 和默认值
-             // 如果API要求严格排除null，可能需要手动构建一个匿名对象或字典
+            // 直接使用 request 对象作为业务参数，System.Text.Json 会处理 null 和默认值
+            // 如果API要求严格排除null，可能需要手动构建一个匿名对象或字典
             var businessObject = request;
 
-             // 检查二选一必填 (针对原始请求对象进行检查)
+            // 检查二选一必填 (针对原始请求对象进行检查)
             if (string.IsNullOrEmpty(businessObject.SrcOrderNo) && string.IsNullOrEmpty(businessObject.LogisticsNo))
             {
-                 throw new ArgumentException("仓储单号和物流单号二选一必填。");
+                throw new ArgumentException("仓储单号和物流单号二选一必填。");
             }
 
             // 序列化业务参数为 JSON 字符串
             // 使用缓存的 options 实例
-             businessJsonBody = JsonSerializer.Serialize(businessObject, _jsonSerializerOptions);
+            businessJsonBody = JsonSerializer.Serialize(businessObject, _jsonSerializerOptions);
 
 
             // 计算签名
@@ -103,7 +111,7 @@ public class WangDianTongApiServiceImplV2(HttpClient httpClient, ISettingsServic
             var result = await response.Content.ReadFromJsonAsync<WeightPushResponseV2>();
 
             // 记录响应详情
-             if (result == null)
+            if (result == null)
             {
                 Log.Error("旺店通重量回传响应解析失败，返回null");
                 return new WeightPushResponseV2
@@ -121,20 +129,20 @@ public class WangDianTongApiServiceImplV2(HttpClient httpClient, ISettingsServic
             else
             {
                 Log.Warning("旺店通重量回传失败V2: 物流单号={LogisticsNo}, 仓储单号={SrcOrderNo}, 重量={Weight}kg, 错误码={Code}, 错误信息={Message}, 响应数据={@Response}",
-                     request.LogisticsNo, request.SrcOrderNo, request.Weight, result.Code, result.Message, result);
+                    request.LogisticsNo, request.SrcOrderNo, request.Weight, result.Code, result.Message, result);
             }
 
             return result;
         }
         catch (ArgumentException argEx)
         {
-             Log.Error(argEx, "旺店通重量回传请求参数错误V2: 物流单号={LogisticsNo}, 仓储单号={SrcOrderNo}, 错误={Message}",
-                 request.LogisticsNo, request.SrcOrderNo, argEx.Message);
-             return new WeightPushResponseV2
-             {
-                 Code = "-997",
-                 Message = $"请求参数错误: {argEx.Message}"
-             };
+            Log.Error(argEx, "旺店通重量回传请求参数错误V2: 物流单号={LogisticsNo}, 仓储单号={SrcOrderNo}, 错误={Message}",
+                request.LogisticsNo, request.SrcOrderNo, argEx.Message);
+            return new WeightPushResponseV2
+            {
+                Code = "-997",
+                Message = $"请求参数错误: {argEx.Message}"
+            };
         }
         catch (HttpRequestException ex)
         {
@@ -151,9 +159,9 @@ public class WangDianTongApiServiceImplV2(HttpClient httpClient, ISettingsServic
         catch (Exception ex)
         {
             Log.Error(ex, "旺店通重量回传发生异常V2: URL={Url}, 业务请求体={BusinessBody}, 异常={ErrorMessage}",
-                 apiUrl ?? "N/A",
-                 businessJsonBody ?? "N/A",
-                 ex.Message);
+                apiUrl ?? "N/A",
+                businessJsonBody ?? "N/A",
+                ex.Message);
             return new WeightPushResponseV2
             {
                 Code = "-999",
@@ -163,7 +171,7 @@ public class WangDianTongApiServiceImplV2(HttpClient httpClient, ISettingsServic
     }
 
     /// <summary>
-    /// 计算API签名 (适配V2接口参数和签名算法)
+    ///     计算API签名 (适配V2接口参数和签名算法)
     /// </summary>
     /// <param name="publicParameters">公共参数字典 (已包含method, timestamp, format等，不含sign)</param>
     /// <param name="businessJsonBody">业务参数的JSON字符串</param>

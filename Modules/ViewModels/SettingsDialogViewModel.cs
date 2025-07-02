@@ -1,26 +1,26 @@
 ﻿using Common.Services.Ui;
+using Modules.ViewModels.Jitu.Settings;
 using Serilog;
 using ShanghaiModuleBelt.ViewModels.Settings;
 using ShanghaiModuleBelt.ViewModels.Sto.Settings;
 using ShanghaiModuleBelt.ViewModels.Yunda.Settings;
 using ShanghaiModuleBelt.ViewModels.Zto.Settings;
 using SharedUI.ViewModels.Settings;
-using Modules.ViewModels.Jitu.Settings;
 
 namespace ShanghaiModuleBelt.ViewModels;
 
 public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
 {
+    // private readonly TcpSettingsViewModel _tcpSettingsViewModel;
+    private readonly BarcodeChuteSettingsViewModel _barcodeChuteSettingsViewModel;
     // 保存各个设置页面的ViewModel实例
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
+    private readonly JituSettingsViewModel _jituSettingsViewModel;
     private readonly ModuleConfigViewModel _moduleConfigViewModel;
     private readonly INotificationService _notificationService;
-    // private readonly TcpSettingsViewModel _tcpSettingsViewModel;
-    private readonly BarcodeChuteSettingsViewModel  _barcodeChuteSettingsViewModel;
     private readonly StoApiSettingsViewModel _stoApiSettingsViewModel;
     private readonly YundaApiSettingsViewModel _yundaApiSettingsViewModel;
     private readonly ZtoApiSettingsViewModel _ztoApiSettingsViewModel;
-    private readonly JituSettingsViewModel _jituSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
@@ -46,7 +46,10 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
     public DelegateCommand SaveCommand { get; }
     public DelegateCommand CancelCommand { get; }
 
-    public string Title => "系统设置";
+    public string Title
+    {
+        get => "系统设置";
+    }
 
     // Prism 9.0+ 要求
     public DialogCloseListener RequestClose { get; }
@@ -64,6 +67,12 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
 
     public void OnDialogOpened(IDialogParameters parameters)
     {
+    }
+
+    // 实现 IDisposable 接口
+    public void Dispose()
+    {
+        GC.SuppressFinalize(this);
     }
 
     private void ExecuteSave()
@@ -95,11 +104,5 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
     {
         // 更新调用方式
         RequestClose.Invoke(new DialogResult(ButtonResult.Cancel));
-    }
-
-    // 实现 IDisposable 接口
-    public void Dispose()
-    {
-        GC.SuppressFinalize(this);
     }
 }

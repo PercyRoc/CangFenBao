@@ -2,7 +2,6 @@
 using Common.Services.Ui;
 using SharedUI.Views.Settings;
 
-
 namespace XinBa.Views;
 
 public partial class SettingsDialog

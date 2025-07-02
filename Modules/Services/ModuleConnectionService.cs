@@ -31,7 +31,10 @@ internal class ModuleConnectionService(ISettingsService settingsService, ChutePa
     private CancellationTokenSource? _receiveCts;
     private TcpListener? _tcpListener;
 
-    public bool IsConnected => _connectedClient?.Connected ?? false;
+    public bool IsConnected
+    {
+        get => _connectedClient?.Connected ?? false;
+    }
 
     public event EventHandler<bool>? ConnectionStateChanged;
 

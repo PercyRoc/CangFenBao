@@ -6,7 +6,7 @@ using ShanghaiModuleBelt.Models.Sto.Settings;
 namespace ShanghaiModuleBelt.ViewModels.Sto.Settings;
 
 /// <summary>
-/// 申通快递API设置视图模型
+///     申通快递API设置视图模型
 /// </summary>
 public class StoApiSettingsViewModel : BindableBase
 {
@@ -39,4 +39,4 @@ public class StoApiSettingsViewModel : BindableBase
         Growl.Success("申通API设置已保存！");
         Log.Information("申通API设置已保存。");
     }
-} 
+}

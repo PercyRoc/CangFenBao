@@ -1,8 +1,10 @@
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.Drawing.Text;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -22,6 +24,7 @@ namespace BenFly.Services;
 /// </summary>
 internal class BenNiaoPackageService : IDisposable
 {
+    private readonly HttpClient _httpClient;
     private readonly IHttpClientFactory _httpClientFactory;
 
     // 创建JSON序列化选项，避免中文转义
@@ -30,21 +33,20 @@ internal class BenNiaoPackageService : IDisposable
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         WriteIndented = true
     };
+    private readonly ISettingsService _settingsService;
 
     private readonly SemaphoreSlim _sftpSemaphore = new(1, 1);
-    private readonly HttpClient _httpClient;
     private bool _isDisposed;
 
     // SFTP客户端实例，用于连接复用
     private SftpClient? _sftpClient;
-    private readonly ISettingsService _settingsService;
 
     /// <summary>
     ///     构造函数
     /// </summary>
     public BenNiaoPackageService(
         IHttpClientFactory httpClientFactory,
-         ISettingsService settingsService)
+        ISettingsService settingsService)
     {
         _httpClientFactory = httpClientFactory;
         _settingsService = settingsService;
@@ -212,7 +214,11 @@ internal class BenNiaoPackageService : IDisposable
             Log.Information("开始实时查询运单 {WaybillNum} 的三段码", waybillNum);
 
             // 记录请求参数
-            var requestParams = new { waybillNum, deviceId = _settingsService.LoadSettings<UploadConfiguration>().DeviceId };
+            var requestParams = new
+            {
+                waybillNum,
+                deviceId = _settingsService.LoadSettings<UploadConfiguration>().DeviceId
+            };
 
             const string url = "/api/openApi/realTimeQuery";
             var request = BenNiaoSignHelper.CreateRequest(
@@ -281,7 +287,10 @@ internal class BenNiaoPackageService : IDisposable
             var request = BenNiaoSignHelper.CreateRequest(
                 _settingsService.LoadSettings<UploadConfiguration>().BenNiaoAppId,
                 _settingsService.LoadSettings<UploadConfiguration>().BenNiaoAppSecret,
-                new[] { uploadItem });
+                new[]
+                {
+                    uploadItem
+                });
 
 
             // 使用 JsonContent 替代 PostAsJsonAsync，以便使用自定义序列化选项
@@ -292,7 +301,7 @@ internal class BenNiaoPackageService : IDisposable
 
             var result = await response.Content.ReadFromJsonAsync<BenNiaoResponse<object>>(_jsonOptions);
             if (result is { IsSuccess: true }) return (true, uploadTime, string.Empty);
-            
+
             var errorMessage = result?.Message ?? "未知错误";
             Log.Error("上传包裹 {Barcode} 数据失败：{Message}", package.Barcode, errorMessage);
             return (false, DateTime.MinValue, $"API返回错误: {errorMessage}");
@@ -345,7 +354,7 @@ internal class BenNiaoPackageService : IDisposable
             const int maxRetries = 3;
             const int retryDelayMs = 1000;
             var retryCount = 0;
-            bool uploadSuccessful = false;
+            var uploadSuccessful = false;
 
             while (!uploadSuccessful && retryCount < maxRetries)
             {
@@ -433,14 +442,14 @@ internal class BenNiaoPackageService : IDisposable
                             currentErrorMessage = $"文件大小不匹配 - 本地: {fileInfo.Length}, 远程: {uploadedFileInfo.Size}";
                             Log.Warning(currentErrorMessage);
                             // 文件大小不匹配也视为失败，以便重试
-                            retryCount++; 
+                            retryCount++;
                         }
                     }
                     else
                     {
                         currentErrorMessage = $"文件上传后未在服务器上找到: {remotePath}";
                         Log.Warning(currentErrorMessage);
-                        retryCount++; 
+                        retryCount++;
                     }
                 }
                 catch (Exception ex)
@@ -457,8 +466,8 @@ internal class BenNiaoPackageService : IDisposable
 
                     if (retryCount >= maxRetries)
                     {
-                         currentErrorMessage = $"图片上传重试 {maxRetries} 次后失败: {ex.Message}";
-                         Log.Error("上传包裹 {WaybillNum} 的图片在 {RetryCount} 次尝试后失败", waybillNum, retryCount);
+                        currentErrorMessage = $"图片上传重试 {maxRetries} 次后失败: {ex.Message}";
+                        Log.Error("上传包裹 {WaybillNum} 的图片在 {RetryCount} 次尝试后失败", waybillNum, retryCount);
                     }
                 }
             } // end while
@@ -503,7 +512,7 @@ internal class BenNiaoPackageService : IDisposable
             AddWatermarkToImage(bitmap, package, deviceId);
 
             // 保存添加水印后的图片
-            bitmap.Save(tempPath, System.Drawing.Imaging.ImageFormat.Jpeg);
+            bitmap.Save(tempPath, ImageFormat.Jpeg);
 
             Log.Information("已将包裹 {WaybillNum} 的图片保存到临时文件 {TempPath}", waybillNum, tempPath);
 
@@ -517,7 +526,7 @@ internal class BenNiaoPackageService : IDisposable
     }
 
     /// <summary>
-    /// 将 BitmapSource 转换为 System.Drawing.Bitmap
+    ///     将 BitmapSource 转换为 System.Drawing.Bitmap
     /// </summary>
     /// <param name="bitmapSource">要转换的 BitmapSource</param>
     /// <returns>转换后的 Bitmap</returns>
@@ -533,12 +542,12 @@ internal class BenNiaoPackageService : IDisposable
             bitmapSource.CopyPixels(pixels, stride, 0);
 
             // 创建一个新的 Bitmap 对象
-            var bitmap = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
             var bitmapData = bitmap.LockBits(new Rectangle(0, 0, width, height),
-                System.Drawing.Imaging.ImageLockMode.WriteOnly, bitmap.PixelFormat);
+                ImageLockMode.WriteOnly, bitmap.PixelFormat);
 
             // 将像素数据复制到 Bitmap
-            System.Runtime.InteropServices.Marshal.Copy(pixels, 0, bitmapData.Scan0, pixels.Length);
+            Marshal.Copy(pixels, 0, bitmapData.Scan0, pixels.Length);
             bitmap.UnlockBits(bitmapData);
 
             return bitmap;
@@ -577,7 +586,10 @@ internal class BenNiaoPackageService : IDisposable
             watermarkText.AppendLine($"设备号: {deviceId}");
 
             // 计算文本大小和位置
-            var lines = watermarkText.ToString().Split(new[] { "\r\n", "\n" }, StringSplitOptions.None); // Split by newline
+            var lines = watermarkText.ToString().Split(new[]
+            {
+                "\r\n", "\n"
+            }, StringSplitOptions.None); // Split by newline
             var lineHeight = font.GetHeight(graphics);
             var yPosition = 10; // 初始Y坐标
 
@@ -616,7 +628,10 @@ internal class BenNiaoPackageService : IDisposable
             if (imageCopy != null)
             {
                 using var memoryStream = new MemoryStream();
-                var encoder = new JpegBitmapEncoder { QualityLevel = 90 };
+                var encoder = new JpegBitmapEncoder
+                {
+                    QualityLevel = 90
+                };
                 encoder.Frames.Add(BitmapFrame.Create(imageCopy));
                 encoder.Save(memoryStream);
                 base64Image = Convert.ToBase64String(memoryStream.ToArray());
@@ -639,7 +654,10 @@ internal class BenNiaoPackageService : IDisposable
             var request = BenNiaoSignHelper.CreateRequest(
                 _settingsService.LoadSettings<UploadConfiguration>().BenNiaoAppId,
                 _settingsService.LoadSettings<UploadConfiguration>().BenNiaoAppSecret,
-                new[] { uploadItem });
+                new[]
+                {
+                    uploadItem
+                });
 
             var jsonContent = JsonSerializer.Serialize(request, _jsonOptions);
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");

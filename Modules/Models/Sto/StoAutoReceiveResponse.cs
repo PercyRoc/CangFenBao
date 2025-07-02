@@ -1,10 +1,9 @@
-using System.Collections.Generic;
 using Newtonsoft.Json;
 
 namespace ShanghaiModuleBelt.Models.Sto;
 
 /// <summary>
-/// 申通仓客户出库自动揽收接口响应模型
+///     申通仓客户出库自动揽收接口响应模型
 /// </summary>
 public class StoAutoReceiveResponse
 {

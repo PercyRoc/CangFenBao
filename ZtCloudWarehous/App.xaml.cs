@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Globalization;
 using System.Net.Http;
 using System.Windows;
 using Common.Extensions;
@@ -30,8 +31,8 @@ namespace ZtCloudWarehous;
 /// </summary>
 public partial class App
 {
-    private static Mutex? _mutex;
     private const string MutexName = "Global\\ZtCloudWarehous_App_Mutex";
+    private static Mutex? _mutex;
     private bool _ownsMutex; // 添加标志位
 
     /// <summary>
@@ -69,13 +70,10 @@ public partial class App
                 Environment.Exit(0); // 直接退出进程
                 return null!;
             }
-            else
-            {
-                // 可以获取Mutex，说明前一个实例可能异常退出但Mutex已被释放或从未正确获取
-                Log.Warning("成功获取已存在的Mutex，可能是上一个实例异常退出");
-                _ownsMutex = true; // 明确拥有权
-                return Container.Resolve<MainWindow>();
-            }
+            // 可以获取Mutex，说明前一个实例可能异常退出但Mutex已被释放或从未正确获取
+            Log.Warning("成功获取已存在的Mutex，可能是上一个实例异常退出");
+            _ownsMutex = true; // 明确拥有权
+            return Container.Resolve<MainWindow>();
         }
         catch (Exception ex)
         {
@@ -88,7 +86,7 @@ public partial class App
     }
 
     /// <summary>
-    /// 检查是否已有相同名称的应用程序实例在运行
+    ///     检查是否已有相同名称的应用程序实例在运行
     /// </summary>
     private static bool IsApplicationAlreadyRunning()
     {
@@ -118,7 +116,7 @@ public partial class App
         // --- 配置 Configuration ---
         var configuration = new ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)
-            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+            .AddJsonFile("appsettings.json", false, true)
             .Build();
         containerRegistry.RegisterInstance<IConfiguration>(configuration); // 注册到容器
         Log.Logger = new LoggerConfiguration()
@@ -129,7 +127,7 @@ public partial class App
 
         // 注册视图和ViewModel
         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
-        containerRegistry.RegisterDialog<SettingsDialog,SettingsDialogViewModel>("SettingsDialog");
+        containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>("SettingsDialog");
         // 注册公共服务
         containerRegistry.AddCommonServices();
         containerRegistry.AddShardUi();
@@ -137,13 +135,13 @@ public partial class App
 
         // 恢复 HttpClient 的单例注册
         containerRegistry.RegisterSingleton<HttpClient>();
-        
+
         // 注册包裹中转服务
         containerRegistry.RegisterSingleton<PackageTransferService>();
 
         // 注册运单上传服务
         containerRegistry.RegisterSingleton<IWaybillUploadService, WaybillUploadService>();
-        
+
         // 注册称重服务
         containerRegistry.RegisterSingleton<IWeighingService, WeighingService>();
         containerRegistry.RegisterForNavigation<HistoryDialogView, HistoryDialogViewModel>("HistoryDialog");
@@ -154,7 +152,7 @@ public partial class App
         containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
         containerRegistry.RegisterForNavigation<XiyiguAPiSettingsPage, XiyiguAPiSettingsViewModel>();
         // 注册多摆轮分拣服务
-        containerRegistry.RegisterPendulumSortService( PendulumServiceType.Multi);
+        containerRegistry.RegisterPendulumSortService(PendulumServiceType.Multi);
         containerRegistry.RegisterSingleton<IHostedService, PendulumSortHostedService>();
     }
 
@@ -164,19 +162,19 @@ public partial class App
     protected override void OnStartup(StartupEventArgs e)
     {
         Log.Information("应用程序启动 (OnStartup)");
-        
+
         // 初始化 WPFLocalizeExtension 为中文
         try
         {
             LocalizeDictionary.Instance.SetCurrentThreadCulture = true;
-            LocalizeDictionary.Instance.Culture = new System.Globalization.CultureInfo("zh-CN");
+            LocalizeDictionary.Instance.Culture = new CultureInfo("zh-CN");
             Log.Information("WPFLocalizeExtension 已初始化为中文 (zh-CN)");
         }
         catch (Exception ex)
         {
             Log.Error(ex, "初始化 WPFLocalizeExtension 时发生错误");
         }
-        
+
         base.OnStartup(e);
 
         try

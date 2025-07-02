@@ -41,8 +41,8 @@
     </Page.Resources>
 
     <Grid>
-        <StackPanel MaxWidth="800" 
-                    Margin="16" 
+        <StackPanel MaxWidth="800"
+                    Margin="16"
                     HorizontalAlignment="Center">
             <TextBlock Text="Weight Settings"
                        HorizontalAlignment="Center"

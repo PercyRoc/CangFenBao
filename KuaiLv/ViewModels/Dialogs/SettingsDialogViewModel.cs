@@ -32,7 +32,10 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
     public DelegateCommand SaveCommand { get; }
     public DelegateCommand CancelCommand { get; }
 
-    public string Title => "系统设置";
+    public string Title
+    {
+        get => "系统设置";
+    }
 
     public DialogCloseListener RequestClose { get; }
 
@@ -48,6 +51,11 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
 
     public void OnDialogOpened(IDialogParameters parameters)
     {
+    }
+
+    public void Dispose()
+    {
+        GC.SuppressFinalize(this);
     }
 
     private void ExecuteSave()
@@ -73,10 +81,5 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
     private void ExecuteCancel()
     {
         RequestClose.Invoke(new DialogResult(ButtonResult.Cancel));
-    }
-
-    public void Dispose()
-    {
-        GC.SuppressFinalize(this);
     }
 }

@@ -8,85 +8,85 @@
              d:DataContext="{d:DesignInstance Type=viewModels1:AsnOrderConfirmDialogViewModel}"
              mc:Ignorable="d"
              Width="400" Height="250">
-    <Border Background="{DynamicResource ApplicationBackgroundBrush}" 
-            BorderBrush="{DynamicResource ControlElevationBorderBrush}" 
-            BorderThickness="1" 
+    <Border Background="{DynamicResource ApplicationBackgroundBrush}"
+            BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+            BorderThickness="1"
             CornerRadius="8">
         <Grid Margin="20">
             <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <!-- 标题 -->
-            <TextBlock Grid.Row="0" 
+            <TextBlock Grid.Row="0"
                        Text="确认ASN单信息"
                        FontSize="20"
                        FontWeight="SemiBold"
-                       Margin="0,0,0,20"/>
+                       Margin="0,0,0,20" />
 
             <!-- 内容区域 -->
             <StackPanel Grid.Row="1">
-                <TextBlock Text="请确认以下ASN单信息是否正确:" 
-                           Margin="0,0,0,10"/>
+                <TextBlock Text="请确认以下ASN单信息是否正确:"
+                           Margin="0,0,0,10" />
 
                 <Grid Margin="0,5">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="120"/>
-                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="120" />
+                        <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="ASN单编码：" 
-                               Grid.Column="0" 
-                               VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding OrderCode}" 
-                               Grid.Column="1" 
+                    <TextBlock Text="ASN单编码："
+                               Grid.Column="0"
+                               VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding OrderCode}"
+                               Grid.Column="1"
                                FontWeight="Bold"
-                               VerticalAlignment="Center"/>
+                               VerticalAlignment="Center" />
                 </Grid>
 
                 <Grid Margin="0,5">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="120"/>
-                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="120" />
+                        <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="车牌号：" 
-                               Grid.Column="0" 
-                               VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding CarCode}" 
-                               Grid.Column="1" 
-                               FontWeight="Bold" 
+                    <TextBlock Text="车牌号："
+                               Grid.Column="0"
+                               VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding CarCode}"
+                               Grid.Column="1"
+                               FontWeight="Bold"
                                Foreground="#E91E63"
-                               VerticalAlignment="Center"/>
+                               VerticalAlignment="Center" />
                 </Grid>
 
                 <Grid Margin="0,5">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="120"/>
-                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="120" />
+                        <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="货品数量：" 
-                               Grid.Column="0" 
-                               VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding ItemsCount}" 
-                               Grid.Column="1" 
+                    <TextBlock Text="货品数量："
+                               Grid.Column="0"
+                               VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding ItemsCount}"
+                               Grid.Column="1"
                                FontWeight="Bold"
-                               VerticalAlignment="Center"/>
+                               VerticalAlignment="Center" />
                 </Grid>
             </StackPanel>
 
             <!-- 按钮区域 -->
-            <StackPanel Grid.Row="2" 
-                        Orientation="Horizontal" 
-                        HorizontalAlignment="Right" 
+            <StackPanel Grid.Row="2"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Right"
                         Margin="0,20,0,0">
                 <ui:Button Content="确认"
-                          Command="{Binding ConfirmCommand}"
-                          Appearance="Primary"
-                          Margin="0,0,8,0"/>
+                           Command="{Binding ConfirmCommand}"
+                           Appearance="Primary"
+                           Margin="0,0,8,0" />
                 <ui:Button Content="取消"
-                          Command="{Binding CancelCommand}"/>
+                           Command="{Binding CancelCommand}" />
             </StackPanel>
         </Grid>
     </Border>
-</UserControl> 
+</UserControl>

@@ -6,7 +6,7 @@ using SharedUI.Views.Settings;
 namespace ShanghaiModuleBelt.Views;
 
 /// <summary>
-/// SettingsDialog 的交互逻辑
+///     SettingsDialog 的交互逻辑
 /// </summary>
 public partial class SettingsDialog
 {

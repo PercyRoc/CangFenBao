@@ -6,21 +6,21 @@ using System.Reactive.Linq;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using BenFly.Services;
+using Common.Data;
 using Common.Models.Package;
 using Common.Models.Settings.ChuteRules;
+using Common.Models.Settings.Sort.PendulumSort;
+using Common.Services.Audio;
 using Common.Services.Settings;
+using Common.Services.Validation;
+using DeviceService.DataSourceDevices.Belt;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Scanner;
 using DeviceService.DataSourceDevices.Services;
-using BenFly.Services;
-using Common.Models.Settings.Sort.PendulumSort;
 using Serilog;
 using SharedUI.Models;
 using SortingServices.Pendulum;
-using Common.Services.Audio;
-using Common.Services.Validation;
-using DeviceService.DataSourceDevices.Belt;
-using Common.Data;
 
 namespace BenFly.ViewModels.Windows;
 
@@ -28,37 +28,37 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 {
     // 用于为合并后的包裹生成新的、线程安全的序号
     private static int _nextMergedPackageIndex;
+    private readonly IAudioService _audioService;
+    private readonly IDisposable? _barcodeSubscription; // Subscription for the barcode stream
+    private readonly IBarcodeValidationService _barcodeValidationService;
+
+    private readonly BeltSerialService _beltSerialService;
 
     private readonly BenNiaoPackageService _benNiaoService;
-    private readonly BenNiaoPreReportService _preReportService;
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
+    private readonly IPackageDataService _packageDataService;
+    private readonly BenNiaoPreReportService _preReportService;
     private readonly ISettingsService _settingsService;
     private readonly IPendulumSortService _sortService;
-    private readonly IAudioService _audioService;
-    private readonly IPackageDataService _packageDataService;
-    private readonly IBarcodeValidationService _barcodeValidationService;
     private readonly List<IDisposable> _subscriptions = [];
-    private readonly IDisposable? _barcodeSubscription; // Subscription for the barcode stream
 
     private readonly DispatcherTimer _timer;
+    private long _chuteAllocationErrorCount;
 
     private string _currentBarcode = string.Empty;
 
     private BitmapSource? _currentImage;
 
     private bool _disposed;
+    private long _errorPackageCount;
+    private long _noReadPackageCount;
 
     private SystemStatus _systemStatus = new();
 
-    private readonly BeltSerialService _beltSerialService;
-
     // 统计计数器 - 使用线程安全的方式
-    private long _totalPackageCount = 0;
-    private long _errorPackageCount = 0;
-    private long _noReadPackageCount = 0;
-    private long _chuteAllocationErrorCount = 0;
-    private long _uploadErrorCount = 0;
+    private long _totalPackageCount;
+    private long _uploadErrorCount;
 
     public MainWindowViewModel(
         IDialogService dialogService,
@@ -353,97 +353,97 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private void InitializeStatisticsItems()
     {
         StatisticsItems.Add(new StatisticsItem(
-            label: "总包裹数",
-            value: "0",
-            unit: "个",
-            description: "累计处理包裹总数",
-            icon: "CubeMultiple24"
+            "总包裹数",
+            "0",
+            "个",
+            "累计处理包裹总数",
+            "CubeMultiple24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
-            label: "NoRead异常",
-            value: "0",
-            unit: "个",
-            description: "无法识别条码的包裹数量",
-            icon: "ScanCamera24"
+            "NoRead异常",
+            "0",
+            "个",
+            "无法识别条码的包裹数量",
+            "ScanCamera24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
-            label: "格口分配异常",
-            value: "0",
-            unit: "个",
-            description: "已上传但格口分配失败的包裹",
-            icon: "LocationOff24"
+            "格口分配异常",
+            "0",
+            "个",
+            "已上传但格口分配失败的包裹",
+            "LocationOff24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
-            label: "上传异常",
-            value: "0",
-            unit: "个",
-            description: "无法上传到笨鸟系统的包裹",
-            icon: "CloudOff24"
+            "上传异常",
+            "0",
+            "个",
+            "无法上传到笨鸟系统的包裹",
+            "CloudOff24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
-            label: "预测效率",
-            value: "0",
-            unit: "个/小时",
-            description: "预计每小时处理量",
-            icon: "ArrowTrending24"
+            "预测效率",
+            "0",
+            "个/小时",
+            "预计每小时处理量",
+            "ArrowTrending24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
-            label: "平均处理时间",
-            value: "0",
-            unit: "ms",
-            description: "单个包裹平均处理时间",
-            icon: "Timer24"
+            "平均处理时间",
+            "0",
+            "ms",
+            "单个包裹平均处理时间",
+            "Timer24"
         ));
     }
 
     private void InitializePackageInfoItems()
     {
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "重量",
-            value: "--",
-            unit: "kg",
-            description: "包裹重量",
-            icon: "Scales24"
+            "重量",
+            "--",
+            "kg",
+            "包裹重量",
+            "Scales24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "尺寸",
-            value: "--",
-            unit: "cm",
-            description: "长×宽×高",
-            icon: "Ruler24"
+            "尺寸",
+            "--",
+            "cm",
+            "长×宽×高",
+            "Ruler24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "段码",
-            value: "--",
+            "段码",
+            "--",
             description: "三段码信息",
             icon: "BarcodeScanner24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "分拣口",
-            value: "--",
+            "分拣口",
+            "--",
             description: "目标分拣位置",
             icon: "ArrowCircleDown24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "处理时间",
-            value: "--",
-            unit: "ms",
-            description: "系统处理耗时",
-            icon: "Timer24"
+            "处理时间",
+            "--",
+            "ms",
+            "系统处理耗时",
+            "Timer24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "当前时间",
-            value: "--:--:--",
+            "当前时间",
+            "--:--:--",
             description: "包裹处理时间",
             icon: "Clock24"
         ));
@@ -500,7 +500,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 处理用户手动输入或巴枪扫码的条码（按回车键触发）
+    ///     处理用户手动输入或巴枪扫码的条码（按回车键触发）
     /// </summary>
     public void OnBarcodeInput()
     {
@@ -535,7 +535,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 处理包裹信息的核心逻辑
+    ///     处理包裹信息的核心逻辑
     /// </summary>
     private async Task OnPackageInfoAsync(PackageInfo package)
     {
@@ -562,17 +562,17 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             // 检查条码是否为 noread 或空
             var isNoReadOrEmpty = string.IsNullOrWhiteSpace(package.Barcode) ||
                                   string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase);
-            
+
             // 单号校验结果
             BarcodeValidationResult? validationResult = null;
             var isBarcodeInvalid = false;
-            
+
             // 对非空且非noread的条码进行校验
             if (!isNoReadOrEmpty)
             {
                 validationResult = _barcodeValidationService.ValidateBarcode(package.Barcode);
                 isBarcodeInvalid = !validationResult.IsValid;
-                
+
                 if (isBarcodeInvalid)
                 {
                     Log.Warning("单号校验失败: {Barcode}, 错误: {Error}", package.Barcode, validationResult.ErrorMessage);
@@ -599,7 +599,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
                 // 分配到配置的异常口
                 package.SetChute(exceptionChute);
-                
+
                 // 确定异常原因
                 string reason;
                 if (isNoReadOrEmpty)
@@ -608,10 +608,10 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     reason = $"Invalid Barcode Format: {validationResult?.ErrorMessage}";
                 else
                     reason = "Invalid Weight/Volume";
-                
+
                 Log.Information("包裹 Barcode: {Barcode}, Index: {Index} 因 '{Reason}',预分配到配置的异常口 {ExceptionChute}",
                     package.Barcode, package.Index, reason, exceptionChute);
-                
+
                 // 根据不同错误类型设置状态和消息
                 if (isBarcodeInvalid)
                 {
@@ -624,7 +624,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 {
                     const string invalidDataErrorMsg = "包裹重量或体积数据无效";
                     package.SetStatus(PackageStatus.Error, invalidDataErrorMsg);
-                    Log.Information("包裹数据无效...状态设为Error, ErrorMessage: '{ErrorMessage}'. 将标记为 uploadAsNoRead。", 
+                    Log.Information("包裹数据无效...状态设为Error, ErrorMessage: '{ErrorMessage}'. 将标记为 uploadAsNoRead。",
                         package.Barcode);
                 }
                 else // isNoReadOrEmpty
@@ -712,7 +712,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     package.SetStatus(PackageStatus.Error, benNiaoErrorMessage);
                     Log.Error(ex, "与笨鸟系统交互时发生异常。Barcode: {Barcode}, Index: {Index}", package.Barcode, package.Index);
                 }
-                
+
                 // 3. 根据交互结果分配格口
                 if (benNiaoInteractionSuccess)
                 {
@@ -750,7 +750,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             try
             {
                 _sortService.ProcessPackage(package);
-                Log.Information("包裹已提交到分拣服务: Barcode: {Barcode}, Index: {Index}, Chute: {Chute}", 
+                Log.Information("包裹已提交到分拣服务: Barcode: {Barcode}, Index: {Index}, Chute: {Chute}",
                     package.Barcode, package.Index, package.ChuteNumber);
             }
             catch (Exception ex)
@@ -765,7 +765,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
             // 更新统计计数器（线程安全）
             Interlocked.Increment(ref _totalPackageCount);
-            
+
             // 分别统计不同类型的异常
             if (package.Status == PackageStatus.NoRead)
             {
@@ -784,9 +784,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     Interlocked.Increment(ref _chuteAllocationErrorCount);
                 }
             }
-            
+
             // 保持原有的总异常数计算（兼容性）
-            if ((package.Status is PackageStatus.Error or PackageStatus.NoRead) && !package.IsUploadedToBenNiao)
+            if (package.Status is PackageStatus.Error or PackageStatus.NoRead && !package.IsUploadedToBenNiao)
             {
                 Interlocked.Increment(ref _errorPackageCount);
             }
@@ -806,7 +806,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     PackageHistory.Insert(0, package);
                     while (PackageHistory.Count > 1000)
                         PackageHistory.RemoveAt(PackageHistory.Count - 1);
-                    
+
                     UpdateStatistics();
                 }
                 catch (Exception ex)
@@ -816,7 +816,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             });
 
             // 记录包裹最终状态用于问题排查
-            Log.Information("包裹处理完成 - Barcode: {Barcode}, Index: {Index}, Status: {Status}, IsUploadedToBenNiao: {IsUploadedToBenNiao}, Chute: {Chute}", 
+            Log.Information("包裹处理完成 - Barcode: {Barcode}, Index: {Index}, Status: {Status}, IsUploadedToBenNiao: {IsUploadedToBenNiao}, Chute: {Chute}",
                 package.Barcode, package.Index, package.Status, package.IsUploadedToBenNiao, package.ChuteNumber);
 
             // 异步保存数据到数据库
@@ -850,7 +850,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 启动后台图片上传任务
+    ///     启动后台图片上传任务
     /// </summary>
     private void StartBackgroundImageUpload(PackageInfo package, BitmapSource originalImage, DateTime uploadTime)
     {

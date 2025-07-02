@@ -1,14 +1,12 @@
 using Common.Services.Settings;
 using HandyControl.Controls;
-using Prism.Commands;
-using Prism.Mvvm;
 using Serilog;
 using ShanghaiModuleBelt.Models.Zto.Settings;
 
 namespace ShanghaiModuleBelt.ViewModels.Zto.Settings;
 
 /// <summary>
-/// 中通API设置视图模型
+///     中通API设置视图模型
 /// </summary>
 public class ZtoApiSettingsViewModel : BindableBase
 {
@@ -23,7 +21,7 @@ public class ZtoApiSettingsViewModel : BindableBase
     }
 
     /// <summary>
-    /// 中通API配置
+    ///     中通API配置
     /// </summary>
     public ZtoApiSettings Settings
     {
@@ -32,12 +30,12 @@ public class ZtoApiSettingsViewModel : BindableBase
     }
 
     /// <summary>
-    /// 保存设置命令
+    ///     保存设置命令
     /// </summary>
     public DelegateCommand SaveCommand { get; }
 
     /// <summary>
-    /// 执行保存设置操作
+    ///     执行保存设置操作
     /// </summary>
     private void ExecuteSaveSettings()
     {
@@ -53,4 +51,4 @@ public class ZtoApiSettingsViewModel : BindableBase
             Log.Error(ex, "中通API设置保存失败");
         }
     }
-} 
+}

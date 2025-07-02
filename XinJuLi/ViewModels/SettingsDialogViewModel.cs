@@ -4,15 +4,15 @@ using SharedUI.ViewModels.Settings;
 
 namespace XinJuLi.ViewModels;
 
-public class SettingsDialogViewModel: BindableBase, IDialogAware
+public class SettingsDialogViewModel : BindableBase, IDialogAware
 {
+    private readonly AsnHttpSettingsViewModel _asnHttpSettingsViewModel;
     private readonly BarcodeChuteSettingsViewModel _barcodeChuteSettingsViewModel;
 
     // 保存各个设置页面的ViewModel实例
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
     private readonly INotificationService _notificationService;
     private readonly BalanceSortSettingsViewModel _sortSettingsViewModel;
-    private readonly AsnHttpSettingsViewModel _asnHttpSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
@@ -33,7 +33,10 @@ public class SettingsDialogViewModel: BindableBase, IDialogAware
     public DelegateCommand SaveCommand { get; }
     public DelegateCommand CancelCommand { get; }
 
-    public string Title => "系统设置";
+    public string Title
+    {
+        get => "系统设置";
+    }
 
     public DialogCloseListener RequestClose { get; }
 

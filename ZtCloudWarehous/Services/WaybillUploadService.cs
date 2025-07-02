@@ -3,13 +3,13 @@ using System.IO;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Windows.Media.Imaging;
 using Common.Models.Package;
 using Common.Services.Settings;
 using Serilog;
 using ZtCloudWarehous.Models;
 using ZtCloudWarehous.Utils;
 using ZtCloudWarehous.ViewModels.Settings;
-using System.Windows.Media.Imaging;
 
 namespace ZtCloudWarehous.Services;
 
@@ -18,10 +18,10 @@ namespace ZtCloudWarehous.Services;
 /// </summary>
 public class WaybillUploadService : IWaybillUploadService
 {
+    private readonly HttpClient _httpClient;
     private readonly object _queueLock = new();
     private readonly ISettingsService _settingsService;
     private readonly Queue<PackageInfo> _uploadQueue = new();
-    private readonly HttpClient _httpClient;
     private XiyiguApiSettings _apiSettings = new();
     private bool _isUploading;
 
@@ -34,24 +34,9 @@ public class WaybillUploadService : IWaybillUploadService
     {
         _settingsService = settingsService;
         _httpClient = httpClient;
-        
+
         // 加载API设置
         LoadApiSettings();
-    }
-
-    /// <summary>
-    ///     加载API设置
-    /// </summary>
-    private void LoadApiSettings()
-    {
-        try
-        {
-            _apiSettings = _settingsService.LoadSettings<XiyiguApiSettings>();
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "加载API设置时发生错误");
-        }
     }
 
     /// <summary>
@@ -71,6 +56,32 @@ public class WaybillUploadService : IWaybillUploadService
         if (!_isUploading)
         {
             _ = ProcessUploadQueueAsync(); // 触发后台处理，不等待
+        }
+    }
+
+    /// <summary>
+    ///     上传指定包裹并等待其完成。
+    /// </summary>
+    /// <param name="package">要上传的包裹信息。</param>
+    /// <returns>一个表示异步上传操作的任务。</returns>
+    public Task UploadPackageAndWaitAsync(PackageInfo package)
+    {
+        // 直接调用内部上传逻辑，并返回 Task 以供等待
+        return UploadPackageInternalAsync(package);
+    }
+
+    /// <summary>
+    ///     加载API设置
+    /// </summary>
+    private void LoadApiSettings()
+    {
+        try
+        {
+            _apiSettings = _settingsService.LoadSettings<XiyiguApiSettings>();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "加载API设置时发生错误");
         }
     }
 
@@ -107,17 +118,6 @@ public class WaybillUploadService : IWaybillUploadService
         {
             _isUploading = false;
         }
-    }
-
-    /// <summary>
-    ///     上传指定包裹并等待其完成。
-    /// </summary>
-    /// <param name="package">要上传的包裹信息。</param>
-    /// <returns>一个表示异步上传操作的任务。</returns>
-    public Task UploadPackageAndWaitAsync(PackageInfo package)
-    {
-        // 直接调用内部上传逻辑，并返回 Task 以供等待
-        return UploadPackageInternalAsync(package);
     }
 
     /// <summary>
@@ -205,7 +205,7 @@ public class WaybillUploadService : IWaybillUploadService
             JtHistoryWeight = package.Weight
         };
     }
-    
+
     /// <summary>
     ///     上传运单记录
     /// </summary>
@@ -232,11 +232,17 @@ public class WaybillUploadService : IWaybillUploadService
             // 3. 生成签名
             var parameters = new Dictionary<string, string>
             {
-                { "machineMx", machineMx },
-                { "data", jsonData },
-                { "timestamp", timestamp.ToString() }
+                {
+                    "machineMx", machineMx
+                },
+                {
+                    "data", jsonData
+                },
+                {
+                    "timestamp", timestamp.ToString()
+                }
             };
-            
+
             try
             {
                 var signature = SignatureUtil.GenerateMd5Signature(parameters, _apiSettings.AesKey);
@@ -270,7 +276,7 @@ public class WaybillUploadService : IWaybillUploadService
             var url = $"{_apiSettings.BaseUrl}/jt/upload_waybill";
             var content = new StringContent(encryptedData, Encoding.UTF8, "application/json");
 
-            Log.Information("正在上传运单记录，URL: {Url}, 运单数量: {Count}, AesKey长度: {AesKeyLength}, MachineMx: {MachineMx}", 
+            Log.Information("正在上传运单记录，URL: {Url}, 运单数量: {Count}, AesKey长度: {AesKeyLength}, MachineMx: {MachineMx}",
                 url, waybills.Count, _apiSettings.AesKey.Length, machineMx);
 
             var response = await _httpClient.PostAsync(url, content);
@@ -282,12 +288,16 @@ public class WaybillUploadService : IWaybillUploadService
                 Log.Information("上传运单记录成功，响应: {Response}", responseContent);
 
                 var apiResponse = JsonSerializer.Deserialize<ApiResponse>(responseContent);
-                return apiResponse ?? new ApiResponse { Code = 200, Msg = "操作成功" };
+                return apiResponse ?? new ApiResponse
+                {
+                    Code = 200,
+                    Msg = "操作成功"
+                };
             }
 
             var errorContent = await response.Content.ReadAsStringAsync();
             Log.Error("上传运单记录失败，状态码: {StatusCode}, 响应内容: {Content}", response.StatusCode, errorContent);
-            
+
             return new ApiResponse
             {
                 Code = (int)response.StatusCode,
@@ -338,8 +348,8 @@ public class WaybillUploadService : IWaybillUploadService
                 }
                 else
                 {
-                     Log.Warning("尝试保存图片但 package.Image 为 null: {Barcode}", package.Barcode);
-                     return; // Cannot proceed if image is null
+                    Log.Warning("尝试保存图片但 package.Image 为 null: {Barcode}", package.Barcode);
+                    return; // Cannot proceed if image is null
                 }
             }
             catch (Exception ex)
@@ -430,11 +440,17 @@ public class WaybillUploadService : IWaybillUploadService
             // 3. 生成签名
             var parameters = new Dictionary<string, string>
             {
-                { "machineMx", machineMx },
-                { "data", jsonData },
-                { "timestamp", timestamp.ToString() }
+                {
+                    "machineMx", machineMx
+                },
+                {
+                    "data", jsonData
+                },
+                {
+                    "timestamp", timestamp.ToString()
+                }
             };
-            
+
             try
             {
                 var signature = SignatureUtil.GenerateMd5Signature(parameters, _apiSettings.AesKey, true);
@@ -476,7 +492,7 @@ public class WaybillUploadService : IWaybillUploadService
             var fileName = Path.GetFileName(imageFilePath);
             formData.Add(fileContent, "file", fileName);
 
-            Log.Information("正在上传运单图片，URL: {Url}, 运单号: {WaybillNumber}, AesKey长度: {AesKeyLength}, MachineMx: {MachineMx}, 文件: {FileName}", 
+            Log.Information("正在上传运单图片，URL: {Url}, 运单号: {WaybillNumber}, AesKey长度: {AesKeyLength}, MachineMx: {MachineMx}, 文件: {FileName}",
                 url, waybillNumber, _apiSettings.AesKey.Length, machineMx, fileName);
 
             // 7. 发送请求
@@ -489,12 +505,16 @@ public class WaybillUploadService : IWaybillUploadService
                 Log.Information("上传运单图片成功，响应: {Response}", responseContent);
 
                 var apiResponse = JsonSerializer.Deserialize<ApiResponse>(responseContent);
-                return apiResponse ?? new ApiResponse { Code = 200, Msg = "操作成功" };
+                return apiResponse ?? new ApiResponse
+                {
+                    Code = 200,
+                    Msg = "操作成功"
+                };
             }
 
             var errorContent = await response.Content.ReadAsStringAsync();
             Log.Error("上传运单图片失败，状态码: {StatusCode}, 响应内容: {Content}", response.StatusCode, errorContent);
-            
+
             return new ApiResponse
             {
                 Code = (int)response.StatusCode,
@@ -511,4 +531,4 @@ public class WaybillUploadService : IWaybillUploadService
             };
         }
     }
-} 
+}

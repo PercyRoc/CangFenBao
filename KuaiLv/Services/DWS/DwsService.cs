@@ -68,7 +68,12 @@ internal class DwsService : IDwsService, IDisposable
                 Log.Warning("网络未连接，保存包裹到离线存储：{Barcode}", package.Barcode);
                 await _offlinePackageService.SaveOfflinePackageAsync(package);
                 package.SetStatus(PackageStatus.Error, "网络未连接，已保存到离线存储");
-                return new DwsResponse { Success = false, Code = "NETWORK_OFFLINE", Message = "网络未连接，包裹已保存到离线存储" };
+                return new DwsResponse
+                {
+                    Success = false,
+                    Code = "NETWORK_OFFLINE",
+                    Message = "网络未连接，包裹已保存到离线存储"
+                };
             }
 
             // 每次都加载最新的配置
@@ -157,7 +162,12 @@ internal class DwsService : IDwsService, IDisposable
                 Log.Error(jsonEx, "DWS服务响应解析异常: {ResponseContent}", responseContent);
                 _notificationService.ShowError("DWS服务响应解析失败");
                 package.SetStatus(PackageStatus.Error, "服务响应解析失败");
-                return new DwsResponse { Success = false, Message = "服务器响应解析失败", Code = "PARSE_ERROR" };
+                return new DwsResponse
+                {
+                    Success = false,
+                    Message = "服务器响应解析失败",
+                    Code = "PARSE_ERROR"
+                };
             }
 
             if (result == null)
@@ -165,7 +175,12 @@ internal class DwsService : IDwsService, IDisposable
                 Log.Error("DWS服务响应解析为null: {ResponseContent}", responseContent);
                 _notificationService.ShowError("DWS服务异常");
                 package.SetStatus(PackageStatus.Error, "服务响应解析失败");
-                return new DwsResponse { Success = false, Message = "服务器响应解析失败", Code = "NULL_RESPONSE" };
+                return new DwsResponse
+                {
+                    Success = false,
+                    Message = "服务器响应解析失败",
+                    Code = "NULL_RESPONSE"
+                };
             }
 
             // 首先检查是否成功
@@ -282,7 +297,11 @@ internal class DwsService : IDwsService, IDisposable
                     break;
             }
 
-            return new DwsResponse { Code = 500, Message = ex.Message };
+            return new DwsResponse
+            {
+                Code = 500,
+                Message = ex.Message
+            };
         }
     }
 
@@ -318,9 +337,9 @@ internal class DwsService : IDwsService, IDisposable
         catch (PingException pingEx) // 特别处理 Ping 异常
         {
             // 记录更具体的 Ping 错误信息，包括内部 SocketException
-            Log.Warning(pingEx, "检查网络状态失败 (PingException): {Message}. 内层错误: {InnerMessage}", 
+            Log.Warning(pingEx, "检查网络状态失败 (PingException): {Message}. 内层错误: {InnerMessage}",
                 pingEx.Message, pingEx.InnerException?.Message ?? "无内层错误");
-            
+
             if (_isNetworkAvailable) // 仅当状态改变时更新
             {
                 _isNetworkAvailable = false;
@@ -384,7 +403,7 @@ internal class DwsService : IDwsService, IDisposable
                     }
 
                     try
-                    { 
+                    {
                         Log.Information("开始重试上传包裹：{Barcode}", package.Barcode);
                         // 调用上报接口
                         var result = await ReportPackageAsync(package);
@@ -435,7 +454,7 @@ internal class DwsService : IDwsService, IDisposable
                 }
                 if (skippedCount > 0)
                 {
-                     Log.Information("因网络断开，本次跳过 {SkippedCount} 个离线包裹的处理", skippedCount);
+                    Log.Information("因网络断开，本次跳过 {SkippedCount} 个离线包裹的处理", skippedCount);
                 }
 
                 if (failCount + skippedCount != offlinePackages.Count || offlinePackages.Count <= 0) continue;

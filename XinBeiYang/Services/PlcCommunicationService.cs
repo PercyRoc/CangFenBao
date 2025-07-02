@@ -1,10 +1,12 @@
 using System.Collections.Concurrent;
 using Common.Services.Settings;
+using DeviceService.DataSourceDevices.TCP;
 using Serilog;
 using XinBeiYang.Models;
 using XinBeiYang.Models.Communication;
 using XinBeiYang.Models.Communication.Packets;
-using DeviceService.DataSourceDevices.TCP; // 添加TcpClientService命名空间
+
+// 添加TcpClientService命名空间
 
 namespace XinBeiYang.Services;
 
@@ -20,18 +22,18 @@ internal class PlcCommunicationService(
 
     private readonly ConcurrentDictionary<ushort, TaskCompletionSource<(bool IsTimeout, int PackageId)>>
         _pendingUploadResults = new(); // 新增：等待最终上包结果的TCS
+    private readonly List<byte> _receivedBuffer = []; // 用于接收数据的缓冲区
+    private readonly object _receivedBufferLock = new(); // 保护缓冲区的锁
 
     private Task? _heartbeatTask;
     private bool _isDisposed;
+    private bool _isStopping;
     private DateTime _lastReceivedTime = DateTime.MinValue;
     private ushort _nextCommandId = 1;
-    private bool _isStopping;
-    private DeviceStatusCode CurrentDeviceStatus { get; set; } = DeviceStatusCode.Normal;
 
     // 替换TcpClient和NetworkStream为TcpClientService
     private TcpClientService? _tcpClientService;
-    private readonly List<byte> _receivedBuffer = []; // 用于接收数据的缓冲区
-    private readonly object _receivedBufferLock = new(); // 保护缓冲区的锁
+    private DeviceStatusCode CurrentDeviceStatus { get; set; } = DeviceStatusCode.Normal;
 
     public void Dispose()
     {
@@ -65,9 +67,10 @@ internal class PlcCommunicationService(
         GC.SuppressFinalize(this);
     }
 
-    public event EventHandler<bool>? ConnectionStatusChanged; // 实现接口事件
-
-    public bool IsConnected => _tcpClientService?.IsConnected() ?? false;
+    public bool IsConnected
+    {
+        get => _tcpClientService?.IsConnected() ?? false;
+    }
 
     public async Task ConnectAsync(string ipAddress, int port)
     {
@@ -177,6 +180,142 @@ internal class PlcCommunicationService(
     public event EventHandler<DeviceStatusCode>? DeviceStatusChanged;
 
     public event EventHandler<(ushort CommandId, bool IsTimeout, int PackageId)>? UploadResultReceived;
+
+    // 修改 SendUploadRequestAsync: 只等待初始ACK (实现接口)
+    public async Task<(bool IsAccepted, ushort CommandId)> SendUploadRequestAsync(float weight, float length,
+        float width, float height,
+        string barcode1D, string barcode2D, ulong scanTimestamp, CancellationToken cancellationToken)
+    {
+        ushort commandId = 0; // 初始化 commandId
+        try
+        {
+            commandId = GetNextCommandId();
+            var packet = new UploadRequestPacket(commandId, weight, length, width, height,
+                barcode1D, barcode2D, scanTimestamp);
+
+            // 从配置中获取超时时间 (用于初始ACK)
+            var config = settingsService.LoadSettings<HostConfiguration>();
+            // 使用新的 UploadAckTimeoutSeconds 作为 ACK 超时时间
+            var ackTimeoutSeconds =
+                config.UploadAckTimeoutSeconds > 0 ? config.UploadAckTimeoutSeconds : 10; // 默认10秒
+            using var ackTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(ackTimeoutSeconds));
+            // 链接外部取消令牌和ACK超时令牌
+            using var linkedAckCts =
+                CancellationTokenSource.CreateLinkedTokenSource(ackTimeoutCts.Token, cancellationToken);
+
+            // 发送上包请求，等待初始 ACK
+            var response = await SendPacketAsync<UploadRequestAckPacket>(packet, linkedAckCts.Token);
+
+            Log.Information("收到上包请求ACK：CommandId={CommandId}, IsAccepted={IsAccepted}",
+                response.CommandId,
+                response.IsAccepted);
+
+            // 如果PLC接受了请求，为最终结果创建一个 TaskCompletionSource
+            if (response.IsAccepted)
+            {
+                var resultTcs =
+                    new TaskCompletionSource<(bool IsTimeout, int PackageId)>(TaskCreationOptions
+                        .RunContinuationsAsynchronously);
+                if (!_pendingUploadResults.TryAdd(response.CommandId, resultTcs))
+                {
+                    Log.Error("无法为 CommandId={CommandId} 添加待处理的上包结果 Tcs，可能已存在。", response.CommandId);
+                    // 标记为拒绝，因为无法跟踪最终结果
+                    return (false, response.CommandId);
+                }
+
+                Log.Debug("为 CommandId={CommandId} 添加了等待最终上包结果的 Tcs。", response.CommandId);
+            }
+
+            return (response.IsAccepted, response.CommandId);
+        }
+        // TimeoutException specifically for the ACK wait
+        catch (TimeoutException ackTimeoutEx)
+        {
+            Log.Error(ackTimeoutEx, "等待上包请求ACK超时: CommandId={CommandId}", commandId);
+            return (false, commandId); // Return not accepted on ACK timeout
+        }
+        catch (OperationCanceledException opCancelEx) // Catch cancellation during ACK wait
+        {
+            // Don't log error if cancellation was requested externally
+            if (cancellationToken.IsCancellationRequested)
+            {
+                Log.Information("发送上包请求或等待ACK时操作被外部取消: CommandId={CommandId}", commandId);
+            }
+            else
+            {
+                Log.Warning(opCancelEx, "发送上包请求或等待ACK时操作被取消(非外部): CommandId={CommandId}", commandId);
+            }
+
+            return (false, commandId); // Return not accepted if cancelled
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "发送上包请求或等待ACK时失败: CommandId={CommandId}", commandId);
+            return (false, commandId); // Return not accepted on general failure during this phase
+        }
+    }
+
+    // 新增方法：等待最终的上包结果 (实现接口)
+    public async Task<(bool WasSuccess, bool IsTimeout, int PackageId)> WaitForUploadResultAsync(ushort commandId,
+        CancellationToken cancellationToken)
+    {
+        if (!_pendingUploadResults.TryGetValue(commandId, out var tcs))
+        {
+            Log.Warning("WaitForUploadResultAsync: 未找到 CommandId={CommandId} 的待处理上包结果 Tcs。", commandId);
+            // 返回一个表示未找到或失败的状态
+            return (false, false, 0);
+        }
+
+        try
+        {
+            // 从配置获取最终结果的超时时间
+            var config = settingsService.LoadSettings<HostConfiguration>();
+            // 使用新的 UploadResultTimeoutSeconds 作为最终结果超时时间
+            var timeoutSeconds = config.UploadResultTimeoutSeconds > 0 ? config.UploadResultTimeoutSeconds : 60; // 默认60秒
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+            // 链接外部取消令牌和最终结果超时令牌
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancellationToken);
+
+            // 使用链接后的令牌注册超时/取消回调
+            // 注意：这里直接设置结果为超时 (true, 0)
+            await using var registration = linkedCts.Token.Register(() =>
+            {
+                if (tcs.TrySetResult((true, 0)))
+                {
+                    // Set timeout result
+                    Log.Warning("等待 CommandId={CommandId} 的最终上包结果超时或被取消。", commandId);
+                }
+            });
+
+            // 等待 TaskCompletionSource 完成 (由 HandlePacket 或上面的注册回调完成)
+            var (isTimeout, packageId) = await tcs.Task;
+
+            Log.Debug(
+                "WaitForUploadResultAsync 完成: CommandId={CommandId}, IsTimeout={IsTimeout}, PackageId={PackageId}",
+                commandId, isTimeout, packageId);
+            return (!isTimeout && packageId > 0, isTimeout, packageId); // WasSuccess is !isTimeout AND packageId > 0
+        }
+        catch (TaskCanceledException) // Catch if tcs.Task itself was cancelled externally before await
+        {
+            Log.Warning("等待 CommandId={CommandId} 的最终上包结果时任务被取消(TaskCanceledException)。", commandId);
+            return (false, true, 0); // Treat cancellation as timeout
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "等待 CommandId={CommandId} 的最终上包结果时出错。", commandId);
+            return (false, false, 0); // Indicate error
+        }
+        finally
+        {
+            // 无论结果如何，都尝试移除 TCS
+            if (_pendingUploadResults.TryRemove(commandId, out _))
+            {
+                Log.Debug("已移除 CommandId={CommandId} 的待处理上包结果 Tcs。", commandId);
+            }
+        }
+    }
+
+    public event EventHandler<bool>? ConnectionStatusChanged; // 实现接口事件
 
     private async Task HeartbeatLoopAsync()
     {
@@ -311,11 +450,11 @@ internal class PlcCommunicationService(
 
             // 重试次数耗尽或外部取消，直接抛出异常
             Log.Error("发送/等待响应操作超时或被取消：CommandId={CommandId}, Type={Type}",
-                 packet.CommandId, packet.GetType().Name);
+                packet.CommandId, packet.GetType().Name);
 
             if (packet is HeartbeatPacket) // 特殊处理心跳包失败
             {
-                 DeviceStatusChanged?.Invoke(this, DeviceStatusCode.Disconnected);
+                DeviceStatusChanged?.Invoke(this, DeviceStatusCode.Disconnected);
             }
             // 重新抛出原始的 OperationCanceledException，指示调用者操作未成功
             throw;
@@ -337,7 +476,7 @@ internal class PlcCommunicationService(
 
             if (packet is HeartbeatPacket) // 特殊处理心跳包失败
             {
-                 DeviceStatusChanged?.Invoke(this, DeviceStatusCode.Disconnected);
+                DeviceStatusChanged?.Invoke(this, DeviceStatusCode.Disconnected);
             }
 
             throw; // 重新抛出异常
@@ -477,7 +616,7 @@ internal class PlcCommunicationService(
             }
 
             // 获取包长度
-            var length = (_receivedBuffer[2] << 8) | _receivedBuffer[3];
+            var length = _receivedBuffer[2] << 8 | _receivedBuffer[3];
             if (_receivedBuffer.Count < length)
                 break;
 
@@ -587,140 +726,6 @@ internal class PlcCommunicationService(
 
                 _ = SendAckPacket(new DeviceStatusAckPacket(packet.CommandId), _cancellationTokenSource.Token);
                 break;
-        }
-    }
-
-    // 修改 SendUploadRequestAsync: 只等待初始ACK (实现接口)
-    public async Task<(bool IsAccepted, ushort CommandId)> SendUploadRequestAsync(float weight, float length,
-        float width, float height,
-        string barcode1D, string barcode2D, ulong scanTimestamp, CancellationToken cancellationToken)
-    {
-        ushort commandId = 0; // 初始化 commandId
-        try
-        {
-            commandId = GetNextCommandId();
-            var packet = new UploadRequestPacket(commandId, weight, length, width, height,
-                barcode1D, barcode2D, scanTimestamp);
-
-            // 从配置中获取超时时间 (用于初始ACK)
-            var config = settingsService.LoadSettings<HostConfiguration>();
-            // 使用新的 UploadAckTimeoutSeconds 作为 ACK 超时时间
-            var ackTimeoutSeconds =
-                config.UploadAckTimeoutSeconds > 0 ? config.UploadAckTimeoutSeconds : 10; // 默认10秒
-            using var ackTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(ackTimeoutSeconds));
-            // 链接外部取消令牌和ACK超时令牌
-            using var linkedAckCts =
-                CancellationTokenSource.CreateLinkedTokenSource(ackTimeoutCts.Token, cancellationToken);
-
-            // 发送上包请求，等待初始 ACK
-            var response = await SendPacketAsync<UploadRequestAckPacket>(packet, linkedAckCts.Token);
-
-            Log.Information("收到上包请求ACK：CommandId={CommandId}, IsAccepted={IsAccepted}",
-                response.CommandId,
-                response.IsAccepted);
-
-            // 如果PLC接受了请求，为最终结果创建一个 TaskCompletionSource
-            if (response.IsAccepted)
-            {
-                var resultTcs =
-                    new TaskCompletionSource<(bool IsTimeout, int PackageId)>(TaskCreationOptions
-                        .RunContinuationsAsynchronously);
-                if (!_pendingUploadResults.TryAdd(response.CommandId, resultTcs))
-                {
-                    Log.Error("无法为 CommandId={CommandId} 添加待处理的上包结果 Tcs，可能已存在。", response.CommandId);
-                    // 标记为拒绝，因为无法跟踪最终结果
-                    return (false, response.CommandId);
-                }
-
-                Log.Debug("为 CommandId={CommandId} 添加了等待最终上包结果的 Tcs。", response.CommandId);
-            }
-
-            return (response.IsAccepted, response.CommandId);
-        }
-        // TimeoutException specifically for the ACK wait
-        catch (TimeoutException ackTimeoutEx)
-        {
-            Log.Error(ackTimeoutEx, "等待上包请求ACK超时: CommandId={CommandId}", commandId);
-            return (false, commandId); // Return not accepted on ACK timeout
-        }
-        catch (OperationCanceledException opCancelEx) // Catch cancellation during ACK wait
-        {
-            // Don't log error if cancellation was requested externally
-            if (cancellationToken.IsCancellationRequested)
-            {
-                Log.Information("发送上包请求或等待ACK时操作被外部取消: CommandId={CommandId}", commandId);
-            }
-            else
-            {
-                Log.Warning(opCancelEx, "发送上包请求或等待ACK时操作被取消(非外部): CommandId={CommandId}", commandId);
-            }
-
-            return (false, commandId); // Return not accepted if cancelled
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "发送上包请求或等待ACK时失败: CommandId={CommandId}", commandId);
-            return (false, commandId); // Return not accepted on general failure during this phase
-        }
-    }
-
-    // 新增方法：等待最终的上包结果 (实现接口)
-    public async Task<(bool WasSuccess, bool IsTimeout, int PackageId)> WaitForUploadResultAsync(ushort commandId,
-        CancellationToken cancellationToken)
-    {
-        if (!_pendingUploadResults.TryGetValue(commandId, out var tcs))
-        {
-            Log.Warning("WaitForUploadResultAsync: 未找到 CommandId={CommandId} 的待处理上包结果 Tcs。", commandId);
-            // 返回一个表示未找到或失败的状态
-            return (false, false, 0);
-        }
-
-        try
-        {
-            // 从配置获取最终结果的超时时间
-            var config = settingsService.LoadSettings<HostConfiguration>();
-            // 使用新的 UploadResultTimeoutSeconds 作为最终结果超时时间
-            var timeoutSeconds = config.UploadResultTimeoutSeconds > 0 ? config.UploadResultTimeoutSeconds : 60; // 默认60秒
-            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
-            // 链接外部取消令牌和最终结果超时令牌
-            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancellationToken);
-
-            // 使用链接后的令牌注册超时/取消回调
-            // 注意：这里直接设置结果为超时 (true, 0)
-            await using var registration = linkedCts.Token.Register(() =>
-            {
-                if (tcs.TrySetResult((true, 0)))
-                {
-                    // Set timeout result
-                    Log.Warning("等待 CommandId={CommandId} 的最终上包结果超时或被取消。", commandId);
-                }
-            });
-
-            // 等待 TaskCompletionSource 完成 (由 HandlePacket 或上面的注册回调完成)
-            var (isTimeout, packageId) = await tcs.Task;
-
-            Log.Debug(
-                "WaitForUploadResultAsync 完成: CommandId={CommandId}, IsTimeout={IsTimeout}, PackageId={PackageId}",
-                commandId, isTimeout, packageId);
-            return (!isTimeout && packageId > 0, isTimeout, packageId); // WasSuccess is !isTimeout AND packageId > 0
-        }
-        catch (TaskCanceledException) // Catch if tcs.Task itself was cancelled externally before await
-        {
-            Log.Warning("等待 CommandId={CommandId} 的最终上包结果时任务被取消(TaskCanceledException)。", commandId);
-            return (false, true, 0); // Treat cancellation as timeout
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "等待 CommandId={CommandId} 的最终上包结果时出错。", commandId);
-            return (false, false, 0); // Indicate error
-        }
-        finally
-        {
-            // 无论结果如何，都尝试移除 TCS
-            if (_pendingUploadResults.TryRemove(commandId, out _))
-            {
-                Log.Debug("已移除 CommandId={CommandId} 的待处理上包结果 Tcs。", commandId);
-            }
         }
     }
 }

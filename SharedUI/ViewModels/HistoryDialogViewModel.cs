@@ -9,9 +9,10 @@ using Common.Services.Ui;
 using Microsoft.Win32;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
-
 using Serilog;
 using WPFLocalizeExtension.Engine;
+using HorizontalAlignment = NPOI.SS.UserModel.HorizontalAlignment;
+using VerticalAlignment = NPOI.SS.UserModel.VerticalAlignment;
 
 namespace SharedUI.ViewModels;
 
@@ -28,27 +29,8 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
     private ObservableCollection<PackageRecord> _packageRecords = [];
     private string _searchBarcode = string.Empty;
     private string _searchChute = string.Empty;
-    private DateTime _startDate = DateTime.Today;
     private string _selectedStatus;
-
-    /// <summary>
-    ///     状态列表 - 动态生成
-    /// </summary>
-    public List<string> StatusList { get; }
-
-    /// <summary>
-    ///     选中的状态 (Localized string from WPFLocalizeExtension)
-    /// </summary>
-    public string SelectedStatus
-    {
-        get => _selectedStatus;
-        set
-        {
-            // 只设置属性，不执行任何操作，避免无限查询循环
-            // 查询操作应该由用户明确点击"查询"按钮来触发
-            SetProperty(ref _selectedStatus, value);
-        }
-    }
+    private DateTime _startDate = DateTime.Today;
 
     /// <summary>
     ///     构造函数
@@ -62,11 +44,14 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
 
         // 动态生成状态列表 - 使用本地化
         var allOption = GetLocString("HistoryDialog_All", "All");
-        var statusOptions = new List<string> { allOption };
+        var statusOptions = new List<string>
+        {
+            allOption
+        };
         var displayNames = Enum.GetValues<PackageStatus>()
-                               .Select(GetLocalizedStatusDisplayForFilter)
-                               .Distinct()
-                               .OrderBy(s => s);
+            .Select(GetLocalizedStatusDisplayForFilter)
+            .Distinct()
+            .OrderBy(s => s);
         statusOptions.AddRange(displayNames);
         StatusList = statusOptions;
         _selectedStatus = allOption;
@@ -77,10 +62,21 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
         OpenImageCommand = new DelegateCommand<string>(OpenImageExecute, CanOpenImage);
     }
 
-    private static string GetLocString(string key, string? fallback = null)
+    /// <summary>
+    ///     状态列表 - 动态生成
+    /// </summary>
+    public List<string> StatusList { get; }
+
+    /// <summary>
+    ///     选中的状态 (Localized string from WPFLocalizeExtension)
+    /// </summary>
+    public string SelectedStatus
     {
-        var value = LocalizeDictionary.Instance.DefaultProvider?.GetLocalizedObject(key, null, LocalizeDictionary.Instance.Culture) as string;
-        return value ?? fallback ?? key;
+        get => _selectedStatus;
+        set =>
+            // 只设置属性，不执行任何操作，避免无限查询循环
+            // 查询操作应该由用户明确点击"查询"按钮来触发
+            SetProperty(ref _selectedStatus, value);
     }
 
     /// <summary>
@@ -152,7 +148,7 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
     /// </summary>
     public ICommand OpenImageCommand { get; }
 
-    public DialogCloseListener RequestClose { get; private set; } = default!;
+    public DialogCloseListener RequestClose { get; } = default!;
 
     public bool CanCloseDialog()
     {
@@ -167,6 +163,12 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
     {
         // 使用 ExecuteQuery 方法确保查询在后台线程执行
         ExecuteQuery();
+    }
+
+    private static string GetLocString(string key, string? fallback = null)
+    {
+        var value = LocalizeDictionary.Instance.DefaultProvider?.GetLocalizedObject(key, null, LocalizeDictionary.Instance.Culture) as string;
+        return value ?? fallback ?? key;
     }
 
     /// <summary>
@@ -213,7 +215,7 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
             {
                 PackageRecords = new ObservableCollection<PackageRecord>(records);
             });
-            
+
             _notificationService.ShowSuccessWithToken(
                 GetLocString("HistoryDialog_QuerySuccess", "Query successful"),
                 "HistoryWindowGrowl");
@@ -278,8 +280,8 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
                 headerStyle.BorderLeft = BorderStyle.Thin;
                 headerStyle.BorderRight = BorderStyle.Thin;
                 headerStyle.BorderTop = BorderStyle.Thin;
-                headerStyle.Alignment = NPOI.SS.UserModel.HorizontalAlignment.Center;
-                headerStyle.VerticalAlignment = NPOI.SS.UserModel.VerticalAlignment.Center;
+                headerStyle.Alignment = HorizontalAlignment.Center;
+                headerStyle.VerticalAlignment = VerticalAlignment.Center;
 
                 var dataFormat = workbook.CreateDataFormat();
                 var dateStyle = workbook.CreateCellStyle();
@@ -287,23 +289,14 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
 
                 var headers = new[]
                 {
-                    GetLocString("HistoryDialog_Header_Id", "ID"),
-                    GetLocString("HistoryDialog_Header_Barcode", "Barcode"),
-                    GetLocString("HistoryDialog_Header_Chute", "Chute"),
-                    GetLocString("HistoryDialog_Header_Weight", "Weight(kg)"),
-                    GetLocString("HistoryDialog_Header_Length", "Length(cm)"),
-                    GetLocString("HistoryDialog_Header_Width", "Width(cm)"),
-                    GetLocString("HistoryDialog_Header_Height", "Height(cm)"),
-                    GetLocString("HistoryDialog_Header_Volume", "Volume(cm³)"),
-                    GetLocString("HistoryDialog_Header_Status", "Status"),
-                    GetLocString("HistoryDialog_Header_Remarks", "Remarks"),
-                    GetLocString("HistoryDialog_Header_CreateTime", "Create Time")
+                    GetLocString("HistoryDialog_Header_Id", "ID"), GetLocString("HistoryDialog_Header_Barcode", "Barcode"), GetLocString("HistoryDialog_Header_Chute", "Chute"), GetLocString("HistoryDialog_Header_Weight", "Weight(kg)"), GetLocString("HistoryDialog_Header_Length", "Length(cm)"), GetLocString("HistoryDialog_Header_Width", "Width(cm)"),
+                    GetLocString("HistoryDialog_Header_Height", "Height(cm)"), GetLocString("HistoryDialog_Header_Volume", "Volume(cm³)"), GetLocString("HistoryDialog_Header_Status", "Status"), GetLocString("HistoryDialog_Header_Remarks", "Remarks"), GetLocString("HistoryDialog_Header_CreateTime", "Create Time")
                 };
 
                 var headerRow = worksheet.CreateRow(0);
                 for (var i = 0; i < headers.Length; i++)
                 {
-                    ICell cell = headerRow.CreateCell(i);
+                    var cell = headerRow.CreateCell(i);
                     cell.SetCellValue(headers[i]);
                     cell.CellStyle = headerStyle;
                 }
@@ -317,16 +310,21 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
                     row.CreateCell(0).SetCellValue(record.Id);
                     row.CreateCell(1).SetCellValue(record.Barcode);
                     var chuteCell = row.CreateCell(2);
-                    if (record.ChuteNumber.HasValue) chuteCell.SetCellValue(record.ChuteNumber.Value); else chuteCell.SetCellType(CellType.Blank);
+                    if (record.ChuteNumber.HasValue) chuteCell.SetCellValue(record.ChuteNumber.Value);
+                    else chuteCell.SetCellType(CellType.Blank);
                     row.CreateCell(3).SetCellValue(record.Weight);
                     var lengthCell = row.CreateCell(4);
-                    if (record.Length.HasValue) lengthCell.SetCellValue(Math.Round(record.Length.Value, 1)); else lengthCell.SetCellType(CellType.Blank);
+                    if (record.Length.HasValue) lengthCell.SetCellValue(Math.Round(record.Length.Value, 1));
+                    else lengthCell.SetCellType(CellType.Blank);
                     var widthCell = row.CreateCell(5);
-                    if (record.Width.HasValue) widthCell.SetCellValue(Math.Round(record.Width.Value, 1)); else widthCell.SetCellType(CellType.Blank);
+                    if (record.Width.HasValue) widthCell.SetCellValue(Math.Round(record.Width.Value, 1));
+                    else widthCell.SetCellType(CellType.Blank);
                     var heightCell = row.CreateCell(6);
-                    if (record.Height.HasValue) heightCell.SetCellValue(Math.Round(record.Height.Value, 1)); else heightCell.SetCellType(CellType.Blank);
+                    if (record.Height.HasValue) heightCell.SetCellValue(Math.Round(record.Height.Value, 1));
+                    else heightCell.SetCellType(CellType.Blank);
                     var volumeCell = row.CreateCell(7);
-                    if (record.Volume.HasValue) volumeCell.SetCellValue(record.Volume.Value); else volumeCell.SetCellType(CellType.Blank);
+                    if (record.Volume.HasValue) volumeCell.SetCellValue(record.Volume.Value);
+                    else volumeCell.SetCellType(CellType.Blank);
 
                     row.CreateCell(8).SetCellValue(record.StatusDisplay);
                     row.CreateCell(9).SetCellValue(record.ErrorMessage);
@@ -349,12 +347,14 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
             _notificationService.ShowSuccessWithToken(string.Format(successMsgFormat, PackageRecords.Count, Path.GetFileName(filePath)), "HistoryWindowGrowl");
         }
         catch (Exception ex)
-        {             Log.Error(ex, "使用NPOI导出Excel失败");
+        {
+            Log.Error(ex, "使用NPOI导出Excel失败");
             var errorMsgFormat = GetLocString("HistoryDialog_ExportFailedFormat", "Export failed: {0}");
             _notificationService.ShowErrorWithToken(string.Format(errorMsgFormat, ex.Message), "HistoryWindowGrowl");
         }
         finally
-        {             IsLoading = false;
+        {
+            IsLoading = false;
         }
     }
 
@@ -381,7 +381,10 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
         {
             if (File.Exists(imagePath))
             {
-                var processStartInfo = new ProcessStartInfo(imagePath) { UseShellExecute = true };
+                var processStartInfo = new ProcessStartInfo(imagePath)
+                {
+                    UseShellExecute = true
+                };
                 Process.Start(processStartInfo);
                 Log.Information("Opened image file: {ImagePath}", imagePath);
             }

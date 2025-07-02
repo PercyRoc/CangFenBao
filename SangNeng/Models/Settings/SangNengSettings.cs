@@ -6,8 +6,8 @@ namespace Sunnen.Models.Settings;
 public class SangNengSettings : BindableBase
 {
     private string _password = "2025";
-    private string _username = "247";
     private string _sign = string.Empty;
+    private string _username = "247";
 
     /// <summary>
     ///     Username for SangNeng server

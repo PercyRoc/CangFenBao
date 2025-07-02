@@ -4,7 +4,7 @@ using Wpf.Ui.Controls;
 namespace ShanghaiModuleBelt.Views;
 
 /// <summary>
-/// 格口统计对话框
+///     格口统计对话框
 /// </summary>
 internal partial class ChuteStatisticsDialog : FluentWindow
 {
@@ -14,7 +14,7 @@ internal partial class ChuteStatisticsDialog : FluentWindow
     }
 
     /// <summary>
-    /// 关闭按钮点击事件
+    ///     关闭按钮点击事件
     /// </summary>
     /// <param name="sender"></param>
     /// <param name="e"></param>
@@ -22,4 +22,4 @@ internal partial class ChuteStatisticsDialog : FluentWindow
     {
         Close();
     }
-} 
+}

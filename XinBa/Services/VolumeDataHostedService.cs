@@ -6,12 +6,12 @@ using XinBa.Services.Models;
 namespace XinBa.Services;
 
 /// <summary>
-/// Manages the lifecycle of the VolumeDataService.
+///     Manages the lifecycle of the VolumeDataService.
 /// </summary>
 public class VolumeDataHostedService : IHostedService
 {
-    private readonly VolumeDataService _volumeDataService;
     private readonly ISettingsService _settingsService;
+    private readonly VolumeDataService _volumeDataService;
 
     public VolumeDataHostedService(VolumeDataService volumeDataService, ISettingsService settingsService)
     {

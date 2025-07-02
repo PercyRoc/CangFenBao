@@ -1,5 +1,4 @@
 ﻿using System.Net.Http;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 using Common.Extensions;
@@ -24,8 +23,8 @@ namespace DongtaiFlippingBoardMachine;
 /// </summary>
 internal partial class App
 {
-    private static Mutex? _mutex;
     private const string MutexName = "Global\\PlateTurnoverMachine_App_Mutex";
+    private static Mutex? _mutex;
 
     protected override Window CreateShell()
     {
@@ -87,7 +86,7 @@ internal partial class App
                 fileSizeLimitBytes: 10 * 1024 * 1024, // Limit file size to 10MB
                 retainedFileCountLimit: 31) // Retain logs for 30 days (31 files total)
             .CreateLogger();
-        
+
         // 注册全局异常处理
         RegisterGlobalExceptionHandling();
 
@@ -144,7 +143,7 @@ internal partial class App
     }
 
     /// <summary>
-    /// 执行异步关闭操作
+    ///     执行异步关闭操作
     /// </summary>
     public async Task PerformShutdownAsync()
     {
@@ -253,7 +252,7 @@ internal partial class App
     }
 
     /// <summary>
-    /// 注册全局异常处理程序
+    ///     注册全局异常处理程序
     /// </summary>
     private void RegisterGlobalExceptionHandling()
     {
@@ -271,11 +270,11 @@ internal partial class App
     {
         Log.Fatal(e.Exception, "UI线程发生未经处理的异常 (Dispatcher Unhandled Exception)");
         // 显示一个友好的对话框
-        MessageBox.Show($"发生了一个无法恢复的严重错误，应用程序即将退出。\n\n错误信息：{e.Exception.Message}", 
+        MessageBox.Show($"发生了一个无法恢复的严重错误，应用程序即将退出。\n\n错误信息：{e.Exception.Message}",
             "严重错误", MessageBoxButton.OK, MessageBoxImage.Error);
-        
+
         e.Handled = true; // 标记为已处理，防止默认的崩溃对话框
-        
+
         // 尝试优雅地关闭
         _ = PerformShutdownAsync().ContinueWith(_ =>
         {
@@ -287,7 +286,7 @@ internal partial class App
     {
         var exception = e.ExceptionObject as Exception;
         Log.Fatal(exception, "非UI线程发生未经处理的异常 (AppDomain Unhandled Exception). IsTerminating: {IsTerminating}", e.IsTerminating);
-        
+
         // 如果应用程序即将终止，确保日志被写入
         if (e.IsTerminating)
         {

@@ -13,8 +13,8 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
 
     // 保存各个设置页面的ViewModel实例
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
-    private readonly WangDianTongSettingsViewModel _wangDianTongSettingsViewModel;
     private readonly INotificationService _notificationService;
+    private readonly WangDianTongSettingsViewModel _wangDianTongSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,

@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+
 <UserControl x:Class="SharedUI.Views.Settings.CarSequenceView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -7,53 +8,53 @@
              xmlns:viewModels="clr-namespace:SharedUI.ViewModels"
              xmlns:converters="clr-namespace:SharedUI.Converters"
              mc:Ignorable="d"
-             xmlns:prism="http://prismlibrary.com/" 
+             xmlns:prism="http://prismlibrary.com/"
              prism:ViewModelLocator.AutoWireViewModel="True"
              d:DesignHeight="450" d:DesignWidth="800"
              d:DataContext="{d:DesignInstance viewModels:CarSequenceViewModel}">
     <UserControl.Resources>
-        <converters:BooleanToStringConverter x:Key="BooleanToDirectionConverter" 
-                                          TrueValue="反转" 
-                                          FalseValue="正转"/>
+        <converters:BooleanToStringConverter x:Key="BooleanToDirectionConverter"
+                                             TrueValue="反转"
+                                             FalseValue="正转" />
     </UserControl.Resources>
-    
+
     <Grid Margin="10">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="200"/>
-            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="200" />
+            <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
-        
+
         <!-- 左侧：格口列表 -->
         <Grid Grid.Column="0">
             <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
             </Grid.RowDefinitions>
-            
-            <TextBlock Grid.Row="0" Text="格口列表" FontSize="16" FontWeight="Bold" Margin="0,0,0,10"/>
-            
-            <ListBox Grid.Row="1" 
-                     ItemsSource="{Binding ChuteSequences}" 
+
+            <TextBlock Grid.Row="0" Text="格口列表" FontSize="16" FontWeight="Bold" Margin="0,0,0,10" />
+
+            <ListBox Grid.Row="1"
+                     ItemsSource="{Binding ChuteSequences}"
                      SelectedItem="{Binding SelectedChute}"
                      DisplayMemberPath="ChuteNumber"
                      BorderThickness="1"
-                     Margin="0,0,10,0"/>
+                     Margin="0,0,10,0" />
         </Grid>
-        
+
         <!-- 右侧：选中格口的小车序列 -->
         <Grid Grid.Column="1">
             <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-            
-            <TextBlock Grid.Row="0" 
-                       Text="{Binding SelectedChute.ChuteNumber, StringFormat=格口 {0} 的小车序列}"  
-                       FontSize="16" 
-                       FontWeight="Bold" 
-                       Margin="0,0,0,10"/>
-            
+
+            <TextBlock Grid.Row="0"
+                       Text="{Binding SelectedChute.ChuteNumber, StringFormat=格口 {0} 的小车序列}"
+                       FontSize="16"
+                       FontWeight="Bold"
+                       Margin="0,0,0,10" />
+
             <!-- 小车序列列表 -->
             <ListBox Grid.Row="1"
                      ItemsSource="{Binding CarSequence}"
@@ -64,56 +65,56 @@
                     <DataTemplate>
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            
-                            <TextBlock Grid.Column="0" 
+
+                            <TextBlock Grid.Column="0"
                                        Text="{Binding CarName}"
-                                       VerticalAlignment="Center"/>
-                            
-                            <TextBlock Grid.Column="1" 
+                                       VerticalAlignment="Center" />
+
+                            <TextBlock Grid.Column="1"
                                        Text="{Binding IsReverse, Converter={StaticResource BooleanToDirectionConverter}}"
                                        Margin="10,0,10,0"
-                                       VerticalAlignment="Center"/>
-                            
+                                       VerticalAlignment="Center" />
+
                             <!-- 延迟时间输入 -->
                             <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,0,10,0">
-                                <TextBlock Text="延迟:" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                                <TextBox Text="{Binding DelayMs, UpdateSourceTrigger=PropertyChanged}" 
-                                         Width="50" 
+                                <TextBlock Text="延迟:" VerticalAlignment="Center" Margin="0,0,5,0" />
+                                <TextBox Text="{Binding DelayMs, UpdateSourceTrigger=PropertyChanged}"
+                                         Width="50"
                                          VerticalAlignment="Center"
-                                         ToolTip="发送此小车命令前的延迟时间(毫秒)"/>
-                                <TextBlock Text="ms" VerticalAlignment="Center" Margin="2,0,0,0"/>
+                                         ToolTip="发送此小车命令前的延迟时间(毫秒)" />
+                                <TextBlock Text="ms" VerticalAlignment="Center" Margin="2,0,0,0" />
                             </StackPanel>
-                            
-                            <Button Grid.Column="3" 
+
+                            <Button Grid.Column="3"
                                     Content="删除"
                                     Command="{Binding DataContext.RemoveCarCommand, 
                                               RelativeSource={RelativeSource AncestorType=ListBox}}"
                                     Padding="5,2"
-                                    Margin="0,2"/>
+                                    Margin="0,2" />
                         </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
-            
+
             <!-- 底部操作区 -->
             <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Left">
                 <!-- 设置方向按钮 -->
                 <StackPanel Orientation="Horizontal" Margin="0,0,20,0">
-                    <Button Content="设为正转" 
+                    <Button Content="设为正转"
                             Command="{Binding SetForwardCommand}"
                             Margin="0,0,5,0"
-                            Padding="5,2"/>
+                            Padding="5,2" />
                     <Button Content="设为反转"
                             Command="{Binding SetReverseCommand}"
                             Margin="5,0,0,0"
-                            Padding="5,2"/>
+                            Padding="5,2" />
                 </StackPanel>
-                
+
                 <!-- 添加小车区域 -->
                 <StackPanel Orientation="Horizontal">
                     <ComboBox ItemsSource="{Binding AvailableCars}"
@@ -121,14 +122,14 @@
                               SelectedValuePath="Address"
                               Name="CarSelector"
                               Width="120"
-                              Margin="0,0,5,0"/>
-                    
+                              Margin="0,0,5,0" />
+
                     <Button Content="添加小车"
                             Command="{Binding AddCarCommand}"
                             CommandParameter="{Binding SelectedItem, ElementName=CarSelector}"
-                            Padding="5,2"/>
+                            Padding="5,2" />
                 </StackPanel>
             </StackPanel>
         </Grid>
     </Grid>
-</UserControl> 
+</UserControl>

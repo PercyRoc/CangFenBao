@@ -14,8 +14,8 @@ internal class TcpConnectionHostedService(
     : BackgroundService
 {
     private readonly PeriodicTimer _timer = new(TimeSpan.FromSeconds(5));
-    private PlateTurnoverSettings? _settings;
     private bool _isStopping;
+    private PlateTurnoverSettings? _settings;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -78,7 +78,7 @@ internal class TcpConnectionHostedService(
                 })
                 .Distinct()
                 .ToList();
-            
+
             // 每次都传递完整的配置列表，由TcpConnectionService内部处理按需连接
             await tcpConnectionService.ConnectTcpModulesAsync(tcpConfigs);
         }
@@ -92,7 +92,7 @@ internal class TcpConnectionHostedService(
     {
         _isStopping = true;
         Log.Information("TCP连接托管服务正在停止... (停止标志已设置)");
-        
+
         // 1. 停止定时器，阻止新的连接尝试
         _timer.Dispose();
         Log.Debug("连接检查定时器已释放");
@@ -108,7 +108,7 @@ internal class TcpConnectionHostedService(
         {
             Log.Error(ex, "等待后台服务ExecuteAsync停止时发生错误");
         }
-        
+
         // 3. 在ExecuteAsync完全停止后，再安全地释放TCP连接服务
         try
         {
@@ -123,7 +123,7 @@ internal class TcpConnectionHostedService(
         {
             Log.Error(ex, "释放TCP连接服务时发生错误");
         }
-        
+
         Log.Information("TCP连接托管服务已完全停止");
     }
 }

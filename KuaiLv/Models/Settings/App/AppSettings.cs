@@ -15,4 +15,4 @@ public class AppSettings
     ///     2: 称重+收货模式
     /// </summary>
     public int OperationMode { get; set; } = 0;
-} 
+}

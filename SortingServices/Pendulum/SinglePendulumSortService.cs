@@ -12,7 +12,6 @@ namespace SortingServices.Pendulum;
 /// </summary>
 public class SinglePendulumSortService(ISettingsService settingsService) : BasePendulumSortService(settingsService)
 {
-
     // 记录光电信号状态的字典，true 表示高电平，false 表示低电平
     private readonly ConcurrentDictionary<string, bool> _photoelectricSignalStates = new();
 
@@ -212,7 +211,7 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
     protected override void HandleSecondPhotoelectric(string data)
     {
         var sortingTime = DateTime.Now;
-        
+
         // 触发分拣光电信号事件
         RaiseSortingPhotoelectricSignal("默认", sortingTime);
 
@@ -290,9 +289,8 @@ public class SinglePendulumSortService(ISettingsService settingsService) : BaseP
     }
 
 
-
     /// <summary>
-    /// 更新光电信号状态并检测异常情况
+    ///     更新光电信号状态并检测异常情况
     /// </summary>
     /// <param name="photoelectricName">光电名称</param>
     /// <param name="isHighLevel">是否为高电平</param>

@@ -15,45 +15,45 @@ using DeviceService.DataSourceDevices.Services;
 using Serilog;
 using SharedUI.Models;
 using SortingServices.Pendulum;
+using XinJuLi.Events;
 using XinJuLi.Models.ASN;
 using XinJuLi.Services.ASN;
-using XinJuLi.Events;
 
 namespace XinJuLi.ViewModels;
 
 public class MainWindowViewModel : BindableBase, IDisposable
 {
+    private readonly IAsnService _asnService;
     private readonly ICameraService _cameraService;
+
+    // 每个格口分配的SKU数量
+    private readonly Dictionary<int, int> _chuteSkuCount = new();
     private readonly IDialogService _dialogService;
     private readonly INotificationService _notificationService;
     private readonly IPackageDataService _packageDataService;
     private readonly ISettingsService _settingsService;
+
+    // SKU分配表，Key是SKU代码，Value是分配的格口编号
+    private readonly Dictionary<string, int> _skuChuteMappings = new();
     private readonly IPendulumSortService _sortService;
-    private readonly IAsnService _asnService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
-    private string _currentBarcode = string.Empty;
-    private BitmapSource? _currentImage;
-    private bool _disposed;
-    private SystemStatus _systemStatus = new();
-    private bool _isRunning;
 
     // ASN订单相关
     private List<AsnOrderItem> _asnOrderItems = new();
     private string _currentAsnOrderCode = string.Empty;
+    private string _currentBarcode = string.Empty;
     private string _currentCarCode = string.Empty;
+    private BitmapSource? _currentImage;
+    private bool _disposed;
 
-    // SKU分配表，Key是SKU代码，Value是分配的格口编号
-    private readonly Dictionary<string, int> _skuChuteMappings = new();
-
-    // 每个格口分配的SKU数量
-    private readonly Dictionary<int, int> _chuteSkuCount = new();
+    private long _failedPackageCount;
+    private bool _isRunning;
+    private long _successPackageCount;
+    private SystemStatus _systemStatus = new();
 
     // Add persistent counters
     private long _totalPackageCount;
-    private long _successPackageCount;
-
-    private long _failedPackageCount;
 
     public MainWindowViewModel(IDialogService dialogService,
         ICameraService cameraService,
@@ -159,7 +159,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 当前ASN订单编码
+    ///     当前ASN订单编码
     /// </summary>
     public string CurrentAsnOrderCode
     {
@@ -168,7 +168,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 当前车牌号
+    ///     当前车牌号
     /// </summary>
     public string CurrentCarCode
     {
@@ -177,7 +177,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// ASN订单项集合
+    ///     ASN订单项集合
     /// </summary>
     public List<AsnOrderItem> AsnOrderItems
     {
@@ -196,8 +196,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
         set => SetProperty(ref _isRunning, value);
     }
 
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
     /// <summary>
-    /// 缓存ASN订单数据
+    ///     缓存ASN订单数据
     /// </summary>
     /// <param name="asnOrderInfo">ASN订单信息</param>
     public void CacheAsnOrderInfo(AsnOrderInfo asnOrderInfo)
@@ -240,7 +246,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 清除ASN订单缓存
+    ///     清除ASN订单缓存
     /// </summary>
     public void ClearAsnOrderCache()
     {
@@ -261,7 +267,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 为每个SKU分配格口
+    ///     为每个SKU分配格口
     /// </summary>
     private void AllocateChutesForSkus()
     {
@@ -311,7 +317,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 查找可用的格口（SKU数量少于2的）
+    ///     查找可用的格口（SKU数量少于2的）
     /// </summary>
     /// <returns>可用格口号，如果没有则返回-1</returns>
     private int FindAvailableChute()
@@ -331,7 +337,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 处理接收到的包裹信息
+    ///     处理接收到的包裹信息
     /// </summary>
     private async void OnPackageInfo(PackageInfo package)
     {
@@ -525,7 +531,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 处理成功的包裹
+    ///     处理成功的包裹
     /// </summary>
     private void ProcessPackageSuccess(PackageInfo package)
     {
@@ -542,7 +548,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 处理异常包裹
+    ///     处理异常包裹
     /// </summary>
     private void ProcessPackageWithError(PackageInfo package, int errorChuteNumber, string errorReason)
     {
@@ -567,7 +573,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 更新包裹信息显示
+    ///     更新包裹信息显示
     /// </summary>
     private void UpdatePackageInfoItems(PackageInfo package)
     {
@@ -595,7 +601,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 使用SKU信息更新包裹显示
+    ///     使用SKU信息更新包裹显示
     /// </summary>
     private void UpdatePackageInfoItemsWithSku(AsnOrderItem item, int chuteNumber)
     {
@@ -621,7 +627,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 使用错误信息更新包裹显示
+    ///     使用错误信息更新包裹显示
     /// </summary>
     private void UpdatePackageInfoItemsWithError(int errorChuteNumber, string errorReason)
     {
@@ -647,7 +653,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 更新统计数据
+    ///     更新统计数据
     /// </summary>
     private void UpdateStatisticsItems()
     {
@@ -677,7 +683,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 保存包裹记录
+    ///     保存包裹记录
     /// </summary>
     private async void SavePackage(PackageInfo package)
     {
@@ -701,12 +707,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
         {
             Log.Error(ex, "保存包裹记录时发生错误: {Barcode}", package.Barcode);
         }
-    }
-
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
     }
 
     private void ExecuteOpenSettings()
@@ -777,75 +777,75 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private void InitializeStatisticsItems()
     {
         StatisticsItems.Add(new StatisticsItem(
-            label: "总包裹数",
-            value: "0",
-            unit: "个",
-            description: "累计处理包裹总数",
-            icon: "BoxMultiple24"
+            "总包裹数",
+            "0",
+            "个",
+            "累计处理包裹总数",
+            "BoxMultiple24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
-            label: "成功数",
-            value: "0",
-            unit: "个",
-            description: "处理成功的包裹数量",
-            icon: "CheckmarkCircle24"
+            "成功数",
+            "0",
+            "个",
+            "处理成功的包裹数量",
+            "CheckmarkCircle24"
         ));
 
         StatisticsItems.Add(new StatisticsItem(
-            label: "异常",
-            value: "0",
-            unit: "个",
-            description: "其他异常包裹数量",
-            icon: "Alert24"
+            "异常",
+            "0",
+            "个",
+            "其他异常包裹数量",
+            "Alert24"
         ));
 
         StatisticsItems.Add(new StatisticsItem
         (
-            label: "处理速率",
-            value: "0",
-            unit: "个/小时",
-            description: "每小时处理包裹数量",
-            icon: "ArrowTrendingLines24"
+            "处理速率",
+            "0",
+            "个/小时",
+            "每小时处理包裹数量",
+            "ArrowTrendingLines24"
         ));
 
         // 添加峰值效率统计
         StatisticsItems.Add(new StatisticsItem
         (
-            label: "峰值效率",
-            value: "0",
-            unit: "个/小时",
-            description: "最高处理速率",
-            icon: "Trophy24"
-            ));
+            "峰值效率",
+            "0",
+            "个/小时",
+            "最高处理速率",
+            "Trophy24"
+        ));
     }
 
     private void InitializePackageInfoItems()
     {
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "重量",
-            value: "0.00",
-            unit: "kg",
-            description: "包裹重量",
-            icon: "Scales24"
+            "重量",
+            "0.00",
+            "kg",
+            "包裹重量",
+            "Scales24"
         ));
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "格口",
-            value: "--",
+            "格口",
+            "--",
             description: "目标分拣位置",
             icon: "ArrowCircleDown24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "时间",
-            value: "--:--:--",
+            "时间",
+            "--:--:--",
             description: "处理时间",
             icon: "Timer24"
         ));
 
         PackageInfoItems.Add(new PackageInfoItem(
-            label: "状态",
-            value: "等待",
+            "状态",
+            "等待",
             description: "处理状态",
             icon: "Alert24"
         ));
@@ -890,7 +890,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 处理ASN订单接收事件
+    ///     处理ASN订单接收事件
     /// </summary>
     private void OnAsnOrderReceived(AsnOrderInfo asnInfo)
     {

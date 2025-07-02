@@ -13,33 +13,33 @@
 
     <Grid>
         <StackPanel MaxWidth="500" Margin="16" VerticalAlignment="Top">
-            <TextBlock Text="体积相机设置" 
-                     Style="{DynamicResource SubtitleTextBlockStyle}" 
-                     HorizontalAlignment="Center" 
-                     Margin="0,0,0,16" />
+            <TextBlock Text="体积相机设置"
+                       Style="{DynamicResource SubtitleTextBlockStyle}"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,16" />
 
             <ui:Card>
                 <StackPanel Margin="16">
-                    <TextBlock Text="相机连接参数" 
-                             Style="{DynamicResource SubtitleTextBlockStyle}" 
-                             Margin="0,0,0,16" />
+                    <TextBlock Text="相机连接参数"
+                               Style="{DynamicResource SubtitleTextBlockStyle}"
+                               Margin="0,0,0,16" />
 
                     <!-- IP Address -->
                     <Grid Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="150" /> 
+                            <ColumnDefinition Width="150" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
 
-                        <TextBlock Text="IP 地址：" 
-                                 Grid.Column="0" 
-                                 VerticalAlignment="Center" 
-                                 HorizontalAlignment="Right" 
-                                 Margin="0,0,8,0" />
+                        <TextBlock Text="IP 地址："
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
-                        <ui:TextBox Grid.Column="1" 
-                                  Text="{Binding Settings.IpAddress, UpdateSourceTrigger=PropertyChanged}" 
-                                  PlaceholderText="请输入相机 IP 地址" />
+                        <ui:TextBox Grid.Column="1"
+                                    Text="{Binding Settings.IpAddress, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="请输入相机 IP 地址" />
                     </Grid>
 
                     <!-- Port -->
@@ -49,19 +49,19 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
 
-                        <TextBlock Text="端口：" 
-                                 Grid.Column="0" 
-                                 VerticalAlignment="Center" 
-                                 HorizontalAlignment="Right" 
-                                 Margin="0,0,8,0" />
+                        <TextBlock Text="端口："
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
-                        <ui:NumberBox Grid.Column="1" 
-                                    Value="{Binding Settings.Port, Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}" 
-                                    PlaceholderText="请输入端口号" 
-                                    SpinButtonPlacementMode="Inline" 
-                                    Minimum="1" 
-                                    Maximum="65535" 
-                                    SmallChange="1" /> 
+                        <ui:NumberBox Grid.Column="1"
+                                      Value="{Binding Settings.Port, Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"
+                                      PlaceholderText="请输入端口号"
+                                      SpinButtonPlacementMode="Inline"
+                                      Minimum="1"
+                                      Maximum="65535"
+                                      SmallChange="1" />
                     </Grid>
 
                     <!-- Min Fusion Time -->
@@ -71,43 +71,43 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
 
-                        <TextBlock Text="最小融合时间 (ms)：" 
-                                 Grid.Column="0" 
-                                 VerticalAlignment="Center" 
-                                 HorizontalAlignment="Right" 
-                                 Margin="0,0,8,0" />
+                        <TextBlock Text="最小融合时间 (ms)："
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
-                        <ui:NumberBox Grid.Column="1" 
-                                    Value="{Binding Settings.MinFusionTimeMs, Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}" 
-                                    PlaceholderText="请输入最小融合时间" 
-                                    SpinButtonPlacementMode="Inline" 
-                                    Minimum="0" 
-                                    Maximum="10000" 
-                                    SmallChange="10" 
-                                    LargeChange="100" /> 
+                        <ui:NumberBox Grid.Column="1"
+                                      Value="{Binding Settings.MinFusionTimeMs, Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"
+                                      PlaceholderText="请输入最小融合时间"
+                                      SpinButtonPlacementMode="Inline"
+                                      Minimum="0"
+                                      Maximum="10000"
+                                      SmallChange="10"
+                                      LargeChange="100" />
                     </Grid>
 
                     <!-- Max Fusion Time -->
-                    <Grid> 
+                    <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="150" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
 
-                        <TextBlock Text="最大融合时间 (ms)：" 
-                                 Grid.Column="0" 
-                                 VerticalAlignment="Center" 
-                                 HorizontalAlignment="Right" 
-                                 Margin="0,0,8,0" />
+                        <TextBlock Text="最大融合时间 (ms)："
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,8,0" />
 
-                        <ui:NumberBox Grid.Column="1" 
-                                    Value="{Binding Settings.MaxFusionTimeMs, Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}" 
-                                    PlaceholderText="请输入最大融合时间" 
-                                    SpinButtonPlacementMode="Inline" 
-                                    Minimum="0" 
-                                    Maximum="10000" 
-                                    SmallChange="10" 
-                                    LargeChange="100" /> 
+                        <ui:NumberBox Grid.Column="1"
+                                      Value="{Binding Settings.MaxFusionTimeMs, Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"
+                                      PlaceholderText="请输入最大融合时间"
+                                      SpinButtonPlacementMode="Inline"
+                                      Minimum="0"
+                                      Maximum="10000"
+                                      SmallChange="10"
+                                      LargeChange="100" />
                     </Grid>
                 </StackPanel>
             </ui:Card>

@@ -1,4 +1,5 @@
-﻿using System.Collections.ObjectModel;
+﻿using System.Collections.Concurrent;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
@@ -13,12 +14,13 @@ using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Weight;
 using Serilog;
+using Serilog.Context;
 using SharedUI.Models;
 using XinBeiYang.Models;
 using XinBeiYang.Models.Communication;
 using XinBeiYang.Services;
-using System.Collections.Concurrent;
-using Serilog.Context; // 添加 Serilog.Context 命名空间
+
+// 添加 Serilog.Context 命名空间
 
 // Added for CancellationTokenSource
 
@@ -27,22 +29,22 @@ namespace XinBeiYang.ViewModels;
 #region 条码模式枚举
 
 /// <summary>
-/// 条码模式枚举
+///     条码模式枚举
 /// </summary>
 public enum BarcodeMode
 {
     /// <summary>
-    /// 多条码模式（合并处理）
+    ///     多条码模式（合并处理）
     /// </summary>
     MultiBarcode,
 
     /// <summary>
-    /// 仅处理母条码（符合正则表达式的条码）
+    ///     仅处理母条码（符合正则表达式的条码）
     /// </summary>
     ParentBarcode,
 
     /// <summary>
-    /// 仅处理子条码（不符合正则表达式的条码）
+    ///     仅处理子条码（不符合正则表达式的条码）
     /// </summary>
     ChildBarcode
 }
@@ -52,12 +54,12 @@ public enum BarcodeMode
 #region 设备状态信息类
 
 /// <summary>
-/// 设备状态信息类
+///     设备状态信息类
 /// </summary>
 public class DeviceStatusInfo(string name, string icon, string status, string statusColor) : BindableBase
 {
-    private string _name = name;
     private string _icon = icon;
+    private string _name = name;
     private string _status = status;
     private string _statusColor = statusColor;
 
@@ -91,21 +93,21 @@ public class DeviceStatusInfo(string name, string icon, string status, string st
 #region 相机展示信息类
 
 /// <summary>
-/// 相机展示信息类
+///     相机展示信息类
 /// </summary>
 public class CameraDisplayInfo : BindableBase
 {
     private readonly string _cameraId = string.Empty;
     private readonly string _cameraName = string.Empty;
-    private bool _isOnline;
-    private BitmapSource? _currentImage;
-    private int _row;
     private int _column;
-    private int _rowSpan = 1;
     private int _columnSpan = 1;
+    private BitmapSource? _currentImage;
+    private bool _isOnline;
+    private int _row;
+    private int _rowSpan = 1;
 
     /// <summary>
-    /// 相机ID
+    ///     相机ID
     /// </summary>
     public string CameraId
     {
@@ -114,7 +116,7 @@ public class CameraDisplayInfo : BindableBase
     }
 
     /// <summary>
-    /// 相机名称
+    ///     相机名称
     /// </summary>
     public string CameraName
     {
@@ -123,7 +125,7 @@ public class CameraDisplayInfo : BindableBase
     }
 
     /// <summary>
-    /// 相机是否在线
+    ///     相机是否在线
     /// </summary>
     public bool IsOnline
     {
@@ -132,7 +134,7 @@ public class CameraDisplayInfo : BindableBase
     }
 
     /// <summary>
-    /// 当前图像
+    ///     当前图像
     /// </summary>
     public BitmapSource? CurrentImage
     {
@@ -141,7 +143,7 @@ public class CameraDisplayInfo : BindableBase
     }
 
     /// <summary>
-    /// 在网格中的行位置
+    ///     在网格中的行位置
     /// </summary>
     public int Row
     {
@@ -150,7 +152,7 @@ public class CameraDisplayInfo : BindableBase
     }
 
     /// <summary>
-    /// 在网格中的列位置
+    ///     在网格中的列位置
     /// </summary>
     public int Column
     {
@@ -159,7 +161,7 @@ public class CameraDisplayInfo : BindableBase
     }
 
     /// <summary>
-    /// 占用的行数
+    ///     占用的行数
     /// </summary>
     public int RowSpan
     {
@@ -168,7 +170,7 @@ public class CameraDisplayInfo : BindableBase
     }
 
     /// <summary>
-    /// 占用的列数
+    ///     占用的列数
     /// </summary>
     public int ColumnSpan
     {
@@ -180,50 +182,10 @@ public class CameraDisplayInfo : BindableBase
 #endregion
 
 /// <summary>
-/// 主窗口视图模型
+///     主窗口视图模型
 /// </summary>
 internal partial class MainWindowViewModel : BindableBase, IDisposable
 {
-    private readonly ICameraService _cameraService;
-    private readonly IDialogService _dialogService;
-    private readonly IAudioService _audioService;
-    private readonly IPlcCommunicationService _plcCommunicationService;
-    private readonly IJdWcsCommunicationService _jdWcsCommunicationService;
-    private readonly IImageStorageService _imageStorageService;
-    private readonly ISettingsService _settingsService;
-    private readonly SerialPortWeightService _weightService; // 添加重量称服务依赖
-    private readonly List<IDisposable> _subscriptions = [];
-    private readonly DispatcherTimer _timer;
-    private string _currentBarcode = string.Empty;
-    private BitmapSource? _currentImage;
-    private bool _disposed;
-    private SystemStatus _systemStatus = new();
-    private string _deviceStatusText = "未连接";
-    private string _deviceStatusDescription = "PLC设备未连接，请检查网络连接";
-    private string _deviceStatusColor = "#F44336";
-    private string _jdStatusText = "未连接";
-    private string _jdStatusDescription = "京东WCS服务未连接，请检查网络连接";
-    private string _jdStatusColor = "#F44336";
-    private bool _lastPackageWasSuccessful = true; // 初始状态为成功
-    private Brush _mainWindowBackgroundBrush = BackgroundSuccess; // 初始为绿色（允许上包）
-    private bool _isPlcRejectWarningVisible; // PLC拒绝警告可见性标志
-    private bool _isPlcAbnormalWarningVisible; // PLC异常警告可见性标志
-    private BarcodeMode _barcodeMode = BarcodeMode.MultiBarcode; // 默认为多条码模式
-    private int _selectedBarcodeModeIndex; // 新增：用于绑定 ComboBox 的 SelectedIndex
-
-    // 上包倒计时相关
-    private DispatcherTimer? _uploadCountdownTimer;
-    private int _uploadCountdownValue;
-    private bool _isUploadCountdownVisible;
-
-    // 新增：相机初始化标志
-    private bool _camerasInitialized;
-
-    private int _viewModelPackageIndex;
-
-    // *** 新增: 用于存储最近超时的条码前缀 ***
-    private readonly ConcurrentDictionary<string, DateTime> _timedOutPrefixes = new();
-
     // 超时条目在缓存中的最大保留时间
     private static readonly TimeSpan TimedOutPrefixMaxAge = TimeSpan.FromSeconds(15);
 
@@ -238,21 +200,64 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     private static readonly Brush
         BackgroundTimeout =
             new SolidColorBrush(Color.FromArgb(0xAA, 0xFF, 0xC1, 0x07)); // 黄色 (增加透明度) - 用于禁止上包状态
+    private readonly IAudioService _audioService;
+    private readonly ICameraService _cameraService;
+    private readonly IDialogService _dialogService;
+    private readonly IImageStorageService _imageStorageService;
+    private readonly IJdWcsCommunicationService _jdWcsCommunicationService;
+
+    // *** 新增: 包裹缓冲栈 ***
+    private readonly ConcurrentStack<PackageInfo> _packageStack = new();
+
+    // *** 新增: 等待最终结果的包裹缓存 ***
+    private readonly ConcurrentDictionary<ushort, PackageInfo> _pendingFinalResultPackages = new();
+
+    // *** 新增: 等待最终结果的包裹超时管理 ***
+    private readonly ConcurrentDictionary<ushort, CancellationTokenSource> _pendingFinalResultTimeouts = new();
+    private readonly IPlcCommunicationService _plcCommunicationService;
+    private readonly object _processingLock = new();
+    private readonly ISettingsService _settingsService;
+    private readonly List<IDisposable> _subscriptions = [];
+
+    // *** 新增: 用于存储最近超时的条码前缀 ***
+    private readonly ConcurrentDictionary<string, DateTime> _timedOutPrefixes = new();
+    private readonly DispatcherTimer _timer;
+    private readonly CancellationTokenSource _viewModelCts = new(); // 视图模型的主要取消标记
+    private readonly SerialPortWeightService _weightService; // 添加重量称服务依赖
+    private BarcodeMode _barcodeMode = BarcodeMode.MultiBarcode; // 默认为多条码模式
+
+    // 新增：相机初始化标志
+    private bool _camerasInitialized;
+    private string _currentBarcode = string.Empty;
+    private BitmapSource? _currentImage;
 
     private PackageInfo? _currentlyProcessingPackage;
-    private readonly object _processingLock = new();
-    private readonly CancellationTokenSource _viewModelCts = new(); // 视图模型的主要取消标记
+    private string _deviceStatusColor = "#F44336";
+    private string _deviceStatusDescription = "PLC设备未连接，请检查网络连接";
+    private string _deviceStatusText = "未连接";
+    private bool _disposed;
+    private int _gridColumns;
+
+    // 布局相关属性
+    private int _gridRows;
 
     private bool _isNextPackageWaiting; // 用于UI指示 (现在指示 _packageStack 是否非空)
+    private bool _isPlcAbnormalWarningVisible; // PLC异常警告可见性标志
+    private bool _isPlcRejectWarningVisible; // PLC拒绝警告可见性标志
+    private bool _isUploadCountdownVisible;
+    private string _jdStatusColor = "#F44336";
+    private string _jdStatusDescription = "京东WCS服务未连接，请检查网络连接";
+    private string _jdStatusText = "未连接";
+    private bool _lastPackageWasSuccessful = true; // 初始状态为成功
+    private Brush _mainWindowBackgroundBrush = BackgroundSuccess; // 初始为绿色（允许上包）
+    private int _selectedBarcodeModeIndex; // 新增：用于绑定 ComboBox 的 SelectedIndex
+    private SystemStatus _systemStatus = new();
 
-    /// <summary>
-    /// 指示是否有包裹正在队列中等待PLC处理
-    /// </summary>
-    public bool IsNextPackageWaiting
-    {
-        get => _isNextPackageWaiting;
-        private set => SetProperty(ref _isNextPackageWaiting, value);
-    }
+    // 上包倒计时相关
+    private DispatcherTimer? _uploadCountdownTimer;
+    private int _uploadCountdownValue;
+
+    private int _viewModelPackageIndex;
 
     public MainWindowViewModel(
         IDialogService dialogService,
@@ -353,7 +358,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                         // ... (existing timeout check logic using initialPackageContext) ...
                         if (_timedOutPrefixes.TryGetValue(currentPrefix, out var timeoutTime))
                         {
-                            if ((DateTime.UtcNow - timeoutTime) < TimedOutPrefixMaxAge)
+                            if (DateTime.UtcNow - timeoutTime < TimedOutPrefixMaxAge)
                             {
                                 if (buffer.Count == 1) // 迟到的包裹
                                 {
@@ -511,6 +516,15 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         PopulateCameraList();
     }
 
+    /// <summary>
+    ///     指示是否有包裹正在队列中等待PLC处理
+    /// </summary>
+    public bool IsNextPackageWaiting
+    {
+        get => _isNextPackageWaiting;
+        private set => SetProperty(ref _isNextPackageWaiting, value);
+    }
+
     public DelegateCommand OpenSettingsCommand { get; }
     public ObservableCollection<PackageInfo> PackageHistory { get; } = [];
     public ObservableCollection<StatisticsItem> StatisticsItems { get; } = [];
@@ -574,7 +588,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 指示上一个处理的包裹是否成功
+    ///     指示上一个处理的包裹是否成功
     /// </summary>
     public bool LastPackageWasSuccessful
     {
@@ -583,7 +597,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 主窗口内容区域背景画刷 - 控制上包状态 (黄/绿)
+    ///     主窗口内容区域背景画刷 - 控制上包状态 (黄/绿)
     /// </summary>
     public Brush MainWindowBackgroundBrush
     {
@@ -592,7 +606,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 控制PLC拒绝警告覆盖层的可见性
+    ///     控制PLC拒绝警告覆盖层的可见性
     /// </summary>
     public bool IsPlcRejectWarningVisible
     {
@@ -601,7 +615,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 控制PLC异常警告覆盖层的可见性
+    ///     控制PLC异常警告覆盖层的可见性
     /// </summary>
     public bool IsPlcAbnormalWarningVisible
     {
@@ -610,7 +624,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 条码模式
+    ///     条码模式
     /// </summary>
     private BarcodeMode BarcodeMode
     {
@@ -630,7 +644,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 用于绑定 ComboBox.SelectedIndex 的属性
+    ///     用于绑定 ComboBox.SelectedIndex 的属性
     /// </summary>
     public int SelectedBarcodeModeIndex
     {
@@ -648,7 +662,45 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 获取条码模式的显示文本
+    ///     网格的行数
+    /// </summary>
+    public int GridRows
+    {
+        get => _gridRows;
+        private set => SetProperty(ref _gridRows, value);
+    }
+
+    /// <summary>
+    ///     网格的列数
+    /// </summary>
+    public int GridColumns
+    {
+        get => _gridColumns;
+        private set => SetProperty(ref _gridColumns, value);
+    }
+
+    // 上包倒计时秒数
+    public int UploadCountdownValue
+    {
+        get => _uploadCountdownValue;
+        private set => SetProperty(ref _uploadCountdownValue, value);
+    }
+
+    // 上包倒计时是否可见
+    public bool IsUploadCountdownVisible
+    {
+        get => _isUploadCountdownVisible;
+        private set => SetProperty(ref _isUploadCountdownVisible, value);
+    }
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    ///     获取条码模式的显示文本
     /// </summary>
     private static string GetBarcodeModeDisplayText(BarcodeMode mode)
     {
@@ -662,7 +714,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 根据当前设置的条码模式过滤包裹
+    ///     根据当前设置的条码模式过滤包裹
     /// </summary>
     private bool FilterBarcodeByMode(PackageInfo package)
     {
@@ -694,7 +746,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 初始化相机占位符
+    ///     初始化相机占位符
     /// </summary>
     private void InitializeCameraPlaceholder()
     {
@@ -722,7 +774,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 填充相机列表（在相机服务连接成功后调用）
+    ///     填充相机列表（在相机服务连接成功后调用）
     /// </summary>
     private void PopulateCameraList()
     {
@@ -757,7 +809,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                         Row = row,
                         Column = column,
                         RowSpan = rowSpan,
-                        ColumnSpan = columnSpan,
+                        ColumnSpan = columnSpan
                     };
                     Cameras.Add(displayInfo);
                 }
@@ -847,12 +899,6 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                 }
             }
         });
-    }
-
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
     }
 
     private void ExecuteOpenSettings()
@@ -1031,7 +1077,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
 
             // *** Use passed context for logging ***
             Log.Information("{Context} 向PLC发送上传请求: W={Weight:F3}, L={L:F1}, W={W:F1}, H={H:F1}",
-                 packageContext, package.Weight, package.Length ?? 0, package.Width ?? 0, package.Height ?? 0);
+                packageContext, package.Weight, package.Length ?? 0, package.Width ?? 0, package.Height ?? 0);
 
             var plcRequestTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
@@ -1047,7 +1093,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                     statusItem.Description = "等待PLC确认接受...";
                     statusItem.StatusColor = "#FFC107"; // Yellow
                 });
-                 Log.Debug("{Context} 等待PLC ACK...", packageContext);
+                Log.Debug("{Context} 等待PLC ACK...", packageContext);
 
                 // *** Use passed context for logging ***
                 Log.Information("{Context} 准备调用 SendUploadRequestAsync: Barcode='{Barcode}', W={Weight:F3}, L={L:F1}, W={W:F1}, H={H:F1}, Timestamp={Ts}",
@@ -1090,7 +1136,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
 
             // --- PLC接受 ---
             Log.Information("{Context} PLC接受上包请求. CommandId={CommandId}", packageContext, ackResult.CommandId);
-            
+
             // *** 新增: 将包裹缓存到等待最终结果的字典中 ***
             if (!_pendingFinalResultPackages.TryAdd(ackResult.CommandId, package))
             {
@@ -1105,7 +1151,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                 var config = _settingsService.LoadSettings<HostConfiguration>();
                 var resultTimeoutSeconds = config.UploadResultTimeoutSeconds > 0 ? config.UploadResultTimeoutSeconds : 60;
                 var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(resultTimeoutSeconds));
-                
+
                 if (_pendingFinalResultTimeouts.TryAdd(ackResult.CommandId, timeoutCts))
                 {
                     // 注册超时回调
@@ -1115,7 +1161,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                         {
                             var timeoutContext = $"[包裹{timeoutPackage.Index}|{timeoutPackage.Barcode}]";
                             Log.Warning("{Context} 等待最终结果超时，CommandId={CommandId}", timeoutContext, ackResult.CommandId);
-                            
+
                             // 异步处理超时
                             _ = Task.Run(async () =>
                             {
@@ -1130,11 +1176,11 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                                 }
                             });
                         }
-                        
+
                         // 清理超时管理器
                         _pendingFinalResultTimeouts.TryRemove(ackResult.CommandId, out _);
                     });
-                    
+
                     Log.Debug("{Context} 已设置最终结果超时机制: {TimeoutSeconds}秒", packageContext, resultTimeoutSeconds);
                 }
                 else
@@ -1150,7 +1196,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
 
             // *** 修改: 设置包裹状态为等待最终结果，但不等待 ***
             package.SetStatus(PackageStatus.LoadingAccepted, $"上包已接受，等待最终结果 (序号: {package.Index})");
-            
+
             Application.Current.Dispatcher.Invoke(() =>
             {
                 MainWindowBackgroundBrush = BackgroundSuccess; // PLC 接受，允许下一个扫描
@@ -1164,7 +1210,6 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
 
             Log.Information("{Context} 包裹已缓存等待最终结果，立即释放处理权限", packageContext);
             // *** 不再等待最终结果，直接返回，让下一个包裹可以立即处理 ***
-            return;
         } // 结束 try (PLC 通信块)
         catch (OperationCanceledException) // 捕获 await 过程中的取消
         {
@@ -1184,7 +1229,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         finally
         {
             Log.Debug("{Context} 进入 ProcessSinglePackageAsync 的 finally 块", packageContext);
-            
+
             // *** 修改: 只有在包裹未被缓存等待最终结果时才进行UI更新和资源释放 ***
             if (package.Status != PackageStatus.LoadingAccepted)
             {
@@ -1198,7 +1243,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             {
                 Log.Debug("{Context} 包裹已缓存等待最终结果，跳过资源释放", packageContext);
             }
-            
+
             // --- 结束处理，可能启动下一个 ---
             // *** Pass context ***
             FinalizeProcessing(package, packageContext);
@@ -1333,11 +1378,11 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                 !ReferenceEquals(_currentlyProcessingPackage, processedPackage))
             {
                 // Log the mismatch using the context of the package that *was* being processed
-                 var currentProcessingContext = _currentlyProcessingPackage.Index >= 0
+                var currentProcessingContext = _currentlyProcessingPackage.Index >= 0
                     ? $"[包裹{_currentlyProcessingPackage.Index}|{_currentlyProcessingPackage.Barcode}]"
                     : "[未知处理中包裹]";
                 Log.Error("[调度][!!!] Finalize 时发现当前处理的包裹 ({CurrentContext}) 与完成的包裹 ({ProcessedContext}) 不匹配!",
-                     currentProcessingContext, processedPackageContext);
+                    currentProcessingContext, processedPackageContext);
             }
 
             _currentlyProcessingPackage = null; // 标记当前为空闲
@@ -1347,7 +1392,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             {
                 // 从堆栈获取下一个
                 var nextPackageContext = $"[包裹{nextPackageToProcess.Index}|{nextPackageToProcess.Barcode}]";
-                 Log.Information("{ProcessedContext} [调度] 从堆栈获取下一个包裹处理: {NextContext}", processedPackageContext, nextPackageContext);
+                Log.Information("{ProcessedContext} [调度] 从堆栈获取下一个包裹处理: {NextContext}", processedPackageContext, nextPackageContext);
 
                 _currentlyProcessingPackage = nextPackageToProcess; // 设置为当前处理
                 IsNextPackageWaiting = !_packageStack.IsEmpty; // 更新等待状态
@@ -1385,7 +1430,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
 
 
     /// <summary>
-    /// 合并UI更新的辅助方法 - 更新最终状态、历史记录、统计信息
+    ///     合并UI更新的辅助方法 - 更新最终状态、历史记录、统计信息
     /// </summary>
     private void UpdateUiFromResult(PackageInfo package)
     {
@@ -1407,7 +1452,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 更新包裹信息项的最终状态部分 (状态文本, 颜色, 描述)
+    ///     更新包裹信息项的最终状态部分 (状态文本, 颜色, 描述)
     /// </summary>
     private void UpdatePackageInfoItemsStatusFinal(PackageInfo package)
     {
@@ -1448,7 +1493,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 更新非状态项的新辅助方法，可在异步操作之前调用
+    ///     更新非状态项的新辅助方法，可在异步操作之前调用
     /// </summary>
     private void UpdatePackageInfoItemsBasic(PackageInfo package)
     {
@@ -1479,7 +1524,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
 
 
     /// <summary>
-    /// 更新包裹历史记录
+    ///     更新包裹历史记录
     /// </summary>
     private void UpdatePackageHistory(PackageInfo package)
     {
@@ -1523,13 +1568,13 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 从状态显示文本中提取PackageId
+    ///     从状态显示文本中提取PackageId
     /// </summary>
     [GeneratedRegex(@"包裹流水号:\s*(\d+)")]
     private static partial Regex PackageIdRegex();
 
     /// <summary>
-    /// 提取PackageId的辅助方法
+    ///     提取PackageId的辅助方法
     /// </summary>
     private static string GetPackageIdFromInformation(string? statusDisplay)
     {
@@ -1605,7 +1650,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 获取条码的前缀（移除 "-1-1-" 后缀）
+    ///     获取条码的前缀（移除 "-1-1-" 后缀）
     /// </summary>
     private static string GetBarcodePrefix(string? barcode)
     {
@@ -1619,7 +1664,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 合并两个相关的 PackageInfo 对象
+    ///     合并两个相关的 PackageInfo 对象
     /// </summary>
     private static PackageInfo MergePackageInfo(PackageInfo p1, PackageInfo p2)
     {
@@ -1703,7 +1748,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 从配置中加载条码模式设置
+    ///     从配置中加载条码模式设置
     /// </summary>
     private void LoadBarcodeModeFromSettings()
     {
@@ -1722,7 +1767,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 保存条码模式到配置
+    ///     保存条码模式到配置
     /// </summary>
     private void SaveBarcodeModeToSettings(BarcodeMode mode)
     {
@@ -1811,7 +1856,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     private void OnPlcUploadResultReceived(object? sender, (ushort CommandId, bool IsTimeout, int PackageId) result)
     {
         var (commandId, isTimeout, packageId) = result;
-        
+
         // 从缓存中获取对应的包裹
         if (!_pendingFinalResultPackages.TryRemove(commandId, out var package))
         {
@@ -1828,7 +1873,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         }
 
         var packageContext = $"[包裹{package.Index}|{package.Barcode}]";
-        Log.Information("{Context} 收到PLC最终结果: CommandId={CommandId}, IsTimeout={IsTimeout}, PackageId={PackageId}", 
+        Log.Information("{Context} 收到PLC最终结果: CommandId={CommandId}, IsTimeout={IsTimeout}, PackageId={PackageId}",
             packageContext, commandId, isTimeout, packageId);
 
         // 异步处理最终结果，避免阻塞PLC通信线程
@@ -1870,7 +1915,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                 package.SetStatus(PackageStatus.LoadingSuccess, $"上包完成 (PLC流水号: {packageId})");
                 Log.Information("{Context} PLC报告上包成功. CommandId={CommandId}, PLC流水号={PackageId}", packageContext, commandId, packageId);
                 _ = _audioService.PlayPresetAsync(AudioType.LoadingSuccess);
-                
+
                 // 处理图像保存和WCS上传
                 await HandleImageSavingAndWcsUpload(package, packageContext, packageId, cancellationToken);
             }
@@ -1998,30 +2043,8 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         };
     }
 
-    // 布局相关属性
-    private int _gridRows;
-    private int _gridColumns;
-
     /// <summary>
-    /// 网格的行数
-    /// </summary>
-    public int GridRows
-    {
-        get => _gridRows;
-        private set => SetProperty(ref _gridRows, value);
-    }
-
-    /// <summary>
-    /// 网格的列数
-    /// </summary>
-    public int GridColumns
-    {
-        get => _gridColumns;
-        private set => SetProperty(ref _gridColumns, value);
-    }
-
-    /// <summary>
-    /// 根据相机数量计算最佳布局
+    ///     根据相机数量计算最佳布局
     /// </summary>
     /// <param name="cameraCount">相机数量</param>
     private void CalculateOptimalLayout(int cameraCount)
@@ -2077,7 +2100,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 获取指定相机在网格中的位置
+    ///     获取指定相机在网格中的位置
     /// </summary>
     /// <param name="cameraIndex">相机索引 (从0开始)</param>
     /// <param name="cameraCount">相机总数</param>
@@ -2162,27 +2185,21 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         IsUploadCountdownVisible = false;
     }
 
-    // 上包倒计时秒数
-    public int UploadCountdownValue
-    {
-        get => _uploadCountdownValue;
-        private set => SetProperty(ref _uploadCountdownValue, value);
-    }
-
-    // 上包倒计时是否可见
-    public bool IsUploadCountdownVisible
-    {
-        get => _isUploadCountdownVisible;
-        private set => SetProperty(ref _isUploadCountdownVisible, value);
-    }
-
     // 新增：WCS 状态辅助方法
-    private static string GetJdWcsStatusDisplayText(bool isConnected) => isConnected ? "已连接" : "已断开";
+    private static string GetJdWcsStatusDisplayText(bool isConnected)
+    {
+        return isConnected ? "已连接" : "已断开";
+    }
 
-    private static string GetJdWcsStatusDescription(bool isConnected) =>
-        isConnected ? "京东WCS服务连接正常，可以上传图片" : "京东WCS服务未连接，请检查网络连接";
+    private static string GetJdWcsStatusDescription(bool isConnected)
+    {
+        return isConnected ? "京东WCS服务连接正常，可以上传图片" : "京东WCS服务未连接，请检查网络连接";
+    }
 
-    private static string GetJdWcsStatusColor(bool isConnected) => isConnected ? "#4CAF50" : "#F44336";
+    private static string GetJdWcsStatusColor(bool isConnected)
+    {
+        return isConnected ? "#4CAF50" : "#F44336";
+    }
 
     // 新增：更新 WCS 特定状态显示的方法
     private void UpdateJdWcsStatusDisplay(string statusText, string description, string color)
@@ -2204,15 +2221,6 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             }
         });
     }
-
-    // *** 新增: 包裹缓冲栈 ***
-    private readonly ConcurrentStack<PackageInfo> _packageStack = new();
-
-    // *** 新增: 等待最终结果的包裹缓存 ***
-    private readonly ConcurrentDictionary<ushort, PackageInfo> _pendingFinalResultPackages = new();
-    
-    // *** 新增: 等待最终结果的包裹超时管理 ***
-    private readonly ConcurrentDictionary<ushort, CancellationTokenSource> _pendingFinalResultTimeouts = new();
 
     // *** 新增: 清理包裹堆栈并释放资源 ***
     // *** Update signature to accept context string ***
@@ -2261,7 +2269,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             count++;
         }
         _pendingFinalResultPackages.Clear();
-        
+
         // *** 新增: 清理所有超时管理器 ***
         var timeoutCount = 0;
         foreach (var kvp in _pendingFinalResultTimeouts)
@@ -2271,7 +2279,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             timeoutCount++;
         }
         _pendingFinalResultTimeouts.Clear();
-        
+
         if (count > 0)
         {
             Log.Information("共清理了 {Count} 个等待最终结果的包裹和 {TimeoutCount} 个超时管理器", count, timeoutCount);
@@ -2287,15 +2295,15 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             var weightTask = Task.Run(() => _weightService.FindNearestWeight(DateTime.Now), cancellationToken);
-             Log.Debug("{Context} 等待重量查询结果...", packageContext);
+            Log.Debug("{Context} 等待重量查询结果...", packageContext);
             var weightFromScale = await weightTask;
-             Log.Debug("{Context} 重量查询完成.", packageContext);
+            Log.Debug("{Context} 重量查询完成.", packageContext);
 
             if (weightFromScale is > 0)
             {
                 var weightInKg = weightFromScale.Value / 1000.0;
                 package.SetWeight(weightInKg);
-                 Log.Information("{Context} 从重量称获取到重量: {WeightKg:F3}kg", packageContext, weightInKg);
+                Log.Information("{Context} 从重量称获取到重量: {WeightKg:F3}kg", packageContext, weightInKg);
             }
             else
             {
@@ -2305,12 +2313,12 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                     var weightSettings = _settingsService.LoadSettings<WeightSettings>();
                     var minimumWeight = weightSettings.MinimumWeight / 1000.0;
                     package.SetWeight(minimumWeight);
-                     Log.Warning("{Context} 未获取到有效重量，使用最小重量: {MinWeight:F3}kg", packageContext, minimumWeight);
+                    Log.Warning("{Context} 未获取到有效重量，使用最小重量: {MinWeight:F3}kg", packageContext, minimumWeight);
                 }
                 else
                 {
                     package.SetWeight(packageWeightOriginal);
-                     Log.Debug("{Context} 重量称未返回有效重量，保留原始重量: {WeightKg:F3}kg", packageContext, packageWeightOriginal);
+                    Log.Debug("{Context} 重量称未返回有效重量，保留原始重量: {WeightKg:F3}kg", packageContext, packageWeightOriginal);
                 }
             }
         }

@@ -1,9 +1,10 @@
+using System.IO;
+using System.Windows.Forms;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera.Models.Camera;
 using Serilog;
-using System.IO;
-using System.Windows.Forms;
+using DialogResult = System.Windows.Forms.DialogResult;
 
 namespace Sunnen.ViewModels.Settings;
 
@@ -96,13 +97,13 @@ public class VolumeSettingsViewModel : BindableBase
         }
         catch (UnauthorizedAccessException uaEx)
         {
-             Log.Error(uaEx, "创建图像保存目录或保存配置时权限不足: {Path}", Configuration.ImageSavePath);
-             _notificationService.ShowErrorWithToken($"Error saving settings: Permission denied for path '{Configuration.ImageSavePath}'. {uaEx.Message}", "SettingWindowGrowl");
+            Log.Error(uaEx, "创建图像保存目录或保存配置时权限不足: {Path}", Configuration.ImageSavePath);
+            _notificationService.ShowErrorWithToken($"Error saving settings: Permission denied for path '{Configuration.ImageSavePath}'. {uaEx.Message}", "SettingWindowGrowl");
         }
         catch (Exception ex)
         {
             Log.Error(ex, "保存体积相机配置失败");
-             _notificationService.ShowErrorWithToken($"Failed to save volume camera settings: {ex.Message}", "SettingWindowGrowl");
+            _notificationService.ShowErrorWithToken($"Failed to save volume camera settings: {ex.Message}", "SettingWindowGrowl");
         }
     }
 
@@ -120,7 +121,7 @@ public class VolumeSettingsViewModel : BindableBase
             var result = dialog.ShowDialog();
 
             // Process dialog results
-            if (result == System.Windows.Forms.DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.SelectedPath))
+            if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.SelectedPath))
             {
                 ImageSavePath = dialog.SelectedPath;
                 Log.Information("用户选择了新的图像保存路径: {Path}", ImageSavePath);

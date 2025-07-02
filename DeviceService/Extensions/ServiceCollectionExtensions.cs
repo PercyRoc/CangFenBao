@@ -21,7 +21,7 @@ public static class ContainerRegistryExtensions
         containerRegistry.RegisterSingleton<PackageTransferService>();
         containerRegistry.RegisterSingleton<CameraStartupService>();
         containerRegistry.RegisterSingleton<IImageSavingService, ImageSavingService>();
-       
+
 
         containerRegistry.RegisterSingleton<ICameraService>(static sp =>
             sp.Resolve<CameraStartupService>().GetCameraService());

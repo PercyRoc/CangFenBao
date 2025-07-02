@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -17,6 +18,7 @@ using Sunnen.ViewModels.Windows;
 using Sunnen.Views.Dialogs;
 using Sunnen.Views.Settings;
 using Sunnen.Views.Windows;
+using MessageBox = System.Windows.MessageBox;
 using Window = System.Windows.Window;
 
 namespace Sunnen;
@@ -26,11 +28,11 @@ namespace Sunnen;
 /// </summary>
 internal partial class App
 {
-    private static Mutex? _mutex;
     private const string MutexName = "Global\\SangNeng_App_Mutex";
-    private bool _ownsMutex;
+    private static Mutex? _mutex;
     private CircleProgressBar? _loadingControl;
     private Window? _loadingWindow;
+    private bool _ownsMutex;
 
     /// <summary>
     ///     创建主窗口
@@ -40,7 +42,7 @@ internal partial class App
         // 检查是否已经运行（进程级检查）
         if (IsApplicationAlreadyRunning())
         {
-            System.Windows.MessageBox.Show("程序已在运行中，请勿重复启动！", "提示", MessageBoxButton.OK,
+            MessageBox.Show("程序已在运行中，请勿重复启动！", "提示", MessageBoxButton.OK,
                 MessageBoxImage.Information);
             Environment.Exit(0); // 直接退出进程
             return null!;
@@ -61,23 +63,20 @@ internal partial class App
             var canAcquire = _mutex.WaitOne(TimeSpan.Zero, false);
             if (!canAcquire)
             {
-                System.Windows.MessageBox.Show("程序已在运行中，请勿重复启动！", "提示", MessageBoxButton.OK,
+                MessageBox.Show("程序已在运行中，请勿重复启动！", "提示", MessageBoxButton.OK,
                     MessageBoxImage.Information);
                 Environment.Exit(0); // 直接退出进程
                 return null!; // 虽然不会执行到这里，但需要满足返回类型
             }
-            else
-            {
-                // 可以获取Mutex，说明前一个实例可能异常退出但Mutex已被释放
-                _ownsMutex = true;
-                return Container.Resolve<MainWindow>();
-            }
+            // 可以获取Mutex，说明前一个实例可能异常退出但Mutex已被释放
+            _ownsMutex = true;
+            return Container.Resolve<MainWindow>();
         }
         catch (Exception ex)
         {
             // Mutex创建或获取失败
             Log.Error(ex, "检查应用程序实例时发生错误");
-            System.Windows.MessageBox.Show($"启动程序时发生错误: {ex.Message}", "错误", MessageBoxButton.OK,
+            MessageBox.Show($"启动程序时发生错误: {ex.Message}", "错误", MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Current.Shutdown();
             return null!;
@@ -85,7 +84,7 @@ internal partial class App
     }
 
     /// <summary>
-    /// 检查是否已有相同名称的应用程序实例在运行
+    ///     检查是否已有相同名称的应用程序实例在运行
     /// </summary>
     private static bool IsApplicationAlreadyRunning()
     {
@@ -153,7 +152,7 @@ internal partial class App
                 rollingInterval: RollingInterval.Day,
                 rollOnFileSizeLimit: true,
                 retainedFileCountLimit: 30,
-                encoding: System.Text.Encoding.UTF8)
+                encoding: Encoding.UTF8)
             .CreateLogger();
 
         Log.Information("应用程序启动");

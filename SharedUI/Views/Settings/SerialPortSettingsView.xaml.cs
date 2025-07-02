@@ -1,13 +1,12 @@
-namespace SharedUI.Views.Settings
+namespace SharedUI.Views.Settings;
+
+/// <summary>
+///     SerialPortSettingsView.xaml 的交互逻辑
+/// </summary>
+public partial class SerialPortSettingsView
 {
-    /// <summary>
-    /// SerialPortSettingsView.xaml 的交互逻辑
-    /// </summary>
-    public partial class SerialPortSettingsView
+    public SerialPortSettingsView()
     {
-        public SerialPortSettingsView()
-        {
-            InitializeComponent();
-        }
+        InitializeComponent();
     }
-} 
+}

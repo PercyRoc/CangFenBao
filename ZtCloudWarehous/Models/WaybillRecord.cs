@@ -42,4 +42,4 @@ public class WaybillRecord
     /// </summary>
     [JsonPropertyName("jtHistoryWeight")]
     public double JtHistoryWeight { get; init; }
-} 
+}

@@ -18,4 +18,4 @@ public class BooleanToEnvironmentConverter : IValueConverter
     {
         throw new NotImplementedException();
     }
-} 
+}

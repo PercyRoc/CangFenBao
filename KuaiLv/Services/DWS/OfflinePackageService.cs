@@ -50,7 +50,7 @@ public class OfflinePackageService(IPackageDataService packageDataService)
             var packages = new List<PackageInfo>();
             foreach (var record in offlineRecords)
             {
-                var package = PackageInfo.Create(); 
+                var package = PackageInfo.Create();
 
                 package.SetBarcode(record.Barcode);
 
@@ -60,25 +60,25 @@ public class OfflinePackageService(IPackageDataService packageDataService)
                     package.SetDimensions(record.Length.Value, record.Width.Value, record.Height.Value);
                 }
                 // 直接使用数据库的状态和显示文本
-                package.SetStatus(record.Status, record.StatusDisplay); 
-           
+                package.SetStatus(record.Status, record.StatusDisplay);
+
                 if (!string.IsNullOrEmpty(record.ErrorMessage))
-                { 
-                     package.ErrorMessage = record.ErrorMessage; 
+                {
+                    package.ErrorMessage = record.ErrorMessage;
                 }
                 package.CreateTime = record.CreateTime;
-                
+
                 // 设置图片路径
-                if(!string.IsNullOrEmpty(record.ImagePath))
+                if (!string.IsNullOrEmpty(record.ImagePath))
                 {
                     package.SetImage(null, record.ImagePath);
                 }
-                packages.Add(package); 
+                packages.Add(package);
             }
 
             return packages;
         }
-        catch(Exception ex)
+        catch (Exception ex)
         {
             Log.Error(ex, "查询所有离线包裹时发生错误");
             return []; // 发生错误时返回空列表
@@ -112,8 +112,8 @@ public class OfflinePackageService(IPackageDataService packageDataService)
             }
 
             // 调用更新状态的方法，传递包裹时间以辅助查找
-            var success = await packageDataService.UpdatePackageStatusAsync(barcode, 
-                PackageStatus.Success, 
+            var success = await packageDataService.UpdatePackageStatusAsync(barcode,
+                PackageStatus.Success,
                 "离线重试成功",
                 packageTime);
 
@@ -133,7 +133,7 @@ public class OfflinePackageService(IPackageDataService packageDataService)
             Log.Error(ex, "在调用 UpdatePackageStatusAsync 标记离线包裹 {Barcode} 为成功时发生意外错误", barcode);
         }
         finally
-        { 
+        {
             _lock.Release();
         }
     }

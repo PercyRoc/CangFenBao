@@ -1,35 +1,18 @@
 using System.Collections.ObjectModel;
-using ShanghaiModuleBelt.Models;
-using Serilog;
-using ShanghaiModuleBelt.Services;
 using Common.Services.Ui;
+using Serilog;
+using ShanghaiModuleBelt.Models;
+using ShanghaiModuleBelt.Services;
 
 namespace ShanghaiModuleBelt.ViewModels;
 
 /// <summary>
-/// 格口统计对话框视图模型
+///     格口统计对话框视图模型
 /// </summary>
 internal class ChuteStatisticsDialogViewModel : BindableBase
 {
-    /// <summary>
-    /// 格口统计集合
-    /// </summary>
-    public ObservableCollection<ChuteStatistics> ChuteStatistics { get; } = [];
-
-    /// <summary>
-    /// 刷新命令
-    /// </summary>
-    public DelegateCommand RefreshCommand { get; set; }
-
-    /// <summary>
-    /// 刷新数据的委托
-    /// </summary>
-    public Action? RefreshAction { get; set; }
-
     private readonly INotificationService _notificationService;
     private readonly RetryService _retryService;
-
-    public DelegateCommand RetryFailedDataCommand { get; }
 
     public ChuteStatisticsDialogViewModel(INotificationService notificationService, RetryService retryService)
     {
@@ -38,9 +21,25 @@ internal class ChuteStatisticsDialogViewModel : BindableBase
         RefreshCommand = new DelegateCommand(ExecuteRefresh);
         RetryFailedDataCommand = new DelegateCommand(ExecuteRetryFailedData);
     }
+    /// <summary>
+    ///     格口统计集合
+    /// </summary>
+    public ObservableCollection<ChuteStatistics> ChuteStatistics { get; } = [];
 
     /// <summary>
-    /// 更新格口统计数据
+    ///     刷新命令
+    /// </summary>
+    public DelegateCommand RefreshCommand { get; set; }
+
+    /// <summary>
+    ///     刷新数据的委托
+    /// </summary>
+    public Action? RefreshAction { get; set; }
+
+    public DelegateCommand RetryFailedDataCommand { get; }
+
+    /// <summary>
+    ///     更新格口统计数据
     /// </summary>
     /// <param name="chutePackageCount">格口包裹计数字典</param>
     public void UpdateStatistics(Dictionary<int, int> chutePackageCount)
@@ -71,7 +70,7 @@ internal class ChuteStatisticsDialogViewModel : BindableBase
         try
         {
             // 调用 RetryService 的重传方法
-            await _retryService.PerformRetryAsync(); 
+            await _retryService.PerformRetryAsync();
             _notificationService.ShowSuccess("重传成功");
         }
         catch (Exception ex)
@@ -84,4 +83,4 @@ internal class ChuteStatisticsDialogViewModel : BindableBase
             RefreshAction?.Invoke(); // 重传完成后刷新统计数据
         }
     }
-} 
+}

@@ -1,6 +1,6 @@
+using System.Collections.ObjectModel;
 using Common.Services.Settings;
 using Sunnen.Events;
-using System.Collections.ObjectModel;
 
 namespace Sunnen.ViewModels.Settings;
 
