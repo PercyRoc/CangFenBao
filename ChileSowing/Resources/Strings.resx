@@ -259,4 +259,21 @@
     <data name="Placeholder_NotApplicable" xml:space="preserve">
         <value>N/A</value>
     </data>
+    
+    <!-- 模式切换 -->
+    <data name="Mode_Test" xml:space="preserve">
+        <value>测试模式</value>
+    </data>
+    <data name="Mode_Production" xml:space="preserve">
+        <value>正式模式</value>
+    </data>
+    <data name="Mode_TestDescription" xml:space="preserve">
+        <value>循环分配格口，不使用接口交互，但仍写入PLC</value>
+    </data>
+    <data name="Mode_ProductionDescription" xml:space="preserve">
+        <value>使用接口交互，异常时分配到异常格口</value>
+    </data>
+    <data name="Tooltip_SwitchMode" xml:space="preserve">
+        <value>切换测试模式/正式模式</value>
+    </data>
 </root> 

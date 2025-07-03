@@ -6,8 +6,6 @@
                  xmlns:viewModels="clr-namespace:ChileSowing.ViewModels"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:hc="https://handyorg.github.io/handycontrol"
-                 xmlns:prism="http://prismlibrary.com/"
-                 xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
                  xmlns:lex="http://wpflocalizeextension.codeplex.com"
                  xmlns:local="clr-namespace:ChileSowing.Views.UserControls"
                  lex:LocalizeDictionary.DesignCulture="en-US"
@@ -36,11 +34,13 @@
         <!-- Title Bar -->
         <Grid Grid.Row="0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />   <!-- Logo -->
+                <ColumnDefinition Width="Auto" />   <!-- Settings Button -->
+                <ColumnDefinition Width="Auto" />   <!-- History Button -->
+                <ColumnDefinition Width="Auto" />   <!-- Mode Switch -->
+                <ColumnDefinition Width="*" />      <!-- Title (Center) -->
+                <ColumnDefinition Width="Auto" />   <!-- Language Switcher -->
+                <ColumnDefinition Width="Auto" />   <!-- TitleBar Controls -->
             </Grid.ColumnDefinitions>
 
             <!-- Logo -->
@@ -70,13 +70,30 @@
                     <TextBlock Text="{lex:Loc Button_History}" VerticalAlignment="Center" />
                 </StackPanel>
             </ui:Button>
+
+            <!-- Mode Switch -->
+            <Border Grid.Column="3" Background="{DynamicResource ControlFillColorDefaultBrush}" 
+                    CornerRadius="16" Margin="8,0,8,0" Padding="12,4"
+                    ToolTip="{Binding CurrentModeDescription}">
+                <StackPanel Orientation="Horizontal">
+                    <ui:SymbolIcon Symbol="TextEditStyle24" FontSize="16" Margin="0,0,8,0"
+                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
+                    <TextBlock Text="{Binding CurrentModeText}" 
+                               VerticalAlignment="Center" 
+                               FontWeight="SemiBold"
+                               MinWidth="60"/>
+                    <ui:ToggleSwitch IsChecked="{Binding IsTestMode, Mode=TwoWay}" 
+                                     Margin="8,0,0,0" 
+                                     ToolTip="{lex:Loc Tooltip_SwitchMode}"/>
+                </StackPanel>
+            </Border>
             
             <!-- Language Switcher -->
-            <ComboBox Grid.Column="3" 
+            <ComboBox Grid.Column="5" 
                       Name="LanguageComboBox" 
                       Width="80" 
                       Height="26"
-                      HorizontalAlignment="Left"
+                      HorizontalAlignment="Right"
                       VerticalAlignment="Center"
                       Margin="8,0,0,0"
                       SelectedIndex="0"
@@ -87,7 +104,7 @@
             </ComboBox>
 
             <!-- Title -->
-            <TextBlock Grid.Column="3" Text="{lex:Loc Window_Title}" HorizontalAlignment="Center" VerticalAlignment="Center"
+            <TextBlock Grid.Column="4" Text="{lex:Loc Window_Title}" HorizontalAlignment="Center" VerticalAlignment="Center"
                        Margin="0,0,8,0" FontSize="20" FontFamily="Microsoft YaHei" FontWeight="SemiBold"
                        TextOptions.TextFormattingMode="Display" Foreground="black"
                        TextOptions.TextRenderingMode="ClearType">
@@ -97,9 +114,9 @@
             </TextBlock>
 
             <!-- TitleBar Controls -->
-            <ui:TitleBar Grid.Column="4" Title="" ShowMaximize="True" ShowMinimize="True" ShowClose="True" />
+            <ui:TitleBar Grid.Column="6" Title="" ShowMaximize="True" ShowMinimize="True" ShowClose="True" />
 
-            <Border Grid.Column="0" Grid.ColumnSpan="5" Height="1" VerticalAlignment="Bottom"
+            <Border Grid.Column="0" Grid.ColumnSpan="7" Height="1" VerticalAlignment="Bottom"
                     Background="#20008080" BorderBrush="#40FFFFFF" BorderThickness="0,0,0,1" />
         </Grid>
 

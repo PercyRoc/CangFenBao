@@ -8,6 +8,7 @@
              xmlns:prism="http://prismlibrary.com/"
              xmlns:lex="http://wpflocalizeextension.codeplex.com"
              xmlns:viewModels="clr-namespace:ChileSowing.ViewModels"
+             xmlns:converters="clr-namespace:ChileSowing.Converters"
              lex:LocalizeDictionary.DesignCulture="en-US"
              lex:ResxLocalizationProvider.DefaultAssembly="ChileSowing"
              lex:ResxLocalizationProvider.DefaultDictionary="Resources.Strings"
@@ -20,6 +21,10 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="/ChileSowing;component/Resources/Styles.xaml"/>
             </ResourceDictionary.MergedDictionaries>
+            
+            <!-- 转换器实例 -->
+            <converters:ChuteGridDimensionConverter x:Key="ChuteGridDimensionConverter"/>
+            <converters:ChuteGridRowsConverter x:Key="ChuteGridRowsConverter"/>
         </ResourceDictionary>
     </UserControl.Resources>
 
@@ -33,99 +38,99 @@
             <TextBlock Text="{lex:Loc Label_ChuteMonitoring}"
                       Style="{StaticResource SectionHeaderStyle}" />
             
-            <!-- 使用 ListBox 替代 ItemsControl 来启用虚拟化 -->
-            <ListBox Grid.Row="1" 
-                     ItemsSource="{Binding Chutes}"
-                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                     ScrollViewer.VerticalScrollBarVisibility="Auto"
-                     VirtualizingPanel.IsVirtualizing="True"
-                     VirtualizingPanel.VirtualizationMode="Recycling"
-                     VirtualizingPanel.IsContainerVirtualizable="True"
-                     VirtualizingPanel.ScrollUnit="Pixel"
-                     SelectionMode="Single"
-                     BorderThickness="0"
-                     Background="Transparent">
-                
-                <ListBox.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <WrapPanel Orientation="Horizontal" 
-                                   IsItemsHost="True"/>
-                    </ItemsPanelTemplate>
-                </ListBox.ItemsPanel>
-                
-                <ListBox.ItemContainerStyle>
-                    <Style TargetType="ListBoxItem">
-                        <Setter Property="Padding" Value="0"/>
-                        <Setter Property="Margin" Value="0"/>
-                        <Setter Property="Background" Value="Transparent"/>
-                        <Setter Property="Template">
-                            <Setter.Value>
-                                <ControlTemplate TargetType="ListBoxItem">
-                                    <ContentPresenter/>
-                                </ControlTemplate>
-                            </Setter.Value>
-                        </Setter>
-                    </Style>
-                </ListBox.ItemContainerStyle>
-                
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <Border Width="100" 
-                                Height="70" 
-                                Background="{Binding StatusColor, FallbackValue={StaticResource DefaultChuteColor}}"
-                                CornerRadius="12" 
-                                Padding="6" 
-                                Margin="6"
-                                Effect="{StaticResource CardDropShadowEffect}"
-                                Cursor="Hand">
-                            <b:Interaction.Triggers>
-                                <b:EventTrigger EventName="MouseLeftButtonUp">
-                                    <prism:InvokeCommandAction Command="{Binding DataContext.ShowChutePackagesCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                             CommandParameter="{Binding}" />
-                                </b:EventTrigger>
-                            </b:Interaction.Triggers>
-                            <Border.Style>
-                                <Style TargetType="Border">
-                                    <Setter Property="BorderBrush" Value="{StaticResource CardBorderColor}"/>
-                                    <Setter Property="BorderThickness" Value="1"/>
-                                    <Style.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentColorLight1}"/>
-                                            <Setter Property="BorderThickness" Value="2"/>
-                                        </Trigger>
-                                        <DataTrigger Binding="{Binding IsTargetChute}" Value="True">
-                                            <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentColorDark1}"/>
-                                            <Setter Property="BorderThickness" Value="2.5"/>
-                                            <Setter Property="Background">
-                                                <Setter.Value>
-                                                    <SolidColorBrush Color="{DynamicResource SystemAccentColor}" Opacity="0.2"/>
-                                                </Setter.Value>
-                                            </Setter>
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding IsErrorState}" Value="True">
-                                            <Setter Property="BorderBrush" Value="{DynamicResource SystemFillColorCritical}"/>
-                                            <Setter Property="BorderThickness" Value="2.5"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Border.Style>
-                            <Grid>
-                                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                    <TextBlock Text="{Binding ChuteNumber}" 
-                                               FontSize="22" 
-                                               FontWeight="Bold"
-                                               HorizontalAlignment="Center" 
-                                               Foreground="#222" />
-                                    <TextBlock Text="{Binding Quantity, FallbackValue='0/0'}" 
-                                               FontSize="12"
-                                               HorizontalAlignment="Center" 
-                                               Foreground="#888" />
-                                </StackPanel>
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
+            <!-- 使用ScrollViewer + ItemsControl + UniformGrid 实现均匀格口布局 -->
+            <ScrollViewer Grid.Row="1" 
+                          HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto"
+                          PanningMode="VerticalOnly">
+                <ItemsControl ItemsSource="{Binding Chutes}"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling"
+                              VirtualizingPanel.IsContainerVirtualizable="True">
+                    
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Columns="{Binding Chutes.Count, Converter={StaticResource ChuteGridDimensionConverter}}"
+                                         Rows="{Binding Chutes.Count, Converter={StaticResource ChuteGridRowsConverter}}"
+                                         Margin="8"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{Binding StatusColor, FallbackValue={StaticResource DefaultChuteColor}}"
+                                    CornerRadius="8"
+                                    Margin="4"
+                                    Padding="8"
+                                    MinWidth="60"
+                                    MinHeight="50"
+                                    MaxWidth="120"
+                                    MaxHeight="90"
+                                    Effect="{StaticResource CardDropShadowEffect}"
+                                    Cursor="Hand">
+                                <b:Interaction.Triggers>
+                                    <b:EventTrigger EventName="MouseLeftButtonUp">
+                                        <prism:InvokeCommandAction Command="{Binding DataContext.ShowChutePackagesCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                 CommandParameter="{Binding}" />
+                                    </b:EventTrigger>
+                                </b:Interaction.Triggers>
+                                
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="BorderBrush" Value="{StaticResource CardBorderColor}"/>
+                                        <Setter Property="BorderThickness" Value="1"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentColorLight1}"/>
+                                                <Setter Property="BorderThickness" Value="2"/>
+                                                <Setter Property="RenderTransform">
+                                                    <Setter.Value>
+                                                        <ScaleTransform ScaleX="1.05" ScaleY="1.05"/>
+                                                    </Setter.Value>
+                                                </Setter>
+                                                <Setter Property="Panel.ZIndex" Value="1"/>
+                                            </Trigger>
+                                            <DataTrigger Binding="{Binding IsTargetChute}" Value="True">
+                                                <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentColorDark1}"/>
+                                                <Setter Property="BorderThickness" Value="3"/>
+                                                <Setter Property="Background">
+                                                    <Setter.Value>
+                                                        <SolidColorBrush Color="{DynamicResource SystemAccentColor}" Opacity="0.3"/>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsErrorState}" Value="True">
+                                                <Setter Property="BorderBrush" Value="{DynamicResource SystemFillColorCritical}"/>
+                                                <Setter Property="BorderThickness" Value="3"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                
+                                <Border.RenderTransformOrigin>0.5,0.5</Border.RenderTransformOrigin>
+                                
+                                <Grid>
+                                    <Viewbox Stretch="Uniform" StretchDirection="Both">
+                                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="4">
+                                            <TextBlock Text="{Binding ChuteNumber}" 
+                                                       FontSize="20" 
+                                                       FontWeight="Bold"
+                                                       HorizontalAlignment="Center" 
+                                                       Foreground="#222" 
+                                                       TextOptions.TextFormattingMode="Display"/>
+                                            <TextBlock Text="{Binding Quantity, FallbackValue='0/0'}" 
+                                                       FontSize="11"
+                                                       HorizontalAlignment="Center" 
+                                                       Foreground="#666" 
+                                                       Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                    </Viewbox>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
         </Grid>
     </hc:Card>
 </UserControl> 

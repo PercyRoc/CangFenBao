@@ -259,4 +259,21 @@
     <data name="Placeholder_NotApplicable" xml:space="preserve">
         <value>N/A</value>
     </data>
+    
+    <!-- Mode Switching -->
+    <data name="Mode_Test" xml:space="preserve">
+        <value>Test Mode</value>
+    </data>
+    <data name="Mode_Production" xml:space="preserve">
+        <value>Production Mode</value>
+    </data>
+    <data name="Mode_TestDescription" xml:space="preserve">
+        <value>Cycle allocation of chutes, no interface interaction, but still write to PLC</value>
+    </data>
+    <data name="Mode_ProductionDescription" xml:space="preserve">
+        <value>Use interface interaction, assign to exception chutes on failure</value>
+    </data>
+    <data name="Tooltip_SwitchMode" xml:space="preserve">
+        <value>Switch between test mode and production mode</value>
+    </data>
 </root> 

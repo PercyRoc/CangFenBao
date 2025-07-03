@@ -10,8 +10,10 @@ using Common.Services.Ui;
 using System.Diagnostics;
 using Common.Models;
 using ChileSowing.Services;
+using Common.Events;
 using WPFLocalizeExtension.Engine;
 using System.Globalization;
+using JetBrains.Annotations;
 
 namespace ChileSowing.ViewModels;
 
@@ -23,8 +25,10 @@ public class MainViewModel : BindableBase, IDisposable
     private readonly IPackageHistoryDataService _historyService;
     private readonly INotificationService _notificationService;
     private readonly IKuaiShouApiService _kuaiShouApiService;
+    private readonly IEventAggregator _eventAggregator;
     private readonly DispatcherTimer _timer;
     private bool _disposed;
+    private SubscriptionToken? _chuteConfigSubscriptionToken;
     private string _currentSkuInput = string.Empty;
     private string _currentWaveInput = string.Empty;
     private string _operationStatusText = "Ready...";
@@ -45,6 +49,14 @@ public class MainViewModel : BindableBase, IDisposable
     // 新增字段用于存储SKU与格口的映射，以及优先格口分配的索引
     private readonly Dictionary<string, int> _skuChuteMapping = new();
 
+    // 新增字段用于测试模式和循环分配
+    private bool _isTestMode;
+    private int _currentTestChuteIndex; // 测试模式下的循环分配索引
+    private int _currentExceptionChuteIndex; // 异常格口的轮询索引
+    
+    // 测试模式下需要跳过的格口列表
+    private readonly HashSet<int> _skipChuteNumbers = new() { 1, 2, 3, 4, 33, 34, 35, 36 };
+
     // 颜色常量
     private const string DefaultChuteColor = "#FFFFFF"; // 白色
     private const string HighlightChuteColor = "#4CAF50"; // 绿色
@@ -56,7 +68,7 @@ public class MainViewModel : BindableBase, IDisposable
     private readonly Queue<TimeSpan> _recentProcessingTimes = new();
     private const int MaxRecentTimesToKeep = 50;
 
-    public MainViewModel(IDialogService dialogService, IModbusTcpService modbusTcpService, ISettingsService settingsService, IPackageHistoryDataService historyService, INotificationService notificationService, IKuaiShouApiService kuaiShouApiService)
+    public MainViewModel(IDialogService dialogService, IModbusTcpService modbusTcpService, ISettingsService settingsService, IPackageHistoryDataService historyService, INotificationService notificationService, IKuaiShouApiService kuaiShouApiService, IEventAggregator eventAggregator)
     {
         _dialogService = dialogService;
         _modbusTcpService = modbusTcpService;
@@ -64,13 +76,18 @@ public class MainViewModel : BindableBase, IDisposable
         _historyService = historyService;
         _notificationService = notificationService;
         _kuaiShouApiService = kuaiShouApiService;
+        _eventAggregator = eventAggregator;
 
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
         ViewHistoryCommand = new DelegateCommand(ExecuteViewHistory);
         ProcessSkuCommand = new DelegateCommand<string>(ExecuteProcessSku);
         ShowChutePackagesCommand = new DelegateCommand<ChuteViewModel>(ShowChutePackages);
+        ToggleTestModeCommand = new DelegateCommand(ExecuteToggleTestMode);
 
         InitializeChutes();
+
+        // 订阅格口配置更改事件
+        _chuteConfigSubscriptionToken = _eventAggregator.GetEvent<ChuteConfigurationChangedEvent>().Subscribe(RefreshChuteConfiguration);
 
         // 订阅 Modbus TCP 连接状态变化事件
         _modbusTcpService.ConnectionStatusChanged += ModbusTcpService_ConnectionStatusChanged;
@@ -128,7 +145,7 @@ public class MainViewModel : BindableBase, IDisposable
     public ObservableCollection<PackageInfoItem> PackageInfoItems { get; } = [];
     public ObservableCollection<PackageInfoItem> StatisticsItems { get; } = [];
 
-    public ICommand ProcessSkuCommand { get; }
+    public ICommand ProcessSkuCommand { [UsedImplicitly] get; }
 
     public ICommand ShowChutePackagesCommand { get; }
 
@@ -177,6 +194,49 @@ public class MainViewModel : BindableBase, IDisposable
         }
     }
 
+    /// <summary>
+    /// 是否为测试模式
+    /// </summary>
+    public bool IsTestMode
+    {
+        get => _isTestMode;
+        set
+        {
+            if (SetProperty(ref _isTestMode, value))
+            {
+                OperationStatusText = value ? "已切换到测试模式（循环分配，仍写入PLC）" : "已切换到正式模式（接口分配）";
+                _notificationService.ShowSuccess(value ? "已启用测试模式" : "已启用正式模式");
+                Log.Information("模式切换: {Mode}", value ? "测试模式" : "正式模式");
+                
+                // 重置循环索引
+                _currentTestChuteIndex = 0;
+                _currentExceptionChuteIndex = 0;
+                
+                // 通知相关属性更改
+                RaisePropertyChanged(nameof(CurrentModeText));
+                RaisePropertyChanged(nameof(CurrentModeDescription));
+            }
+        }
+    }
+
+    /// <summary>
+    /// 当前模式显示文本
+    /// </summary>
+    public string CurrentModeText
+    {
+        get => IsTestMode ? GetLocalizedString("Mode_Test") : GetLocalizedString("Mode_Production");
+    }
+
+    /// <summary>
+    /// 当前模式描述
+    /// </summary>
+    public string CurrentModeDescription
+    {
+        get => IsTestMode
+            ? GetLocalizedString("Mode_TestDescription")
+            : GetLocalizedString("Mode_ProductionDescription");
+    }
+
     #endregion
 
     #region 公共方法
@@ -190,12 +250,34 @@ public class MainViewModel : BindableBase, IDisposable
         InitializeStatistics();
     }
 
+    /// <summary>
+    /// 刷新格口配置，当设置更改时调用
+    /// </summary>
+    private void RefreshChuteConfiguration()
+    {
+        var modbusSettings = _settingsService.LoadSettings<ModbusTcpSettings>();
+        
+        // 验证异常格口配置
+        var testExceptionChute = SelectExceptionChute(modbusSettings.ExceptionChuteNumbers);
+        if (testExceptionChute <= 0)
+        {
+            _notificationService.ShowWarning($"异常格口配置无效：{modbusSettings.ExceptionChuteNumbers}");
+            Log.Warning("异常格口配置无效：{Config}", modbusSettings.ExceptionChuteNumbers);
+        }
+        
+        InitializeChutes();
+        _notificationService.ShowSuccess($"格口配置已更新：{modbusSettings.ChuteCount}个格口，异常格口：{modbusSettings.ExceptionChuteNumbers}");
+        Log.Information("格口配置已更新：{ChuteCount}个格口，异常格口：{ExceptionChutes}", 
+            modbusSettings.ChuteCount, modbusSettings.ExceptionChuteNumbers);
+    }
+
     #endregion
 
     #region 命令
 
     public ICommand OpenSettingsCommand { get; }
     public DelegateCommand ViewHistoryCommand { get; }
+    public ICommand ToggleTestModeCommand { [UsedImplicitly] get; }
 
     #endregion
 
@@ -249,6 +331,11 @@ public class MainViewModel : BindableBase, IDisposable
         _dialogService.ShowDialog("ChuteDetailDialogView", parameters, _ => { });
     }
 
+    private void ExecuteToggleTestMode()
+    {
+        IsTestMode = !IsTestMode;
+    }
+
     #endregion
 
     #region 私有方法
@@ -270,25 +357,31 @@ public class MainViewModel : BindableBase, IDisposable
         IsProcessing = true;
         var stopwatch = Stopwatch.StartNew(); // 开始计时
 
+        // 获取ModbusTcp设置（在需要时重新加载以获取最新配置）
+        var modbusSettings = _settingsService.LoadSettings<ModbusTcpSettings>();
+
         try
         {
-            if (!_modbusTcpService.IsConnected)
-            {
-                OperationStatusText = GetLocalizedString("Message_PlcNotConnected");
-                _notificationService.ShowError(GetLocalizedString("Message_PlcNotConnected"));
-                return;
-            }
-
             // 检查SKU是否已分配过格口
             var chuteNumber = 0; // 初始化为无效值
-            if (_skuChuteMapping.TryGetValue(sku, out var assignedChute))
+
+            if (IsTestMode)
             {
+                // 测试模式：循环分配格口，跳过指定格口
+                chuteNumber = GetNextAvailableTestChute();
+                _skuChuteMapping[sku] = chuteNumber;
+                Log.Information("测试模式：SKU {Sku} 循环分配到格口 {ChuteNumber}（跳过格口：1,2,3,4,33,34,35,36）",
+                    sku, chuteNumber);
+            }
+            else if (_skuChuteMapping.TryGetValue(sku, out var assignedChute))
+            {
+                // 正式模式：检查是否已分配过格口
                 chuteNumber = assignedChute;
                 Log.Information("SKU {Sku} 已分配过格口 {ChuteNumber}，直接使用。", sku, chuteNumber);
             }
             else
             {
-                // 调用韵达接口获取格口信息
+                // 正式模式：调用韵达接口获取格口信息
                 var kuaiShouResponse = await _kuaiShouApiService.CommitScanMsgAsync(sku);
                 if (kuaiShouResponse is { IsSuccess: true })
                 {
@@ -301,7 +394,7 @@ public class MainViewModel : BindableBase, IDisposable
                         {
                             chuteNumber = parsedChute;
                             _skuChuteMapping[sku] = chuteNumber;
-                            Log.Information("SKU {Sku} 韵达接口分配到格口 {ChuteNumber}，物理格口: {PhysicalChute}", 
+                            Log.Information("SKU {Sku} 韵达接口分配到格口 {ChuteNumber}，物理格口: {PhysicalChute}",
                                 sku, chuteNumber, physicalChute);
                         }
                         else
@@ -319,19 +412,41 @@ public class MainViewModel : BindableBase, IDisposable
                     Log.Warning("SKU {Sku} 韵达接口调用失败或返回错误", sku);
                 }
 
-                // 如果韵达接口未能分配格口，使用默认格口
+                // 如果韵达接口未能分配格口，使用异常格口
                 if (chuteNumber <= 0)
                 {
-                    chuteNumber = 1; // 默认格口，可以从配置中获取
-                    _skuChuteMapping[sku] = chuteNumber;
-                    OperationStatusText = $"SKU {sku} 韵达接口未能分配格口，使用默认格口 {chuteNumber}";
-                    _notificationService.ShowWarning($"SKU {sku} 使用默认格口 {chuteNumber}");
-                    Log.Warning("SKU {Sku} 韵达接口未能分配格口，使用默认格口 {ChuteNumber}", sku, chuteNumber);
+                    chuteNumber = SelectExceptionChute(modbusSettings.ExceptionChuteNumbers); // 从配置的异常格口中选择一个
+                    if (chuteNumber > 0)
+                    {
+                        _skuChuteMapping[sku] = chuteNumber;
+                        OperationStatusText = $"SKU {sku} 韵达接口未能分配格口，使用异常格口 {chuteNumber}";
+                        _notificationService.ShowWarning($"SKU {sku} 使用异常格口 {chuteNumber}");
+                        Log.Warning("SKU {Sku} 韵达接口未能分配格口，使用异常格口 {ChuteNumber}", sku, chuteNumber);
+                    }
+                    else
+                    {
+                        OperationStatusText = $"SKU {sku} 无法分配格口：异常格口配置无效";
+                        _notificationService.ShowError($"SKU {sku} 分配失败：异常格口配置无效");
+                        Log.Error("SKU {Sku} 无法分配格口：异常格口配置无效 {Config}", sku, modbusSettings.ExceptionChuteNumbers);
+                        stopwatch.Stop();
+                        return;
+                    }
                 }
             }
 
             // 确保 chuteNumber 有效
-            if (chuteNumber <= 0 || chuteNumber > Chutes.Count)
+            bool isExceptionChute = IsExceptionChute(chuteNumber, modbusSettings.ExceptionChuteNumbers);
+
+            if (chuteNumber <= 0)
+            {
+                OperationStatusText = "格口分配错误：无效的格口编号。";
+                _notificationService.ShowError($"格口分配失败：格口 {chuteNumber} 无效");
+                stopwatch.Stop();
+                return;
+            }
+
+            // 如果是异常格口，不需要检查是否在正常格口范围内
+            if (!isExceptionChute && chuteNumber > Chutes.Count)
             {
                 OperationStatusText = "格口分配错误：超出有效范围。";
                 _notificationService.ShowError($"格口分配失败：格口 {chuteNumber} 超出有效范围 (1-{Chutes.Count})");
@@ -339,7 +454,18 @@ public class MainViewModel : BindableBase, IDisposable
                 return;
             }
 
-            var selectedChute = Chutes[chuteNumber - 1];
+            ChuteViewModel? selectedChute = null;
+            if (isExceptionChute)
+            {
+                // 异常格口处理：创建临时格口或使用特殊处理逻辑
+                Log.Information("使用异常格口 {ChuteNumber} 处理 SKU {Sku}", chuteNumber, sku);
+                // 这里可以添加特殊的异常格口处理逻辑
+                // 暂时不更新UI格口显示，只处理PLC逻辑
+            }
+            else
+            {
+                selectedChute = Chutes[chuteNumber - 1];
+            }
 
             // 在分配新包裹前重置上一个高亮格口的颜色
             if (_currentlyHighlightedChute != null && _currentlyHighlightedChute != selectedChute)
@@ -354,19 +480,37 @@ public class MainViewModel : BindableBase, IDisposable
                 PackageInfoItems[1].Value = chuteNumber.ToString();
             }
 
-            // 每次使用配置时都获取最新配置
-            var modbusSettings = _settingsService.LoadSettings<ModbusTcpSettings>();
+            // 写入PLC，使用格口号作为值
             int registerAddress = modbusSettings.DefaultRegisterAddress;
 
-            // 写入PLC，使用格口号作为值
+            // 检查PLC连接状态（测试模式和正式模式都需要PLC连接）
+            if (!_modbusTcpService.IsConnected)
+            {
+                OperationStatusText = GetLocalizedString("Message_PlcNotConnected");
+                _notificationService.ShowError(GetLocalizedString("Message_PlcNotConnected"));
+                stopwatch.Stop();
+                return;
+            }
+
+            // 写入PLC寄存器
             bool success = await _modbusTcpService.WriteSingleRegisterAsync(registerAddress, chuteNumber);
             stopwatch.Stop(); // 停止计时
 
             if (success)
             {
+                // 记录PLC写入成功的日志
+                string modeLog = IsTestMode ? "测试模式" : "正式模式";
+                Log.Information("{Mode}：PLC写入成功，寄存器地址 {Address}，值 {Value}，SKU {Sku}",
+                    modeLog, registerAddress, chuteNumber, sku);
+
                 // 更新格口信息
-                selectedChute.AddSku(sku);
-                OperationStatusText = $"SKU {sku} assigned to chute {chuteNumber}";
+                if (selectedChute != null)
+                {
+                    selectedChute.AddSku(sku);
+                }
+
+                string modeInfo = IsTestMode ? "（测试模式-循环分配）" : "（正式模式-接口分配）";
+                OperationStatusText = $"SKU {sku} assigned to chute {chuteNumber} {modeInfo}";
                 _packagesProcessedToday++; // 成功处理，总数加一
 
                 // 记录处理时长
@@ -399,14 +543,20 @@ public class MainViewModel : BindableBase, IDisposable
                 _notificationService.ShowSuccess($"SKU {sku} assigned to chute {chuteNumber}");
 
                 // 高亮当前分配的格口
-                selectedChute.StatusColor = HighlightChuteColor;
+                if (selectedChute != null)
+                {
+                    selectedChute.StatusColor = HighlightChuteColor;
+                }
                 _currentlyHighlightedChute = selectedChute;
             }
             else
             {
                 stopwatch.Stop();
-                OperationStatusText = $"Failed to write to PLC for chute {chuteNumber}";
+                string modeLog = IsTestMode ? "测试模式" : "正式模式";
+                OperationStatusText = $"Failed to write to PLC for chute {chuteNumber} ({modeLog})";
                 _notificationService.ShowError($"写入PLC失败，格口：{chuteNumber}");
+                Log.Error("{Mode}：PLC写入失败，寄存器地址 {Address}，值 {Value}，SKU {Sku}",
+                    modeLog, registerAddress, chuteNumber, sku);
                 _errorCount++;
             }
         }
@@ -451,11 +601,21 @@ public class MainViewModel : BindableBase, IDisposable
 
     private void InitializeChutes()
     {
-        for (int i = 1; i <= 60; i++)
+        // 从ModbusTcp设置中读取格口数量
+        var modbusSettings = _settingsService.LoadSettings<ModbusTcpSettings>();
+        int chuteCount = modbusSettings.ChuteCount;
+        
+        // 清空现有格口
+        Chutes.Clear();
+        
+        // 根据设置生成格口
+        for (int i = 1; i <= chuteCount; i++)
         {
             var chute = new ChuteViewModel(i);
             Chutes.Add(chute);
         }
+        
+        Log.Information("已初始化 {ChuteCount} 个格口", chuteCount);
 
         InitializeDeviceStatuses();
     }
@@ -637,6 +797,115 @@ public class MainViewModel : BindableBase, IDisposable
         }
     }
 
+    /// <summary>
+    /// 从异常格口配置中选择一个格口（均匀分配）
+    /// </summary>
+    /// <param name="exceptionChuteNumbers">异常格口配置字符串（分号分割）</param>
+    /// <returns>选择的异常格口号，如果解析失败返回0</returns>
+    private int SelectExceptionChute(string exceptionChuteNumbers)
+    {
+        if (string.IsNullOrWhiteSpace(exceptionChuteNumbers))
+        {
+            Log.Warning("异常格口配置为空");
+            return 0;
+        }
+
+        var chuteNumbers = exceptionChuteNumbers.Split(';', StringSplitOptions.RemoveEmptyEntries);
+        var validChutes = new List<int>();
+
+        foreach (var chuteStr in chuteNumbers)
+        {
+            if (int.TryParse(chuteStr.Trim(), out int chuteNumber) && chuteNumber > 0)
+            {
+                validChutes.Add(chuteNumber);
+            }
+            else
+            {
+                Log.Warning("无效的异常格口号: {ChuteString}", chuteStr);
+            }
+        }
+
+        if (validChutes.Count == 0)
+        {
+            Log.Warning("没有找到有效的异常格口号，异常格口配置: {Config}", exceptionChuteNumbers);
+            return 0;
+        }
+
+        // 如果只有一个格口，直接返回
+        if (validChutes.Count == 1)
+        {
+            return validChutes[0];
+        }
+
+        // 多个格口时，使用轮询方式均匀分配
+        var selectedChute = validChutes[_currentExceptionChuteIndex % validChutes.Count];
+        _currentExceptionChuteIndex = (_currentExceptionChuteIndex + 1) % validChutes.Count;
+        
+        Log.Information("从 {TotalCount} 个异常格口中轮询选择了格口 {SelectedChute}（索引: {Index}）", 
+            validChutes.Count, selectedChute, _currentExceptionChuteIndex);
+        
+        return selectedChute;
+    }
+
+    /// <summary>
+    /// 检查指定格口号是否为异常格口
+    /// </summary>
+    /// <param name="chuteNumber">格口号</param>
+    /// <param name="exceptionChuteNumbers">异常格口配置字符串</param>
+    /// <returns>是否为异常格口</returns>
+    private bool IsExceptionChute(int chuteNumber, string exceptionChuteNumbers)
+    {
+        if (string.IsNullOrWhiteSpace(exceptionChuteNumbers))
+            return false;
+
+        var chuteNumbers = exceptionChuteNumbers.Split(';', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var chuteStr in chuteNumbers)
+        {
+            if (int.TryParse(chuteStr.Trim(), out int exceptionChute) && exceptionChute == chuteNumber)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// 获取下一个可用的测试格口（跳过指定格口）
+    /// </summary>
+    /// <returns>下一个可用的格口号</returns>
+    private int GetNextAvailableTestChute()
+    {
+        int totalChutes = Chutes.Count;
+        int maxAttempts = totalChutes; // 最多尝试所有格口数量次，防止无限循环
+        
+        for (int attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            _currentTestChuteIndex = (_currentTestChuteIndex + 1) % totalChutes;
+            int chuteNumber = _currentTestChuteIndex + 1; // 转换为1-based索引
+            
+            // 检查这个格口是否在跳过列表中
+            if (!_skipChuteNumbers.Contains(chuteNumber))
+            {
+                return chuteNumber;
+            }
+        }
+        
+        // 如果所有格口都被跳过了（理论上不会发生），返回第一个非跳过格口
+        Log.Warning("测试模式：所有格口都在跳过列表中，使用备用分配逻辑");
+        for (int i = 1; i <= totalChutes; i++)
+        {
+            if (!_skipChuteNumbers.Contains(i))
+            {
+                _currentTestChuteIndex = i - 1; // 更新索引
+                return i;
+            }
+        }
+        
+        // 最后的fallback，理论上不应该到达这里
+        Log.Error("测试模式：无法找到可用的格口");
+        return 1;
+    }
+
     #endregion
 
     public void Dispose()
@@ -656,6 +925,13 @@ public class MainViewModel : BindableBase, IDisposable
 
             // 取消订阅 Modbus TCP 连接状态变化事件
             _modbusTcpService.ConnectionStatusChanged -= ModbusTcpService_ConnectionStatusChanged;
+            
+            // 取消订阅格口配置更改事件
+            if (_chuteConfigSubscriptionToken != null)
+            {
+                _eventAggregator.GetEvent<ChuteConfigurationChangedEvent>().Unsubscribe(_chuteConfigSubscriptionToken);
+                _chuteConfigSubscriptionToken = null;
+            }
         }
         _disposed = true;
     }

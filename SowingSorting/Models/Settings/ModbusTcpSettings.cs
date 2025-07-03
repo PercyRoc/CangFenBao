@@ -48,5 +48,25 @@ namespace SowingSorting.Models.Settings
             get => _defaultRegisterAddress;
             set => SetProperty(ref _defaultRegisterAddress, value);
         }
+
+        private int _chuteCount = 60;
+        /// <summary>
+        /// 格口数量
+        /// </summary>
+        public int ChuteCount
+        {
+            get => _chuteCount;
+            set => SetProperty(ref _chuteCount, value);
+        }
+
+        private string _exceptionChuteNumbers = "61";
+        /// <summary>
+        /// 异常格口编号（多个格口用分号;分割，如：61;62;99）
+        /// </summary>
+        public string ExceptionChuteNumbers
+        {
+            get => _exceptionChuteNumbers;
+            set => SetProperty(ref _exceptionChuteNumbers, value);
+        }
     }
 } 

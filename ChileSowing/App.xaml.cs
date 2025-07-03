@@ -14,6 +14,7 @@ using System.Net.Http;
 using ChileSowing.ViewModels.Settings;
 using System.Globalization;
 using WPFLocalizeExtension.Engine;
+using Prism.Events;
 
 namespace ChileSowing;
 
@@ -117,6 +118,9 @@ public partial class App
         containerRegistry.RegisterSingleton<ISettingsService, SettingsService>();
         containerRegistry.RegisterSingleton<INotificationService, NotificationService>();
         containerRegistry.RegisterSingleton<IModbusTcpService, ModbusTcpService>();
+        
+        // 确保 IEventAggregator 被注册（Prism应该自动注册，但显式注册以确保可用）
+        containerRegistry.RegisterSingleton<IEventAggregator, EventAggregator>();
         
         // 注册HttpClient和快手API服务
         containerRegistry.RegisterSingleton<HttpClient>();

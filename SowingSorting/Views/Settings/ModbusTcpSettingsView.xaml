@@ -72,6 +72,37 @@
                                Style="{DynamicResource SubtitleTextBlockStyle}"
                                Margin="0,0,0,16" />
                     
+                    <!-- 格口数量 -->
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="格口数量:" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"/>
+                        <ui:NumberBox Grid.Column="1" HorizontalAlignment="Left"
+                                      Value="{Binding Settings.ChuteCount, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}"
+                                      SpinButtonPlacementMode="Inline"
+                                      Minimum="1" Maximum="200" SmallChange="1" LargeChange="10"/>
+                    </Grid>
+
+                    <!-- 异常格口编号 -->
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="异常格口编号:" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"/>
+                        <StackPanel Grid.Column="1">
+                            <ui:TextBox Text="{Binding Settings.ExceptionChuteNumbers, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}"
+                                        PlaceholderText="多个格口用分号分割，如：61;62;99"
+                                        ToolTip="当韵达接口无法分配格口时使用的异常格口号&#x0a;支持配置多个格口，用分号(;)分割&#x0a;系统将随机选择其中一个使用"/>
+                            <TextBlock Text="💡 支持多个格口，用分号(;)分割，系统会随机选择" 
+                                       FontSize="10" 
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" 
+                                       Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </Grid>
+                    
                     <!-- 默认寄存器地址 -->
                     <Grid Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>

@@ -5,13 +5,22 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:hc="https://handyorg.github.io/handycontrol"
+             xmlns:prism="http://prismlibrary.com/"
              xmlns:lex="http://wpflocalizeextension.codeplex.com"
+             xmlns:converters="clr-namespace:Common.Converters;assembly=基础模块"
+             xmlns:converters1="clr-namespace:Common.Converters;assembly=Common"
              lex:LocalizeDictionary.DesignCulture="en-US"
              lex:ResxLocalizationProvider.DefaultAssembly="ChileSowing"
              lex:ResxLocalizationProvider.DefaultDictionary="Resources.Strings"
+             prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
              d:DesignHeight="800" d:DesignWidth="800">
     
+    <UserControl.Resources>
+        <converters1:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+        <converters1:StringToVisibilityConverter x:Key="StringToVisibilityConverter"/>
+    </UserControl.Resources>
+
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="20">
             
@@ -33,7 +42,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="启用接口:" VerticalAlignment="Center"/>
-                        <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding Settings.IsEnabled}" />
+                        <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding Settings.IsEnabled, Mode=TwoWay}" />
                     </Grid>
 
                     <!-- API 地址 -->
@@ -43,8 +52,30 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="API 地址:" VerticalAlignment="Center"/>
-                        <ui:TextBox Grid.Column="1" Text="{Binding Settings.ApiUrl, UpdateSourceTrigger=PropertyChanged}" 
+                        <ui:TextBox Grid.Column="1" Text="{Binding Settings.ApiUrl, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" 
                                     PlaceholderText="http://10.20.160.36:7001/ydadl/public/common/new/commitScanMsg.do"/>
+                    </Grid>
+
+                    <!-- 用户名 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="用户名:" VerticalAlignment="Center"/>
+                        <ui:TextBox Grid.Column="1" Text="{Binding Settings.User, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" 
+                                    PlaceholderText="接口认证用户名"/>
+                    </Grid>
+
+                    <!-- 密码 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="密码:" VerticalAlignment="Center"/>
+                        <ui:PasswordBox Grid.Column="1" Password="{Binding Settings.Password, Mode=TwoWay}" 
+                                        PlaceholderText="接口认证密码"/>
                     </Grid>
 
                     <!-- 设备号 -->
@@ -54,7 +85,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="设备号:" VerticalAlignment="Center"/>
-                        <ui:TextBox Grid.Column="1" Text="{Binding Settings.DeviceNum, UpdateSourceTrigger=PropertyChanged}" 
+                        <ui:TextBox Grid.Column="1" Text="{Binding Settings.DeviceNum, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" 
                                     PlaceholderText="ChileSowing001"/>
                     </Grid>
 
@@ -65,7 +96,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="扫描人员:" VerticalAlignment="Center"/>
-                        <ui:TextBox Grid.Column="1" Text="{Binding Settings.ScanPerson, UpdateSourceTrigger=PropertyChanged}" 
+                        <ui:TextBox Grid.Column="1" Text="{Binding Settings.ScanPerson, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" 
                                     PlaceholderText="System"/>
                     </Grid>
                 </StackPanel>
@@ -83,7 +114,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="扫描类型:" VerticalAlignment="Center"/>
-                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.ScanType}" Minimum="1" Maximum="99"/>
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.ScanType, Mode=TwoWay}" Minimum="1" Maximum="999"/>
                     </Grid>
 
                     <!-- 供件台ID -->
@@ -93,7 +124,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="供件台ID:" VerticalAlignment="Center"/>
-                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.InductionId}" Minimum="1" Maximum="999"/>
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.InductionId, Mode=TwoWay}" Minimum="1" Maximum="999"/>
                     </Grid>
 
                     <!-- 生产线编码 -->
@@ -103,7 +134,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="生产线编码:" VerticalAlignment="Center"/>
-                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.ProdLine}" Minimum="1" Maximum="999"/>
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.ProdLine, Mode=TwoWay}" Minimum="1" Maximum="999"/>
                     </Grid>
 
                     <!-- 交叉带设备ID -->
@@ -113,7 +144,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="交叉带设备ID:" VerticalAlignment="Center"/>
-                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.EquipmentId}" Minimum="1" Maximum="999"/>
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.EquipmentId, Mode=TwoWay}" Minimum="1" Maximum="99999999"/>
                     </Grid>
 
                     <!-- 场地编码 -->
@@ -123,7 +154,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="场地编码:" VerticalAlignment="Center"/>
-                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.PlaceCode}" Minimum="1" Maximum="999"/>
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.PlaceCode, Mode=TwoWay}" Minimum="1" Maximum="999999"/>
                     </Grid>
 
                     <!-- 片区编码 -->
@@ -133,7 +164,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="片区编码:" VerticalAlignment="Center"/>
-                        <ui:TextBox Grid.Column="1" Text="{Binding Settings.AreaCode, UpdateSourceTrigger=PropertyChanged}" 
+                        <ui:TextBox Grid.Column="1" Text="{Binding Settings.AreaCode, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" 
                                     PlaceholderText="DEFAULT"/>
                     </Grid>
 
@@ -144,7 +175,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="产品类型:" VerticalAlignment="Center"/>
-                        <ui:TextBox Grid.Column="1" Text="{Binding Settings.ExpProdType, UpdateSourceTrigger=PropertyChanged}" 
+                        <ui:TextBox Grid.Column="1" Text="{Binding Settings.ExpProdType, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" 
                                     PlaceholderText="STANDARD"/>
                     </Grid>
 
@@ -155,18 +186,80 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="货样编码:" VerticalAlignment="Center"/>
-                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.ObjId}" Minimum="1" Maximum="999"/>
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.ObjId, Mode=TwoWay}" Minimum="1" Maximum="9999"/>
                     </Grid>
 
                     <!-- 默认重量 -->
-                    <Grid>
+                    <Grid Margin="0,0,0,10">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="150"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="默认重量(kg):" VerticalAlignment="Center"/>
-                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.DefaultWeight}" 
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.DefaultWeight, Mode=TwoWay}" 
                                       Minimum="0.1" Maximum="50" SmallChange="0.1" LargeChange="1.0"/>
+                    </Grid>
+
+                    <!-- 备注字段 -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="备注字段:" VerticalAlignment="Center"/>
+                        <ui:TextBox Grid.Column="1" Text="{Binding Settings.RemarkField, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" 
+                                    PlaceholderText="n"/>
+                    </Grid>
+                </StackPanel>
+            </hc:Card>
+
+            <!-- 包裹尺寸设置 -->
+            <hc:Card Padding="15" Margin="0,0,0,15">
+                <StackPanel>
+                    <TextBlock Text="包裹尺寸设置" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" Margin="0,0,0,10"/>
+                    
+                    <!-- 长度 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="长度(cm):" VerticalAlignment="Center"/>
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.Length, Mode=TwoWay}" 
+                                      Minimum="1" Maximum="200" SmallChange="1" LargeChange="10"/>
+                    </Grid>
+
+                    <!-- 宽度 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="宽度(cm):" VerticalAlignment="Center"/>
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.Width, Mode=TwoWay}" 
+                                      Minimum="1" Maximum="200" SmallChange="1" LargeChange="10"/>
+                    </Grid>
+
+                    <!-- 高度 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="高度(cm):" VerticalAlignment="Center"/>
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.Height, Mode=TwoWay}" 
+                                      Minimum="1" Maximum="200" SmallChange="1" LargeChange="10"/>
+                    </Grid>
+
+                    <!-- 体积 -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="体积(cm³):" VerticalAlignment="Center"/>
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.Volume, Mode=TwoWay}" 
+                                      Minimum="1" Maximum="8000" SmallChange="10" LargeChange="100"/>
                     </Grid>
                 </StackPanel>
             </hc:Card>
@@ -183,7 +276,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="超时时间(ms):" VerticalAlignment="Center"/>
-                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.TimeoutMs}" 
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.TimeoutMs, Mode=TwoWay}" 
                                       Minimum="1000" Maximum="30000" SmallChange="1000" LargeChange="5000"/>
                     </Grid>
 
@@ -194,7 +287,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="重试次数:" VerticalAlignment="Center"/>
-                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.RetryCount}" Minimum="1" Maximum="10"/>
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.RetryCount, Mode=TwoWay}" Minimum="1" Maximum="10"/>
                     </Grid>
 
                     <!-- 重试间隔 -->
@@ -204,7 +297,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="重试间隔(ms):" VerticalAlignment="Center"/>
-                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.RetryDelayMs}" 
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.RetryDelayMs, Mode=TwoWay}" 
                                       Minimum="500" Maximum="10000" SmallChange="500" LargeChange="1000"/>
                     </Grid>
 
@@ -215,29 +308,43 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="详细日志:" VerticalAlignment="Center"/>
-                        <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding Settings.EnableDetailedLogging}" />
+                        <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding Settings.EnableDetailedLogging, Mode=TwoWay}" />
                     </Grid>
                 </StackPanel>
             </hc:Card>
 
             <!-- 操作按钮 -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,20,0,0">
-                <ui:Button Appearance="Primary" 
-                           Command="{Binding TestConnectionCommand}"
-                           Margin="0,0,15,0">
-                    <StackPanel Orientation="Horizontal">
-                        <ui:SymbolIcon Symbol="NetworkCheck24" Margin="0,0,8,0" />
-                        <TextBlock Text="测试连接" />
-                    </StackPanel>
-                </ui:Button>
-                
-                <ui:Button Appearance="Secondary" Command="{Binding ResetToDefaultCommand}">
-                    <StackPanel Orientation="Horizontal">
-                        <ui:SymbolIcon Symbol="ArrowReset24" Margin="0,0,8,0" />
-                        <TextBlock Text="恢复默认" />
-                    </StackPanel>
-                </ui:Button>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <ui:Button Appearance="Primary"
+                               Content="Test Connection" 
+                               Command="{Binding TestConnectionCommand}"
+                               IsEnabled="{Binding IsTesting, Converter={StaticResource InverseBooleanConverter}}"
+                               Margin="0,0,10,0"/>
+                    <ui:Button Appearance="Secondary"
+                               Content="Network Diagnostic" 
+                               Command="{Binding NetworkDiagnosticCommand}"
+                               IsEnabled="{Binding IsDiagnosing, Converter={StaticResource InverseBooleanConverter}}"
+                               Margin="0,0,10,0"/>
+                    <ui:Button Appearance="Secondary"
+                               Content="Reset to Default" 
+                               Command="{Binding ResetToDefaultCommand}"/>
+                </StackPanel>
             </StackPanel>
+
+            <!-- 网络诊断结果 -->
+            <ui:Card Margin="0,10,0,0" Visibility="{Binding DiagnosticResults, Converter={StaticResource StringToVisibilityConverter}}">
+                <ScrollViewer MaxHeight="300" VerticalScrollBarVisibility="Auto">
+                    <TextBox Text="{Binding DiagnosticResults, Mode=OneWay}"
+                             IsReadOnly="True"
+                             FontFamily="Consolas"
+                             FontSize="12"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             TextWrapping="Wrap"
+                             AcceptsReturn="True"/>
+                </ScrollViewer>
+            </ui:Card>
 
         </StackPanel>
     </ScrollViewer>
