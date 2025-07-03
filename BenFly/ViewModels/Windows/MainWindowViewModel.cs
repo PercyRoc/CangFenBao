@@ -51,7 +51,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private BitmapSource? _currentImage;
 
     private bool _disposed;
-    private long _errorPackageCount;
     private long _noReadPackageCount;
 
     private SystemStatus _systemStatus = new();
@@ -629,11 +628,10 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 }
                 else // isNoReadOrEmpty
                 {
-                    if (package.Status != PackageStatus.Error)
-                    {
-                        package.SetStatus(PackageStatus.NoRead, "未能识别包裹条码(NoRead)");
-                    }
-                    Log.Information("包裹为 NoRead/Empty...将标记为 uploadAsNoRead。当前状态: {Status}",
+                    // 对于 NoRead 包裹，不管之前的状态是什么，都应该设置为 NoRead 状态
+                    // 这样才能正确统计 NoRead 异常计数
+                    package.SetStatus(PackageStatus.NoRead, "未能识别包裹条码(NoRead)");
+                    Log.Information("包裹为 NoRead/Empty...状态已设置为 NoRead。Barcode: {Barcode}",
                         package.Barcode);
                 }
             }
@@ -783,12 +781,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     // 格口分配异常：已上传但后续处理失败
                     Interlocked.Increment(ref _chuteAllocationErrorCount);
                 }
-            }
-
-            // 保持原有的总异常数计算（兼容性）
-            if (package.Status is PackageStatus.Error or PackageStatus.NoRead && !package.IsUploadedToBenNiao)
-            {
-                Interlocked.Increment(ref _errorPackageCount);
             }
 
             // 更新UI显示
