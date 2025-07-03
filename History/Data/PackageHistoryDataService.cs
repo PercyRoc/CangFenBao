@@ -133,12 +133,11 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
             {
                 // 这是预期的错误，说明记录已经存在（被唯一索引阻止）
                 Log.Information("PackageHistoryDataService: AddPackageAsync: 记录 (Barcode: {Barcode}, CreateTime: {CreateTime:yyyy-MM-dd HH:mm:ss.fff}) 已存在 (约束冲突)，跳过插入.", record.Barcode, record.CreateTime);
-                return; // 静默处理重复记录
             }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "PackageHistoryDataService: 添加包裹历史记录时出错。", record.Barcode, record.CreateTime);
+            Log.Error(ex, "PackageHistoryDataService: 添加包裹历史记录时出错。");
         }
     }
 

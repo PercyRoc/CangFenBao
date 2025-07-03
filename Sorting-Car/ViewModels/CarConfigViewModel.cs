@@ -18,7 +18,10 @@ namespace Sorting_Car.ViewModels
         /// <summary>
         /// 小车配置集合
         /// </summary>
-        public ObservableCollection<CarConfig>? CarConfigs => _carConfigModel.CarConfigs;
+        public ObservableCollection<CarConfig>? CarConfigs
+        {
+            get => _carConfigModel.CarConfigs;
+        }
 
         /// <summary>
         /// 选中的小车配置

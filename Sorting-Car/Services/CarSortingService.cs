@@ -34,7 +34,10 @@ namespace Sorting_Car.Services
             Log.Information("CarSortingService 已创建");
         }
 
-        public bool IsConnected => _serialPortService?.IsConnected ?? false;
+        public bool IsConnected
+        {
+            get => _serialPortService?.IsConnected ?? false;
+        }
 
         public Task<bool> StartAsync()
         {
@@ -46,7 +49,7 @@ namespace Sorting_Car.Services
 
             if (_serviceShutdownCts == null || _serviceShutdownCts.IsCancellationRequested)
             {
-                 _serviceShutdownCts = new CancellationTokenSource();
+                _serviceShutdownCts = new CancellationTokenSource();
             }
 
             Log.Information("CarSortingService 初始化开始...");
@@ -78,20 +81,16 @@ namespace Sorting_Car.Services
                 var serialParams = ConvertToSerialPortParams(_serialPortSettings);
                 _serialPortService = new SerialPortService("CarSorting", serialParams);
                 _serialPortService.ConnectionChanged += OnConnectionChanged;
-                _serialPortService.DataReceived += OnDataReceived;
 
                 Log.Information("尝试连接串口 {PortName}...", _serialPortSettings.PortName);
                 var connected = _serialPortService.Connect();
                 if (!connected)
                 {
                     Log.Error("串口 {PortName} 连接失败", _serialPortSettings.PortName);
-                    if (_serialPortService != null)
-                    {
-                        _serialPortService.ConnectionChanged -= OnConnectionChanged;
-                        _serialPortService.DataReceived -= OnDataReceived;
-                        _serialPortService.Dispose();
-                        _serialPortService = null;
-                    }
+                    if (_serialPortService == null) return Task.FromResult(false);
+                    _serialPortService.ConnectionChanged -= OnConnectionChanged;
+                    _serialPortService.Dispose();
+                    _serialPortService = null;
                     return Task.FromResult(false);
                 }
 
@@ -111,7 +110,6 @@ namespace Sorting_Car.Services
                 if (_serialPortService != null)
                 {
                     _serialPortService.ConnectionChanged -= OnConnectionChanged;
-                    _serialPortService.DataReceived -= OnDataReceived;
                     _serialPortService.Dispose();
                     _serialPortService = null;
                 }
@@ -128,13 +126,15 @@ namespace Sorting_Car.Services
                 PortName = settings.PortName,
                 BaudRate = settings.BaudRate,
                 DataBits = settings.DataBits,
-                StopBits = settings.StopBits switch {
+                StopBits = settings.StopBits switch
+                {
                     SerialStopBits.One => System.IO.Ports.StopBits.One,
                     SerialStopBits.Two => System.IO.Ports.StopBits.Two,
                     SerialStopBits.OnePointFive => System.IO.Ports.StopBits.OnePointFive,
                     _ => System.IO.Ports.StopBits.None,
                 },
-                Parity = settings.Parity switch {
+                Parity = settings.Parity switch
+                {
                     SerialParity.None => System.IO.Ports.Parity.None,
                     SerialParity.Odd => System.IO.Ports.Parity.Odd,
                     SerialParity.Even => System.IO.Ports.Parity.Even,
@@ -149,11 +149,6 @@ namespace Sorting_Car.Services
         {
             Log.Information("串口连接状态变更: {Status}", isConnected ? "已连接" : "已断开");
             ConnectionChanged?.Invoke(this, ("CarSorting", isConnected));
-        }
-
-        private void OnDataReceived(byte[] data)
-        {
-            Log.Debug("收到串口数据: {DataHex}", BitConverter.ToString(data));
         }
 
         public bool SendCommandForPackage(PackageInfo package, CancellationToken cancellationToken = default)
@@ -231,8 +226,9 @@ namespace Sorting_Car.Services
                             }
                             else if (cancellationToken.IsCancellationRequested)
                             {
-                                Log.Debug("小车 {Address} 延迟期间被取消");
-                                overallSuccess = false; break;
+                                Log.Debug("小车 {Address} 延迟期间被取消", carItem.CarAddress);
+                                overallSuccess = false;
+                                break;
                             }
                         }
 
@@ -245,7 +241,11 @@ namespace Sorting_Car.Services
                             Log.Debug("发送组合双帧命令(16字节 0x95+0x8A)给小车地址 {Address} (反转={IsReverse}): {CommandHex}",
                                 carItem.CarAddress, carItem.IsReverse, BitConverter.ToString(command));
 
-                            if (cancellationToken.IsCancellationRequested) { overallSuccess = false; break; }
+                            if (cancellationToken.IsCancellationRequested)
+                            {
+                                overallSuccess = false;
+                                break;
+                            }
                             if (!IsConnected)
                             {
                                 Log.Error("在发送命令给小车 {Address} 之前检测到串口断开，格口 {ChuteNumber} 发送中止", carItem.CarAddress, chuteNumber);
@@ -268,7 +268,8 @@ namespace Sorting_Car.Services
                                 else if (cancellationToken.IsCancellationRequested)
                                 {
                                     Log.Debug("命令间延迟期间被取消");
-                                    overallSuccess = false; break;
+                                    overallSuccess = false;
+                                    break;
                                 }
                             }
                         }
@@ -319,25 +320,25 @@ namespace Sorting_Car.Services
                 return [];
             }
 
-            if (addr < 1 || addr > 32) // 地址范围扩大到1-32以包含0x8A帧的寻址
+            if (addr is < 1 or > 32) // 地址范围扩大到1-32以包含0x8A帧的寻址
             {
                 Log.Warning("无效的小车地址 {Address} (必须在 1-32 之间)", addr);
                 return [];
             }
 
-            if (car.Speed < 30 || car.Speed > 1530)
+            if (car.Speed is < 30 or > 1530)
             {
                 Log.Warning("无效的速度 {Speed} RPM (必须在 30-1530 之间)", car.Speed);
                 return [];
             }
 
-            if (car.Delay < 0 || car.Delay > 2550)
+            if (car.Delay is < 0 or > 2550)
             {
                 Log.Warning("无效的延迟时间 {DelayMs} ms (必须在 0-2550 ms 之间)", car.Delay);
                 return [];
             }
 
-            if (timeMs < 0 || timeMs > 2550)
+            if (timeMs is < 0 or > 2550)
             {
                 Log.Warning("无效的运行时间 {TimeMs} ms (必须在 0-2550 ms 之间)", timeMs);
                 return [];
@@ -348,33 +349,32 @@ namespace Sorting_Car.Services
                 var cmd = new byte[16]; // 创建16字节数组
 
                 // --- 第1部分: 0x95 参数设定帧 (cmd[0] - cmd[7]) ---
-                const int piValue = 1; // 固定PI值为1
 
                 cmd[0] = DualFrameParamFrame; // 帧头 0x95
 
                 // Byte 1: 地址 + 方向 + S7
-                byte speedVal = (byte)Math.Clamp(car.Speed / 6, 5, 255); // 速度计算
-                byte s7 = (byte)(speedVal >> 7 & 0x01); // 获取速度的最高位
-                byte directionBit = (byte)(isReverse ? 0x40 : 0x00); // 方向位 (0x00=正向, 0x40=反向)
-                cmd[1] = (byte)(directionBit | s7 << 5 | addr & 0x1F); // 注意: 0x95帧地址只用到低5位(1-31)
+                var speedVal = (byte)Math.Clamp(car.Speed / 6, 5, 255); // 速度计算
+                var s7 = (byte)(speedVal >> 7 & 0x01); // 获取速度的最高位
+                var directionBit = (byte)(isReverse ? 0x40 : 0x00); // 方向位 (0x00=正向, 0x40=反向)
+                cmd[1] = (byte)(directionBit | (s7 << 5) | addr & 0x1F); // 注意: 0x95帧地址只用到低5位(1-31)
 
                 // Byte 2: 速度 S6-S0
                 cmd[2] = (byte)(speedVal & 0x7F); // 速度低7位
 
                 // Byte 3: 延迟 Dt6-Dt0
-                byte delayVal = (byte)Math.Clamp(car.Delay / 10, 0, 255);
-                byte dt7 = (byte)(delayVal >> 7 & 0x01); // 获取延迟的最高位
+                var delayVal = (byte)Math.Clamp(car.Delay / 10, 0, 255);
+                var dt7 = (byte)(delayVal >> 7 & 0x01); // 获取延迟的最高位
                 cmd[3] = (byte)(delayVal & 0x7F); // 获取延迟的低7位
 
                 // Byte 4: 时间 T6-T0
-                byte timeVal = (byte)Math.Clamp(timeMs / 10, 0, 255);
-                byte t7 = (byte)(timeVal >> 7 & 0x01); // 获取时间的最高位
+                var timeVal = (byte)Math.Clamp(timeMs / 10, 0, 255);
+                var t7 = (byte)(timeVal >> 7 & 0x01); // 获取时间的最高位
                 cmd[4] = (byte)(timeVal & 0x7F); // 获取时间的低7位
 
                 // Byte 5: 复合数据 1
-                const byte piBits = piValue - 1 & 0x07; // PI值1对应0
+                const byte piBits = 0; // PI值1对应0 (piValue - 1 & 0x07 = 0)
                 const byte controlModeBit = 0x00; // 时间模式 Bit2=0
-                cmd[5] = (byte)(piBits << 3 | controlModeBit | t7 << 1 | dt7);
+                cmd[5] = (byte)(piBits | controlModeBit | (t7 << 1) | dt7);
 
                 // Byte 6: 复合数据 2 (暂不用)
                 cmd[6] = 0x00;
@@ -393,28 +393,36 @@ namespace Sorting_Car.Services
                 cmd[12] = 0; // Reg 4: 小车 31-25
                 cmd[13] = 0; // Reg 5: 小车 32,24,16,8
 
-                if (addr <= 7) // Reg 1
+                switch (addr)
                 {
-                    cmd[9] = (byte)(1 << addr - 1);
-                }
-                else if (addr is >= 9 and <= 15) // Reg 2
-                {
-                    cmd[10] = (byte)(1 << addr - 9);
-                }
-                else if (addr is >= 17 and <= 23) // Reg 3
-                {
-                    cmd[11] = (byte)(1 << addr - 17);
-                }
-                else if (addr is >= 25 and <= 31) // Reg 4
-                {
-                    cmd[12] = (byte)(1 << addr - 25);
-                }
-                else // Reg 5
-                {
-                    if (addr == 8) cmd[13] = 1 << 0;
-                    else if (addr == 16) cmd[13] = 1 << 1;
-                    else if (addr == 24) cmd[13] = 1 << 2;
-                    else cmd[13] = 1 << 3;
+                    // Reg 1
+                    case <= 7:
+                        cmd[9] = (byte)(1 << addr - 1);
+                        break;
+                    // Reg 2
+                    case >= 9 and <= 15:
+                        cmd[10] = (byte)(1 << addr - 9);
+                        break;
+                    // Reg 3
+                    case >= 17 and <= 23:
+                        cmd[11] = (byte)(1 << addr - 17);
+                        break;
+                    // Reg 4
+                    case >= 25 and <= 31:
+                        cmd[12] = (byte)(1 << addr - 25);
+                        break;
+                    case 8:
+                        cmd[13] = 1; // 1 << 0 = 1
+                        break;
+                    case 16:
+                        cmd[13] = 1 << 1;
+                        break;
+                    case 24:
+                        cmd[13] = 1 << 2;
+                        break;
+                    default:
+                        cmd[13] = 1 << 3;
+                        break;
                 }
 
                 // Byte 14: 序列号 (递增, B7=0)
@@ -453,7 +461,7 @@ namespace Sorting_Car.Services
             }
 
             byte crc = 0;
-            for (int i = startIndex; i <= endIndex; i++)
+            for (var i = startIndex; i <= endIndex; i++)
             {
                 crc ^= data[i];
             }
@@ -479,7 +487,6 @@ namespace Sorting_Car.Services
                 if (_serialPortService != null)
                 {
                     _serialPortService.ConnectionChanged -= OnConnectionChanged;
-                    _serialPortService.DataReceived -= OnDataReceived;
                     _serialPortService.Dispose();
                     _serialPortService = null;
                     Log.Information("SerialPortService 已断开并释放。");
@@ -500,7 +507,7 @@ namespace Sorting_Car.Services
         public async ValueTask DisposeAsync()
         {
             Log.Information("正在释放 CarSortingService...");
-            
+
             await StopAsync();
 
             _serviceShutdownCts?.Dispose();
@@ -511,7 +518,6 @@ namespace Sorting_Car.Services
             {
                 Log.Warning("在 DisposeAsync 期间 SerialPortService 不为 null，现在执行释放。");
                 _serialPortService.ConnectionChanged -= OnConnectionChanged;
-                _serialPortService.DataReceived -= OnDataReceived;
                 _serialPortService.Dispose();
                 _serialPortService = null;
             }

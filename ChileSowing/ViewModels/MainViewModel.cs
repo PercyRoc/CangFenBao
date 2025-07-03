@@ -55,7 +55,10 @@ public class MainViewModel : BindableBase, IDisposable
     private int _currentExceptionChuteIndex; // 异常格口的轮询索引
     
     // 测试模式下需要跳过的格口列表
-    private readonly HashSet<int> _skipChuteNumbers = new() { 1, 2, 3, 4, 33, 34, 35, 36 };
+    private readonly HashSet<int> _skipChuteNumbers =
+    [
+        1, 2, 3, 4, 33, 34, 35, 36
+    ];
 
     // 颜色常量
     private const string DefaultChuteColor = "#FFFFFF"; // 白色
@@ -892,13 +895,11 @@ public class MainViewModel : BindableBase, IDisposable
         
         // 如果所有格口都被跳过了（理论上不会发生），返回第一个非跳过格口
         Log.Warning("测试模式：所有格口都在跳过列表中，使用备用分配逻辑");
-        for (int i = 1; i <= totalChutes; i++)
+        for (var i = 1; i <= totalChutes; i++)
         {
-            if (!_skipChuteNumbers.Contains(i))
-            {
-                _currentTestChuteIndex = i - 1; // 更新索引
-                return i;
-            }
+            if (_skipChuteNumbers.Contains(i)) continue;
+            _currentTestChuteIndex = i - 1; // 更新索引
+            return i;
         }
         
         // 最后的fallback，理论上不应该到达这里

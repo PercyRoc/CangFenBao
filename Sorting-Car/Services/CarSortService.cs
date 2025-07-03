@@ -42,7 +42,10 @@ public class CarSortService : IDevice // 实现 IDevice，隐式实现 IAsyncDis
     }
 
     // 实现 IDevice.IsConnected
-    public bool IsConnected => _carSortingService.IsConnected;
+    public bool IsConnected
+    {
+        get => _carSortingService.IsConnected;
+    }
 
     // 实现 IDevice.ConnectionChanged (从底层设备转发)
     public event EventHandler<(string DeviceName, bool IsConnected)>? ConnectionChanged;

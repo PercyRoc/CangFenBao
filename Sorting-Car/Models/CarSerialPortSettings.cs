@@ -37,7 +37,7 @@ namespace Sorting_Car.Models
         private int _dataBits = 8;
         private SerialParity _parity = SerialParity.None;
         private SerialStopBits _stopBits = SerialStopBits.One;
-        private int _commandDelayMs = 0;
+        private int _commandDelayMs;
 
         /// <summary>
         /// 端口名称

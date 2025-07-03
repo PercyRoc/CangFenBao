@@ -3,7 +3,6 @@ using SowingSorting.Models.Settings;
 using SowingSorting.Services;
 using Common.Services.Settings;
 using Common.Events;
-using Prism.Events;
 
 namespace SowingSorting.ViewModels.Settings
 {
@@ -21,30 +20,24 @@ namespace SowingSorting.ViewModels.Settings
                         private set
             {
                 // 移除旧对象的事件监听
-                if (_settings != null)
-                {
-                    _settings.PropertyChanged -= OnSettingsPropertyChanged;
-                }
-                
+                _settings.PropertyChanged -= OnSettingsPropertyChanged;
+
                 if (!SetProperty(ref _settings, value)) return;
                 
                 // 为新对象添加事件监听
-                if (_settings != null)
-                {
-                    _settings.PropertyChanged += OnSettingsPropertyChanged;
-                }
-                
+                _settings.PropertyChanged += OnSettingsPropertyChanged;
+
                 // 只有在命令已经创建后才调用RaiseCanExecuteChanged
-                SaveCommand?.RaiseCanExecuteChanged();
-                TestWriteRegisterCommand?.RaiseCanExecuteChanged();
+                SaveCommand.RaiseCanExecuteChanged();
+                TestWriteRegisterCommand.RaiseCanExecuteChanged();
             }
         }
 
         private void OnSettingsPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             // 只有在命令已经创建后才调用RaiseCanExecuteChanged
-            SaveCommand?.RaiseCanExecuteChanged();
-            TestWriteRegisterCommand?.RaiseCanExecuteChanged();
+            SaveCommand.RaiseCanExecuteChanged();
+            TestWriteRegisterCommand.RaiseCanExecuteChanged();
         }
 
         private string _operationStatusMessage = "准备就绪";
@@ -83,9 +76,7 @@ namespace SowingSorting.ViewModels.Settings
         
         private bool CanSaveSettings()
         {
-            if (Settings == null)
-                return false;
-                
+
             if (string.IsNullOrWhiteSpace(Settings.IpAddress) || 
                 Settings.Port <= 0 || Settings.Port > 65535)
             {
@@ -132,9 +123,7 @@ namespace SowingSorting.ViewModels.Settings
 
         private bool CanTestWriteRegister()
         {
-            if (Settings == null)
-                return false;
-                
+
             return !string.IsNullOrWhiteSpace(Settings.IpAddress) && 
                    Settings.Port is > 0 and <= 65535 &&
                    _modbusTcpService.IsConnected;
@@ -146,37 +135,20 @@ namespace SowingSorting.ViewModels.Settings
             try
             {
                 var loadedSettings = _settingsService.LoadSettings<ModbusTcpSettings>(SettingsKey);
-                if (loadedSettings != null)
-                {
-                    Settings = loadedSettings;
-                    Log.Information("Modbus TCP 设置已从 ISettingsService 加载 (Key: {Key})。", SettingsKey);
-                }
-                else
-                {
-                    Log.Warning("从 ISettingsService 加载的设置为空，使用默认设置。");
-                    Settings = new ModbusTcpSettings();
-                }
+                Settings = loadedSettings;
+                Log.Information("Modbus TCP 设置已从 ISettingsService 加载 (Key: {Key})。", SettingsKey);
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "从 ISettingsService 加载 Modbus TCP 设置失败 (Key: {Key})。将使用默认设置。", SettingsKey);
                 Settings = new ModbusTcpSettings(); 
             }
-            
-            // 确保Settings不为null
-            Settings ??= new ModbusTcpSettings();
-            
             OperationStatusMessage = "设置已加载。";
         }
 
         private void OnSave()
         {
-            if (Settings == null)
-            {
-                OperationStatusMessage = "无法保存：设置对象未初始化。";
-                return;
-            }
-            
+
             // 详细验证并提供具体错误信息
             if (string.IsNullOrWhiteSpace(Settings.IpAddress))
             {
@@ -216,12 +188,7 @@ namespace SowingSorting.ViewModels.Settings
 
         private async Task TestWriteRegisterAsync()
         {
-            if (Settings == null)
-            {
-                OperationStatusMessage = "无法执行测试：设置对象未初始化。";
-                return;
-            }
-            
+
             if (!_modbusTcpService.IsConnected)
             {
                 OperationStatusMessage = $"Modbus 服务未连接。尝试自动连接到 {Settings.IpAddress}:{Settings.Port}...";

@@ -1,5 +1,3 @@
-using System.Windows.Controls;
-
 namespace Sorting_Car.Views
 {
     /// <summary>

@@ -8,7 +8,7 @@ namespace Sorting_Car.Models
     /// </summary>
     public class CarSequenceItem : BindableBase
     {
-        private byte _carAddress;
+        private readonly byte _carAddress;
         private bool _isReverse;
         private int _delayMs;
         
@@ -18,7 +18,7 @@ namespace Sorting_Car.Models
         public byte CarAddress
         {
             get => _carAddress;
-            set => SetProperty(ref _carAddress, value);
+            init => SetProperty(ref _carAddress, value);
         }
         
         /// <summary>
@@ -42,7 +42,7 @@ namespace Sorting_Car.Models
         /// <summary>
         /// 小车名称（用于显示）
         /// </summary>
-        public string CarName { get; set; } = string.Empty;
+        public string CarName { get; init; } = string.Empty;
     }
     
     /// <summary>
@@ -50,8 +50,8 @@ namespace Sorting_Car.Models
     /// </summary>
     public class ChuteCarSequence : BindableBase
     {
-        private int _chuteNumber;
-        private ObservableCollection<CarSequenceItem> _carSequence = [];
+        private readonly int _chuteNumber;
+        private readonly ObservableCollection<CarSequenceItem> _carSequence = [];
         
         /// <summary>
         /// 格口号
@@ -59,7 +59,7 @@ namespace Sorting_Car.Models
         public int ChuteNumber
         {
             get => _chuteNumber;
-            set => SetProperty(ref _chuteNumber, value);
+            init => SetProperty(ref _chuteNumber, value);
         }
         
         /// <summary>
@@ -68,7 +68,7 @@ namespace Sorting_Car.Models
         public ObservableCollection<CarSequenceItem> CarSequence
         {
             get => _carSequence;
-            set => SetProperty(ref _carSequence, value);
+            init => SetProperty(ref _carSequence, value);
         }
     }
     
@@ -116,7 +116,7 @@ namespace Sorting_Car.Models
             ChuteSequences.Clear();
             
             // 添加格口配置
-            for (int i = 1; i <= chuteCount; i++)
+            for (var i = 1; i <= chuteCount; i++)
             {
                 if (existingChutes.TryGetValue(i, out var existingSequence))
                 {

@@ -2,7 +2,6 @@ using Sorting_Car.ViewModels;
 using Sorting_Car.Views;
 using Sorting_Car.Services;
 using Serilog;
-using Common.Services.Settings;
 
 namespace Sorting_Car
 {

@@ -17,7 +17,7 @@ namespace Sorting_Car.Models
         public ObservableCollection<CarConfig>? CarConfigs
         {
             get => _carConfigs;
-            set => SetProperty(ref _carConfigs, value);
+            private set => SetProperty(ref _carConfigs, value);
         }
 
         public CarConfigModel()

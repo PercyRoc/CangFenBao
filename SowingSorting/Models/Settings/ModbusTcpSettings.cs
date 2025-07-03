@@ -1,4 +1,3 @@
-using Prism.Mvvm;
 using Common.Services.Settings;
 
 namespace SowingSorting.Models.Settings
@@ -39,7 +38,7 @@ namespace SowingSorting.Models.Settings
             set => SetProperty(ref _connectionTimeout, value);
         }
 
-        private int _defaultRegisterAddress = 0;
+        private int _defaultRegisterAddress;
         /// <summary>
         /// 默认寄存器地址
         /// </summary>
