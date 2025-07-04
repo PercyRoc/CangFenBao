@@ -4,7 +4,6 @@ using System.Drawing.Text;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -237,13 +236,13 @@ internal class BenNiaoPackageService : IDisposable
 
             if (!response.IsSuccessStatusCode)
             {
-                var errorContent = await response.Content.ReadAsStringAsync();
+                var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
                 var httpErrorMessage = $"HTTP请求失败: {(int)response.StatusCode} {response.ReasonPhrase}. 内容: {errorContent}";
                 Log.Error("实时查询三段码失败: {ErrorMessage}", httpErrorMessage);
                 return (null, httpErrorMessage);
             }
 
-            var result = await response.Content.ReadFromJsonAsync<BenNiaoResponse<string>>(_jsonOptions);
+            var result = await response.Content.ReadFromJsonAsync<BenNiaoResponse<string>>(_jsonOptions, cancellationToken: cancellationToken);
             if (result is { IsSuccess: true })
             {
                 return (result.Result, null); // 成功，无错误消息
@@ -299,7 +298,7 @@ internal class BenNiaoPackageService : IDisposable
             var response = await _httpClient.PostAsync(url, content, cancellationToken);
             response.EnsureSuccessStatusCode();
 
-            var result = await response.Content.ReadFromJsonAsync<BenNiaoResponse<object>>(_jsonOptions);
+            var result = await response.Content.ReadFromJsonAsync<BenNiaoResponse<object>>(_jsonOptions, cancellationToken: cancellationToken);
             if (result is { IsSuccess: true }) return (true, uploadTime, string.Empty);
 
             var errorMessage = result?.Message ?? "未知错误";
@@ -534,23 +533,22 @@ internal class BenNiaoPackageService : IDisposable
     {
         try
         {
-            var width = bitmapSource.PixelWidth;
-            var height = bitmapSource.PixelHeight;
-            var stride = width * ((bitmapSource.Format.BitsPerPixel + 7) / 8);
-            var pixels = new byte[height * stride];
+            // 使用流和编码器进行可靠的格式转换，避免手动操作像素数据导致的格式问题。
+            // BmpBitmapEncoder 是一种快速的无损编码方式，适合作为中间格式。
+            var encoder = new BmpBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(bitmapSource));
 
-            bitmapSource.CopyPixels(pixels, stride, 0);
+            using var stream = new MemoryStream();
+            encoder.Save(stream);
+            stream.Position = 0; // Rewind the stream
 
-            // 创建一个新的 Bitmap 对象
-            var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
-            var bitmapData = bitmap.LockBits(new Rectangle(0, 0, width, height),
-                ImageLockMode.WriteOnly, bitmap.PixelFormat);
+            // 从流创建一个临时的 Bitmap。
+            // 直接从流创建的Bitmap可能由于其像素格式（如索引格式）而不支持GDI+绘图。
+            using var tempBitmap = new Bitmap(stream);
 
-            // 将像素数据复制到 Bitmap
-            Marshal.Copy(pixels, 0, bitmapData.Scan0, pixels.Length);
-            bitmap.UnlockBits(bitmapData);
-
-            return bitmap;
+            // 为了确保返回的Bitmap是可编辑的（支持GDI+绘图），我们创建一个副本。
+            // new Bitmap(Image) 会创建一个具有标准像素格式（如 32bpp ARGB）的可写副本。
+            return new Bitmap(tempBitmap);
         }
         catch (Exception ex)
         {
@@ -586,10 +584,9 @@ internal class BenNiaoPackageService : IDisposable
             watermarkText.AppendLine($"设备号: {deviceId}");
 
             // 计算文本大小和位置
-            var lines = watermarkText.ToString().Split(new[]
-            {
+            var lines = watermarkText.ToString().Split([
                 "\r\n", "\n"
-            }, StringSplitOptions.None); // Split by newline
+            ], StringSplitOptions.None); // Split by newline
             var lineHeight = font.GetHeight(graphics);
             var yPosition = 10; // 初始Y坐标
 

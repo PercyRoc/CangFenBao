@@ -98,7 +98,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         // 订阅皮带连接状态事件
         _beltSerialService.ConnectionStatusChanged += OnBeltConnectionStatusChanged;
 
-        // 初始化命令
+        // 初始化命令   
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
         OpenHistoryCommand = new DelegateCommand(ExecuteOpenHistory);
         OpenCalibrationCommand = new DelegateCommand(ExecuteOpenCalibration);

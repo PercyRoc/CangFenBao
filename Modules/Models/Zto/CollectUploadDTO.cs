@@ -8,7 +8,7 @@ public class CollectUploadDTO
     ///     运单号
     /// </summary>
     [JsonProperty("billCode")]
-    public string BillCode { get; set; }
+    public string BillCode { get; set; } = string.Empty;
     /// <summary>
     ///     重量，单位：kg
     /// </summary>

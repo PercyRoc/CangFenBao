@@ -11,10 +11,10 @@ public class StoAutoReceiveResponse
     public bool Success { get; set; }
 
     [JsonProperty("errorCode")]
-    public string ErrorCode { get; set; }
+    public string ErrorCode { get; set; } = string.Empty;
 
     [JsonProperty("errorMsg")]
-    public string ErrorMsg { get; set; }
+    public string ErrorMsg { get; set; } = string.Empty;
 
     // 根据申通文档，data节点可能不存在或为空，暂时注释掉或者根据实际情况调整
     // [JsonProperty("data")]

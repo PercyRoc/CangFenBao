@@ -1,7 +1,6 @@
-using Modules.Models.Jitu;
 using ShanghaiModuleBelt.Models.Jitu;
 
-namespace Modules.Services.Jitu;
+namespace ShanghaiModuleBelt.Services.Jitu;
 
 public interface IJituService
 {

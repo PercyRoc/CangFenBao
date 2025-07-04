@@ -1,6 +1,6 @@
 ﻿using Common.Services.Ui;
-using Modules.ViewModels.Jitu.Settings;
 using Serilog;
+using ShanghaiModuleBelt.ViewModels.Jitu.Settings;
 using ShanghaiModuleBelt.ViewModels.Settings;
 using ShanghaiModuleBelt.ViewModels.Sto.Settings;
 using ShanghaiModuleBelt.ViewModels.Yunda.Settings;

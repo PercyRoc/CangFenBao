@@ -1,25 +1,25 @@
 using System.Net.Http;
 using System.Text;
 using Common.Services.Settings;
-using Modules.Models.Jitu;
 using Modules.Models.Jitu.Settings;
 using Newtonsoft.Json;
 using Serilog;
 using ShanghaiModuleBelt.Models.Jitu;
 
-namespace Modules.Services.Jitu;
+namespace ShanghaiModuleBelt.Services.Jitu;
 
-public class JituService : IJituService
+public class JituService : IJituService, IDisposable
 {
     private readonly HttpClient _httpClient;
     private readonly ISettingsService _settingsService;
-    private JituApiSettings _jituApiSettings;
+    private readonly JituApiSettings _jituApiSettings;
 
     public JituService(ISettingsService settingsService)
     {
         _settingsService = settingsService;
         _httpClient = new HttpClient();
-        LoadSettings();
+        _jituApiSettings = _settingsService.LoadSettings<JituApiSettings>();
+        Log.Information("JituApiSettings loaded. OpScanUrl: {OpScanUrl}", _jituApiSettings.OpScanUrl);
     }
 
     public async Task<JituOpScanResponse> SendOpScanRequestAsync(JituOpScanRequest request)
@@ -48,6 +48,18 @@ public class JituService : IJituService
             Log.Information("Received Jitu OpScan response: {ResponseBody}", responseBody);
 
             var jituResponse = JsonConvert.DeserializeObject<JituOpScanResponse>(responseBody);
+            if (jituResponse is null)
+            {
+                const string message = "服务暂停：响应解析失败 (null)";
+                Log.Error("Failed to deserialize Jitu OpScan response: {Message}", message);
+                return new JituOpScanResponse
+                {
+                    Success = false,
+                    Code = 812,
+                    Message = message
+                };
+            }
+
             return jituResponse;
         }
         catch (HttpRequestException httpEx)
@@ -82,9 +94,8 @@ public class JituService : IJituService
         }
     }
 
-    private void LoadSettings()
+    public void Dispose()
     {
-        _jituApiSettings = _settingsService.LoadSettings<JituApiSettings>();
-        Log.Information("JituApiSettings loaded. OpScanUrl: {OpScanUrl}", _jituApiSettings.OpScanUrl);
+        _httpClient.Dispose();
     }
 }

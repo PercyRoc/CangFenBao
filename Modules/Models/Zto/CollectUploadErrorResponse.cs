@@ -8,13 +8,13 @@ public class CollectUploadErrorResponse
     ///     结果
     /// </summary>
     [JsonProperty("result")]
-    public object Result { get; set; }
+    public object Result { get; set; } = new();
 
     /// <summary>
     ///     异常信息
     /// </summary>
     [JsonProperty("message")]
-    public string Message { get; set; }
+    public string Message { get; set; } = string.Empty;
 
     /// <summary>
     ///     状态
@@ -26,5 +26,5 @@ public class CollectUploadErrorResponse
     ///     状态码
     /// </summary>
     [JsonProperty("statusCode")]
-    public string StatusCode { get; set; }
+    public string StatusCode { get; set; } = string.Empty;
 }

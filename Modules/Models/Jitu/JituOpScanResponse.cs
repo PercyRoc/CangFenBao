@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace Modules.Models.Jitu;
+namespace ShanghaiModuleBelt.Models.Jitu;
 
 public class JituOpScanResponse
 {
@@ -11,5 +11,5 @@ public class JituOpScanResponse
     public int Code { get; set; }
 
     [JsonProperty("message")]
-    public string Message { get; set; }
+    public string Message { get; set; } = string.Empty;
 }

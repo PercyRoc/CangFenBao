@@ -6,8 +6,8 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:mvvm="http://prismlibrary.com/"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-    xmlns:viewmodels="clr-namespace:Modules.ViewModels.Jitu.Settings"
-    d:DataContext="{d:DesignInstance viewmodels:JituSettingsViewModel}"
+    xmlns:settings="clr-namespace:ShanghaiModuleBelt.ViewModels.Jitu.Settings"
+    d:DataContext="{d:DesignInstance settings:JituSettingsViewModel}"
     mvvm:ViewModelLocator.AutoWireViewModel="True"
     mc:Ignorable="d">
     <Grid>

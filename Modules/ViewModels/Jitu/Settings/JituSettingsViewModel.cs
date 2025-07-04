@@ -2,17 +2,18 @@ using Common.Services.Settings;
 using Modules.Models.Jitu.Settings;
 using Serilog;
 
-namespace Modules.ViewModels.Jitu.Settings;
+namespace ShanghaiModuleBelt.ViewModels.Jitu.Settings;
 
 public class JituSettingsViewModel : BindableBase
 {
     private readonly ISettingsService _settingsService;
-    private JituApiSettings _jituApiSettings;
+    private readonly JituApiSettings _jituApiSettings;
 
     public JituSettingsViewModel(ISettingsService settingsService)
     {
         _settingsService = settingsService;
-        LoadSettings();
+        _jituApiSettings = _settingsService.LoadSettings<JituApiSettings>();
+        Log.Information("JituApiSettings loaded for ViewModel.");
         SaveCommand = new DelegateCommand(SaveSettings);
     }
 
@@ -69,12 +70,6 @@ public class JituSettingsViewModel : BindableBase
     }
 
     public DelegateCommand SaveCommand { get; }
-
-    private void LoadSettings()
-    {
-        _jituApiSettings = _settingsService.LoadSettings<JituApiSettings>();
-        Log.Information("JituApiSettings loaded for ViewModel.");
-    }
 
     private void SaveSettings()
     {

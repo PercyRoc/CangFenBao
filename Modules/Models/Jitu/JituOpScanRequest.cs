@@ -5,7 +5,7 @@ namespace ShanghaiModuleBelt.Models.Jitu;
 public class JituOpScanRequest
 {
     [JsonProperty("billcode")]
-    public string Billcode { get; set; }
+    public string Billcode { get; set; } = string.Empty;
 
     [JsonProperty("weight")]
     public double Weight { get; set; }
@@ -20,11 +20,11 @@ public class JituOpScanRequest
     public double Height { get; set; }
 
     [JsonProperty("devicecode")]
-    public string Devicecode { get; set; }
+    public string Devicecode { get; set; } = string.Empty;
 
     [JsonProperty("devicename")]
-    public string Devicename { get; set; }
+    public string Devicename { get; set; } = string.Empty;
 
     [JsonProperty("imgpath")]
-    public string Imgpath { get; set; }
+    public string Imgpath { get; set; } = string.Empty;
 }
