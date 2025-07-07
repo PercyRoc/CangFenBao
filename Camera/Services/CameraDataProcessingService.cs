@@ -28,7 +28,6 @@ namespace Camera.Services
         private IDisposable? _imageSubscription;
 
         // 【关键改进】为包裹匹配和处理创建一个专用的线程和调度器
-        private readonly Thread _packageMatchingThread;
         private readonly EventLoopScheduler _packageMatchingScheduler;
         private readonly CancellationTokenSource _cts = new();
 
@@ -53,16 +52,16 @@ namespace Camera.Services
             _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
 
             // 【关键改进】初始化专用线程和调度器
-            _packageMatchingThread = new Thread(ThreadStart)
+            var packageMatchingThread = new Thread(ThreadStart)
             {
                 Name = "PackageMatchingThread",
                 IsBackground = true,
                 Priority = ThreadPriority.Normal // 正常优先级，低于TCP接收线程
             };
             
-            _packageMatchingScheduler = new EventLoopScheduler(ts => _packageMatchingThread);
+            _packageMatchingScheduler = new EventLoopScheduler(_ => packageMatchingThread);
             
-            _packageMatchingThread.Start();
+            packageMatchingThread.Start();
             Log.Information("✅ [专用匹配线程] 线程 'PackageMatchingThread' 已启动。");
         }
         

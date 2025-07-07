@@ -10,32 +10,32 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="JetBrains.Annotations" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
-        <PackageReference Include="Serilog" />
-        <PackageReference Include="NPOI" />
+        <PackageReference Include="JetBrains.Annotations"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite"/>
+        <PackageReference Include="Serilog"/>
+        <PackageReference Include="NPOI"/>
         <PackageReference Include="WPFLocalizeExtension"/>
         <PackageReference Include="HandyControl"/>
-        <PackageReference Include="WPF-UI" />
+        <PackageReference Include="WPF-UI"/>
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Common\基础模块.csproj" />
+        <ProjectReference Include="..\Common\基础模块.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
-      <EmbeddedResource Update="Resources\HistoryStrings.resx">
-        <Generator>ResXFileCodeGenerator</Generator>
-        <LastGenOutput>HistoryStrings.Designer.cs</LastGenOutput>
-      </EmbeddedResource>
+        <EmbeddedResource Update="Resources\HistoryStrings.resx">
+            <Generator>ResXFileCodeGenerator</Generator>
+            <LastGenOutput>HistoryStrings.Designer.cs</LastGenOutput>
+        </EmbeddedResource>
     </ItemGroup>
 
     <ItemGroup>
-      <Compile Update="Resources\HistoryStrings.Designer.cs">
-        <DesignTime>True</DesignTime>
-        <AutoGen>True</AutoGen>
-        <DependentUpon>HistoryStrings.resx</DependentUpon>
-      </Compile>
+        <Compile Update="Resources\HistoryStrings.Designer.cs">
+            <DesignTime>True</DesignTime>
+            <AutoGen>True</AutoGen>
+            <DependentUpon>HistoryStrings.resx</DependentUpon>
+        </Compile>
     </ItemGroup>
-    
+
 </Project>

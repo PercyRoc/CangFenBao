@@ -2,8 +2,6 @@ using Camera.Models.Settings;
 using Common.Services.Settings;
 using Serilog;
 using System.Windows.Input;
-using System.Windows.Forms;
-using System;
 using DialogResult = System.Windows.Forms.DialogResult;
 
 namespace Camera.ViewModels;
@@ -77,12 +75,10 @@ public class CameraSettingsViewModel : BindableBase
 
     private void ExecuteRemoveFilterGroup(BarcodeFilterGroup? groupToRemove)
     {
-        if (groupToRemove == null || CameraSettings.BarcodeFilter.RuleGroups == null) return;
-        if (CameraSettings.BarcodeFilter.RuleGroups.Remove(groupToRemove))
-        {
-            Log.Information("删除条形码过滤器组：{groupName}", groupToRemove.GroupName);
-            (SaveSettingsCommand as DelegateCommand)?.RaiseCanExecuteChanged();
-        }
+        if (groupToRemove == null) return;
+        if (!CameraSettings.BarcodeFilter.RuleGroups.Remove(groupToRemove)) return;
+        Log.Information("删除条形码过滤器组：{groupName}", groupToRemove.GroupName);
+        (SaveSettingsCommand as DelegateCommand)?.RaiseCanExecuteChanged();
     }
 
     private void ExecuteSelectImageSaveFolderPath()

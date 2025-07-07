@@ -11,18 +11,15 @@ namespace ChileSowing.Converters;
 /// </summary>
 public class BooleanToProcessingStatusConverter : IValueConverter
 {
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (value is bool isProcessing)
-        {
-            string locKey = isProcessing ? "Status_Processing" : "Status_Idle";
-            return LocalizeDictionary.Instance.GetLocalizedObject("ChileSowing:Resources/Strings:" + locKey, null, culture) ?? locKey;
-        }
-        
-        return LocalizeDictionary.Instance.GetLocalizedObject("ChileSowing:Resources/Strings:Status_None", null, culture) ?? "Unknown";
+        if (value is not bool isProcessing) return LocalizeDictionary.Instance.GetLocalizedObject("ChileSowing:Resources/Strings:Status_None", null, culture) ?? "Unknown";
+        var locKey = isProcessing ? "Status_Processing" : "Status_Idle";
+        return LocalizeDictionary.Instance.GetLocalizedObject("ChileSowing:Resources/Strings:" + locKey, null, culture) ?? locKey;
+
     }
 
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         throw new NotImplementedException("BooleanToProcessingStatusConverter does not support ConvertBack");
     }

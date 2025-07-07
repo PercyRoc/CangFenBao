@@ -74,6 +74,7 @@ public class PackageHistoryRecord
     /// <summary>
     ///     处理状态
     /// </summary>
+    [MaxLength(50)]
     public string? Status { get; set; }
 
     /// <summary>

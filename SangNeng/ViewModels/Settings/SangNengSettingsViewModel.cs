@@ -1,5 +1,5 @@
+using Common.Services.Notifications;
 using Common.Services.Settings;
-using Common.Services.Ui;
 using Serilog;
 using Sunnen.Models.Settings;
 

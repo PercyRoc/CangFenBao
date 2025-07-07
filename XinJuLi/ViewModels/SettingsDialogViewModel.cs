@@ -1,5 +1,5 @@
 ﻿using BalanceSorting.ViewModels.Settings;
-using Common.Services.Ui;
+using Common.Services.Notifications;
 using Serilog;
 using Common.ViewModels.Settings.ChuteRules;
 using XinJuLi.ViewModels.Settings;

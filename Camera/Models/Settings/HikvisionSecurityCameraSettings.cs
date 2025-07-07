@@ -1,5 +1,3 @@
-using Prism.Mvvm;
-
 namespace Camera.Models.Settings;
 
 public class HikvisionSecurityCameraSettings : BindableBase

@@ -1,5 +1,3 @@
-using System;
-
 namespace Camera.Models.Settings;
 
 /// <summary>

@@ -1,0 +1,207 @@
+<UserControl x:Class="ChileSowing.Views.Settings.WebServerSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:hc="https://handyorg.github.io/handycontrol"
+             xmlns:prism="http://prismlibrary.com/"
+             xmlns:lex="http://wpflocalizeextension.codeplex.com"
+             xmlns:converters="clr-namespace:Common.Converters;assembly=Common"
+             lex:LocalizeDictionary.DesignCulture="en-US"
+             lex:ResxLocalizationProvider.DefaultAssembly="ChileSowing"
+             lex:ResxLocalizationProvider.DefaultDictionary="Resources.Strings"
+             prism:ViewModelLocator.AutoWireViewModel="True"
+             mc:Ignorable="d"
+             d:DesignHeight="800" d:DesignWidth="800">
+    
+    <UserControl.Resources>
+        <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+        <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter"/>
+        <converters:BooleanToStringConverter x:Key="BooleanToStringConverter" TrueValue="运行中" FalseValue="已停止"/>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="20">
+            
+            <!-- 标题 -->
+            <TextBlock Text="Web API 服务器设置" 
+                       FontSize="24" 
+                       FontWeight="Bold" 
+                       Margin="0,0,0,20"/>
+
+            <!-- 服务器状态 -->
+            <hc:Card Padding="15" Margin="0,0,0,15">
+                <StackPanel>
+                    <TextBlock Text="服务器状态" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" Margin="0,0,0,10"/>
+                    
+                    <!-- 运行状态 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="运行状态:" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <ui:Badge Content="{Binding IsServerRunning, Converter={StaticResource BooleanToStringConverter}}"
+                                      Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding ServerUrl}" VerticalAlignment="Center" Foreground="Gray"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- 接口地址 -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="API地址:" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="1" Text="{Binding Settings.BatchOrderSyncUrl}" VerticalAlignment="Center" 
+                                   FontFamily="Consolas" TextWrapping="Wrap"/>
+                    </Grid>
+                </StackPanel>
+            </hc:Card>
+
+            <!-- 基本设置 -->
+            <hc:Card Padding="15" Margin="0,0,0,15">
+                <StackPanel>
+                    <TextBlock Text="基本设置" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" Margin="0,0,0,10"/>
+                    
+                    <!-- 启用状态 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="启用服务器:" VerticalAlignment="Center"/>
+                        <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding Settings.IsEnabled, Mode=TwoWay}" />
+                    </Grid>
+
+                    <!-- 监听端口 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="监听端口:" VerticalAlignment="Center"/>
+                        <ui:NumberBox Grid.Column="1" Value="{Binding Settings.Port, Mode=TwoWay}" 
+                                      Minimum="1024" Maximum="65535" PlaceholderText="8080"/>
+                    </Grid>
+
+                    <!-- 主机地址 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="主机地址:" VerticalAlignment="Center"/>
+                        <ui:TextBox Grid.Column="1" Text="{Binding Settings.Host, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" 
+                                    PlaceholderText="* (所有地址)"/>
+                    </Grid>
+
+                    <!-- 应用名称 -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="应用名称:" VerticalAlignment="Center"/>
+                        <ui:TextBox Grid.Column="1" Text="{Binding Settings.AppName, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" 
+                                    PlaceholderText="chile-sowing"/>
+                    </Grid>
+                </StackPanel>
+            </hc:Card>
+
+            <!-- 接口说明 -->
+            <hc:Card Padding="15" Margin="0,0,0,15">
+                <StackPanel>
+                    <TextBlock Text="接口说明" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" Margin="0,0,0,10"/>
+                    
+                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
+                        <Run Text="本服务器提供分拣单数据同步接口，用于接收WMS系统推送的分拣任务。"/>
+                    </TextBlock>
+                    
+                    <!-- 接口信息表格 -->
+                    <Border BorderBrush="Gray" BorderThickness="1" CornerRadius="5">
+                        <StackPanel>
+                            <Grid Background="LightGray" Margin="10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="120"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="接口路径:" FontWeight="Bold"/>
+                                <TextBlock Grid.Column="1" Text="POST /chile-sowing/send_batch_order_info" FontFamily="Consolas"/>
+                            </Grid>
+                            <Grid Margin="10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="120"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="请求格式:" FontWeight="Bold"/>
+                                <TextBlock Grid.Column="1" Text="Content-Type: application/json"/>
+                            </Grid>
+                            <Grid Margin="10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="120"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="功能描述:" FontWeight="Bold"/>
+                                <TextBlock Grid.Column="1" Text="接收分拣单数据，包含订单号、物料明细等信息" TextWrapping="Wrap"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </hc:Card>
+
+            <!-- 操作按钮 -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,20,0,0">
+                <ui:Button Appearance="Primary"
+                           Content="测试连接" 
+                           Command="{Binding TestConnectionCommand}"
+                           IsEnabled="{Binding IsTesting, Converter={StaticResource InverseBooleanConverter}}"
+                           Margin="0,0,10,0">
+                    <ui:Button.Icon>
+                        <ui:SymbolIcon Symbol="NetworkCheck24"/>
+                    </ui:Button.Icon>
+                </ui:Button>
+                
+                <ui:Button Appearance="Secondary"
+                           Content="重启服务器" 
+                           Command="{Binding RestartServerCommand}"
+                           IsEnabled="{Binding IsRestarting, Converter={StaticResource InverseBooleanConverter}}"
+                           Margin="0,0,10,0">
+                    <ui:Button.Icon>
+                        <ui:SymbolIcon Symbol="ArrowClockwise24"/>
+                    </ui:Button.Icon>
+                </ui:Button>
+                
+                <ui:Button Appearance="Secondary"
+                           Content="重置默认" 
+                           Command="{Binding ResetToDefaultCommand}">
+                    <ui:Button.Icon>
+                        <ui:SymbolIcon Symbol="ArrowReset24"/>
+                    </ui:Button.Icon>
+                </ui:Button>
+            </StackPanel>
+
+            <!-- 测试结果 -->
+            <ui:Card Margin="0,20,0,0" Visibility="{Binding TestResults, Converter={StaticResource StringToVisibilityConverter}}">
+                <StackPanel>
+                    <TextBlock Text="测试结果" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                    <ScrollViewer MaxHeight="300" VerticalScrollBarVisibility="Auto">
+                        <TextBox Text="{Binding TestResults, Mode=OneWay}"
+                                 IsReadOnly="True"
+                                 FontFamily="Consolas"
+                                 FontSize="12"
+                                 Background="Transparent"
+                                 BorderThickness="0"
+                                 TextWrapping="Wrap"
+                                 AcceptsReturn="True"/>
+                    </ScrollViewer>
+                </StackPanel>
+            </ui:Card>
+
+        </StackPanel>
+    </ScrollViewer>
+    
+</UserControl> 

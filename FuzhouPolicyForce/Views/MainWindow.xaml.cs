@@ -1,8 +1,9 @@
 ﻿using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
-using Common.Services.Ui;
+using Common.Services.Notifications;
 using Serilog;
+using MessageBox = HandyControl.Controls.MessageBox;
 
 namespace FuzhouPolicyForce.Views;
 
@@ -41,9 +42,9 @@ public partial class MainWindow
         e.Cancel = true;
 
         // 使用 HandyControl 的 MessageBox 进行确认 (使用简洁重载)
-        var result = HandyControl.Controls.MessageBox.Show(
-            "确定要关闭程序吗？", 
-            "关闭确认", 
+        var result = MessageBox.Show(
+            "确定要关闭程序吗？",
+            "关闭确认",
             MessageBoxButton.OKCancel,
             MessageBoxImage.Question // 使用 System.Windows 的图标枚举
         );

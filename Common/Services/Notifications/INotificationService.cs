@@ -1,6 +1,6 @@
 using System.Windows;
 
-namespace Common.Services.Ui;
+namespace Common.Services.Notifications;
 
 public interface INotificationService
 {

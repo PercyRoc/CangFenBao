@@ -1,6 +1,4 @@
 using Common.Services.Settings; // For ConfigurationAttribute
-using Prism.Mvvm;
-using System.Collections.ObjectModel;
 
 namespace Camera.Models.Settings;
 

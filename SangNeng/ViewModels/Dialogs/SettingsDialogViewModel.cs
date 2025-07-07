@@ -1,5 +1,5 @@
 using Camera.ViewModels;
-using Common.Services.Ui;
+using Common.Services.Notifications;
 using Serilog;
 using Sunnen.ViewModels.Settings;
 using Weight.ViewModels.Settings;

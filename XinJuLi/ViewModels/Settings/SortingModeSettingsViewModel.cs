@@ -1,19 +1,18 @@
+using System.ComponentModel;
+using Common.Services.Notifications;
 using Common.Services.Settings;
-using Common.Services.Ui;
-using Prism.Mvvm;
 using Serilog;
 using XinJuLi.Models;
 
 namespace XinJuLi.ViewModels.Settings;
 
 /// <summary>
-/// 分拣模式设置视图模型
+///     分拣模式设置视图模型
 /// </summary>
 public class SortingModeSettingsViewModel : BindableBase
 {
-    private readonly ISettingsService _settingsService;
     private readonly INotificationService _notificationService;
-    private SortingModeSettings _settings;
+    private readonly ISettingsService _settingsService;
 
     public SortingModeSettingsViewModel(
         ISettingsService settingsService,
@@ -29,28 +28,34 @@ public class SortingModeSettingsViewModel : BindableBase
     }
 
     /// <summary>
-    /// 分拣模式设置对象（直接绑定）
+    ///     分拣模式设置对象（直接绑定）
     /// </summary>
-    public SortingModeSettings Settings => _settings;
+    public SortingModeSettings Settings { get; private set; }
 
     /// <summary>
-    /// 最后更新时间显示
+    ///     最后更新时间显示
     /// </summary>
-    public string LastUpdatedDisplay => _settings.LastUpdated.ToString("yyyy-MM-dd HH:mm:ss");
+    public string LastUpdatedDisplay
+    {
+        get => Settings.LastUpdated.ToString("yyyy-MM-dd HH:mm:ss");
+    }
 
     /// <summary>
-    /// 当前模式显示名称
+    ///     当前模式显示名称
     /// </summary>
-    public string CurrentModeDisplayName => _settings.GetCurrentModeDisplayName();
+    public string CurrentModeDisplayName
+    {
+        get => Settings.GetCurrentModeDisplayName();
+    }
 
     /// <summary>
-    /// 选择的分拣模式详细描述
+    ///     选择的分拣模式详细描述
     /// </summary>
     public string SelectedModeDescription
     {
         get
         {
-            return _settings.CurrentSortingMode switch
+            return Settings.CurrentSortingMode switch
             {
                 SortingMode.AreaCodeSorting => "根据包裹条码中的大区编码进行分拣，需要导入格口配置文件。适用于按地理区域分拣的场景。",
                 SortingMode.ScanReviewSorting => "通过扫码复核接口验证包裹，成功/异常分别分拣到不同格口。适用于需要验证包裹合法性的场景。",
@@ -61,13 +66,13 @@ public class SortingModeSettingsViewModel : BindableBase
     }
 
     /// <summary>
-    /// 摆动方向详细描述
+    ///     摆动方向详细描述
     /// </summary>
     public string PendulumDirectionDescription
     {
         get
         {
-            return _settings.PendulumDirection switch
+            return Settings.PendulumDirection switch
             {
                 PendulumDirection.Left => "摆轮向左侧摆动，将包裹分拣到左侧格口。这是默认的摆动方向设置。",
                 PendulumDirection.Right => "摆轮向右侧摆动，将包裹分拣到右侧格口。适用于需要向右分拣的场景。",
@@ -77,45 +82,48 @@ public class SortingModeSettingsViewModel : BindableBase
     }
 
     /// <summary>
-    /// 当前生效设备ID显示
+    ///     当前生效设备ID显示
     /// </summary>
-    public string CurrentDeviceIdDisplay => _settings.GetCurrentDeviceId();
+    public string CurrentDeviceIdDisplay
+    {
+        get => Settings.GetCurrentDeviceId();
+    }
 
     /// <summary>
-    /// 加载设置
+    ///     加载设置
     /// </summary>
     private void LoadSettings()
     {
         try
         {
-            _settings = _settingsService.LoadSettings<SortingModeSettings>();
-            Log.Information("分拣模式设置已加载: {Mode}", _settings.CurrentSortingMode);
+            Settings = _settingsService.LoadSettings<SortingModeSettings>();
+            Log.Information("分拣模式设置已加载: {Mode}", Settings.CurrentSortingMode);
         }
         catch (Exception ex)
         {
             Log.Error(ex, "加载分拣模式设置时发生错误");
-            _settings = new SortingModeSettings();
+            Settings = new SortingModeSettings();
         }
 
         // 订阅设置对象的属性变更事件
-        _settings.PropertyChanged += OnSettingsPropertyChanged;
+        Settings.PropertyChanged += OnSettingsPropertyChanged;
     }
 
     /// <summary>
-    /// 处理设置对象属性变更
+    ///     处理设置对象属性变更
     /// </summary>
-    private void OnSettingsPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    private void OnSettingsPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(SortingModeSettings.CurrentSortingMode))
         {
-            Log.Information("分拣模式已更改为: {Mode}", _settings.CurrentSortingMode);
+            Log.Information("分拣模式已更改为: {Mode}", Settings.CurrentSortingMode);
             RaisePropertyChanged(nameof(SelectedModeDescription));
             RaisePropertyChanged(nameof(CurrentModeDisplayName));
             RaisePropertyChanged(nameof(CurrentDeviceIdDisplay));
         }
         else if (e.PropertyName == nameof(SortingModeSettings.PendulumDirection))
         {
-            Log.Information("摆动方向已更改为: {Direction}", _settings.PendulumDirection);
+            Log.Information("摆动方向已更改为: {Direction}", Settings.PendulumDirection);
             RaisePropertyChanged(nameof(PendulumDirectionDescription));
         }
         else if (e.PropertyName == nameof(SortingModeSettings.LastUpdated))
@@ -126,40 +134,40 @@ public class SortingModeSettingsViewModel : BindableBase
                  e.PropertyName == nameof(SortingModeSettings.ScanCheckDeviceId) ||
                  e.PropertyName == nameof(SortingModeSettings.RegionSortDeviceId))
         {
-            Log.Information("设备ID已更改: {PropertyName} = {Value}", e.PropertyName, 
-                e.PropertyName == nameof(SortingModeSettings.SkuSortDeviceId) ? _settings.SkuSortDeviceId :
-                e.PropertyName == nameof(SortingModeSettings.ScanCheckDeviceId) ? _settings.ScanCheckDeviceId :
-                _settings.RegionSortDeviceId);
+            Log.Information("设备ID已更改: {PropertyName} = {Value}", e.PropertyName,
+                e.PropertyName == nameof(SortingModeSettings.SkuSortDeviceId) ? Settings.SkuSortDeviceId :
+                e.PropertyName == nameof(SortingModeSettings.ScanCheckDeviceId) ? Settings.ScanCheckDeviceId :
+                Settings.RegionSortDeviceId);
             RaisePropertyChanged(nameof(CurrentDeviceIdDisplay));
         }
     }
 
     /// <summary>
-    /// 保存配置（由SettingsDialog调用）
+    ///     保存配置（由SettingsDialog调用）
     /// </summary>
     public void SaveConfiguration()
     {
         try
         {
-            Log.Information("保存分拣模式设置: {SelectedMode}, 摆动方向: {PendulumDirection}", 
-                _settings.CurrentSortingMode, _settings.PendulumDirection);
+            Log.Information("保存分拣模式设置: {SelectedMode}, 摆动方向: {PendulumDirection}",
+                Settings.CurrentSortingMode, Settings.PendulumDirection);
 
             // 更新时间戳
-            _settings.LastUpdated = DateTime.Now;
+            Settings.LastUpdated = DateTime.Now;
 
             // 验证设置
-            if (!_settings.IsValid())
+            if (!Settings.IsValid())
             {
-                Log.Warning("分拣模式设置无效: {Mode}, {Direction}", 
-                    _settings.CurrentSortingMode, _settings.PendulumDirection);
+                Log.Warning("分拣模式设置无效: {Mode}, {Direction}",
+                    Settings.CurrentSortingMode, Settings.PendulumDirection);
                 throw new InvalidOperationException("设置无效，请检查选择的分拣模式和摆动方向");
             }
 
             // 保存设置
-            _settingsService.SaveSettings(_settings);
+            _settingsService.SaveSettings(Settings);
 
-            Log.Information("分拣模式设置保存成功: {Mode}, 摆动方向: {Direction}", 
-                _settings.CurrentSortingMode, _settings.PendulumDirection);
+            Log.Information("分拣模式设置保存成功: {Mode}, 摆动方向: {Direction}",
+                Settings.CurrentSortingMode, Settings.PendulumDirection);
         }
         catch (Exception ex)
         {
@@ -167,4 +175,4 @@ public class SortingModeSettingsViewModel : BindableBase
             throw;
         }
     }
-} 
+}

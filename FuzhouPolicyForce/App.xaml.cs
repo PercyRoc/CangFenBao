@@ -2,7 +2,6 @@
 using System.Windows;
 using System.Windows.Threading;
 using Common.Services.License;
-using Common.Services.Ui;
 using FuzhouPolicyForce.ViewModels;
 using FuzhouPolicyForce.Views;
 using FuzhouPolicyForce.Views.Settings;
@@ -21,6 +20,7 @@ using BalanceSorting.Modules;
 using BalanceSorting.Service;
 using Camera.Interface;
 using Common;
+using Common.Services.Notifications;
 using Common.Views.Settings.ChuteRules; // 注册多摆轮模块需要
 
 namespace FuzhouPolicyForce;

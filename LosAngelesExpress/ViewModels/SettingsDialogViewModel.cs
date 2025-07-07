@@ -1,4 +1,4 @@
-﻿using Common.Services.Ui;
+﻿using Common.Services.Notifications;
 using LosAngelesExpress.ViewModels.Settings;
 using Serilog;
 

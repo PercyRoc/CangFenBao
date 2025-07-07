@@ -20,8 +20,7 @@ public static class BarcodeCharacterTypeExtension
                 {
                     Value = e,
                     LocalizedName =
-                        ResxLocalizationProviderHelper.GetLocalizedValue($"Enum_BarcodeCharacterType_{e}") ??
-                        e.ToString()
+                        ResxLocalizationProviderHelper.GetLocalizedValue($"Enum_BarcodeCharacterType_{e}")
                 })
                 .ToList();
         }
@@ -29,7 +28,7 @@ public static class BarcodeCharacterTypeExtension
 }
 public static class ResxLocalizationProviderHelper
 {
-    public static string? GetLocalizedValue(string key)
+    public static string GetLocalizedValue(string key)
     {
         string uiCulture = WPFLocalizeExtension.Engine.LocalizeDictionary.Instance.Culture.ToString();
         string? value = null;

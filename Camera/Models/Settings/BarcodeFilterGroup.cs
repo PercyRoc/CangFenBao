@@ -1,5 +1,3 @@
-using Prism.Mvvm;
-
 namespace Camera.Models.Settings;
 
 /// <summary>

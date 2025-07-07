@@ -1,5 +1,5 @@
 namespace Server.JuShuiTan.Services;
-using Server.JuShuiTan.Models;
+using Models;
 
 /// <summary>
 ///     聚水潭服务接口

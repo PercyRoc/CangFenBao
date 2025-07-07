@@ -180,17 +180,11 @@ public class TcpCameraService : IDisposable
         var allTasks = new List<Task>();
         
         // 添加处理任务
-        if (_processingTask != null)
-        {
-            allTasks.Add(_processingTask);
-        }
-        
+        allTasks.Add(_processingTask);
+
         // 【新增】添加发布任务
-        if (_publishingTask != null)
-        {
-            allTasks.Add(_publishingTask);
-        }
-        
+        allTasks.Add(_publishingTask);
+
         // 添加连接任务
         if (_connectionTask != null)
         {
@@ -202,19 +196,6 @@ public class TcpCameraService : IDisposable
             // 等待所有任务完成，最多等待3秒
             if (allTasks.Count > 0)
             {
-                Log.Debug("等待 {TaskCount} 个任务完成...", allTasks.Count);
-                
-                // 【专用线程监控】特别关注数据处理线程的状态
-                if (_processingTask != null)
-                {
-                    Log.Debug("专用数据处理线程状态: {TaskStatus}", _processingTask.Status);
-                }
-                
-                if (_publishingTask != null)
-                {
-                    Log.Debug("专用发布线程状态: {TaskStatus}", _publishingTask.Status);
-                }
-                
                 var waitResult = Task.WaitAll([.. allTasks], TimeSpan.FromSeconds(3));
                 
                 if (!waitResult)
@@ -231,7 +212,7 @@ public class TcpCameraService : IDisposable
                     }
                     
                     // 对专用线程未停止的情况给出特别警告
-                    if (_processingTask != null && !_processingTask.IsCompleted)
+                    if (!_processingTask.IsCompleted)
                     {
                         Log.Error("专用数据处理线程未能正常停止，可能存在阻塞问题");
                     }
@@ -628,8 +609,7 @@ public class TcpCameraService : IDisposable
                     
                     // 【紧急诊断】监控专用线程的数据读取响应时间
                     bool hasProcessedData = false;
-                    var loopStartTime = DateTimeOffset.UtcNow;
-                    
+
                     // 处理所有可用数据
                     while (_dataReader.TryRead(out var item))
                     {
@@ -710,8 +690,7 @@ public class TcpCameraService : IDisposable
                 try
                 {
                     bool hasPublishedData = false;
-                    var loopStartTime = DateTimeOffset.UtcNow;
-                    
+
                     // 处理所有待发布的包裹
                     while (_publishReader.TryRead(out var timestampedPackage))
                     {

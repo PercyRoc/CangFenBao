@@ -8,33 +8,33 @@
         <AssemblyName>Weight</AssemblyName>
         <UseWPF>true</UseWPF>
     </PropertyGroup>
-    
+
     <ItemGroup>
         <PackageReference Include="Prism.Wpf"/>
-        <PackageReference Include="Serilog" />
+        <PackageReference Include="Serilog"/>
         <PackageReference Include="WPF-UI"/>
         <PackageReference Include="HandyControl"/>
         <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
-        <PackageReference Include="WPFLocalizeExtension" />
-        <PackageReference Include="System.Reactive" />
+        <PackageReference Include="WPFLocalizeExtension"/>
+        <PackageReference Include="System.Reactive"/>
     </ItemGroup>
-    
+
     <ItemGroup>
-      <ProjectReference Include="..\Common\基础模块.csproj" />
+        <ProjectReference Include="..\Common\基础模块.csproj"/>
     </ItemGroup>
-    
+
     <ItemGroup>
-      <EmbeddedResource Update="Resources\WeightSettings.resx">
-        <Generator>ResXFileCodeGenerator</Generator>
-        <LastGenOutput>WeightSettings.Designer.cs</LastGenOutput>
-      </EmbeddedResource>
+        <EmbeddedResource Update="Resources\WeightSettings.resx">
+            <Generator>ResXFileCodeGenerator</Generator>
+            <LastGenOutput>WeightSettings.Designer.cs</LastGenOutput>
+        </EmbeddedResource>
     </ItemGroup>
-    
+
     <ItemGroup>
-      <Compile Update="Resources\WeightSettings.Designer.cs">
-        <DesignTime>True</DesignTime>
-        <AutoGen>True</AutoGen>
-        <DependentUpon>WeightSettings.resx</DependentUpon>
-      </Compile>
+        <Compile Update="Resources\WeightSettings.Designer.cs">
+            <DesignTime>True</DesignTime>
+            <AutoGen>True</AutoGen>
+            <DependentUpon>WeightSettings.resx</DependentUpon>
+        </Compile>
     </ItemGroup>
 </Project>

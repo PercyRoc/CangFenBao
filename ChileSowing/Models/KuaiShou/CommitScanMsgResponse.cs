@@ -73,5 +73,8 @@ public class CommitScanMsgResponse
     /// <summary>
     /// 是否请求成功
     /// </summary>
-    public bool IsSuccess => Status == "ok" && ResultCode == "0";
+    public bool IsSuccess
+    {
+        get => Status == "ok" && ResultCode == "0";
+    }
 } 

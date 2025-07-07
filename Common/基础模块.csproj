@@ -11,60 +11,60 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <Compile Remove="Models\Sortings\**" />
-      <EmbeddedResource Remove="Models\Sortings\**" />
-      <None Remove="Models\Sortings\**" />
-      <Page Remove="Models\Sortings\**" />
-      <EmbeddedResource Update="Resources\Strings.resx">
-        <Generator>ResXFileCodeGenerator</Generator>
-        <LastGenOutput>Strings.Designer.cs</LastGenOutput>
-      </EmbeddedResource>
-      <Compile Update="Resources\Strings.Designer.cs">
-        <DesignTime>True</DesignTime>
-        <AutoGen>True</AutoGen>
-        <DependentUpon>Strings.resx</DependentUpon>
-      </Compile>
+        <Compile Remove="Models\Sortings\**"/>
+        <EmbeddedResource Remove="Models\Sortings\**"/>
+        <None Remove="Models\Sortings\**"/>
+        <Page Remove="Models\Sortings\**"/>
+        <EmbeddedResource Update="Resources\Strings.resx">
+            <Generator>ResXFileCodeGenerator</Generator>
+            <LastGenOutput>Strings.Designer.cs</LastGenOutput>
+        </EmbeddedResource>
+        <Compile Update="Resources\Strings.Designer.cs">
+            <DesignTime>True</DesignTime>
+            <AutoGen>True</AutoGen>
+            <DependentUpon>Strings.resx</DependentUpon>
+        </Compile>
     </ItemGroup>
 
     <ItemGroup>
         <!-- Folders for new Chute Rule settings UI -->
-        <Folder Include="ViewModels\Settings\ChuteRules\" />
-        <Folder Include="Views\Settings\ChuteRules\" />
+        <Folder Include="ViewModels\Settings\ChuteRules\"/>
+        <Folder Include="Views\Settings\ChuteRules\"/>
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="MahApps.Metro.IconPacks.Material" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
-        <PackageReference Include="Microsoft.Extensions.Configuration" />
-        <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
-        <PackageReference Include="Microsoft.Extensions.Hosting" />
-        <PackageReference Include="Microsoft.Extensions.Options" />
-        <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
-        <PackageReference Include="Prism.Wpf" />
-        <PackageReference Include="Prism.Unity" />
-        <PackageReference Include="Serilog" />
-        <PackageReference Include="SixLabors.ImageSharp" />
-        <PackageReference Include="System.IO.Ports" />
-        <PackageReference Include="HandyControl" />
-        <PackageReference Include="WPF-UI" />
-        <PackageReference Include="WPFLocalizeExtension" />
+        <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite"/>
+        <PackageReference Include="Microsoft.Extensions.Configuration"/>
+        <PackageReference Include="Microsoft.Extensions.Configuration.Json"/>
+        <PackageReference Include="Microsoft.Extensions.Hosting"/>
+        <PackageReference Include="Microsoft.Extensions.Options"/>
+        <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions"/>
+        <PackageReference Include="Prism.Wpf"/>
+        <PackageReference Include="Prism.Unity"/>
+        <PackageReference Include="Serilog"/>
+        <PackageReference Include="SixLabors.ImageSharp"/>
+        <PackageReference Include="System.IO.Ports"/>
+        <PackageReference Include="HandyControl"/>
+        <PackageReference Include="WPF-UI"/>
+        <PackageReference Include="WPFLocalizeExtension"/>
     </ItemGroup>
 
     <ItemGroup>
-      <Page Update="Views\Settings\ChuteRules\ChuteRuleSettingsView.xaml">
-        <XamlRuntime>Wpf</XamlRuntime>
-        <SubType>Designer</SubType>
-        <Generator>MSBuild:Compile</Generator>
-      </Page>
+        <Page Update="Views\Settings\ChuteRules\ChuteRuleSettingsView.xaml">
+            <XamlRuntime>Wpf</XamlRuntime>
+            <SubType>Designer</SubType>
+            <Generator>MSBuild:Compile</Generator>
+        </Page>
     </ItemGroup>
 
     <ItemGroup>
-      <None Remove="logo.ico" />
-      <Reference Include="WPFLocalizeExtension">
-        <HintPath>..\..\..\NugetPackages\wpflocalizeextension\3.10.0\lib\netcoreapp3.1\WPFLocalizeExtension.dll</HintPath>
-      </Reference>
-      <Resource Include="logo.ico">
-        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      </Resource>
+        <None Remove="logo.ico"/>
+        <Reference Include="WPFLocalizeExtension">
+            <HintPath>..\..\..\NugetPackages\wpflocalizeextension\3.10.0\lib\netcoreapp3.1\WPFLocalizeExtension.dll</HintPath>
+        </Reference>
+        <Resource Include="logo.ico">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </Resource>
     </ItemGroup>
 </Project>

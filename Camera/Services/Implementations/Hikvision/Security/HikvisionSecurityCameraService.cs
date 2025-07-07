@@ -5,7 +5,6 @@ using System.Reactive.Subjects;
 using System.Runtime.InteropServices;
 using System.Windows.Media.Imaging;
 using Camera.Interface;
-using Camera.Models;
 using Camera.Models.Settings;
 using Common.Models.Package;
 using Common.Services.Settings;

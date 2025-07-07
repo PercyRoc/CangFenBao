@@ -1,0 +1,29 @@
+{
+  "systemCode": "WMS001",
+  "houseCode": "WH001",
+  "orderNo": "SO20241215001",
+  "priority": 50,
+  "remark": "测试分拣单",
+  "items": [
+    {
+      "detailCode": "D001",
+      "itemCode": "BC123456789",
+      "skuCode": "SKU001",
+      "skuName": "测试商品1",
+      "shopCode": "SHOP001",
+      "shopName": "测试门店1"
+    },
+    {
+      "detailCode": "D002",
+      "itemCode": "BC987654321",
+      "skuCode": "SKU002",
+      "skuName": "测试商品2",
+      "shopCode": "SHOP002",
+      "shopName": "测试门店2"
+    }
+  ],
+  "extra": {
+    "customerName": "测试客户",
+    "urgentLevel": "normal"
+  }
+} 

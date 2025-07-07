@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <root>
-    <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
-        <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata" id="root"
+                xmlns="">
+        <xsd:import namespace="http://www.w3.org/XML/1998/namespace"/>
         <xsd:element name="root" msdata:IsDataSet="true">
             <xsd:complexType>
                 <xsd:choice maxOccurs="unbounded">
@@ -53,17 +54,21 @@
         <value>2.0</value>
     </resheader>
     <resheader name="reader">
-        <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+        <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral,
+            PublicKeyToken=b77a5c561934e089
+        </value>
     </resheader>
     <resheader name="writer">
-        <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+        <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral,
+            PublicKeyToken=b77a5c561934e089
+        </value>
     </resheader>
-    
+
     <!-- 窗口标题 -->
     <data name="Window_Title" xml:space="preserve">
         <value>播种墙系统</value>
     </data>
-    
+
     <!-- 按钮文本 -->
     <data name="Button_Settings" xml:space="preserve">
         <value>设置</value>
@@ -71,7 +76,7 @@
     <data name="Button_History" xml:space="preserve">
         <value>历史记录</value>
     </data>
-    
+
     <!-- 输入区域 -->
     <data name="Label_ScanProductSku" xml:space="preserve">
         <value>扫描商品SKU</value>
@@ -85,7 +90,7 @@
     <data name="Placeholder_EnterScanWaveNumber" xml:space="preserve">
         <value>请扫描或输入波次号</value>
     </data>
-    
+
     <!-- 信息面板 -->
     <data name="Label_PackageInfo" xml:space="preserve">
         <value>包裹信息</value>
@@ -93,12 +98,12 @@
     <data name="Label_Statistics" xml:space="preserve">
         <value>统计信息</value>
     </data>
-    
+
     <!-- 格口监控 -->
     <data name="Label_ChuteMonitoring" xml:space="preserve">
         <value>格口监控</value>
     </data>
-    
+
     <!-- 状态栏 -->
     <data name="Status_CPU" xml:space="preserve">
         <value>CPU</value>
@@ -109,7 +114,7 @@
     <data name="Status_Uptime" xml:space="preserve">
         <value>运行时间</value>
     </data>
-    
+
     <!-- 工具提示 -->
     <data name="Tooltip_Settings" xml:space="preserve">
         <value>打开设置</value>
@@ -117,7 +122,7 @@
     <data name="Tooltip_History" xml:space="preserve">
         <value>查看历史记录</value>
     </data>
-    
+
     <!-- 设置对话框 -->
     <data name="Settings_ModbusTcp" xml:space="preserve">
         <value>Modbus TCP</value>
@@ -137,7 +142,10 @@
     <data name="Settings_KuaiShou" xml:space="preserve">
         <value>韵达快手接口</value>
     </data>
-    
+    <data name="Settings_WebServer" xml:space="preserve">
+        <value>Web API 服务器</value>
+    </data>
+
     <!-- 性能监控面板 -->
     <data name="Label_PerformanceMonitor" xml:space="preserve">
         <value>性能监控</value>
@@ -175,7 +183,7 @@
     <data name="Description_BasedOnRecentProcessing" xml:space="preserve">
         <value>基于最近处理时间</value>
     </data>
-    
+
     <!-- 包裹信息项 -->
     <data name="PackageInfo_CurrentSku" xml:space="preserve">
         <value>当前SKU</value>
@@ -189,7 +197,7 @@
     <data name="PackageInfo_ChuteNumberDesc" xml:space="preserve">
         <value>当前分配的格口编号</value>
     </data>
-    
+
     <!-- 统计信息项 -->
     <data name="Statistics_TotalProcessed" xml:space="preserve">
         <value>处理总数</value>
@@ -215,7 +223,7 @@
     <data name="Statistics_AverageTimeDesc" xml:space="preserve">
         <value>平均处理时间</value>
     </data>
-    
+
     <!-- 单位 -->
     <data name="Unit_Pieces" xml:space="preserve">
         <value>件</value>
@@ -226,7 +234,7 @@
     <data name="Unit_Seconds" xml:space="preserve">
         <value>秒</value>
     </data>
-    
+
     <!-- 格口详情对话框 -->
     <data name="Dialog_ChutePackages_Title" xml:space="preserve">
         <value>格口包裹列表</value>
@@ -237,7 +245,7 @@
     <data name="DataGrid_Header_ScanTime" xml:space="preserve">
         <value>扫描时间</value>
     </data>
-    
+
     <!-- 消息提示 -->
     <data name="Message_PreviousRequestProcessing" xml:space="preserve">
         <value>上一个请求仍在处理中...</value>
@@ -251,7 +259,7 @@
     <data name="Message_TestingConnection" xml:space="preserve">
         <value>正在测试连接...</value>
     </data>
-    
+
     <!-- 占位符文本 -->
     <data name="Placeholder_None" xml:space="preserve">
         <value>无</value>
@@ -259,7 +267,7 @@
     <data name="Placeholder_NotApplicable" xml:space="preserve">
         <value>N/A</value>
     </data>
-    
+
     <!-- 模式切换 -->
     <data name="Mode_Test" xml:space="preserve">
         <value>测试模式</value>

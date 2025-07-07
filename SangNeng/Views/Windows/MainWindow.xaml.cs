@@ -1,12 +1,12 @@
 ﻿using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
-using Common.Services.Ui;
 using Serilog;
 using Sunnen.ViewModels.Windows;
 using MessageBoxResult = System.Windows.MessageBoxResult;
 using MessageBoxButton = System.Windows.MessageBoxButton;
 using System.Windows.Controls;
+using Common.Services.Notifications;
 
 namespace Sunnen.Views.Windows;
 

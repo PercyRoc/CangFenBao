@@ -1,10 +1,10 @@
 using System.Windows;
-using Common.Services.Ui;
 using Serilog;
 using XinJuLi.Models.ASN;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using Common.Services.Notifications;
 using Common.Services.Settings;
 using XinJuLi.Events;
 

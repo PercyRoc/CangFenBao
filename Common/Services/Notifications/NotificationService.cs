@@ -3,7 +3,7 @@ using System.Windows.Controls;
 using HandyControl.Controls;
 using HandyControl.Data;
 
-namespace Common.Services.Ui;
+namespace Common.Services.Notifications;
 
 public class NotificationService : INotificationService
 {

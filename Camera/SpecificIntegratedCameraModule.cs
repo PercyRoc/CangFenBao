@@ -1,7 +1,5 @@
 using Camera.Interface;
 using Camera.Services.Implementations.Hikvision.Integrated;
-using Prism.Ioc;
-using Prism.Modularity;
 using Serilog;
 
 namespace Camera

@@ -18,8 +18,8 @@ using Weight.Services;
 using Camera.Services.Implementations.Hikvision.Volume;
 using Camera.Services.Implementations.Hikvision.Security;
 using Common;
+using Common.Services.Notifications;
 using Common.Services.Settings;
-using Common.Services.Ui;
 using History;
 using History.Data;
 

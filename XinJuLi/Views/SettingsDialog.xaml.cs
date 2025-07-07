@@ -1,5 +1,5 @@
 ﻿using System.Windows;
-using Common.Services.Ui;
+using Common.Services.Notifications;
 
 namespace XinJuLi.Views;
 

@@ -11,30 +11,30 @@
 
 
     <ItemGroup>
-        <ProjectReference Include="..\Common\基础模块.csproj" />
+        <ProjectReference Include="..\Common\基础模块.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="FluentFTP" />
-        <PackageReference Include="MahApps.Metro.IconPacks.Material" />
-        <PackageReference Include="Prism.Unity" />
-        <PackageReference Include="Prism.Wpf" />
-        <PackageReference Include="WPF-UI" />
-        <PackageReference Include="EasyModbusTCP" />
+        <PackageReference Include="FluentFTP"/>
+        <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
+        <PackageReference Include="Prism.Unity"/>
+        <PackageReference Include="Prism.Wpf"/>
+        <PackageReference Include="WPF-UI"/>
+        <PackageReference Include="EasyModbusTCP"/>
     </ItemGroup>
 
     <ItemGroup>
-      <EmbeddedResource Update="Resources\Strings.resx">
-        <Generator>ResXFileCodeGenerator</Generator>
-        <LastGenOutput>Strings.Designer.cs</LastGenOutput>
-      </EmbeddedResource>
+        <EmbeddedResource Update="Resources\Strings.resx">
+            <Generator>ResXFileCodeGenerator</Generator>
+            <LastGenOutput>Strings.Designer.cs</LastGenOutput>
+        </EmbeddedResource>
     </ItemGroup>
 
     <ItemGroup>
-      <Compile Update="Resources\Strings.Designer.cs">
-        <DesignTime>True</DesignTime>
-        <AutoGen>True</AutoGen>
-        <DependentUpon>Strings.resx</DependentUpon>
-      </Compile>
+        <Compile Update="Resources\Strings.Designer.cs">
+            <DesignTime>True</DesignTime>
+            <AutoGen>True</AutoGen>
+            <DependentUpon>Strings.resx</DependentUpon>
+        </Compile>
     </ItemGroup>
 </Project>

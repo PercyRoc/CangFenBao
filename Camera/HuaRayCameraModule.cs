@@ -1,8 +1,5 @@
 using Camera.Interface;
-using Camera.Services;
 using Camera.Services.Implementations.HuaRay;
-using Prism.Ioc;
-using Prism.Modularity;
 using Serilog;
 
 namespace Camera

@@ -1,7 +1,7 @@
-﻿using Common.Services.Ui;
-using Serilog;
+﻿using Serilog;
 using SowingSorting.ViewModels.Settings;
 using ChileSowing.ViewModels.Settings;
+using Common.Services.Notifications;
 
 namespace ChileSowing.ViewModels;
 
@@ -13,6 +13,8 @@ public class SettingsDialogViewModel: BindableBase, IDialogAware, IDisposable
     
     private readonly KuaiShouSettingsViewModel _kuaiShouSettingsViewModel;
     
+    private readonly WebServerSettingsViewModel _webServerSettingsViewModel;
+    
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
         INotificationService notificationService)
@@ -21,6 +23,7 @@ public class SettingsDialogViewModel: BindableBase, IDialogAware, IDisposable
         RequestClose = new DialogCloseListener();
         _modbusTcpSettingsViewModel = containerProvider.Resolve<ModbusTcpSettingsViewModel>();
         _kuaiShouSettingsViewModel = containerProvider.Resolve<KuaiShouSettingsViewModel>();
+        _webServerSettingsViewModel = containerProvider.Resolve<WebServerSettingsViewModel>();
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
     }
@@ -52,6 +55,7 @@ public class SettingsDialogViewModel: BindableBase, IDialogAware, IDisposable
         {
             _modbusTcpSettingsViewModel.SaveCommand.Execute();
             _kuaiShouSettingsViewModel.SaveSettings();
+            _webServerSettingsViewModel.SaveCommand.Execute();
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");
             // 更新调用方式

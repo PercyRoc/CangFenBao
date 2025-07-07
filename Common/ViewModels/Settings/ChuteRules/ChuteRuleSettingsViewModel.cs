@@ -2,8 +2,8 @@ using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using System.Windows.Input;
 using Common.Models.Settings.ChuteRules;
+using Common.Services.Notifications;
 using Common.Services.Settings;
-using Common.Services.Ui;
 using Serilog;
 
 namespace Common.ViewModels.Settings.ChuteRules

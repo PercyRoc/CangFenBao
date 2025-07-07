@@ -1,5 +1,4 @@
 using System.Windows.Media.Imaging;
-using Prism.Mvvm;
 
 namespace Common.Models.Package;
 

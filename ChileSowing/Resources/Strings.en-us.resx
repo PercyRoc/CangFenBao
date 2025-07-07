@@ -1,45 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
 <root>
-    <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
-        <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata" id="root"
+                xmlns="">
+        <xsd:import namespace="http://www.w3.org/XML/1998/namespace"/>
         <xsd:element name="root" msdata:IsDataSet="true">
             <xsd:complexType>
                 <xsd:choice maxOccurs="unbounded">
                     <xsd:element name="metadata">
                         <xsd:complexType>
                             <xsd:sequence>
-                                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+                                <xsd:element name="value" type="xsd:string" minOccurs="0"/>
                             </xsd:sequence>
-                            <xsd:attribute name="name" use="required" type="xsd:string" />
-                            <xsd:attribute name="type" type="xsd:string" />
-                            <xsd:attribute name="mimetype" type="xsd:string" />
-                            <xsd:attribute ref="xml:space" />
+                            <xsd:attribute name="name" use="required" type="xsd:string"/>
+                            <xsd:attribute name="type" type="xsd:string"/>
+                            <xsd:attribute name="mimetype" type="xsd:string"/>
+                            <xsd:attribute ref="xml:space"/>
                         </xsd:complexType>
                     </xsd:element>
                     <xsd:element name="assembly">
                         <xsd:complexType>
-                            <xsd:attribute name="alias" type="xsd:string" />
-                            <xsd:attribute name="name" type="xsd:string" />
+                            <xsd:attribute name="alias" type="xsd:string"/>
+                            <xsd:attribute name="name" type="xsd:string"/>
                         </xsd:complexType>
                     </xsd:element>
                     <xsd:element name="data">
                         <xsd:complexType>
                             <xsd:sequence>
-                                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
-                                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+                                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1"/>
+                                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2"/>
                             </xsd:sequence>
-                            <xsd:attribute name="name" use="required" type="xsd:string" />
-                            <xsd:attribute name="type" type="xsd:string" />
-                            <xsd:attribute name="mimetype" type="xsd:string" />
-                            <xsd:attribute ref="xml:space" />
+                            <xsd:attribute name="name" use="required" type="xsd:string"/>
+                            <xsd:attribute name="type" type="xsd:string"/>
+                            <xsd:attribute name="mimetype" type="xsd:string"/>
+                            <xsd:attribute ref="xml:space"/>
                         </xsd:complexType>
                     </xsd:element>
                     <xsd:element name="resheader">
                         <xsd:complexType>
                             <xsd:sequence>
-                                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1"/>
                             </xsd:sequence>
-                            <xsd:attribute name="name" use="required" type="xsd:string" />
+                            <xsd:attribute name="name" use="required" type="xsd:string"/>
                         </xsd:complexType>
                     </xsd:element>
                 </xsd:choice>
@@ -53,17 +54,21 @@
         <value>2.0</value>
     </resheader>
     <resheader name="reader">
-        <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+        <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral,
+            PublicKeyToken=b77a5c561934e089
+        </value>
     </resheader>
     <resheader name="writer">
-        <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+        <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral,
+            PublicKeyToken=b77a5c561934e089
+        </value>
     </resheader>
-    
+
     <!-- Window Title -->
     <data name="Window_Title" xml:space="preserve">
         <value>Chile Sowing Wall System</value>
     </data>
-    
+
     <!-- Button Text -->
     <data name="Button_Settings" xml:space="preserve">
         <value>Settings</value>
@@ -71,7 +76,7 @@
     <data name="Button_History" xml:space="preserve">
         <value>History</value>
     </data>
-    
+
     <!-- Input Area -->
     <data name="Label_ScanProductSku" xml:space="preserve">
         <value>Scan Product SKU</value>
@@ -85,7 +90,7 @@
     <data name="Placeholder_EnterScanWaveNumber" xml:space="preserve">
         <value>Enter or scan wave number</value>
     </data>
-    
+
     <!-- Information Panel -->
     <data name="Label_PackageInfo" xml:space="preserve">
         <value>Package Information</value>
@@ -93,12 +98,12 @@
     <data name="Label_Statistics" xml:space="preserve">
         <value>Statistics</value>
     </data>
-    
+
     <!-- Chute Monitoring -->
     <data name="Label_ChuteMonitoring" xml:space="preserve">
         <value>Chute Monitoring</value>
     </data>
-    
+
     <!-- Status Bar -->
     <data name="Status_CPU" xml:space="preserve">
         <value>CPU</value>
@@ -109,7 +114,7 @@
     <data name="Status_Uptime" xml:space="preserve">
         <value>Uptime</value>
     </data>
-    
+
     <!-- Tooltips -->
     <data name="Tooltip_Settings" xml:space="preserve">
         <value>Open Settings</value>
@@ -117,7 +122,7 @@
     <data name="Tooltip_History" xml:space="preserve">
         <value>View History</value>
     </data>
-    
+
     <!-- Settings Dialog -->
     <data name="Settings_ModbusTcp" xml:space="preserve">
         <value>Modbus TCP</value>
@@ -137,7 +142,7 @@
     <data name="Settings_KuaiShou" xml:space="preserve">
         <value>YunDa KuaiShou API</value>
     </data>
-    
+
     <!-- Performance Monitor Panel -->
     <data name="Label_PerformanceMonitor" xml:space="preserve">
         <value>Performance Monitor</value>
@@ -175,7 +180,7 @@
     <data name="Description_BasedOnRecentProcessing" xml:space="preserve">
         <value>Based on recent processing</value>
     </data>
-    
+
     <!-- Package Information Items -->
     <data name="PackageInfo_CurrentSku" xml:space="preserve">
         <value>Current SKU</value>
@@ -189,7 +194,7 @@
     <data name="PackageInfo_ChuteNumberDesc" xml:space="preserve">
         <value>Current assigned chute number</value>
     </data>
-    
+
     <!-- Statistics Items -->
     <data name="Statistics_TotalProcessed" xml:space="preserve">
         <value>Total Processed</value>
@@ -215,7 +220,7 @@
     <data name="Statistics_AverageTimeDesc" xml:space="preserve">
         <value>Average processing time</value>
     </data>
-    
+
     <!-- Units -->
     <data name="Unit_Pieces" xml:space="preserve">
         <value>pcs</value>
@@ -226,7 +231,7 @@
     <data name="Unit_Seconds" xml:space="preserve">
         <value>sec</value>
     </data>
-    
+
     <!-- Chute Details Dialog -->
     <data name="Dialog_ChutePackages_Title" xml:space="preserve">
         <value>Chute Package List</value>
@@ -237,7 +242,7 @@
     <data name="DataGrid_Header_ScanTime" xml:space="preserve">
         <value>Scan Time</value>
     </data>
-    
+
     <!-- Message Notifications -->
     <data name="Message_PreviousRequestProcessing" xml:space="preserve">
         <value>Previous request is still processing...</value>
@@ -251,7 +256,7 @@
     <data name="Message_TestingConnection" xml:space="preserve">
         <value>Testing connection...</value>
     </data>
-    
+
     <!-- Placeholder Text -->
     <data name="Placeholder_None" xml:space="preserve">
         <value>None</value>
@@ -259,7 +264,7 @@
     <data name="Placeholder_NotApplicable" xml:space="preserve">
         <value>N/A</value>
     </data>
-    
+
     <!-- Mode Switching -->
     <data name="Mode_Test" xml:space="preserve">
         <value>Test Mode</value>

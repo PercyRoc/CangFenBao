@@ -18,7 +18,7 @@
              d:DesignWidth="1280"
              d:DesignHeight="720"
              d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}">
-   <Grid>
+    <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
@@ -48,6 +48,13 @@
                                                Icon="{ui:SymbolIcon CloudSync24}">
                             <ui:NavigationViewItem.TargetPageType>
                                 <x:Type Type="kuaiShouViews:KuaiShouSettingsView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
+                        <ui:NavigationViewItem Content="{lex:Loc Settings_WebServer}"
+                                               Tag="WebServerSettingsView"
+                                               Icon="{ui:SymbolIcon Server24}">
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="kuaiShouViews:WebServerSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>

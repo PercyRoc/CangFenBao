@@ -1,8 +1,7 @@
 ﻿using BalanceSorting.ViewModels.Settings;
 
 using Camera.ViewModels;
-
-using Common.Services.Ui;
+using Common.Services.Notifications;
 using Common.ViewModels.Settings.ChuteRules;
 
 using FuzhouPolicyForce.ViewModels.Settings;

@@ -6,15 +6,16 @@ using Serilog;
 using Microsoft.Extensions.Configuration;
 using ChileSowing.ViewModels;
 using Common.Services.Settings;
-using Common.Services.Ui;
 using SowingSorting.Services;
 using Common;
 using ChileSowing.Services;
 using System.Net.Http;
 using ChileSowing.ViewModels.Settings;
 using System.Globalization;
+using Common.Services.Notifications;
 using WPFLocalizeExtension.Engine;
-using Prism.Events;
+using Microsoft.Extensions.Logging;
+using Serilog.Extensions.Logging;
 
 namespace ChileSowing;
 
@@ -90,6 +91,28 @@ public partial class App
         {
             Log.Error(ex, "断开IModbusTcpService时发生异常。");
         }
+        
+        try
+        {
+            // 停止Web服务器
+            var webServerService = Container.Resolve<IWebServerService>();
+            {
+                Log.Information("正在停止Web服务器...");
+                var task = webServerService.StopAsync();
+                if (!task.Wait(TimeSpan.FromSeconds(5)))
+                {
+                    Log.Warning("Web服务器停止超时。");
+                }
+                else
+                {
+                    Log.Information("Web服务器已停止。");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "停止Web服务器时发生异常。");
+        }
         _mutex?.ReleaseMutex();
         _mutex = null;
         Log.CloseAndFlush();
@@ -111,6 +134,10 @@ public partial class App
         containerRegistry.RegisterInstance(_configuration); // 注册已创建和使用的 IConfiguration
         containerRegistry.RegisterInstance(Log.Logger); // 注册已配置的静态 Log.Logger 实例
         
+        // 注册 Microsoft.Extensions.Logging for Serilog
+        containerRegistry.RegisterInstance<ILoggerFactory>(new SerilogLoggerFactory(null, true));
+        containerRegistry.Register(typeof(ILogger<>), typeof(Logger<>));
+        
         containerRegistry.RegisterForNavigation<MainWindow, MainViewModel>();
         containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>();
         containerRegistry.RegisterDialog<ChuteDetailDialogView, ChuteDetailDialogViewModel>();
@@ -129,8 +156,14 @@ public partial class App
         // 注册KuaiShouSettingsViewModel
         containerRegistry.RegisterSingleton<KuaiShouSettingsViewModel>();
         
+        // 注册WebServerSettingsViewModel
+        containerRegistry.RegisterSingleton<WebServerSettingsViewModel>();
+        
         // 注册本地化服务
         containerRegistry.RegisterSingleton<ILocalizationService, LocalizationService>();
+        
+        // 注册Web服务器服务
+        containerRegistry.RegisterSingleton<IWebServerService, WebServerService>();
     }
 
     protected override void ConfigureModuleCatalog(IModuleCatalog moduleCatalog)
@@ -151,5 +184,9 @@ public partial class App
         
         var historyService = Container.Resolve<History.Data.IPackageHistoryDataService>();
         await historyService.InitializeAsync();
+        
+        // 启动Web服务器
+        var webServerService = Container.Resolve<IWebServerService>();
+        await webServerService.StartAsync();
     }
 }

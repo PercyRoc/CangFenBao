@@ -1,5 +1,3 @@
-using System.Threading.Tasks;
-
 namespace Server.YouYu.Services
 {
     public interface IYouYuService

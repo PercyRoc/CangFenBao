@@ -12,7 +12,6 @@ using Camera.Services.Implementations.RenJia;
 using Common.Models.Package;
 using Common.Services.Audio;
 using Common.Services.Settings;
-using Common.Services.Ui;
 using History.Data;
 using History.Views.Dialogs;
 using Serilog;
@@ -29,6 +28,7 @@ using DimensionImageSaveMode = Camera.Models.Settings.DimensionImageSaveMode;
 using History.Configuration;
 using Weight.Services;
 using System.Text;
+using Common.Services.Notifications;
 
 namespace Sunnen.ViewModels.Windows;
 

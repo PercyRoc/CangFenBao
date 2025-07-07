@@ -1,6 +1,6 @@
 using Common.Services.Audio;
+using Common.Services.Notifications;
 using Common.Services.Settings;
-using Common.Services.Ui;
 using Common.ViewModels.Settings.ChuteRules;
 using Common.Views.Settings.ChuteRules;
 using Serilog;

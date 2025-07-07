@@ -3,9 +3,9 @@ using System.Windows.Input;
 using ChileSowing.Models.Settings;
 using ChileSowing.Services;
 using Common.Services.Settings;
-using Common.Services.Ui;
 using Serilog;
 using System.Net.NetworkInformation;
+using Common.Services.Notifications;
 
 namespace ChileSowing.ViewModels.Settings;
 

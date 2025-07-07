@@ -7,35 +7,35 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
         <AssemblyName>Sunnen</AssemblyName>
-		<RootNamespace>Sunnen</RootNamespace>
+        <RootNamespace>Sunnen</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>
         <!-- Prism -->
-        <PackageReference Include="Prism.Wpf" />
+        <PackageReference Include="Prism.Wpf"/>
 
         <!-- Serilog -->
-        <PackageReference Include="Serilog" />
-        <PackageReference Include="Serilog.Sinks.Console" />
-        <PackageReference Include="Serilog.Sinks.File" />
-        <PackageReference Include="Serilog.Sinks.Debug" />
-        <PackageReference Include="Serilog.Extensions.Logging" />
+        <PackageReference Include="Serilog"/>
+        <PackageReference Include="Serilog.Sinks.Console"/>
+        <PackageReference Include="Serilog.Sinks.File"/>
+        <PackageReference Include="Serilog.Sinks.Debug"/>
+        <PackageReference Include="Serilog.Extensions.Logging"/>
 
         <!-- UI Framework -->
-        <PackageReference Include="WPF-UI" />
-        <PackageReference Include="HandyControl" />
-        <PackageReference Include="MahApps.Metro.IconPacks.Material" />
-        <PackageReference Include="NPOI" />
+        <PackageReference Include="WPF-UI"/>
+        <PackageReference Include="HandyControl"/>
+        <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
+        <PackageReference Include="NPOI"/>
 
         <!-- Serial Port -->
-        <PackageReference Include="System.IO.Ports" />
+        <PackageReference Include="System.IO.Ports"/>
         <PackageReference Include="WPFLocalizeExtension"/>
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Camera\相机模块.csproj" />
-        <ProjectReference Include="..\Common\基础模块.csproj" />
-        <ProjectReference Include="..\History\历史模块.csproj" />
-        <ProjectReference Include="..\Weight\称重模块.csproj" />
+        <ProjectReference Include="..\Camera\相机模块.csproj"/>
+        <ProjectReference Include="..\Common\基础模块.csproj"/>
+        <ProjectReference Include="..\History\历史模块.csproj"/>
+        <ProjectReference Include="..\Weight\称重模块.csproj"/>
     </ItemGroup>
 </Project>

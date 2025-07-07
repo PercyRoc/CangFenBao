@@ -1,7 +1,7 @@
 ﻿using System.Windows;
 using System.Windows.Controls;
 using Camera.Views;
-using Common.Services.Ui;
+using Common.Services.Notifications;
 
 namespace Rookie.Views.Dialogs;
 

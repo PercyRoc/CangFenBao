@@ -1,5 +1,4 @@
 ﻿using System.Windows.Media.Imaging;
-using Camera.Models;
 using Common.Models.Package;
 
 namespace Camera.Interface;

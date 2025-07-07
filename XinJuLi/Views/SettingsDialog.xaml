@@ -13,7 +13,7 @@
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}">
-    
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="32" />
@@ -101,7 +101,7 @@
                                 <x:Type Type="local:SortingModeSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
-                        
+
                         <ui:NavigationViewItem Content="ASN HTTP服务"
                                                Tag="ASN">
                             <ui:NavigationViewItem.Icon>
@@ -111,7 +111,7 @@
                                 <x:Type Type="local:AsnHttpSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
-                        
+
                         <!-- 分拣摆轮设置 -->
                         <ui:NavigationViewItem Content="分拣摆轮设置"
                                                Tag="BalanceSortSettings">

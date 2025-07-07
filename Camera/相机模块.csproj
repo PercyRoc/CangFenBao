@@ -10,57 +10,57 @@
         <UseWindowsForms>true</UseWindowsForms>
         <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
     </PropertyGroup>
-    
+
     <ItemGroup>
-        <PackageReference Include="Prism.Wpf" />
-        <PackageReference Include="Serilog" />
-        <PackageReference Include="Serilog.Sinks.Async" />
-        <PackageReference Include="Serilog.Sinks.Console" />
-        <PackageReference Include="Serilog.Sinks.Debug" />
-        <PackageReference Include="Serilog.Sinks.File" />
-        <PackageReference Include="WPF-UI" />
-        <PackageReference Include="HandyControl" />
-        <PackageReference Include="MahApps.Metro.IconPacks.Material" />
-        <PackageReference Include="WPFLocalizeExtension" />
-        <PackageReference Include="System.Reactive" />
-        <PackageReference Include="TurboJpegWrapper" />
-        <PackageReference Include="Microsoft.Extensions.ObjectPool" />
-    </ItemGroup>
-    
-    <ItemGroup>
-      <ProjectReference Include="..\Common\基础模块.csproj" />
+        <PackageReference Include="Prism.Wpf"/>
+        <PackageReference Include="Serilog"/>
+        <PackageReference Include="Serilog.Sinks.Async"/>
+        <PackageReference Include="Serilog.Sinks.Console"/>
+        <PackageReference Include="Serilog.Sinks.Debug"/>
+        <PackageReference Include="Serilog.Sinks.File"/>
+        <PackageReference Include="WPF-UI"/>
+        <PackageReference Include="HandyControl"/>
+        <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
+        <PackageReference Include="WPFLocalizeExtension"/>
+        <PackageReference Include="System.Reactive"/>
+        <PackageReference Include="TurboJpegWrapper"/>
+        <PackageReference Include="Microsoft.Extensions.ObjectPool"/>
     </ItemGroup>
 
     <ItemGroup>
-      <EmbeddedResource Include="Resources\CameraSettings.en-us.resx" />
-      <EmbeddedResource Include="Resources\CameraSettings.resx">
-        <Generator>ResXFileCodeGenerator</Generator>
-        <LastGenOutput>CameraSettings.Designer.cs</LastGenOutput>
-      </EmbeddedResource>
+        <ProjectReference Include="..\Common\基础模块.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
-      <None Update="MVIDCodeReader.Net.dll">
-        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      </None>
-      <None Update="VolMeasure.Net.dll">
-        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      </None>
+        <EmbeddedResource Include="Resources\CameraSettings.en-us.resx"/>
+        <EmbeddedResource Include="Resources\CameraSettings.resx">
+            <Generator>ResXFileCodeGenerator</Generator>
+            <LastGenOutput>CameraSettings.Designer.cs</LastGenOutput>
+        </EmbeddedResource>
     </ItemGroup>
 
     <ItemGroup>
-      <Reference Include="LogisticsBaseCSharp">
-        <HintPath>Services\Implementations\HuaRay\LogisticsBaseCSharp.dll</HintPath>
-      </Reference>
-      <Reference Include="MVIDCodeReader.Net">
-        <HintPath>MVIDCodeReader.Net.dll</HintPath>
-      </Reference>
-      <Reference Include="MvLogisticsSDK.Net">
-        <HintPath>Services\Implementations\Hikvision\MvLogisticsSDK.Net.dll</HintPath>
-      </Reference>
-      <Reference Include="VolMeasure.Net">
-        <HintPath>VolMeasure.Net.dll</HintPath>
-      </Reference>
+        <None Update="MVIDCodeReader.Net.dll">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Update="VolMeasure.Net.dll">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Reference Include="LogisticsBaseCSharp">
+            <HintPath>Services\Implementations\HuaRay\LogisticsBaseCSharp.dll</HintPath>
+        </Reference>
+        <Reference Include="MVIDCodeReader.Net">
+            <HintPath>MVIDCodeReader.Net.dll</HintPath>
+        </Reference>
+        <Reference Include="MvLogisticsSDK.Net">
+            <HintPath>Services\Implementations\Hikvision\MvLogisticsSDK.Net.dll</HintPath>
+        </Reference>
+        <Reference Include="VolMeasure.Net">
+            <HintPath>VolMeasure.Net.dll</HintPath>
+        </Reference>
     </ItemGroup>
 
 </Project>

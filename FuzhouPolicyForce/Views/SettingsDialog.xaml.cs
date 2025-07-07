@@ -1,6 +1,6 @@
 ﻿using System.Windows;
 using Camera.Views;
-using Common.Services.Ui;
+using Common.Services.Notifications;
 
 namespace FuzhouPolicyForce.Views;
 

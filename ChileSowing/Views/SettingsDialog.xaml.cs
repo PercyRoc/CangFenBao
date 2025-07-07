@@ -1,5 +1,7 @@
-﻿using Common.Services.Ui;
+﻿using System.Windows;
+using Common.Services.Notifications;
 using Serilog;
+using SowingSorting.Views.Settings;
 
 namespace ChileSowing.Views;
 
@@ -15,12 +17,12 @@ public partial class SettingsDialog
         Loaded += OnLoaded;
     }
 
-    private void OnLoaded(object sender, System.Windows.RoutedEventArgs e)
+    private void OnLoaded(object sender, RoutedEventArgs e)
     {
         try
         {
             // 默认导航到TCP Modbus Settings页面
-            RootNavigation?.Navigate(typeof(SowingSorting.Views.Settings.ModbusTcpSettingsView));
+            RootNavigation?.Navigate(typeof(ModbusTcpSettingsView));
         }
         catch (Exception ex)
         {

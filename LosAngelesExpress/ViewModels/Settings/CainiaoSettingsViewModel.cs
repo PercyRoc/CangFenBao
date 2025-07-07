@@ -1,11 +1,11 @@
 using Common.Models.Package;
 using Common.Services.Settings;
-using Common.Services.Ui;
 using LosAngelesExpress.Models.Settings;
 using LosAngelesExpress.Services;
 using Serilog;
 using System.ComponentModel;
 using System.Text.Json;
+using Common.Services.Notifications;
 
 namespace LosAngelesExpress.ViewModels.Settings;
 

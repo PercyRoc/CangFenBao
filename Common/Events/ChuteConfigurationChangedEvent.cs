@@ -1,5 +1,3 @@
-using Prism.Events;
-
 namespace Common.Events
 {
     /// <summary>

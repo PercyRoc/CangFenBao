@@ -86,7 +86,7 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
             //     Log.Warning("PackageHistoryDataService: 记录创建时间 {RecordCreateTime:yyyy-MM-dd HH:mm:ss.fff} 被认为无效 (过远未来或过去), 设置为当前系统时间 ({SystemTime:yyyy-MM-dd HH:mm:ss.fff}).", record.CreateTime, DateTime.Now);
             //     record.CreateTime = DateTime.Now;
             // }
-            Log.Information("PackageHistoryDataService: 最终用于确定表的记录创建时间: {FinalRecordCreateTime:yyyyMM} - {FinalRecordCreateTime:yyyy-MM-dd HH:mm:ss.fff}", record.CreateTime, record.CreateTime);
+            Log.Information("PackageHistoryDataService: 最终用于确定表的记录创建时间: {TableNameDate:yyyyMM} - {FullDate:yyyy-MM-dd HH:mm:ss.fff}", record.CreateTime, record.CreateTime);
 
             var targetTableName = GetTableName(record.CreateTime);
             Log.Information("PackageHistoryDataService: AddPackageAsync: 条码 {Barcode} (创建时间 {CreateTime:yyyy-MM-dd HH:mm:ss.fff}) 的数据将被写入表 {TargetTableName}.", record.Barcode, record.CreateTime, targetTableName);
@@ -94,7 +94,7 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
             await EnsureMonthlyTableExistsInternal(record.CreateTime);
             
             // 使用原生 SQL 进行插入操作
-            await using var connection = new SqliteConnection(_options.FindExtension<Microsoft.EntityFrameworkCore.Sqlite.Infrastructure.Internal.SqliteOptionsExtension>()?.ConnectionString);
+            await using var connection = new SqliteConnection(GetConnectionString());
             await connection.OpenAsync();
 
             // 【性能优化】使用乐观并发：直接尝试插入，利用唯一索引约束防重复
@@ -174,14 +174,14 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
         {
             foreach (var tableName in relevantTableNames)
             {
-                if (!TryParseDateFromTableName(tableName, out var tableDate)) 
+                if (!TryParseDateFromTableName(tableName, out _))
                 { 
                     Log.Warning("PackageHistoryDataService: 无法从表名 {TableName} 解析日期，跳过此表查询。", tableName);
                     continue; 
                 }
 
                 // 现在直接使用 SqliteConnection 和 SqliteCommand
-                await using var connection = new SqliteConnection(_options.FindExtension<Microsoft.EntityFrameworkCore.Sqlite.Infrastructure.Internal.SqliteOptionsExtension>()?.ConnectionString);
+                await using var connection = new SqliteConnection(GetConnectionString());
                 await connection.OpenAsync();
 
                 var tableExists = await TableExistsAsync(null, tableName, connection); // 传递连接，不再创建新的 DbContext
@@ -299,7 +299,7 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
             await EnsureMonthlyTableExistsInternal(package.CreateTime);
             
             // 使用原生 SQL 进行更新操作
-            await using var connection = new SqliteConnection(_options.FindExtension<Microsoft.EntityFrameworkCore.Sqlite.Infrastructure.Internal.SqliteOptionsExtension>()?.ConnectionString);
+            await using var connection = new SqliteConnection(GetConnectionString());
             await connection.OpenAsync();
 
             var tableExists = await TableExistsAsync(null, tableName, connection); // 传递连接
@@ -315,7 +315,7 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
             checkCommand.CommandText = checkSql;
             checkCommand.Parameters.Add(new SqliteParameter("@Id", package.Id));
             checkCommand.Parameters.Add(new SqliteParameter("@CreateTime", package.CreateTime.ToString("yyyy-MM-dd HH:mm:ss.fff")));
-            long count = (long)await checkCommand.ExecuteScalarAsync();
+            long count = Convert.ToInt64(await checkCommand.ExecuteScalarAsync());
 
             if (count == 0)
             {
@@ -372,7 +372,7 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
             await EnsureMonthlyTableExistsInternal(createTime);
             
             // 使用原生 SQL 进行删除操作
-            await using var connection = new SqliteConnection(_options.FindExtension<Microsoft.EntityFrameworkCore.Sqlite.Infrastructure.Internal.SqliteOptionsExtension>()?.ConnectionString);
+            await using var connection = new SqliteConnection(GetConnectionString());
             await connection.OpenAsync();
 
             var tableExists = await TableExistsAsync(null, tableName, connection); // 传递连接
@@ -388,7 +388,7 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
             checkCommand.CommandText = checkSql;
             checkCommand.Parameters.Add(new SqliteParameter("@Id", id));
             checkCommand.Parameters.Add(new SqliteParameter("@CreateTime", createTime.ToString("yyyy-MM-dd HH:mm:ss.fff")));
-            long count = (long)await checkCommand.ExecuteScalarAsync();
+            long count = Convert.ToInt64(await checkCommand.ExecuteScalarAsync());
 
             if (count == 0)
             {
@@ -633,7 +633,7 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
         else
         {
             // 获取连接字符串并创建新连接
-            var connectionString = _options.FindExtension<Microsoft.EntityFrameworkCore.Sqlite.Infrastructure.Internal.SqliteOptionsExtension>()?.ConnectionString;
+            var connectionString = GetConnectionString();
             if (string.IsNullOrEmpty(connectionString))
             {
                 Log.Error("PackageHistoryDataService: 无法获取数据库连接字符串。");
@@ -936,5 +936,12 @@ internal class PackageHistoryDataService : IPackageHistoryDataService
         {
             Log.Error(ex, "RenameMigratedLegacyDbFile: 重命名旧数据库文件 {LegacyDbFile} 失败。请手动检查。", legacyDbFilePath);
         }
+    }
+
+    private string? GetConnectionString()
+    {
+        #pragma warning disable EF1001 // Internal EF Core API usage.
+        return _options.FindExtension<Microsoft.EntityFrameworkCore.Sqlite.Infrastructure.Internal.SqliteOptionsExtension>()?.ConnectionString;
+        #pragma warning restore EF1001 // Internal EF Core API usage.
     }
 } 

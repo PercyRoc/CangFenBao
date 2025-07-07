@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using Prism.Mvvm;
 
 namespace Camera.Models.Settings;
 

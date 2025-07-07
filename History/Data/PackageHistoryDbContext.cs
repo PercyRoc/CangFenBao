@@ -31,12 +31,6 @@ public class PackageHistoryDbContext : DbContext
         // 日志由 Serilog 静态Log统一处理
     }
 
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-    {
-        // 如需日志，直接用Log
-        base.OnConfiguring(optionsBuilder);
-    }
-
     /// <summary>
     ///     配置模型
     /// </summary>

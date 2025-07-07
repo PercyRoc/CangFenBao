@@ -57,6 +57,7 @@
         <PackageReference Include="Serilog.Sinks.Debug"/>
         <PackageReference Include="Serilog.Extensions.Logging"/>
         <PackageReference Include="Serilog.Settings.Configuration"/>
+        <PackageReference Include="Serilog.AspNetCore"/>
 
         <!-- UI Framework -->
         <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
@@ -64,6 +65,12 @@
         <PackageReference Include="WPF-UI"/>
         <PackageReference Include="HandyControl"/>
         <PackageReference Include="WPFLocalizeExtension"/>
+        
+        <!-- Web API -->
+        <PackageReference Include="Microsoft.AspNetCore.Mvc"/>
+        <PackageReference Include="Microsoft.AspNetCore.Hosting"/>
+        <PackageReference Include="Microsoft.AspNetCore.Server.Kestrel"/>
+        <PackageReference Include="Microsoft.AspNetCore.Hosting.Abstractions"/>
 
     </ItemGroup>
 
@@ -90,10 +97,10 @@
     </ItemGroup>
 
     <ItemGroup>
-      <None Remove="logo.ico" />
-      <Resource Include="logo.ico">
-        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      </Resource>
+        <None Remove="logo.ico"/>
+        <Resource Include="logo.ico">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </Resource>
     </ItemGroup>
 
 </Project>

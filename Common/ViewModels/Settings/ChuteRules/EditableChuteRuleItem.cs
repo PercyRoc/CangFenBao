@@ -1,5 +1,4 @@
 using Common.Models.Settings.ChuteRules;
-using Prism.Mvvm;
 
 namespace Common.ViewModels.Settings.ChuteRules
 {

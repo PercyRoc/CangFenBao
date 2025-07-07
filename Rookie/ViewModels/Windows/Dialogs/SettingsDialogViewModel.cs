@@ -1,5 +1,5 @@
 ﻿using Camera.ViewModels;
-using Common.Services.Ui;
+using Common.Services.Notifications;
 using Rookie.ViewModels.Settings;
 using Serilog;
 using Sorting_Car.ViewModels;

@@ -7,12 +7,12 @@ using System.Windows.Threading;
 using Camera.Interface;
 using Common.Models;
 using Common.Models.Package;
-using Common.Services.Ui;
 using History.Configuration;
 using History.Data;
 using LosAngelesExpress.Services;
 using Serilog;
 using System.Diagnostics;
+using Common.Services.Notifications;
 
 namespace LosAngelesExpress.ViewModels;
 
