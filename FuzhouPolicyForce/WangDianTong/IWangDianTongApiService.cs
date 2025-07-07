@@ -1,5 +1,7 @@
 namespace FuzhouPolicyForce.WangDianTong;
 
+using System.Threading;
+
 /// <summary>
 ///     旺店通API服务接口
 /// </summary>
@@ -13,13 +15,15 @@ public interface IWangDianTongApiService
     /// <param name="isCheckWeight">是否校验重量是否超限</param>
     /// <param name="isCheckTradeStatus">是否判断退款状态</param>
     /// <param name="packagerNo">打包员编号</param>
+    /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>物流信息响应结果</returns>
     Task<WeightPushResponse> PushWeightAsync(
         string logisticsNo,
         decimal weight,
         bool isCheckWeight = true,
         bool isCheckTradeStatus = false,
-        string packagerNo = "");
+        string packagerNo = "",
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

@@ -6,8 +6,8 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
-        <ApplicationIcon>..\SharedUI\Resources\Icon\logo.ico</ApplicationIcon>
-        <AssemblyName>仓分宝-中旭云仓</AssemblyName>
+        <ApplicationIcon>Resources\favicon.ico</ApplicationIcon>
+        <AssemblyName>泉州市策力自动化科技有限公司</AssemblyName>
         <RootNamespace>FuzhouPolicyForce</RootNamespace>
     </PropertyGroup>
 
@@ -40,9 +40,6 @@
     <ItemGroup>
         <Resource Include="Resources\favicon.ico">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </Resource>
-        <Resource Include="..\SharedUI\Resources\Icon\logo.ico">
-            <Link>logo.ico</Link>
         </Resource>
     </ItemGroup>
 </Project>

@@ -1,3 +1,3 @@
 {
-    "dotnet.server.useOmnisharp": true
+    "dotnet.server.useOmnisharp": false
 }

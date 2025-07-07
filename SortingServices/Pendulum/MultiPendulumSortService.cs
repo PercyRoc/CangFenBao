@@ -406,7 +406,7 @@ public class MultiPendulumSortService(ISettingsService settingsService) : BasePe
             _lastSignalTimes[photoelectricName] = now; // 更新上次信号时间
 
             // 只对上升沿信号（OCCH2:1）做出反应
-            if (!message.Contains("OCCH2:1"))
+            if (!message.Contains("OCCH1:1"))
             {
                 // 记录Debug日志表示收到了其他信号，但不会处理
                 Log.Debug("收到分拣光电 {Name} 的非上升沿信号: {Message}，已忽略", photoelectricName, message);

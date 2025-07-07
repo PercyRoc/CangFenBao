@@ -63,13 +63,11 @@ internal partial class App
         // 注册多摆轮分拣服务
         containerRegistry.RegisterPendulumSortService(PendulumServiceType.Multi);
         containerRegistry.RegisterSingleton<IHostedService, PendulumSortHostedService>();
-        containerRegistry.RegisterSingleton<IWangDianTongApiService, WangDianTongApiService>();
-
-        // 注册旺店通API服务 V2
+        
+        // 注册旺店通API服务 V1
         // 注册 HttpClient
         containerRegistry.RegisterSingleton<HttpClient>();
-        // 注册新的旺店通API服务实现
-        containerRegistry.RegisterSingleton<IWangDianTongApiServiceV2, WangDianTongApiServiceImplV2>();
+        containerRegistry.RegisterSingleton<IWangDianTongApiService, WangDianTongApiService>();
     }
 
     protected override Window CreateShell()

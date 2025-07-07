@@ -12,6 +12,7 @@ public class ChuteSettings : BindableBase
     private Dictionary<int, BarcodeMatchRule> _chuteRules = [];
     private int _errorChuteNumber;
     private int _noReadChuteNumber;
+    private int _refundChuteNumber;
     private int _timeoutChuteNumber;
     private int _weightMismatchChuteNumber;
 
@@ -48,6 +49,13 @@ public class ChuteSettings : BindableBase
     {
         get => _weightMismatchChuteNumber;
         set => SetProperty(ref _weightMismatchChuteNumber, value);
+    }
+
+    [Range(0, 100, ErrorMessage = "退款格口必须在0-100之间")]
+    public int RefundChuteNumber
+    {
+        get => _refundChuteNumber;
+        set => SetProperty(ref _refundChuteNumber, value);
     }
 
     public Dictionary<int, BarcodeMatchRule> ChuteRules

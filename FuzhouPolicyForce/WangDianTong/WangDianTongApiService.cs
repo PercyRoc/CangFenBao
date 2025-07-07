@@ -22,14 +22,13 @@ public class WangDianTongApiService(HttpClient httpClient, ISettingsService sett
         decimal weight,
         bool isCheckWeight = true,
         bool isCheckTradeStatus = false,
-        string packagerNo = "")
+        string packagerNo = "",
+        CancellationToken cancellationToken = default)
     {
         Dictionary<string, string> requestParams = [];
+        var settings = settingsService.LoadSettings<WangDianTongSettings>();
         try
         {
-            // 获取旺店通配置
-            var settings = settingsService.LoadSettings<WangDianTongSettings>();
-
             // 构建请求参数
             var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             requestParams = new Dictionary<string, string>
@@ -68,8 +67,8 @@ public class WangDianTongApiService(HttpClient httpClient, ISettingsService sett
             requestParams.Add("sign", sign);
 
             // 构建请求URL
-            var apiUrl = $"{settings.GetApiBaseUrl()}open_api/service.php";
-            // var apiUrl = $"{settings.GetApiBaseUrl()}vip_stockout_sales_weight_push.php";
+            // var apiUrl = $"{settings.GetApiBaseUrl()}open_api/service.php";
+            var apiUrl = $"{settings.GetApiBaseUrl()}vip_stockout_sales_weight_push.php";
 
             // 记录请求详情
             Log.Information("旺店通重量回传请求: URL={Url}, 参数={@Params}",
@@ -80,13 +79,13 @@ public class WangDianTongApiService(HttpClient httpClient, ISettingsService sett
             var formContent = new FormUrlEncodedContent(requestParams);
 
             // 发送请求
-            var response = await httpClient.PostAsync(apiUrl, formContent);
+            var response = await httpClient.PostAsync(apiUrl, formContent, cancellationToken);
 
             // 确保请求成功
             response.EnsureSuccessStatusCode();
 
             // 解析响应
-            var result = await response.Content.ReadFromJsonAsync<WeightPushResponse>();
+            var result = await response.Content.ReadFromJsonAsync<WeightPushResponse>(cancellationToken: cancellationToken);
 
             // 记录响应详情
             if (result!.IsSuccess)
@@ -106,7 +105,7 @@ public class WangDianTongApiService(HttpClient httpClient, ISettingsService sett
         {
             Log.Error(ex, "旺店通重量回传HTTP请求异常: 物流单号={LogisticsNo}, 请求URL={Url}, 请求参数={@Params}",
                 logisticsNo,
-                $"{settingsService.LoadSettings<WangDianTongSettings>().GetApiBaseUrl()}vip_stockout_sales_weight_push.php",
+                $"{settings.GetApiBaseUrl()}vip_stockout_sales_weight_push.php",
                 requestParams.Where(p => p.Key != "sign").ToDictionary(p => p.Key, p => p.Value));
             return new WeightPushResponse
             {
@@ -118,7 +117,7 @@ public class WangDianTongApiService(HttpClient httpClient, ISettingsService sett
         {
             Log.Error(ex, "旺店通重量回传发生异常: 物流单号={LogisticsNo}, 请求URL={Url}, 请求参数={@Params}",
                 logisticsNo,
-                $"{settingsService.LoadSettings<WangDianTongSettings>().GetApiBaseUrl()}vip_stockout_sales_weight_push.php",
+                $"{settings.GetApiBaseUrl()}vip_stockout_sales_weight_push.php",
                 requestParams.Where(p => p.Key != "sign").ToDictionary(p => p.Key, p => p.Value));
             return new WeightPushResponse
             {
