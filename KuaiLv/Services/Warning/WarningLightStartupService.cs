@@ -5,7 +5,7 @@ namespace KuaiLv.Services.Warning;
 /// <summary>
 ///     警示灯托管服务
 /// </summary>
-internal class WarningLightStartupService(IWarningLightService warningLightService)
+public class WarningLightStartupService(IWarningLightService warningLightService)
 {
     /// <summary>
     ///     启动服务

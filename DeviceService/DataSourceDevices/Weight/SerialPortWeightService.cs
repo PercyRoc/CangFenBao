@@ -141,15 +141,31 @@ public class SerialPortWeightService : IDisposable
         Log.Debug("FindNearestWeight 开始 - 本地状态: {LocalConnected}, 底层状态: {ServiceConnected}, 目标时间: {TargetTime}",
             IsConnected, _serialPortService.IsConnected, targetTime);
 
-        // 主动检查连接状态，如果发现不一致则尝试同步
+        // 智能检查连接状态不一致的情况
         if (IsConnected != _serialPortService.IsConnected)
         {
-            Log.Warning("发现连接状态不一致，同步状态 - 本地: {Local}, 底层: {Service}",
-                IsConnected, _serialPortService.IsConnected);
-            IsConnected = _serialPortService.IsConnected;
+            Log.Warning("发现连接状态不一致 - 本地: {Local}, 底层: {Service}", IsConnected, _serialPortService.IsConnected);
+
+            switch (_serialPortService.IsConnected)
+            {
+                // 如果底层服务显示已连接，但本地状态显示断开，优先信任底层服务
+                case true when !IsConnected:
+                    Log.Information("底层服务显示已连接，同步本地状态为已连接");
+                    IsConnected = true;
+                    break;
+                // 如果底层服务显示断开，但本地状态显示连接，需要进一步验证
+                case false when IsConnected:
+                {
+                    Log.Warning("底层服务显示断开，但本地状态显示连接，尝试重连验证");
+                    var reconnectResult = _serialPortService.Connect();
+                    Log.Information("重连验证结果: {Result}", reconnectResult);
+                    IsConnected = _serialPortService.IsConnected;
+                    break;
+                }
+            }
         }
 
-        // 如果连接断开，尝试重连一次
+        // 如果连接确实断开，尝试重连一次
         if (!_serialPortService.IsConnected)
         {
             Log.Warning("发现串口连接断开，尝试重连...");
@@ -278,7 +294,15 @@ public class SerialPortWeightService : IDisposable
                     Log.Debug("收到信号但新数据不符合时间范围或仍为零，继续等待");
                 }
 
-                if (!_serialPortService.IsConnected)
+                // 在等待期间，如果底层服务显示断开，但本地状态显示连接，需要重新验证
+                if (!_serialPortService.IsConnected && IsConnected)
+                {
+                    Log.Warning("等待期间发现底层服务状态为断开，但本地状态为连接，重新验证连接状态");
+                    IsConnected = false;
+                    break; // 退出 while 循环
+                }
+                // 只有当底层服务确实断开时才停止等待
+                else if (!_serialPortService.IsConnected)
                 {
                     Log.Warning("等待重量数据期间串口连接断开，停止等待 - 本地状态: {LocalConnected}, 底层状态: {ServiceConnected}",
                         IsConnected, _serialPortService.IsConnected);
@@ -332,16 +356,19 @@ public class SerialPortWeightService : IDisposable
         try
         {
             var receivedString = Encoding.ASCII.GetString(data);
-            Log.Information("SerialPortWeightService - 收到原始数据: {Data}, 长度: {Length}, 连接状态: {Connected}, 时间: {Time}",
+            Log.Debug("SerialPortWeightService - 收到原始数据: {Data}, 长度: {Length}, 连接状态: {Connected}, 时间: {Time}",
                 receivedString, data.Length, _serialPortService.IsConnected, DateAndTime.Now);
 
             // 更新最后接收数据的时间
             _lastDataReceiveTime = DateTime.Now;
 
-            // 如果收到数据但连接状态显示断开，这是异常情况
+            // 如果收到数据但连接状态显示断开，这是异常情况，主动修复
             if (!_serialPortService.IsConnected)
             {
-                Log.Warning("收到数据但连接状态显示断开，这可能是状态同步问题");
+                Log.Warning("收到数据但底层服务状态为断开，此为异常状态，将尝试强制重新连接以同步状态...");
+                _serialPortService.Disconnect(); // 尝试清理
+                var reconnectResult = _serialPortService.Connect(); // 重建连接和状态
+                Log.Information("数据接收期间的重连尝试结果: {Result}", reconnectResult);
             }
 
             lock (_lock)
@@ -475,37 +502,41 @@ public class SerialPortWeightService : IDisposable
         _weightSamples.Add(weightG);
         Log.Debug("添加重量样本: {Weight:F2}g, 当前样本数: {Count}", weightG, _weightSamples.Count);
 
-        while (_weightSamples.Count > _settingsService.LoadSettings<WeightSettings>().StableCheckCount)
+        var stableCheckCount = _settingsService.LoadSettings<WeightSettings>().StableCheckCount;
+        while (_weightSamples.Count > stableCheckCount)
         {
             _weightSamples.RemoveAt(0);
             Log.Debug("移除最旧样本，当前样本数: {Count}", _weightSamples.Count);
         }
 
-        if (_weightSamples.Count < _settingsService.LoadSettings<WeightSettings>().StableCheckCount)
+        if (_weightSamples.Count < stableCheckCount)
         {
             Log.Debug("样本数量不足，需要 {Required} 个样本，当前: {Current}",
-                _settingsService.LoadSettings<WeightSettings>().StableCheckCount,
+                stableCheckCount,
                 _weightSamples.Count);
             return;
         }
 
-        var average = _weightSamples.Average();
+        // 改为滑动窗口判断：检查窗口中最后一个值与所有先前值的绝对差是否均小于阈值
+        var lastWeight = _weightSamples[^1]; // 使用C# 8.0的索引器获取最后一个元素
         const double stableThresholdG = StableThreshold * 1000;
-        var isStable = _weightSamples.All(w => Math.Abs(w - average) <= stableThresholdG);
+
+        // LINQ表达式：取窗口中除最后一个元素外的所有元素，然后检查它们是否都满足稳定条件
+        var isStable = _weightSamples.Take(_weightSamples.Count - 1).All(w => Math.Abs(w - lastWeight) <= stableThresholdG);
 
         if (!isStable)
         {
             var samplesString = string.Join(", ", _weightSamples.Select(w => w.ToString("F2")));
-            Log.Debug("重量样本不稳定: Avg={Avg:F2}g, 阈值={Threshold:F2}g, Samples=[{Samples}]",
-                average, stableThresholdG, samplesString);
+            Log.Debug("重量样本不稳定 (滑动窗口检查): Last={Last:F2}g, 阈值={Threshold:F2}g, Samples=[{Samples}]",
+                lastWeight, stableThresholdG, samplesString);
             return;
         }
 
-        Log.Information("重量稳定: {Weight:F2}g, 样本数: {Count}", average, _weightSamples.Count);
+        Log.Debug("重量稳定 (滑动窗口): {Weight:F2}g, 样本数: {Count}", lastWeight, _weightSamples.Count);
 
         lock (_lock)
         {
-            _weightCache.Enqueue((average, timestamp));
+            _weightCache.Enqueue((lastWeight, timestamp)); // 使用最后一个稳定的重量值
             while (_weightCache.Count > MaxCacheSize) _weightCache.Dequeue();
         }
 
@@ -559,19 +590,36 @@ public class SerialPortWeightService : IDisposable
         try
         {
             var now = DateTime.Now;
-            var timeSinceLastData = _lastDataReceiveTime == DateTime.MinValue ?
-                TimeSpan.Zero : now - _lastDataReceiveTime;
+            var timeSinceLastData = _lastDataReceiveTime == DateTime.MinValue
+                ? TimeSpan.MaxValue // 如果从未收到数据，则认为时间间隔是无限大
+                : now - _lastDataReceiveTime;
 
-            Log.Information("串口状态检查 - 连接状态: {Connected}, 最后接收数据: {LastReceive}, 距离上次: {TimeSince:F1}秒, 缓存数量: {CacheCount}",
+            Log.Information(
+                "串口状态检查 - 连接状态: {Connected}, 最后接收数据: {LastReceive}, 距离上次: {TimeSince:F1}秒, 缓存数量: {CacheCount}",
                 _serialPortService.IsConnected,
                 _lastDataReceiveTime == DateTime.MinValue ? "从未接收" : _lastDataReceiveTime.ToString("HH:mm:ss.fff"),
-                timeSinceLastData.TotalSeconds,
+                _lastDataReceiveTime == DateTime.MinValue ? -1 : timeSinceLastData.TotalSeconds,
                 _weightCache.Count);
 
-            // 如果超过30秒没有收到数据且连接状态显示正常，发出警告
-            if (_serialPortService.IsConnected && timeSinceLastData.TotalSeconds > 30 && _lastDataReceiveTime != DateTime.MinValue)
+            // 如果连接正常但超过30秒没有收到数据（或从未收到数据），则认为可能出现问题
+            if (_serialPortService.IsConnected && timeSinceLastData.TotalSeconds > 30)
             {
-                Log.Warning("串口连接正常但超过30秒未收到数据，可能存在通信问题");
+                Log.Warning("串口连接正常但超过30秒未收到数据，可能存在通信问题，将尝试重新连接...");
+                // 尝试重新连接
+                _serialPortService.Disconnect();
+                var reconnectResult = _serialPortService.Connect();
+                Log.Information("状态检查期间的重连尝试结果: {Result}", reconnectResult);
+                if (reconnectResult)
+                {
+                    // 重连成功后，重置数据接收时间，避免立即再次触发重连
+                    _lastDataReceiveTime = DateTime.Now;
+                }
+            }
+            else if (!_serialPortService.IsConnected)
+            {
+                Log.Information("串口当前处于断开状态，将尝试重新连接...");
+                var reconnectResult = _serialPortService.Connect();
+                Log.Information("状态检查期间的重连尝试结果: {Result}", reconnectResult);
             }
         }
         catch (Exception ex)

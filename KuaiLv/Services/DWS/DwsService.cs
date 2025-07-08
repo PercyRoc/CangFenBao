@@ -17,7 +17,7 @@ namespace KuaiLv.Services.DWS;
 /// <summary>
 ///     DWS服务实现
 /// </summary>
-internal class DwsService : IDwsService, IDisposable
+public class DwsService : IDwsService, IDisposable
 {
     private readonly HttpClient _httpClient;
     private readonly Timer _networkCheckTimer;
@@ -305,6 +305,164 @@ internal class DwsService : IDwsService, IDisposable
         }
     }
 
+    /// <summary>
+    ///     重试上报包裹信息（专门用于离线包裹重试，避免重复保存）
+    /// </summary>
+    private async Task<DwsResponse> RetryReportPackageAsync(PackageInfo package)
+    {
+        try
+        {
+            // 每次都加载最新的配置
+            var uploadConfig = _settingsService.LoadSettings<UploadConfiguration>();
+            var appSettings = _settingsService.LoadSettings<AppSettings>();
+
+            // 获取当前操作模式
+            var operationMode = appSettings.OperationMode + 1; // 加1是因为UI从0开始，接口从1开始
+            Log.Debug("当前操作场景：{OperateScene}", operationMode);
+
+            // 构建请求数据
+            var request = new DwsRequest
+            {
+                BarCode = string.IsNullOrEmpty(package.Barcode) ? "noread" : package.Barcode,
+                Weight = Math.Round(package.Weight, 2),
+                Length = package.Length ?? 0,
+                Width = package.Width ?? 0,
+                Height = package.Height ?? 0,
+                Volume = package.Volume ?? 0,
+                Timestamp = package.CreateTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                OperateScene = operationMode // 设置操作场景
+            };
+
+            // 序列化请求数据
+            var jsonContent = JsonSerializer.Serialize(request);
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+            // 计算Content-MD5 - 正确计算一次并使用Base64格式
+            var contentMd5 = Convert.ToBase64String(MD5.HashData(Encoding.UTF8.GetBytes(jsonContent)));
+            content.Headers.ContentMD5 = Convert.FromBase64String(contentMd5);
+
+            // 构建签名字符串 - 确保路径一致
+            var timestamp = DateTimeOffset.Now.ToUnixTimeMilliseconds().ToString();
+            // 统一使用相同的API路径
+            const string path = "/haina/parcel/dws/w/bindWeight";
+            var stringToSign = $"POST\n{contentMd5}\n{path}";
+
+            // 计算签名
+            var secret = uploadConfig.Secret;
+            var signature = Convert.ToBase64String(new HMACSHA256(Encoding.UTF8.GetBytes(secret))
+                .ComputeHash(Encoding.UTF8.GetBytes(stringToSign)));
+
+            // 设置基地址 - 每次都从最新配置读取
+            var baseAddress = uploadConfig.Environment == UploadEnvironment.Production
+                ? "https://klwms.meituan.com"
+                : "https://klvwms.meituan.com";
+
+            // 记录请求前的信息
+            Log.Information("DWS重试请求参数: BaseUrl={BaseUrl}, Path={Path}, Method={Method}",
+                baseAddress, path, "POST");
+            Log.Information("DWS重试请求头: Accept={Accept}, App={App}, Timestamp={Timestamp}, MD5={MD5}",
+                "application/json", "kl_dws_weighing", timestamp, contentMd5);
+            Log.Information("DWS重试请求体: {RequestBody}", jsonContent);
+
+            // 使用完整URL
+            var fullUrl = new Uri($"{baseAddress}{path}");
+            Log.Information("DWS重试完整请求URL: {FullUrl}", fullUrl);
+
+            var requestMessage = new HttpRequestMessage(HttpMethod.Post, fullUrl)
+            {
+                Content = content
+            };
+
+            // 设置请求头部
+            requestMessage.Headers.Add("Accept", "application/json");
+            requestMessage.Headers.Add("S-Ca-App", "kl_dws_weighing");
+            requestMessage.Headers.Add("S-Ca-Timestamp", timestamp);
+            requestMessage.Headers.Add("S-Ca-Signature", signature);
+
+            // 发送请求
+            Log.Information("开始发送DWS重试请求...");
+            var response = await _httpClient.SendAsync(requestMessage);
+            Log.Information("DWS重试响应状态码: {StatusCode}", response.StatusCode);
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+            Log.Information("DWS重试响应内容: {ResponseContent}", responseContent);
+
+            DwsResponse? result;
+            try
+            {
+                result = JsonSerializer.Deserialize<DwsResponse>(responseContent);
+            }
+            catch (JsonException jsonEx)
+            {
+                Log.Error(jsonEx, "DWS重试服务响应解析异常: {ResponseContent}", responseContent);
+                package.SetStatus(PackageStatus.Error, "服务响应解析失败");
+                return new DwsResponse
+                {
+                    Success = false,
+                    Message = "服务器响应解析失败",
+                    Code = "PARSE_ERROR"
+                };
+            }
+
+            if (result == null)
+            {
+                Log.Error("DWS重试服务响应解析为null: {ResponseContent}", responseContent);
+                package.SetStatus(PackageStatus.Error, "服务响应解析失败");
+                return new DwsResponse
+                {
+                    Success = false,
+                    Message = "服务器响应解析失败",
+                    Code = "NULL_RESPONSE"
+                };
+            }
+
+            // 检查是否成功
+            if (result.IsSuccess)
+            {
+                var successMessage = string.IsNullOrEmpty(result.Message) ? "重试上报成功：多退少补品" : result.Message;
+                Log.Information("包裹重试上报成功：{Barcode}, Message: {Message}", package.Barcode, successMessage);
+                package.SetStatus(PackageStatus.Success, successMessage);
+                return result;
+            }
+
+            // 处理失败情况
+            string? errorMessage;
+            const PackageStatus errorStatus = PackageStatus.Error;
+
+            switch (result.ResponseCodeValue)
+            {
+                case 1003:
+                case 1005:
+                case 1004:
+                    errorMessage = result.Message;
+                    Log.Warning("重试上报 - {ErrorMessage} Barcode: {Barcode}", errorMessage, package.Barcode);
+                    break;
+                default:
+                    errorMessage = result.Code switch
+                    {
+                        int => result.Message,
+                        string strCode => $"服务错误[{strCode}]：{result.Message}",
+                        _ => $"处理失败：{result.Message}"
+                    };
+                    Log.Error("重试上报 - {ErrorMessage} Barcode: {Barcode}", errorMessage, package.Barcode);
+                    break;
+            }
+
+            package.SetStatus(errorStatus, errorMessage);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "DWS重试服务请求异常: {Type}, {Message}", ex.GetType().Name, ex.Message);
+            package.SetStatus(PackageStatus.Error, $"重试异常：{ex.Message}");
+            return new DwsResponse
+            {
+                Code = 500,
+                Message = ex.Message
+            };
+        }
+    }
+
     private async Task CheckNetworkStatusAsync()
     {
         try
@@ -405,35 +563,33 @@ internal class DwsService : IDwsService, IDisposable
                     try
                     {
                         Log.Information("开始重试上传包裹：{Barcode}", package.Barcode);
-                        // 调用上报接口
-                        var result = await ReportPackageAsync(package);
+                        // 调用专门的重试上报接口，避免重复保存
+                        var result = await RetryReportPackageAsync(package);
 
-                        // 严格检查 IsSuccess 属性判断是否成功
+                        // 无论成功还是失败，都标记为已处理，不再重试
+                        await _offlinePackageService.MarkOfflinePackageAsRetryCompletedAsync(package.Barcode, package.CreateTime, result.IsSuccess);
+                        
                         if (result.IsSuccess)
                         {
-                            // 传递包裹创建时间，帮助正确定位记录
-                            await _offlinePackageService.MarkOfflinePackageAsUploadedAsync(package.Barcode, package.CreateTime);
                             successCount++;
-                            Log.Information("离线包裹上传成功并已从数据库中标记处理：{Barcode}", package.Barcode);
+                            Log.Information("离线包裹重试上传成功：{Barcode}", package.Barcode);
                         }
                         else
                         {
-                            // 上传失败 (API错误 或 ReportPackageAsync内部因网络问题再次保存)
                             failCount++;
-                            var errorMessage = $"离线包裹 {package.Barcode} 上传失败：Code={result.Code}, Value={result.ResponseCodeValue}, Msg='{result.Message}'";
+                            var errorMessage = $"离线包裹 {package.Barcode} 重试上传失败：Code={result.Code}, Value={result.ResponseCodeValue}, Msg='{result.Message}'";
                             errorMessages.Add(errorMessage);
                             Log.Warning(errorMessage);
-                            // 失败时不删除，保留在离线库中
                         }
                     }
                     catch (Exception ex)
                     {
-                        // ReportPackageAsync 内部有异常处理，但以防万一这里也捕获
+                        // 发生异常时也标记为已处理，不再重试
+                        await _offlinePackageService.MarkOfflinePackageAsRetryCompletedAsync(package.Barcode, package.CreateTime, false);
                         failCount++;
                         var errorMessage = $"处理离线包裹 {package.Barcode} 时发生意外异常：{ex.Message}";
                         errorMessages.Add(errorMessage);
                         Log.Error(ex, errorMessage);
-                        // 发生异常时也不删除
                     }
                 }
 
@@ -477,7 +633,7 @@ internal class DwsService : IDwsService, IDisposable
     /// <summary>
     ///     释放资源
     /// </summary>
-    protected virtual void Dispose(bool disposing)
+    protected void Dispose(bool disposing)
     {
         if (_disposed) return;
 

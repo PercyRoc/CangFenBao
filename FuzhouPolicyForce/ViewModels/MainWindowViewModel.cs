@@ -13,6 +13,8 @@ using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Scanner;
 using DeviceService.DataSourceDevices.Services;
+using FuzhouPolicyForce.Models.AnttoWeight;
+using FuzhouPolicyForce.Services.AnttoWeight;
 using FuzhouPolicyForce.WangDianTong;
 using Serilog;
 using SharedUI.Models;
@@ -32,6 +34,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private readonly DispatcherTimer _timer;
 
     private readonly IWangDianTongApiService _wangDianTongApiService;
+    private readonly IAnttoWeightService _anttoWeightService;
 
     private string _currentBarcode = string.Empty;
 
@@ -53,7 +56,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         PackageTransferService packageTransferService,
         ScannerStartupService scannerStartupService,
         IPackageDataService packageDataService,
-        IWangDianTongApiService wangDianTongApiService)
+        IWangDianTongApiService wangDianTongApiService,
+        IAnttoWeightService anttoWeightService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
@@ -61,11 +65,13 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         _sortService = sortService;
         _packageDataService = packageDataService;
         _wangDianTongApiService = wangDianTongApiService;
+        _anttoWeightService = anttoWeightService;
         scannerStartupService.GetScannerService();
 
         // 初始化命令
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
         OpenHistoryCommand = new DelegateCommand(ExecuteOpenHistory);
+        OpenCalibrationCommand = new DelegateCommand(ExecuteOpenCalibration);
 
         // 初始化系统状态更新定时器
         _timer = new DispatcherTimer
@@ -128,6 +134,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     public DelegateCommand OpenHistoryCommand { get; }
 
+    public DelegateCommand OpenCalibrationCommand { get; }
+
     public string CurrentBarcode
     {
         get => _currentBarcode;
@@ -160,6 +168,55 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private void ExecuteOpenSettings()
     {
         _dialogService.ShowDialog("SettingsDialog");
+    }
+
+    private void ExecuteOpenCalibration()
+    {
+        try
+        {
+            var config = _settingsService.LoadSettings<PendulumSortConfig>();
+            var targets = new List<CalibrationTarget>();
+
+            // 添加完整标定流程目标
+            targets.Add(new CalibrationTarget
+            {
+                Id = "Trigger", // 特殊ID，用于匹配
+                DisplayName = "完整标定流程 (触发时间 + 分拣时间)",
+                Mode = CalibrationMode.CompleteFlow,
+                TimeRangeLower = config.TriggerPhotoelectric.SortingTimeRangeLower,
+                TimeRangeUpper = config.TriggerPhotoelectric.SortingTimeRangeUpper,
+                SortingDelay = config.TriggerPhotoelectric.SortingDelay,
+                ResetDelay = config.TriggerPhotoelectric.ResetDelay
+            });
+
+            var parameters = new DialogParameters { { "targets", targets } };
+
+            _dialogService.ShowDialog("CalibrationDialogView", parameters, r =>
+            {
+                if (r.Result != ButtonResult.OK) return;
+
+                var updatedTargets = r.Parameters.GetValue<List<CalibrationTarget>>("targets");
+                if (updatedTargets == null) return;
+
+                foreach (var target in updatedTargets)
+                {
+                    if (target.Id == "Trigger")
+                    {
+                        config.TriggerPhotoelectric.SortingTimeRangeLower = (int)target.TimeRangeLower;
+                        config.TriggerPhotoelectric.SortingTimeRangeUpper = (int)target.TimeRangeUpper;
+                        config.TriggerPhotoelectric.SortingDelay = (int)target.SortingDelay;
+                        config.TriggerPhotoelectric.ResetDelay = (int)target.ResetDelay;
+                    }
+                }
+
+                _settingsService.SaveSettings(config);
+                Log.Information("标定设置已从对话框回调中成功保存。");
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "打开或处理标定对话框时发生错误");
+        }
     }
 
     private void ExecuteOpenHistory()
@@ -416,10 +473,10 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             if (string.IsNullOrEmpty(package.Barcode) ||
                 string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase))
             {
-                package.SetChute(chuteSettings.NoReadChuteNumber);
+                package.SetChute(chuteSettings.ErrorChuteNumber);
                 package.SetStatus(PackageStatus.Failed, "条码为空或无法识别");
-                Log.Warning("包裹条码为空或noread，分配到NoRead格口 {NoReadChute}：{Barcode}", 
-                    chuteSettings.NoReadChuteNumber, package.Barcode ?? "NULL");
+                Log.Warning("包裹条码为空或noread，分配到异常格口 {ErrorChute}：{Barcode}",
+                    chuteSettings.ErrorChuteNumber, package.Barcode ?? "NULL");
                 Interlocked.Increment(ref _errorPackageCount);
 
                 // 直接处理包裹，跳过API调用和本地规则匹配
@@ -445,134 +502,102 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 return; // 处理完毕，退出方法
             }
 
-            // 条码有效，尝试调用旺店通API回传重量
-            var apiSuccess = false;
-            var apiMessage = "未调用API";
-
+            // 在本地规则匹配之前调用安通API上传称重数据
+            var anttoApiSuccess = false;
+            var anttoApiMessage = "未调用安通API";
             try
             {
-                using var cts = new CancellationTokenSource(300);
-                var response = await _wangDianTongApiService.PushWeightAsync(
-                    package.Barcode,
-                    (decimal)package.Weight,
-                    isCheckWeight: true,
-                    isCheckTradeStatus: false,
-                    packagerNo: "",
-                    cancellationToken: cts.Token);
-
-                // 只判断API回传是否成功，不使用API返回的格口号
-                apiSuccess = response.IsSuccess;
-                apiMessage = response.Message ?? (apiSuccess ? "API回传成功" : "API回传失败");
-
-                if (!apiSuccess)
+                var anttoRequest = new AnttoWeightRequest
                 {
-                    // API 回传失败，先检查是否为退款订单
-                    if (IsRefundOrder(response))
-                    {
-                        // 退款订单，使用退款格口
-                        package.SetChute(chuteSettings.RefundChuteNumber);
-                        package.SetStatus(PackageStatus.Success, $"退款订单: {apiMessage}");
-                        Log.Information("包裹 {Barcode} 检测到退款订单(API失败)，分配到退款格口 {RefundChute}: {Message}", 
-                            package.Barcode, chuteSettings.RefundChuteNumber, apiMessage);
-                        Interlocked.Increment(ref _successPackageCount);
-                    }
-                    else if (IsWeightMismatch(response))
-                    {
-                        // 重量不匹配，使用重量不匹配格口
-                        package.SetChute(chuteSettings.WeightMismatchChuteNumber);
-                        package.SetStatus(PackageStatus.Error, $"重量不匹配: {apiMessage}");
-                        Log.Warning("包裹 {Barcode} 重量不匹配，分配到重量不匹配格口 {WeightMismatchChute}: {Message}", 
-                            package.Barcode, chuteSettings.WeightMismatchChuteNumber, apiMessage);
-                        Interlocked.Increment(ref _errorPackageCount);
-                    }
-                    else
-                    {
-                        // 其他API失败，使用错误格口
-                        package.SetChute(chuteSettings.ErrorChuteNumber);
-                        package.SetStatus(PackageStatus.Error, $"API回传失败: {apiMessage}");
-                        Log.Warning("包裹 {Barcode} 旺店通回传失败，分配到错误格口 {ErrorChute}: {Message}", 
-                            package.Barcode, chuteSettings.ErrorChuteNumber, apiMessage);
-                        Interlocked.Increment(ref _errorPackageCount);
-                    }
+                    WaybillCode = package.Barcode,
+                    Weight = package.Weight
+                };
+
+                var anttoResponse = await _anttoWeightService.UploadWeightAsync(anttoRequest);
+
+                if (anttoResponse.Code == "0")
+                {
+                    anttoApiSuccess = true;
+                    anttoApiMessage = "安通API称重数据上传成功";
+                    Log.Information("包裹 {Barcode} 安通API称重数据上传成功", package.Barcode);
                 }
                 else
                 {
-                    // API 回传成功，检查是否包含退款信息
-                    if (IsRefundOrder(response))
-                    {
-                        // 退款订单，使用退款格口
-                        package.SetChute(chuteSettings.RefundChuteNumber);
-                        package.SetStatus(PackageStatus.Success, "退款订单已分配到退款格口");
-                        Log.Information("包裹 {Barcode} 检测到退款订单，分配到退款格口 {RefundChute}", 
-                            package.Barcode, chuteSettings.RefundChuteNumber);
-                        Interlocked.Increment(ref _successPackageCount);
-                    }
-                    else
-                    {
-                        // 非退款订单，继续走本地规则判断
-                        Log.Information("包裹 {Barcode} 旺店通回传成功 (将使用本地规则)", package.Barcode);
-                        // API成功，此时不设置状态和格口，继续走本地规则判断
-                    }
+                    anttoApiMessage = $"安通API称重数据上传失败: {anttoResponse.Msg} (Code: {anttoResponse.Code})";
+                    Log.Warning("包裹 {Barcode} {Message}", package.Barcode, anttoApiMessage);
                 }
-            }
-            catch (OperationCanceledException)
-            {
-                apiSuccess = false;
-                apiMessage = "API调用超时 (超过300ms)";
-                Log.Warning("旺店通API调用超时，分配到超时格口 {TimeoutChute}: {Barcode}", 
-                    chuteSettings.TimeoutChuteNumber, package.Barcode);
-                package.SetChute(chuteSettings.TimeoutChuteNumber);
-                package.SetStatus(PackageStatus.Timeout, apiMessage);
-                Interlocked.Increment(ref _errorPackageCount);
             }
             catch (Exception ex)
             {
-                // API 调用本身发生异常，使用错误格口
-                apiSuccess = false; // 标记API失败
-                apiMessage = $"API调用异常: {ex.Message}";
-                Log.Error(ex, "旺店通重量回传时发生异常，分配到错误格口 {ErrorChute}：{Barcode}", 
-                    chuteSettings.ErrorChuteNumber, package.Barcode);
-                package.SetChute(chuteSettings.ErrorChuteNumber);
-                package.SetStatus(PackageStatus.Error, apiMessage);
-                Interlocked.Increment(ref _errorPackageCount);
+                anttoApiMessage = $"安通API称重数据上传异常: {ex.Message}";
+                Log.Error(ex, "包裹 {Barcode} 安通API称重数据上传时发生异常", package.Barcode);
             }
 
-            // 只有当API回传成功且未设置退款格口时，才执行本地格口规则匹配
-            if (apiSuccess && package.ChuteNumber == 0)
+            if (!anttoApiSuccess)
             {
-                try
-                {
-                    var matchedChute = chuteSettings.FindMatchingChute(package.Barcode);
+                // 如果安通API调用失败或返回异常，分配到异常格口
+                package.SetChute(chuteSettings.ErrorChuteNumber);
+                package.SetStatus(PackageStatus.Failed, anttoApiMessage);
+                Log.Warning("包裹 {Barcode} 因安通API异常，分配到异常格口 {ErrorChute}: {Message}",
+                    package.Barcode, chuteSettings.ErrorChuteNumber, anttoApiMessage);
+                Interlocked.Increment(ref _errorPackageCount);
 
-                    if (matchedChute.HasValue)
-                    {
-                        // 本地规则匹配成功
-                        package.SetChute(matchedChute.Value);
-                        package.SetStatus(PackageStatus.Success, "本地规则匹配成功");
-                        Log.Information("包裹 {Barcode} 本地规则匹配到格口 {Chute}", package.Barcode, matchedChute.Value);
-                        Interlocked.Increment(ref _successPackageCount);
-                    }
-                    else
-                    {
-                        // 本地规则未匹配到，使用错误格口
-                        package.SetChute(chuteSettings.ErrorChuteNumber);
-                        package.SetStatus(PackageStatus.Failed, "本地规则未匹配到");
-                        Log.Warning("包裹 {Barcode} 本地规则未匹配到任何规则，分配到错误格口 {ErrorChute}",
-                            package.Barcode, chuteSettings.ErrorChuteNumber);
-                        Interlocked.Increment(ref _errorPackageCount);
-                    }
-                }
-                catch (Exception ex)
+                // 统一处理包裹分拣、UI更新和数据保存
+                _sortService.ProcessPackage(package);
+
+                Application.Current.Dispatcher.Invoke(() =>
                 {
-                    // 本地规则匹配过程中发生异常，使用错误格口
-                    Log.Error(ex, "执行本地格口规则时发生错误，分配到错误格口 {ErrorChute}：{Barcode}", 
-                        chuteSettings.ErrorChuteNumber, package.Barcode);
+                    try
+                    {
+                        UpdatePackageInfoItems(package);
+                        PackageHistory.Insert(0, package);
+                        while (PackageHistory.Count > 1000)
+                        {
+                            var removedPackage = PackageHistory[^1];
+                            PackageHistory.RemoveAt(PackageHistory.Count - 1);
+                            removedPackage.Dispose();
+                        }
+                        UpdateStatistics();
+                    }
+                    catch (Exception ex) { Log.Error(ex, "更新UI时发生错误"); }
+                });
+                await SavePackageRecordAsync(package); // 保存记录
+                package.ReleaseImage(); // 释放资源
+                return; // 处理完毕，退出方法
+            }
+            
+            // 如果安通API调用成功，继续执行本地规则匹配
+            try
+            {
+                var matchedChute = chuteSettings.FindMatchingChute(package.Barcode);
+
+                if (matchedChute.HasValue)
+                {
+                    // 本地规则匹配成功
+                    package.SetChute(matchedChute.Value);
+                    package.SetStatus(PackageStatus.Success, "本地规则匹配成功");
+                    Log.Information("包裹 {Barcode} 本地规则匹配到格口 {Chute}", package.Barcode, matchedChute.Value);
+                    Interlocked.Increment(ref _successPackageCount);
+                }
+                else
+                {
+                    // 本地规则未匹配到，使用错误格口
                     package.SetChute(chuteSettings.ErrorChuteNumber);
-                    package.SetStatus(PackageStatus.Error, $"本地规则异常: {ex.Message}");
+                    package.SetStatus(PackageStatus.Failed, "本地规则未匹配到");
+                    Log.Warning("包裹 {Barcode} 本地规则未匹配到任何规则，分配到错误格口 {ErrorChute}",
+                        package.Barcode, chuteSettings.ErrorChuteNumber);
                     Interlocked.Increment(ref _errorPackageCount);
                 }
             }
-            // 如果apiSuccess为false (API调用失败或返回失败状态，或调用异常)，则包裹状态和格口已经在上面的catch或!apiSuccess分支中设置为Error/异常口。
+            catch (Exception ex)
+            {
+                // 本地规则匹配过程中发生异常，使用错误格口
+                Log.Error(ex, "执行本地格口规则时发生错误，分配到错误格口 {ErrorChute}：{Barcode}",
+                    chuteSettings.ErrorChuteNumber, package.Barcode);
+                package.SetChute(chuteSettings.ErrorChuteNumber);
+                package.SetStatus(PackageStatus.Error, $"本地规则异常: {ex.Message}");
+                Interlocked.Increment(ref _errorPackageCount);
+            }
 
             // 统一处理包裹分拣、UI更新和数据保存
             _sortService.ProcessPackage(package);

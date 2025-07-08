@@ -25,6 +25,7 @@ using Microsoft.Extensions.Hosting;
 using Serilog;
 using SharedUI.Extensions;
 using SharedUI.ViewModels;
+using SharedUI.ViewModels.Dialogs;
 using SharedUI.ViewModels.Settings;
 using SharedUI.Views.Dialogs;
 using SharedUI.Views.Settings;

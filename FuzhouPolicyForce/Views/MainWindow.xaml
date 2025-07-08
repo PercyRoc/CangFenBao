@@ -8,7 +8,7 @@
                  xmlns:viewModels="clr-namespace:FuzhouPolicyForce.ViewModels"
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=viewModels:MainWindowViewModel}"
-                 Title="泉州市策力自动化科技有限公司"
+                 Title="科仓南宁"
                  Height="900"
                  Width="1600"
                  WindowStartupLocation="CenterScreen"
@@ -36,11 +36,13 @@
         <!-- 标题栏 -->
         <Grid Grid.Row="0" Background="{StaticResource TitleBarGradient}">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" /> <!-- Icon -->
+                <ColumnDefinition Width="Auto" /> <!-- 标定 -->
+                <ColumnDefinition Width="Auto" /> <!-- 历史记录 -->
+                <ColumnDefinition Width="Auto" /> <!-- 系统设置 -->
+                <ColumnDefinition Width="Auto" /> <!-- 标题 -->
+                <ColumnDefinition Width="*" />    <!-- 间隔 -->
+                <ColumnDefinition Width="Auto" /> <!-- 窗口按钮 -->
             </Grid.ColumnDefinitions>
 
             <!-- 应用图标 -->
@@ -48,7 +50,7 @@
                     Width="48"
                     Height="32"
                     Effect="{StaticResource IconGlowEffect}">
-                <Image Source="/Resources/favicon.ico"
+                <Image Source="/Resources/logo2.ico"
                        Width="32"
                        Height="32"
                        Margin="8,0,8,0"
@@ -64,35 +66,33 @@
                 </Image>
             </Border>
 
-            <!-- 系统设置按钮 -->
+            <!-- 标定按钮 -->
             <ui:Button Grid.Column="1"
-                       Appearance="Primary"
-                       Command="{Binding OpenSettingsCommand}"
-                       Margin="0,0,8,0"
-                       Padding="8,6"
-                       ToolTip="系统设置">
-                <StackPanel Orientation="Horizontal">
-                    <ui:SymbolIcon Symbol="Settings24" Margin="0,0,8,0" />
-                    <TextBlock Text="系统设置" VerticalAlignment="Center" />
-                </StackPanel>
-            </ui:Button>
+                       Command="{Binding OpenCalibrationCommand}"
+                       Icon="Target24"
+                       Content="标定"
+                       Margin="8,0,0,0"
+                       Appearance="Primary" />
+
+            <!-- 历史记录按钮 -->
+            <ui:Button Grid.Column="2"
+                       Command="{Binding OpenHistoryCommand}"
+                       Icon="History24"
+                       Content="历史记录"
+                       Margin="8,0,0,0"
+                       Appearance="Primary" />
 
             <!-- 系统设置按钮 -->
-            <ui:Button Grid.Column="2"
-                       Appearance="Primary"
-                       Command="{Binding OpenHistoryCommand}"
-                       Margin="0,0,8,0"
-                       Padding="8,6"
-                       ToolTip="历史记录">
-                <StackPanel Orientation="Horizontal">
-                    <ui:SymbolIcon Symbol="History24" Margin="0,0,8,0" />
-                    <TextBlock Text="历史记录" VerticalAlignment="Center" />
-                </StackPanel>
-            </ui:Button>
+            <ui:Button Grid.Column="3"
+                       Command="{Binding OpenSettingsCommand}"
+                       Icon="Settings24"
+                       Content="系统设置"
+                       Margin="8,0,8,0"
+                       Appearance="Primary" />
 
             <!-- 标题 -->
-            <TextBlock Grid.Column="3"
-                       Text="泉州市策力自动化科技有限公司"
+            <TextBlock Grid.Column="4"
+                       Text="科仓南宁"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
                        Margin="0,0,8,0"
@@ -111,7 +111,7 @@
             </TextBlock>
 
             <!-- TitleBar -->
-            <ui:TitleBar Grid.Column="4"
+            <ui:TitleBar Grid.Column="6"
                          Title=""
                          ButtonsForeground="#FF008891"
                          ShowMaximize="True"
@@ -119,7 +119,7 @@
                          ShowClose="True" />
 
             <Border Grid.Column="0"
-                    Grid.ColumnSpan="4"
+                    Grid.ColumnSpan="7"
                     Height="1"
                     VerticalAlignment="Bottom"
                     Background="#20008080"

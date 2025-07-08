@@ -77,7 +77,6 @@ public partial class App
 
         // 注册对话框
         containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>("SettingsDialog");
-        containerRegistry.RegisterDialog<LoginDialog, LoginViewModel>("LoginDialog");
 
         // 注册其他服务
         containerRegistry.RegisterSingleton<IApiService, ApiService>();
@@ -96,62 +95,27 @@ public partial class App
     }
 
     /// <summary>
-    ///     应用程序初始化完成后，显示登录对话框并启动后台服务
+    ///     应用程序初始化完成后，直接启动后台服务
     /// </summary>
     protected override void OnInitialized()
     {
-        base.OnInitialized(); // This might show the shell depending on Prism version/config
-        Log.Information("应用程序初始化完成 (OnInitialized)，准备显示登录对话框。 ");
+        base.OnInitialized();
+        Log.Information("应用程序初始化完成 (OnInitialized)，直接启动后台服务。 ");
 
-        // 隐藏主窗口，直到登录成功
+        // 获取主窗口并附加关闭事件处理
         var mainWindow = Current.MainWindow;
         if (mainWindow != null)
         {
-            mainWindow.Hide();
             mainWindow.Closing += MainWindow_Closing;
-            Log.Debug("主窗口已隐藏并附加 Closing 事件处理 (OnInitialized)");
+            Log.Debug("主窗口已附加 Closing 事件处理 (OnInitialized)");
         }
         else
         {
             Log.Warning("无法获取主窗口实例以附加 Closing 事件处理程序。 ");
         }
 
-        var dialogService = Container.Resolve<IDialogService>();
-
-        // 显示登录对话框
-        dialogService.ShowDialog("LoginDialog", null, result =>
-        {
-            Log.Information("登录对话框关闭回调执行，结果: {DialogResult}", result?.Result);
-
-            if (result?.Result == ButtonResult.OK)
-            {
-                Log.Information("登录成功 (回调确认)，显示主窗口并启动后台服务。 ");
-                // 登录成功，显示主窗口
-                mainWindow?.Show();
-                Log.Debug("主窗口已显示");
-
-                // 在这里执行主窗口显示后的操作
-                if (mainWindow?.DataContext is MainWindowViewModel mainVm)
-                {
-                    _ = mainVm.UpdateCurrentEmployeeInfo();
-                    // 订阅登出事件
-                    mainVm.LogoutRequested += OnLogoutRequested;
-                    Log.Debug("MainWindowViewModel 更新并已订阅登出事件。 ");
-                }
-                else
-                {
-                    Log.Warning("无法获取 MainWindowViewModel 实例来更新员工信息或订阅事件。 ");
-                }
-
-                // 手动启动后台服务
-                StartBackgroundServices();
-            }
-            else
-            {
-                Log.Warning("登录失败或取消，应用程序将关闭。 ");
-                Current.Shutdown(2); // 使用适当的退出代码
-            }
-        });
+        // 直接启动后台服务
+        StartBackgroundServices();
     }
 
     /// <summary>
@@ -180,71 +144,7 @@ public partial class App
         Log.Information("DispatcherUnhandledException handler attached.");
     }
 
-    /// <summary>
-    ///     登出请求事件处理
-    /// </summary>
-    private void OnLogoutRequested(object? sender, EventArgs e)
-    {
-        try
-        {
-            Log.Information("收到登出请求，准备切换到登录窗口 ");
 
-            // 停止后台服务
-            StopBackgroundServices(false); // Don't wait indefinitely on logout
-
-            // 关闭主窗口（或隐藏）并显示登录对话框
-            Dispatcher.Invoke(() =>
-            {
-                try
-                {
-                    var currentMainWindow = Current.MainWindow;
-                    var dialogService = Container.Resolve<IDialogService>();
-
-                    // 注销事件
-                    if (sender is MainWindowViewModel mainVm)
-                    {
-                        mainVm.LogoutRequested -= OnLogoutRequested;
-                    }
-
-                    currentMainWindow?.Hide();
-                    Log.Debug("主窗口已隐藏 (Logout)");
-
-                    // 显示登录对话框
-                    dialogService.ShowDialog("LoginDialog", null, loginResult =>
-                    {
-                        if (loginResult.Result == ButtonResult.OK)
-                        {
-                            Log.Information("重新登录成功，显示主窗口并重启后台服务。 ");
-                            // 重新显示主窗口
-                            currentMainWindow?.Show();
-                            if (currentMainWindow?.DataContext is MainWindowViewModel newMainVm)
-                            {
-                                _ = newMainVm.UpdateCurrentEmployeeInfo();
-                                // 重新订阅事件
-                                newMainVm.LogoutRequested += OnLogoutRequested;
-                            }
-                            // 重启后台服务
-                            StartBackgroundServices();
-                        }
-                        else
-                        {
-                            Log.Warning("重新登录失败或取消，应用程序将关闭。 ");
-                            Current.Shutdown(2);
-                        }
-                    });
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "切换到登录窗口时发生错误 ");
-                    Current.Shutdown(); // 关闭以防出错
-                }
-            });
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "处理登出请求事件时发生错误 ");
-        }
-    }
 
     /// <summary>
     ///     主窗口关闭事件处理程序
@@ -280,7 +180,6 @@ public partial class App
             await Task.Run(async () =>
             {
                 StopBackgroundServices(true);
-                await LogoutApiUserAsync();
             });
             Log.Information("后台清理任务完成。 ");
         }
@@ -302,41 +201,7 @@ public partial class App
         }
     }
 
-    /// <summary>
-    ///     尝试登出 API 用户
-    /// </summary>
-    private async Task LogoutApiUserAsync()
-    {
-        try
-        {
-            var apiService = Container?.Resolve<IApiService>();
-            if (apiService != null && apiService.IsLoggedIn())
-            {
-                Log.Information("正在登出 API 用户... ");
-                try
-                {
-                    await apiService.LogoutAsync().WaitAsync(TimeSpan.FromSeconds(5));
-                    Log.Information("API 用户已登出或超时。 ");
-                }
-                catch (TimeoutException)
-                {
-                    Log.Warning("API 登出操作超时 ");
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "API 登出时发生错误 ");
-                }
-            }
-            else
-            {
-                Log.Debug("无需登出 API 用户 (未登录或服务不可用) ");
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "解析 ApiService 以进行登出时发生错误 ");
-        }
-    }
+
 
     /// <summary>
     ///     退出

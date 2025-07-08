@@ -29,6 +29,7 @@
         <PackageReference Include="HandyControl"/>
         <PackageReference Include="NPOI"/>
         <PackageReference Include="WPFLocalizeExtension"/>
+        <PackageReference Include="JetBrains.Annotations"/>
     </ItemGroup>
 
     <ItemGroup>

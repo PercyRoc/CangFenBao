@@ -15,6 +15,7 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
     private readonly INotificationService _notificationService;
     private readonly WangDianTongSettingsViewModel _wangDianTongSettingsViewModel;
+    private readonly AnttoWeightSettingsViewModel _anttoWeightSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
@@ -29,6 +30,7 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
         _balanceSortSettingsViewModel = containerProvider.Resolve<BalanceSortSettingsViewModel>();
         _barcodeChuteSettingsViewModel = containerProvider.Resolve<BarcodeChuteSettingsViewModel>();
         _wangDianTongSettingsViewModel = containerProvider.Resolve<WangDianTongSettingsViewModel>();
+        _anttoWeightSettingsViewModel = containerProvider.Resolve<AnttoWeightSettingsViewModel>();
 
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
@@ -62,6 +64,7 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
             _balanceSortSettingsViewModel.SaveConfigurationCommand.Execute();
             _barcodeChuteSettingsViewModel.SaveConfigurationCommand.Execute();
             _wangDianTongSettingsViewModel.SaveConfigurationCommand.Execute();
+            _anttoWeightSettingsViewModel.SaveCommand.Execute();
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");
             // 更新调用方式

@@ -1,6 +1,6 @@
 namespace KuaiLv.Views.Settings;
 
-internal partial class WarningLightSettingsView
+public partial class WarningLightSettingsView
 {
     public WarningLightSettingsView()
     {

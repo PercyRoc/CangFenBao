@@ -356,7 +356,6 @@ internal class TcpCameraService : ICameraService
 
             var package = PackageInfo.Create();
             package.SetBarcode(firstBarcode);
-            package.SetTriggerTimestamp(timestamp);
 
             double? length = null, width = null, height = null, volume = null;
 

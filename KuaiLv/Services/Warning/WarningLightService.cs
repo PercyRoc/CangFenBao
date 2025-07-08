@@ -10,7 +10,7 @@ namespace KuaiLv.Services.Warning;
 /// <summary>
 ///     警示灯服务实现
 /// </summary>
-internal class WarningLightService(
+public class WarningLightService(
     ISettingsService settingsService,
     INotificationService notificationService)
     : IWarningLightService, IDisposable
@@ -266,7 +266,7 @@ internal class WarningLightService(
         }
     }
 
-    protected virtual void Dispose(bool disposing)
+    protected void Dispose(bool disposing)
     {
         if (_disposed) return;
 

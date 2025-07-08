@@ -63,5 +63,10 @@ public enum PackageStatus
     /// <summary>
     ///     无法识别的条码（已处理或上传）
     /// </summary>
-    NoRead
+    NoRead,
+
+    /// <summary>
+    ///     重试已完成（无论成功还是失败，都不再重试）
+    /// </summary>
+    RetryCompleted
 }

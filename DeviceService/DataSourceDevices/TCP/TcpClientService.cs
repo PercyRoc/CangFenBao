@@ -515,9 +515,7 @@ public class TcpClientService : IDisposable
                 // 检查读取到的字节数
                 if (bytesRead == 0)
                 {
-                    // 读取到 0 字节不一定代表连接关闭
-                    Log.Debug("设备 {DeviceName} 读取到 0 字节。继续监听...", _deviceName);
-                    continue; // 继续循环，尝试下一次读取
+                    continue;
                 }
 
                 // 读取操作后检查取消令牌

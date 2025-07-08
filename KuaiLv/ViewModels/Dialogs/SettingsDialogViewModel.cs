@@ -5,7 +5,7 @@ using SharedUI.ViewModels.Settings;
 
 namespace KuaiLv.ViewModels.Dialogs;
 
-internal class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
+public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
 {
     // 保存各个设置页面的ViewModel实例
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;

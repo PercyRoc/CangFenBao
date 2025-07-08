@@ -28,7 +28,7 @@ namespace KuaiLv;
 /// <summary>
 ///     Interaction logic for App.xaml
 /// </summary>
-internal partial class App
+public partial class App
 {
     private const string MutexName = "Global\\KuaiLv_App_Mutex";
     private static Mutex? _mutex;

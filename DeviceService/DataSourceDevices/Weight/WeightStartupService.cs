@@ -110,7 +110,17 @@ public class WeightStartupService : IHostedService
         _initLock.Wait();
         try
         {
-            return _weightService ??= new SerialPortWeightService(_settingsService);
+            // 确保只创建一个实例，即使多次调用也返回同一个实例
+            if (_weightService == null)
+            {
+                _weightService = new SerialPortWeightService(_settingsService);
+                Log.Information("创建新的 SerialPortWeightService 实例");
+            }
+            else
+            {
+                Log.Debug("返回已存在的 SerialPortWeightService 实例");
+            }
+            return _weightService;
         }
         finally
         {

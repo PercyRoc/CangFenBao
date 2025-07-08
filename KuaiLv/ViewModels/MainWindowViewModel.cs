@@ -109,7 +109,7 @@ public class CameraDisplayInfo : BindableBase
 
 #endregion
 
-internal class MainWindowViewModel : BindableBase, IDisposable
+public class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly IAudioService _audioService;
     private readonly ICameraService _cameraService;

@@ -197,8 +197,7 @@ public class WangDianTongApiServiceImplV2(HttpClient httpClient, ISettingsServic
         var signStringWithSecret = $"{secret}{publicParamString}{secret}";
 
         // 第五步：生成32位MD5大写签名值
-        using var md5 = MD5.Create();
-        var hash = md5.ComputeHash(Encoding.UTF8.GetBytes(signStringWithSecret));
+        var hash = MD5.HashData(Encoding.UTF8.GetBytes(signStringWithSecret));
         var md5String = BitConverter.ToString(hash).Replace("-", "").ToUpper(); // 转为大写
 
         return md5String;

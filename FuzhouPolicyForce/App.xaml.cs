@@ -10,6 +10,8 @@ using Common.Services.License;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.Extensions;
+using FuzhouPolicyForce.Services;
+using FuzhouPolicyForce.Services.AnttoWeight;
 using FuzhouPolicyForce.ViewModels;
 using FuzhouPolicyForce.ViewModels.Settings;
 using FuzhouPolicyForce.Views;
@@ -18,7 +20,9 @@ using FuzhouPolicyForce.WangDianTong;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using SharedUI.Extensions;
+using SharedUI.ViewModels.Dialogs;
 using SharedUI.ViewModels.Settings;
+using SharedUI.Views.Dialogs;
 using SharedUI.Views.Settings;
 using SortingServices.Pendulum;
 using SortingServices.Pendulum.Extensions;
@@ -57,17 +61,22 @@ internal partial class App
         containerRegistry.RegisterForNavigation<BalanceSortSettingsView, BalanceSortSettingsViewModel>();
         containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
         containerRegistry.RegisterForNavigation<WangDianTongSettingsView, WangDianTongSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<AnttoWeightSettingsView, AnttoWeightSettingsViewModel>();
 
         containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>("SettingsDialog");
+        containerRegistry.RegisterDialog<CalibrationDialogView, CalibrationDialogViewModel>();
 
         // 注册多摆轮分拣服务
         containerRegistry.RegisterPendulumSortService(PendulumServiceType.Multi);
         containerRegistry.RegisterSingleton<IHostedService, PendulumSortHostedService>();
-        
+
         // 注册旺店通API服务 V1
         // 注册 HttpClient
         containerRegistry.RegisterSingleton<HttpClient>();
         containerRegistry.RegisterSingleton<IWangDianTongApiService, WangDianTongApiService>();
+
+        // 注册安通称重API服务
+        containerRegistry.RegisterSingleton<IAnttoWeightService, AnttoWeightService>();
     }
 
     protected override Window CreateShell()
@@ -185,7 +194,7 @@ internal partial class App
             Log.Information("相机托管服务启动成功");
 
             // 启动摆轮分拣托管服务
-            var pendulumHostedService = Container.Resolve<IHostedService>();
+            var pendulumHostedService = Container.Resolve<PendulumSortHostedService>();
             await pendulumHostedService.StartAsync(CancellationToken.None);
             Log.Information("摆轮分拣托管服务启动成功");
         }

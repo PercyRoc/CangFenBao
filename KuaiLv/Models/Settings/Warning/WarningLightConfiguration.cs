@@ -7,7 +7,7 @@ namespace KuaiLv.Models.Settings.Warning;
 ///     警示灯配置
 /// </summary>
 [Configuration("WarningLightSettings")]
-internal class WarningLightConfiguration
+public class WarningLightConfiguration
 {
     /// <summary>
     ///     IP地址

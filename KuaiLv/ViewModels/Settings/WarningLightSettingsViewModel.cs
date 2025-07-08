@@ -6,7 +6,7 @@ namespace KuaiLv.ViewModels.Settings;
 /// <summary>
 ///     警示灯设置视图模型
 /// </summary>
-internal class WarningLightSettingsViewModel : BindableBase
+public class WarningLightSettingsViewModel : BindableBase
 {
     private readonly ISettingsService _settingsService;
     private WarningLightConfiguration _configuration = new();

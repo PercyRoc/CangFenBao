@@ -4,7 +4,7 @@ using Serilog;
 
 namespace KuaiLv.ViewModels.Settings;
 
-internal class UploadSettingsViewModel : BindableBase
+public class UploadSettingsViewModel : BindableBase
 {
     private readonly ISettingsService _settingsService;
     private UploadConfiguration _configuration = new();

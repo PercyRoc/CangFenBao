@@ -211,12 +211,50 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            Log.Information("用户打开分拣时间标定对话框");
-            _dialogService.ShowDialog("CalibrationDialog");
+            var config = _settingsService.LoadSettings<PendulumSortConfig>();
+            var targets = new List<CalibrationTarget>();
+
+            // 添加完整标定流程目标
+            targets.Add(new CalibrationTarget
+            {
+                Id = "Trigger", // 特殊ID，用于匹配
+                DisplayName = "完整标定流程 (触发时间 + 分拣时间)",
+                Mode = CalibrationMode.CompleteFlow,
+                TimeRangeLower = config.TriggerPhotoelectric.SortingTimeRangeLower,
+                TimeRangeUpper = config.TriggerPhotoelectric.SortingTimeRangeUpper,
+                SortingDelay = config.TriggerPhotoelectric.SortingDelay,
+                ResetDelay = config.TriggerPhotoelectric.ResetDelay
+            });
+
+            var parameters = new DialogParameters { { "targets", targets } };
+
+            _dialogService.ShowDialog("CalibrationDialogView", parameters, r =>
+            {
+                if (r.Result != ButtonResult.OK) return;
+
+                var updatedTargets = r.Parameters.GetValue<List<CalibrationTarget>>("targets");
+                if (updatedTargets == null) return;
+
+                // 更新配置
+                foreach (var target in updatedTargets)
+                {
+                    if (target.Id == "Trigger")
+                    {
+                        config.TriggerPhotoelectric.SortingTimeRangeLower = (int)target.TimeRangeLower;
+                        config.TriggerPhotoelectric.SortingTimeRangeUpper = (int)target.TimeRangeUpper;
+                        config.TriggerPhotoelectric.SortingDelay = (int)target.SortingDelay;
+                        config.TriggerPhotoelectric.ResetDelay = (int)target.ResetDelay;
+                    }
+                }
+
+                _settingsService.SaveSettings(config);
+                Log.Information("标定设置已从对话框回调中成功保存。");
+                // 可以加一个通知告诉用户保存成功
+            });
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "打开标定对话框时发生错误");
+            Log.Error(ex, "打开或处理标定对话框时发生错误");
         }
     }
 

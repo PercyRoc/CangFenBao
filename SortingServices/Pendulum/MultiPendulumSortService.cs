@@ -11,7 +11,8 @@ namespace SortingServices.Pendulum;
 /// <summary>
 ///     多光电多摆轮分拣服务实现
 /// </summary>
-public class MultiPendulumSortService(ISettingsService settingsService) : BasePendulumSortService(settingsService)
+public class MultiPendulumSortService(ISettingsService settingsService, IEventAggregator eventAggregator)
+    : BasePendulumSortService(settingsService, eventAggregator)
 {
     // 为每个光电创建一个动作队列和处理任务
     private readonly ConcurrentDictionary<string, Channel<Func<Task>>> _actionChannels = new();

@@ -1,9 +1,9 @@
 using Wpf.Ui.Controls;
 
-namespace BenFly.Views.Dialogs;
+namespace SharedUI.Views.Dialogs;
 
 /// <summary>
-///     CalibrationDialogView.xaml 的交互逻辑
+///     Interaction logic for CalibrationDialogView.xaml
 /// </summary>
 public partial class CalibrationDialogView : ContentDialog
 {

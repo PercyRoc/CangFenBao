@@ -6,7 +6,7 @@ namespace KuaiLv.Services.DWS;
 /// <summary>
 ///     DWS服务接口
 /// </summary>
-internal interface IDwsService
+public interface IDwsService
 {
     /// <summary>
     ///     上报包裹信息

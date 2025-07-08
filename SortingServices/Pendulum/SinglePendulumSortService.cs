@@ -10,7 +10,8 @@ namespace SortingServices.Pendulum;
 /// <summary>
 ///     单光电单摆轮分拣服务实现
 /// </summary>
-public class SinglePendulumSortService(ISettingsService settingsService) : BasePendulumSortService(settingsService)
+public class SinglePendulumSortService(ISettingsService settingsService, IEventAggregator eventAggregator)
+    : BasePendulumSortService(settingsService, eventAggregator)
 {
     // 记录光电信号状态的字典，true 表示高电平，false 表示低电平
     private readonly ConcurrentDictionary<string, bool> _photoelectricSignalStates = new();

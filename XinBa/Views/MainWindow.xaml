@@ -106,7 +106,7 @@
                 </TextBlock.Effect>
             </TextBlock>
 
-            <!-- 用户信息和登出按钮 - 移到右侧 -->
+            <!-- 用户信息 - 移到右侧 -->
             <StackPanel Grid.Column="4"
                         Orientation="Horizontal"
                         HorizontalAlignment="Right"
@@ -117,17 +117,6 @@
                            Margin="0,0,10,0"
                            Foreground="{StaticResource TextPrimaryBrush}"
                            FontWeight="SemiBold" />
-                <ui:Button Command="{Binding LogoutCommand}"
-                           Appearance="Primary"
-                           Margin="0,0,0,0"
-                           Padding="8,4"
-                           Foreground="White"
-                           Background="{StaticResource AccentBrush}">
-                    <StackPanel Orientation="Horizontal">
-                        <ui:SymbolIcon Symbol="SignOut24" Margin="0,0,8,0" />
-                        <TextBlock Text="Logout" VerticalAlignment="Center" />
-                    </StackPanel>
-                </ui:Button>
             </StackPanel>
 
             <!-- TitleBar -->

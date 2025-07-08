@@ -6,8 +6,8 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
-        <ApplicationIcon>Resources\favicon.ico</ApplicationIcon>
-        <AssemblyName>泉州市策力自动化科技有限公司</AssemblyName>
+        <ApplicationIcon>Resources\logo2.ico</ApplicationIcon>
+        <AssemblyName>科仓南宁</AssemblyName>
         <RootNamespace>FuzhouPolicyForce</RootNamespace>
     </PropertyGroup>
 
@@ -36,10 +36,15 @@
         <PackageReference Include="WPF-UI"/>
         <PackageReference Include="HandyControl"/>
         <PackageReference Include="WPFLocalizeExtension"/>
+        <PackageReference Include="Newtonsoft.Json" />
     </ItemGroup>
     <ItemGroup>
         <Resource Include="Resources\favicon.ico">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Resource>
+        <None Remove="Resources\logo2.ico" />
+        <Resource Include="Resources\logo2.ico">
+          <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </Resource>
     </ItemGroup>
 </Project>

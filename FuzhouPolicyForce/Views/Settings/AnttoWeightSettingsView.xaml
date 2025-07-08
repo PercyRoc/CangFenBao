@@ -1,0 +1,32 @@
+<UserControl x:Class="FuzhouPolicyForce.Views.Settings.AnttoWeightSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:vm="clr-namespace:FuzhouPolicyForce.ViewModels.Settings"
+             xmlns:mvvm="http://prismlibrary.com/"
+             d:DataContext="{d:DesignInstance Type=vm:AnttoWeightSettingsViewModel}"
+             mvvm:ViewModelLocator.AutoWireViewModel="True"
+             mc:Ignorable="d">
+
+    <StackPanel Margin="16">
+        <TextBlock Text="安通称重API设置" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,0,0,16" />
+
+        <ui:Card Margin="0,0,0,16">
+            <StackPanel>
+                <TextBlock Text="API 环境选择" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,0,0,10" />
+
+                <ComboBox ItemsSource="{Binding AvailableEnvironments}"
+                          SelectedValue="{Binding Settings.SelectedEnvironment}"
+                          SelectedValuePath="Value"
+                          DisplayMemberPath="DisplayName"
+                          MinWidth="200"
+                          HorizontalAlignment="Left"
+                          Margin="0,0,0,10" />
+                
+                <TextBlock Text="请选择要使用的API环境" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,8,0,0" />
+            </StackPanel>
+        </ui:Card>
+    </StackPanel>
+</UserControl> 

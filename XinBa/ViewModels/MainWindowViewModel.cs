@@ -12,8 +12,6 @@ using Serilog;
 using SharedUI.Models;
 using XinBa.Services;
 using XinBa.Services.Models;
-using MessageBox = HandyControl.Controls.MessageBox;
-using MessageBoxImage = System.Windows.MessageBoxImage;
 
 namespace XinBa.ViewModels;
 
@@ -59,7 +57,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         // Initialize commands
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
-        LogoutCommand = new DelegateCommand(ExecuteLogout);
 
         // Initialize system status update timer
         _timer = new DispatcherTimer
@@ -147,58 +144,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
         GC.SuppressFinalize(this);
     }
 
-    /// <summary>
-    ///     登出请求事件
-    /// </summary>
-    public event EventHandler? LogoutRequested;
+
 
     private void ExecuteOpenSettings()
     {
         _dialogService.ShowDialog("SettingsDialog");
     }
 
-    /// <summary>
-    ///     执行登出
-    /// </summary>
-    private async void ExecuteLogout()
-    {
-        try
-        {
-            var result = await Application.Current.Dispatcher.InvokeAsync(() =>
-                MessageBox.Show(
-                    "Are you sure you want to log out?",
-                    "Logout Confirmation",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Question));
 
-            if (result != MessageBoxResult.Yes) return;
-
-            // 先触发登出请求事件，创建登录窗口
-            Log.Information("用户确认登出，触发登出请求事件");
-            LogoutRequested?.Invoke(this, EventArgs.Empty);
-
-            // 执行登出API调用
-            Log.Information("开始调用登出API");
-            var success = await _apiService.LogoutAsync();
-
-            if (!success)
-            {
-                Log.Warning("用户登出失败");
-                await Application.Current.Dispatcher.InvokeAsync(() =>
-                    MessageBox.Show("登出失败，请稍后重试", "错误", MessageBoxButton.OK, MessageBoxImage.Error));
-            }
-            else
-            {
-                Log.Information("用户登出成功");
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "执行登出过程中发生错误");
-            await Application.Current.Dispatcher.InvokeAsync(() =>
-                MessageBox.Show($"登出过程中发生错误: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error));
-        }
-    }
 
     private void Timer_Tick(object? sender, EventArgs e)
     {
@@ -324,28 +277,19 @@ public class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    ///     更新当前登录员工信息
+    ///     更新当前员工信息（已移除登录功能）
     /// </summary>
     internal Task UpdateCurrentEmployeeInfo()
     {
         try
         {
-            var employeeId = _apiService.GetCurrentEmployeeId();
-            if (employeeId.HasValue)
-            {
-                CurrentEmployeeInfo = $"Employee ID: {employeeId.Value}";
-                Log.Information("已更新当前登录员工信息: {EmployeeId}", employeeId.Value);
-            }
-            else
-            {
-                CurrentEmployeeInfo = "未登录";
-                Log.Warning("未检测到登录员工信息");
-            }
+            CurrentEmployeeInfo = "系统运行中";
+            Log.Information("系统正常运行中");
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "更新当前登录员工信息时出错");
-            CurrentEmployeeInfo = "获取员工信息出错";
+            Log.Error(ex, "更新员工信息时出错");
+            CurrentEmployeeInfo = "系统运行中";
         }
 
         return Task.CompletedTask;
@@ -730,8 +674,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
     #region Properties
 
     public DelegateCommand OpenSettingsCommand { get; }
-
-    public DelegateCommand LogoutCommand { get; }
 
     public string CurrentBarcode
     {

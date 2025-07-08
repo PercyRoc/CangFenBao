@@ -7,6 +7,7 @@ using Common.Services.Settings;
 using DeviceService.DataSourceDevices.TCP;
 using Serilog;
 using Serilog.Context;
+using Common.Events;
 using Timer = System.Timers.Timer;
 
 namespace SortingServices.Pendulum;
@@ -30,10 +31,12 @@ public abstract class BasePendulumSortService : IPendulumSortService
     protected CancellationTokenSource? CancellationTokenSource;
     protected bool IsRunningFlag;
     protected TcpClientService? TriggerClient;
+    private readonly IEventAggregator _eventAggregator;
 
-    protected BasePendulumSortService(ISettingsService settingsService)
+    protected BasePendulumSortService(ISettingsService settingsService, IEventAggregator eventAggregator)
     {
         _settingsService = settingsService;
+        _eventAggregator = eventAggregator;
 
         // 初始化超时检查定时器
         TimeoutCheckTimer = new Timer(5000); // 5秒检查一次
@@ -42,9 +45,6 @@ public abstract class BasePendulumSortService : IPendulumSortService
     }
 
     public event EventHandler<(string Name, bool Connected)>? DeviceConnectionStatusChanged;
-
-    public event EventHandler<DateTime>? TriggerPhotoelectricSignal;
-    public event EventHandler<(string PhotoelectricName, DateTime SignalTime)>? SortingPhotoelectricSignal;
 
     public abstract Task InitializeAsync(PendulumSortConfig configuration);
 
@@ -59,6 +59,19 @@ public abstract class BasePendulumSortService : IPendulumSortService
 
     public void ProcessPackage(PackageInfo package)
     {
+        var processingTime = DateTime.Now;
+        
+        // 通过 EventAggregator 发布包裹处理事件
+        try
+        {
+            _eventAggregator.GetEvent<PackageProcessingEvent>().Publish(processingTime);
+            Log.Debug("已通过 EventAggregator 发布 PackageProcessingEvent.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "通过 EventAggregator 发布 PackageProcessingEvent 时发生错误");
+        }
+
         // 在应用 LogContext 之前记录接收信息和初始检查
         Log.Information("收到包裹 {Index}|{Barcode}, 准备处理.", package.Index, package.Barcode);
 
@@ -453,14 +466,15 @@ public abstract class BasePendulumSortService : IPendulumSortService
         var triggerTime = DateTime.Now;
         Log.Debug("收到触发信号: {Signal}，记录触发时间: {TriggerTime:HH:mm:ss.fff}", data, triggerTime);
 
-        // 触发光电信号事件
+        // 通过 EventAggregator 发布触发光电信号事件
         try
         {
-            TriggerPhotoelectricSignal?.Invoke(this, triggerTime);
+            _eventAggregator.GetEvent<TriggerSignalEvent>().Publish(triggerTime);
+            Log.Debug("已通过 EventAggregator 发布 TriggerSignalEvent.");
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "触发光电信号事件时发生错误");
+            Log.Error(ex, "通过 EventAggregator 发布 TriggerSignalEvent 时发生错误");
         }
 
         lock (_triggerTimes)
@@ -1039,11 +1053,12 @@ public abstract class BasePendulumSortService : IPendulumSortService
     {
         try
         {
-            SortingPhotoelectricSignal?.Invoke(this, (photoelectricName, signalTime));
+            _eventAggregator.GetEvent<SortingSignalEvent>().Publish((photoelectricName, signalTime));
+            Log.Debug("已通过 EventAggregator 发布 SortingSignalEvent.");
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "触发分拣光电信号事件时发生错误，光电: {PhotoelectricName}", photoelectricName);
+            Log.Error(ex, "通过 EventAggregator 发布 SortingSignalEvent 时发生错误，光电: {PhotoelectricName}", photoelectricName);
         }
     }
 

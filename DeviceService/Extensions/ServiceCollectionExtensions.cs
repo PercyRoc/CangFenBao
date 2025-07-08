@@ -50,7 +50,14 @@ public static class ContainerRegistryExtensions
     /// </summary>
     public static void AddWeightScale(this IContainerRegistry containerRegistry)
     {
+        // 注册 WeightStartupService 为单例
+        containerRegistry.RegisterSingleton<WeightStartupService>();
+        
+        // 注册 SerialPortWeightService 为单例，确保通过 WeightStartupService 获取唯一实例
         containerRegistry.RegisterSingleton<SerialPortWeightService>(static sp =>
-            sp.Resolve<WeightStartupService>().GetWeightService());
+        {
+            var weightStartupService = sp.Resolve<WeightStartupService>();
+            return weightStartupService.GetWeightService();
+        });
     }
 }

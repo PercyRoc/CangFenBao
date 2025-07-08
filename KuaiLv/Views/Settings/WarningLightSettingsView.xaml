@@ -11,7 +11,7 @@
       prism:ViewModelLocator.AutoWireViewModel="True"
       d:DataContext="{d:DesignInstance Type=settings:WarningLightSettingsViewModel}"
       mc:Ignorable="d"
-      Title="警示灯设置" x:ClassModifier="internal">
+      Title="警示灯设置">
 
     <Grid>
         <StackPanel Margin="16" MaxWidth="800" VerticalAlignment="Top">

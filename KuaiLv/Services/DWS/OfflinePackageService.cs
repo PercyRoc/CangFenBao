@@ -137,4 +137,67 @@ public class OfflinePackageService(IPackageDataService packageDataService)
             _lock.Release();
         }
     }
+
+    /// <summary>
+    ///     标记离线包裹的重试已完成（无论成功还是失败，都不再重试）
+    /// </summary>
+    /// <param name="barcode">包裹条码</param>
+    /// <param name="packageTime">包裹时间，用于跨表查找</param>
+    /// <param name="success">是否成功</param>
+    internal async Task MarkOfflinePackageAsRetryCompletedAsync(string barcode, DateTime? packageTime, bool success)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            // 如果未提供包裹时间，可能需要先查询包裹信息
+            if (packageTime == null)
+            {
+                // 查询包裹记录以获取其创建时间
+                var record = await packageDataService.GetPackageByBarcodeAsync(barcode);
+                if (record != null)
+                {
+                    packageTime = record.CreateTime;
+                    Log.Debug("获取到包裹 {Barcode} 的创建时间: {CreateTime}", barcode, packageTime);
+                }
+            }
+
+            // 根据成功或失败设置不同的状态和消息
+            PackageStatus finalStatus;
+            string statusMessage;
+
+            if (success)
+            {
+                finalStatus = PackageStatus.Success;
+                statusMessage = "离线重试成功";
+            }
+            else
+            {
+                finalStatus = PackageStatus.RetryCompleted;
+                statusMessage = "离线重试失败，不再重试";
+            }
+
+            // 调用更新状态的方法
+            var updateSuccess = await packageDataService.UpdatePackageStatusAsync(barcode,
+                finalStatus,
+                statusMessage,
+                packageTime);
+
+            if (updateSuccess)
+            {
+                Log.Information("离线包裹 {Barcode} 已标记为重试完成状态：{Status}", barcode, finalStatus);
+            }
+            else
+            {
+                Log.Warning("未能标记离线包裹 {Barcode} 为重试完成状态（可能未找到记录或更新出错）", barcode);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "在标记离线包裹 {Barcode} 为重试完成时发生意外错误", barcode);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
 }
