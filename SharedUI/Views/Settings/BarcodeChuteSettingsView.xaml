@@ -238,6 +238,68 @@
                             </Grid>
                         </Grid>
 
+                        <!-- 重量规则设置 -->
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="120" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Text="重量规则："
+                                       Grid.Column="0"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Right"
+                                       Margin="0,0,8,0" />
+
+                            <StackPanel Grid.Column="1">
+                                <!-- 启用重量规则 -->
+                                <CheckBox Content="启用重量规则"
+                                          IsChecked="{Binding CurrentRule.UseWeightRule, UpdateSourceTrigger=PropertyChanged}"
+                                          Margin="0,0,0,8" />
+
+                                <!-- 重量范围设置 -->
+                                <Grid IsEnabled="{Binding CurrentRule.UseWeightRule}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <ui:NumberBox Grid.Column="0"
+                                                  Width="120"
+                                                  HorizontalAlignment="Left"
+                                                  Value="{Binding CurrentRule.MinWeight, UpdateSourceTrigger=PropertyChanged}"
+                                                  ClearButtonEnabled="False"
+                                                  PlaceholderText="最小重量" />
+
+                                    <TextBlock Text=" - "
+                                               Grid.Column="1"
+                                               Margin="8,0"
+                                               VerticalAlignment="Center" />
+
+                                    <ui:NumberBox Grid.Column="2"
+                                                  Width="120"
+                                                  HorizontalAlignment="Left"
+                                                  Value="{Binding CurrentRule.MaxWeight, UpdateSourceTrigger=PropertyChanged}"
+                                                  ClearButtonEnabled="False"
+                                                  PlaceholderText="最大重量" />
+
+                                    <TextBlock Text=" 克"
+                                               Grid.Column="3"
+                                               Margin="8,0,0,0"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+
+                                <!-- 重量说明 -->
+                                <TextBlock Text="说明：重量范围为0时表示不限制，用于区分条码规则相同但重量不同的包裹"
+                                           FontSize="12"
+                                           Foreground="Gray"
+                                           Margin="0,4,0,0"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Grid>
+
                         <!-- 规则输入框 -->
                         <Grid Margin="0,0,0,8">
                             <Grid.ColumnDefinitions>

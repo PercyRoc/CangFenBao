@@ -14,7 +14,7 @@ namespace Common.Services.Settings;
 /// </summary>
 public class SettingsService : ISettingsService
 {
-    private static readonly SemaphoreSlim _fileAccessLock = new(1, 1);
+    private static readonly SemaphoreSlim FileAccessLock = new(1, 1);
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -61,7 +61,7 @@ public class SettingsService : ISettingsService
 
         var filePath = GetSettingsFilePath(settingsKey);
 
-        _fileAccessLock.Wait();
+        FileAccessLock.Wait();
         try
         {
             if (!File.Exists(filePath))
@@ -97,7 +97,7 @@ public class SettingsService : ISettingsService
         }
         finally
         {
-            _fileAccessLock.Release();
+            FileAccessLock.Release();
         }
     }
 
@@ -276,14 +276,14 @@ public class SettingsService : ISettingsService
         var filePath = GetSettingsFilePath(key);
         var json = JsonSerializer.Serialize(configuration, JsonOptions);
 
-        _fileAccessLock.Wait();
+        FileAccessLock.Wait();
         try
         {
             File.WriteAllText(filePath, json);
         }
         finally
         {
-            _fileAccessLock.Release();
+            FileAccessLock.Release();
         }
     }
 }

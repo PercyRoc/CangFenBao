@@ -1,6 +1,6 @@
 using Common.Services.Settings;
 
-namespace Modules.Models.Jitu.Settings;
+namespace ShanghaiModuleBelt.Models.Jitu.Settings;
 
 [Configuration("JituApiSettings")]
 public class JituApiSettings

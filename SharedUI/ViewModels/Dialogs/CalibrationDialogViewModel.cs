@@ -324,7 +324,7 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
     {
         if (!_packageProcessingTime.HasValue || !SecondSignalTime.HasValue) return;
 
-        var triggerTimeDelay = (_packageProcessingTime.Value - TriggerTime.Value).TotalMilliseconds;
+        var triggerTimeDelay = (_packageProcessingTime.Value - TriggerTime!.Value).TotalMilliseconds;
         var sortingTimeDelay = (SecondSignalTime.Value - TriggerTime.Value).TotalMilliseconds;
 
         var result = new CalibrationResult
@@ -364,7 +364,7 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
         {
             Timestamp = DateTime.Now,
             PhotoelectricName = SelectedTarget?.DisplayName ?? "",
-            TriggerTime = TriggerTime.Value,
+            TriggerTime = TriggerTime!.Value,
             SortingTime = signalTime,
             MeasuredDelay = delay,
             Mode = SelectedTarget?.Mode ?? CalibrationMode.SortingTime
@@ -499,13 +499,10 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
     public void OnDialogOpened(IDialogParameters parameters)
     {
         var targets = parameters.GetValue<IEnumerable<CalibrationTarget>>("targets");
-        if (targets != null)
-        {
-            AvailableTargets.Clear();
-            AvailableTargets.AddRange(targets);
-            SelectedTarget = AvailableTargets.FirstOrDefault();
-        }
-        
+        AvailableTargets.Clear();
+        AvailableTargets.AddRange(targets);
+        SelectedTarget = AvailableTargets.FirstOrDefault();
+
         StatusMessage = "请启用一次性标定模式，然后让包裹通过触发完整标定流程";
     }
 

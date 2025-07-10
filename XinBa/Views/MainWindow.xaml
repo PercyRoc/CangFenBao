@@ -6,6 +6,7 @@
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:hc="https://handyorg.github.io/handycontrol"
                  xmlns:viewModels="clr-namespace:XinBa.ViewModels"
+                 xmlns:views="clr-namespace:XinBa.Views"
                  xmlns:mvvm="http://prismlibrary.com/"
                  d:DataContext="{d:DesignInstance Type=viewModels:MainWindowViewModel}"
                  mvvm:ViewModelLocator.AutoWireViewModel="True"
@@ -26,6 +27,10 @@
             </ResourceDictionary.MergedDictionaries>
 
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+
+            <DataTemplate DataType="{x:Type viewModels:MeasurementResultViewModel}">
+                <views:MeasurementResultView />
+            </DataTemplate>
         </ResourceDictionary>
     </ui:FluentWindow.Resources>
 
@@ -41,9 +46,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
@@ -67,12 +70,9 @@
                     </Image.Effect>
                 </Image>
             </Border>
-            <!-- 顶部工具栏 -->
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,5">
-                <!-- 移除了用户信息和登出按钮 -->
-            </StackPanel>
+
             <!-- System Settings Button -->
-            <ui:Button Grid.Column="2"
+            <ui:Button Grid.Column="1"
                        Appearance="Primary"
                        Command="{Binding OpenSettingsCommand}"
                        Margin="0,0,8,0"
@@ -87,7 +87,7 @@
             </ui:Button>
 
             <!-- Title -->
-            <TextBlock Grid.Column="3"
+            <TextBlock Grid.Column="2"
                        Text="CangFenBao-XinBa"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
@@ -106,21 +106,8 @@
                 </TextBlock.Effect>
             </TextBlock>
 
-            <!-- 用户信息 - 移到右侧 -->
-            <StackPanel Grid.Column="4"
-                        Orientation="Horizontal"
-                        HorizontalAlignment="Right"
-                        VerticalAlignment="Center"
-                        Margin="0,0,10,0">
-                <TextBlock Text="{Binding CurrentEmployeeInfo}"
-                           VerticalAlignment="Center"
-                           Margin="0,0,10,0"
-                           Foreground="{StaticResource TextPrimaryBrush}"
-                           FontWeight="SemiBold" />
-            </StackPanel>
-
             <!-- TitleBar -->
-            <ui:TitleBar Grid.Column="5"
+            <ui:TitleBar Grid.Column="3"
                          Title=""
                          ButtonsForeground="{StaticResource AccentBrush}"
                          ShowMaximize="True"
@@ -128,7 +115,7 @@
                          ShowClose="True" />
 
             <Border Grid.Column="0"
-                    Grid.ColumnSpan="5"
+                    Grid.ColumnSpan="3"
                     Height="1"
                     VerticalAlignment="Bottom"
                     Background="{StaticResource BorderBrush}"
@@ -369,42 +356,38 @@
                     <RowDefinition Height="*" /> <!-- Row for History -->
                 </Grid.RowDefinitions>
 
-                <!-- Image Display Area -->
-                <Border Grid.Row="0"
-                        Style="{StaticResource CardStyle}"
-                        Margin="16,0,16,16">
-                    <Grid Margin="16">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
+                                    <!-- Measurement Result Display Area -->
+                    <Border Grid.Row="0"
+                            Style="{StaticResource CardStyle}"
+                            Margin="16,0,16,16">
+                        <Grid Margin="16">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
 
-                        <!-- Title Bar -->
-                        <StackPanel Grid.Row="0"
-                                    Orientation="Horizontal"
-                                    Margin="0,0,0,8">
-                            <ui:SymbolIcon Symbol="Image24"
-                                           Margin="0,0,8,0"
+                            <!-- Title Bar -->
+                            <StackPanel Grid.Row="0"
+                                        Orientation="Horizontal"
+                                        Margin="0,0,0,8">
+                                <ui:SymbolIcon Symbol="QrCode24"
+                                               Margin="0,0,8,0"
+                                               Foreground="{StaticResource AccentBrush}"
+                                               VerticalAlignment="Center" />
+                                <TextBlock Text="Package Measurement Result"
+                                           FontSize="16"
+                                           FontWeight="SemiBold"
                                            Foreground="{StaticResource AccentBrush}"
                                            VerticalAlignment="Center" />
-                            <TextBlock Text="实时图像"
-                                       FontSize="16"
-                                       FontWeight="SemiBold"
-                                       Foreground="{StaticResource AccentBrush}"
-                                       VerticalAlignment="Center" />
-                        </StackPanel>
+                            </StackPanel>
 
-                        <!-- Image Display -->
-                        <Image Grid.Row="1"
-                               Source="{Binding CurrentImage}"
-                               RenderOptions.BitmapScalingMode="HighQuality"
-                               RenderOptions.EdgeMode="Aliased"
-                               Stretch="Fill"
-                               StretchDirection="Both"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center" />
-                    </Grid>
-                </Border>
+                            <!-- Measurement Result View -->
+                            <ContentControl Grid.Row="1"
+                                           Content="{Binding CurrentMeasurementResult}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
 
                 <!-- Historical Package Information -->
                 <Border Grid.Row="1" Margin="16,0,16,16"

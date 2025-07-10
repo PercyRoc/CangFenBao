@@ -1,4 +1,5 @@
 using System.Windows.Media.Imaging;
+using Common.Models.Package;
 
 namespace DeviceService.DataSourceDevices.Services;
 
@@ -15,6 +16,14 @@ public interface IImageSavingService
     /// <param name="timestamp">图像的时间戳。</param>
     /// <returns>图像保存的完整路径，如果保存失败或被禁用则返回null。</returns>
     Task<string?> SaveImageAsync(BitmapSource? image, string? barcode, DateTime timestamp);
+
+    /// <summary>
+    ///     异步保存带水印的图像到配置的位置。
+    /// </summary>
+    /// <param name="image">要保存的图像。</param>
+    /// <param name="packageInfo">包裹信息，包含条码、重量、尺寸等信息。</param>
+    /// <returns>图像保存的完整路径，如果保存失败或被禁用则返回null。</returns>
+    Task<string?> SaveImageWithWatermarkAsync(BitmapSource? image, PackageInfo packageInfo);
 
     /// <summary>
     ///     根据配置、条码和时间戳生成保存图像的潜在完整路径，

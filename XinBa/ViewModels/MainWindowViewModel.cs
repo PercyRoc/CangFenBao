@@ -1,6 +1,7 @@
 ﻿using System.Collections.ObjectModel;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -11,7 +12,6 @@ using DeviceService.DataSourceDevices.Weight;
 using Serilog;
 using SharedUI.Models;
 using XinBa.Services;
-using XinBa.Services.Models;
 
 namespace XinBa.ViewModels;
 
@@ -20,17 +20,16 @@ namespace XinBa.ViewModels;
 /// </summary>
 public class MainWindowViewModel : BindableBase, IDisposable
 {
-    private readonly IApiService _apiService;
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
     private readonly List<IDisposable> _subscriptions = [];
-    private readonly ITareAttributesApiService _tareAttributesApiService;
     private readonly DispatcherTimer _timer;
     private readonly VolumeDataService _volumeDataService;
     private readonly SerialPortWeightService? _weightService;
+    private readonly IQrCodeService _qrCodeService;
     private string _currentBarcode = string.Empty;
-    private string _currentEmployeeInfo = string.Empty;
     private BitmapSource? _currentImage;
+    private MeasurementResultViewModel? _currentMeasurementResult;
     private bool _disposed;
     private int _failedPackages;
     private DateTime _lastRateCalculationTime = DateTime.Now;
@@ -42,18 +41,16 @@ public class MainWindowViewModel : BindableBase, IDisposable
     public MainWindowViewModel(
         IDialogService dialogService,
         PackageTransferService packageTransferService,
-        IApiService apiService,
         ICameraService cameraService,
         VolumeDataService volumeDataService,
         WeightStartupService weightStartupService,
-        ITareAttributesApiService tareAttributesApiService)
+        IQrCodeService qrCodeService)
     {
         _dialogService = dialogService;
-        _apiService = apiService;
         _cameraService = cameraService;
         _volumeDataService = volumeDataService;
         _weightService = weightStartupService.GetWeightService();
-        _tareAttributesApiService = tareAttributesApiService;
+        _qrCodeService = qrCodeService;
 
         // Initialize commands
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
@@ -71,9 +68,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
         InitializeStatisticsItems();
 
         InitializePackageInfoItems();
-
-        // 更新当前登录员工信息 - 初始调用
-        _ = UpdateCurrentEmployeeInfo();
 
         // 新增：订阅 PackageTransferService 的包裹流
         _subscriptions.Add(packageTransferService.PackageStream
@@ -276,24 +270,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         ));
     }
 
-    /// <summary>
-    ///     更新当前员工信息（已移除登录功能）
-    /// </summary>
-    internal Task UpdateCurrentEmployeeInfo()
-    {
-        try
-        {
-            CurrentEmployeeInfo = "系统运行中";
-            Log.Information("系统正常运行中");
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "更新员工信息时出错");
-            CurrentEmployeeInfo = "系统运行中";
-        }
 
-        return Task.CompletedTask;
-    }
 
     /// <summary>
     ///     处理接收到的包裹信息
@@ -346,62 +323,27 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 AddToPackageHistory(package);
             });
 
-            // 同时提交到两个API：Dimensions Machine API 和 Tare Attributes API
+            // 创建测量结果视图模型并显示
             if (package.Length.HasValue && package.Width.HasValue && package.Height.HasValue && package.Weight > 0.0)
             {
-                // 将包裹数据转换为API所需的单位和类型
-                // 包裹数据通常以厘米和千克为单位，需要转换为毫米和毫克/克
-                var heightMm = (int)(package.Height.Value * 10); // 厘米转毫米
-                var lengthMm = (int)(package.Length.Value * 10); // 厘米转毫米
-                var widthMm = (int)(package.Width.Value * 10); // 厘米转毫米
-                var weightMg = (int)(package.Weight * 1000000); // 千克转毫克
-                var weightG = (int)(package.Weight * 1000); // 千克转克
-
-                // 提交到 Dimensions Machine API
-                var dimensionsSuccess = await _apiService.SubmitDimensionsAsync(
-                    package.Barcode,
-                    heightMm,
-                    lengthMm,
-                    widthMm,
-                    weightMg); // 不提交图片数据
-
-                if (dimensionsSuccess)
+                try
                 {
-                    Log.Information("Dimensions Machine API 提交成功: Barcode={Barcode}, H={Height}mm, L={Length}mm, W={Width}mm, Weight={Weight}mg",
-                        package.Barcode, heightMm, lengthMm, widthMm, weightMg);
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        CurrentMeasurementResult = new MeasurementResultViewModel(package, _qrCodeService);
+                    });
+                    
+                    Log.Information("Measurement result view model created successfully: Barcode={Barcode}, Size={Length}x{Width}x{Height}cm, Weight={Weight}kg",
+                        package.Barcode, package.Length, package.Width, package.Height, package.Weight);
                 }
-                else
+                catch (Exception ex)
                 {
-                    Log.Warning("Dimensions Machine API 提交失败: Barcode={Barcode}", package.Barcode);
-                }
-
-                // 提交到 Tare Attributes API
-                var tareRequest = new TareAttributesRequest
-                {
-                    TareSticker = package.Barcode,
-                    SizeAMm = lengthMm, // 长度
-                    SizeBMm = widthMm, // 宽度
-                    SizeCMm = heightMm, // 高度
-                    WeightG = weightG // 重量（克）
-                    // OfficeId 和 PlaceId 使用默认硬编码值
-                    // VolumeMm 将通过 CalculateVolume() 自动计算
-                };
-
-                var (tareSuccess, tareErrorMessage) = await _tareAttributesApiService.SubmitTareAttributesAsync(tareRequest);
-
-                if (tareSuccess)
-                {
-                    Log.Information("Tare Attributes API 提交成功: Barcode={Barcode}, Size={Length}x{Width}x{Height}mm, Weight={Weight}g",
-                        package.Barcode, lengthMm, widthMm, heightMm, weightG);
-                }
-                else
-                {
-                    Log.Warning("Tare Attributes API 提交失败: Barcode={Barcode}, Error={Error}", package.Barcode, tareErrorMessage);
+                    Log.Error(ex, "Error occurred while creating measurement result view model: Barcode={Barcode}", package.Barcode);
                 }
             }
             else
             {
-                Log.Warning("包裹缺少必要的尺寸或重量信息，无法提交到API: Barcode={Barcode}, Length={Length}, Width={Width}, Height={Height}, Weight={Weight}",
+                Log.Warning("Package missing required size or weight info, cannot create measurement result: Barcode={Barcode}, Length={Length}, Width={Width}, Height={Height}, Weight={Weight}",
                     package.Barcode, package.Length, package.Width, package.Height, package.Weight);
             }
         }
@@ -687,13 +629,13 @@ public class MainWindowViewModel : BindableBase, IDisposable
         private set => SetProperty(ref _currentImage, value);
     }
 
-    public SystemStatus SystemStatus { get; private set; } = new();
-
-    public string CurrentEmployeeInfo
+    public MeasurementResultViewModel? CurrentMeasurementResult
     {
-        get => _currentEmployeeInfo;
-        private set => SetProperty(ref _currentEmployeeInfo, value);
+        get => _currentMeasurementResult;
+        private set => SetProperty(ref _currentMeasurementResult, value);
     }
+
+    public SystemStatus SystemStatus { get; private set; } = new();
 
     public ObservableCollection<PackageInfo> PackageHistory { get; } = [];
     public ObservableCollection<StatisticsItem> StatisticsItems { get; } = [];

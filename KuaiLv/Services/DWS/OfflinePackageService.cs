@@ -46,10 +46,17 @@ public class OfflinePackageService(IPackageDataService packageDataService)
             var offlineRecords = await packageDataService.GetAllOfflinePackagesAsync();
             Log.Information("查询到 {Count} 条离线包裹记录", offlineRecords.Count);
 
-            // 转换为PackageInfo对象
+            // 转换为PackageInfo对象，排除"noread"条码的包裹
             var packages = new List<PackageInfo>();
             foreach (var record in offlineRecords)
             {
+                // 跳过"noread"条码的包裹
+                if (string.IsNullOrEmpty(record.Barcode) || record.Barcode.Equals("noread", StringComparison.OrdinalIgnoreCase))
+                {
+                    Log.Debug("跳过noread条码的离线包裹：{Barcode}", record.Barcode);
+                    continue;
+                }
+                
                 var package = PackageInfo.Create();
 
                 package.SetBarcode(record.Barcode);

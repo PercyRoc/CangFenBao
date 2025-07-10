@@ -431,7 +431,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                             if (isSuccess)
                             {
                                 // 查找匹配规则
-                                var matchedChute = chuteSettings.FindMatchingChute(package.Barcode);
+                                var matchedChute = chuteSettings.FindMatchingChute(package.Barcode, package.Weight);
                                 if (matchedChute.HasValue)
                                 {
                                     package.SetChute(matchedChute.Value);

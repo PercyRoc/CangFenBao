@@ -41,8 +41,7 @@ internal class TcpCameraService : ICameraService
             _host,
             _port,
             HandleDataReceived,
-            HandleConnectionStatusChanged,
-            true // 启用自动重连
+            HandleConnectionStatusChanged // 启用自动重连
         );
 
         Log.Information("TCP相机服务已创建，将使用 TcpClientService 连接到 {Host}:{Port}", _host, _port);

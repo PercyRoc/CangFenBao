@@ -569,7 +569,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             // 如果安通API调用成功，继续执行本地规则匹配
             try
             {
-                var matchedChute = chuteSettings.FindMatchingChute(package.Barcode);
+                var matchedChute = chuteSettings.FindMatchingChute(package.Barcode, package.Weight);
 
                 if (matchedChute.HasValue)
                 {

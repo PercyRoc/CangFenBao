@@ -71,21 +71,40 @@ public class ChuteSettings : BindableBase
     /// <returns>匹配的格口号，如果没有匹配则返回null</returns>
     public int? FindMatchingChute(string barcode)
     {
+        return FindMatchingChute(barcode, null);
+    }
+
+    /// <summary>
+    ///     根据条码和重量查找匹配的格口
+    /// </summary>
+    /// <param name="barcode">包裹条码</param>
+    /// <param name="weight">包裹重量（克）</param>
+    /// <returns>匹配的格口号，如果没有匹配则返回null</returns>
+    public int? FindMatchingChute(string barcode, double? weight)
+    {
         if (string.IsNullOrEmpty(barcode)) return null;
 
-        foreach (var (chuteNumber, chuteRule) in ChuteRules.OrderBy(r => r.Value.IsEffectivelyDefault())) // 优先处理非默认规则
+        // 按优先级排序：先处理有重量规则的非默认规则，再处理无重量规则的非默认规则，最后处理默认规则
+        var orderedRules = ChuteRules
+            .OrderBy(r => r.Value.IsEffectivelyDefault())
+            .ThenByDescending(r => r.Value.HasWeightRule())
+            .ToList();
+
+        foreach (var (chuteNumber, chuteRule) in orderedRules)
         {
-            if (!chuteRule.IsMatching(barcode)) continue;
+            if (!chuteRule.IsMatching(barcode, weight)) continue;
+            
             // 如果规则是默认规则，并且不是唯一的匹配，则跳过继续寻找更具体的规则。
             // 如果只有默认规则匹配，或者该格口是唯一的匹配，则返回它。
-            if (!chuteRule.IsEffectivelyDefault()) return chuteNumber; // 返回第一个匹配的非默认规则，或者唯一的默认规则
+            if (!chuteRule.IsEffectivelyDefault()) return chuteNumber; // 返回第一个匹配的非默认规则
+            
             // 检查是否存在其他非默认规则也匹配
-            var hasSpecificMatch = ChuteRules.Any(r => r.Key != chuteNumber && r.Value.IsMatching(barcode) && !r.Value.IsEffectivelyDefault());
+            var hasSpecificMatch = ChuteRules.Any(r => r.Key != chuteNumber && r.Value.IsMatching(barcode, weight) && !r.Value.IsEffectivelyDefault());
             if (hasSpecificMatch)
             {
                 continue; // 存在更具体的匹配，跳过此默认规则
             }
-            return chuteNumber; // 返回第一个匹配的非默认规则，或者唯一的默认规则
+            return chuteNumber; // 返回第一个匹配的默认规则
         }
 
         return null;
@@ -100,12 +119,15 @@ public class BarcodeMatchRule : BindableBase
     private bool _isDigitOnly;
     private bool _isLetterOnly;
     private int _maxLength;
+    private double _maxWeight;
     private int _minLength;
+    private double _minWeight;
     private string _notContains = string.Empty;
     private string _notEndsWith = string.Empty;
     private string _notStartsWith = string.Empty;
     private string _regexPattern = "(?=.*(?))";
     private string _startsWith = string.Empty;
+    private bool _useWeightRule;
 
     public bool IsDigitOnly
     {
@@ -137,6 +159,35 @@ public class BarcodeMatchRule : BindableBase
     {
         get => _maxLength;
         set => SetProperty(ref _maxLength, value);
+    }
+
+    /// <summary>
+    ///     是否启用重量规则
+    /// </summary>
+    public bool UseWeightRule
+    {
+        get => _useWeightRule;
+        set => SetProperty(ref _useWeightRule, value);
+    }
+
+    /// <summary>
+    ///     最小重量（克）
+    /// </summary>
+    [Range(0, double.MaxValue, ErrorMessage = "最小重量不能小于0")]
+    public double MinWeight
+    {
+        get => _minWeight;
+        set => SetProperty(ref _minWeight, value);
+    }
+
+    /// <summary>
+    ///     最大重量（克）
+    /// </summary>
+    [Range(0, double.MaxValue, ErrorMessage = "最大重量不能小于0")]
+    public double MaxWeight
+    {
+        get => _maxWeight;
+        set => SetProperty(ref _maxWeight, value);
     }
 
     public string StartsWith
@@ -182,6 +233,14 @@ public class BarcodeMatchRule : BindableBase
     }
 
     /// <summary>
+    ///     检查当前规则是否包含重量规则
+    /// </summary>
+    internal bool HasWeightRule()
+    {
+        return UseWeightRule && (MinWeight > 0 || MaxWeight > 0);
+    }
+
+    /// <summary>
     ///     检查当前规则是否是"默认"规则，即在没有其他特定条件的情况下会匹配任何条码。
     /// </summary>
     internal bool IsEffectivelyDefault()
@@ -192,6 +251,7 @@ public class BarcodeMatchRule : BindableBase
                !IsDigitOnly &&
                !IsLetterOnly &&
                !IsAlphanumeric &&
+               !UseWeightRule &&
                string.IsNullOrEmpty(StartsWith) &&
                string.IsNullOrEmpty(EndsWith) &&
                string.IsNullOrEmpty(NotStartsWith) &&
@@ -209,6 +269,7 @@ public class BarcodeMatchRule : BindableBase
         return (IsDigitOnly || IsLetterOnly || IsAlphanumeric) &&
                MinLength == 0 &&
                MaxLength == 0 &&
+               !UseWeightRule &&
                string.IsNullOrEmpty(StartsWith) &&
                string.IsNullOrEmpty(EndsWith) &&
                string.IsNullOrEmpty(NotStartsWith) &&
@@ -225,10 +286,34 @@ public class BarcodeMatchRule : BindableBase
     /// <returns>是否匹配</returns>
     internal bool IsMatching(string barcode)
     {
+        return IsMatching(barcode, null);
+    }
+
+    /// <summary>
+    ///     检查条码和重量是否匹配当前规则
+    /// </summary>
+    /// <param name="barcode">包裹条码</param>
+    /// <param name="weight">包裹重量（克）</param>
+    /// <returns>是否匹配</returns>
+    internal bool IsMatching(string barcode, double? weight)
+    {
         // 检查是否为"仅字符类型"的默认规则，如果是则不匹配
         if (IsCharacterTypeOnlyRule())
         {
             return false; // 不匹配仅字符类型的默认规则
+        }
+
+        // 检查重量限制
+        if (UseWeightRule && weight.HasValue)
+        {
+            var weightInGrams = weight.Value * 1000; // 转换为克
+            if (MinWeight > 0 && weightInGrams < MinWeight) return false;
+            if (MaxWeight > 0 && weightInGrams > MaxWeight) return false;
+        }
+        else if (UseWeightRule && !weight.HasValue)
+        {
+            // 如果规则要求重量但没有提供重量信息，则不匹配
+            return false;
         }
 
         // 检查长度限制

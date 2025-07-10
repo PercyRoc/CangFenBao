@@ -114,10 +114,10 @@ public class PackageTransferService : IDisposable
                             var cloneForSave = originalImage.Clone();
                             cloneForSave.Freeze();
 
-                            Log.Debug("准备启动后台任务保存图像.");
-                            // 捕获上下文信息用于后台任务
-                            var barcodeForTask = package.Barcode;
+                            Log.Debug("准备启动后台任务保存带水印图像.");
+                            // 捕获上下文信息和包裹信息用于后台任务
                             var contextForTask = packageContext; // 捕获上下文
+                            var packageForTask = package; // 捕获包裹信息用于生成水印
 
                             _ = Task.Run(async () =>
                             {
@@ -127,21 +127,21 @@ public class PackageTransferService : IDisposable
                                     Log.Debug("后台保存任务开始.");
                                     try
                                     {
-                                        var actualSavedPath = await _imageSavingService.SaveImageAsync(cloneForSave, barcodeForTask, triggerTime);
+                                        var actualSavedPath = await _imageSavingService.SaveImageWithWatermarkAsync(cloneForSave, packageForTask);
 
                                         if (actualSavedPath != null)
                                         {
-                                            Log.Information("后台图像保存成功, 路径: {ImagePath}", actualSavedPath);
+                                            Log.Information("后台带水印图像保存成功, 路径: {ImagePath}", actualSavedPath);
                                         }
                                         else
                                         {
-                                            // SaveImageAsync 返回 null 的原因已经在该服务内部记录 (例如禁用, 路径错误等)
-                                            Log.Warning("后台图像保存任务返回 null (可能已禁用或失败).");
+                                            // SaveImageWithWatermarkAsync 返回 null 的原因已经在该服务内部记录 (例如禁用, 路径错误等)
+                                            Log.Warning("后台带水印图像保存任务返回 null (可能已禁用或失败).");
                                         }
                                     }
                                     catch (Exception ex)
                                     {
-                                        Log.Error(ex, "后台图像保存任务发生异常.");
+                                        Log.Error(ex, "后台带水印图像保存任务发生异常.");
                                     }
                                     // cloneForSave 在此任务完成后超出作用域, 可被 GC 回收.
                                     Log.Debug("后台保存任务结束.");

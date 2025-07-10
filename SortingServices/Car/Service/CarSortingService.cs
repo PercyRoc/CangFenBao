@@ -10,7 +10,7 @@ namespace SortingServices.Car.Service;
 /// <summary>
 ///     小车分拣服务实现
 /// </summary>
-public class CarSortingService
+public class CarSortingService : IAsyncDisposable
 {
     private const byte DualFrameParamFrame = 0x95; // 双帧控制 - 参数设定帧 (无回码)
     private const byte DualFrameRunFrame = 0x8A; // 双帧控制 - 运行命令帧 (广播，无回码)
@@ -316,8 +316,8 @@ public class CarSortingService
             cmd[4] = (byte)(timeVal & 0x7F); // 获取时间的低7位
 
             // Byte 5: 复合数据 1
-            byte piBits = piValue - 1 & 0x07; // PI值1对应0
-            byte controlModeBit = 0x00; // 时间模式 Bit2=0
+            const byte piBits = piValue - 1 & 0x07; // PI值1对应0
+            const byte controlModeBit = 0x00; // 时间模式 Bit2=0
             cmd[5] = (byte)(piBits << 3 | controlModeBit | t7 << 1 | dt7);
 
             // Byte 6: 复合数据 2 (暂不用)
@@ -337,28 +337,36 @@ public class CarSortingService
             cmd[12] = 0; // Reg 4: Cars 31-25
             cmd[13] = 0; // Reg 5: Cars 32,24,16,8
 
-            if (addr <= 7) // Reg 1
+            switch (addr)
             {
-                cmd[9] = (byte)(1 << addr - 1);
-            }
-            else if (addr is >= 9 and <= 15) // Reg 2
-            {
-                cmd[10] = (byte)(1 << addr - 9);
-            }
-            else if (addr is >= 17 and <= 23) // Reg 3
-            {
-                cmd[11] = (byte)(1 << addr - 17);
-            }
-            else if (addr is >= 25 and <= 31) // Reg 4
-            {
-                cmd[12] = (byte)(1 << addr - 25);
-            }
-            else // Reg 5
-            {
-                if (addr == 8) cmd[13] = 1 << 0;
-                else if (addr == 16) cmd[13] = 1 << 1;
-                else if (addr == 24) cmd[13] = 1 << 2;
-                else cmd[13] = 1 << 3;
+                // Reg 1
+                case <= 7:
+                    cmd[9] = (byte)(1 << addr - 1);
+                    break;
+                // Reg 2
+                case >= 9 and <= 15:
+                    cmd[10] = (byte)(1 << addr - 9);
+                    break;
+                // Reg 3
+                case >= 17 and <= 23:
+                    cmd[11] = (byte)(1 << addr - 17);
+                    break;
+                // Reg 4
+                case >= 25 and <= 31:
+                    cmd[12] = (byte)(1 << addr - 25);
+                    break;
+                case 8:
+                    cmd[13] = 1 << 0;
+                    break;
+                case 16:
+                    cmd[13] = 1 << 1;
+                    break;
+                case 24:
+                    cmd[13] = 1 << 2;
+                    break;
+                default:
+                    cmd[13] = 1 << 3;
+                    break;
             }
 
             // Byte 14: 序列号 (递增, B7=0)
@@ -404,7 +412,6 @@ public class CarSortingService
         return (byte)(crc & 0x7F); // 根据规范，最后与0x7F进行与操作
     }
 
-    /// <inheritdoc />
     public ValueTask DisposeAsync()
     {
         if (_serialPortService != null)

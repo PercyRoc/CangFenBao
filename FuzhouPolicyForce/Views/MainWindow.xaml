@@ -8,7 +8,7 @@
                  xmlns:viewModels="clr-namespace:FuzhouPolicyForce.ViewModels"
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=viewModels:MainWindowViewModel}"
-                 Title="科仓南宁"
+                 Title="科仓重庆"
                  Height="900"
                  Width="1600"
                  WindowStartupLocation="CenterScreen"
@@ -40,8 +40,8 @@
                 <ColumnDefinition Width="Auto" /> <!-- 标定 -->
                 <ColumnDefinition Width="Auto" /> <!-- 历史记录 -->
                 <ColumnDefinition Width="Auto" /> <!-- 系统设置 -->
-                <ColumnDefinition Width="Auto" /> <!-- 标题 -->
-                <ColumnDefinition Width="*" />    <!-- 间隔 -->
+                <ColumnDefinition Width="*" /> <!-- 标题 -->
+                <ColumnDefinition Width="Auto" />    <!-- 间隔 -->
                 <ColumnDefinition Width="Auto" /> <!-- 窗口按钮 -->
             </Grid.ColumnDefinitions>
 
@@ -92,7 +92,7 @@
 
             <!-- 标题 -->
             <TextBlock Grid.Column="4"
-                       Text="科仓南宁"
+                       Text="科仓重庆"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
                        Margin="0,0,8,0"

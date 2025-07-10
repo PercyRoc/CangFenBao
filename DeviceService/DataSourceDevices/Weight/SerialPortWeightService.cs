@@ -636,8 +636,8 @@ public class SerialPortWeightService : IDisposable
         {
             Stop();
 
-            _statusCheckTimer?.Stop();
-            _statusCheckTimer?.Dispose();
+            _statusCheckTimer.Stop();
+            _statusCheckTimer.Dispose();
 
             _serialPortService.Dispose();
 

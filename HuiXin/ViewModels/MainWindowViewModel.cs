@@ -356,7 +356,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         Log.Information("聚水潭上传成功: {Barcode}", package.Barcode);
 
                         // 尝试匹配格口规则
-                        var matchedChute = chuteSettings.FindMatchingChute(package.Barcode);
+                        var matchedChute = chuteSettings.FindMatchingChute(package.Barcode, package.Weight);
 
                         if (matchedChute.HasValue)
                         {

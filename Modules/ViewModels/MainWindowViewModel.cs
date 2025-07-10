@@ -7,9 +7,9 @@ using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
-using Modules.Models.Jitu.Settings;
 using Serilog;
 using ShanghaiModuleBelt.Models.Jitu;
+using ShanghaiModuleBelt.Models.Jitu.Settings;
 using ShanghaiModuleBelt.Models.Sto;
 using ShanghaiModuleBelt.Models.Sto.Settings;
 using ShanghaiModuleBelt.Models.Yunda;
@@ -331,6 +331,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
+            package.SetWeight(0.1);
             Log.Information("收到包裹信息: {Barcode}, 序号={Index}", package.Barcode, package.Index);
 
             // 从 ChuteSettings 获取格口配置
@@ -346,7 +347,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             else
             {
                 // 根据条码查找匹配的格口
-                var chuteNumber = chuteSettings.FindMatchingChute(package.Barcode);
+                var chuteNumber = chuteSettings.FindMatchingChute(package.Barcode, package.Weight);
 
                 if (chuteNumber == null)
                 {

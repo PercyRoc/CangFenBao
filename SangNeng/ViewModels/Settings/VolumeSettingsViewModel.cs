@@ -121,11 +121,9 @@ public class VolumeSettingsViewModel : BindableBase
             var result = dialog.ShowDialog();
 
             // Process dialog results
-            if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.SelectedPath))
-            {
-                ImageSavePath = dialog.SelectedPath;
-                Log.Information("用户选择了新的图像保存路径: {Path}", ImageSavePath);
-            }
+            if (result != DialogResult.OK || string.IsNullOrWhiteSpace(dialog.SelectedPath)) return;
+            ImageSavePath = dialog.SelectedPath;
+            Log.Information("用户选择了新的图像保存路径: {Path}", ImageSavePath);
         }
         catch (Exception ex)
         {

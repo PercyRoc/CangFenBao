@@ -63,18 +63,31 @@ public class DwsService : IDwsService, IDisposable
     {
         try
         {
-            if (!_isNetworkAvailable)
+                    if (!_isNetworkAvailable)
+        {
+            // 如果是"noread"条码，不保存到离线存储
+            if (string.IsNullOrEmpty(package.Barcode) || package.Barcode.Equals("noread", StringComparison.OrdinalIgnoreCase))
             {
-                Log.Warning("网络未连接，保存包裹到离线存储：{Barcode}", package.Barcode);
-                await _offlinePackageService.SaveOfflinePackageAsync(package);
-                package.SetStatus(PackageStatus.Error, "网络未连接，已保存到离线存储");
+                Log.Warning("网络未连接，但条码为noread，不保存到离线存储：{Barcode}", package.Barcode);
+                package.SetStatus(PackageStatus.Error, "网络未连接，noread包裹不保存");
                 return new DwsResponse
                 {
                     Success = false,
                     Code = "NETWORK_OFFLINE",
-                    Message = "网络未连接，包裹已保存到离线存储"
+                    Message = "网络未连接，noread包裹不保存到离线存储"
                 };
             }
+            
+            Log.Warning("网络未连接，保存包裹到离线存储：{Barcode}", package.Barcode);
+            await _offlinePackageService.SaveOfflinePackageAsync(package);
+            package.SetStatus(PackageStatus.Error, "网络未连接，已保存到离线存储");
+            return new DwsResponse
+            {
+                Success = false,
+                Code = "NETWORK_OFFLINE",
+                Message = "网络未连接，包裹已保存到离线存储"
+            };
+        }
 
             // 每次都加载最新的配置
             var uploadConfig = _settingsService.LoadSettings<UploadConfiguration>();
@@ -278,14 +291,28 @@ public class DwsService : IDwsService, IDisposable
                     Log.Error(ex, "DWS服务HTTP请求异常: {StatusCode}, {Message}",
                         httpEx.StatusCode, ex.Message);
                     package.SetStatus(PackageStatus.Error, $"网络请求异常：{httpEx.Message}");
-                    // 保存到离线存储
-                    await _offlinePackageService.SaveOfflinePackageAsync(package);
+                    // 如果不是"noread"条码，才保存到离线存储
+                    if (!string.IsNullOrEmpty(package.Barcode) && !package.Barcode.Equals("noread", StringComparison.OrdinalIgnoreCase))
+                    {
+                        await _offlinePackageService.SaveOfflinePackageAsync(package);
+                    }
+                    else
+                    {
+                        Log.Warning("HTTP请求异常，但条码为noread，不保存到离线存储：{Barcode}", package.Barcode);
+                    }
                     break;
                 case TaskCanceledException:
                     Log.Error(ex, "DWS服务请求超时");
                     package.SetStatus(PackageStatus.Timeout, "请求超时，请检查网络连接");
-                    // 保存到离线存储
-                    await _offlinePackageService.SaveOfflinePackageAsync(package);
+                    // 如果不是"noread"条码，才保存到离线存储
+                    if (!string.IsNullOrEmpty(package.Barcode) && !package.Barcode.Equals("noread", StringComparison.OrdinalIgnoreCase))
+                    {
+                        await _offlinePackageService.SaveOfflinePackageAsync(package);
+                    }
+                    else
+                    {
+                        Log.Warning("请求超时，但条码为noread，不保存到离线存储：{Barcode}", package.Barcode);
+                    }
                     break;
                 case JsonException jsonEx:
                     Log.Error(ex, "DWS服务响应解析异常: {Message}", jsonEx.Message);
@@ -593,20 +620,18 @@ public class DwsService : IDwsService, IDisposable
                     }
                 }
 
-                // 显示上传结果通知
+                // 重试上传不显示通知，仅记录日志
                 if (successCount > 0)
                 {
-                    _notificationService.ShowSuccess($"成功上传 {successCount} 个离线包裹");
+                    Log.Information("重试上传成功 {SuccessCount} 个离线包裹", successCount);
                 }
                 if (failCount > 0)
                 {
-                    var message = $"有 {failCount} 个离线包裹上传失败，将稍后重试";
+                    Log.Warning("重试上传失败 {FailCount} 个离线包裹，已标记为不再重试", failCount);
                     if (errorMessages.Count > 0)
                     {
-                        message += $"\n部分错误: {string.Join("; ", errorMessages.Take(3))}";
-                        if (errorMessages.Count > 3) message += "...";
+                        Log.Warning("重试失败详情: {ErrorDetails}", string.Join("; ", errorMessages.Take(5)));
                     }
-                    _notificationService.ShowWarning(message);
                 }
                 if (skippedCount > 0)
                 {
@@ -621,7 +646,7 @@ public class DwsService : IDwsService, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "处理离线包裹时发生错误");
-            _notificationService.ShowError("处理离线包裹时发生错误");
+            // 重试过程中的错误不显示通知，仅记录日志
         }
     }
 

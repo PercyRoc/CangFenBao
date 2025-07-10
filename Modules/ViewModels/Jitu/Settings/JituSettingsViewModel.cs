@@ -1,6 +1,6 @@
 using Common.Services.Settings;
-using Modules.Models.Jitu.Settings;
 using Serilog;
+using ShanghaiModuleBelt.Models.Jitu.Settings;
 
 namespace ShanghaiModuleBelt.ViewModels.Jitu.Settings;
 

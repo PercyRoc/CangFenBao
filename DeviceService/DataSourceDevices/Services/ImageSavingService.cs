@@ -3,6 +3,9 @@ using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera.Models.Camera;
 using DeviceService.DataSourceDevices.Camera.Models.Camera.Enums;
 using Serilog;
+using System.Windows.Media;
+using System.Windows;
+using Common.Models.Package;
 
 namespace DeviceService.DataSourceDevices.Services;
 
@@ -111,6 +114,126 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
             Log.Error(ex, "保存条码 {Barcode} (时间戳 {Timestamp}) 的图像失败", barcode, timestamp);
             return null;
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<string?> SaveImageWithWatermarkAsync(BitmapSource? image, PackageInfo packageInfo)
+    {
+        // 如果没有提供图像，则不保存
+        if (image == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            // 生成带水印的图像
+            var watermarkedImage = AddWatermarkToImage(image, packageInfo);
+            
+            // 使用带水印的图像保存
+            return await SaveImageAsync(watermarkedImage, packageInfo.Barcode, packageInfo.CreateTime);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "保存带水印的图像失败，条码: {Barcode}", packageInfo.Barcode);
+            return null;
+        }
+    }
+
+    /// <summary>
+    ///     在图像上添加水印
+    /// </summary>
+    /// <param name="originalImage">原始图像</param>
+    /// <param name="packageInfo">包裹信息</param>
+    /// <returns>带水印的图像</returns>
+    private static BitmapSource AddWatermarkToImage(BitmapSource originalImage, PackageInfo packageInfo)
+    {
+        // 确保原始图像已冻结
+        if (!originalImage.IsFrozen)
+        {
+            originalImage.Freeze();
+        }
+
+        // 创建DrawingVisual进行绘制
+        var visual = new DrawingVisual();
+        using (var drawingContext = visual.RenderOpen())
+        {
+            // 绘制原始图像
+            drawingContext.DrawImage(originalImage, new Rect(0, 0, originalImage.Width, originalImage.Height));
+
+            // 准备水印文本
+            var watermarkTexts = new List<string>();
+            
+            // 添加条码
+            if (!string.IsNullOrEmpty(packageInfo.Barcode))
+            {
+                watermarkTexts.Add($"Barcode: {packageInfo.Barcode}");
+            }
+            
+            // 添加重量
+            if (packageInfo.Weight > 0)
+            {
+                watermarkTexts.Add($"Weight: {packageInfo.Weight:F2}kg");
+            }
+            
+            // 添加尺寸
+            if (packageInfo.Length.HasValue && packageInfo.Width.HasValue && packageInfo.Height.HasValue)
+            {
+                watermarkTexts.Add($"Size: {packageInfo.Length:F1}*{packageInfo.Width:F1}*{packageInfo.Height:F1}cm");
+            }
+            
+            // 添加时间
+            watermarkTexts.Add($"Time: {packageInfo.CreateTime:yyyy-MM-dd HH:mm:ss}");
+
+            // 设置字体样式
+            var typeface = new Typeface(new FontFamily("Microsoft YaHei"), 
+                FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
+            var fontSize = Math.Max(12, originalImage.Width / 60); // 根据图像宽度调整字体大小
+            var brush = new SolidColorBrush(Colors.Lime); // 绿色字体
+            brush.Freeze();
+
+            // 绘制水印文本
+            var yOffset = 10.0; // 起始Y偏移
+            var lineHeight = fontSize * 1.2; // 行高
+            const double xOffset = 10.0; // X偏移
+
+            foreach (var text in watermarkTexts)
+            {
+                var formattedText = new FormattedText(
+                    text,
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    FlowDirection.LeftToRight,
+                    typeface,
+                    fontSize,
+                    brush,
+                    1.0); // DPI scaling factor
+
+                // 添加黑色背景以提高可读性
+                var backgroundBrush = new SolidColorBrush(Color.FromArgb(128, 0, 0, 0)); // 半透明黑色
+                backgroundBrush.Freeze();
+                
+                var backgroundRect = new Rect(xOffset - 2, yOffset - 2, 
+                    formattedText.Width + 4, formattedText.Height + 4);
+                drawingContext.DrawRectangle(backgroundBrush, null, backgroundRect);
+
+                // 绘制文本
+                drawingContext.DrawText(formattedText, new Point(xOffset, yOffset));
+                yOffset += lineHeight;
+            }
+        }
+
+        // 渲染到RenderTargetBitmap
+        var renderTargetBitmap = new RenderTargetBitmap(
+            (int)originalImage.Width,
+            (int)originalImage.Height,
+            originalImage.DpiX,
+            originalImage.DpiY,
+            PixelFormats.Pbgra32);
+
+        renderTargetBitmap.Render(visual);
+        renderTargetBitmap.Freeze();
+
+        return renderTargetBitmap;
     }
 
     /// <inheritdoc />

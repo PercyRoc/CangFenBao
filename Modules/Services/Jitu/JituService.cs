@@ -1,10 +1,10 @@
 using System.Net.Http;
 using System.Text;
 using Common.Services.Settings;
-using Modules.Models.Jitu.Settings;
 using Newtonsoft.Json;
 using Serilog;
 using ShanghaiModuleBelt.Models.Jitu;
+using ShanghaiModuleBelt.Models.Jitu.Settings;
 
 namespace ShanghaiModuleBelt.Services.Jitu;
 
