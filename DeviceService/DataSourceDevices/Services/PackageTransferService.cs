@@ -85,7 +85,7 @@ public class PackageTransferService : IDisposable
 
                     var originalImage = package.Image; // 获取原始图像引用
                     string? generatedPath = null;
-                    var triggerTime = package.TriggerTimestamp;
+                    var triggerTime = package.CreateTime; // 使用CreateTime确保与保存文件时的时间戳一致
                     var imageSavingEnabled = _cameraSettings.EnableImageSaving;
 
                     try

@@ -25,7 +25,7 @@ public class HuaRayCameraService : ICameraService
     /// <summary>
     ///     构造函数
     /// </summary>
-    internal HuaRayCameraService()
+    public HuaRayCameraService()
     {
         _huaRayWrapper = HuaRayWrapper.Instance;
     }
@@ -116,7 +116,7 @@ public class HuaRayCameraService : ICameraService
     /// </summary>
     IObservable<BitmapSource> ICameraService.ImageStream
     {
-        get => _imageSubject.Select(tuple => (tuple.bitmapSource));
+        get => _imageSubject.Select(tuple => tuple.bitmapSource);
     }
 
     /// <summary>
@@ -154,6 +154,16 @@ public class HuaRayCameraService : ICameraService
     public bool Start()
     {
         return StartService();
+    }
+
+    /// <summary>
+    ///     使用指定的配置文件启动相机服务
+    /// </summary>
+    /// <param name="configurationPath">配置文件路径</param>
+    /// <returns>启动结果</returns>
+    public bool Start(string configurationPath)
+    {
+        return StartService(configurationPath);
     }
 
     /// <summary>

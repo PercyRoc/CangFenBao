@@ -326,6 +326,15 @@ public class PackageInfo : IDisposable
     }
 
     /// <summary>
+    ///     设置格口号。
+    /// </summary>
+    /// <param name="chuteNumber">目标格口号。</param>
+    public void SetChuteNumber(int chuteNumber)
+    {
+        ChuteNumber = chuteNumber;
+    }
+
+    /// <summary>
     ///     设置处理状态。如果未提供 statusDisplay，则使用默认值。
     /// </summary>
     /// <param name="status">新的状态</param>

@@ -53,6 +53,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "快手", "快手", "{1CD879
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "菜鸟", "Rookie\菜鸟.csproj", "{A216A592-3459-4815-98D1-9F0E7894BB98}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CangFenBao.SDK", "CangFenBao.SDK\CangFenBao.SDK.csproj", "{B8D6FAA8-36EF-4430-AF0F-5EE82C4F2C52}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -127,6 +129,10 @@ Global
 		{A216A592-3459-4815-98D1-9F0E7894BB98}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A216A592-3459-4815-98D1-9F0E7894BB98}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A216A592-3459-4815-98D1-9F0E7894BB98}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B8D6FAA8-36EF-4430-AF0F-5EE82C4F2C52}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B8D6FAA8-36EF-4430-AF0F-5EE82C4F2C52}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B8D6FAA8-36EF-4430-AF0F-5EE82C4F2C52}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B8D6FAA8-36EF-4430-AF0F-5EE82C4F2C52}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -32,6 +32,8 @@ public class CarSortingService : IAsyncDisposable
         Log.Information("CarSortingService 创建");
     }
 
+    public event Action<bool>? ConnectionChanged;
+
     public bool IsConnected
     {
         get => _serialPortService?.IsConnected ?? false;
@@ -121,7 +123,7 @@ public class CarSortingService : IAsyncDisposable
     private void OnConnectionChanged(bool isConnected)
     {
         Log.Information("串口连接状态变更: {Status}", isConnected ? "已连接" : "已断开");
-        // 可以添加重连逻辑或通知其他服务
+        ConnectionChanged?.Invoke(isConnected);
     }
 
     private void OnDataReceived(byte[] data)
