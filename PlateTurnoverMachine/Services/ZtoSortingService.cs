@@ -144,7 +144,7 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
     /// <param name="trayCode">小车编号</param>
     /// <param name="weight">重量</param>
     /// <returns>分拣信息</returns>
-    public async Task<SortingInfoResponse> GetSortingInfoAsync(string billCode, string pipeline, int turnNumber, string trayCode = "", float? weight = null)
+    public async Task<SortingInfoResponse?> GetSortingInfoAsync(string billCode, string pipeline, int turnNumber, string trayCode = "", float? weight = null)
     {
         try
         {
@@ -165,7 +165,11 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "获取分拣信息异常: {Barcode}", billCode);
-            return new SortingInfoResponse();
+            return new SortingInfoResponse
+            {
+                Status = false, // 异常时设置状态为false
+                Message = ex.Message // 异常信息
+            };
         }
     }
 
@@ -243,14 +247,19 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
             var requestData = data ?? string.Empty;
             var dataDigest = CalculateMd5(requestData + secretKey);
 
-            // 不使用URL编码，直接拼接请求字符串
-            var requestBodyStr = $"data={requestData}&data_digest={dataDigest}&msg_type={msgType}&company_id={companyId}";
+            // 使用 FormUrlEncodedContent 自动处理 URL 编码
+            var parameters = new List<KeyValuePair<string, string>>
+            {
+                new("data", requestData),
+                new("data_digest", dataDigest),
+                new("msg_type", msgType),
+                new("company_id", companyId)
+            };
+
+            var content = new FormUrlEncodedContent(parameters);
 
             // 使用@符号标记原始字符串，避免Serilog错误解析大括号
-            Log.Debug("发送中通请求 -> URL: {ApiUrl}, MsgType: {MsgType}, Body: {@RequestBody}", apiUrl, msgType, requestBodyStr);
-
-            // 创建表单内容
-            var content = new StringContent(requestBodyStr, Encoding.UTF8, "application/x-www-form-urlencoded");
+            Log.Debug("发送中通请求 -> URL: {ApiUrl}, MsgType: {MsgType}, Body: {@RequestBody}", apiUrl, msgType, content.ReadAsStringAsync().Result);
 
             var response = await _httpClient.PostAsync(apiUrl, content);
             response.EnsureSuccessStatusCode();

@@ -338,7 +338,7 @@
 //             _grabThread.Start(_device);
 //
 //             // 可选：短暂等待或检查线程状态，但通常先启动采集再启动线程就够了
-//             // Thread.Sleep(50); 
+//             // Thread.Sleep(50);
 //
 //             return true;
 //         }

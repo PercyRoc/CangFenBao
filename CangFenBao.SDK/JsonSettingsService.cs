@@ -212,8 +212,7 @@ namespace CangFenBao.SDK
             {
                 "HuaRaySettings" => config.HuaRayConfigPath,
                 "SerialPortSettings" => config.SerialPortSettingsPath,
-                "CarSettings" => config.CarSettingsPath,
-                "CarSequenceSettings" => config.CarSequenceSettingsPath,
+                "WeightServiceSettings" => config.WeightServiceSettingsPath,
                 _ => null
             };
             

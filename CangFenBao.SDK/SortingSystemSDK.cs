@@ -4,7 +4,6 @@ using DeviceService.DataSourceDevices.Camera.HuaRay;
 using DeviceService.DataSourceDevices.Camera.Models;
 using Serilog;
 using Serilog.Events;
-using SortingServices.Car.Service;
 
 namespace CangFenBao.SDK
 {
@@ -15,12 +14,13 @@ namespace CangFenBao.SDK
     {
         private readonly SdkConfig _config;
         private HuaRayCameraService? _cameraService;
-        private CarSortingService? _carSortingServiceInternal;
-        private CarSortService? _carSortService;
         private IDisposable? _packageSubscription;
         private IDisposable? _imageSubscription;
         private SdkImageService? _imageService;
         private HttpUploadService? _httpUploadService;
+        private DirectSorterService? _sorterService;
+        private SdkWeightService? _weightService;
+        private WeightServiceSettings? _weightSettings;
 
         /// <summary>
         /// 当相机识别到包裹并提取出完整信息后触发。
@@ -46,6 +46,16 @@ namespace CangFenBao.SDK
         public event EventHandler<(BitmapSource Image, string CameraId)>? ImageReceived;
 
         /// <summary>
+        /// 当收到有效的实时重量数据时触发。
+        /// </summary>
+        public event Action<double>? WeightUpdate;
+
+        /// <summary>
+        /// 当检测到重量低于设定的最小阈值时触发。
+        /// </summary>
+        public event Action<double>? NoValidWeightDetected;
+
+        /// <summary>
         /// 相机连接状态发生变化时触发。
         /// </summary>
         public event Action<string, bool>? CameraConnectionChanged;
@@ -64,9 +74,10 @@ namespace CangFenBao.SDK
         /// 初始化分拣系统SDK。
         /// </summary>
         /// <param name="config">SDK配置参数</param>
-        public SortingSystemSdk(SdkConfig config)
+        public SortingSystemSdk(SdkConfig config, string portName, int baudRate, int dataBits, int stopBits, int parity, int readTimeout, int writeTimeout)
         {
             _config = config ?? throw new ArgumentNullException(nameof(config));
+            _sorterService = new DirectSorterService(portName, baudRate, dataBits, stopBits, parity, readTimeout, writeTimeout);
         }
 
         /// <summary>
@@ -101,34 +112,23 @@ namespace CangFenBao.SDK
                 // 2. 初始化相机服务
                 _cameraService = new HuaRayCameraService();
 
-                // 3. 初始化小车服务
-                _carSortingServiceInternal = new CarSortingService(settingsService);
-                _carSortService = new CarSortService(_carSortingServiceInternal, settingsService);
-
-                var carInitSuccess = await _carSortService.InitializeAsync();
-                if (!carInitSuccess)
+                // 3. 初始化分拣机服务
+                // 在 InitializeAsync 方法中，移除 _sorterService = new DirectSorterService(...) 和 sorterInitSuccess 检查
+                // 只保留 _sorterService.ConnectionChanged 事件订阅
+                _sorterService.ConnectionChanged += (status) =>
                 {
-                    Log.Error("小车服务初始化失败。");
-                    return false;
-                }
-
-                // 4. 订阅内部事件并暴露为公共事件
-                _packageSubscription = _cameraService.PackageStream.Subscribe(OnPackageReceived);
-                _imageSubscription = _cameraService.ImageStreamWithId.Subscribe(OnImageReceived);
-                _cameraService.ConnectionChanged += (id, status) =>
-                {
-                    Log.Information("相机 '{CameraId}' 连接状态: {Status}", id, status ? "在线" : "离线");
-                    CameraConnectionChanged?.Invoke(id, status);
+                    Log.Information("分拣机串口连接状态: {Status}", status ? "已连接" : "已断开");
+                    SorterConnectionChanged?.Invoke(status);
                 };
 
-                if (_carSortingServiceInternal != null)
+                // 4. 初始化重量服务
+                _weightService = new SdkWeightService(settingsService);
+                if (_weightService.IsEnabled)
                 {
-                    _carSortingServiceInternal.ConnectionChanged += (status) =>
-                    {
-                        Log.Information("分拣机串口连接状态: {Status}", status ? "已连接" : "已断开");
-                        SorterConnectionChanged?.Invoke(status);
-                    };
+                    await _weightService.StartAsync();
+                    _weightSettings = settingsService.LoadSettings<WeightServiceSettings>(); // 缓存配置
                 }
+
                 Log.Information("SDK 初始化成功！");
                 return true;
             }
@@ -150,9 +150,14 @@ namespace CangFenBao.SDK
             // 启动相机
             _cameraService?.Start(_config.HuaRayConfigPath);
 
-            if (_carSortService != null)
+            if (_sorterService != null)
             {
-                await _carSortService.StartAsync();
+                await _sorterService.StartAsync();
+            }
+
+            if (_weightService != null && _weightService.IsEnabled)
+            {
+                await _weightService.StartAsync();
             }
 
             IsRunning = true;
@@ -168,9 +173,13 @@ namespace CangFenBao.SDK
             Log.Information("SDK 服务停止中...");
 
             _cameraService?.Stop();
-            if (_carSortService != null)
+            if (_sorterService != null)
             {
-                await _carSortService.StopAsync();
+                await _sorterService.StopAsync();
+            }
+            if (_weightService != null && _weightService.IsEnabled)
+            {
+                await _weightService.DisposeAsync();
             }
 
             IsRunning = false;
@@ -178,52 +187,18 @@ namespace CangFenBao.SDK
         }
 
         /// <summary>
-        /// 发送分拣指令。
-        /// 用户应在 PackageReady 事件中获得 PackageInfo，设置 ChuteNumber，然后调用此方法。
+        /// 发送分拣机指令。
         /// </summary>
-        /// <param name="package">包含目标格口号的包裹信息。</param>
-        public async Task<bool> SortPackageAsync(PackageInfo package)
+        /// <param name="command">要发送的指令字节数组。</param>
+        /// <returns>如果指令发送成功，则为 true；否则为 false。</returns>
+        public async Task<bool> SendSorterCommandAsync(byte[] command)
         {
-            if (!IsRunning || _carSortService == null)
+            if (!IsRunning || _sorterService == null)
             {
-                Log.Warning("SDK 未运行或小车分拣服务未初始化，无法处理分拣指令。");
+                Log.Warning("SDK 未运行或分拣服务未初始化，无法发送指令。");
                 return false;
             }
-            Log.Information("开始处理包裹 {Barcode} 的分拣指令，目标格口: {ChuteNumber}", package.Barcode, package.ChuteNumber);
-            var success = await _carSortService.ProcessPackageSortingAsync(package);
-            if (success)
-            {
-                Log.Information("包裹 {Barcode} 的分拣指令已成功发送到队列。", package.Barcode);
-            }
-            else
-            {
-                Log.Error("包裹 {Barcode} 的分拣指令发送失败。", package.Barcode);
-            }
-            return success;
-        }
-
-        /// <summary>
-        /// 直接向指定格口发送分拣指令。
-        /// </summary>
-        /// <param name="chuteNumber">目标格口号。</param>
-        public async Task<bool> SortToChuteAsync(int chuteNumber)
-        {
-            if (!IsRunning || _carSortingServiceInternal == null)
-            {
-                Log.Warning("SDK 未运行或小车内部服务未初始化，无法直接发送格口指令。");
-                return false;
-            }
-            Log.Information("直接向格口 {ChuteNumber} 发送分拣指令。", chuteNumber);
-            var success = await _carSortingServiceInternal.SendCommandForChuteAsync(chuteNumber);
-            if (success)
-            {
-                Log.Information("直接向格口 {ChuteNumber} 发送指令成功。", chuteNumber);
-            }
-            else
-            {
-                Log.Error("直接向格口 {ChuteNumber} 发送指令失败。", chuteNumber);
-            }
-            return success;
+            return await _sorterService.SendCommandAsync(command);
         }
 
         /// <summary>
@@ -239,21 +214,63 @@ namespace CangFenBao.SDK
 
         private void OnPackageReceived(PackageInfo package)
         {
-            Log.Information("收到原始包裹数据: 条码 {Barcode}, 重量 {Weight}g", package.Barcode, package.Weight);
-            // 重量检查
+            var packageReceivedTime = DateTime.Now; // 以SDK收到包的时间为基准
+            Log.Information("收到原始包裹数据: 条码 {Barcode}，此时相机重量为 {Weight}g", package.Barcode, package.Weight);
+
+            double fusedWeight = 0;
+
+            if (_weightService != null && _weightService.IsEnabled)
+            {
+                var lowerBound = packageReceivedTime.AddMilliseconds(_weightSettings!.FusionTimeRangeLowerMs);
+                var upperBound = packageReceivedTime.AddMilliseconds(_weightSettings.FusionTimeRangeUpperMs);
+
+                // 1. 尝试从稳定队列中查找匹配的重量
+                var stableWeightEntry = _weightService.StableWeights
+                    .Where(w => w.Timestamp >= lowerBound && w.Timestamp <= upperBound)
+                    .OrderByDescending(w => w.Timestamp) // 取时间范围内最新的一个
+                    .FirstOrDefault();
+
+                if (stableWeightEntry != default)
+                {
+                    fusedWeight = stableWeightEntry.Weight;
+                    Log.Information("成功融合稳定重量: {Weight:F2}g (时间戳: {Timestamp})", fusedWeight, stableWeightEntry.Timestamp);
+                }
+                else
+                {
+                    // 2. 如果找不到，使用最新的实时重量作为备用
+                    fusedWeight = _weightService.LatestWeightInGrams;
+                    Log.Warning("在时间范围 [{Lower}, {Upper}] 内未找到稳定重量，使用最新实时重量作为备用: {Weight:F2}g",
+                        lowerBound.ToString("HH:mm:ss.fff"),
+                        upperBound.ToString("HH:mm:ss.fff"),
+                        fusedWeight);
+                }
+            }
+            else
+            {
+                Log.Warning("重量服务未启用或未初始化，无法融合重量。");
+                // 在此情况下，fusedWeight 将保持为 0，或使用相机自带的重量（如果存在）
+                fusedWeight = package.Weight;
+            }
+
+            // 3. 将融合后的重量赋值给包裹对象
+            package.SetWeight(fusedWeight / 1000.0); // SetWeight参数为千克
+
+            // 4. 使用融合后的重量进行业务判断（例如，丢弃包裹）
+            // 注意：这里的 MinimumWeightGrams 来自 SdkConfig，与重量服务的阈值是两个概念
             if (_config.MinimumWeightGrams > 0 && package.Weight < _config.MinimumWeightGrams)
             {
                 PackageDiscarded?.Invoke(this, package);
-                Log.Information("包裹 {Barcode} 因重量 ({Weight}g) 低于阈值 ({Threshold}g) 被丢弃", 
+                Log.Information("包裹 {Barcode} 因融合后重量 ({Weight}g) 低于业务阈值 ({Threshold}g) 被丢弃",
                     package.Barcode, package.Weight, _config.MinimumWeightGrams);
-                return; 
+                return;
             }
 
-            Log.Information("包裹 {Barcode} 通过重量检查。", package.Barcode);
-            // 触发包裹就绪事件，此时包裹可用于显示或初步记录
+            Log.Information("包裹 {Barcode} 通过重量检查，最终重量: {Weight:F2}g", package.Barcode, package.Weight);
+
+            // 5. 触发最终事件
             PackageReady?.Invoke(this, package);
-            
-            // 如果启用了上传功能，则执行上传和自动分拣
+
+            // 6. 处理数据上传（如果启用）
             if (_config.EnableUpload)
             {
                 Log.Information("启用上传功能，开始异步上传包裹 {Barcode}...", package.Barcode);
@@ -262,31 +279,14 @@ namespace CangFenBao.SDK
                     try
                     {
                         var response = await _httpUploadService!.UploadPackageAsync(package);
-                        
                         UploadCompleted?.Invoke(this, (package, response));
-
-                        if (response is { Code: 0, Chute: > 0 })
-                        {
-                            package.SetChuteNumber(response.Chute);
-                            Log.Information("收到服务器分拣指令: 包裹 {Barcode} -> 格口 {Chute}", package.Barcode, package.ChuteNumber);
-                            await SortPackageAsync(package);
-                        }
-                        else
-                        {
-                            Log.Warning("包裹 {Barcode} 上传失败或服务器未返回有效格口。服务器消息: {Message}. 响应码: {Code}", 
-                                package.Barcode, response?.Message ?? "无响应", response?.Code ?? -1);
-                        }
                     }
                     catch (Exception ex)
                     {
                         Log.Error(ex, "异步上传包裹 {Barcode} 时发生错误。", package.Barcode);
-                        UploadCompleted?.Invoke(this, (package, null)); // 上传失败也触发事件，response为null
+                        UploadCompleted?.Invoke(this, (package, null));
                     }
                 });
-            }
-            else
-            {
-                Log.Information("未启用上传功能，包裹 {Barcode} 等待手动分拣或处理。", package.Barcode);
             }
         }
 
@@ -323,10 +323,13 @@ namespace CangFenBao.SDK
             _packageSubscription?.Dispose();
             _imageSubscription?.Dispose();
             _cameraService?.Dispose();
-            _carSortService?.Dispose();
-            if (_carSortingServiceInternal != null)
+            if (_sorterService != null)
             {
-                await _carSortingServiceInternal.DisposeAsync();
+                await _sorterService.DisposeAsync();
+            }
+            if (_weightService != null)
+            {
+                await _weightService.DisposeAsync();
             }
             await Log.CloseAndFlushAsync(); // 确保所有日志都写入完毕
             GC.SuppressFinalize(this);

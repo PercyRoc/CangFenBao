@@ -356,38 +356,76 @@
                     <RowDefinition Height="*" /> <!-- Row for History -->
                 </Grid.RowDefinitions>
 
-                                    <!-- Measurement Result Display Area -->
-                    <Border Grid.Row="0"
-                            Style="{StaticResource CardStyle}"
-                            Margin="16,0,16,16">
-                        <Grid Margin="16">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
+                <!-- Measurement Result Display Area -->
+                <Border Grid.Row="0"
+                        Style="{StaticResource CardStyle}"
+                        Margin="16,0,16,16">
+                    <Grid Margin="16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
 
-                            <!-- Title Bar -->
-                            <StackPanel Grid.Row="0"
-                                        Orientation="Horizontal"
-                                        Margin="0,0,0,8">
-                                <ui:SymbolIcon Symbol="QrCode24"
-                                               Margin="0,0,8,0"
-                                               Foreground="{StaticResource AccentBrush}"
-                                               VerticalAlignment="Center" />
-                                <TextBlock Text="Package Measurement Result"
-                                           FontSize="16"
-                                           FontWeight="SemiBold"
+                        <!-- Title Bar -->
+                        <StackPanel Grid.Row="0"
+                                    Orientation="Horizontal"
+                                    Margin="0,0,0,8">
+                            <ui:SymbolIcon Symbol="QrCode24"
+                                           Margin="0,0,8,0"
                                            Foreground="{StaticResource AccentBrush}"
                                            VerticalAlignment="Center" />
-                            </StackPanel>
+                            <TextBlock Text="Live Camera Feed"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentBrush}"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
 
-                            <!-- Measurement Result View -->
-                            <ContentControl Grid.Row="1"
-                                           Content="{Binding CurrentMeasurementResult}"
+                        <!-- 实时图像流展示区 -->
+                        <Border Grid.Row="1"
+                                CornerRadius="8"
+                                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center">
+                            <Grid>
+                                <Image Source="{Binding CurrentImage}"
+                                       Stretch="Uniform"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center">
+                                    <Image.Style>
+                                        <Style TargetType="Image">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding CurrentImage}" Value="{x:Null}">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Image.Style>
+                                </Image>
+                                <TextBlock Text="No Signal"
+                                           Foreground="Gray"
+                                           FontSize="20"
+                                           FontWeight="Bold"
                                            HorizontalAlignment="Center"
-                                           VerticalAlignment="Center" />
-                        </Grid>
-                    </Border>
+                                           VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding CurrentImage}" Value="{x:Null}">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Border>
 
                 <!-- Historical Package Information -->
                 <Border Grid.Row="1" Margin="16,0,16,16"

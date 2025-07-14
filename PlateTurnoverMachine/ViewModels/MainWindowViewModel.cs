@@ -5,6 +5,7 @@ using System.Reactive.Linq;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Common.Data;
 using Common.Models.Package;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
@@ -22,6 +23,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
     private readonly IEventAggregator _eventAggregator;
+    private readonly IPackageDataService _packageDataService;
     private readonly ISettingsService _settingsService;
     private readonly SortingService _sortingService;
     private readonly List<IDisposable> _subscriptions = [];
@@ -43,11 +45,13 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         ITcpConnectionService tcpConnectionService,
         ISettingsService settingsService,
         IZtoSortingService ztoSortingService,
-        IEventAggregator eventAggregator)
+        IEventAggregator eventAggregator,
+        IPackageDataService packageDataService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
         _sortingService = sortingService;
+        _packageDataService = packageDataService;
         _tcpConnectionService = tcpConnectionService;
         _settingsService = settingsService;
         _ztoSortingService = ztoSortingService;
@@ -58,6 +62,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
         // 初始化命令
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
+        ShowHistoryCommand = new DelegateCommand(ExecuteShowHistory);
 
         // 初始化系统状态更新定时器
         _timer = new DispatcherTimer
@@ -120,11 +125,15 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                     Log.Error(ex, "处理图像流时发生错误");
                 }
             }));
+
+        // ZTO API 生命周期管理 - 启动
+        _ = InitializeSystemAsync();
     }
 
     #region Properties
 
     public DelegateCommand OpenSettingsCommand { get; }
+    public DelegateCommand ShowHistoryCommand { get; }
 
     public string CurrentBarcode
     {
@@ -156,6 +165,18 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private void ExecuteOpenSettings()
     {
         _dialogService.ShowDialog("SettingsDialog");
+    }
+
+    private void ExecuteShowHistory()
+    {
+        try
+        {
+            _dialogService.ShowDialog("HistoryDialog");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "显示历史记录对话框时发生错误");
+        }
     }
 
     private void OnSettingsUpdated(PlateTurnoverSettings newSettings)
@@ -222,7 +243,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    private void OnPackageInfo(PackageInfo package)
+    private async void OnPackageInfo(PackageInfo package)
     {
         try
         {
@@ -232,23 +253,59 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 return; // 直接退出方法
             }
 
-            // 规则 2: 所有非 "noread" 包裹都分配到异常口。
-            var errorChuteNumber = _settings.ErrorChute;
-            package.SetChute(errorChuteNumber);
+            Log.Information("正在处理新包裹：{Barcode}", package.Barcode);
 
-            if (string.IsNullOrEmpty(package.Barcode))
+            // 调用中通API获取分拣信息
+            var sortingInfoResponse = await _ztoSortingService.GetSortingInfoAsync(
+                package.Barcode,
+                _settings.ZtoPipelineCode,
+                1, // 扫描次数，这里暂时固定为1
+                _settings.ZtoTrayCode);
+
+            if (sortingInfoResponse is { Status: true } && sortingInfoResponse.Result?.SortPortCode?.Any() == true)
             {
-                package.SetStatus(PackageStatus.Error, "No barcode");
-                Log.Warning("包裹无有效条码，已按规则分配到异常口 {ErrorChute}", errorChuteNumber);
+                // API返回的SortPortCode是一个列表，我们取第一个作为格口号
+                if (int.TryParse(sortingInfoResponse.Result.SortPortCode.First(), out var parsedChuteNumber))
+                {
+                    package.SetChute(parsedChuteNumber);
+                    package.SetStatus(PackageStatus.Success, $"API 分配格口: {parsedChuteNumber}");
+                    Log.Information("包裹 {Barcode} 已成功通过API分配到格口: {Chute}", package.Barcode, parsedChuteNumber);
+                }
+                else
+                {
+                    // 解析失败，按错误处理
+                    Log.Warning("包裹 {Barcode} 的API返回格口号无法解析：{SortPortCode}，已分配到异常口 {ErrorChute}",
+                        package.Barcode, sortingInfoResponse.Result.SortPortCode.FirstOrDefault() ?? "无格口数据", _settings.ErrorChute);
+                    package.SetChute(_settings.ErrorChute);
+                    package.SetStatus(PackageStatus.Error, "API 返回格口号无效，已分配到异常口。");
+                }
             }
             else
             {
-                package.SetStatus(PackageStatus.Success, $"Routed to error chute as per rule: {errorChuteNumber}");
-                Log.Information("包裹 {Barcode} 已按规则分配到异常口 {ErrorChute}", package.Barcode, errorChuteNumber);
+                // API返回错误或未分配格口
+                Log.Warning("包裹 {Barcode} 获取分拣信息失败或未分配格口。API消息：{Message}，已分配到异常口 {ErrorChute}",
+                    package.Barcode, sortingInfoResponse?.Message ?? "无消息", _settings.ErrorChute);
+                package.SetChute(_settings.ErrorChute);
+                package.SetStatus(PackageStatus.Error, $"API 错误: {sortingInfoResponse?.Message ?? "未分配格口"}");
             }
 
-            // 规则 3: 只有被处理的包裹才进入分拣队列和更新UI。
+            // 将包裹加入队列以进行物理分拣 (无论API结果如何，都入队处理)
             _sortingService.EnqueuePackage(package);
+
+            // 保存包裹到数据库（异步执行，不阻塞分拣流程）
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _packageDataService.AddPackageAsync(package);
+                    Log.Debug("包裹 {Barcode} 已保存到数据库", package.Barcode);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "保存包裹 {Barcode} 到数据库时发生错误", package.Barcode);
+                    // 数据库保存失败不影响分拣流程，只记录日志
+                }
+            });
 
             Application.Current.Dispatcher.Invoke(() =>
             {
@@ -273,8 +330,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "处理包裹信息时发生错误：{Barcode}", package.Barcode);
-            package.SetStatus(PackageStatus.Error, $"处理失败：{ex.Message}");
+            Log.Error(ex, "处理包裹信息时发生意外错误：{Barcode}", package.Barcode);
+            package.SetStatus(PackageStatus.Error, "处理过程中发生意外错误。");
         }
     }
 
@@ -540,6 +597,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         if (disposing)
             try
             {
+                // ZTO API 生命周期管理 - 停止
+                _ = _ztoSortingService.ReportPipelineStatusAsync(_settings.ZtoPipelineCode, "stop");
+
                 // 取消订阅事件
                 _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
                 _tcpConnectionService.TriggerPhotoelectricConnectionChanged -= OnTriggerPhotoelectricConnectionChanged;
@@ -566,6 +626,31 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     {
         Dispose(true);
         GC.SuppressFinalize(this);
+    }
+
+    private async Task InitializeSystemAsync()
+    {
+        try
+        {
+            Log.Information("正在初始化系统API调用...");
+            // 上报流水线启动状态
+            await _ztoSortingService.ReportPipelineStatusAsync(_settings.ZtoPipelineCode, "start");
+            Log.Information("已上报流水线启动状态。");
+
+            // 获取面单规则 (目前无需处理返回结果)
+            await _ztoSortingService.GetBillRuleAsync();
+            Log.Information("已获取面单规则。");
+
+            // 执行初始时间校验
+            await _ztoSortingService.InspectTimeAsync();
+            Log.Information("已执行初始时间校验。");
+
+            Log.Information("系统API初始化完成。");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "系统API初始化失败。");
+        }
     }
 
     #endregion

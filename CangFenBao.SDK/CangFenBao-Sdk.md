@@ -2,17 +2,16 @@
 
 ### **1. 概述**
 
-`CangFenBao.SDK` 是一个专为物流分拣和包裹处理系统设计的 .NET 库。它高度封装了与工业相机（特别是华睿相机）和基于串口通信的小车分拣设备的复杂交互逻辑。通过使用本 SDK，开发者可以快速、高效地将包裹数据采集（条码、重量、尺寸、图像）、图像处理（保存、水印）和物理分拣控制功能集成到自己的应用程序中，而无需深入了解底层硬件协议和数据流细节。
+`CangFenBao.SDK` 是一个专为物流分拣和包裹处理系统设计的 .NET 库。它高度封装了与工业相机（特别是华睿相机）和基于串口通信的分拣设备的交互逻辑。通过本 SDK，开发者可快速集成包裹数据采集（条码、重量、尺寸、图像）、图像处理（保存、水印）和分拣控制功能。**分拣机指令由调用方自定义，SDK 只负责底层串口发送。**
 
 #### **核心功能亮点：**
 
 *   **多功能数据采集**：从相机实时捕获包裹的条码、重量和体积信息。
-*   **图像智能处理**：支持相机捕获图像的自动保存，并可在图像上添加包含包裹详细信息的可定制水印，方便追溯和管理。
-*   **灵活的包裹过滤**：提供重量阈值过滤功能，可自动识别并丢弃低于设定重量的无效包裹数据，提升数据质量。
-*   **自动化数据上传与分拣**：能够将处理后的包裹数据（可选包含图像）自动上传至指定服务器，并根据服务器返回的分拣指令智能控制小车分拣机完成分拣任务。
+*   **图像智能处理**：支持相机捕获图像的自动保存，并可在图像上添加包含包裹详细信息的可定制水印。
+*   **灵活的包裹过滤**：提供重量阈值过滤功能。
 *   **事件驱动架构**：通过丰富的事件通知机制，使应用程序能够实时响应包裹状态、连接变化和操作结果。
-*   **高内聚低耦合**：SDK 内部服务（如配置加载、图像处理、HTTP通信）完全自包含，不侵入原有项目结构，保证模块独立性。
-*   **简单易用**：提供简洁的配置类和直观的 API 接口，大幅降低集成难度。
+*   **高内聚低耦合**：SDK 内部服务完全自包含，保证模块独立性。
+*   **简单易用**：API 接口直观，分拣指令由调用方自定义，SDK 只负责发送。
 
 ### **2. 快速入门**
 
@@ -44,99 +43,31 @@
 
 #### **2.2 准备配置文件**
 
-SDK 的正常运行依赖于四个必需的 JSON 格式配置文件（华睿相机配置文件除外）。请确保这些文件存在于您指定的绝对路径，并根据您的实际硬件和业务需求进行配置。
+SDK 运行仅依赖两个必需的配置文件：
 
 1.  **华睿相机配置文件 (`LogisticsBase.cfg`)**
-    *   **说明**: 这是华睿相机 SDK 所需的原生配置文件，通常由相机供应商提供或通过其专用配置工具生成。SDK 将加载此文件来初始化相机。
-    *   **示例**: 无特定格式，由相机 SDK 决定。
-
+    *   由相机 SDK 提供。
 2.  **串口设置 (`SerialPortSettings.json`)**
-    *   **说明**: 定义了与小车分拣控制器通信所需的串口参数，如端口号、波特率等。
-    *   **示例 `SerialPortSettings.json`**: 
+    *   定义与分拣机通信的串口参数。
+    *   示例：
         ```json
         {
-          "PortName": "COM3",       // 串口名称，例如 COM1, COM3
-          "BaudRate": 115200,       // 波特率
-          "DataBits": 8,            // 数据位
-          "StopBits": 1,            // 停止位: 0=None, 1=One, 2=Two, 3=OnePointFive
-          "Parity": 0,              // 校验方式: 0=None, 1=Odd, 2=Event, 3=Mark, 4=Space
-          "RtsEnable": false,       // 是否启用RTS流控制
-          "DtrEnable": false,       // 是否启用DTR流控制
-          "ReadTimeout": 500,       // 读取超时时间(ms)
-          "WriteTimeout": 500,      // 写入超时时间(ms)
-          "CommandDelayMs": 50      // 命令延迟发送时间(ms)，命令将在触发后等待此时间后再发送
+          "PortName": "COM3",
+          "BaudRate": 115200,
+          "DataBits": 8,
+          "StopBits": 1,
+          "Parity": 0,
+          "RtsEnable": false,
+          "DtrEnable": false,
+          "ReadTimeout": 500,
+          "WriteTimeout": 500,
+          "CommandDelayMs": 50
         }
         ```
 
-3.  **小车硬件参数 (`CarSettings.json`)**
-    *   **说明**: 包含了系统中每个物理小车的独特硬件参数，例如运行速度、加速度、延迟等。
-    *   **示例 `CarSettings.json`**: 
-        ```json
-        {
-          "CarConfigs": [
-            {
-              "Name": "1号小车",      // 小车名称，用于识别
-              "Address": 1,           // 小车地址（唯一标识）
-              "Speed": 500,           // 运行速度
-              "Time": 500,            // 运行时间(ms)
-              "Acceleration": 6,      // 加速度
-              "Delay": 350            // 延迟运行时间(ms)
-            },
-            {
-              "Name": "2号小车",
-              "Address": 2,
-              "Speed": 500,
-              "Time": 500,
-              "Acceleration": 6,
-              "Delay": 350
-            }
-            // ... 更多小车配置
-          ]
-        }
-        ```
-
-4.  **小车分拣序列 (`CarSequenceSettings.json`)**
-    *   **说明**: 定义了包裹被投递到特定格口（Chute）时，需要联动哪些小车以及它们各自的动作顺序和延时。这允许实现复杂的联动分拣逻辑。
-    *   **示例 `CarSequenceSettings.json`**: 
-        ```json
-        {
-          "ChuteSequences": [
-            {
-              "ChuteNumber": 1,       // 目标格口号
-              "CarSequence": [        // 触发此格口所需的小车动作序列
-                {
-                  "CarAddress": 1,      // 小车地址
-                  "IsReverse": false,   // 是否反向运行
-                  "DelayMs": 0,         // 发送此小车命令前的延迟时间(ms)
-                  "CarName": "1号小车"  // 对应小车名称（可选，仅用于显示/日志）
-                },
-                {
-                  "CarAddress": 2,
-                  "IsReverse": true,    // 反向
-                  "DelayMs": 50,        // 延迟50ms后发送
-                  "CarName": "2号小车"
-                }
-              ]
-            },
-            {
-              "ChuteNumber": 2,
-              "CarSequence": [
-                {
-                  "CarAddress": 3,
-                  "IsReverse": false,
-                  "DelayMs": 0,
-                  "CarName": "3号小车"
-                }
-              ]
-            }
-            // ... 更多格口与小车序列配置
-          ]
-        }
-        ```
+> **分拣机正转/反转等所有控制指令均由调用方在业务层自行决定和传递，SDK 不再负责任何指令配置文件的加载。**
 
 #### **2.3 代码示例**
-
-以下是一个完整的控制台应用程序示例，演示了如何实例化、配置（包括新添加的图像处理和数据上传设置）和使用 `CangFenBao.SDK`。
 
 ```csharp
 using CangFenBao.SDK;
@@ -152,77 +83,35 @@ public class Program
         // 1. 定义 SDK 配置
         var config = new SdkConfig
         {
-            // --- 必需的配置文件路径 ---
-            HuaRayConfigPath = "D:\\LogisticsPlatform\\V1.0\\LogisticsBase.cfg", // 替换为您的实际路径
-            SerialPortSettingsPath = "D:\\Configs\\SerialPortSettings.json",     // 替换为您的实际路径
-            CarSettingsPath = "D:\\Configs\\CarSettings.json",                   // 替换为您的实际路径
-            CarSequenceSettingsPath = "D:\\Configs\\CarSequenceSettings.json",   // 替换为您的实际路径
-
-            // --- 包裹过滤配置 (可选) ---
-            // 如果包裹重量小于20克，将被SDK自动丢弃，不触发 PackageReady 事件。
-            // 设置为 0 或负数禁用此功能。
-            MinimumWeightGrams = 20, 
-
-            // --- 图像处理与保存配置 (可选) ---
-            SaveImages = true,    // 是否保存相机捕获的图像
-            ImageSavePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SavedImages"), // 图像保存目录
-            AddWatermark = true,  // 是否在保存的图像上添加水印
-            // 水印格式：支持 {barcode}, {weight}, {size}, {dateTime} 占位符
+            HuaRayConfigPath = "D:\\LogisticsPlatform\\V1.0\\LogisticsBase.cfg",
+            SerialPortSettingsPath = "D:\\Configs\\SerialPortSettings.json",
+            MinimumWeightGrams = 20,
+            SaveImages = true,
+            ImageSavePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SavedImages"),
+            AddWatermark = true,
             WatermarkFormat = "SN: {barcode}\nWeight: {weight}\nSize: {size}\nTime: {dateTime}",
-
-            // --- 数据上传配置 (可选) ---
-            EnableUpload = true,    // 是否启用上传包裹数据功能
-            UploadUrl = "http://yourserver.com/api/package", // 您的服务器上传API地址
-            UploadImage = false     // 上传时是否包含图像Base64数据 (会显著增加请求体大小)
+            EnableUpload = true,
+            UploadUrl = "http://yourserver.com/api/package",
+            UploadImage = false
         };
 
-        // 2. 创建并初始化 SDK 实例
-        // 使用 await using 确保 SDK 资源在离开作用域时被正确释放
-        await using var sdk = new SortingSystemSdk(config);
+        // 2. 创建并初始化 SDK 实例（串口参数由 SerialPortSettings.json 决定）
+        await using var sdk = new SortingSystemSdk(
+            config,
+            "COM3", 115200, 8, 1, 0, 500, 500 // 串口参数示例
+        );
 
-        // 3. 订阅 SDK 事件
-        // 当相机识别到有效包裹信息后触发，此时包裹重量已通过过滤，并已进行图像处理（保存/水印）
+        // 3. 订阅事件
         sdk.PackageReady += async (sender, package) =>
         {
             Console.WriteLine($"[有效包裹] 条码: {package.Barcode}, 重量: {package.Weight:F2}g, 图像路径: {package.ImagePath ?? "无"}.");
-            // 在启用 EnableUpload 时，此事件后会立即尝试上传和自动分拣，
-            // 此时不应再手动调用 sdk.SortPackageAsync(package)，否则可能重复分拣。
-            // 如果 EnableUpload=false，您可以在此事件中根据业务逻辑手动设置 package.ChuteNumber 并调用 SortPackageAsync。
+            // 业务层根据实际需求决定何时、如何发送分拣指令：
+            // 例如：发送正转指令
+            byte[] forwardCommand = new byte[] { 0xFE, 0x01, 0x01, 0xFF };
+            await sdk.SendSorterCommandAsync(forwardCommand);
         };
 
-        // (新) 当包裹因重量过低而被丢弃时触发
-        sdk.PackageDiscarded += (sender, package) =>
-        {
-            Console.WriteLine($"[丢弃包裹] 包裹因重量 ({package.Weight}g) 低于阈值 ({config.MinimumWeightGrams}g) 被丢弃。条码: {package.Barcode}");
-        };
-
-        // 当相机捕获到图像时触发（无论是有效包裹还是被过滤的包裹，只要有图像都会触发）
-        sdk.ImageReceived += (sender, data) =>
-        {
-            Console.WriteLine($"[图像事件] 收到来自相机 {data.CameraId} 的图像，尺寸: {data.Image.PixelWidth}x{data.Image.PixelHeight}.");
-            // data.Image 是一个 BitmapSource 对象，可用于实时显示等。
-        };
-
-        // (新) 包裹数据上传完成时触发，无论上传成功或失败
-        sdk.UploadCompleted += (sender, result) =>
-        {
-            var (package, response) = result;
-            if (response is { Code: 0, Chute: > 0 })
-            {
-                Console.WriteLine($"[上传成功] 包裹 {package.Barcode} 已成功上传。服务器指令格口: {response.Chute}。");
-                // SDK 将根据此指令自动执行分拣。
-            }
-            else
-            {
-                Console.Error.WriteLine($"[上传失败] 包裹 {package.Barcode} 上传失败或服务器未返回有效格口。错误码: {response?.Code}, 消息: {response?.Message ?? "无响应或网络错误"}");
-            }
-        };
-
-        // 相机连接状态变化时触发
-        sdk.CameraConnectionChanged += (id, status) => Console.WriteLine($"[状态] 相机 '{id}' 连接状态: {(status ? "在线" : "离线")}");
-        
-        // 分拣机（小车串口）连接状态变化时触发
-        sdk.SorterConnectionChanged += (status) => Console.WriteLine($"[状态] 分拣机串口连接状态: {(status ? "已连接" : "已断开")}");
+        // 其他事件订阅（略）
 
         // 4. 初始化 SDK
         Console.WriteLine("正在初始化SDK，请确保所有配置文件路径正确...");
@@ -253,101 +142,47 @@ public class Program
 
 #### **3.1 `SDKConfig` 类**
 
-`SDKConfig` 是初始化 `SortingSystemSDK` 时必须提供的配置类，它包含了 SDK 行为所需的所有参数。
-
 | 属性名称             | 类型          | 说明                                                         | 默认值/示例                                                  |
 | :------------------- | :------------ | :----------------------------------------------------------- | :----------------------------------------------------------- |
-| `HuaRayConfigPath`   | `required string` | 华睿相机 `LogisticsBase.cfg` 文件的绝对路径。这是华睿相机 SDK 必需的原生配置文件。 | `"C:\\path\\to\\your\\LogisticsBase.cfg"`                      |
-| `SerialPortSettingsPath` | `required string` | 串口设置 JSON 文件的绝对路径。详见 `2.2 准备配置文件 - 串口设置`。 | `"C:\\path\\to\\your\\SerialPortSettings.json"`              |
-| `CarSettingsPath`    | `required string` | 小车硬件参数 JSON 文件的绝对路径。详见 `2.2 准备配置文件 - 小车硬件参数`。 | `"C:\\path\\to\\your\\CarSettings.json"`                    |
-| `CarSequenceSettingsPath` | `required string` | 小车分拣序列 JSON 文件的绝对路径。详见 `2.2 准备配置文件 - 小车分拣序列`。 | `"C:\\path\\to\\your\\CarSequenceSettings.json"`              |
-| `MinimumWeightGrams` | `double`      | 最小重量阈值（单位：克）。如果包裹重量（由相机测得）小于此值，将被视为无效包裹并丢弃。<br/>设置为 `0` 或负数可禁用此功能。 | `0`                                                          |
-| `SaveImages`         | `bool`        | 是否保存相机捕获的图像到本地磁盘。如果为 `true`，`ImageSavePath` 必须提供。 | `false`                                                      |
-| `ImageSavePath`      | `string?`     | 图像保存的根目录路径。当 `SaveImages` 为 `true` 时，SDK 将在此路径下按 `年/月/日` 的结构创建子目录来组织图片。 | `null` (但如果 `SaveImages` 为 `true` 则为必需)                |
-| `AddWatermark`       | `bool`        | 是否在保存的图像上添加水印。此设置仅在 `SaveImages` 为 `true` 时生效。 | `false`                                                      |
-| `WatermarkFormat`    | `string`      | 定义水印内容的格式字符串。支持以下占位符：<br/>- `{barcode}`: 包裹主条码<br/>- `{weight}`: 包裹重量 (例如 "1.23kg")<br/>- `{size}`: 包裹尺寸 (例如 "10.0*20.5*5.1cm")<br/>- `{dateTime}`: 处理时间 (例如 "2023-10-27 10:30:00") | `"SN: {barcode} {dateTime}"`                                 |
-| `EnableUpload`       | `bool`        | 是否启用上传包裹数据到服务器的功能。如果为 `true`，SDK 将在包裹有效后自动执行上传。 | `false`                                                      |
-| `UploadUrl`          | `string?`     | 包裹数据上传的目标服务器URL。当 `EnableUpload` 为 `true` 时，此项必须提供。 | `null` (但如果 `EnableUpload` 为 `true` 则为必需)              |
-| `UploadImage`        | `bool`        | 在上传包裹数据时，是否同时包含图像的 Base64 编码字符串。请注意，这会显著增加 HTTP 请求体的大小和网络负担。 | `false`                                                      |
+| `HuaRayConfigPath`   | `required string` | 华睿相机 `LogisticsBase.cfg` 文件的绝对路径。 | `"C:\\path\\to\\your\\LogisticsBase.cfg"` |
+| `SerialPortSettingsPath` | `required string` | 串口设置 JSON 文件的绝对路径。 | `"C:\\path\\to\\your\\SerialPortSettings.json"` |
+| `MinimumWeightGrams` | `double` | 最小重量阈值（单位：克）。**用于业务判断，融合后的包裹重量低于此值将被丢弃。** | `0` |
+| `SaveImages`         | `bool`        | 是否保存相机捕获的图像到本地磁盘。 | `false` |
+| `ImageSavePath`      | `string?`     | 图像保存的根目录路径。 | `null` |
+| `AddWatermark`       | `bool`        | 是否在保存的图像上添加水印。 | `false` |
+| `WatermarkFormat`    | `string`      | 定义水印内容的格式字符串。 | `"SN: {barcode} {dateTime}"` |
+| `EnableUpload`       | `bool`        | 是否启用上传包裹数据到服务器的功能。 | `false` |
+| `UploadUrl`          | `string?`     | 包裹数据上传的目标服务器URL。 | `null` |
+| `UploadImage`        | `bool`        | 在上传包裹数据时，是否同时包含图像的 Base64 编码字符串。 | `false` |
 
 #### **3.2 `SortingSystemSDK` 类**
 
-这是与 `CangFenBao.SDK` 交互的核心入口点。
-
 ##### **构造函数**
 
-*   `public SortingSystemSDK(SDKConfig config)`
-    *   **参数**: `config` - 用于初始化 SDK 的 `SDKConfig` 实例。
+*   `public SortingSystemSDK(SDKConfig config, string portName, int baudRate, int dataBits, int stopBits, int parity, int readTimeout, int writeTimeout)`
+    *   **参数**: `config` - SDK 配置；后续参数为串口参数。
+
+##### **方法**
+
+*   `public async Task<bool> SendSorterCommandAsync(byte[] command)`
+    *   **说明**: 发送一条自定义分拣机指令。调用方需自行构造命令内容，SDK 只负责底层串口发送。
+    *   **参数**: `command` - 要发送的指令字节数组。
+    *   **返回**: `true` 表示指令发送成功，`false` 表示串口未连接或发送失败。
 
 ##### **事件**
 
 *   `public event EventHandler<PackageInfo>? PackageReady;`
-    *   **何时触发**: 当相机成功识别并解析出有效包裹（通过重量过滤）时触发。此时，包裹的条码、重量、尺寸等基础信息已填充，并且图像处理（保存、水印）已在后台启动。
-    *   **用途**: 您可以在此事件中进行业务逻辑处理，例如显示包裹信息、记录日志。
-    *   **重要提示**: 如果 `SDKConfig.EnableUpload` 为 `true`，SDK 会在此事件后自动触发数据上传和分拣，您通常无需在此事件中手动调用 `SortPackageAsync`。
-
-*   `public event EventHandler<PackageInfo>? PackageDiscarded;`
-    *   **何时触发**: 当从相机收到的包裹重量低于 `SDKConfig.MinimumWeightGrams` 设定的阈值时触发。此包裹将被 SDK 自动丢弃，不会进入后续处理流程，也不会触发 `PackageReady` 事件。
-    *   **用途**: 用于监控和记录无效的包裹数据。
-
-*   `public event EventHandler<(BitmapSource Image, string CameraId)>? ImageReceived;`
-    *   **何时触发**: 每当相机捕获到新的图像时触发，无论该图像是否与有效包裹关联（即即使包裹因重量被过滤，只要有图像，此事件仍可能触发）。
-    *   **用途**: 允许您获取并显示实时相机图像流，进行监控或调试。
-
+    *   **何时触发**: 当相机成功识别包裹，并且SDK完成重量数据融合后触发。
+    *   **重要提示**: 此事件中 `PackageInfo` 对象的 `Weight` 属性是SDK内部通过稳定算法和时间窗口融合后的高精度重量，而非相机直接提供的原始值。
 *   `public event EventHandler<(PackageInfo package, UploadResponse? response)>? UploadCompleted;`
-    *   **何时触发**: 当 `SDKConfig.EnableUpload` 为 `true` 时，每次包裹数据上传尝试完成后触发，无论上传成功或失败。
-    *   **参数**: 
-        *   `package`: 尝试上传的 `PackageInfo` 对象。
-        *   `response`: 服务器返回的 `UploadResponse` 对象。如果上传过程中发生网络错误、请求失败（非2xx状态码）或 JSON 解析失败，`response` 将为 `null`。
-    *   **用途**: 用于监控数据上传状态，处理上传结果，或在上传失败时触发重试/报警逻辑。
-
+*   `public event EventHandler<PackageInfo>? PackageDiscarded;`
+*   `public event EventHandler<(BitmapSource Image, string CameraId)>? ImageReceived;`
 *   `public event Action<string, bool>? CameraConnectionChanged;`
-    *   **何时触发**: 相机设备的连接状态发生变化时触发（例如，相机上线或离线）。
-    *   **参数**: `string` - 相机 ID；`bool` - 连接状态（`true` 为在线，`false` 为离线）。
-
 *   `public event Action<bool>? SorterConnectionChanged;`
-    *   **何时触发**: 分拣机（小车串口）的连接状态发生变化时触发。
-    *   **参数**: `bool` - 连接状态（`true` 为已连接，`false` 为已断开）。
-
-##### **属性**
-
-*   `public bool IsRunning { get; }`
-    *   指示 SDK 当前是否处于运行状态（即相机和分拣服务是否已启动）。
-
-##### **方法**
-
-*   `public async Task<bool> InitializeAsync()`
-    *   **说明**: 异步初始化 SDK 内部的所有服务和依赖项（包括相机、小车分拣服务和内部数据处理服务）。
-    *   **重要性**: 在调用 `StartAsync` 方法之前，此方法必须成功完成。
-    *   **返回**: `true` 表示初始化成功；`false` 表示初始化失败（通常因配置文件缺失、无效或设备连接问题）。
-
-*   `public async Task StartAsync()`
-    *   **说明**: 启动所有已初始化的服务，开始接收相机数据并根据配置处理分拣逻辑。
-    *   **前置条件**: 必须在 `InitializeAsync()` 成功完成后调用。
-
-*   `public async Task StopAsync()`
-    *   **说明**: 停止所有正在运行的 SDK 服务，停止数据采集和分拣处理。
-
-*   `public async Task<bool> SortPackageAsync(PackageInfo package)`
-    *   **说明**: 将一个包含目标格口号的包裹信息加入分拣队列，SDK 将尝试向小车分拣机发送相应的分拣指令。
-    *   **参数**: `package` - 必须是一个已设置 `ChuteNumber` 属性的 `PackageInfo` 对象。
-    *   **返回**: `true` 表示分拣指令已成功加入队列并发送（不代表硬件执行成功）；`false` 表示服务未运行或参数无效。
-    *   **使用场景**: 主要用于 `SDKConfig.EnableUpload` 为 `false` 的手动分拣模式，或在服务器未返回格口指令时，应用程序需进行备用分拣。
-
-*   `public async Task<bool> SortToChuteAsync(int chuteNumber)`
-    *   **说明**: 绕过正常的包裹处理流程，直接向指定的格口发送一次小车分拣指令。主要用于测试或调试特定格口功能。
-    *   **参数**: `chuteNumber` - 目标格口号。
-    *   **返回**: `true` 表示命令发送成功；`false` 表示服务未运行或命令发送失败。
-
-*   `public IEnumerable<CameraBasicInfo> GetAvailableCameras()`
-    *   **说明**: 获取当前系统（由华睿相机 SDK 发现）中可用的相机列表及其基本信息。
-    *   **返回**: `CameraBasicInfo` 对象的集合。
-
-*   `public async ValueTask DisposeAsync()`
-    *   **说明**: 异步释放 SDK 使用的所有内部资源，包括停止所有服务、取消订阅和清理对象。
-    *   **重要性**: 当您使用 `await using var sdk = new SortingSystemSDK(config);` 语句创建 SDK 实例时，此方法会在 `using` 代码块结束时自动调用，无需手动管理。
 
 ---
+
+> **分拣机所有控制指令均由调用方自定义，SDK 只负责发送。**
 
 ### **4. 日志配置**
 
@@ -425,3 +260,46 @@ public class Program
 *   **`HttpUploadService`**: 处理所有与远程服务器的 HTTP 通信。它负责将 `PackageInfo` 对象转换为所需的 JSON 格式，处理图片 Base64 编码，并解析服务器响应。
 
 这些内部服务的实现细节对 SDK 用户是透明的，您只需通过 `SDKConfig` 配置其行为。
+
+### **6. 实时重量服务（WeightService）**
+
+#### **6.1 WeightServiceSettings 配置项**
+
+| 属性名称                 | 类型                | 说明                                   | 默认值/示例 |
+|--------------------------|---------------------|----------------------------------------|-------------|
+| `PortName`               | `string`            | 串口端口名                             | "COM3"     |
+| `BaudRate`               | `int`               | 波特率                                 | 115200      |
+| `DataBits`               | `int`               | 数据位                                 | 8           |
+| `StopBits`               | `int`               | 停止位                                 | 1           |
+| `Parity`                 | `int`               | 校验位（0=无，1=奇，2=偶）             | 0           |
+| `ReadTimeout`            | `int`               | 读取超时时间（毫秒）                   | 500         |
+| `WriteTimeout`           | `int`               | 写入超时时间（毫秒）                   | 500         |
+| `CommandDelayMs`         | `int`               | 指令发送间隔（毫秒）                   | 50          |
+| `MinimumValidWeight`     | `double`            | 最小有效重量阈值（克）。**用于原始秤数据过滤和稳定性判断，低于此值的原始重量将不参与融合。** | `20` |
+| `EventIntervalMs`        | `int`               | 最小事件推送间隔（毫秒）               | 200         |
+| `ProtocolType`           | `string`            | 协议类型（如 "Antto", "Zemic" 等）    | "Antto"    |
+| `StableSampleCount` | `int` | 用于判断重量稳定性的滑动窗口样本数 | `5` |
+| `StableThresholdGrams` | `double` | 判断重量稳定的阈值（克），窗口内所有值与最后一个值的差都小于此阈值视为稳定 | `10.0` |
+| `FusionTimeRangeLowerMs` | `int` | 融合重量时，相对于相机数据时间戳的查找范围下限（毫秒，负值为向前查找） | `-500` |
+| `FusionTimeRangeUpperMs` | `int` | 融合重量时，相对于相机数据时间戳的查找范围上限（毫秒，正值为向后查找） | `500` |
+
+> **说明：**
+> - 所有串口参数与主流工业秤一致，支持灵活配置。
+> - `MinimumValidWeight` 用于过滤抖动和无效数据。
+> - `EventIntervalMs` 控制事件推送频率，防止高频刷屏。
+
+### 6.3 频率控制与阈值逻辑
+- SDK 内部自动根据 `MinimumValidWeight` 过滤抖动和无效数据。
+- 事件推送频率受 `EventIntervalMs` 控制，典型值 200ms。
+- 支持多协议解析，自动适配主流工业秤。
+
+### 6.5 生命周期管理说明
+- 重量服务随 SortingSystemSDK 初始化、启动、停止、释放自动管理。
+- 无需手动创建或销毁重量服务实例。
+- 所有配置变更需重启 SDK 后生效。
+
+### 6.6 常见问题与异常处理
+- 串口占用、参数错误、协议不兼容等异常会自动记录日志并通过事件/日志反馈。
+- 建议关注日志文件，及时发现硬件异常。
+
+---

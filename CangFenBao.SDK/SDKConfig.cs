@@ -17,14 +17,9 @@ namespace CangFenBao.SDK
         public required string SerialPortSettingsPath { get; set; }
 
         /// <summary>
-        /// 小车硬件参数配置文件的绝对路径 (JSON格式)。
+        /// 重量服务配置文件的绝对路径 (JSON格式)。
         /// </summary>
-        public required string CarSettingsPath { get; set; }
-
-        /// <summary>
-        /// 小车分拣序列配置文件的绝对路径 (JSON格式)。
-        /// </summary>
-        public required string CarSequenceSettingsPath { get; set; }
+        public required string WeightServiceSettingsPath { get; set; }
 
         /// <summary>
         /// 是否保存相机捕获的图像。默认为 false。

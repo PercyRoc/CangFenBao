@@ -407,6 +407,33 @@ public class SerialPortWeightService : IDisposable
 
         CleanExpiredWeightData(receiveTime);
 
+        // --- HK协议动态称重解析 ---
+        var bufferBytes = Encoding.ASCII.GetBytes(_receiveBuffer.ToString());
+        int i = 0;
+        while (i <= bufferBytes.Length - 8)
+        {
+            if (bufferBytes[i] == 0x88 && bufferBytes[i + 1] == 0x02 && bufferBytes[i + 7] == 0x16)
+            {
+                var weightBytes = bufferBytes.Skip(i + 2).Take(5).ToArray();
+                double weight = ParseHkWeight(weightBytes); // 单位kg
+                if (_settingsService.LoadSettings<WeightSettings>().WeightType == WeightType.Dynamic)
+                {
+                    ProcessDynamicWeight(weight, receiveTime);
+                }
+                i += 8; // 跳过本帧
+            }
+            else
+            {
+                i++;
+            }
+        }
+        // 清理已处理内容
+        if (i > 0)
+        {
+            _receiveBuffer.Remove(0, Math.Min(i, _receiveBuffer.Length));
+        }
+        // --- 其他静态称重逻辑保持不变 ---
+
         var bufferContent = _receiveBuffer.ToString();
         if (string.IsNullOrEmpty(bufferContent)) return;
 
@@ -580,6 +607,16 @@ public class SerialPortWeightService : IDisposable
         var chars = weightStr.ToCharArray();
         Array.Reverse(chars);
         return new string(chars);
+    }
+
+    // HK协议5字节重量解析，单位kg
+    private static double ParseHkWeight(byte[] weightBytes)
+    {
+        if (weightBytes.Length != 5) return 0;
+        var str = string.Concat(weightBytes.Select(b => (b % 10).ToString()));
+        if (str.Length < 5) str = str.PadLeft(5, '0');
+        str = str.Insert(str.Length - 2, ".");
+        return double.TryParse(str, out var v) ? v : 0;
     }
 
     /// <summary>

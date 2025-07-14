@@ -1,7 +1,10 @@
-﻿using System.Net.Http;
+﻿using System.Globalization;
+using System.Net.Http;
+using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
 using Common.Extensions;
+using WPFLocalizeExtension.Engine;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
@@ -15,6 +18,8 @@ using DongtaiFlippingBoardMachine.Views.Settings;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using SharedUI.Extensions;
+using SharedUI.ViewModels;
+using SharedUI.Views.Dialogs;
 
 namespace DongtaiFlippingBoardMachine;
 
@@ -57,6 +62,9 @@ internal partial class App
 
         // 注册设置窗口
         containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>("SettingsDialog");
+        
+        // 注册历史记录对话框
+        containerRegistry.RegisterDialog<HistoryDialogView, HistoryDialogViewModel>("HistoryDialog");
 
         // 注册TCP连接服务
         containerRegistry.RegisterSingleton<ITcpConnectionService, TcpConnectionService>();
@@ -75,6 +83,15 @@ internal partial class App
     /// </summary>
     protected override void OnStartup(StartupEventArgs e)
     {
+        // 设置本地化为中文
+        var culture = new CultureInfo("zh-CN");
+        Thread.CurrentThread.CurrentCulture = culture;
+        Thread.CurrentThread.CurrentUICulture = culture;
+        
+        // 初始化 WPFLocalizeExtension
+        LocalizeDictionary.Instance.Culture = culture;
+        LocalizeDictionary.Instance.SetCurrentThreadCulture = true;
+        
         // 配置Serilog
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Debug()

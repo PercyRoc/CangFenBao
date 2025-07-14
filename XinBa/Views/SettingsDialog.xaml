@@ -11,8 +11,6 @@
              xmlns:settings="clr-namespace:XinBa.Views.Settings"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
-             Height="720"
-             Width="1280"
              d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}">
 
     <UserControl.Resources>

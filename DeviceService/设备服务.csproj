@@ -42,4 +42,10 @@
             <HintPath>DataSourceDevices\Camera\Hikvision\MvCodeReaderSDK.Net.dll</HintPath>
         </Reference>
     </ItemGroup>
+
+    <ItemGroup>
+      <None Update="DataSourceDevices\Camera\HikvisionSmartSdk\MvCodeReaderSDK.Net.dll">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+    </ItemGroup>
 </Project>
