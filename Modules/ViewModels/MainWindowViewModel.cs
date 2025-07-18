@@ -8,19 +8,7 @@ using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using Serilog;
-using ShanghaiModuleBelt.Models.Jitu;
-using ShanghaiModuleBelt.Models.Jitu.Settings;
-using ShanghaiModuleBelt.Models.Sto;
-using ShanghaiModuleBelt.Models.Sto.Settings;
-using ShanghaiModuleBelt.Models.Yunda;
-using ShanghaiModuleBelt.Models.Yunda.Settings;
-using ShanghaiModuleBelt.Models.Zto;
-using ShanghaiModuleBelt.Models.Zto.Settings;
 using ShanghaiModuleBelt.Services;
-using ShanghaiModuleBelt.Services.Jitu;
-using ShanghaiModuleBelt.Services.Sto;
-using ShanghaiModuleBelt.Services.Yunda;
-using ShanghaiModuleBelt.Services.Zto;
 using ShanghaiModuleBelt.Views;
 using SharedUI.Models;
 
@@ -34,19 +22,15 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private readonly Dictionary<int, int> _chutePackageCount = new();
 
     // 格口锁定状态字典
-    // private readonly ChuteMappingService _chuteMappingService;
+    private readonly ChuteMappingService _chuteMappingService;
     private readonly IDialogService _dialogService;
-    private readonly IJituService _jituService;
-    // private readonly LockingService _lockingService;
+    private readonly LockingService _lockingService;
     private readonly IModuleConnectionService _moduleConnectionService;
     private readonly INotificationService _notificationService;
-    private readonly RetryService _retryService;
+    private readonly ChutePackageRecordService _chutePackageRecordService;
     private readonly ISettingsService _settingsService;
-    private readonly IStoAutoReceiveService _stoAutoReceiveService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
-    private readonly IYundaUploadWeightService _yundaUploadWeightService;
-    private readonly IZtoApiService _ztoApiService;
     private string _currentBarcode = string.Empty;
     private bool _disposed;
     private SystemStatus _systemStatus = new();
@@ -56,24 +40,18 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         ICameraService cameraService,
         PackageTransferService packageTransferService, ISettingsService settingsService,
         IModuleConnectionService moduleConnectionService,
-        IStoAutoReceiveService stoAutoReceiveService,
-        IYundaUploadWeightService yundaUploadWeightService,
-        IZtoApiService ztoApiService,
-        IJituService jituService,
-        RetryService retryService)
+        ChuteMappingService chuteMappingService,
+        LockingService lockingService,
+        ChutePackageRecordService chutePackageRecordService)
     {
         _dialogService = dialogService;
         _notificationService = notificationService;
         _cameraService = cameraService;
         _settingsService = settingsService;
         _moduleConnectionService = moduleConnectionService;
-        // _chuteMappingService = chuteMappingService;
-        // _lockingService = lockingService;
-        _stoAutoReceiveService = stoAutoReceiveService;
-        _yundaUploadWeightService = yundaUploadWeightService;
-        _ztoApiService = ztoApiService;
-        _jituService = jituService;
-        _retryService = retryService;
+        _chuteMappingService = chuteMappingService;
+        _lockingService = lockingService;
+        _chutePackageRecordService = chutePackageRecordService;
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
         ShowChuteStatisticsCommand = new DelegateCommand(ExecuteShowChuteStatistics);
 
@@ -100,17 +78,17 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         // 订阅模组带连接状态事件
         _moduleConnectionService.ConnectionStateChanged += OnModuleConnectionChanged;
 
-        // // 订阅锁格状态变更事件
-        // _lockingService.ChuteLockStatusChanged += OnChuteLockStatusChanged;
-        //
-        // // 订阅锁格设备连接状态变更事件
-        // _lockingService.ConnectionStatusChanged += OnLockingDeviceConnectionChanged;
+        // 订阅锁格状态变更事件
+        _lockingService.ChuteLockStatusChanged += OnChuteLockStatusChanged;
+
+        // 订阅锁格设备连接状态变更事件
+        _lockingService.ConnectionStatusChanged += OnLockingDeviceConnectionChanged;
         // 订阅包裹流
         _subscriptions.Add(packageTransferService.PackageStream
             .Subscribe(package => { Application.Current.Dispatcher.BeginInvoke(() => OnPackageInfo(package)); }));
 
         // 初始检查锁格设备状态
-        // UpdateLockingDeviceStatus(_lockingService.IsConnected());
+        UpdateLockingDeviceStatus(_lockingService.IsConnected());
     }
 
     public DelegateCommand OpenSettingsCommand { get; }
@@ -148,7 +126,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             var dialog = new ChuteStatisticsDialog();
-            var viewModel = new ChuteStatisticsDialogViewModel(_notificationService, _retryService);
+            var viewModel = new ChuteStatisticsDialogViewModel(_notificationService);
 
             // 更新统计数据
             viewModel.UpdateStatistics(_chutePackageCount);
@@ -203,15 +181,15 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 Icon = "ArrowSort24",
                 StatusColor = "#F44336" // 红色表示未连接
             });
-            //
-            // // 添加锁格设备状态
-            // DeviceStatuses.Add(new DeviceStatus
-            // {
-            //     Name = "锁格设备",
-            //     Status = "未连接",
-            //     Icon = "Lock24",
-            //     StatusColor = "#F44336" // 红色表示未连接
-            // });
+
+            // 添加锁格设备状态
+            DeviceStatuses.Add(new DeviceStatus
+            {
+                Name = "锁格设备",
+                Status = "未连接",
+                Icon = "Lock24",
+                StatusColor = "#F44336" // 红色表示未连接
+            });
         }
         catch (Exception ex)
         {
@@ -331,9 +309,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            package.SetWeight(0.1);
             Log.Information("收到包裹信息: {Barcode}, 序号={Index}", package.Barcode, package.Index);
-
             // 从 ChuteSettings 获取格口配置
             var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
 
@@ -347,7 +323,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             else
             {
                 // 根据条码查找匹配的格口
-                var chuteNumber = chuteSettings.FindMatchingChute(package.Barcode, package.Weight);
+                var chuteNumber = await _chuteMappingService.GetChuteNumberAsync(package);
 
                 if (chuteNumber == null)
                 {
@@ -362,17 +338,21 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 }
             }
 
+            // 检查格口是否被锁定
+            if (_chutePackageRecordService.IsChuteLocked(package.ChuteNumber))
+            {
+                Log.Warning("格口 {ChuteNumber} 已锁定，将包裹 {Barcode} 分到异常格口。", package.ChuteNumber, package.Barcode);
+                package.SetChute(chuteSettings.ErrorChuteNumber);
+                package.SetStatus(PackageStatus.Error, "格口已锁定");
+            }
+
             // 通知模组带服务处理包裹
             _moduleConnectionService.OnPackageReceived(package);
 
             // 更新格口统计计数器
-            if (_chutePackageCount.ContainsKey(package.ChuteNumber))
+            if (!_chutePackageCount.TryAdd(package.ChuteNumber, 1))
             {
                 _chutePackageCount[package.ChuteNumber]++;
-            }
-            else
-            {
-                _chutePackageCount[package.ChuteNumber] = 1;
             }
 
             // 如果没有错误，设置为正常状态
@@ -380,197 +360,12 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             {
                 package.SetStatus(PackageStatus.Success, "正常");
             }
-
-            // 获取申通API配置
-            var stoApiSettings = _settingsService.LoadSettings<StoApiSettings>();
-            var stoPrefixes = stoApiSettings.BarcodePrefixes.Split(';', StringSplitOptions.RemoveEmptyEntries).ToList();
-
-            // 根据配置的条码前缀上传申通自动揽收
-            if (stoPrefixes.Any(prefix => package.Barcode.StartsWith(prefix)))
-            {
-                // 发送申通自动揽收请求
-                var stoRequest = new StoAutoReceiveRequest
-                {
-                    WhCode = stoApiSettings.WhCode,
-                    OrgCode = stoApiSettings.OrgCode,
-                    UserCode = stoApiSettings.UserCode,
-                    Packages =
-                    [
-                        new Package
-                        {
-                            WaybillNo = package.Barcode,
-                            Weight = package.Weight.ToString("F2"),
-                            OpTime = package.CreateTime.ToString("yyyy-MM-dd HH:mm:ss")
-                        }
-                    ]
-                };
-
-                var stoResponse = await _stoAutoReceiveService.SendAutoReceiveRequestAsync(stoRequest);
-                // 无论成功或失败都记录
-                await _retryService.AddRetryRecordAsync(
-                    package.Barcode,
-                    "申通",
-                    stoRequest,
-                    stoResponse is { Success: true } ? null : stoResponse?.ErrorMsg
-                );
-                if (stoResponse is { Success: true })
-                {
-                    Log.Information("申通自动揽收请求成功: {Barcode}", package.Barcode);
-                }
-                else
-                {
-                    Log.Error("申通自动揽收请求失败: {Barcode}, 错误: {ErrorMessage}", package.Barcode, stoResponse?.ErrorMsg);
-                }
-            }
-            else
-            {
-                Log.Information("包裹 {Barcode} 条码不符合申通自动揽收前缀，跳过申通自动揽收。");
-            }
-
-            // 获取韵达API配置
-            var yundaApiSettings = _settingsService.LoadSettings<YundaApiSettings>();
-            var yundaPrefixes = yundaApiSettings.BarcodePrefixes.Split(';', StringSplitOptions.RemoveEmptyEntries).ToList();
-
-            // 根据配置的条码前缀上传韵达重量
-            if (yundaPrefixes.Any(prefix => package.Barcode.StartsWith(prefix)))
-            {
-                var yundaRequest = new YundaUploadWeightRequest
-                {
-                    PartnerId = yundaApiSettings.PartnerId,
-                    Password = yundaApiSettings.Password,
-                    Rc4Key = yundaApiSettings.Rc4Key,
-                    Orders = new YundaOrders
-                    {
-                        GunId = yundaApiSettings.GunId,
-                        RequestTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
-                        OrderList =
-                        [
-                            new YundaOrder
-                            {
-                                Id = Random.Shared.NextInt64(1_000_000_000_000_000_000L, long.MaxValue),
-                                DocId = long.Parse(package.Barcode),
-                                ScanSite = yundaApiSettings.ScanSite,
-                                ScanTime = package.CreateTime.ToString("yyyy-MM-dd HH:mm:ss"),
-                                ScanMan = yundaApiSettings.ScanMan,
-                                ObjWei = (decimal)package.Weight
-                            }
-                        ]
-                    }
-                };
-
-                var yundaResponse = await _yundaUploadWeightService.SendUploadWeightRequestAsync(yundaRequest);
-                // 无论成功或失败都记录
-                await _retryService.AddRetryRecordAsync(
-                    package.Barcode,
-                    "韵达",
-                    yundaRequest,
-                    yundaResponse is { Result: true, Code: "0000" } ? null : $"{yundaResponse?.Message}, {yundaResponse?.Data?.ErrorCode}-{yundaResponse?.Data?.ErrorMsg}"
-                );
-                if (yundaResponse is { Result: true, Code: "0000" })
-                {
-                    Log.Information("韵达上传重量请求成功: {Barcode}", package.Barcode);
-                }
-                else
-                {
-                    Log.Error("韵达上传重量请求失败: {Barcode}, 错误: {Message}, {ErrorCode}-{ErrorMsg}",
-                        package.Barcode, yundaResponse?.Message, yundaResponse?.Data?.ErrorCode, yundaResponse?.Data?.ErrorMsg);
-                }
-            }
-            else
-            {
-                Log.Information("包裹 {Barcode} 条码不符合韵达上传重量前缀，跳过韵达上传重量。");
-            }
-
-            // 获取中通API配置
-            var ztoApiSettings = _settingsService.LoadSettings<ZtoApiSettings>();
-            var ztoPrefixes = ztoApiSettings.BarcodePrefixes.Split(';', StringSplitOptions.RemoveEmptyEntries).ToList();
-
-            // 根据配置的条码前缀上传中通揽收
-            if (ztoPrefixes.Any(package.Barcode.StartsWith))
-            {
-                var ztoRequest = new CollectUploadRequest
-                {
-                    CollectUploadDTOS =
-                    [
-                        new CollectUploadDTO
-                        {
-                            BillCode = package.Barcode,
-                            Weight = (decimal)package.Weight
-                        }
-                    ]
-                };
-
-                var ztoResponse = await _ztoApiService.UploadCollectTraceAsync(ztoRequest);
-                // 无论成功或失败都记录
-                await _retryService.AddRetryRecordAsync(
-                    package.Barcode,
-                    "中通",
-                    ztoRequest,
-                    ztoResponse is { Status: true } ? null : $"{ztoResponse.Message}, Code={ztoResponse.Code}"
-                );
-                if (ztoResponse is { Status: true })
-                {
-                    Log.Information("中通揽收上传请求成功: {Barcode}", package.Barcode);
-                }
-                else
-                {
-                    Log.Error("中通揽收上传请求失败: {Barcode}, 错误: {Message}, Code={Code}",
-                        package.Barcode, ztoResponse.Message, ztoResponse.Code);
-                }
-            }
-            else
-            {
-                Log.Information("包裹 {Barcode} 条码不符合中通揽收前缀，跳过中通揽收。");
-            }
-
-            // 获取极兔API配置
-            var jituApiSettings = _settingsService.LoadSettings<JituApiSettings>();
-            var jituPrefixes = jituApiSettings.BarcodePrefixes.Split(';', StringSplitOptions.RemoveEmptyEntries).ToList();
-
-            // 根据配置的条码前缀上传极兔OpScan
-            if (jituPrefixes.Any(package.Barcode.StartsWith))
-            {
-                var jituRequest = new JituOpScanRequest
-                {
-                    Billcode = package.Barcode,
-                    Weight = package.Weight,
-                    Length = package.Length ?? 0,
-                    Width = package.Width ?? 0,
-                    Height = package.Height ?? 0,
-                    Devicecode = jituApiSettings.DeviceCode,
-                    Devicename = jituApiSettings.DeviceName,
-                    Imgpath = package.ImagePath ?? string.Empty
-                };
-
-                var jituResponse = await _jituService.SendOpScanRequestAsync(jituRequest);
-                // 无论成功或失败都记录
-                await _retryService.AddRetryRecordAsync(
-                    package.Barcode,
-                    "极兔",
-                    jituRequest,
-                    jituResponse is { Success: true, Code: 200 } ? null : $"{jituResponse.Message}, Code={jituResponse.Code}"
-                );
-                if (jituResponse is { Success: true, Code: 200 })
-                {
-                    Log.Information("极兔OpScan上传请求成功: {Barcode}", package.Barcode);
-                }
-                else
-                {
-                    Log.Error("极兔OpScan上传请求失败: {Barcode}, 错误: {Message}, Code={Code}",
-                        package.Barcode, jituResponse.Message, jituResponse.Code);
-                }
-            }
-            else
-            {
-                Log.Information("包裹 {Barcode} 条码不符合极兔OpScan上传前缀，跳过极兔OpScan上传。");
-            }
-
             // 更新UI
             Application.Current.Dispatcher.Invoke(() =>
             {
                 try
                 {
-                    // 更新当前条码和图像
+                    // 更新当前条码
                     CurrentBarcode = package.Barcode;
                     // 更新实时包裹数据
                     UpdatePackageInfoItems(package);
@@ -683,6 +478,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 // 取消事件订阅
                 _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
                 _moduleConnectionService.ConnectionStateChanged -= OnModuleConnectionChanged;
+                _lockingService.ChuteLockStatusChanged -= OnChuteLockStatusChanged;
+                _lockingService.ConnectionStatusChanged -= OnLockingDeviceConnectionChanged;
 
                 // 释放订阅
                 foreach (var subscription in _subscriptions) subscription.Dispose();
@@ -694,5 +491,51 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             }
 
         _disposed = true;
+    }
+
+    /// <summary>
+    ///     更新锁格设备状态
+    /// </summary>
+    /// <param name="isConnected"></param>
+    private void UpdateLockingDeviceStatus(bool isConnected)
+    {
+        try
+        {
+            var lockingDeviceStatus = DeviceStatuses.FirstOrDefault(static x => x.Name == "锁格设备");
+            if (lockingDeviceStatus == null) return;
+
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                lockingDeviceStatus.Status = isConnected ? "已连接" : "已断开";
+                lockingDeviceStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "更新锁格设备状态时发生错误");
+        }
+    }
+
+    /// <summary>
+    ///     处理锁格状态变更事件
+    /// </summary>
+    /// <param name="chuteNumber">格口号</param>
+    /// <param name="isLocked">是否锁定</param>
+    private async void OnChuteLockStatusChanged(int chuteNumber, bool isLocked)
+    {
+        // 如果格口被锁定，则通知格口包裹记录服务进行数据上传和清空
+        if (isLocked)
+        {
+            await _chutePackageRecordService.SetChuteLockStatusAsync(chuteNumber, true);
+        }
+    }
+
+    /// <summary>
+    ///     处理锁格设备连接状态变更事件
+    /// </summary>
+    /// <param name="isConnected">是否已连接</param>
+    private void OnLockingDeviceConnectionChanged(bool isConnected)
+    {
+        UpdateLockingDeviceStatus(isConnected);
     }
 }

@@ -3,8 +3,6 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using Common.Services.Settings;
-using Common.Services.Ui;
 using Serilog;
 using XinBa.Services.Models;
 
@@ -16,12 +14,12 @@ namespace XinBa.Services;
 public class TareAttributesApiService : ITareAttributesApiService, IDisposable
 {
     // API 认证信息
-    private const string ApiUsername = "yaoli";
-    private const string ApiPassword = "L4T97kdYBKHg1YTkSmccy3YvnSibr4z66NtpxJ28buSjaXdIKEMJvbY8bqewbkIi";
+    private const string ApiUsername = "simba";
+    private const string ApiPassword = "1tcyoKLXH0NwVZuVuhjdl2X5BMFqp6Gnor39zaG9tKqUylFSC1ckacQxWsR10CIVspp0Cq";
     private const string ApiBaseUrl = "https://wh-skud-external.wildberries.ru";
     private const string ApiEndpoint = "/srv/measure_machine_api/api/tare_attributes_from_machine";
     private const long ApiOfficeId = 300864; // 仓库ID
-    private const long ApiPlaceId = 943626653; // 机器ID
+    private const long ApiPlaceId = 971319209; // 机器ID
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -29,16 +27,10 @@ public class TareAttributesApiService : ITareAttributesApiService, IDisposable
         WriteIndented = true
     };
     private readonly HttpClient _httpClient;
-    private readonly INotificationService _notificationService;
-    private readonly ISettingsService _settingsService;
     private bool _disposed;
 
-    public TareAttributesApiService(
-        INotificationService notificationService,
-        ISettingsService settingsService)
+    public TareAttributesApiService()
     {
-        _notificationService = notificationService;
-        _settingsService = settingsService;
 
         // 配置 HttpClient
         var handler = new HttpClientHandler
@@ -99,45 +91,67 @@ public class TareAttributesApiService : ITareAttributesApiService, IDisposable
             // 发送请求
             var response = await _httpClient.PostAsync(ApiEndpoint, content);
 
-            Log.Information("Tare Attributes API 响应: StatusCode={StatusCode}", response.StatusCode);
+            // 读取响应内容
+            var responseContent = await response.Content.ReadAsStringAsync();
+            
+            Log.Information("Tare Attributes API 响应: StatusCode={StatusCode}, Content={Content}", 
+                response.StatusCode, responseContent);
 
-            // 检查响应状态
-            if (response.StatusCode == HttpStatusCode.NoContent)
+            // 检查响应状态和内容
+            if (response.IsSuccessStatusCode)
             {
-                // 204 No Content 表示成功
-                Log.Information("Tare Attributes 提交成功: TareSticker={TareSticker}", request.TareSticker);
-                return (true, null);
+                // 204 No Content 也被认为是成功
+                if (response.StatusCode == HttpStatusCode.NoContent)
+                {
+                    Log.Information("Tare Attributes 提交成功 (StatusCode: NoContent): TareSticker={TareSticker}", 
+                        request.TareSticker);
+                    return (true, null);
+                }
+                
+                // 检查响应内容是否为"1"（表示成功）
+                var trimmedContent = responseContent.Trim();
+                if (trimmedContent == "1")
+                {
+                    Log.Information("Tare Attributes 提交成功: TareSticker={TareSticker}, 响应内容={ResponseContent}", 
+                        request.TareSticker, trimmedContent);
+                    return (true, null);
+                }
+                else
+                {
+                    // HTTP状态码成功但响应内容不是"1"
+                    Log.Warning("Tare Attributes 提交失败 - 意外的响应内容: TareSticker={TareSticker}, StatusCode={StatusCode}, Content={Content}",
+                        request.TareSticker, response.StatusCode, responseContent);
+                    
+                    var errorMessage = $"API returned unexpected response: '{responseContent}' (expected '1')";
+                    return (false, errorMessage);
+                }
             }
+            else
+            {
+                // HTTP状态码表示失败
+                Log.Error("Tare Attributes 提交失败: StatusCode={StatusCode}, Response={Response}",
+                    response.StatusCode, responseContent);
 
-            // 处理错误响应
-            var errorContent = await response.Content.ReadAsStringAsync();
-            Log.Error("Tare Attributes 提交失败: StatusCode={StatusCode}, Response={Response}",
-                response.StatusCode, errorContent);
-
-            var errorMessage = await ParseErrorResponseAsync(response, errorContent);
-            _notificationService.ShowError($"Tare Attributes submission failed: {errorMessage}");
-
-            return (false, errorMessage);
+                var errorMessage = await ParseErrorResponseAsync(response, responseContent);
+                return (false, errorMessage);
+            }
         }
         catch (HttpRequestException ex)
         {
             Log.Error(ex, "发送 Tare Attributes 请求时发生网络错误");
             var errorMessage = $"Network error: {ex.Message}";
-            _notificationService.ShowError(errorMessage);
             return (false, errorMessage);
         }
         catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
         {
             Log.Error(ex, "Tare Attributes 请求超时");
             const string errorMessage = "Request timeout";
-            _notificationService.ShowError(errorMessage);
             return (false, errorMessage);
         }
         catch (Exception ex)
         {
             Log.Error(ex, "提交 Tare Attributes 时发生未知错误");
             var errorMessage = $"Unexpected error: {ex.Message}";
-            _notificationService.ShowError(errorMessage);
             return (false, errorMessage);
         }
     }
@@ -145,7 +159,7 @@ public class TareAttributesApiService : ITareAttributesApiService, IDisposable
     /// <inheritdoc />
     public bool IsServiceAvailable()
     {
-        return !_disposed && _httpClient != null;
+        return !_disposed;
     }
 
     /// <summary>
@@ -161,14 +175,11 @@ public class TareAttributesApiService : ITareAttributesApiService, IDisposable
             }
 
             var errorResponse = JsonSerializer.Deserialize<TareAttributesErrorResponse>(errorContent, JsonOptions);
-            if (errorResponse?.Errors?.Count > 0)
-            {
-                var firstError = errorResponse.Errors[0];
-                var message = !string.IsNullOrEmpty(firstError.Message) ? firstError.Message : firstError.Error;
-                return Task.FromResult(!string.IsNullOrEmpty(message) ? message : $"HTTP {(int)response.StatusCode}");
-            }
+            if (!(errorResponse?.Errors.Count > 0)) return Task.FromResult($"HTTP {(int)response.StatusCode} - {response.StatusCode}");
+            var firstError = errorResponse.Errors[0];
+            var message = !string.IsNullOrEmpty(firstError.Message) ? firstError.Message : firstError.Error;
+            return Task.FromResult(!string.IsNullOrEmpty(message) ? message : $"HTTP {(int)response.StatusCode}");
 
-            return Task.FromResult($"HTTP {(int)response.StatusCode} - {response.StatusCode}");
         }
         catch (JsonException ex)
         {
@@ -187,13 +198,13 @@ public class TareAttributesApiService : ITareAttributesApiService, IDisposable
         Log.Debug("已设置 Basic 认证: {Username}", username);
     }
 
-    protected virtual void Dispose(bool disposing)
+    protected void Dispose(bool disposing)
     {
         if (_disposed) return;
 
         if (disposing)
         {
-            _httpClient?.Dispose();
+            _httpClient.Dispose();
             Log.Information("Tare Attributes API 服务已释放资源");
         }
 

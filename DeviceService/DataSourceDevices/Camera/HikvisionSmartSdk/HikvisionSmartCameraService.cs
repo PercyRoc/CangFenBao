@@ -55,7 +55,7 @@ public class HikvisionSmartCameraService : ICameraService
                 if (_isConnected == value) return;
                 _isConnected = value;
                 ConnectionChanged?.Invoke(null, _isConnected);
-                Log.Information("Overall Hikvision Smart Camera connection status changed: {IsConnected}",
+                Log.Information("海康智能相机整体连接状态变更: {IsConnected}",
                     _isConnected);
             }
         }
@@ -69,7 +69,7 @@ public class HikvisionSmartCameraService : ICameraService
 
     public bool Start()
     {
-        Log.Information("Attempting to start Hikvision Smart Camera service and connect to all available devices...");
+        Log.Information("正在尝试启动海康智能相机服务并连接到所有可用设备...");
         _isGrabbing = false;
         var anyDeviceStarted = false;
 
@@ -78,18 +78,18 @@ public class HikvisionSmartCameraService : ICameraService
             MvCodeReader.MV_CODEREADER_GIGE_DEVICE | MvCodeReader.MV_CODEREADER_USB_DEVICE);
         if (nRet != MvCodeReader.MV_CODEREADER_OK)
         {
-            Log.Error("Failed to enumerate Hikvision Smart Cameras. Error code: {ErrorCode:X}", nRet);
+            Log.Error("枚举海康智能相机失败。错误码: {ErrorCode:X}", nRet);
             return false;
         }
 
         if (_deviceList.nDeviceNum == 0)
         {
-            Log.Warning("No Hikvision Smart Cameras found.");
+            Log.Warning("未找到海康智能相机。");
             IsConnected = false;
             return false;
         }
 
-        Log.Information("Found {DeviceCount} Hikvision Smart Cameras. Attempting to connect...",
+        Log.Information("发现 {DeviceCount} 台海康智能相机。正在尝试连接...",
             _deviceList.nDeviceNum);
 
         for (var i = 0; i < _deviceList.nDeviceNum; i++)
@@ -99,7 +99,7 @@ public class HikvisionSmartCameraService : ICameraService
                 var pDevInfo = _deviceList.pDeviceInfo[i];
                 if (pDevInfo == IntPtr.Zero)
                 {
-                    Log.Warning("Device info pointer at index {Index} is null. Skipping.", i);
+                    Log.Warning("索引 {Index} 处的设备信息指针为空，已跳过。", i);
                     continue;
                 }
                 var stDevInfo =
@@ -109,18 +109,18 @@ public class HikvisionSmartCameraService : ICameraService
 
                 if (string.IsNullOrEmpty(cameraId))
                 {
-                    Log.Warning("Could not determine a unique ID for camera index {Index}. Skipping.", i);
+                    Log.Warning("无法确定相机索引 {Index} 的唯一ID，已跳过。", i);
                     continue;
                 }
 
-                Log.Information("Attempting to connect to camera: {CameraId}", cameraId);
+                Log.Information("正在尝试连接相机: {CameraId}", cameraId);
                 var device = new MvCodeReader();
 
                 // 3. 创建句柄
                 nRet = device.MV_CODEREADER_CreateHandle_NET(ref stDevInfo);
                 if (nRet != MvCodeReader.MV_CODEREADER_OK)
                 {
-                    Log.Error("Failed to create handle for camera {CameraId}. Error code: {ErrorCode:X}", cameraId,
+                    Log.Error("为相机 {CameraId} 创建句柄失败。错误码: {ErrorCode:X}", cameraId,
                         nRet);
                     continue;
                 }
@@ -129,7 +129,7 @@ public class HikvisionSmartCameraService : ICameraService
                 nRet = device.MV_CODEREADER_OpenDevice_NET();
                 if (nRet != MvCodeReader.MV_CODEREADER_OK)
                 {
-                    Log.Error("Failed to open camera {CameraId}. Error code: {ErrorCode:X}", cameraId, nRet);
+                    Log.Error("打开相机 {CameraId} 失败。错误码: {ErrorCode:X}", cameraId, nRet);
                     device.MV_CODEREADER_DestroyHandle_NET(); // Clean up handle
                     continue;
                 }
@@ -138,7 +138,7 @@ public class HikvisionSmartCameraService : ICameraService
                 nRet = device.MV_CODEREADER_StartGrabbing_NET();
                 if (nRet != MvCodeReader.MV_CODEREADER_OK)
                 {
-                    Log.Error("Failed to start grabbing for camera {CameraId}. Error code: {ErrorCode:X}", cameraId,
+                    Log.Error("为相机 {CameraId} 启动抓图失败。错误码: {ErrorCode:X}", cameraId,
                         nRet);
                     device.MV_CODEREADER_CloseDevice_NET();
                     device.MV_CODEREADER_DestroyHandle_NET();
@@ -156,13 +156,13 @@ public class HikvisionSmartCameraService : ICameraService
                 if (_activeDevices.TryAdd(cameraId, (device, receiveThread)) && _deviceCts.TryAdd(cameraId, cts))
                 {
                     receiveThread.Start();
-                    Log.Information("Successfully started grabbing and receive thread for camera: {CameraId}",
+                    Log.Information("为相机 {CameraId} 成功启动抓图和接收线程。",
                         cameraId);
                     anyDeviceStarted = true;
                 }
                 else
                 {
-                    Log.Error("Failed to add camera {CameraId} to active devices dictionary. Stopping grab.", cameraId);
+                    Log.Error("将相机 {CameraId} 添加到活动设备字典失败。正在停止抓图。", cameraId);
                     // Stop and cleanup the device itself
                     device.MV_CODEREADER_StopGrabbing_NET();
                     device.MV_CODEREADER_CloseDevice_NET();
@@ -171,7 +171,7 @@ public class HikvisionSmartCameraService : ICameraService
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Exception occurred while processing device info at index {Index}", i);
+                Log.Error(ex, "处理索引为 {Index} 的设备信息时发生异常。", i);
             }
         }
 
@@ -179,13 +179,13 @@ public class HikvisionSmartCameraService : ICameraService
         IsConnected = anyDeviceStarted; // Update overall connection status
 
         if (anyDeviceStarted || _deviceList.nDeviceNum <= 0) return _isGrabbing;
-        Log.Warning("Failed to start any of the {DeviceCount} detected cameras.", _deviceList.nDeviceNum);
+        Log.Warning("启动 {DeviceCount} 台已检测到的相机均失败。", _deviceList.nDeviceNum);
         return false;
     }
 
     public bool Stop()
     {
-        Log.Information("Attempting to stop Hikvision Smart Camera service...");
+        Log.Information("正在尝试停止海康智能相机服务...");
         _isGrabbing = false;
         var allStoppedCleanly = true;
 
@@ -202,7 +202,7 @@ public class HikvisionSmartCameraService : ICameraService
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, "Error cancelling token for camera {CameraId}", kvp.Key);
+                Log.Warning(ex, "取消相机 {CameraId} 的令牌时出错。", kvp.Key);
             }
         }
 
@@ -213,7 +213,7 @@ public class HikvisionSmartCameraService : ICameraService
         {
             if (!_activeDevices.TryRemove(cameraId, out var deviceTuple)) continue;
             var (device, thread) = deviceTuple;
-            Log.Information("Stopping camera {CameraId}...", cameraId);
+            Log.Information("正在停止相机 {CameraId}...", cameraId);
 
             try
             {
@@ -221,7 +221,7 @@ public class HikvisionSmartCameraService : ICameraService
                 var nRet = device.MV_CODEREADER_StopGrabbing_NET();
                 if (nRet != MvCodeReader.MV_CODEREADER_OK)
                 {
-                    Log.Warning("Failed to stop grabbing for camera {CameraId}. Error code: {ErrorCode:X}",
+                    Log.Warning("为相机 {CameraId} 停止抓图失败。错误码: {ErrorCode:X}",
                         cameraId, nRet);
                     allStoppedCleanly = false;
                 }
@@ -231,7 +231,7 @@ public class HikvisionSmartCameraService : ICameraService
                 {
                     if (!thread.Join(TimeSpan.FromSeconds(2))) // Wait for 2 seconds
                     {
-                        Log.Warning("Receive thread for camera {CameraId} did not terminate gracefully.", cameraId);
+                        Log.Warning("相机 {CameraId} 的接收线程未正常终止。", cameraId);
                         // Consider Thread.Abort() as a last resort, but it's generally discouraged.
                         allStoppedCleanly = false;
                     }
@@ -241,7 +241,7 @@ public class HikvisionSmartCameraService : ICameraService
                 nRet = device.MV_CODEREADER_CloseDevice_NET();
                 if (nRet != MvCodeReader.MV_CODEREADER_OK)
                 {
-                    Log.Warning("Failed to close camera {CameraId}. Error code: {ErrorCode:X}", cameraId, nRet);
+                    Log.Warning("关闭相机 {CameraId} 失败。错误码: {ErrorCode:X}", cameraId, nRet);
                     allStoppedCleanly = false;
                 }
 
@@ -249,14 +249,14 @@ public class HikvisionSmartCameraService : ICameraService
                 nRet = device.MV_CODEREADER_DestroyHandle_NET();
                 if (nRet != MvCodeReader.MV_CODEREADER_OK)
                 {
-                    Log.Warning("Failed to destroy handle for camera {CameraId}. Error code: {ErrorCode:X}",
+                    Log.Warning("销毁相机 {CameraId} 的句柄失败。错误码: {ErrorCode:X}",
                         cameraId, nRet);
                     allStoppedCleanly = false;
                 }
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Exception occurred while stopping camera {CameraId}.", cameraId);
+                Log.Error(ex, "停止相机 {CameraId} 时发生异常。", cameraId);
                 allStoppedCleanly = false;
             }
 
@@ -270,14 +270,14 @@ public class HikvisionSmartCameraService : ICameraService
         _activeDevices.Clear(); // Ensure dictionary is empty
         _deviceCts.Clear();
         IsConnected = false; // Update overall status
-        Log.Information("Hikvision Smart Camera service stopped. All devices released: {AllStoppedCleanly}",
+        Log.Information("海康智能相机服务已停止。所有设备已释放: {AllStoppedCleanly}",
             allStoppedCleanly);
         return allStoppedCleanly;
     }
 
     public IEnumerable<CameraBasicInfo> GetAvailableCameras()
     {
-        Log.Information("Getting available Hikvision Smart Cameras...");
+        Log.Information("正在获取可用的海康智能相机...");
         var availableCameras = new List<CameraBasicInfo>();
         // Ensure the list is updated
         var nRet = MvCodeReader.MV_CODEREADER_EnumDevices_NET(ref _deviceList,
@@ -285,14 +285,14 @@ public class HikvisionSmartCameraService : ICameraService
         if (nRet != MvCodeReader.MV_CODEREADER_OK)
         {
             Log.Error(
-                "Failed to enumerate Hikvision Smart Cameras during GetAvailableCameras. Error code: {ErrorCode:X}",
+                "在 GetAvailableCameras 期间枚举海康智能相机失败。错误码: {ErrorCode:X}",
                 nRet);
             return availableCameras; // Return empty list
         }
 
         if (_deviceList.nDeviceNum == 0)
         {
-            Log.Information("No Hikvision Smart Cameras found during enumeration.");
+            Log.Information("枚举期间未找到海康智能相机。");
             return availableCameras;
         }
 
@@ -303,7 +303,7 @@ public class HikvisionSmartCameraService : ICameraService
                 var pDevInfo = _deviceList.pDeviceInfo[i];
                 if (pDevInfo == IntPtr.Zero)
                 {
-                    Log.Warning("Device info pointer at index {Index} is null. Skipping.", i);
+                    Log.Warning("索引 {Index} 处的设备信息指针为空，已跳过。", i);
                     continue;
                 }
 
@@ -341,7 +341,7 @@ public class HikvisionSmartCameraService : ICameraService
                         break;
                     }
                     default:
-                        Log.Warning("Unsupported device type detected: {DeviceType}", stDevInfo.nTLayerType);
+                        Log.Warning("检测到不支持的设备类型: {DeviceType}", stDevInfo.nTLayerType);
                         deviceName = $"Unknown Type ({stDevInfo.nTLayerType})";
                         serialNumber = $"UnknownSN_{i}"; // Assign a temporary unique ID
                         break;
@@ -351,20 +351,20 @@ public class HikvisionSmartCameraService : ICameraService
                 if (!string.IsNullOrEmpty(serialNumber) && !string.IsNullOrEmpty(deviceName))
                 {
                     availableCameras.Add(new CameraBasicInfo { Id = serialNumber, Name = deviceName });
-                    Log.Debug("Found camera: ID={CameraId}, Name={CameraName}", serialNumber, deviceName);
+                    Log.Debug("发现相机: ID={CameraId}, 名称={CameraName}", serialNumber, deviceName);
                 }
                 else
                 {
-                    Log.Warning("Could not retrieve valid ID or Name for device index {Index}", i);
+                    Log.Warning("无法检索索引为 {Index} 的设备的有效ID或名称。", i);
                 }
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Error processing device info at index {Index}", i);
+                Log.Error(ex, "处理索引为 {Index} 的设备信息时出错。", i);
             }
         }
 
-        Log.Information("Found {Count} available cameras.", availableCameras.Count);
+        Log.Information("发现 {Count} 台可用相机。", availableCameras.Count);
         return availableCameras;
     }
 
@@ -392,14 +392,14 @@ public class HikvisionSmartCameraService : ICameraService
                     return stUsbDeviceInfo.chSerialNumber?.TrimEnd('\0');
                 }
                 default:
-                    Log.Warning("Cannot get SerialNumber for unsupported device type: {DeviceType}",
+                    Log.Warning("无法获取不支持设备类型的序列号: {DeviceType}",
                         stDevInfo.nTLayerType);
                     return null;
             }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to extract camera ID from device info.");
+            Log.Error(ex, "从设备信息中提取相机ID失败。");
             return null;
         }
     }
@@ -407,7 +407,7 @@ public class HikvisionSmartCameraService : ICameraService
 
     private void ReceiveThreadProcess(MvCodeReader device, string cameraId, CancellationToken cancellationToken)
     {
-        Log.Debug("Hikvision Smart Camera receive thread started for {CameraId}.", cameraId);
+        Log.Debug("海康智能相机接收线程已为 {CameraId} 启动。", cameraId);
         var pData = IntPtr.Zero;
         var pstFrameInfoEx2 =
             Marshal.AllocHGlobal(Marshal.SizeOf(typeof(MvCodeReader.MV_CODEREADER_IMAGE_OUT_INFO_EX2)));
@@ -429,7 +429,7 @@ public class HikvisionSmartCameraService : ICameraService
 
                     if (stFrameInfoEx2.nFrameLen > 0 && pData != IntPtr.Zero)
                     {
-                        Log.Verbose("Received frame from {CameraId}. Length: {FrameLen}, PixelType: {PixelType}",
+                        Log.Verbose("从 {CameraId} 收到帧。长度: {FrameLen}, 像素类型: {PixelType}",
                             cameraId, stFrameInfoEx2.nFrameLen, stFrameInfoEx2.enPixelType);
                         // 1. Process Image
                         var bitmapSource = ConvertToBitmapSource(pData, stFrameInfoEx2);
@@ -439,11 +439,11 @@ public class HikvisionSmartCameraService : ICameraService
                             bitmapSource.Freeze();
                             _imageSubject.OnNext(bitmapSource); // Push to general image stream
                             _imageWithIdSubject.OnNext((bitmapSource,
-                                cameraId)); // Push image with its source camera ID
+                                cameraId));
                         }
                         else
                         {
-                            Log.Warning("Failed to convert image data to BitmapSource for frame from {CameraId}.",
+                            Log.Warning("将来自 {CameraId} 的帧的图像数据转换为 BitmapSource 失败。",
                                 cameraId);
                         }
 
@@ -455,42 +455,47 @@ public class HikvisionSmartCameraService : ICameraService
                                     stFrameInfoEx2.UnparsedBcrList.pstCodeListEx2,
                                     typeof(MvCodeReader.MV_CODEREADER_RESULT_BCR_EX2))!;
 
-                            var
-                                packageInfo = ConvertToPackageInfo(stBcrResultEx2, cameraId); // Pass cameraId if needed
+                            var packageInfo = ConvertToPackageInfo(stBcrResultEx2, cameraId);
                             if (packageInfo != null)
                             {
-                                _packageSubject.OnNext(packageInfo); // Push package info
+                                _packageSubject.OnNext(packageInfo);
                             }
                         }
                         else
                         {
-                            Log.Verbose("No barcode result structure found in frame from {CameraId}.", cameraId);
+                            Log.Verbose("在来自 {CameraId} 的帧中未找到条码结果结构。", cameraId);
                         }
                     }
                     else if (pData == IntPtr.Zero)
                     {
                         Log.Warning(
-                            "MV_CODEREADER_GetOneFrameTimeoutEx2_NET returned OK but pData is Zero for {CameraId}.",
+                            "MV_CODEREADER_GetOneFrameTimeoutEx2_NET 返回 OK 但 pData 对于 {CameraId} 为零。",
                             cameraId);
                     }
                 }
                 else if (nRet == MvCodeReader.MV_CODEREADER_E_GC_TIMEOUT) // 使用正确的超时错误码
                 {
-                    Log.Verbose("Receive frame timeout for {CameraId}.", cameraId);
+                    Log.Verbose("相机 {CameraId} 接收帧超时。", cameraId);
+                }
+                else if (nRet == MvCodeReader.MV_CODEREADER_E_NODATA) // 0x80020006 - 正常超时，相机等待触发信号
+                {
+                    // 这只是一个正常的超时，意味着相机还在等待触发信号。
+                    // 我们什么都不做，直接进入下一次循环继续等待。
+                    continue;
                 }
                 else if (nRet == MvCodeReader.MV_CODEREADER_E_CALLORDER && !_isGrabbing)
                 {
                     // If grabbing was stopped, this error might occur. Exit gracefully.
                     Log.Information(
-                        "Received expected call order error after stopping grab for {CameraId}. Exiting thread.",
+                        "为 {CameraId} 停止抓图后收到预期的调用顺序错误。正在退出线程。",
                         cameraId);
                     break;
                 }
                 else
                 {
-                    // Log other errors
+                    // 现在，能进入这个分支的都是我们没预料到的真正错误。
                     Log.Error(
-                        "MV_CODEREADER_GetOneFrameTimeoutEx2_NET failed for {CameraId}. Error code: {ErrorCode:X}",
+                        "获取相机图像时发生意外错误 {CameraId}. 错误码: {ErrorCode:X}",
                         cameraId, nRet);
                     Thread.Sleep(100); // Prevent tight loop on error
                 }
@@ -498,7 +503,7 @@ public class HikvisionSmartCameraService : ICameraService
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Exception in receive thread for camera {CameraId}.", cameraId);
+            Log.Error(ex, "相机 {CameraId} 的接收线程发生异常。", cameraId);
         }
         finally
         {
@@ -508,7 +513,7 @@ public class HikvisionSmartCameraService : ICameraService
                 Marshal.FreeHGlobal(pstFrameInfoEx2);
             }
 
-            Log.Debug("Hikvision Smart Camera receive thread stopping for {CameraId}.", cameraId);
+            Log.Debug("海康智能相机接收线程正在为 {CameraId} 停止。", cameraId);
         }
     }
 
@@ -518,12 +523,12 @@ public class HikvisionSmartCameraService : ICameraService
     {
         if (imageDataPtr == IntPtr.Zero || frameInfo.nFrameLen == 0 || frameInfo.nWidth == 0 || frameInfo.nHeight == 0)
         {
-            Log.Warning("Invalid image data or dimensions provided for BitmapSource conversion.");
+            Log.Warning("为 BitmapSource 转换提供了无效的图像数据或尺寸。");
             return null;
         }
 
         Log.Verbose(
-            "Converting frame data (PixelType: {PixelType}, W: {Width}, H: {Height}, Len: {Length}) to BitmapSource...",
+            "正在将帧数据 (像素类型: {PixelType}, 宽: {Width}, 高: {Height}, 长度: {Length}) 转换为 BitmapSource...",
             frameInfo.enPixelType, frameInfo.nWidth, frameInfo.nHeight, frameInfo.nFrameLen);
 
         try
@@ -544,7 +549,7 @@ public class HikvisionSmartCameraService : ICameraService
                         imageDataPtr,
                         (int)frameInfo.nFrameLen,
                         stride);
-                    Log.Verbose("Successfully created Gray8 BitmapSource.");
+                    Log.Verbose("成功创建 Gray8 BitmapSource。");
                     return bitmapSource;
                 }
                 case MvCodeReader.MvCodeReaderGvspPixelType.PixelType_CodeReader_Gvsp_Jpeg:
@@ -558,17 +563,17 @@ public class HikvisionSmartCameraService : ICameraService
                         BitmapCacheOption.OnLoad);
                     if (decoder.Frames.Count > 0)
                     {
-                        Log.Verbose("Successfully decoded JPEG BitmapSource.");
+                        Log.Verbose("成功解码 JPEG BitmapSource。");
                         return decoder.Frames[0];
                     }
                     else
                     {
-                        Log.Warning("JpegBitmapDecoder could not decode any frames.");
+                        Log.Warning("JpegBitmapDecoder 无法解码任何帧。");
                         return null;
                     }
                 }
                 default:
-                    Log.Warning("Unsupported pixel format for BitmapSource conversion: {PixelType}",
+                    Log.Warning("不支持的像素格式，无法转换为 BitmapSource: {PixelType}",
                         frameInfo.enPixelType);
                     return null;
             }
@@ -576,7 +581,7 @@ public class HikvisionSmartCameraService : ICameraService
         catch (Exception ex)
         {
             Log.Error(ex,
-                "Exception during BitmapSource conversion. PixelType: {PixelType}, W: {Width}, H: {Height}, Len: {Length}",
+                "BitmapSource 转换期间发生异常。像素类型: {PixelType}, 宽: {Width}, 高: {Height}, 长度: {Length}",
                 frameInfo.enPixelType, frameInfo.nWidth, frameInfo.nHeight, frameInfo.nFrameLen);
             return null;
         }
@@ -612,7 +617,7 @@ public class HikvisionSmartCameraService : ICameraService
 
 
                     Log.Debug(
-                        "Barcode found by {CameraId}: {Barcode} (Type: {BarcodeType}, Quality: {Quality}, Cost: {Cost}ms)",
+                        "相机 {CameraId} 发现条码: {Barcode} (类型: {BarcodeType}, 质量: {Quality}, 耗时: {Cost}ms)",
                         cameraId,
                         packageInfo.Barcode,
                         (MvCodeReader.MV_CODEREADER_CODE_TYPE)firstCodeInfo
@@ -621,18 +626,18 @@ public class HikvisionSmartCameraService : ICameraService
                         firstCodeInfo.nTotalProcCost);
                     return packageInfo;
                 }
-                Log.Warning("Decoded barcode string is empty for camera {CameraId} despite codeLength > 0.",
+                Log.Warning("相机 {CameraId} 解码后的条码字符串为空，尽管 codeLength > 0。",
                     cameraId);
             }
             else
             {
-                Log.Warning("Barcode byte array is empty or contains only null terminator for camera {CameraId}.",
+                Log.Warning("相机 {CameraId} 的条码字节数组为空或仅包含空终止符。",
                     cameraId);
             }
         }
         else
         {
-            Log.Verbose("No barcode found in the result from camera {CameraId}.", cameraId);
+            Log.Verbose("相机 {CameraId} 的结果中未找到条码。", cameraId);
         }
 
         return null;
@@ -641,7 +646,7 @@ public class HikvisionSmartCameraService : ICameraService
 
     public void Dispose()
     {
-        Log.Information("Disposing Hikvision Smart Camera service...");
+        Log.Information("正在处置海康智能相机服务...");
         Stop();
 
         _packageSubject.Dispose();

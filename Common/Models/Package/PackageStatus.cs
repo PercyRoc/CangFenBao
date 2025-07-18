@@ -61,6 +61,16 @@ public enum PackageStatus
     LoadingTimeout,
 
     /// <summary>
+    ///     上传成功
+    /// </summary>
+    UploadSuccess,
+
+    /// <summary>
+    ///     上传失败
+    /// </summary>
+    UploadFailed,
+
+    /// <summary>
     ///     无法识别的条码（已处理或上传）
     /// </summary>
     NoRead,

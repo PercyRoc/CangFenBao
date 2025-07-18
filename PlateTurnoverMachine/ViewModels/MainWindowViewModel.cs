@@ -18,13 +18,12 @@ using SharedUI.Models;
 
 namespace DongtaiFlippingBoardMachine.ViewModels;
 
-internal class MainWindowViewModel : BindableBase, IDisposable
+public class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
     private readonly IEventAggregator _eventAggregator;
     private readonly IPackageDataService _packageDataService;
-    private readonly ISettingsService _settingsService;
     private readonly SortingService _sortingService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly ITcpConnectionService _tcpConnectionService;
@@ -53,12 +52,11 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         _sortingService = sortingService;
         _packageDataService = packageDataService;
         _tcpConnectionService = tcpConnectionService;
-        _settingsService = settingsService;
         _ztoSortingService = ztoSortingService;
         _eventAggregator = eventAggregator;
 
         // 加载初始配置
-        _settings = _settingsService.LoadSettings<PlateTurnoverSettings>();
+        _settings = settingsService.LoadSettings<PlateTurnoverSettings>();
 
         // 初始化命令
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
@@ -247,13 +245,11 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            // 规则 1: 如果是 "noread" 包裹，则直接忽略，不进行任何处理。
+            // 处理 noread 包裹，直接跳过
             if (package.Barcode.Equals("noread", StringComparison.OrdinalIgnoreCase))
             {
-                return; // 直接退出方法
+                return;
             }
-
-            Log.Information("正在处理新包裹：{Barcode}", package.Barcode);
 
             // 调用中通API获取分拣信息
             var sortingInfoResponse = await _ztoSortingService.GetSortingInfoAsync(
@@ -262,10 +258,14 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 1, // 扫描次数，这里暂时固定为1
                 _settings.ZtoTrayCode);
 
-            if (sortingInfoResponse is { Status: true } && sortingInfoResponse.Result?.SortPortCode?.Any() == true)
+            if (sortingInfoResponse is { Status: true } && sortingInfoResponse.Result?.SortPortCode.Any() == true)
             {
+                var sortPortCode = sortingInfoResponse.Result.SortPortCode.First();
+                // 兼容 004-A 或 043-C 格式的格口号
+                var chuteCode = sortPortCode.Split('-')[0];
+
                 // API返回的SortPortCode是一个列表，我们取第一个作为格口号
-                if (int.TryParse(sortingInfoResponse.Result.SortPortCode.First(), out var parsedChuteNumber))
+                if (int.TryParse(chuteCode, out var parsedChuteNumber))
                 {
                     package.SetChute(parsedChuteNumber);
                     package.SetStatus(PackageStatus.Success, $"API 分配格口: {parsedChuteNumber}");
@@ -275,7 +275,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 {
                     // 解析失败，按错误处理
                     Log.Warning("包裹 {Barcode} 的API返回格口号无法解析：{SortPortCode}，已分配到异常口 {ErrorChute}",
-                        package.Barcode, sortingInfoResponse.Result.SortPortCode.FirstOrDefault() ?? "无格口数据", _settings.ErrorChute);
+                        package.Barcode, sortPortCode, _settings.ErrorChute);
                     package.SetChute(_settings.ErrorChute);
                     package.SetStatus(PackageStatus.Error, "API 返回格口号无效，已分配到异常口。");
                 }
@@ -298,12 +298,10 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 try
                 {
                     await _packageDataService.AddPackageAsync(package);
-                    Log.Debug("包裹 {Barcode} 已保存到数据库", package.Barcode);
                 }
                 catch (Exception ex)
                 {
                     Log.Error(ex, "保存包裹 {Barcode} 到数据库时发生错误", package.Barcode);
-                    // 数据库保存失败不影响分拣流程，只记录日志
                 }
             });
 
@@ -590,7 +588,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         ));
     }
 
-    protected virtual void Dispose(bool disposing)
+    protected void Dispose(bool disposing)
     {
         if (_disposed) return;
 

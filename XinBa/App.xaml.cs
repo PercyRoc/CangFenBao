@@ -70,7 +70,7 @@ public partial class App
 
         // 注册视图和ViewModel
         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
-        containerRegistry.RegisterSingleton<MainWindowViewModel>(); // Ensure singleton for logout/login cycle
+        containerRegistry.RegisterSingleton<MainWindowViewModel>();
         containerRegistry.RegisterForNavigation<CameraSettingsView, CameraSettingsViewModel>();
         containerRegistry.RegisterForNavigation<VolumeSettingsView, VolumeSettingsViewModel>();
         containerRegistry.RegisterForNavigation<WeightSettingsView, WeightSettingsViewModel>();
@@ -83,11 +83,14 @@ public partial class App
 
         // 注册二维码服务
         containerRegistry.RegisterSingleton<IQrCodeService, QrCodeService>();
+        
+        // 注册WildberriesApi服务
+        containerRegistry.RegisterSingleton<ITareAttributesApiService, TareAttributesApiService>();
 
         // 注册后台服务启动器 (需要手动管理生命周期)
         Log.Debug("Registering background service singletons for manual management...");
         containerRegistry.RegisterSingleton<CameraStartupService>();
-        containerRegistry.RegisterSingleton<WeightStartupService>();
+        // 注意：WeightStartupService 已在 AddWeightScale() 扩展方法中注册，避免重复注册
         containerRegistry.RegisterSingleton<VolumeDataHostedService>(); // XinBa specific volume service
 
         Log.Information("Type registration complete.");

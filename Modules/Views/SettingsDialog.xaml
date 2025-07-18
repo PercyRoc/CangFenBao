@@ -9,10 +9,7 @@
              xmlns:settings1="clr-namespace:SharedUI.Views.Settings;assembly=SharedUI"
              xmlns:viewModels="clr-namespace:ShanghaiModuleBelt.ViewModels"
              xmlns:settings="clr-namespace:ShanghaiModuleBelt.Views.Settings"
-             xmlns:stoSettings="clr-namespace:ShanghaiModuleBelt.Views.Sto.Settings"
-             xmlns:yundaSettings="clr-namespace:ShanghaiModuleBelt.Views.Yunda.Settings"
-             xmlns:ztoSettings="clr-namespace:ShanghaiModuleBelt.Views.Zto.Settings"
-             xmlns:jituSettings="clr-namespace:ShanghaiModuleBelt.Views.Jitu.Settings"
+             xmlns:views="clr-namespace:ShanghaiModuleBelt.Views"
              prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}">
@@ -63,39 +60,7 @@
                                                Tag="TcpSettingsView"
                                                Icon="{ui:SymbolIcon Box24}">
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="settings1:BarcodeChuteSettingsView" />
-                            </ui:NavigationViewItem.TargetPageType>
-                        </ui:NavigationViewItem>
-
-                        <ui:NavigationViewItem Content="申通API设置"
-                                               Tag="StoApiSettingsView"
-                                               Icon="{ui:SymbolIcon Cube24}">
-                            <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="stoSettings:StoApiSettingsView" />
-                            </ui:NavigationViewItem.TargetPageType>
-                        </ui:NavigationViewItem>
-
-                        <ui:NavigationViewItem Content="韵达API设置"
-                                               Tag="YundaApiSettingsView"
-                                               Icon="{ui:SymbolIcon Cube24}">
-                            <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="yundaSettings:YundaApiSettingsView" />
-                            </ui:NavigationViewItem.TargetPageType>
-                        </ui:NavigationViewItem>
-
-                        <ui:NavigationViewItem Content="中通API设置"
-                                               Tag="ZtoApiSettingsView"
-                                               Icon="{ui:SymbolIcon Box24}">
-                            <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="ztoSettings:ZtoApiSettingsView" />
-                            </ui:NavigationViewItem.TargetPageType>
-                        </ui:NavigationViewItem>
-
-                        <ui:NavigationViewItem Content="极兔API设置"
-                                               Tag="JituSettingsView"
-                                               Icon="{ui:SymbolIcon Cube24}">
-                            <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="jituSettings:JituSettingsView" />
+                                <x:Type Type="views:TcpSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>

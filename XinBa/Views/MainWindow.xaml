@@ -370,11 +370,10 @@
                         <StackPanel Grid.Row="0"
                                     Orientation="Horizontal"
                                     Margin="0,0,0,8">
-                            <ui:SymbolIcon Symbol="QrCode24"
+                            <ui:SymbolIcon Symbol="Image24"
                                            Margin="0,0,8,0"
-                                           Foreground="{StaticResource AccentBrush}"
                                            VerticalAlignment="Center" />
-                            <TextBlock Text="Live Camera Feed"
+                            <TextBlock Text="Live Camera"
                                        FontSize="16"
                                        FontWeight="SemiBold"
                                        Foreground="{StaticResource AccentBrush}"

@@ -11,16 +11,11 @@ namespace ShanghaiModuleBelt.ViewModels;
 
 public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
 {
-    // private readonly TcpSettingsViewModel _tcpSettingsViewModel;
-    private readonly BarcodeChuteSettingsViewModel _barcodeChuteSettingsViewModel;
+    private readonly TcpSettingsViewModel _tcpSettingsViewModel;
     // 保存各个设置页面的ViewModel实例
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
-    private readonly JituSettingsViewModel _jituSettingsViewModel;
     private readonly ModuleConfigViewModel _moduleConfigViewModel;
     private readonly INotificationService _notificationService;
-    private readonly StoApiSettingsViewModel _stoApiSettingsViewModel;
-    private readonly YundaApiSettingsViewModel _yundaApiSettingsViewModel;
-    private readonly ZtoApiSettingsViewModel _ztoApiSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,
@@ -33,11 +28,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
         // 创建各个设置页面的ViewModel实例
         _cameraSettingsViewModel = containerProvider.Resolve<CameraSettingsViewModel>();
         _moduleConfigViewModel = containerProvider.Resolve<ModuleConfigViewModel>();
-        _barcodeChuteSettingsViewModel = containerProvider.Resolve<BarcodeChuteSettingsViewModel>();
-        _stoApiSettingsViewModel = containerProvider.Resolve<StoApiSettingsViewModel>();
-        _yundaApiSettingsViewModel = containerProvider.Resolve<YundaApiSettingsViewModel>();
-        _ztoApiSettingsViewModel = containerProvider.Resolve<ZtoApiSettingsViewModel>();
-        _jituSettingsViewModel = containerProvider.Resolve<JituSettingsViewModel>();
+        _tcpSettingsViewModel = containerProvider.Resolve<TcpSettingsViewModel>();
 
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
@@ -82,11 +73,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware, IDisposable
             // 保存所有设置
             _cameraSettingsViewModel.SaveConfigurationCommand.Execute();
             _moduleConfigViewModel.SaveConfigurationCommand.Execute();
-            _barcodeChuteSettingsViewModel.SaveConfigurationCommand.Execute();
-            _stoApiSettingsViewModel.SaveCommand.Execute();
-            _yundaApiSettingsViewModel.SaveSettingsCommand.Execute();
-            _ztoApiSettingsViewModel.SaveCommand.Execute();
-            _jituSettingsViewModel.SaveCommand.Execute();
+            _tcpSettingsViewModel.SaveConfigurationCommand.Execute();
 
             Log.Information("所有设置已保存");
             _notificationService.ShowSuccess("设置已保存");

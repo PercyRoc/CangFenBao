@@ -1,7 +1,7 @@
 ﻿using System.Collections.ObjectModel;
+using System.Text.RegularExpressions;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
-using System.Text.Json;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -18,7 +18,7 @@ namespace XinBa.ViewModels;
 /// <summary>
 ///     主窗口视图模型
 /// </summary>
-public class MainWindowViewModel : BindableBase, IDisposable
+public partial class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
@@ -280,39 +280,59 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            Log.Debug("接收到包裹信息: 条码={Barcode}", package.Barcode);
-
-            // 检查包裹是否已经有重量数据（大于0），如果没有且重量服务存在，则尝试查询
-            if (package.Weight <= 0.0 && _weightService != null)
+            var barcodeMatch = MyRegex().Match(package.Barcode);
+            if (!barcodeMatch.Success)
             {
-                var weightInGrams = _weightService.FindNearestWeight(package.CreateTime);
-                if (weightInGrams.HasValue)
-                {
-                    var weightInKg = weightInGrams.Value / 1000.0;
-                    package.SetWeight(weightInKg);
-                    Log.Information("为包裹 {Index} 找到并设置重量: {Weight} kg ({Grams} g)",
-                        package.Index, weightInKg.ToString("F3"), weightInGrams.Value.ToString("F2"));
-                }
-                else
-                {
-                    Log.Warning("未找到包裹 {Index} 的重量数据", package.Index);
-                }
+                Log.Warning("接收到的条码 {Barcode} 格式不符合要求，已忽略。", package.Barcode);
+                return;
             }
 
-            // 检查包裹是否已经有体积数据，如果没有则尝试查询
+            Log.Debug("接收到包裹信息: 条码={Barcode}", package.Barcode);
+
+            var tasks = new List<Task>();
+
+            // 如果需要，并行获取重量
+            if (package.Weight <= 0.0 && _weightService != null)
+            {
+                tasks.Add(Task.Run(() =>
+                {
+                    var weightInGrams = _weightService.FindNearestWeight(package.CreateTime);
+                    if (weightInGrams.HasValue)
+                    {
+                        var weightInKg = weightInGrams.Value / 1000.0;
+                        package.SetWeight(weightInKg);
+                        Log.Information("为包裹 {Index} 找到并设置重量: {Weight} kg ({Grams} g)",
+                            package.Index, weightInKg.ToString("F3"), weightInGrams.Value.ToString("F2"));
+                    }
+                    else
+                    {
+                        Log.Warning("未找到包裹 {Index} 的重量数据", package.Index);
+                    }
+                }));
+            }
+
+            // 如果需要，并行获取体积
             if (!package.Length.HasValue || !package.Width.HasValue || !package.Height.HasValue)
             {
-                var volume = _volumeDataService.FindVolumeData(package);
-                if (volume.HasValue)
+                tasks.Add(Task.Run(() =>
                 {
-                    package.SetDimensions(volume.Value.Length, volume.Value.Width, volume.Value.Height);
-                    Log.Information("为包裹 {Index} 找到并设置体积: L={Length}, W={Width}, H={Height}",
-                        package.Index, package.Length, package.Width, package.Height);
-                }
-                else
-                {
-                    Log.Warning("未找到包裹 {Index} 的体积数据", package.Index);
-                }
+                    var volume = _volumeDataService.FindVolumeData(package);
+                    if (volume.HasValue)
+                    {
+                        package.SetDimensions(volume.Value.Length, volume.Value.Width, volume.Value.Height);
+                        Log.Information("为包裹 {Index} 找到并设置体积: L={Length}, W={Width}, H={Height}",
+                            package.Index, package.Length, package.Width, package.Height);
+                    }
+                    else
+                    {
+                        Log.Warning("未找到包裹 {Index} 的体积数据", package.Index);
+                    }
+                }));
+            }
+
+            if (tasks.Any())
+            {
+                await Task.WhenAll(tasks);
             }
 
             Application.Current.Dispatcher.Invoke(() =>
@@ -641,6 +661,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
     public ObservableCollection<StatisticsItem> StatisticsItems { get; } = [];
     public ObservableCollection<DeviceStatus> DeviceStatuses { get; } = [];
     public ObservableCollection<PackageInfoItem> PackageInfoItems { get; } = [];
+
+    [GeneratedRegex(@"^\$1:1:\d+:\d+$")]
+    private static partial Regex MyRegex();
 
     #endregion
 }

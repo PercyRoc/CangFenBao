@@ -116,16 +116,12 @@ public partial class App
         // 注册 SQLite 数据库上下文
         containerRegistry.RegisterSingleton<ApplicationDbContext>();
 
-        // 注册重传服务
-        containerRegistry.RegisterSingleton<RetryService>();
-
         containerRegistry.RegisterSingleton<HttpClient>();
         // 注册包裹中转服务
         containerRegistry.RegisterSingleton<PackageTransferService>();
 
         // 注册格口映射服务
         containerRegistry.RegisterSingleton<ChuteMappingService>();
-        containerRegistry.RegisterSingleton<BarcodeChuteSettingsViewModel>();
 
         // 注册模组连接服务
         containerRegistry.RegisterSingleton<IModuleConnectionService, ModuleConnectionService>();
@@ -136,26 +132,26 @@ public partial class App
         containerRegistry.RegisterSingleton<ChutePackageRecordService>();
 
         // 注册申通自动揽收服务
-        containerRegistry.RegisterSingleton<IStoAutoReceiveService, StoAutoReceiveService>();
+        // containerRegistry.RegisterSingleton<IStoAutoReceiveService, StoAutoReceiveService>();
 
         // 注册韵达上传重量服务
-        containerRegistry.RegisterSingleton<IYundaUploadWeightService, YundaUploadWeightService>();
+        // containerRegistry.RegisterSingleton<IYundaUploadWeightService, YundaUploadWeightService>();
 
         // 注册中通API服务
-        containerRegistry.RegisterSingleton<IZtoApiService, ZtoApiService>();
+        // containerRegistry.RegisterSingleton<IZtoApiService, ZtoApiService>();
 
         // 注册极兔API服务
-        containerRegistry.RegisterSingleton<IJituService, JituService>();
+        // containerRegistry.RegisterSingleton<IJituService, JituService>();
 
         containerRegistry.RegisterForNavigation<ModuleConfigView, ModuleConfigViewModel>();
-        // containerRegistry.RegisterForNavigation<TcpSettingsView, TcpSettingsViewModel>();
-        containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
-        containerRegistry.RegisterForNavigation<StoApiSettingsView, StoApiSettingsViewModel>();
-        containerRegistry.RegisterForNavigation<YundaApiSettingsView, YundaApiSettingsViewModel>();
-        containerRegistry.RegisterForNavigation<ZtoApiSettingsView, ZtoApiSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<TcpSettingsView, TcpSettingsViewModel>();
+        // containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
+        // containerRegistry.RegisterForNavigation<StoApiSettingsView, StoApiSettingsViewModel>();
+        // containerRegistry.RegisterForNavigation<YundaApiSettingsView, YundaApiSettingsViewModel>();
+        // containerRegistry.RegisterForNavigation<ZtoApiSettingsView, ZtoApiSettingsViewModel>();
 
         // 注册极兔设置界面
-        containerRegistry.RegisterForNavigation<JituSettingsView, JituSettingsViewModel>();
+        // containerRegistry.RegisterForNavigation<JituSettingsView, JituSettingsViewModel>();
 
         // 注册设置窗口
         containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>("SettingsDialog");
@@ -207,8 +203,8 @@ public partial class App
             // });
 
             // 初始化锁格服务
-            // _ = Container.Resolve<LockingService>();
-            // Log.Information("锁格服务初始化成功");
+            _ = Container.Resolve<LockingService>();
+            Log.Information("锁格服务初始化成功");
         }
         catch (Exception ex)
         {
@@ -240,12 +236,10 @@ public partial class App
                 Task.Run(async () => await moduleConnectionHostedService.StopAsync(CancellationToken.None)).Wait(2000);
                 Log.Information("模组连接托管服务已停止");
 
-                // 停止重传服务
-                if (Container.Resolve<RetryService>() is IDisposable retryService)
-                {
-                    retryService.Dispose();
-                    Log.Information("重传服务已停止");
-                }
+                // // 停止锁格托管服务
+                // var lockingHostedService = Container.Resolve<LockingHostedService>();
+                // Task.Run(async () => await lockingHostedService.StopAsync()).Wait(2000);
+                // Log.Information("锁格托管服务已停止");
 
                 // 释放数据库上下文
                 if (Container.Resolve<ApplicationDbContext>() is IDisposable dbContext)

@@ -44,34 +44,40 @@ public class PackageInfo : IDisposable
     private static readonly Dictionary<PackageStatus, string> DefaultStatusDisplays = new()
     {
         {
-            PackageStatus.Created, "已创建"
+            PackageStatus.Created, "Created"
         },
         {
-            PackageStatus.Success, "分拣成功"
+            PackageStatus.Success, "Success"
         },
         {
-            PackageStatus.Failed, "分拣失败"
+            PackageStatus.Failed, "Failed"
         },
         {
-            PackageStatus.Timeout, "处理超时"
+            PackageStatus.Timeout, "Timeout"
         },
         {
-            PackageStatus.Offline, "设备离线"
+            PackageStatus.Offline, "Offline"
         },
         {
-            PackageStatus.Error, "异常"
+            PackageStatus.Error, "Error"
         },
         {
-            PackageStatus.WaitingForLoading, "等待上包"
+            PackageStatus.WaitingForLoading, "Waiting For Loading"
         },
         {
-            PackageStatus.LoadingRejected, "拒绝上包"
+            PackageStatus.LoadingRejected, "Loading Rejected"
         },
         {
-            PackageStatus.LoadingSuccess, "上包成功"
+            PackageStatus.LoadingSuccess, "Loading Success"
         },
         {
-            PackageStatus.LoadingTimeout, "上包超时"
+            PackageStatus.LoadingTimeout, "Loading Timeout"
+        },
+        {
+            PackageStatus.UploadSuccess, "Upload Success"
+        },
+        {
+            PackageStatus.UploadFailed, "Upload Failed"
         }
     };
     private bool _disposed;
@@ -114,12 +120,12 @@ public class PackageInfo : IDisposable
     }
 
     /// <summary>
-    ///     体积显示
+    ///     体积显示（毫米）
     /// </summary>
     public string VolumeDisplay
     {
         get => Length.HasValue && Width.HasValue && Height.HasValue
-            ? $"{Length:F1}cm*{Width:F1}cm*{Height:F1}cm"
+            ? $"{Length:F0}×{Width:F0}×{Height:F0}mm"
             : string.Empty;
     }
 

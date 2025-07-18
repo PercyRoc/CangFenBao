@@ -1,13 +1,11 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
-using System.Timers;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.SerialPort;
 using Microsoft.VisualBasic;
 using Serilog;
 // 引入新服务的命名空间
-using Timer = System.Timers.Timer;
 
 // 如果尚未存在，添加LINQ命名空间
 
@@ -25,10 +23,9 @@ public class SerialPortWeightService : IDisposable
     private const int ProcessInterval = 100;
 
     private readonly object _lock = new();
-    private readonly StringBuilder _receiveBuffer = new();
+    private readonly List<byte> _receiveBuffer = new();
     private readonly SerialPortService _serialPortService;
     private readonly ISettingsService _settingsService;
-    private readonly Timer _statusCheckTimer;
     private readonly Queue<(double Weight, DateTime Timestamp)> _weightCache = new();
     private readonly AutoResetEvent _weightReceived = new(false);
     private readonly List<double> _weightSamples = [];
@@ -43,11 +40,6 @@ public class SerialPortWeightService : IDisposable
         _settingsService = settingsService;
         var weightSettings = _settingsService.LoadSettings<WeightSettings>();
         _serialPortService = new SerialPortService("WeightScale", weightSettings.SerialPortParams);
-
-        // 初始化状态检查定时器，每10秒检查一次
-        _statusCheckTimer = new Timer(10000); // 10秒
-        _statusCheckTimer.Elapsed += OnStatusCheck;
-        _statusCheckTimer.AutoReset = true;
     }
 
     public bool IsConnected
@@ -83,7 +75,6 @@ public class SerialPortWeightService : IDisposable
             var connectResult = _serialPortService.Connect();
             if (connectResult)
             {
-                _statusCheckTimer.Start(); // 启动状态检查定时器
                 return connectResult;
             }
             Log.Error("串口连接失败");
@@ -113,8 +104,6 @@ public class SerialPortWeightService : IDisposable
     {
         try
         {
-            _statusCheckTimer.Stop(); // 停止状态检查定时器
-
             _serialPortService.ConnectionChanged -= HandleConnectionStatusChanged;
             _serialPortService.DataReceived -= HandleDataReceived;
 
@@ -135,138 +124,126 @@ public class SerialPortWeightService : IDisposable
         }
     }
 
+    /// <summary>
+    /// 按需执行连接状态检查和验证
+    /// 这个方法在需要时才检查连接状态，实现事件驱动 + 按需检查的策略
+    /// </summary>
+    private void PerformOnDemandConnectionCheck()
+    {
+        try
+        {
+            // 智能检查连接状态不一致的情况
+            if (IsConnected != _serialPortService.IsConnected)
+            {
+                Log.Warning("发现连接状态不一致 - 本地: {Local}, 底层: {Service}", IsConnected, _serialPortService.IsConnected);
+
+                switch (_serialPortService.IsConnected)
+                {
+                    // 如果底层服务显示已连接，但本地状态显示断开，优先信任底层服务
+                    case true when !IsConnected:
+                        Log.Information("底层服务显示已连接，同步本地状态为已连接");
+                        IsConnected = true;
+                        break;
+                    // 如果底层服务显示断开，但本地状态显示连接，需要进一步验证
+                    case false when IsConnected:
+                    {
+                        Log.Warning("底层服务显示断开，但本地状态显示连接，尝试重连验证");
+                        var reconnectResult = _serialPortService.Connect();
+                        Log.Information("重连验证结果: {Result}", reconnectResult);
+                        IsConnected = _serialPortService.IsConnected;
+                        break;
+                    }
+                }
+            }
+
+            // 如果连接确实断开，尝试重连一次
+            if (!_serialPortService.IsConnected)
+            {
+                Log.Warning("发现串口连接断开，尝试重连...");
+                var reconnectResult = _serialPortService.Connect();
+                Log.Information("按需检查期间的重连结果: {Result}", reconnectResult);
+                
+                // 更新本地连接状态
+                IsConnected = _serialPortService.IsConnected;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "按需连接状态检查时发生错误");
+            // 发生异常时，将连接状态设为断开
+            IsConnected = false;
+        }
+    }
+
     public double? FindNearestWeight(DateTime targetTime)
     {
-        // 在方法开始时记录连接状态
-        Log.Debug("FindNearestWeight 开始 - 本地状态: {LocalConnected}, 底层状态: {ServiceConnected}, 目标时间: {TargetTime}",
-            IsConnected, _serialPortService.IsConnected, targetTime);
+        PerformOnDemandConnectionCheck();
 
-        // 智能检查连接状态不一致的情况
-        if (IsConnected != _serialPortService.IsConnected)
-        {
-            Log.Warning("发现连接状态不一致 - 本地: {Local}, 底层: {Service}", IsConnected, _serialPortService.IsConnected);
+        Log.Debug("FindNearestWeight 开始 - 目标时间: {TargetTime}", targetTime);
 
-            switch (_serialPortService.IsConnected)
-            {
-                // 如果底层服务显示已连接，但本地状态显示断开，优先信任底层服务
-                case true when !IsConnected:
-                    Log.Information("底层服务显示已连接，同步本地状态为已连接");
-                    IsConnected = true;
-                    break;
-                // 如果底层服务显示断开，但本地状态显示连接，需要进一步验证
-                case false when IsConnected:
-                {
-                    Log.Warning("底层服务显示断开，但本地状态显示连接，尝试重连验证");
-                    var reconnectResult = _serialPortService.Connect();
-                    Log.Information("重连验证结果: {Result}", reconnectResult);
-                    IsConnected = _serialPortService.IsConnected;
-                    break;
-                }
-            }
-        }
+        var settings = _settingsService.LoadSettings<WeightSettings>();
+        var lowerBound = targetTime.AddMilliseconds(settings.TimeRangeLower);
+        var upperBound = targetTime.AddMilliseconds(settings.TimeRangeUpper);
 
-        // 如果连接确实断开，尝试重连一次
-        if (!_serialPortService.IsConnected)
-        {
-            Log.Warning("发现串口连接断开，尝试重连...");
-            var reconnectResult = _serialPortService.Connect();
-            Log.Information("重连结果: {Result}", reconnectResult);
-        }
+        (double Weight, DateTime Timestamp)? nearestZeroWeight = null;
 
+        // 1. 初始查找（在短暂的锁中完成）
         lock (_lock)
         {
-            var lowerBound = targetTime.AddMilliseconds(_settingsService.LoadSettings<WeightSettings>().TimeRangeLower);
-            var upperBound = targetTime.AddMilliseconds(_settingsService.LoadSettings<WeightSettings>().TimeRangeUpper);
+            var initialWeightInRange = _weightCache
+                .Where(w => w.Timestamp >= lowerBound && w.Timestamp <= upperBound)
+                .OrderBy(w => Math.Abs((w.Timestamp - targetTime).TotalMilliseconds))
+                .FirstOrDefault();
 
-            Log.Debug("查找重量数据 - 目标时间: {TargetTime}, 下限: {LowerBound}, 上限: {UpperBound}, 缓存数量: {CacheCount}",
-                targetTime, lowerBound, upperBound, _weightCache.Count);
-
-            (double Weight, DateTime Timestamp)? nearestZeroWeight = null;
-
-            if (_weightCache.Count > 0)
+            if (initialWeightInRange != default)
             {
-                (double Weight, DateTime Timestamp)? initialWeightInRange = _weightCache
-                    .Where(w => w.Timestamp >= lowerBound && w.Timestamp <= upperBound)
-                    .OrderBy(w => Math.Abs((w.Timestamp - targetTime).TotalMilliseconds))
-                    .FirstOrDefault();
-
-                if (initialWeightInRange != default)
+                var timeDiff = (initialWeightInRange.Timestamp - targetTime).TotalMilliseconds;
+                if (initialWeightInRange.Weight != 0)
                 {
-                    var timeDiff = (initialWeightInRange.Value.Timestamp - targetTime).TotalMilliseconds;
-                    if (initialWeightInRange.Value.Weight != 0)
-                    {
-                        Log.Debug("初始查找找到非零重量数据: {Weight:F3}kg, 时间差: {TimeDiff:F0}ms",
-                            initialWeightInRange.Value.Weight / 1000, timeDiff);
-                        return initialWeightInRange.Value.Weight;
-                    }
-                    // 找到的是 0，记录下来，继续等待
-                    Log.Debug("初始查找找到零重量数据，记录并继续等待: 时间差: {TimeDiff:F0}ms", timeDiff);
-                    nearestZeroWeight = initialWeightInRange;
+                    Log.Debug("初始查找找到非零重量数据: {Weight:F3}kg, 时间差: {TimeDiff:F0}ms",
+                        initialWeightInRange.Weight / 1000, timeDiff);
+                    return initialWeightInRange.Weight;
                 }
-                else
+                
+                Log.Debug("初始查找找到零重量数据，记录并继续等待: 时间差: {TimeDiff:F0}ms", timeDiff);
+                nearestZeroWeight = initialWeightInRange;
+            }
+        }
+
+        // 2. 如果没有立即找到非零值，则在锁外部等待
+        var waitTime = upperBound - DateTime.Now;
+        if (waitTime <= TimeSpan.Zero)
+        {
+            if (nearestZeroWeight.HasValue)
+            {
+                Log.Debug("等待时间已过，返回之前找到的零重量");
+                return nearestZeroWeight.Value.Weight;
+            }
+            Log.Debug("等待时间已过，未找到任何数据");
+            return null;
+        }
+
+        Log.Debug("未立即找到非零重量，开始等待，最大等待时间: {WaitTime:F0}ms", waitTime.TotalMilliseconds);
+
+        var sw = Stopwatch.StartNew();
+        while (sw.Elapsed < waitTime && IsConnected)
+        {
+            var remainingTime = waitTime - sw.Elapsed;
+            if (remainingTime <= TimeSpan.Zero) break;
+
+            var currentWaitTimeout = TimeSpan.FromMilliseconds(Math.Min(100, remainingTime.TotalMilliseconds));
+
+            if (_weightReceived.WaitOne(currentWaitTimeout))
+            {
+                // 收到信号后，短暂加锁检查缓存
+                lock (_lock)
                 {
-                    // Log the nearest out-of-range weight only if no in-range weight was found yet
-                    var nearestWeight = _weightCache
-                        .OrderBy(w => Math.Abs((w.Timestamp - targetTime).TotalMilliseconds))
-                        .FirstOrDefault();
-                    if (nearestWeight != default)
-                    {
-                        var timeDiff = (nearestWeight.Timestamp - targetTime).TotalMilliseconds;
-                        Log.Debug("未找到时间范围内的数据，最近的数据超出范围: {Weight:F3}kg, 时间差: {TimeDiff:F0}ms, 时间戳: {Timestamp}",
-                            nearestWeight.Weight / 1000, timeDiff, nearestWeight.Timestamp);
-                    }
-                }
-            }
-            else
-            {
-                Log.Debug("重量缓存为空");
-            }
-
-            // 如果初始找到了非零值，上面已经 return 了，能走到这里说明要么没找到，要么找到的是0
-
-            if (!_serialPortService.IsConnected && DateTime.Now > upperBound)
-            {
-                Log.Debug("串口未连接且当前时间已超过上限，不再等待新数据");
-                // 如果之前找到了0，则返回0，否则返回null
-                return nearestZeroWeight?.Weight;
-            }
-
-            if (DateTime.Now > upperBound)
-            {
-                Log.Debug("当前时间已超过上限，不再等待新数据");
-                // 如果之前找到了0，则返回0，否则返回null
-                return nearestZeroWeight?.Weight;
-            }
-
-            var waitTime = upperBound - DateTime.Now;
-            if (waitTime <= TimeSpan.Zero)
-            {
-                // 等待时间已过，如果之前找到了0，则返回0，否则返回null
-                Log.Debug("等待时间已过，返回找到的零重量（如有）或null");
-                return nearestZeroWeight?.Weight;
-            }
-
-
-            Log.Debug("继续等待新的重量数据（或非零重量），最大等待时间: {WaitTime:F0}ms", waitTime.TotalMilliseconds);
-
-            var remainingTime = waitTime;
-            var sw = Stopwatch.StartNew();
-            while (remainingTime > TimeSpan.Zero && sw.Elapsed < waitTime)
-            {
-                var currentWaitTimeout = TimeSpan.FromMilliseconds(Math.Min(100, remainingTime.TotalMilliseconds));
-
-                if (_weightReceived.WaitOne(currentWaitTimeout))
-                {
-                    Log.Debug("收到新的重量数据信号，重新查找");
                     var weightInRangeDuringWait = _weightCache
                         .Where(w => w.Timestamp >= lowerBound && w.Timestamp <= upperBound)
-                        // 在等待期间，我们总是希望找到最新的非零值，或者最接近的零值（如果只有零）
-                        .OrderByDescending(w => w.Timestamp) // 优先考虑最新的数据
-                        .ThenBy(w => Math.Abs((w.Timestamp - targetTime).TotalMilliseconds))
-                        .ToList(); // 获取所有符合条件的，以便区分0和非0
+                        .OrderByDescending(w => w.Timestamp) // 优先最新的
+                        .ToList();
 
                     var nonZeroWeight = weightInRangeDuringWait.FirstOrDefault(w => w.Weight != 0);
-
                     if (nonZeroWeight != default)
                     {
                         sw.Stop();
@@ -276,54 +253,29 @@ public class SerialPortWeightService : IDisposable
                         return nonZeroWeight.Weight;
                     }
 
-                    // 检查是否有零重量数据
                     var zeroWeight = weightInRangeDuringWait.FirstOrDefault(w => w.Weight == 0);
-                    if (zeroWeight != default)
+                    if (zeroWeight != default && (!nearestZeroWeight.HasValue || 
+                        Math.Abs((zeroWeight.Timestamp - targetTime).TotalMilliseconds) < 
+                        Math.Abs((nearestZeroWeight.Value.Timestamp - targetTime).TotalMilliseconds)))
                     {
-                        // 如果当前找到的零重量比之前记录的更接近目标时间，则更新
-                        if (nearestZeroWeight == null ||
-                            Math.Abs((zeroWeight.Timestamp - targetTime).TotalMilliseconds) <
-                            Math.Abs((nearestZeroWeight.Value.Timestamp - targetTime).TotalMilliseconds))
-                        {
-                            Log.Debug("等待期间找到零重量数据，更新记录并继续等待");
-                            nearestZeroWeight = zeroWeight;
-                        }
+                        Log.Debug("等待期间更新了最佳零重量记录");
+                        nearestZeroWeight = zeroWeight;
                     }
-
-
-                    Log.Debug("收到信号但新数据不符合时间范围或仍为零，继续等待");
                 }
-
-                // 在等待期间，如果底层服务显示断开，但本地状态显示连接，需要重新验证
-                if (!_serialPortService.IsConnected && IsConnected)
-                {
-                    Log.Warning("等待期间发现底层服务状态为断开，但本地状态为连接，重新验证连接状态");
-                    IsConnected = false;
-                    break; // 退出 while 循环
-                }
-                // 只有当底层服务确实断开时才停止等待
-                else if (!_serialPortService.IsConnected)
-                {
-                    Log.Warning("等待重量数据期间串口连接断开，停止等待 - 本地状态: {LocalConnected}, 底层状态: {ServiceConnected}",
-                        IsConnected, _serialPortService.IsConnected);
-                    break; // 退出 while 循环
-                }
-
-                remainingTime = upperBound - DateTime.Now;
             }
-
-            sw.Stop();
-
-            // 等待结束（超时或断开连接）
-            if (nearestZeroWeight != null)
-            {
-                Log.Debug("等待结束 ({Elapsed}ms)，未找到非零重量，返回找到的最佳零重量", sw.ElapsedMilliseconds);
-                return nearestZeroWeight.Value.Weight; // 返回找到的 0 重量
-            }
-
-            Log.Debug("等待结束 ({Elapsed}ms)，未找到任何符合条件的重量数据", sw.ElapsedMilliseconds);
-            return null; // 在整个过程中（包括等待）都没有找到任何符合条件的重量
         }
+
+        sw.Stop();
+
+        // 3. 等待结束，返回最终结果
+        if (nearestZeroWeight.HasValue)
+        {
+            Log.Debug("等待结束 ({Elapsed}ms)，未找到非零重量，返回找到的最佳零重量", sw.ElapsedMilliseconds);
+            return nearestZeroWeight.Value.Weight;
+        }
+
+        Log.Debug("等待结束 ({Elapsed}ms)，未找到任何符合条件的重量数据", sw.ElapsedMilliseconds);
+        return null;
     }
 
     private void HandleConnectionStatusChanged(bool isConnected)
@@ -355,9 +307,13 @@ public class SerialPortWeightService : IDisposable
 
         try
         {
-            var receivedString = Encoding.ASCII.GetString(data);
+            // 将二进制数据转换为十六进制格式显示，便于调试HK协议等二进制协议
+            var hexData = BitConverter.ToString(data).Replace("-", " ");
             Log.Debug("SerialPortWeightService - 收到原始数据: {Data}, 长度: {Length}, 连接状态: {Connected}, 时间: {Time}",
-                receivedString, data.Length, _serialPortService.IsConnected, DateAndTime.Now);
+                hexData, data.Length, _serialPortService.IsConnected, DateAndTime.Now);
+            
+            // 仅用于内部处理的ASCII字符串转换
+            var receivedString = Encoding.ASCII.GetString(data);
 
             // 更新最后接收数据的时间
             _lastDataReceiveTime = DateTime.Now;
@@ -373,13 +329,13 @@ public class SerialPortWeightService : IDisposable
 
             lock (_lock)
             {
-                _receiveBuffer.Append(receivedString);
-                Log.Debug("当前接收缓冲区内容: {BufferContent}, 长度: {Length}", _receiveBuffer.ToString(), _receiveBuffer.Length);
+                _receiveBuffer.AddRange(data);
+                Log.Debug("当前接收缓冲区内容: {BufferContent}, 长度: {Length}", BitConverter.ToString([.. _receiveBuffer]).Replace("-", " "), _receiveBuffer.Count);
 
                 const int maxInternalBufferSize = 4096; // 定义一个合适的缓冲区大小
-                if (_receiveBuffer.Length > maxInternalBufferSize)
+                if (_receiveBuffer.Count > maxInternalBufferSize)
                 {
-                    Log.Warning("内部接收缓冲区超过限制 ({Length} > {Limit})，清空缓冲区", _receiveBuffer.Length, maxInternalBufferSize);
+                    Log.Warning("内部接收缓冲区超过限制 ({Length} > {Limit})，清空缓冲区", _receiveBuffer.Count, maxInternalBufferSize);
                     _receiveBuffer.Clear();
                     return;
                 }
@@ -390,6 +346,14 @@ public class SerialPortWeightService : IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "处理接收到的串口数据时发生错误");
+            
+            // 根据异常类型判断是否需要处理连接问题
+            if (ShouldTriggerReconnectionOnException(ex))
+            {
+                Log.Warning("数据处理异常可能指示连接问题，触发事件驱动的重连检查");
+                TriggerEventDrivenReconnection();
+            }
+            
             lock (_lock)
             {
                 _receiveBuffer.Clear();
@@ -402,23 +366,28 @@ public class SerialPortWeightService : IDisposable
     /// </summary>
     private void ProcessBuffer(DateTime receiveTime)
     {
-        if ((receiveTime - _lastProcessTime).TotalMilliseconds < ProcessInterval) return;
-        _lastProcessTime = receiveTime;
-
         CleanExpiredWeightData(receiveTime);
 
         // --- HK协议动态称重解析 ---
-        var bufferBytes = Encoding.ASCII.GetBytes(_receiveBuffer.ToString());
+        var bufferBytes = _receiveBuffer.ToArray();
+        Log.Debug("ProcessBuffer: 缓冲区字节数据 - 长度: {Length}, 十六进制: {HexData}", 
+            bufferBytes.Length, BitConverter.ToString(bufferBytes));
+        
         int i = 0;
+        bool foundHkFrame = false;
         while (i <= bufferBytes.Length - 8)
         {
             if (bufferBytes[i] == 0x88 && bufferBytes[i + 1] == 0x02 && bufferBytes[i + 7] == 0x16)
             {
+                foundHkFrame = true;
                 var weightBytes = bufferBytes.Skip(i + 2).Take(5).ToArray();
                 double weight = ParseHkWeight(weightBytes); // 单位kg
+                Log.Debug("ProcessBuffer: 找到HK协议帧，解析重量: {Weight}kg", weight);
+                
                 if (_settingsService.LoadSettings<WeightSettings>().WeightType == WeightType.Dynamic)
                 {
-                    ProcessDynamicWeight(weight, receiveTime);
+                    // 修正：将kg转换为g
+                    ProcessDynamicWeight(weight * 1000, receiveTime);
                 }
                 i += 8; // 跳过本帧
             }
@@ -427,17 +396,28 @@ public class SerialPortWeightService : IDisposable
                 i++;
             }
         }
+        
+        if (bufferBytes.Length >= 8 && !foundHkFrame)
+        {
+            Log.Debug("ProcessBuffer: 未找到HK协议帧，数据不符合HK格式 (需要0x88 0x02开头，0x16结尾)");
+        }
         // 清理已处理内容
         if (i > 0)
         {
-            _receiveBuffer.Remove(0, Math.Min(i, _receiveBuffer.Length));
+            _receiveBuffer.RemoveRange(0, Math.Min(i, _receiveBuffer.Count));
         }
         // --- 其他静态称重逻辑保持不变 ---
 
-        var bufferContent = _receiveBuffer.ToString();
-        if (string.IsNullOrEmpty(bufferContent)) return;
+        // 尝试将剩余字节转换为字符串进行默认协议处理
+        var bufferContent = Encoding.ASCII.GetString([.. _receiveBuffer]);
+        if (string.IsNullOrEmpty(bufferContent)) 
+        {
+            Log.Debug("ProcessBuffer: 缓冲区为空，跳过默认协议处理");
+            return;
+        }
 
-        Log.Verbose("开始处理内部缓冲区，内容长度: {Length}", bufferContent.Length);
+        Log.Debug("ProcessBuffer: 开始默认协议处理，缓冲区内容: \"{Content}\", 长度: {Length}", 
+            bufferContent, bufferContent.Length);
 
         var processedLength = 0;
 
@@ -447,9 +427,13 @@ public class SerialPortWeightService : IDisposable
 
             if (lastSeparatorIndex == -1)
             {
-                Log.Verbose("缓冲区中未找到分隔符 '='，等待更多数据");
-                if (_receiveBuffer.Length <= 100) return;
-                Log.Warning("缓冲区过长但无分隔符，可能数据格式错误，清空缓冲区");
+                Log.Debug("ProcessBuffer: 缓冲区中未找到分隔符 '='，数据不符合默认协议格式");
+                if (_receiveBuffer.Count <= 100) 
+                {
+                    Log.Debug("ProcessBuffer: 缓冲区长度 {Length} <= 100，继续等待更多数据", _receiveBuffer.Count);
+                    return;
+                }
+                Log.Warning("ProcessBuffer: 缓冲区过长但无分隔符，可能数据格式错误，清空缓冲区");
                 _receiveBuffer.Clear();
 
                 return;
@@ -486,6 +470,7 @@ public class SerialPortWeightService : IDisposable
                     }
                     else
                     {
+                        // 此处已经是g，无需转换
                         ProcessDynamicWeight(weightG, receiveTime);
                     }
                 }
@@ -502,18 +487,21 @@ public class SerialPortWeightService : IDisposable
         }
         finally
         {
-            if (processedLength > 0 && processedLength <= _receiveBuffer.Length)
+            if (processedLength > 0 && processedLength <= _receiveBuffer.Count)
             {
-                Log.Verbose("从缓冲区移除已处理的 {ProcessedLength} 个字符", processedLength);
-                _receiveBuffer.Remove(0, processedLength);
-                Log.Verbose("处理后剩余缓冲区内容: \"{RemainingBuffer}\"", _receiveBuffer.ToString());
+                Log.Debug("ProcessBuffer: 从缓冲区移除已处理的 {ProcessedLength} 个字节", processedLength);
+                _receiveBuffer.RemoveRange(0, processedLength);
+                Log.Debug("ProcessBuffer: 处理后剩余缓冲区内容: \"{RemainingBuffer}\"", BitConverter.ToString([.. _receiveBuffer]).Replace("-", " "));
             }
-            else if (processedLength > _receiveBuffer.Length)
+            else if (processedLength > _receiveBuffer.Count)
             {
-                Log.Warning("计算的处理长度 {ProcessedLength} 大于缓冲区长度 {BufferLength}，清空缓冲区", processedLength,
-                    _receiveBuffer.Length);
+                Log.Warning("ProcessBuffer: 计算的处理长度 {ProcessedLength} 大于缓冲区长度 {BufferLength}，清空缓冲区", 
+                    processedLength, _receiveBuffer.Count);
                 _receiveBuffer.Clear();
             }
+            
+            // 总结数据处理结果
+            Log.Debug("ProcessBuffer: 数据处理完成 - 当前重量缓存数量: {CacheCount}", _weightCache.Count);
         }
     }
 
@@ -620,48 +608,56 @@ public class SerialPortWeightService : IDisposable
     }
 
     /// <summary>
-    ///     定期状态检查方法
+    /// 判断异常是否应该触发重连检查
     /// </summary>
-    private void OnStatusCheck(object? sender, ElapsedEventArgs e)
+    /// <param name="ex">捕获的异常</param>
+    /// <returns>是否应该触发重连</returns>
+    private static bool ShouldTriggerReconnectionOnException(Exception ex)
+    {
+        return ex switch
+        {
+            TimeoutException => true,           // 超时异常可能指示连接问题
+            InvalidOperationException => true,  // 操作异常可能指示端口状态问题
+            UnauthorizedAccessException => true, // 访问被拒绝可能指示端口被占用
+            IOException => true,      // IO异常通常指示连接问题
+            _ => false                          // 其他异常不触发重连
+        };
+    }
+
+    /// <summary>
+    /// 触发事件驱动的重连检查
+    /// 这个方法在检测到可能的连接问题时被调用
+    /// </summary>
+    private void TriggerEventDrivenReconnection()
     {
         try
         {
-            var now = DateTime.Now;
-            var timeSinceLastData = _lastDataReceiveTime == DateTime.MinValue
-                ? TimeSpan.MaxValue // 如果从未收到数据，则认为时间间隔是无限大
-                : now - _lastDataReceiveTime;
-
-            Log.Information(
-                "串口状态检查 - 连接状态: {Connected}, 最后接收数据: {LastReceive}, 距离上次: {TimeSince:F1}秒, 缓存数量: {CacheCount}",
-                _serialPortService.IsConnected,
-                _lastDataReceiveTime == DateTime.MinValue ? "从未接收" : _lastDataReceiveTime.ToString("HH:mm:ss.fff"),
-                _lastDataReceiveTime == DateTime.MinValue ? -1 : timeSinceLastData.TotalSeconds,
-                _weightCache.Count);
-
-            // 如果连接正常但超过30秒没有收到数据（或从未收到数据），则认为可能出现问题
-            if (_serialPortService.IsConnected && timeSinceLastData.TotalSeconds > 30)
+            Log.Information("触发事件驱动的连接状态检查和重连");
+            
+            // 首先断开当前连接
+            if (_serialPortService.IsConnected)
             {
-                Log.Warning("串口连接正常但超过30秒未收到数据，可能存在通信问题，将尝试重新连接...");
-                // 尝试重新连接
+                Log.Debug("断开当前连接以进行重连");
                 _serialPortService.Disconnect();
-                var reconnectResult = _serialPortService.Connect();
-                Log.Information("状态检查期间的重连尝试结果: {Result}", reconnectResult);
-                if (reconnectResult)
-                {
-                    // 重连成功后，重置数据接收时间，避免立即再次触发重连
-                    _lastDataReceiveTime = DateTime.Now;
-                }
             }
-            else if (!_serialPortService.IsConnected)
+            
+            // 尝试重新连接
+            var reconnectResult = _serialPortService.Connect();
+            Log.Information("事件驱动重连结果: {Result}", reconnectResult);
+            
+            // 更新本地连接状态
+            IsConnected = _serialPortService.IsConnected;
+            
+            if (reconnectResult)
             {
-                Log.Information("串口当前处于断开状态，将尝试重新连接...");
-                var reconnectResult = _serialPortService.Connect();
-                Log.Information("状态检查期间的重连尝试结果: {Result}", reconnectResult);
+                // 重连成功后，重置数据接收时间
+                _lastDataReceiveTime = DateTime.Now;
             }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "状态检查时发生错误");
+            Log.Error(ex, "事件驱动重连过程中发生错误");
+            IsConnected = false;
         }
     }
 
@@ -672,9 +668,6 @@ public class SerialPortWeightService : IDisposable
         if (disposing)
         {
             Stop();
-
-            _statusCheckTimer.Stop();
-            _statusCheckTimer.Dispose();
 
             _serialPortService.Dispose();
 

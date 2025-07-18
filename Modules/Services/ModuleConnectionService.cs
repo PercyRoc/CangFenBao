@@ -442,8 +442,16 @@ internal class ModuleConnectionService(ISettingsService settingsService, ChutePa
                             Log.Warning("包裹等待超时: 序号={PackageNumber}, 最大等待时间={MaxWaitTime}ms, 绑定条码={Barcode}",
                                 packageNumber, _config.MaxWaitTime, boundBarcode);
 
-                            // 发送异常格口指令
-                            await SendSortingCommandAsync(packageNumber, (byte)_config.ExceptionChute);
+                            // 修复：在发送指令前检查连接状态
+                            if (IsConnected)
+                            {
+                                // 只有在连接时才发送
+                                await SendSortingCommandAsync(packageNumber, (byte)_config.ExceptionChute);
+                            }
+                            else
+                            {
+                                Log.Warning("客户端已断开，无法为超时包裹 {PackageNumber} 发送异常指令。", packageNumber);
+                            }
                         }
                         else
                         {

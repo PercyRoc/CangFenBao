@@ -12,14 +12,31 @@ public class DiskStatus
 
 public class SystemStatus
 {
-    private static readonly PerformanceCounter CpuCounter;
-    private static readonly PerformanceCounter MemCounter;
+    private static PerformanceCounter? CpuCounter;
+    private static PerformanceCounter? MemCounter;
     private static readonly DateTime StartTime = DateTime.Now;
+    private static DateTime _lastCpuCheck = DateTime.MinValue;
+    private static double _lastCpuValue = 0;
 
     static SystemStatus()
     {
-        CpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
-        MemCounter = new PerformanceCounter("Memory", "% Committed Bytes In Use");
+        try
+        {
+            CpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
+            MemCounter = new PerformanceCounter("Memory", "% Committed Bytes In Use");
+            
+            // 初始化CPU计数器 - 第一次调用通常返回0
+            if (CpuCounter != null)
+            {
+                _ = CpuCounter.NextValue();
+            }
+        }
+        catch (Exception)
+        {
+            // 如果性能计数器不可用，设为null，后续使用备用方案
+            CpuCounter = null;
+            MemCounter = null;
+        }
     }
 
     public double CpuUsage { get; private set; }
@@ -35,15 +52,54 @@ public class SystemStatus
             RunningTime = DateTime.Now - StartTime
         };
 
+        // 获取CPU使用率
         try
         {
-            // CPU使用率
-            status.CpuUsage = CpuCounter.NextValue();
+            if (CpuCounter != null)
+            {
+                var cpuValue = CpuCounter.NextValue();
+                
+                // 避免第一次调用返回0的问题
+                if (cpuValue > 0 || (DateTime.Now - _lastCpuCheck).TotalSeconds > 1)
+                {
+                    _lastCpuValue = cpuValue;
+                    _lastCpuCheck = DateTime.Now;
+                }
+                
+                status.CpuUsage = _lastCpuValue;
+            }
+            else
+            {
+                // 备用方案：使用Process类获取CPU信息
+                status.CpuUsage = GetCpuUsageAlternative();
+            }
+        }
+        catch (Exception)
+        {
+            status.CpuUsage = GetCpuUsageAlternative();
+        }
 
-            // 内存使用率
-            status.MemoryUsage = MemCounter.NextValue();
+        // 获取内存使用率
+        try
+        {
+            if (MemCounter != null)
+            {
+                status.MemoryUsage = MemCounter.NextValue();
+            }
+            else
+            {
+                // 备用方案：使用GC获取内存信息
+                status.MemoryUsage = GetMemoryUsageAlternative();
+            }
+        }
+        catch (Exception)
+        {
+            status.MemoryUsage = GetMemoryUsageAlternative();
+        }
 
-            // 获取所有硬盘信息
+        // 获取硬盘信息
+        try
+        {
             foreach (var drive in DriveInfo.GetDrives())
             {
                 var diskStatus = new DiskStatus
@@ -52,7 +108,7 @@ public class SystemStatus
                     IsReady = drive.IsReady
                 };
 
-                if (drive.IsReady)
+                if (drive.IsReady && drive.DriveType == DriveType.Fixed)
                 {
                     var totalSize = drive.TotalSize;
                     var freeSpace = drive.AvailableFreeSpace;
@@ -64,12 +120,37 @@ public class SystemStatus
         }
         catch (Exception)
         {
-            // 如果获取失败，使用默认值
-            status.CpuUsage = 0;
-            status.MemoryUsage = 0;
-            status.Disks.Clear();
+            // 如果获取硬盘信息失败，至少显示一个占位符
+            status.Disks.Add(new DiskStatus { Name = "C", UsagePercentage = 0, IsReady = false });
         }
 
         return status;
+    }
+
+    private static double GetCpuUsageAlternative()
+    {
+        try
+        {
+            var process = Process.GetCurrentProcess();
+            return Math.Min(100, process.TotalProcessorTime.TotalMilliseconds / Environment.ProcessorCount / 10);
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private static double GetMemoryUsageAlternative()
+    {
+        try
+        {
+            var process = Process.GetCurrentProcess();
+            var totalMemory = GC.GetTotalMemory(false);
+            return Math.Min(100, totalMemory / (1024.0 * 1024.0)); // 简化的内存使用量，以MB为单位显示
+        }
+        catch
+        {
+            return 0;
+        }
     }
 }

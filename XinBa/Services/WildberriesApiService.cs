@@ -37,17 +37,29 @@ public class WildberriesApiService
 
             var response = await _httpClient.PostAsync(_settings.TareAttributesEndpoint, content);
 
+            // 读取响应内容
+            var responseBody = await response.Content.ReadAsStringAsync();
+            
+            Log.Information("Wildberries API 响应: StatusCode={StatusCode}, Content={Content}", 
+                response.StatusCode, responseBody);
+
             if (response.IsSuccessStatusCode)
             {
-                if (response.StatusCode == HttpStatusCode.NoContent)
+                // 检查响应内容是否为"1"（表示成功）
+                var trimmedContent = responseBody?.Trim();
+                if (trimmedContent == "1")
                 {
-                    Log.Information("TareAttributes request succeeded with 204 No Content.");
+                    Log.Information("TareAttributes 请求成功: 响应内容={ResponseContent}", trimmedContent);
                     return (true, string.Empty);
                 }
-                Log.Warning("TareAttributes request succeeded with unexpected status code: {StatusCode}", response.StatusCode);
-                return (true, string.Empty);
+                else
+                {
+                    // HTTP状态码成功但响应内容不是"1"
+                    Log.Warning("TareAttributes 请求失败 - 意外的响应内容: StatusCode={StatusCode}, Content={Content}",
+                        response.StatusCode, responseBody);
+                    return (false, $"API returned unexpected response: '{responseBody}' (expected '1')");
+                }
             }
-            var responseBody = await response.Content.ReadAsStringAsync();
             Log.Error("TareAttributes request failed with status code {StatusCode}. Response Body: {ResponseBody}", response.StatusCode, responseBody);
 
             try

@@ -59,7 +59,7 @@ public class TcpClientService : IDisposable
     /// <summary>
     ///     连接到设备
     /// </summary>
-    public void Connect(int timeoutMs = 5000)
+    public void Connect(int timeoutMs = 5000, bool isFromReconnectThread = false)
     {
         // 先检查是否已释放
         if (_disposed)
@@ -171,11 +171,13 @@ public class TcpClientService : IDisposable
             }
 
             // 如果不是初始连接，则启动自动重连
-            if (_autoReconnect && !_disposed && !_cts.IsCancellationRequested)
+            if (_autoReconnect && !isFromReconnectThread && !_disposed && !_cts.IsCancellationRequested)
             {
                 Log.Debug("设备 {DeviceName} 启动自动重连", _deviceName);
                 StartReconnectThread();
             }
+
+            throw;
         }
     }
 
@@ -203,10 +205,9 @@ public class TcpClientService : IDisposable
                 Log.Information("启动设备 {DeviceName} 的自动重连任务", _deviceName);
 
                 var retryCount = 0;
-                const int maxRetries = 5; // 最大重试次数
 
                 // 添加对取消令牌的检查
-                while (!_isConnected && !_disposed && !_cts.IsCancellationRequested && _autoReconnect && retryCount < maxRetries)
+                while (!_isConnected && !_disposed && !_cts.IsCancellationRequested && _autoReconnect)
                 {
                     try
                     {
@@ -216,7 +217,7 @@ public class TcpClientService : IDisposable
                         Log.Information("尝试重新连接设备 {DeviceName} ({IpAddress}:{Port}), 第 {RetryCount} 次尝试",
                             _deviceName, _ipAddress, _port, retryCount + 1);
 
-                        Connect(); // 连接成功后会退出循环
+                        Connect(5000, true); // 连接成功后会退出循环
                         return; // 连接成功，退出重连循环
                     }
                     catch (OperationCanceledException)
@@ -246,9 +247,7 @@ public class TcpClientService : IDisposable
                     }
                 }
 
-                if (retryCount >= maxRetries && !_cts.IsCancellationRequested && !_disposed)
-                    Log.Error("设备 {DeviceName} 重连失败次数达到上限 {MaxRetries}，停止重连", _deviceName, maxRetries);
-                else if (_cts.IsCancellationRequested)
+                if (_cts.IsCancellationRequested)
                     Log.Information("设备 {DeviceName} 重连任务因取消请求而停止", _deviceName);
                 else if (_disposed)
                     Log.Information("设备 {DeviceName} 重连任务因服务已释放而停止", _deviceName);
@@ -515,6 +514,26 @@ public class TcpClientService : IDisposable
                 // 检查读取到的字节数
                 if (bytesRead == 0)
                 {
+                    // 读取到0字节表示远程主机已正常关闭连接
+                    Log.Information("设备 {DeviceName} 连接被远程主机关闭", _deviceName);
+                    if (_isConnected)
+                    {
+                        _isConnected = false;
+                        _connectionStatusCallback(false);
+
+                        // 启动重连（如果允许）
+                        if (_autoReconnect && !_disposed && !_cts.IsCancellationRequested)
+                        {
+                            StartReconnectThread();
+                        }
+                    }
+
+                    // 等待一下，避免在特殊情况下进入紧密循环
+                    if (_cts.Token.WaitHandle.WaitOne(1000))
+                    {
+                        // 等待被取消，退出循环
+                        break;
+                    }
                     continue;
                 }
 

@@ -31,13 +31,11 @@ public class ApplicationDbContext : DbContext
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
-        if (!optionsBuilder.IsConfigured)
-        {
-            // 使用相对路径存储数据库文件
-            var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "retry.db");
-            // 确保目录存在
-            Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
-            optionsBuilder.UseSqlite($"Data Source={dbPath}");
-        }
+        if (optionsBuilder.IsConfigured) return;
+        // 使用相对路径存储数据库文件
+        var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "retry.db");
+        // 确保目录存在
+        Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
+        optionsBuilder.UseSqlite($"Data Source={dbPath}");
     }
 }

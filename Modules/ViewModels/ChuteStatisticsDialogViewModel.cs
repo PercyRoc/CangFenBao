@@ -12,12 +12,10 @@ namespace ShanghaiModuleBelt.ViewModels;
 internal class ChuteStatisticsDialogViewModel : BindableBase
 {
     private readonly INotificationService _notificationService;
-    private readonly RetryService _retryService;
 
-    public ChuteStatisticsDialogViewModel(INotificationService notificationService, RetryService retryService)
+    public ChuteStatisticsDialogViewModel(INotificationService notificationService)
     {
         _notificationService = notificationService;
-        _retryService = retryService;
         RefreshCommand = new DelegateCommand(ExecuteRefresh);
         RetryFailedDataCommand = new DelegateCommand(ExecuteRetryFailedData);
     }
@@ -65,22 +63,9 @@ internal class ChuteStatisticsDialogViewModel : BindableBase
         RefreshAction?.Invoke();
     }
 
-    private async void ExecuteRetryFailedData()
-    {
-        try
+    private void ExecuteRetryFailedData()
         {
-            // 调用 RetryService 的重传方法
-            await _retryService.PerformRetryAsync();
-            _notificationService.ShowSuccess("重传成功");
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "手动重传失败数据时发生错误");
-            _notificationService.ShowError($"重传失败数据时发生错误：{ex.Message}");
-        }
-        finally
-        {
-            RefreshAction?.Invoke(); // 重传完成后刷新统计数据
-        }
+        // 重传功能已被移除
+        _notificationService.ShowWarning("重传功能已被禁用");
     }
 }

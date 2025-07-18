@@ -15,7 +15,7 @@ namespace ShanghaiModuleBelt.Services;
 /// </summary>
 public class ChutePackageRecordService(HttpClient httpClient, ISettingsService settingsService)
 {
-    private const string ApiUrl = "http://123.56.22.107:8080/api/DWSInfo2";
+    private const string ApiUrl = "http://123.56.22.107:28081/api/DWSInfo2";
 
     // 格口锁定状态字典
     private readonly ConcurrentDictionary<int, bool> _chuteLockStatus = new();
@@ -102,7 +102,7 @@ public class ChutePackageRecordService(HttpClient httpClient, ISettingsService s
             List<PackageInfo> packagesCopy;
             lock (packages)
             {
-                packagesCopy = new List<PackageInfo>(packages);
+                packagesCopy = [.. packages];
                 packages.Clear();
             }
 
@@ -128,7 +128,7 @@ public class ChutePackageRecordService(HttpClient httpClient, ISettingsService s
         try
         {
             // 根据站点代码确定handlers
-            const string handlers = "上海收货组08";
+            const string handlers = "上海收货组03";
 
             // 构建包裹条码字符串，用逗号分隔
             var packageCodes = string.Join(",", packages.Select(static p => p.Barcode));
@@ -208,7 +208,7 @@ public class ChutePackageRecordService(HttpClient httpClient, ISettingsService s
     /// </summary>
     /// <param name="chuteNumber">格口号</param>
     /// <returns>是否锁定</returns>
-    private bool IsChuteLocked(int chuteNumber)
+    internal bool IsChuteLocked(int chuteNumber)
     {
         return _chuteLockStatus.TryGetValue(chuteNumber, out var isLocked) && isLocked;
     }

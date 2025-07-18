@@ -23,6 +23,7 @@ public class VolumeDataService : IDisposable
     private readonly object _lock = new();
     private readonly ISettingsService _settingsService;
     private readonly List<VolumeRecord> _volumeCache = [];
+    private readonly AutoResetEvent _volumeReceived = new(false); // 1. 添加AutoResetEvent
     private bool _disposed;
     private bool _isConnected;
     private VolumeCameraSettings? _settings;
@@ -78,7 +79,8 @@ public class VolumeDataService : IDisposable
                 return false;
             }
 
-            Log.Information("使用设置初始化体积数据服务: IP={IpAddress}, Port={Port}", _settings.IpAddress, _settings.Port);
+            Log.Information("使用设置初始化体积数据服务: IP={IpAddress}, Port={Port}, 时间窗口=[{MinTime}ms-{MaxTime}ms]", 
+                _settings.IpAddress, _settings.Port, _settings.MinFusionTimeMs, _settings.MaxFusionTimeMs);
 
             _tcpClientService = new TcpClientService(
                 "VolumeCamera",
@@ -119,10 +121,11 @@ public class VolumeDataService : IDisposable
             return;
         }
 
-        Log.Information("尝试启动体积数据服务连接...");
+        Log.Information("尝试启动体积数据服务连接到 {IP}:{Port}...", _settings?.IpAddress, _settings?.Port);
         try
         {
             _tcpClientService.Connect();
+            Log.Information("体积数据服务连接请求已发送，等待连接状态回调...");
         }
         catch (Exception ex)
         {
@@ -138,7 +141,20 @@ public class VolumeDataService : IDisposable
 
     private void HandleConnectionStatusChanged(bool isConnected)
     {
+        var previousState = IsConnected;
         IsConnected = isConnected;
+        
+        Log.Information("体积数据服务连接状态变化: {Previous} -> {Current}, TCP地址: {Address}", 
+            previousState, isConnected, $"{_settings?.IpAddress}:{_settings?.Port}");
+            
+        if (isConnected)
+        {
+            Log.Information("体积数据服务已成功连接，准备接收数据");
+        }
+        else
+        {
+            Log.Warning("体积数据服务连接断开，将无法接收新的体积数据");
+        }
     }
 
     private void HandleDataReceived(byte[] data)
@@ -146,13 +162,15 @@ public class VolumeDataService : IDisposable
         try
         {
             var rawString = Encoding.UTF8.GetString(data).Trim();
-            Log.Debug("体积数据服务收到原始数据: {RawData}", rawString);
+            Log.Information("体积数据服务收到原始数据: {RawData}, 长度: {Length}, 当前时间: {CurrentTime:O}", 
+                rawString, data.Length, DateTime.Now);
 
             var parts = rawString.Split(',');
 
             if (parts.Length != 3)
             {
-                Log.Warning("接收到的体积数据格式无效 (部分数量不为 3): {RawData}", rawString);
+                Log.Warning("接收到的体积数据格式无效 (部分数量不为 3): {RawData}, 实际部分数: {PartCount}", 
+                    rawString, parts.Length);
                 return;
             }
 
@@ -160,23 +178,33 @@ public class VolumeDataService : IDisposable
                 double.TryParse(parts[1].Trim(), CultureInfo.InvariantCulture, out var width) &&
                 double.TryParse(parts[2].Trim(), CultureInfo.InvariantCulture, out var height))
             {
-                var record = new VolumeRecord(DateTime.Now, length, width, height);
-                Log.Debug("解析体积数据成功: L={Length}, W={Width}, H={Height}", length, width, height);
+                var timestamp = DateTime.Now;
+                var record = new VolumeRecord(timestamp, length, width, height);
+                Log.Information("解析体积数据成功: L={Length}, W={Width}, H={Height}, 时间戳: {Timestamp:O}", 
+                    length, width, height, timestamp);
 
                 lock (_lock)
                 {
+                    var oldCacheCount = _volumeCache.Count;
                     _volumeCache.Add(record);
                     CleanupCache_NoLock();
+                    var newCacheCount = _volumeCache.Count;
+                    
+                    Log.Debug("体积数据已添加到缓存, 缓存数量: {OldCount} -> {NewCount}, 数据: L={L}, W={W}, H={H}", 
+                        oldCacheCount, newCacheCount, length, width, height);
                 }
+                
+                _volumeReceived.Set(); // 2. 收到数据后，发出信号
             }
             else
             {
-                Log.Warning("解析体积数据失败: {RawData}", rawString);
+                Log.Warning("解析体积数据失败: {RawData}, 解析结果: L=[{L}], W=[{W}], H=[{H}]", 
+                    rawString, parts[0].Trim(), parts[1].Trim(), parts[2].Trim());
             }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "体积数据服务处理接收数据时出错。");
+            Log.Error(ex, "体积数据服务处理接收数据时出错: {RawData}", Encoding.UTF8.GetString(data));
         }
     }
 
@@ -189,49 +217,79 @@ public class VolumeDataService : IDisposable
         }
 
         var baseTime = package.CreateTime;
-
         if (baseTime <= DateTime.MinValue + TimeSpan.FromSeconds(1))
         {
             Log.Error("无法查找体积数据 包裹: {Index}, 使用的基准时间无效或过早: {BaseTime:O}", package.Index, baseTime);
             return null;
         }
+        
+        var lowerBound = baseTime.AddMilliseconds(_settings.MinFusionTimeMs);
+        var upperBound = baseTime.AddMilliseconds(_settings.MaxFusionTimeMs);
 
-        var maxTimeOffset = TimeSpan.FromMilliseconds(_settings.MaxFusionTimeMs);
-        var minTimeOffset = TimeSpan.FromMilliseconds(_settings.MinFusionTimeMs);
-
-        var latestTime = baseTime - minTimeOffset;
-        var earliestTime = baseTime - maxTimeOffset;
-
-        Log.Debug("查找体积数据 包裹: {Index}, 基准时间: {BaseTime:O}, 时间窗口: [{Earliest:O} - {Latest:O}]",
-            package.Index, baseTime, earliestTime, latestTime);
-
-        VolumeRecord? foundRecord = null;
+        Log.Information("查找体积数据 包裹: {Index}, 基准时间: {BaseTime:O}, 时间窗口: [{LowerBound:O} - {UpperBound:O}], 缓存记录数: {CacheCount}",
+            package.Index, baseTime, lowerBound, upperBound, _volumeCache.Count);
+        
+        // 1. 初始查找 (在短暂的锁中完成)
         lock (_lock)
         {
-            for (var i = _volumeCache.Count - 1; i >= 0; i--)
-            {
-                var record = _volumeCache[i];
-                if (record.Timestamp >= earliestTime && record.Timestamp <= latestTime)
-                {
-                    foundRecord = record;
-                    Log.Information("找到匹配的体积数据 包裹: {Index}, 记录时间: {RecordTime:O}, L={L}, W={W}, H={H}",
-                        package.Index, record.Timestamp, record.Length, record.Width, record.Height);
-                    break;
-                }
+            var initialRecord = _volumeCache
+                .Where(r => r.Timestamp >= lowerBound && r.Timestamp <= upperBound)
+                .OrderBy(r => Math.Abs((r.Timestamp - baseTime).TotalMilliseconds))
+                .FirstOrDefault();
 
-                if (record.Timestamp < earliestTime)
-                {
-                    break;
-                }
+            if (initialRecord != null)
+            {
+                var timeDiff = (initialRecord.Timestamp - baseTime).TotalMilliseconds;
+                Log.Information("初始查找即找到匹配的体积数据: 包裹 {Index}, 时间差 {TimeDiff:F0}ms, L={L}, W={W}, H={H}",
+                    package.Index, timeDiff, initialRecord.Length, initialRecord.Width, initialRecord.Height);
+                return (initialRecord.Length, initialRecord.Width, initialRecord.Height);
             }
         }
 
-        if (foundRecord != null)
+        // 2. 如果找不到，则进入等待阶段 (在锁外部)
+        var waitTime = upperBound - DateTime.Now;
+        if (waitTime <= TimeSpan.Zero)
         {
-            return (foundRecord.Length, foundRecord.Width, foundRecord.Height);
+            Log.Warning("等待时间已过，未找到包裹 {Index} 的体积数据", package.Index);
+            return null;
         }
 
-        Log.Warning("未找到包裹 {Index} 在时间窗口内的体积数据", package.Index);
+        Log.Debug("未立即找到体积数据，开始等待，最大等待时间: {WaitTime:F0}ms", waitTime.TotalMilliseconds);
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        while (sw.Elapsed < waitTime && IsConnected)
+        {
+            var remainingTime = waitTime - sw.Elapsed;
+            if (remainingTime <= TimeSpan.Zero) break;
+
+            var currentWaitTimeout = TimeSpan.FromMilliseconds(Math.Min(100, remainingTime.TotalMilliseconds));
+
+            if (_volumeReceived.WaitOne(currentWaitTimeout))
+            {
+                Log.Debug("收到新的体积数据信号，重新在时间窗口内查找");
+                // 收到信号后，短暂加锁检查缓存
+                lock (_lock)
+                {
+                    var recordAfterWait = _volumeCache
+                        .Where(r => r.Timestamp >= lowerBound && r.Timestamp <= upperBound)
+                        .OrderBy(r => Math.Abs((r.Timestamp - baseTime).TotalMilliseconds))
+                        .FirstOrDefault();
+
+                    if (recordAfterWait != null)
+                    {
+                        sw.Stop();
+                        var timeDiff = (recordAfterWait.Timestamp - baseTime).TotalMilliseconds;
+                        Log.Information("等待后找到匹配的体积数据: 包裹 {Index}, 时间差 {TimeDiff:F0}ms, L={L}, W={W}, H={H}",
+                            package.Index, timeDiff, recordAfterWait.Length, recordAfterWait.Width, recordAfterWait.Height);
+                        return (recordAfterWait.Length, recordAfterWait.Width, recordAfterWait.Height);
+                    }
+                }
+                Log.Debug("收到信号，但新数据不符合当前包裹的时间范围，继续等待");
+            }
+        }
+        
+        sw.Stop();
+        Log.Warning("等待结束 ({Elapsed}ms)，仍未找到包裹 {Index} 在时间窗口内的体积数据", sw.ElapsedMilliseconds, package.Index);
         return null;
     }
 
@@ -263,7 +321,7 @@ public class VolumeDataService : IDisposable
                 _tcpClientService = null;
                 _volumeCache.Clear();
             }
-
+            _volumeReceived.Dispose(); // 4. 释放AutoResetEvent
             Log.Information("体积数据服务已释放。");
         }
 
