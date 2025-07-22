@@ -6,7 +6,7 @@ namespace Common.Services.Audio;
 /// <summary>
 ///     文本转语音服务实现
 /// </summary>
-public class TtsService : ITtsService, IDisposable
+public class TtsService : ITtsService
 {
     private readonly SpeechSynthesizer _synthesizer;
     private readonly SemaphoreSlim _speakLock;
@@ -157,7 +157,7 @@ public class TtsService : ITtsService, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "获取已安装语音时发生错误");
-            return Enumerable.Empty<VoiceInfo>();
+            return [];
         }
     }
 

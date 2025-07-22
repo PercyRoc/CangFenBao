@@ -26,7 +26,7 @@ public interface IEnhancedAudioService : IAudioService
     /// <param name="rate">TTS语音速度 (-10 到 10，默认为 0)</param>
     /// <param name="volume">TTS音量 (0 到 100，默认为 100)</param>
     /// <returns>是否播放成功</returns>
-    Task<bool> PlayPresetAsync(AudioType audioType, bool forceTts = false, int rate = 0, int volume = 100);
+   Task<bool> PlayPresetAsync(AudioType audioType, bool forceTts = false, int rate = 0, int volume = 100);
 
     /// <summary>
     ///     停止所有播放
@@ -56,7 +56,6 @@ public class EnhancedAudioService : IEnhancedAudioService, IDisposable
     private readonly ITtsService _ttsService;
     private readonly SemaphoreSlim _playLock;
     private readonly Dictionary<AudioType, string> _presetAudios;
-    private readonly string _audioDirectory;
     private bool _disposed;
 
     /// <summary>
@@ -70,29 +69,51 @@ public class EnhancedAudioService : IEnhancedAudioService, IDisposable
         _playLock = new SemaphoreSlim(1, 1);
 
         // 初始化音频目录
-        _audioDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Audio");
-        
+        var audioDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Audio");
+
         // 初始化预设音频
         _presetAudios = new Dictionary<AudioType, string>
         {
-            { AudioType.SystemError, Path.Combine(_audioDirectory, "error.wav") },
-            { AudioType.Success, Path.Combine(_audioDirectory, "success.wav") },
-            { AudioType.PlcDisconnected, Path.Combine(_audioDirectory, "PLC未连接.wav") },
-            { AudioType.WaitingScan, Path.Combine(_audioDirectory, "等待扫码.wav") },
-            { AudioType.WaitingForLoading, Path.Combine(_audioDirectory, "等待上包.wav") },
-            { AudioType.LoadingTimeout, Path.Combine(_audioDirectory, "超时.wav") },
-            { AudioType.LoadingRejected, Path.Combine(_audioDirectory, "拒绝上包.wav") },
-            { AudioType.LoadingSuccess, Path.Combine(_audioDirectory, "上包成功.wav") },
-            { AudioType.LoadingAllowed, Path.Combine(_audioDirectory, "允许上包.wav") },
-            { AudioType.VolumeAbnormal, Path.Combine(_audioDirectory, "体积异常.wav") },
-            { AudioType.WeightAbnormal, Path.Combine(_audioDirectory, "重量异常.wav") }
+            {
+                AudioType.SystemError, Path.Combine(audioDirectory, "error.wav")
+            },
+            {
+                AudioType.Success, Path.Combine(audioDirectory, "success.wav")
+            },
+            {
+                AudioType.PlcDisconnected, Path.Combine(audioDirectory, "PLC未连接.wav")
+            },
+            {
+                AudioType.WaitingScan, Path.Combine(audioDirectory, "等待扫码.wav")
+            },
+            {
+                AudioType.WaitingForLoading, Path.Combine(audioDirectory, "等待上包.wav")
+            },
+            {
+                AudioType.LoadingTimeout, Path.Combine(audioDirectory, "超时.wav")
+            },
+            {
+                AudioType.LoadingRejected, Path.Combine(audioDirectory, "拒绝上包.wav")
+            },
+            {
+                AudioType.LoadingSuccess, Path.Combine(audioDirectory, "上包成功.wav")
+            },
+            {
+                AudioType.LoadingAllowed, Path.Combine(audioDirectory, "允许上包.wav")
+            },
+            {
+                AudioType.VolumeAbnormal, Path.Combine(audioDirectory, "体积异常.wav")
+            },
+            {
+                AudioType.WeightAbnormal, Path.Combine(audioDirectory, "重量异常.wav")
+            }
         };
 
         // 确保音频目录存在
-        if (!Directory.Exists(_audioDirectory))
+        if (!Directory.Exists(audioDirectory))
         {
-            Directory.CreateDirectory(_audioDirectory);
-            Log.Information("创建音频目录：{Directory}", _audioDirectory);
+            Directory.CreateDirectory(audioDirectory);
+            Log.Information("创建音频目录：{Directory}", audioDirectory);
         }
 
         Log.Information("增强音频服务已初始化，支持预录制音频和TTS");
@@ -147,12 +168,6 @@ public class EnhancedAudioService : IEnhancedAudioService, IDisposable
     }
 
     /// <inheritdoc />
-    public async Task<bool> PlayPresetAsync(AudioType audioType)
-    {
-        return await PlayPresetAsync(audioType, false, 0, 100);
-    }
-
-    /// <inheritdoc />
     public async Task<bool> PlayPresetAsync(AudioType audioType, bool forceTts = false, int rate = 0, int volume = 100)
     {
         // 如果强制使用TTS或音频文件不存在，则使用TTS
@@ -165,6 +180,12 @@ public class EnhancedAudioService : IEnhancedAudioService, IDisposable
         // 使用预录制音频文件
         Log.Debug("使用预录制音频播放：{Type}", audioType);
         return await PlayAsync(audioPath);
+    }
+
+    async Task<bool> IAudioService.PlayPresetAsync(AudioType audioType)
+    {
+        // 调用此类的公共实现
+        return await PlayPresetAsync(audioType);
     }
 
     /// <inheritdoc />
