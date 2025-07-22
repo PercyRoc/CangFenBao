@@ -15,6 +15,5 @@ public static class ServiceCollectionExtensions
         services.RegisterForNavigation<ChineseWeightSettingsView, ChineseWeightSettingsViewModel>();
         // 注册通用的确认对话框
         services.RegisterDialog<HistoryDialogView, HistoryDialogViewModel>();
-        services.RegisterDialogWindow<HistoryDialogWindow>();
     }
 }

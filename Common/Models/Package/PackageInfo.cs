@@ -125,7 +125,7 @@ public class PackageInfo : IDisposable
     public string VolumeDisplay
     {
         get => Length.HasValue && Width.HasValue && Height.HasValue
-            ? $"{Length:F0}×{Width:F0}×{Height:F0}mm"
+            ? $"{Length:F0}×{Width:F0}×{Height:F0}cm"
             : string.Empty;
     }
 

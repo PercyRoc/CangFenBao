@@ -29,7 +29,13 @@ public static class ServiceCollectionExtensions
         // 注册UI通知服务
         containerRegistry.RegisterSingleton<INotificationService, NotificationService>();
 
-        // 注册音频服务
+        // 注册TTS服务
+        containerRegistry.RegisterSingleton<ITtsService, TtsService>();
+        
+        // 注册增强音频服务（支持预录制音频和TTS）
+        containerRegistry.RegisterSingleton<IEnhancedAudioService, EnhancedAudioService>();
+        
+        // 注册传统音频服务（向后兼容）
         containerRegistry.RegisterSingleton<IAudioService, AudioService>();
 
         // 注册数据库上下文

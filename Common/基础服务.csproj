@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFramework>net8.0-windows</TargetFramework>
@@ -31,6 +31,7 @@
         <PackageReference Include="Serilog"/>
         <PackageReference Include="SixLabors.ImageSharp"/>
         <PackageReference Include="System.IO.Ports"/>
+        <PackageReference Include="System.Speech"/>
         <PackageReference Include="HandyControl"/>
         <PackageReference Include="WPF-UI"/>
     </ItemGroup>

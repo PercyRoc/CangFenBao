@@ -70,6 +70,11 @@ public enum AudioType
     LoadingSuccess,
 
     /// <summary>
+    ///     允许上包
+    /// </summary>
+    LoadingAllowed,
+
+    /// <summary>
     ///     体积异常
     /// </summary>
     VolumeAbnormal,
@@ -125,6 +130,9 @@ public class AudioService : IAudioService, IDisposable
             },
             {
                 AudioType.LoadingSuccess, Path.Combine(audioDirectory, "上包成功.wav")
+            },
+            {
+                AudioType.LoadingAllowed, Path.Combine(audioDirectory, "允许上包.wav")
             },
             {
                 AudioType.VolumeAbnormal, Path.Combine(audioDirectory, "体积异常.wav")

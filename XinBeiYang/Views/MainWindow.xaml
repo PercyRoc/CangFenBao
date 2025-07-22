@@ -482,7 +482,8 @@
                                     CornerRadius="8"
                                     Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                                     BorderBrush="{Binding JdStatusColor, FallbackValue=#F44336}"
-                                    BorderThickness="2">
+                                    BorderThickness="2"
+                                    Visibility="Collapsed">
                                 <Grid>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
@@ -649,7 +650,7 @@
                                 <DataGridTextColumn Header="序号" Binding="{Binding Index}" Width="60" />
                                 <DataGridTextColumn Header="条码" Binding="{Binding Barcode}" Width="160" />
                                 <DataGridTextColumn Header="重量" Binding="{Binding WeightDisplay}" Width="80" />
-                                <DataGridTextColumn Header="尺寸（mm）" Binding="{Binding VolumeDisplay}" Width="200" />
+                                <DataGridTextColumn Header="尺寸（cm）" Binding="{Binding VolumeDisplay}" Width="200" />
                                 <DataGridTextColumn Header="状态" Binding="{Binding StatusDisplay}" Width="*" />
                                 <DataGridTextColumn Header="时间"
                                                     Binding="{Binding CreateTime, StringFormat={}{0:HH:mm:ss}}"

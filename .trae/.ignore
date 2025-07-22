@@ -1,0 +1,14 @@
+bin/
+obj/
+.vs/
+.idea/
+*.user
+*.suo
+*.cache
+*.dll
+*.exe
+*.pdb
+*.log
+packages/
+node_modules/
+dist/

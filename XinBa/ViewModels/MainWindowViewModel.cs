@@ -139,12 +139,10 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
 
-
     private void ExecuteOpenSettings()
     {
         _dialogService.ShowDialog("SettingsDialog");
     }
-
 
 
     private void Timer_Tick(object? sender, EventArgs e)
@@ -271,7 +269,6 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
 
-
     /// <summary>
     ///     处理接收到的包裹信息
     /// </summary>
@@ -330,7 +327,7 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
                 }));
             }
 
-            if (tasks.Any())
+            if (tasks.Count != 0)
             {
                 await Task.WhenAll(tasks);
             }
@@ -342,30 +339,6 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
                 UpdateStatistics(package);
                 AddToPackageHistory(package);
             });
-
-            // 创建测量结果视图模型并显示
-            if (package.Length.HasValue && package.Width.HasValue && package.Height.HasValue && package.Weight > 0.0)
-            {
-                try
-                {
-                    Application.Current.Dispatcher.Invoke(() =>
-                    {
-                        CurrentMeasurementResult = new MeasurementResultViewModel(package, _qrCodeService);
-                    });
-                    
-                    Log.Information("Measurement result view model created successfully: Barcode={Barcode}, Size={Length}x{Width}x{Height}cm, Weight={Weight}kg",
-                        package.Barcode, package.Length, package.Width, package.Height, package.Weight);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "Error occurred while creating measurement result view model: Barcode={Barcode}", package.Barcode);
-                }
-            }
-            else
-            {
-                Log.Warning("Package missing required size or weight info, cannot create measurement result: Barcode={Barcode}, Length={Length}, Width={Width}, Height={Height}, Weight={Weight}",
-                    package.Barcode, package.Length, package.Width, package.Height, package.Weight);
-            }
         }
         catch (Exception ex)
         {
@@ -555,7 +528,7 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
     }
     // --- 结束修改 ---
 
-    protected virtual void Dispose(bool disposing)
+    protected void Dispose(bool disposing)
     {
         if (_disposed) return;
 

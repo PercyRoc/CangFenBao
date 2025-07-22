@@ -179,9 +179,10 @@ public partial class App
             });
 
             Log.Information("开始后台清理任务... ");
-            await Task.Run(async () =>
+            await Task.Run(() =>
             {
                 StopBackgroundServices(true);
+                return Task.CompletedTask;
             });
             Log.Information("后台清理任务完成。 ");
         }

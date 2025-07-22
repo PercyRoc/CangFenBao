@@ -368,9 +368,28 @@ public class SerialPortWeightService : IDisposable
     {
         CleanExpiredWeightData(receiveTime);
 
-        // --- HK协议动态称重解析 ---
+        var weightSettings = _settingsService.LoadSettings<WeightSettings>();
+        
+        // 根据称重类型选择协议解析方式
+        if (weightSettings.WeightType == WeightType.Dynamic)
+        {
+            // 动态称重：只使用HK协议解析
+            ProcessHkProtocol(receiveTime);
+        }
+        else
+        {
+            // 静态称重：只使用=协议解析
+            ProcessEqualsProtocol(receiveTime);
+        }
+    }
+
+    /// <summary>
+    /// 处理HK协议数据（仅用于动态称重）
+    /// </summary>
+    private void ProcessHkProtocol(DateTime receiveTime)
+    {
         var bufferBytes = _receiveBuffer.ToArray();
-        Log.Debug("ProcessBuffer: 缓冲区字节数据 - 长度: {Length}, 十六进制: {HexData}", 
+        Log.Debug("ProcessHkProtocol: 缓冲区字节数据 - 长度: {Length}, 十六进制: {HexData}", 
             bufferBytes.Length, BitConverter.ToString(bufferBytes));
         
         int i = 0;
@@ -382,13 +401,10 @@ public class SerialPortWeightService : IDisposable
                 foundHkFrame = true;
                 var weightBytes = bufferBytes.Skip(i + 2).Take(5).ToArray();
                 double weight = ParseHkWeight(weightBytes); // 单位kg
-                Log.Debug("ProcessBuffer: 找到HK协议帧，解析重量: {Weight}kg", weight);
+                Log.Debug("ProcessHkProtocol: 找到HK协议帧，解析重量: {Weight}kg", weight);
                 
-                if (_settingsService.LoadSettings<WeightSettings>().WeightType == WeightType.Dynamic)
-                {
-                    // 修正：将kg转换为g
-                    ProcessDynamicWeight(weight * 1000, receiveTime);
-                }
+                // 将kg转换为g并处理动态重量
+                ProcessDynamicWeight(weight * 1000, receiveTime);
                 i += 8; // 跳过本帧
             }
             else
@@ -399,24 +415,30 @@ public class SerialPortWeightService : IDisposable
         
         if (bufferBytes.Length >= 8 && !foundHkFrame)
         {
-            Log.Debug("ProcessBuffer: 未找到HK协议帧，数据不符合HK格式 (需要0x88 0x02开头，0x16结尾)");
+            Log.Debug("ProcessHkProtocol: 未找到HK协议帧，数据不符合HK格式 (需要0x88 0x02开头，0x16结尾)");
         }
+        
         // 清理已处理内容
         if (i > 0)
         {
             _receiveBuffer.RemoveRange(0, Math.Min(i, _receiveBuffer.Count));
         }
-        // --- 其他静态称重逻辑保持不变 ---
+    }
 
-        // 尝试将剩余字节转换为字符串进行默认协议处理
+    /// <summary>
+    /// 处理=协议数据（仅用于静态称重）
+    /// </summary>
+    private void ProcessEqualsProtocol(DateTime receiveTime)
+    {
+        // 将字节转换为字符串进行=协议处理
         var bufferContent = Encoding.ASCII.GetString([.. _receiveBuffer]);
         if (string.IsNullOrEmpty(bufferContent)) 
         {
-            Log.Debug("ProcessBuffer: 缓冲区为空，跳过默认协议处理");
+            Log.Debug("ProcessEqualsProtocol: 缓冲区为空，跳过=协议处理");
             return;
         }
 
-        Log.Debug("ProcessBuffer: 开始默认协议处理，缓冲区内容: \"{Content}\", 长度: {Length}", 
+        Log.Debug("ProcessEqualsProtocol: 开始=协议处理，缓冲区内容: \"{Content}\", 长度: {Length}", 
             bufferContent, bufferContent.Length);
 
         var processedLength = 0;
@@ -427,22 +449,21 @@ public class SerialPortWeightService : IDisposable
 
             if (lastSeparatorIndex == -1)
             {
-                Log.Debug("ProcessBuffer: 缓冲区中未找到分隔符 '='，数据不符合默认协议格式");
+                Log.Debug("ProcessEqualsProtocol: 缓冲区中未找到分隔符 '='，数据不符合=协议格式");
                 if (_receiveBuffer.Count <= 100) 
                 {
-                    Log.Debug("ProcessBuffer: 缓冲区长度 {Length} <= 100，继续等待更多数据", _receiveBuffer.Count);
+                    Log.Debug("ProcessEqualsProtocol: 缓冲区长度 {Length} <= 100，继续等待更多数据", _receiveBuffer.Count);
                     return;
                 }
-                Log.Warning("ProcessBuffer: 缓冲区过长但无分隔符，可能数据格式错误，清空缓冲区");
+                Log.Warning("ProcessEqualsProtocol: 缓冲区过长但无分隔符，可能数据格式错误，清空缓冲区");
                 _receiveBuffer.Clear();
-
                 return;
             }
 
             var dataToProcess = bufferContent[..lastSeparatorIndex];
             processedLength = lastSeparatorIndex + 1;
 
-            Log.Verbose("准备处理的数据段: {DataSegment}", dataToProcess);
+            Log.Verbose("ProcessEqualsProtocol: 准备处理的数据段: {DataSegment}", dataToProcess);
 
             var dataSegments = dataToProcess.Split(['='], StringSplitOptions.RemoveEmptyEntries)
                 .Select(s => s.Trim())
@@ -453,55 +474,47 @@ public class SerialPortWeightService : IDisposable
             {
                 if (segment.Length < 3)
                 {
-                    Log.Warning("无效的重量数据段 (太短): \"{Segment}\"", segment);
+                    Log.Warning("ProcessEqualsProtocol: 无效的重量数据段 (太短): \"{Segment}\"", segment);
                     continue;
                 }
 
                 var valuePart = segment.Length >= 6 ? segment[..6] : segment;
                 var reversedValue = ReverseWeight(valuePart);
-                Log.Verbose("解析反转后的值: {ReversedValue} (来自段: {Segment})", reversedValue, valuePart);
+                Log.Verbose("ProcessEqualsProtocol: 解析反转后的值: {ReversedValue} (来自段: {Segment})", reversedValue, valuePart);
 
                 if (float.TryParse(reversedValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var weightInKg))
                 {
                     var weightG = weightInKg * 1000;
-                    if (_settingsService.LoadSettings<WeightSettings>().WeightType == WeightType.Static)
-                    {
-                        ProcessStaticWeight(weightG, receiveTime);
-                    }
-                    else
-                    {
-                        // 此处已经是g，无需转换
-                        ProcessDynamicWeight(weightG, receiveTime);
-                    }
+                    ProcessStaticWeight(weightG, receiveTime);
                 }
                 else
                 {
-                    Log.Warning("无法解析反转后的重量数据: {ReversedData} (原始段: {OriginalSegment})", reversedValue, valuePart);
+                    Log.Warning("ProcessEqualsProtocol: 无法解析反转后的重量数据: {ReversedData} (原始段: {OriginalSegment})", reversedValue, valuePart);
                 }
             }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "解析重量数据缓冲区时发生错误");
+            Log.Error(ex, "ProcessEqualsProtocol: 解析重量数据缓冲区时发生错误");
             _receiveBuffer.Clear();
         }
         finally
         {
             if (processedLength > 0 && processedLength <= _receiveBuffer.Count)
             {
-                Log.Debug("ProcessBuffer: 从缓冲区移除已处理的 {ProcessedLength} 个字节", processedLength);
+                Log.Debug("ProcessEqualsProtocol: 从缓冲区移除已处理的 {ProcessedLength} 个字节", processedLength);
                 _receiveBuffer.RemoveRange(0, processedLength);
-                Log.Debug("ProcessBuffer: 处理后剩余缓冲区内容: \"{RemainingBuffer}\"", BitConverter.ToString([.. _receiveBuffer]).Replace("-", " "));
+                Log.Debug("ProcessEqualsProtocol: 处理后剩余缓冲区内容: \"{RemainingBuffer}\"", BitConverter.ToString([.. _receiveBuffer]).Replace("-", " "));
             }
             else if (processedLength > _receiveBuffer.Count)
             {
-                Log.Warning("ProcessBuffer: 计算的处理长度 {ProcessedLength} 大于缓冲区长度 {BufferLength}，清空缓冲区", 
+                Log.Warning("ProcessEqualsProtocol: 计算的处理长度 {ProcessedLength} 大于缓冲区长度 {BufferLength}，清空缓冲区", 
                     processedLength, _receiveBuffer.Count);
                 _receiveBuffer.Clear();
             }
             
             // 总结数据处理结果
-            Log.Debug("ProcessBuffer: 数据处理完成 - 当前重量缓存数量: {CacheCount}", _weightCache.Count);
+            Log.Debug("ProcessEqualsProtocol: 数据处理完成 - 当前重量缓存数量: {CacheCount}", _weightCache.Count);
         }
     }
 

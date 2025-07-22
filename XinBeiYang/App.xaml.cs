@@ -108,8 +108,6 @@ public partial class App
 
         containerRegistry.RegisterSingleton<IHostedService, PlcCommunicationHostedService>();
 
-        containerRegistry.RegisterSingleton<IJdWcsCommunicationService, JdWcsCommunicationService>();
-
         containerRegistry.RegisterSingleton<IImageStorageService, LocalImageStorageService>();
     }
 
@@ -159,10 +157,6 @@ public partial class App
 
             var hostedService = Container.Resolve<PlcCommunicationHostedService>();
             await hostedService.StartAsync(CancellationToken.None);
-
-            var jdWcsService = Container.Resolve<IJdWcsCommunicationService>();
-            jdWcsService.Start();
-            Log.Information("京东WCS通信服务启动成功");
         }
         catch (Exception ex)
         {
@@ -328,12 +322,6 @@ public partial class App
             var hostedService = Container.Resolve<PlcCommunicationHostedService>();
             await hostedService.StopAsync(CancellationToken.None);
             Log.Information("PLC托管服务已停止");
-
-            // 移除手动停止 JdWcsCommunicationService 的调用
-            // 让 DI 容器在程序退出时调用其 Dispose 方法
-            // var jdWcsService = Container.Resolve<JdWcsCommunicationService>();
-            // await jdWcsService.StopAsync();
-            // Log.Information("京东WCS通信服务已停止");
         }
         catch (Exception ex)
         {

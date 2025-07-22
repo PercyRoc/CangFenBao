@@ -8,6 +8,7 @@ using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using Serilog;
+using ShanghaiModuleBelt.Models;
 using ShanghaiModuleBelt.Services;
 using ShanghaiModuleBelt.Views;
 using SharedUI.Models;
@@ -311,13 +312,13 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         {
             Log.Information("收到包裹信息: {Barcode}, 序号={Index}", package.Barcode, package.Index);
             // 从 ChuteSettings 获取格口配置
-            var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
+            var moduleConfig = _settingsService.LoadSettings<ModuleConfig>();
 
             // 检查条码是否包含异常字符（|或逗号）
             if (package.Barcode.Contains('|') || package.Barcode.Contains(','))
             {
                 Log.Warning("条码包含异常字符（|或,），分到异常格口: {Barcode}", package.Barcode);
-                package.SetChute(chuteSettings.ErrorChuteNumber);
+                package.SetChute(moduleConfig.ExceptionChute);
                 package.SetStatus(PackageStatus.Error, "条码包含异常字符");
             }
             else
@@ -328,7 +329,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 if (chuteNumber == null)
                 {
                     Log.Warning("无法获取格口号，使用异常格口: {Barcode}", package.Barcode);
-                    package.SetChute(chuteSettings.ErrorChuteNumber); // 使用 ChuteSettings 中的异常格口
+                    package.SetChute(moduleConfig.ExceptionChute); // 使用 ChuteSettings 中的异常格口
                     package.SetStatus(PackageStatus.Error, "格口分配失败");
                 }
                 else
@@ -342,7 +343,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             if (_chutePackageRecordService.IsChuteLocked(package.ChuteNumber))
             {
                 Log.Warning("格口 {ChuteNumber} 已锁定，将包裹 {Barcode} 分到异常格口。", package.ChuteNumber, package.Barcode);
-                package.SetChute(chuteSettings.ErrorChuteNumber);
+                package.SetChute(moduleConfig.ExceptionChute);
                 package.SetStatus(PackageStatus.Error, "格口已锁定");
             }
 
