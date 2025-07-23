@@ -66,5 +66,7 @@
         <PackageVersion Include="Microsoft.AspNetCore.Builder" Version="1.1.7"/>
         <PackageVersion Include="Microsoft.AspNetCore.Routing" Version="2.2.2"/>
         <PackageVersion Include="Microsoft.AspNetCore.Hosting.Abstractions" Version="2.2.0"/>
+        <!-- 语音合成 -->
+        <PackageVersion Include="System.Speech" Version="8.0.0"/>
     </ItemGroup>
 </Project>

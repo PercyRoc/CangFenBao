@@ -25,6 +25,7 @@ public class MainViewModel: BindableBase, IDisposable
     private readonly INotificationService _notificationService;
     private readonly IPackageHistoryDataService _historyDataService;
     private readonly ICainiaoApiService _cainiaoApiService;
+    private readonly Common.Services.Audio.IAudioService _audioService;
 
     private string _currentBarcode = string.Empty;
     private BitmapSource? _currentImage;
@@ -43,13 +44,15 @@ public class MainViewModel: BindableBase, IDisposable
         INotificationService notificationService,
         ICameraService huaRayCameraService,
         IPackageHistoryDataService historyDataService,
-        ICainiaoApiService cainiaoApiService)
+        ICainiaoApiService cainiaoApiService,
+        Common.Services.Audio.IAudioService audioService)
     {
         _dialogService = dialogService;
         _notificationService = notificationService;
         _huaRayCameraService = huaRayCameraService;
         _historyDataService = historyDataService;
         _cainiaoApiService = cainiaoApiService;
+        _audioService = audioService;
 
         // 初始化命令
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
@@ -445,16 +448,22 @@ public class MainViewModel: BindableBase, IDisposable
             {
                 status = "Missing weight and dimension data";
                 errorMessage = status;
+                await _audioService.PlayPresetAsync(Common.Services.Audio.AudioType.DataError);
+                Log.Information("包裹 {Barcode} 缺少重量和尺寸数据，已播放数据错误音频提醒", package.Barcode);
             }
             else if (!hasWeight)
             {
                 status = "Missing weight data";
                 errorMessage = status;
+                await _audioService.PlayPresetAsync(Common.Services.Audio.AudioType.WeightAbnormal);
+                Log.Information("包裹 {Barcode} 缺少重量数据，已播放重量异常音频提醒", package.Barcode);
             }
             else if (!hasDimensions)
             {
                 status = "Missing dimension data";
                 errorMessage = status;
+                await _audioService.PlayPresetAsync(Common.Services.Audio.AudioType.VolumeAbnormal);
+                Log.Information("包裹 {Barcode} 缺少尺寸数据，已播放体积异常音频提醒", package.Barcode);
             }
 
             // 4. 上传到菜鸟API（仅有数据时才上传）
@@ -478,6 +487,26 @@ public class MainViewModel: BindableBase, IDisposable
                         Log.Warning("包裹 {Barcode} 菜鸟API上传失败: {ErrorMessage}, HTTP状态码={HttpStatus}, 耗时={ResponseTime}ms",
                             package.Barcode, uploadResult.ErrorMessage, uploadResult.HttpStatusCode, uploadResult.ResponseTimeMs);
                         _notificationService.ShowWarning($"Cainiao API upload failed for {package.Barcode}: {uploadResult.ErrorMessage}");
+                        
+                        // 播放音频提醒 - 使用更具体的错误类型
+                        if (uploadResult.HttpStatusCode == 0 || uploadResult.HttpStatusCode >= 500)
+                        {
+                            // 服务器错误或无法连接
+                            await _audioService.PlayPresetAsync(Common.Services.Audio.AudioType.ServerError);
+                            Log.Information("包裹 {Barcode} 菜鸟API服务器错误，已播放服务器错误音频提醒", package.Barcode);
+                        }
+                        else if (uploadResult.HttpStatusCode >= 400 && uploadResult.HttpStatusCode < 500)
+                        {
+                            // API错误（客户端错误）
+                            await _audioService.PlayPresetAsync(Common.Services.Audio.AudioType.ApiError);
+                            Log.Information("包裹 {Barcode} 菜鸟API客户端错误，已播放API错误音频提醒", package.Barcode);
+                        }
+                        else
+                        {
+                            // 其他错误
+                            await _audioService.PlayPresetAsync(Common.Services.Audio.AudioType.SystemError);
+                            Log.Information("包裹 {Barcode} 菜鸟API返回StatusCode=false，已播放系统错误音频提醒", package.Barcode);
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -486,6 +515,18 @@ public class MainViewModel: BindableBase, IDisposable
                     errorMessage = status;
                     Log.Error(ex, "包裹 {Barcode}: 上传到菜鸟API时发生未预期错误。", package.Barcode);
                     _notificationService.ShowWarning($"Cainiao API upload error for {package.Barcode}: {ex.Message}");
+                    
+                    // 播放网络错误音频提醒
+                    if (ex is System.Net.Http.HttpRequestException)
+                    {
+                        await _audioService.PlayPresetAsync(Common.Services.Audio.AudioType.NetworkError);
+                        Log.Information("包裹 {Barcode} 菜鸟API网络连接错误，已播放网络错误音频提醒", package.Barcode);
+                    }
+                    else
+                    {
+                        await _audioService.PlayPresetAsync(Common.Services.Audio.AudioType.SystemError);
+                        Log.Information("包裹 {Barcode} 菜鸟API异常错误，已播放系统错误音频提醒", package.Barcode);
+                    }
                 }
             }
 
