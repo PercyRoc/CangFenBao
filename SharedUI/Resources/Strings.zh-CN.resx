@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 
 <root>
     <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata" id="root"
@@ -73,6 +73,9 @@
     </data>
     <data name="HistoryDialog_Header_Chute" xml:space="preserve">
         <value>格口</value>
+    </data>
+    <data name="HistoryDialog_Header_SortPortCode" xml:space="preserve">
+        <value>真实格口</value>
     </data>
     <data name="HistoryDialog_Header_Weight" xml:space="preserve">
         <value>重量(kg)</value>

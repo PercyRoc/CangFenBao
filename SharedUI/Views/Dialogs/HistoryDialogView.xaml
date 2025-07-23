@@ -187,6 +187,8 @@
                             </DataGridTemplateColumn>
                             <DataGridTextColumn Header="{lex:Loc Key=HistoryDialog_Header_Chute}"
                                                 Binding="{Binding ChuteNumber}" Width="80" />
+                            <DataGridTextColumn Header="{lex:Loc Key=HistoryDialog_Header_SortPortCode}"
+                                                Binding="{Binding SortPortCode}" Width="120" />
                             <DataGridTextColumn Header="{lex:Loc Key=HistoryDialog_Header_Weight}"
                                                 Binding="{Binding Weight}" Width="100" />
                             <DataGridTextColumn Header="{lex:Loc Key=HistoryDialog_Header_Length}"

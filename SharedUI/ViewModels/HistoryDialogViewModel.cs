@@ -289,7 +289,7 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
 
                 var headers = new[]
                 {
-                    GetLocString("HistoryDialog_Header_Id", "ID"), GetLocString("HistoryDialog_Header_Barcode", "Barcode"), GetLocString("HistoryDialog_Header_Chute", "Chute"), GetLocString("HistoryDialog_Header_Weight", "Weight(kg)"), GetLocString("HistoryDialog_Header_Length", "Length(cm)"), GetLocString("HistoryDialog_Header_Width", "Width(cm)"),
+                    GetLocString("HistoryDialog_Header_Id", "ID"), GetLocString("HistoryDialog_Header_Barcode", "Barcode"), GetLocString("HistoryDialog_Header_Chute", "Chute"), GetLocString("HistoryDialog_Header_SortPortCode", "Sort Port Code"), GetLocString("HistoryDialog_Header_Weight", "Weight(kg)"), GetLocString("HistoryDialog_Header_Length", "Length(cm)"), GetLocString("HistoryDialog_Header_Width", "Width(cm)"),
                     GetLocString("HistoryDialog_Header_Height", "Height(cm)"), GetLocString("HistoryDialog_Header_Volume", "Volume(cm³)"), GetLocString("HistoryDialog_Header_Status", "Status"), GetLocString("HistoryDialog_Header_Remarks", "Remarks"), GetLocString("HistoryDialog_Header_CreateTime", "Create Time")
                 };
 
@@ -312,24 +312,25 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
                     var chuteCell = row.CreateCell(2);
                     if (record.ChuteNumber.HasValue) chuteCell.SetCellValue(record.ChuteNumber.Value);
                     else chuteCell.SetCellType(CellType.Blank);
-                    row.CreateCell(3).SetCellValue(record.Weight);
-                    var lengthCell = row.CreateCell(4);
+                    row.CreateCell(3).SetCellValue(record.SortPortCode ?? string.Empty);
+                    row.CreateCell(4).SetCellValue(record.Weight);
+                    var lengthCell = row.CreateCell(5);
                     if (record.Length.HasValue) lengthCell.SetCellValue(Math.Round(record.Length.Value, 1));
                     else lengthCell.SetCellType(CellType.Blank);
-                    var widthCell = row.CreateCell(5);
+                    var widthCell = row.CreateCell(6);
                     if (record.Width.HasValue) widthCell.SetCellValue(Math.Round(record.Width.Value, 1));
                     else widthCell.SetCellType(CellType.Blank);
-                    var heightCell = row.CreateCell(6);
+                    var heightCell = row.CreateCell(7);
                     if (record.Height.HasValue) heightCell.SetCellValue(Math.Round(record.Height.Value, 1));
                     else heightCell.SetCellType(CellType.Blank);
-                    var volumeCell = row.CreateCell(7);
+                    var volumeCell = row.CreateCell(8);
                     if (record.Volume.HasValue) volumeCell.SetCellValue(record.Volume.Value);
                     else volumeCell.SetCellType(CellType.Blank);
 
-                    row.CreateCell(8).SetCellValue(record.StatusDisplay);
-                    row.CreateCell(9).SetCellValue(record.ErrorMessage);
+                    row.CreateCell(9).SetCellValue(record.StatusDisplay);
+                    row.CreateCell(10).SetCellValue(record.ErrorMessage);
 
-                    var dateCell = row.CreateCell(10);
+                    var dateCell = row.CreateCell(11);
                     dateCell.SetCellValue(record.CreateTime);
                     dateCell.CellStyle = dateStyle;
                 }
