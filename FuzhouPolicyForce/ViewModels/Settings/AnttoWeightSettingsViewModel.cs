@@ -1,15 +1,9 @@
 using Common.Services.Settings;
 using FuzhouPolicyForce.Models.Settings;
 using HandyControl.Controls;
-using Prism.Commands;
-using Prism.Mvvm;
 using Serilog;
-using System;
-using System.Collections.Generic;
 using System.ComponentModel;
-using System.Linq;
 using System.Reflection;
-using System.Threading.Tasks;
 
 namespace FuzhouPolicyForce.ViewModels.Settings
 {

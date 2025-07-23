@@ -135,6 +135,11 @@ public class PackageInfo : IDisposable
     public int ChuteNumber { get; private set; }
 
     /// <summary>
+    ///     完整格口代码（如021-A），用于回传给接口
+    /// </summary>
+    public string? SortPortCode { get; private set; }
+
+    /// <summary>
     ///     状态显示
     /// </summary>
     public string StatusDisplay { get; private set; } = string.Empty;
@@ -329,6 +334,17 @@ public class PackageInfo : IDisposable
     public void SetChute(int chuteNumber, int? originalChuteNumber = null)
     {
         ChuteNumber = chuteNumber;
+    }
+
+    /// <summary>
+    ///     设置格口号和完整格口代码。
+    /// </summary>
+    /// <param name="chuteNumber">格口号</param>
+    /// <param name="sortPortCode">完整格口代码（如021-A）</param>
+    public void SetChute(int chuteNumber, string? sortPortCode)
+    {
+        ChuteNumber = chuteNumber;
+        SortPortCode = sortPortCode;
     }
 
     /// <summary>

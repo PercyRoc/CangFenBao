@@ -117,7 +117,7 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
             if (!_isInitialized)
             {
                 Log.Warning("多光电多摆轮分拣服务未初始化，尝试初始化");
-                await InitializeAsync(_settingsService.LoadSettings<PendulumSortConfig>());
+                await InitializeAsync(SettingsService.LoadSettings<PendulumSortConfig>());
             }
 
             // 创建取消令牌
@@ -391,11 +391,11 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
             var message = Encoding.ASCII.GetString(data);
 
             // 增加防抖逻辑，与触发光电保持一致
-            var config = _settingsService.LoadSettings<PendulumSortConfig>();
+            var config = SettingsService.LoadSettings<PendulumSortConfig>();
             var debounceTime = config.GlobalDebounceTime;
             var now = DateTime.Now;
 
-            if (_lastSignalTimes.TryGetValue(photoelectricName, out var lastSignalTime))
+            if (LastSignalTimes.TryGetValue(photoelectricName, out var lastSignalTime))
             {
                 if ((now - lastSignalTime).TotalMilliseconds < debounceTime)
                 {
@@ -404,7 +404,7 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
                     return; // 忽略此信号
                 }
             }
-            _lastSignalTimes[photoelectricName] = now; // 更新上次信号时间
+            LastSignalTimes[photoelectricName] = now; // 更新上次信号时间
 
             // 只对上升沿信号（OCCH2:1）做出反应
             if (!message.Contains("OCCH1:1"))

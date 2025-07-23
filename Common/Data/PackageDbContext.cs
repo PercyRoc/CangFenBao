@@ -30,6 +30,7 @@ public class PackageDbContext(DbContextOptions<PackageDbContext> options, DateTi
             entity.Property(static e => e.SegmentCode);
             entity.Property(static e => e.Weight);
             entity.Property(static e => e.ChuteNumber);
+            entity.Property(static e => e.SortPortCode);
             entity.Property(static e => e.Status);
             entity.Property(static e => e.StatusDisplay);
             entity.Property(static e => e.CreateTime);

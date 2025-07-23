@@ -228,7 +228,7 @@ public class SinglePendulumSortService(ISettingsService settingsService, IEventA
     {
         try
         {
-            var config = _settingsService.LoadSettings<PendulumSortConfig>();
+            var config = SettingsService.LoadSettings<PendulumSortConfig>();
             // 检查触发光电配置是否有效
             if (string.IsNullOrEmpty(config.TriggerPhotoelectric.IpAddress) ||
                 config.TriggerPhotoelectric.Port == 0)
@@ -270,7 +270,7 @@ public class SinglePendulumSortService(ISettingsService settingsService, IEventA
     protected override TriggerPhotoelectric GetPhotoelectricConfig(string photoelectricName)
     {
         // 单摆轮使用触发光电的配置
-        return _settingsService.LoadSettings<PendulumSortConfig>().TriggerPhotoelectric;
+        return SettingsService.LoadSettings<PendulumSortConfig>().TriggerPhotoelectric;
     }
 
     protected override TcpClientService? GetSortingClient(string photoelectricName)

@@ -4,13 +4,9 @@ using System.Reactive.Linq;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
-using Common.Data;
 using Common.Models.Package;
-using Common.Services.Settings;
-using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
-using Rookie.Models.Api;
 using Rookie.Services;
 using Serilog;
 using SharedUI.Models;
@@ -21,10 +17,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
-    private readonly INotificationService _notificationService;
-    private readonly IPackageDataService _packageDataService;
     private readonly IRookieApiService _rookieApiService;
-    private readonly ISettingsService _settingsService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
 
@@ -42,17 +35,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
     public MainWindowViewModel(
         IDialogService dialogService,
         ICameraService cameraService,
-        ISettingsService settingsService,
-        INotificationService notificationService,
-        IPackageDataService packageDataService,
         IRookieApiService rookieApiService,
         PackageTransferService? packageTransferService = null)
     {
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
         _cameraService = cameraService ?? throw new ArgumentNullException(nameof(cameraService));
-        _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
-        _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
-        _packageDataService = packageDataService ?? throw new ArgumentNullException(nameof(packageDataService));
+        _rookieApiService = rookieApiService?? throw new ArgumentNullException(nameof(rookieApiService));
         // packageTransferService is used directly in subscription setup
 
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
@@ -305,33 +293,32 @@ public class MainWindowViewModel : BindableBase, IDisposable
         });
 
         Log.Information("开始处理包裹: {Barcode}", package.Barcode);
-        DestRequestResultParams? destinationResult;
         var finalChute = "ERR"; // Default error chute for reporting if needed
         var finalErrorMessage = "处理失败"; // Default error message
 
         try
         {
             // --- 1. 上报包裹信息 ---
-            Log.Debug("上报包裹信息: {Barcode}", package.Barcode ?? "NoRead");
+            Log.Debug("上报包裹信息: {Barcode}", package.Barcode);
             var uploadSuccess = await _rookieApiService.UploadParcelInfoAsync(package);
             if (!uploadSuccess)
             {
-                Log.Error("上传包裹信息失败: {Barcode}", package.Barcode ?? "NoRead");
+                Log.Error("上传包裹信息失败: {Barcode}", package.Barcode);
                 finalErrorMessage = "上传包裹信息失败";
                 package.SetStatus(PackageStatus.Error, finalErrorMessage);
                 package.ErrorMessage = finalErrorMessage;
             }
             else
             {
-                Log.Information("包裹信息上传成功: {Barcode}", package.Barcode ?? "NoRead");
+                Log.Information("包裹信息上传成功: {Barcode}", package.Barcode);
 
                 // --- 2. 请求目的地 ---
-                Log.Debug("请求目的地: {Barcode}", package.Barcode ?? "NoRead");
-                destinationResult = await _rookieApiService.RequestDestinationAsync(package.Barcode ?? "NoRead");
+                Log.Debug("请求目的地: {Barcode}", package.Barcode);
+                var destinationResult = await _rookieApiService.RequestDestinationAsync(package.Barcode);
 
                 if (destinationResult == null)
                 {
-                    Log.Error("请求目的地失败或API返回错误: {Barcode}", package.Barcode ?? "NoRead");
+                    Log.Error("请求目的地失败或API返回错误: {Barcode}", package.Barcode);
                     finalErrorMessage = "请求目的地失败";
                     package.SetStatus(PackageStatus.Error, finalErrorMessage);
                     package.ErrorMessage = finalErrorMessage;
@@ -339,7 +326,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 else
                 {
                     Log.Information("收到目的地信息: {Barcode}, Chute: {ChuteCode}, ErrorCode: {ErrorCode}, FinalBarcode: {FinalBarcode}",
-                        package.Barcode ?? "NoRead", destinationResult.ChuteCode, destinationResult.ErrorCode, destinationResult.FinalBarcode);
+                        package.Barcode, destinationResult.ChuteCode, destinationResult.ErrorCode, destinationResult.FinalBarcode);
 
                     if (!string.IsNullOrWhiteSpace(destinationResult.FinalBarcode) && destinationResult.FinalBarcode != package.Barcode)
                     {
@@ -355,11 +342,11 @@ public class MainWindowViewModel : BindableBase, IDisposable
                             package.SetStatus(PackageStatus.Success);
                             package.ErrorMessage = null;
                             finalChute = destinationResult.ChuteCode;
-                            Log.Information("包裹 {Barcode} 分配到格口: {Chute}", package.Barcode ?? "NoRead", finalChute);
+                            Log.Information("包裹 {Barcode} 分配到格口: {Chute}", package.Barcode, finalChute);
                         }
                         else
                         {
-                            Log.Error("无法解析目的地格口 '{ChuteCode}' 为整数: {Barcode}", destinationResult.ChuteCode, package.Barcode ?? "NoRead");
+                            Log.Error("无法解析目的地格口 '{ChuteCode}' 为整数: {Barcode}", destinationResult.ChuteCode, package.Barcode);
                             finalErrorMessage = $"无效格口: {destinationResult.ChuteCode}";
                             package.SetStatus(PackageStatus.Error, finalErrorMessage);
                             package.ErrorMessage = finalErrorMessage;
@@ -369,12 +356,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     {
                         var dcsError = MapDcsErrorCodeToString(destinationResult.ErrorCode);
                         Log.Error("DCS 目的地请求错误: {Barcode}, ErrorCode: {ErrorCode} ({ErrorString})",
-                            package.Barcode ?? "NoRead", destinationResult.ErrorCode, dcsError);
+                            package.Barcode, destinationResult.ErrorCode, dcsError);
                         var mappedStatus = MapDcsErrorCodeToPackageStatus(destinationResult.ErrorCode);
                         package.SetStatus(mappedStatus, dcsError);
                         package.ErrorMessage = dcsError;
                         finalErrorMessage = package.ErrorMessage;
-                        finalChute = destinationResult.ChuteCode ?? "ERR";
+                        finalChute = destinationResult.ChuteCode;
                     }
                 }
             }
@@ -382,26 +369,26 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // --- 3. 上报分拣结果 ---
             // Note: We now use package.Status which reflects the outcome of the destination request
             Log.Debug("上报分拣结果: {Barcode}, Chute: {Chute}, Success: {StatusBool}",
-                package.Barcode ?? "NoRead", finalChute, package.Status == PackageStatus.Success);
+                package.Barcode, finalChute, package.Status == PackageStatus.Success);
             var reportSuccess = await _rookieApiService.ReportSortResultAsync(
-                package.Barcode ?? "NoRead",
+                package.Barcode,
                 finalChute,
                 package.Status == PackageStatus.Success, // Report based on final PackageStatus
                 package.Status == PackageStatus.Success ? null : package.ErrorMessage ?? finalErrorMessage); // Use actual error message if available
 
             if (!reportSuccess)
             {
-                Log.Error("上报分拣结果失败: {Barcode}", package.Barcode ?? "NoRead");
+                Log.Error("上报分拣结果失败: {Barcode}", package.Barcode);
                 // Consider if this failure should change the package status or just be logged.
             }
             else
             {
-                Log.Information("分拣结果上报成功: {Barcode}", package.Barcode ?? "NoRead");
+                Log.Information("分拣结果上报成功: {Barcode}", package.Barcode);
             }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "处理包裹 {Barcode} 时发生意外错误。", package.Barcode ?? "NoRead");
+            Log.Error(ex, "处理包裹 {Barcode} 时发生意外错误。", package.Barcode);
             try
             {
                 finalErrorMessage = $"处理异常: {ex.Message.Split('\r', '\n')[0]}";
@@ -415,16 +402,16 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // Attempt to report failure after exception
             try
             {
-                Log.Debug("尝试在异常后上报失败结果: {Barcode}, Chute: {Chute}", package.Barcode ?? "NoRead", finalChute);
+                Log.Debug("尝试在异常后上报失败结果: {Barcode}, Chute: {Chute}", package.Barcode, finalChute);
                 await _rookieApiService.ReportSortResultAsync(
-                    package.Barcode ?? "NoRead",
+                    package.Barcode,
                     finalChute,
                     false,
                     finalErrorMessage);
             }
             catch (Exception reportEx)
             {
-                Log.Error(reportEx, "在主处理异常后上报分拣结果也失败: {Barcode}", package.Barcode ?? "NoRead");
+                Log.Error(reportEx, "在主处理异常后上报分拣结果也失败: {Barcode}", package.Barcode);
             }
         }
         finally
@@ -455,7 +442,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
             });
 
             package.ReleaseImage();
-            Log.Information("包裹 {Barcode} 处理流程结束, 最终状态: {Status}", package.Barcode ?? "NoRead", package.Status);
+            Log.Information("包裹 {Barcode} 处理流程结束, 最终状态: {Status}", package.Barcode, package.Status);
         }
     }
 

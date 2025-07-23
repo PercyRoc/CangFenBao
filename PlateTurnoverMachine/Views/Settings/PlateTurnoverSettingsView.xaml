@@ -110,7 +110,7 @@
                                   Maximum="1000"
                                   SpinButtonPlacementMode="Inline" />
 
-                    <ui:Button Grid.Row="1" Grid.Column="4"
+                    <ui:Button Grid.Column="4"
                                Content="根据格口生成"
                                Command="{Binding InitializeByChuteCountCommand}"
                                Margin="16,0,0,0"

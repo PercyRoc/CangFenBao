@@ -1179,8 +1179,8 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
 
     // *** 新增: 处理图像保存的辅助方法 ***
     // *** Add packageContext parameter ***
-    private async Task HandleImageSaving(PackageInfo package, string packageContext, int plcPackageId,
-        CancellationToken cancellationToken)
+    // ReSharper disable once UnusedMember.Local
+    private async Task HandleImageSaving(PackageInfo package, string packageContext)
     {
         // *** Use passed context for logging ***
         if (package.Image == null)
@@ -1240,6 +1240,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
 
+    // ReSharper disable once UnusedMember.Local
     private void HidePlcRejectionWarning()
     {
         if (!IsPlcRejectWarningVisible) return; // 已经隐藏
@@ -2055,6 +2056,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         Log.Information("上包倒计时结束");
     }
 
+    // ReSharper disable once UnusedMember.Local
     private void StartUploadCountdown()
     {
         try

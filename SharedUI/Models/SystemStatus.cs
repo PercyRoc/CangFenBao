@@ -12,11 +12,11 @@ public class DiskStatus
 
 public class SystemStatus
 {
-    private static PerformanceCounter? CpuCounter;
-    private static PerformanceCounter? MemCounter;
+    private static readonly PerformanceCounter? CpuCounter;
+    private static readonly PerformanceCounter? MemCounter;
     private static readonly DateTime StartTime = DateTime.Now;
     private static DateTime _lastCpuCheck = DateTime.MinValue;
-    private static double _lastCpuValue = 0;
+    private static double _lastCpuValue;
 
     static SystemStatus()
     {
@@ -26,10 +26,7 @@ public class SystemStatus
             MemCounter = new PerformanceCounter("Memory", "% Committed Bytes In Use");
             
             // 初始化CPU计数器 - 第一次调用通常返回0
-            if (CpuCounter != null)
-            {
-                _ = CpuCounter.NextValue();
-            }
+            _ = CpuCounter.NextValue();
         }
         catch (Exception)
         {
@@ -82,15 +79,7 @@ public class SystemStatus
         // 获取内存使用率
         try
         {
-            if (MemCounter != null)
-            {
-                status.MemoryUsage = MemCounter.NextValue();
-            }
-            else
-            {
-                // 备用方案：使用GC获取内存信息
-                status.MemoryUsage = GetMemoryUsageAlternative();
-            }
+            status.MemoryUsage = MemCounter?.NextValue() ?? GetMemoryUsageAlternative();
         }
         catch (Exception)
         {
@@ -108,7 +97,7 @@ public class SystemStatus
                     IsReady = drive.IsReady
                 };
 
-                if (drive.IsReady && drive.DriveType == DriveType.Fixed)
+                if (drive is { IsReady: true, DriveType: DriveType.Fixed })
                 {
                     var totalSize = drive.TotalSize;
                     var freeSpace = drive.AvailableFreeSpace;
@@ -144,7 +133,7 @@ public class SystemStatus
     {
         try
         {
-            var process = Process.GetCurrentProcess();
+            Process.GetCurrentProcess();
             var totalMemory = GC.GetTotalMemory(false);
             return Math.Min(100, totalMemory / (1024.0 * 1024.0)); // 简化的内存使用量，以MB为单位显示
         }

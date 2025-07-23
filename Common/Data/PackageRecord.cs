@@ -41,6 +41,12 @@ public class PackageRecord
     public int? ChuteNumber { get; set; }
 
     /// <summary>
+    ///     完整格口代码（如 "021-A"）
+    /// </summary>
+    [MaxLength(50)]
+    public string? SortPortCode { get; set; }
+
+    /// <summary>
     ///     创建时间
     /// </summary>
     public DateTime CreateTime { get; set; }
@@ -126,6 +132,7 @@ public class PackageRecord
             SegmentCode = info.SegmentCode,
             Weight = info.Weight,
             ChuteNumber = info.ChuteNumber,
+            SortPortCode = info.SortPortCode,
             CreateTime = info.CreateTime,
             ErrorMessage = info.ErrorMessage,
             Length = info.Length,

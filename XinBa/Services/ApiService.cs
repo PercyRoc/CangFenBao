@@ -50,7 +50,6 @@ public class ApiService : IApiService
     private readonly HttpClient _httpClient;
 
     private readonly INotificationService _notificationService;
-    private readonly ISettingsService _settingsService;
 
     /// <summary>
     ///     构造函数
@@ -58,7 +57,6 @@ public class ApiService : IApiService
     public ApiService(ISettingsService settingsService,
         INotificationService notificationService)
     {
-        _settingsService = settingsService;
         _notificationService = notificationService;
 
         // 配置HttpClient以处理SSL
@@ -69,7 +67,7 @@ public class ApiService : IApiService
         _httpClient = new HttpClient(handler);
 
         // 设置基础URL
-        var apiCredentials = _settingsService.LoadSettings<ApiCredentials>();
+        var apiCredentials = settingsService.LoadSettings<ApiCredentials>();
         var baseUrl = apiCredentials.BaseUrl.TrimEnd('/'); // 确保没有尾部斜杠
         _httpClient.BaseAddress = new Uri(baseUrl + "/"); // 确保有尾部斜杠
         Log.Debug("API基础URL设置为: {BaseUrl}", _httpClient.BaseAddress);

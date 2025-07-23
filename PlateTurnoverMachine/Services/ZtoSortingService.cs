@@ -192,7 +192,7 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
                 TurnNumber = turnNumber,
                 SortTime = DateTimeOffset.Now.ToUnixTimeMilliseconds(),
                 TrayCode = trayCode,
-                SortPortCode = package.ChuteNumber.ToString("D3"), // 格式化为3位数字
+                SortPortCode = !string.IsNullOrEmpty(package.SortPortCode) ? package.SortPortCode : package.ChuteNumber.ToString("D3"), // 优先使用完整格口代码，否则使用格式化数字
                 SortSource = package.Status == PackageStatus.Error ? "3" : "0" // 如果是异常状态，设置为异常件
             };
 

@@ -69,7 +69,7 @@ public class CameraSettingsViewModel : BindableBase
         {
             var dialog = new FolderBrowserDialog
             {
-                Description = "选择图像保存路径",
+                Description = @"选择图像保存路径",
                 UseDescriptionForTitle = true,
                 ShowNewFolderButton = true
             };

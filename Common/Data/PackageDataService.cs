@@ -158,14 +158,14 @@ internal class PackageDataService : IPackageDataService
                 // 这里选择添加新记录而不是更新，因为可能表示新的扫描
             }
 
-            // 构建插入SQL - 加入托盘信息字段
+            // 构建插入SQL - 加入托盘信息字段和SortPortCode字段
             var insertSql = $@"
                 INSERT INTO {tableName} (
-                    Id, PackageIndex, Barcode, SegmentCode, Weight, ChuteNumber, Status, StatusDisplay,
+                    Id, PackageIndex, Barcode, SegmentCode, Weight, ChuteNumber, SortPortCode, Status, StatusDisplay,
                     CreateTime, Length, Width, Height, Volume, ErrorMessage, ImagePath,
                     PalletName, PalletWeight, PalletLength, PalletWidth, PalletHeight
                 ) VALUES (
-                    NULL, @PackageIndex, @Barcode, @SegmentCode, @Weight, @ChuteNumber, @Status, @StatusDisplay,
+                    NULL, @PackageIndex, @Barcode, @SegmentCode, @Weight, @ChuteNumber, @SortPortCode, @Status, @StatusDisplay,
                     @CreateTime, @Length, @Width, @Height, @Volume, @ErrorMessage, @ImagePath,
                     @PalletName, @PalletWeight, @PalletLength, @PalletWidth, @PalletHeight
                 )";
@@ -181,6 +181,8 @@ internal class PackageDataService : IPackageDataService
             insertCommand.Parameters.Add(new SqliteParameter("@Weight", record.Weight));
             _ = insertCommand.Parameters.Add(new SqliteParameter("@ChuteNumber",
                 record.ChuteNumber.HasValue ? record.ChuteNumber.Value : DBNull.Value));
+            insertCommand.Parameters.Add(new SqliteParameter("@SortPortCode",
+                record.SortPortCode as object ?? DBNull.Value));
             insertCommand.Parameters.Add(new SqliteParameter("@Status", (int)record.Status));
             insertCommand.Parameters.Add(
                 new SqliteParameter("@StatusDisplay", record.StatusDisplay));
@@ -328,7 +330,7 @@ internal class PackageDataService : IPackageDataService
 
                 // 在每个子查询中就进行时间过滤，减少数据传输量
                 sqlBuilder.AppendLine($@"
-                    SELECT Id, PackageIndex, Barcode, SegmentCode, Weight, ChuteNumber, Status, StatusDisplay,
+                    SELECT Id, PackageIndex, Barcode, SegmentCode, Weight, ChuteNumber, SortPortCode, Status, StatusDisplay,
                            CreateTime, Length, Width, Height, Volume, ErrorMessage, ImagePath,
                            PalletName, PalletWeight, PalletLength, PalletWidth, PalletHeight
                     FROM {existingTableNames[i]}
@@ -437,7 +439,7 @@ internal class PackageDataService : IPackageDataService
 
                 // 在每个子查询中应用所有WHERE条件，让数据库引擎进行优化
                 sqlBuilder.AppendLine($@"
-                    SELECT Id, PackageIndex, Barcode, SegmentCode, Weight, ChuteNumber, Status, StatusDisplay,
+                    SELECT Id, PackageIndex, Barcode, SegmentCode, Weight, ChuteNumber, SortPortCode, Status, StatusDisplay,
                            CreateTime, Length, Width, Height, Volume, ErrorMessage, ImagePath,
                            PalletName, PalletWeight, PalletLength, PalletWidth, PalletHeight
                     FROM {existingTableNames[i]}
@@ -966,6 +968,7 @@ internal class PackageDataService : IPackageDataService
                                                       SegmentCode TEXT(50),
                                                       Weight REAL,
                                                       ChuteNumber INTEGER,
+                                                      SortPortCode TEXT(50),
                                                       Status INTEGER,
                                                       StatusDisplay TEXT(50),
                                                       CreateTime TEXT,
@@ -1188,6 +1191,7 @@ internal class PackageDataService : IPackageDataService
                                                   SegmentCode TEXT(50),
                                                   Weight REAL,
                                                   ChuteNumber INTEGER,
+                                                  SortPortCode TEXT(50),
                                                   Status INTEGER,
                                                   StatusDisplay TEXT(50),
                                                   CreateTime TEXT,
@@ -1340,6 +1344,7 @@ internal class PackageDataService : IPackageDataService
             record.SegmentCode = GetNullableString(reader, "SegmentCode");
             record.Weight = GetDouble(reader, "Weight"); // 假设 Weight 不为 null
             record.ChuteNumber = GetNullableInt32(reader, "ChuteNumber");
+            record.SortPortCode = GetNullableString(reader, "SortPortCode");
             record.Status = (PackageStatus)reader.GetInt32(reader.GetOrdinal("Status"));
             record.StatusDisplay = GetString(reader, "StatusDisplay"); // 假设 StatusDisplay 不为 null
 

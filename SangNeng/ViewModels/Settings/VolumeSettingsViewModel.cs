@@ -113,7 +113,7 @@ public class VolumeSettingsViewModel : BindableBase
         {
             var dialog = new FolderBrowserDialog
             {
-                Description = "Select Image Save Folder",
+                Description = @"Select Image Save Folder",
                 UseDescriptionForTitle = true,
                 SelectedPath = Directory.Exists(ImageSavePath) ? ImageSavePath : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
             };

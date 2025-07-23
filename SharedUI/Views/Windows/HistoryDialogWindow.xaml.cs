@@ -5,7 +5,7 @@ namespace SharedUI.Views.Windows;
 /// <summary>
 ///     Interaction logic for HistoryDialogWindow.xaml
 /// </summary>
-public partial class HistoryDialogWindow : Window, IDialogWindow
+public partial class HistoryDialogWindow : IDialogWindow
 {
     public HistoryDialogWindow()
     {

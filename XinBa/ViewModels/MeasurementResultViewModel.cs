@@ -1,7 +1,6 @@
 using System.Text.Json;
 using System.Windows.Media.Imaging;
 using Common.Models.Package;
-using Prism.Mvvm;
 using Serilog;
 using XinBa.Services;
 

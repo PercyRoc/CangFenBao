@@ -11,7 +11,7 @@ namespace XinBeiYang.Services;
 /// </summary>
 public class LocalImageStorageService : IImageStorageService
 {
-    private const double DISK_SPACE_THRESHOLD = 90.0; // 磁盘空间占用率阈值（百分比）
+    private const double DiskSpaceThreshold = 90.0; // 磁盘空间占用率阈值（百分比）
     private readonly string _baseStoragePath;
 
     public LocalImageStorageService()
@@ -147,10 +147,10 @@ public class LocalImageStorageService : IImageStorageService
             var driveInfo = new DriveInfo(Path.GetPathRoot(_baseStoragePath)!);
             var diskSpaceUsedPercentage = 100 - (double)driveInfo.AvailableFreeSpace / driveInfo.TotalSize * 100;
 
-            if (diskSpaceUsedPercentage >= DISK_SPACE_THRESHOLD)
+            if (diskSpaceUsedPercentage >= DiskSpaceThreshold)
             {
                 Log.Warning("磁盘空间使用率超过 {Threshold}%，当前使用率: {UsedPercentage}%，开始清理最早的数据",
-                    DISK_SPACE_THRESHOLD, diskSpaceUsedPercentage);
+                    DiskSpaceThreshold, diskSpaceUsedPercentage);
 
                 // 获取所有日期文件夹并按日期排序
                 var dateFolders = Directory.GetDirectories(_baseStoragePath)

@@ -217,9 +217,9 @@ namespace CangFenBao.SDK
             var packageReceivedTime = DateTime.Now; // 以SDK收到包的时间为基准
             Log.Information("收到原始包裹数据: 条码 {Barcode}，此时相机重量为 {Weight}g", package.Barcode, package.Weight);
 
-            double fusedWeight = 0;
+            double fusedWeight;
 
-            if (_weightService != null && _weightService.IsEnabled)
+            if (_weightService is { IsEnabled: true })
             {
                 var lowerBound = packageReceivedTime.AddMilliseconds(_weightSettings!.FusionTimeRangeLowerMs);
                 var upperBound = packageReceivedTime.AddMilliseconds(_weightSettings.FusionTimeRangeUpperMs);

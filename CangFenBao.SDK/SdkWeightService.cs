@@ -1,10 +1,6 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.SerialPort;
 using Serilog;

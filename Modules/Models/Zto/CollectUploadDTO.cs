@@ -2,7 +2,7 @@ using Newtonsoft.Json;
 
 namespace ShanghaiModuleBelt.Models.Zto;
 
-public class CollectUploadDTO
+public class CollectUploadDto
 {
     /// <summary>
     ///     运单号

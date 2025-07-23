@@ -10,7 +10,6 @@ using Common.Services.License;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.Extensions;
-using FuzhouPolicyForce.Services;
 using FuzhouPolicyForce.Services.AnttoWeight;
 using FuzhouPolicyForce.ViewModels;
 using FuzhouPolicyForce.ViewModels.Settings;

@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -46,7 +45,7 @@ public class WildberriesApiService
             if (response.IsSuccessStatusCode)
             {
                 // 检查响应内容是否为"1"（表示成功）
-                var trimmedContent = responseBody?.Trim();
+                var trimmedContent = responseBody.Trim();
                 if (trimmedContent == "1")
                 {
                     Log.Information("TareAttributes 请求成功: 响应内容={ResponseContent}", trimmedContent);

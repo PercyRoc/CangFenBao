@@ -11,14 +11,12 @@ namespace ShanghaiModuleBelt.Services.Jitu;
 public class JituService : IJituService, IDisposable
 {
     private readonly HttpClient _httpClient;
-    private readonly ISettingsService _settingsService;
     private readonly JituApiSettings _jituApiSettings;
 
     public JituService(ISettingsService settingsService)
     {
-        _settingsService = settingsService;
         _httpClient = new HttpClient();
-        _jituApiSettings = _settingsService.LoadSettings<JituApiSettings>();
+        _jituApiSettings = settingsService.LoadSettings<JituApiSettings>();
         Log.Information("JituApiSettings loaded. OpScanUrl: {OpScanUrl}", _jituApiSettings.OpScanUrl);
     }
 

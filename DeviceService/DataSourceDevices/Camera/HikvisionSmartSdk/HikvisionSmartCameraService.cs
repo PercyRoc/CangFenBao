@@ -481,7 +481,6 @@ public class HikvisionSmartCameraService : ICameraService
                 {
                     // 这只是一个正常的超时，意味着相机还在等待触发信号。
                     // 我们什么都不做，直接进入下一次循环继续等待。
-                    continue;
                 }
                 else if (nRet == MvCodeReader.MV_CODEREADER_E_CALLORDER && !_isGrabbing)
                 {

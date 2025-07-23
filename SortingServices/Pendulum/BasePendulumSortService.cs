@@ -18,8 +18,8 @@ namespace SortingServices.Pendulum;
 public abstract class BasePendulumSortService : IPendulumSortService
 {
     private readonly ConcurrentDictionary<string, bool> _deviceConnectionStates = new();
-    protected readonly ConcurrentDictionary<string, DateTime> _lastSignalTimes = new(); // 用于存储上次收到信号的时间
-    protected readonly ISettingsService _settingsService;
+    protected readonly ConcurrentDictionary<string, DateTime> LastSignalTimes = new(); // 用于存储上次收到信号的时间
+    protected readonly ISettingsService SettingsService;
     private readonly Queue<DateTime> _triggerTimes = new();
     protected readonly ConcurrentDictionary<string, PackageInfo> MatchedPackages = new();
     protected readonly ConcurrentDictionary<int, Timer> PackageTimers = new();
@@ -35,7 +35,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
 
     protected BasePendulumSortService(ISettingsService settingsService, IEventAggregator eventAggregator)
     {
-        _settingsService = settingsService;
+        SettingsService = settingsService;
         _eventAggregator = eventAggregator;
 
         // 初始化超时检查定时器
@@ -106,7 +106,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
                 lock (_triggerTimes) // 确保线程安全
                 {
                     var currentTime = DateTime.Now;
-                    var config = _settingsService.LoadSettings<PendulumSortConfig>();
+                    var config = SettingsService.LoadSettings<PendulumSortConfig>();
                     var lowerBound = config.TriggerPhotoelectric.TimeRangeLower;
                     var upperBound = config.TriggerPhotoelectric.TimeRangeUpper;
 
@@ -237,7 +237,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
                 // 这是"直行包裹"，绑定到专门的直行超时处理方法
                 timer.Elapsed += (_, _) => HandleStraightThroughTimeout(package);
 
-                var config = _settingsService.LoadSettings<PendulumSortConfig>();
+                var config = SettingsService.LoadSettings<PendulumSortConfig>();
                 timeoutInterval = config.StraightThroughTimeout;
                 timeoutReason = $"直行包裹 (目标格口: {package.ChuteNumber})";
                 Log.Information("包裹为直行包裹，将使用直行超时配置.");
@@ -509,13 +509,13 @@ public abstract class BasePendulumSortService : IPendulumSortService
         var now = DateTime.Now;
 
         // 获取全局防抖时间
-        var config = _settingsService.LoadSettings<PendulumSortConfig>();
+        var config = SettingsService.LoadSettings<PendulumSortConfig>();
         var debounceTime = config.GlobalDebounceTime;
 
         foreach (var line in lines)
         {
             // 检查防抖
-            if (_lastSignalTimes.TryGetValue(photoelectricName, out var lastSignalTime))
+            if (LastSignalTimes.TryGetValue(photoelectricName, out var lastSignalTime))
             {
                 var elapsedSinceLastSignal = (now - lastSignalTime).TotalMilliseconds;
                 if (elapsedSinceLastSignal < debounceTime)
@@ -525,7 +525,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
                     continue; // 忽略此信号
                 }
             }
-            _lastSignalTimes[photoelectricName] = now; // 更新上次信号时间
+            LastSignalTimes[photoelectricName] = now; // 更新上次信号时间
 
             Log.Verbose("处理光电信号行: {SignalLine}", line); // 使用 Verbose 记录原始信号行
             // 简化逻辑：直接检查是否包含特定触发或分拣标识
@@ -679,7 +679,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
     protected virtual TriggerPhotoelectric GetPhotoelectricConfig(string photoelectricName)
     {
         // 尝试从分拣光电配置中查找
-        var sortConfig = _settingsService.LoadSettings<PendulumSortConfig>();
+        var sortConfig = SettingsService.LoadSettings<PendulumSortConfig>();
         var photoelectricConfig = sortConfig.SortingPhotoelectrics.FirstOrDefault(p => p.Name == photoelectricName);
 
         if (photoelectricConfig != null)
@@ -715,12 +715,11 @@ public abstract class BasePendulumSortService : IPendulumSortService
         using (LogContext.PushProperty("PackageContext", packageContext))
         {
             Log.Information("开始执行分拣动作 (光电: {PhotoelectricName}, 格口: {Chute}).", photoelectricName, package.ChuteNumber);
-            TcpClientService? client;
             PendulumState? pendulumState = null;
 
             try
             {
-                client = GetSortingClient(photoelectricName);
+                var client = GetSortingClient(photoelectricName);
                 if (client == null || !client.IsConnected())
                 {
                     Log.Warning("分拣客户端 '{Name}' 未连接或未找到，无法执行分拣.", photoelectricName);

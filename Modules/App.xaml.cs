@@ -8,25 +8,11 @@ using DeviceService.Extensions;
 using Serilog;
 using ShanghaiModuleBelt.Data;
 using ShanghaiModuleBelt.Services;
-using ShanghaiModuleBelt.Services.Jitu;
-using ShanghaiModuleBelt.Services.Sto;
-using ShanghaiModuleBelt.Services.Yunda;
-using ShanghaiModuleBelt.Services.Zto;
 using ShanghaiModuleBelt.ViewModels;
-using ShanghaiModuleBelt.ViewModels.Jitu.Settings;
 using ShanghaiModuleBelt.ViewModels.Settings;
-using ShanghaiModuleBelt.ViewModels.Sto.Settings;
-using ShanghaiModuleBelt.ViewModels.Yunda.Settings;
-using ShanghaiModuleBelt.ViewModels.Zto.Settings;
 using ShanghaiModuleBelt.Views;
-using ShanghaiModuleBelt.Views.Jitu.Settings;
 using ShanghaiModuleBelt.Views.Settings;
-using ShanghaiModuleBelt.Views.Sto.Settings;
-using ShanghaiModuleBelt.Views.Yunda.Settings;
-using ShanghaiModuleBelt.Views.Zto.Settings;
 using SharedUI.Extensions;
-using SharedUI.ViewModels.Settings;
-using SharedUI.Views.Settings;
 
 namespace ShanghaiModuleBelt;
 

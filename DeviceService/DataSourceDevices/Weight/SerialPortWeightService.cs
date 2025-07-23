@@ -20,7 +20,6 @@ public class SerialPortWeightService : IDisposable
     private const int MaxCacheSize = 100;
     private const int MaxCacheAgeMinutes = 2;
     private const double StableThreshold = 0.01; // 0.01kg = 10g
-    private const int ProcessInterval = 100;
 
     private readonly object _lock = new();
     private readonly List<byte> _receiveBuffer = new();
@@ -32,8 +31,6 @@ public class SerialPortWeightService : IDisposable
 
     private bool _disposed;
     private bool _isConnected;
-    private DateTime _lastDataReceiveTime = DateTime.MinValue;
-    private DateTime _lastProcessTime = DateTime.MinValue;
 
     public SerialPortWeightService(ISettingsService settingsService)
     {
@@ -313,10 +310,9 @@ public class SerialPortWeightService : IDisposable
                 hexData, data.Length, _serialPortService.IsConnected, DateAndTime.Now);
             
             // 仅用于内部处理的ASCII字符串转换
-            var receivedString = Encoding.ASCII.GetString(data);
+            Encoding.ASCII.GetString(data);
 
             // 更新最后接收数据的时间
-            _lastDataReceiveTime = DateTime.Now;
 
             // 如果收到数据但连接状态显示断开，这是异常情况，主动修复
             if (!_serialPortService.IsConnected)
@@ -664,7 +660,6 @@ public class SerialPortWeightService : IDisposable
             if (reconnectResult)
             {
                 // 重连成功后，重置数据接收时间
-                _lastDataReceiveTime = DateTime.Now;
             }
         }
         catch (Exception ex)

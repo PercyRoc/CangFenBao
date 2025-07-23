@@ -267,8 +267,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 // API返回的SortPortCode是一个列表，我们取第一个作为格口号
                 if (int.TryParse(chuteCode, out var parsedChuteNumber))
                 {
-                    package.SetChute(parsedChuteNumber);
-                    package.SetStatus(PackageStatus.Success, $"API 分配格口: {parsedChuteNumber}");
+                    // 同时设置数字格口号和完整格口代码
+                    package.SetChute(parsedChuteNumber, sortPortCode);
+                    package.SetStatus(PackageStatus.Success, $"API 分配格口: {sortPortCode}");
                     Log.Information("包裹 {Barcode} 已成功通过API分配到格口: {Chute}", package.Barcode, parsedChuteNumber);
                 }
                 else
@@ -351,8 +352,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
         var chuteItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "格口");
         if (chuteItem != null)
         {
-            // Use ChuteNumber property (assuming it's available for getting)
-            var chuteDisplay = package.ChuteNumber > 0 ? package.ChuteNumber.ToString() : "--";
+            // 优先显示完整格口代码，否则显示数字格口号
+            var chuteDisplay = !string.IsNullOrEmpty(package.SortPortCode) ? package.SortPortCode :
+                package.ChuteNumber > 0 ? package.ChuteNumber.ToString() : "--";
             chuteItem.Value = chuteDisplay;
             chuteItem.Description = package.ChuteNumber > 0 ? "目标格口" : "等待分配...";
         }

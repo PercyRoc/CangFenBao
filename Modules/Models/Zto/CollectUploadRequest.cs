@@ -8,5 +8,5 @@ public class CollectUploadRequest
     ///     批量上传数据
     /// </summary>
     [JsonProperty("collectUploadDTOS")]
-    public List<CollectUploadDTO> CollectUploadDTOS { get; set; } = [];
+    public List<CollectUploadDto> CollectUploadDtos { get; set; } = [];
 }
