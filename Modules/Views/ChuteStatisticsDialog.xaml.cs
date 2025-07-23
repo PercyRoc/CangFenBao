@@ -1,12 +1,11 @@
 using System.Windows;
-using Wpf.Ui.Controls;
 
 namespace ShanghaiModuleBelt.Views;
 
 /// <summary>
 ///     格口统计对话框
 /// </summary>
-internal partial class ChuteStatisticsDialog : FluentWindow
+internal partial class ChuteStatisticsDialog
 {
     public ChuteStatisticsDialog()
     {

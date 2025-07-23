@@ -6,16 +6,16 @@ namespace FuzhouPolicyForce.Models.Settings
     public enum AnttoWeightEnvironment
     {
         [Description("测试环境")]
-        UAT,
+        Uat,
         [Description("验证环境")]
-        VER,
+        Ver,
         [Description("生产环境")]
-        PROD
+        Prod
     }
 
     [Configuration("AnttoWeightSettings")]
     public class AnttoWeightSettings
     {
-        public AnttoWeightEnvironment SelectedEnvironment { get; set; } = AnttoWeightEnvironment.UAT;
+        public AnttoWeightEnvironment SelectedEnvironment { get; set; } = AnttoWeightEnvironment.Uat;
     }
 }

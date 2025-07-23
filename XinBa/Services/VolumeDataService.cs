@@ -87,8 +87,7 @@ public class VolumeDataService : IDisposable
                 _settings.IpAddress,
                 _settings.Port,
                 HandleDataReceived,
-                HandleConnectionStatusChanged,
-                true
+                HandleConnectionStatusChanged
             );
             return true;
         }

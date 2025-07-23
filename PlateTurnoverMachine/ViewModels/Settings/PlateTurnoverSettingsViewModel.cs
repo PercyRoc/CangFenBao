@@ -269,7 +269,7 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
         {
             // 导入时关闭自动保存
 
-            using var stream = new FileStream(dialog.FileName, FileMode.Open, FileAccess.Read);
+            await using var stream = new FileStream(dialog.FileName, FileMode.Open, FileAccess.Read);
             var workbook = new XSSFWorkbook(stream);
             var sheet = workbook.GetSheetAt(0); // 获取第一个工作表
 
@@ -489,16 +489,10 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
     }
 
 
-    private void OnSettingsChanged(object? sender, EventArgs e)
-    {
-        DebouncedAutoSave();
-    }
-
     // --- 深度监听逻辑 ---
 
     private void SubscribeToItemChanges(ObservableCollection<PlateTurnoverItem> items)
     {
-        if (items == null) return;
         items.CollectionChanged += OnItemsCollectionChanged;
         foreach (var item in items)
         {
@@ -508,7 +502,6 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
 
     private void UnsubscribeFromItemChanges(ObservableCollection<PlateTurnoverItem> items)
     {
-        if (items == null) return;
         items.CollectionChanged -= OnItemsCollectionChanged;
         foreach (var item in items)
         {
@@ -540,7 +533,7 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
     {
         try
         {
-            _autoSaveCts?.Cancel(); // Cancel previous pending save
+            await _autoSaveCts?.CancelAsync()!; // Cancel previous pending save
             _autoSaveCts?.Dispose();
             _autoSaveCts = new CancellationTokenSource();
             var token = _autoSaveCts.Token;
@@ -564,11 +557,8 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
     // 释放资源，取消事件订阅
     public void Dispose()
     {
-        if (_settings != null)
-        {
-            _settings.PropertyChanged -= Settings_PropertyChanged;
-            UnsubscribeFromItemChanges(_settings.Items);
-        }
+        _settings.PropertyChanged -= Settings_PropertyChanged;
+        UnsubscribeFromItemChanges(_settings.Items);
 
         if (_autoSaveCts != null)
         {

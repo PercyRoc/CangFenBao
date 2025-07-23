@@ -2,7 +2,6 @@
 using System.Windows;
 using System.Windows.Threading;
 using Common.Models.Package;
-using Common.Models.Settings.ChuteRules;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;

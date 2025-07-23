@@ -5,20 +5,22 @@ namespace FuzhouPolicyForce.Models.AnttoWeight
 {
     public class AnttoWeightResponse
     {
-        public string Code { get; set; }
-        public string Msg { get; set; }
-        [CanBeNull] public string ErrMsg { get; set; }
-        
+        public string Code { get; set; } = null!;
+        public string Msg { get; set; } = null!;
+        public string ErrMsg { [UsedImplicitly] get; set; } = null!;
+
         [JsonConverter(typeof(AnttoWeightTimestampConverter))]
         public DateTime Timestamp { get; set; }
         
-        [CanBeNull] public AnttoWeightResponseData Data { get; set; }
+        public AnttoWeightResponseData Data { get; set; } = null!;
     }
 
     public class AnttoWeightResponseData
     {
-        public string CarrierCode { get; set; }
-        public string ProvinceName { get; set; }
+        [UsedImplicitly]
+        public string CarrierCode { get; set; } = null!;
+        [UsedImplicitly]
+        public string ProvinceName { get; set; } = null!;
     }
 
     /// <summary>
@@ -29,26 +31,24 @@ namespace FuzhouPolicyForce.Models.AnttoWeight
     {
         public override DateTime ReadJson(JsonReader reader, Type objectType, DateTime existingValue, bool hasExisting, JsonSerializer serializer)
         {
-            if (reader.TokenType == JsonToken.String)
+            if (reader.TokenType != JsonToken.String) return DateTime.MinValue;
+            var timestampString = reader.Value?.ToString();
+            if (string.IsNullOrEmpty(timestampString))
+                return DateTime.MinValue;
+
+            // 处理安通API的特殊时间格式: "2025-07-07 16:37:59:890"
+            // 将最后一个冒号替换为点号，使其符合标准格式
+            var lastColonIndex = timestampString.LastIndexOf(':');
+            if (lastColonIndex > 0)
             {
-                var timestampString = reader.Value?.ToString();
-                if (string.IsNullOrEmpty(timestampString))
-                    return DateTime.MinValue;
-
-                // 处理安通API的特殊时间格式: "2025-07-07 16:37:59:890"
-                // 将最后一个冒号替换为点号，使其符合标准格式
-                var lastColonIndex = timestampString.LastIndexOf(':');
-                if (lastColonIndex > 0)
-                {
-                    var correctedTimestamp = timestampString.Substring(0, lastColonIndex) + "." + timestampString.Substring(lastColonIndex + 1);
-                    if (DateTime.TryParse(correctedTimestamp, out var result))
-                        return result;
-                }
-
-                // 如果无法解析，尝试直接解析原始字符串
-                if (DateTime.TryParse(timestampString, out var fallbackResult))
-                    return fallbackResult;
+                var correctedTimestamp = timestampString.Substring(0, lastColonIndex) + "." + timestampString.Substring(lastColonIndex + 1);
+                if (DateTime.TryParse(correctedTimestamp, out var result))
+                    return result;
             }
+
+            // 如果无法解析，尝试直接解析原始字符串
+            if (DateTime.TryParse(timestampString, out var fallbackResult))
+                return fallbackResult;
 
             return DateTime.MinValue;
         }

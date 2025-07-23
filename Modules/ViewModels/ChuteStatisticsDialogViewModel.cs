@@ -1,8 +1,6 @@
 using System.Collections.ObjectModel;
 using Common.Services.Ui;
-using Serilog;
 using ShanghaiModuleBelt.Models;
-using ShanghaiModuleBelt.Services;
 
 namespace ShanghaiModuleBelt.ViewModels;
 

@@ -414,7 +414,7 @@
                                   ClearButtonEnabled="False"
                                   Width="120"
                                   HorizontalAlignment="Left"
-                                  Value="{Binding Configuration.DuplicateSignalFilterMs, UpdateSourceTrigger=PropertyChanged}" />
+                                  Value="{Binding Configuration.GlobalDebounceTime, UpdateSourceTrigger=PropertyChanged}" />
                     <TextBlock Text="毫秒"
                                Grid.Column="1"
                                Margin="8,0,0,0"

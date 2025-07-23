@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http;
 using System.Text;
 using Common.Services.Settings;
@@ -8,22 +9,13 @@ using Serilog;
 
 namespace FuzhouPolicyForce.Services.AnttoWeight
 {
-    public class AnttoWeightService : IAnttoWeightService
+    public class AnttoWeightService(HttpClient httpClient, ISettingsService settingsService) : IAnttoWeightService
     {
-        private const string UAT_API_URL = "https://anapi-uat.annto.com/bop/T201904230000000014/xjyc/weighing";
-        private const string VER_API_URL = "https://anapi-ver.annto.com/bop/T201904230000000014/xjyc/weighing";
-        private const string PROD_API_URL = "https://anapi.annto.com/bop/T201904230000000014/xjyc/weighing";
+        private const string UatApiUrl = "https://anapi-uat.annto.com/bop/T201904230000000014/xjyc/weighing";
+        private const string VerApiUrl = "https://anapi-ver.annto.com/bop/T201904230000000014/xjyc/weighing";
+        private const string ProdApiUrl = "https://anapi.annto.com/bop/T201904230000000014/xjyc/weighing";
 
-        private readonly HttpClient _httpClient;
-        private readonly ISettingsService _settingsService;
-        private readonly AnttoWeightSettings _anttoWeightSettings;
-
-        public AnttoWeightService(HttpClient httpClient, ISettingsService settingsService)
-        {
-            _httpClient = httpClient;
-            _settingsService = settingsService;
-            _anttoWeightSettings = _settingsService.LoadSettings<AnttoWeightSettings>();
-        }
+        private readonly AnttoWeightSettings _anttoWeightSettings = settingsService.LoadSettings<AnttoWeightSettings>();
 
         public async Task<AnttoWeightResponse> UploadWeightAsync(AnttoWeightRequest request)
         {
@@ -37,7 +29,7 @@ namespace FuzhouPolicyForce.Services.AnttoWeight
                 var requestBody = new
                 {
                     waybillCode = request.WaybillCode,
-                    weight = request.Weight.ToString()
+                    weight = request.Weight.ToString(CultureInfo.InvariantCulture)
                 };
                 var jsonContent = JsonConvert.SerializeObject(requestBody);
                 
@@ -50,7 +42,7 @@ namespace FuzhouPolicyForce.Services.AnttoWeight
                     Content = new StringContent(jsonContent, Encoding.UTF8, "application/json")
                 };
                 
-                var response = await _httpClient.SendAsync(requestMessage);
+                var response = await httpClient.SendAsync(requestMessage);
                 var responseBody = await response.Content.ReadAsStringAsync();
 
                 if (response.IsSuccessStatusCode)
@@ -88,10 +80,10 @@ namespace FuzhouPolicyForce.Services.AnttoWeight
         {
             return _anttoWeightSettings.SelectedEnvironment switch
             {
-                AnttoWeightEnvironment.UAT => UAT_API_URL,
-                AnttoWeightEnvironment.VER => VER_API_URL,
-                AnttoWeightEnvironment.PROD => PROD_API_URL,
-                _ => UAT_API_URL // 默认返回UAT环境URL
+                AnttoWeightEnvironment.Uat => UatApiUrl,
+                AnttoWeightEnvironment.Ver => VerApiUrl,
+                AnttoWeightEnvironment.Prod => ProdApiUrl,
+                _ => UatApiUrl // 默认返回UAT环境URL
             };
         }
     }

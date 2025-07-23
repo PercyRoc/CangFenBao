@@ -8,12 +8,12 @@ public class ErrorResponse
     /// <summary>
     ///     错误代码或简短错误信息
     /// </summary>
-    public string error { get; set; } = string.Empty;
+    public string Error { get; set; } = string.Empty;
 
     /// <summary>
     ///     详细错误说明
     /// </summary>
-    public string message { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -21,9 +21,9 @@ public class ErrorResponse
 /// </summary>
 public class ErrorDetail
 {
-    public string error { get; set; } = string.Empty;
-    public string message { get; set; } = string.Empty;
-    public string detail { get; set; } = string.Empty;
+    public string Error { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+    public string Detail { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -31,5 +31,5 @@ public class ErrorDetail
 /// </summary>
 public class LegacyErrorResponse
 {
-    public List<ErrorDetail> errors { get; set; } = new();
+    public List<ErrorDetail> Errors { get; set; } = new();
 }

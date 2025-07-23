@@ -18,22 +18,22 @@ public class WeightPushResponseV2
     /// <summary>
     ///     出口通道号。
     /// </summary>
-    public string? export_num { get; set; }
+    public string? ExportNum { get; set; }
 
     /// <summary>
     ///     收件人省，比如：北京
     /// </summary>
-    public string? receiver_province { get; set; }
+    public string? ReceiverProvince { get; set; }
 
     /// <summary>
     ///     收件人市，比如：北京市
     /// </summary>
-    public string? receiver_city { get; set; }
+    public string? ReceiverCity { get; set; }
 
     /// <summary>
     ///     收件人区，比如：朝阳区
     /// </summary>
-    public string? receiver_district { get; set; }
+    public string? ReceiverDistrict { get; set; }
 
     /// <summary>
     ///     是否成功 (辅助属性，根据Code判断)

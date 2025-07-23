@@ -175,19 +175,20 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             var config = _settingsService.LoadSettings<PendulumSortConfig>();
-            var targets = new List<CalibrationTarget>();
-
-            // 添加完整标定流程目标
-            targets.Add(new CalibrationTarget
+            var targets = new List<CalibrationTarget>
             {
-                Id = "Trigger", // 特殊ID，用于匹配
-                DisplayName = "完整标定流程 (触发时间 + 分拣时间)",
-                Mode = CalibrationMode.CompleteFlow,
-                TimeRangeLower = config.TriggerPhotoelectric.SortingTimeRangeLower,
-                TimeRangeUpper = config.TriggerPhotoelectric.SortingTimeRangeUpper,
-                SortingDelay = config.TriggerPhotoelectric.SortingDelay,
-                ResetDelay = config.TriggerPhotoelectric.ResetDelay
-            });
+                // 添加完整标定流程目标
+                new CalibrationTarget
+                {
+                    Id = "Trigger", // 特殊ID，用于匹配
+                    DisplayName = "完整标定流程 (触发时间 + 分拣时间)",
+                    Mode = CalibrationMode.CompleteFlow,
+                    TimeRangeLower = config.TriggerPhotoelectric.SortingTimeRangeLower,
+                    TimeRangeUpper = config.TriggerPhotoelectric.SortingTimeRangeUpper,
+                    SortingDelay = config.TriggerPhotoelectric.SortingDelay,
+                    ResetDelay = config.TriggerPhotoelectric.ResetDelay
+                }
+            };
 
             var parameters = new DialogParameters { { "targets", targets } };
 
@@ -196,7 +197,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 if (r.Result != ButtonResult.OK) return;
 
                 var updatedTargets = r.Parameters.GetValue<List<CalibrationTarget>>("targets");
-                if (updatedTargets == null) return;
 
                 foreach (var target in updatedTargets)
                 {
@@ -476,7 +476,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 package.SetChute(chuteSettings.ErrorChuteNumber);
                 package.SetStatus(PackageStatus.Failed, "条码为空或无法识别");
                 Log.Warning("包裹条码为空或noread，分配到异常格口 {ErrorChute}：{Barcode}",
-                    chuteSettings.ErrorChuteNumber, package.Barcode ?? "NULL");
+                    chuteSettings.ErrorChuteNumber, package.Barcode);
                 Interlocked.Increment(ref _errorPackageCount);
 
                 // 直接处理包裹，跳过API调用和本地规则匹配
@@ -504,7 +504,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
             // 在本地规则匹配之前调用安通API上传称重数据
             var anttoApiSuccess = false;
-            var anttoApiMessage = "未调用安通API";
+            string anttoApiMessage;
             try
             {
                 var anttoRequest = new AnttoWeightRequest

@@ -136,9 +136,9 @@ public class ApiService : IApiService
             try
             {
                 var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(responseContent, JsonOptions);
-                if (!string.IsNullOrEmpty(errorResponse?.message))
+                if (!string.IsNullOrEmpty(errorResponse?.Message))
                 {
-                    var errorMessage = errorResponse.message;
+                    var errorMessage = errorResponse.Message;
                     _notificationService.ShowError($"Submit failed: {errorMessage}");
                     Log.Error("错误详情: {ErrorMessage}", errorMessage);
                 }

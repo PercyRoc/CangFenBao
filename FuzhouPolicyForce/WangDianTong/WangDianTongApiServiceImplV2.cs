@@ -17,7 +17,7 @@ namespace FuzhouPolicyForce.WangDianTong;
 public class WangDianTongApiServiceImplV2(HttpClient httpClient, ISettingsService settingsService) : IWangDianTongApiServiceV2
 {
     // Cache JsonSerializerOptions for performance
-    private static readonly JsonSerializerOptions _jsonSerializerOptions = new()
+    private static readonly JsonSerializerOptions JsonSerializerOptions = new()
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull // 排除null值
     };
@@ -73,7 +73,7 @@ public class WangDianTongApiServiceImplV2(HttpClient httpClient, ISettingsServic
 
             // 序列化业务参数为 JSON 字符串
             // 使用缓存的 options 实例
-            businessJsonBody = JsonSerializer.Serialize(businessObject, _jsonSerializerOptions);
+            businessJsonBody = JsonSerializer.Serialize(businessObject, JsonSerializerOptions);
 
 
             // 计算签名
@@ -124,7 +124,7 @@ public class WangDianTongApiServiceImplV2(HttpClient httpClient, ISettingsServic
             if (result.IsSuccess)
             {
                 Log.Information("旺店通重量回传成功V2: 物流单号={LogisticsNo}, 仓储单号={SrcOrderNo}, 重量={Weight}kg, 通道号={ExportNum}, 响应数据={@Response}",
-                    request.LogisticsNo, request.SrcOrderNo, request.Weight, result.export_num, result);
+                    request.LogisticsNo, request.SrcOrderNo, request.Weight, result.ExportNum, result);
             }
             else
             {

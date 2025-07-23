@@ -15,7 +15,6 @@ public class SortingService : IDisposable
 {
     private readonly IEventAggregator _eventAggregator;
     private readonly ConcurrentQueue<PackageInfo> _packageQueue = new();
-    private readonly ISettingsService _settingsService;
     private readonly Dictionary<string, TcpConnectionConfig> _tcpConfigs = [];
     private readonly ITcpConnectionService _tcpConnectionService;
     private readonly IZtoSortingService _ztoSortingService;
@@ -31,11 +30,10 @@ public class SortingService : IDisposable
         IEventAggregator eventAggregator)
     {
         _tcpConnectionService = tcpConnectionService;
-        _settingsService = settingsService;
         _ztoSortingService = ztoSortingService;
         _eventAggregator = eventAggregator;
 
-        Settings = _settingsService.LoadSettings<PlateTurnoverSettings>();
+        Settings = settingsService.LoadSettings<PlateTurnoverSettings>();
 
         _tcpConnectionService.TriggerPhotoelectricDataReceived += OnTriggerPhotoelectricDataReceived;
         _lastTriggerTime = DateTime.Now;
@@ -281,7 +279,6 @@ public class SortingService : IDisposable
             var magnetTime = turnoverItem.MagnetTime;
             var tcpAddress = turnoverItem.TcpAddress;
             var ioPoint = turnoverItem.IoPoint;
-            var chuteNumber = package.ChuteNumber;
 
             // 异步发送落格命令 (将包裹实例传递给异步方法)
             var packageToSend = package; // 捕获当前循环的包裹实例
@@ -492,7 +489,7 @@ public class SortingService : IDisposable
         Log.Information("所有格口的复位命令已发送完毕。");
     }
 
-    protected virtual void Dispose(bool disposing)
+    protected void Dispose(bool disposing)
     {
         if (_disposed)
             return;

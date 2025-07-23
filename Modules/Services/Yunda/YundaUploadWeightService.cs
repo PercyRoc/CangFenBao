@@ -41,9 +41,8 @@ public class YundaUploadWeightService(
             };
         }
 
-        var contentJson = JsonConvert.SerializeObject(request.Orders);
+        JsonConvert.SerializeObject(request.Orders);
 
-        // TODO: 韵达的签名说明参看附录《鉴权说明》，此处为MD5 + Base64 占位，实际需要根据RC4加密规则进行调整。
         // 韵达鉴权说明：所有报文体（包括公共参数、业务参数、sign）都拼接成一个字符串（JSON），
         // 然后使用 partnerid+password+rc4Key 对该字符串进行RC4加密。
         // 鉴于RC4在.NET Core中需要额外实现或库，此处暂用MD5+Base64占位
@@ -123,7 +122,7 @@ public class YundaUploadWeightService(
     /// <returns>签名字符串</returns>
     private static string CalculateSign(string content, string appSecret)
     {
-        // 韵达签名规则：MD5( RequstBody(请求参数对象).toJSONString() + "_" + app-secret);
+        // 韵达签名规则：MD5( RequestBody(请求参数对象).toJSONString() + "_" + app-secret);
         var signSource = $"{content}_{appSecret}";
         var hashBytes = MD5.HashData(Encoding.UTF8.GetBytes(signSource));
 

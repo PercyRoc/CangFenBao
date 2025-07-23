@@ -147,7 +147,6 @@ internal class TcpConnectionService : ITcpConnectionService
     /// <summary>
     ///     连接TCP模块
     /// </summary>
-    /// <param name="configs">TCP模块连接配置列表</param>
     /// <returns>连接结果字典，key为配置，value为对应的TcpClient</returns>
     public async Task<Dictionary<TcpConnectionConfig, TcpClient>> ConnectTcpModulesAsync(
         IEnumerable<TcpConnectionConfig> desiredConfigs)
@@ -547,60 +546,58 @@ internal class TcpConnectionService : ITcpConnectionService
         }
     }
 
-    protected virtual void Dispose(bool disposing)
+    protected void Dispose(bool disposing)
     {
         if (_disposed)
             return;
 
         _disposed = true;
 
-        if (disposing)
+        if (!disposing) return;
+        Log.Information("开始释放 TcpConnectionService 资源...");
+
+        // 停止所有TCP模块的监听
+        var moduleConfigs = _tcpModuleClients.Keys.ToList(); // 创建副本以安全迭代
+        foreach (var config in moduleConfigs)
         {
-            Log.Information("开始释放 TcpConnectionService 资源...");
+            StopListeningTcpModuleAsync(config).Wait();
+            // 不需要手动触发 OnTcpModuleConnectionChanged，任务结束时会处理
+        }
 
-            // 停止所有TCP模块的监听
-            var moduleConfigs = _tcpModuleClients.Keys.ToList(); // 创建副本以安全迭代
-            foreach (var config in moduleConfigs)
-            {
-                StopListeningTcpModuleAsync(config).Wait();
-                // 不需要手动触发 OnTcpModuleConnectionChanged，任务结束时会处理
-            }
+        _tcpModuleListeningTasks.Clear(); // 清理任务字典
+        _tcpModuleListeningCts.Clear(); // 清理CTS字典
 
-            _tcpModuleListeningTasks.Clear(); // 清理任务字典
-            _tcpModuleListeningCts.Clear(); // 清理CTS字典
+        // 停止触发光电监听
+        StopListeningTriggerPhotoelectric();
 
-            // 停止触发光电监听
-            StopListeningTriggerPhotoelectric();
+        // 释放锁
+        _sendLock.Dispose();
 
-            // 释放锁
-            _sendLock.Dispose();
+        // 关闭连接
+        try
+        {
+            TriggerPhotoelectricClient?.Close();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "关闭触发光电客户端时出错");
+        }
 
-            // 关闭连接
+        foreach (var client in _tcpModuleClients.Values)
+        {
             try
             {
-                TriggerPhotoelectricClient?.Close();
+                client.Close();
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, "关闭触发光电客户端时出错");
+                Log.Warning(ex, "关闭TCP模块客户端时出错: {IpAddress}", client.Client.RemoteEndPoint);
             }
-
-            foreach (var client in _tcpModuleClients.Values)
-            {
-                try
-                {
-                    client.Close();
-                }
-                catch (Exception ex)
-                {
-                    Log.Warning(ex, "关闭TCP模块客户端时出错: {IpAddress}", client.Client.RemoteEndPoint);
-                }
-            }
-
-            _tcpModuleClients.Clear();
-
-            Log.Information("TcpConnectionService 资源已释放");
         }
+
+        _tcpModuleClients.Clear();
+
+        Log.Information("TcpConnectionService 资源已释放");
     }
 
     /// <summary>

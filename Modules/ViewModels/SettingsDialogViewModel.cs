@@ -1,10 +1,6 @@
 ﻿using Common.Services.Ui;
 using Serilog;
-using ShanghaiModuleBelt.ViewModels.Jitu.Settings;
 using ShanghaiModuleBelt.ViewModels.Settings;
-using ShanghaiModuleBelt.ViewModels.Sto.Settings;
-using ShanghaiModuleBelt.ViewModels.Yunda.Settings;
-using ShanghaiModuleBelt.ViewModels.Zto.Settings;
 using SharedUI.ViewModels.Settings;
 
 namespace ShanghaiModuleBelt.ViewModels;

@@ -212,19 +212,20 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             var config = _settingsService.LoadSettings<PendulumSortConfig>();
-            var targets = new List<CalibrationTarget>();
-
-            // 添加完整标定流程目标
-            targets.Add(new CalibrationTarget
+            var targets = new List<CalibrationTarget>
             {
-                Id = "Trigger", // 特殊ID，用于匹配
-                DisplayName = "完整标定流程 (触发时间 + 分拣时间)",
-                Mode = CalibrationMode.CompleteFlow,
-                TimeRangeLower = config.TriggerPhotoelectric.SortingTimeRangeLower,
-                TimeRangeUpper = config.TriggerPhotoelectric.SortingTimeRangeUpper,
-                SortingDelay = config.TriggerPhotoelectric.SortingDelay,
-                ResetDelay = config.TriggerPhotoelectric.ResetDelay
-            });
+                // 添加完整标定流程目标
+                new()
+                {
+                    Id = "Trigger", // 特殊ID，用于匹配
+                    DisplayName = "完整标定流程 (触发时间 + 分拣时间)",
+                    Mode = CalibrationMode.CompleteFlow,
+                    TimeRangeLower = config.TriggerPhotoelectric.SortingTimeRangeLower,
+                    TimeRangeUpper = config.TriggerPhotoelectric.SortingTimeRangeUpper,
+                    SortingDelay = config.TriggerPhotoelectric.SortingDelay,
+                    ResetDelay = config.TriggerPhotoelectric.ResetDelay
+                }
+            };
 
             var parameters = new DialogParameters { { "targets", targets } };
 
@@ -233,18 +234,14 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 if (r.Result != ButtonResult.OK) return;
 
                 var updatedTargets = r.Parameters.GetValue<List<CalibrationTarget>>("targets");
-                if (updatedTargets == null) return;
 
                 // 更新配置
-                foreach (var target in updatedTargets)
+                foreach (var target in updatedTargets.Where(target => target.Id == "Trigger"))
                 {
-                    if (target.Id == "Trigger")
-                    {
-                        config.TriggerPhotoelectric.SortingTimeRangeLower = (int)target.TimeRangeLower;
-                        config.TriggerPhotoelectric.SortingTimeRangeUpper = (int)target.TimeRangeUpper;
-                        config.TriggerPhotoelectric.SortingDelay = (int)target.SortingDelay;
-                        config.TriggerPhotoelectric.ResetDelay = (int)target.ResetDelay;
-                    }
+                    config.TriggerPhotoelectric.SortingTimeRangeLower = (int)target.TimeRangeLower;
+                    config.TriggerPhotoelectric.SortingTimeRangeUpper = (int)target.TimeRangeUpper;
+                    config.TriggerPhotoelectric.SortingDelay = (int)target.SortingDelay;
+                    config.TriggerPhotoelectric.ResetDelay = (int)target.ResetDelay;
                 }
 
                 _settingsService.SaveSettings(config);
