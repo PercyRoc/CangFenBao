@@ -1,4 +1,4 @@
-﻿<UserControl x:Class="LosAngelesExpress.Views.SettingsDialog"
+<UserControl x:Class="AmericanQuickHands.Views.SettingsDialog"
             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -6,9 +6,9 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:prism="http://prismlibrary.com/"
              xmlns:hc="https://handyorg.github.io/handycontrol"
-            xmlns:viewModels="clr-namespace:LosAngelesExpress.ViewModels"
-            xmlns:settingsViews="clr-namespace:LosAngelesExpress.Views.Settings"
-             prism:ViewModelLocator.AutoWireViewModel="True"
+            xmlns:viewModels="clr-namespace:AmericanQuickHands.ViewModels"
+            xmlns:local="clr-namespace:AmericanQuickHands.Views.Settings"
+            prism:ViewModelLocator.AutoWireViewModel="True"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=viewModels:SettingsDialogViewModel}">
     <Grid>
@@ -70,15 +70,9 @@
                                    Name="RootNavigation">
 
                     <ui:NavigationView.MenuItems>
-                        <ui:NavigationViewItem Content="Cainiao API" 
-                                               Tag="CainiaoSettings">
-                            <ui:NavigationViewItem.Icon>
-                                <ui:SymbolIcon Symbol="CloudArrowUp24" />
-                            </ui:NavigationViewItem.Icon>
-                            <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="settingsViews:CainiaoSettingsView" />
-                            </ui:NavigationViewItem.TargetPageType>
-                        </ui:NavigationViewItem>
+                        <ui:NavigationViewItem Content="American QuickHands API" 
+                                               Icon="{ui:SymbolIcon Globe24}"
+                                               TargetPageType="{x:Type local:AmericanQuickHandsApiSettingsView}" />
                     </ui:NavigationView.MenuItems>
                 </ui:NavigationView>
 

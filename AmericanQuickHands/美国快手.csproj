@@ -1,0 +1,60 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>WinExe</OutputType>
+        <TargetFramework>net8.0-windows</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <UseWPF>true</UseWPF>
+        <RootNamespace>AmericanQuickHands</RootNamespace>
+        <ApplicationIcon>logo.ico</ApplicationIcon>
+        <AssemblyName>AmericanQuickHands</AssemblyName>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Page Update="Views\MainWindow.xaml">
+            <Generator>MSBuild:Compile</Generator>
+            <XamlRuntime>Wpf</XamlRuntime>
+            <SubType>Designer</SubType>
+        </Page>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Camera\相机模块.csproj"/>
+        <ProjectReference Include="..\Common\基础模块.csproj"/>
+        <ProjectReference Include="..\History\历史模块.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Prism -->
+        <PackageReference Include="Prism.Wpf"/>
+
+        <!-- Serilog -->
+        <PackageReference Include="Serilog"/>
+        <PackageReference Include="Serilog.Sinks.Console"/>
+        <PackageReference Include="Serilog.Sinks.File"/>
+        <PackageReference Include="Serilog.Sinks.Debug"/>
+        <PackageReference Include="Serilog.Extensions.Logging"/>
+        <PackageReference Include="Serilog.Settings.Configuration"/>
+
+        <!-- UI Framework -->
+        <PackageReference Include="MahApps.Metro.IconPacks.Material"/>
+        <PackageReference Include="Microsoft.Extensions.Http"/>
+        <PackageReference Include="WPF-UI"/>
+        <PackageReference Include="HandyControl"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Remove="logo.ico"/>
+        <Resource Include="logo.ico">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </Resource>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Models\Api\" />
+      <Folder Include="Models\Settings\" />
+      <Folder Include="ViewModels\Settings\" />
+      <Folder Include="Views\Settings\" />
+    </ItemGroup>
+</Project>

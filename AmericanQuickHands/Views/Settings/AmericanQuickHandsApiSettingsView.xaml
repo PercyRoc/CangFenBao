@@ -1,0 +1,106 @@
+<UserControl x:Class="AmericanQuickHands.Views.Settings.AmericanQuickHandsApiSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:settingsVm="clr-namespace:AmericanQuickHands.ViewModels.Settings"
+             xmlns:prism="http://prismlibrary.com/"
+             prism:ViewModelLocator.AutoWireViewModel="True"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=settingsVm:AmericanQuickHandsApiSettingsViewModel}">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <ui:Card Grid.Row="1" Grid.Column="1" Width="500">
+            <StackPanel Margin="24">
+                <!-- 标题 -->
+                <TextBlock Text="Swiftx API 接口设置"
+                           Style="{DynamicResource SubtitleTextBlockStyle}"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,24" />
+
+                <!-- API接口地址 -->
+                <TextBlock Text="API接口地址" 
+                           Style="{DynamicResource BodyStrongTextBlockStyle}"
+                           Margin="0,0,0,8" />
+                <ui:TextBox Text="{Binding ApiUrl, UpdateSourceTrigger=PropertyChanged}"
+                           PlaceholderText="请输入API接口地址，如：https://api.example.com"
+                           Width="450"
+                           Margin="0,0,0,16">
+                    <ui:TextBox.Icon>
+                        <ui:SymbolIcon Symbol="Globe24" />
+                    </ui:TextBox.Icon>
+                </ui:TextBox>
+
+                <!-- 应用密钥 -->
+                <TextBlock Text="应用密钥 (AppKey)" 
+                           Style="{DynamicResource BodyStrongTextBlockStyle}"
+                           Margin="0,0,0,8" />
+                <ui:TextBox Text="{Binding AppKey, UpdateSourceTrigger=PropertyChanged}"
+                           PlaceholderText="请输入应用密钥"
+                           Width="450"
+                           Margin="0,0,0,16">
+                    <ui:TextBox.Icon>
+                        <ui:SymbolIcon Symbol="Key24" />
+                    </ui:TextBox.Icon>
+                </ui:TextBox>
+
+                <!-- 应用秘钥 -->
+                <TextBlock Text="应用秘钥 (AppSecret)" 
+                           Style="{DynamicResource BodyStrongTextBlockStyle}"
+                           Margin="0,0,0,8" />
+                <ui:PasswordBox Password="{Binding AppSecret, UpdateSourceTrigger=PropertyChanged}"
+                               PlaceholderText="请输入应用秘钥"
+                               Width="450"
+                               Margin="0,0,0,16">
+                    <ui:PasswordBox.Icon>
+                        <ui:SymbolIcon Symbol="Password24" />
+                    </ui:PasswordBox.Icon>
+                </ui:PasswordBox>
+
+                <!-- 分拣机编码 -->
+                <TextBlock Text="分拣机编码 (SortingMachineCode)" 
+                           Style="{DynamicResource BodyStrongTextBlockStyle}"
+                           Margin="0,0,0,8" />
+                <ui:TextBox Text="{Binding SortingMachineCode, UpdateSourceTrigger=PropertyChanged}"
+                           PlaceholderText="请输入分拣机编码"
+                           Width="450"
+                           Margin="0,0,0,16">
+                    <ui:TextBox.Icon>
+                        <ui:SymbolIcon Symbol="BarcodeScanner24" />
+                    </ui:TextBox.Icon>
+                </ui:TextBox>
+
+
+
+                <!-- 操作按钮 -->
+                <StackPanel Orientation="Horizontal" 
+                           HorizontalAlignment="Center"
+                           Margin="0,16,0,0">
+                    <ui:Button Content="测试连接"
+                              Command="{Binding TestConnectionCommand}"
+                              Appearance="Secondary"
+                              Icon="{ui:SymbolIcon NetworkCheck24}" />
+                </StackPanel>
+
+                <!-- 状态提示 -->
+                <ui:InfoBar Severity="Informational"
+                           IsOpen="True"
+                           Title="配置说明"
+                           Message="请确保API接口地址和分拣机编码配置正确。建议先在测试环境验证配置后再切换到生产环境。"
+                           Margin="0,24,0,0" />
+            </StackPanel>
+        </ui:Card>
+    </Grid>
+</UserControl>

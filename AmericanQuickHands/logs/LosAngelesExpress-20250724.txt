@@ -1,0 +1,142 @@
+2025-07-24 10:44:21.776 +08:00 [INF] appsettings.json 中未找到 Serilog 配置或文件不存在。已使用基本备用日志记录器。
+2025-07-24 10:44:21.809 +08:00 [INF] 应用程序启动 (OnStartup)
+2025-07-24 10:44:21.810 +08:00 [INF] 全局异常处理程序已注册
+2025-07-24 10:44:21.829 +08:00 [INF] Serilog.ILogger instance registered in DI container.
+2025-07-24 10:44:21.862 +08:00 [INF] [HuaRayCameraModule] 模块初始化开始...
+2025-07-24 10:44:21.866 +08:00 [INF] [HuaRayCameraModule] 正在启动 HuaRayCameraService...
+2025-07-24 10:44:21.869 +08:00 [INF] 开始搜索配置文件...
+2025-07-24 10:44:21.871 +08:00 [INF] 开始搜索LogisticsBase.cfg文件...
+2025-07-24 10:44:21.876 +08:00 [INF] 检查桌面快捷方式: C:\Users\19531\Desktop
+2025-07-24 10:44:21.882 +08:00 [INF] 开始搜索LP开头文件夹中的配置文件...
+2025-07-24 10:44:21.882 +08:00 [INF] 正在搜索目录: C:\
+2025-07-24 10:44:21.888 +08:00 [INF] 正在搜索目录: D:\
+2025-07-24 10:44:21.892 +08:00 [INF] 正在搜索目录: E:\
+2025-07-24 10:44:21.894 +08:00 [INF] 正在搜索目录: D:\RiderProjects\CangFenBao\AmericanQuickHands\bin\Debug\net8.0-windows\
+2025-07-24 10:44:21.894 +08:00 [INF] 未在LP文件夹下找到配置文件，开始搜索常规位置...
+2025-07-24 10:44:21.894 +08:00 [INF] 正在搜索目录: C:\
+2025-07-24 10:44:21.895 +08:00 [INF] 正在搜索目录: D:\
+2025-07-24 10:44:21.895 +08:00 [INF] 正在搜索目录: E:\
+2025-07-24 10:44:21.895 +08:00 [INF] 正在搜索目录: D:\RiderProjects\CangFenBao\AmericanQuickHands\bin\Debug\net8.0-windows\
+2025-07-24 10:44:21.896 +08:00 [WRN] 未找到LogisticsBase.cfg文件
+2025-07-24 10:44:21.896 +08:00 [ERR] 无法找到LogisticsBase.cfg配置文件
+2025-07-24 10:44:21.896 +08:00 [ERR] 无法找到LogisticsBase.cfg配置文件
+2025-07-24 10:44:21.896 +08:00 [WRN] [HuaRayCameraModule] HuaRayCameraService 启动失败，请检查日志。
+2025-07-24 10:44:21.896 +08:00 [INF] [HuaRayCameraModule] 模块初始化完成。
+2025-07-24 10:44:21.923 +08:00 [INF] 模块已通过 moduleManager.Run() 显式初始化于 CreateShell 内部或之前。
+2025-07-24 10:44:21.977 +08:00 [WRN] 扫描程序集 Camera, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null 时发生错误: Could not load type 'WIFI_AUTH_PARAM' from assembly 'Camera, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null' because it contains an object field at offset 0 that is incorrectly aligned or overlapped by a non-object field.
+2025-07-24 10:44:29.906 +08:00 [INF] 设备状态列表初始化完成。
+2025-07-24 10:44:29.947 +08:00 [INF] 统计信息项目初始化完成。
+2025-07-24 10:44:29.949 +08:00 [INF] 包裹信息项目初始化完成。
+2025-07-24 10:44:30.027 +08:00 [INF] 洛杉矶快手 MainViewModel 初始化完成。
+2025-07-24 10:44:34.528 +08:00 [INF] PackageDbContext.OnModelCreating: Configuring entity for table Package_202507
+2025-07-24 10:44:35.805 +08:00 [INF] IPackageHistoryDataService 初始化成功。
+2025-07-24 10:44:35.868 +08:00 [INF] 主动更新设备初始状态: HuaRay Camera - Disconnected
+2025-07-24 10:44:50.716 +08:00 [INF] appsettings.json 中未找到 Serilog 配置或文件不存在。已使用基本备用日志记录器。
+2025-07-24 10:44:50.821 +08:00 [INF] 应用程序启动 (OnStartup)
+2025-07-24 10:44:50.823 +08:00 [INF] 全局异常处理程序已注册
+2025-07-24 10:44:50.880 +08:00 [INF] Serilog.ILogger instance registered in DI container.
+2025-07-24 10:44:50.980 +08:00 [INF] [HuaRayCameraModule] 模块初始化开始...
+2025-07-24 10:44:50.994 +08:00 [INF] [HuaRayCameraModule] 正在启动 HuaRayCameraService...
+2025-07-24 10:44:51.018 +08:00 [INF] 开始搜索配置文件...
+2025-07-24 10:44:51.024 +08:00 [INF] 开始搜索LogisticsBase.cfg文件...
+2025-07-24 10:44:51.033 +08:00 [INF] 检查桌面快捷方式: C:\Users\19531\Desktop
+2025-07-24 10:44:51.049 +08:00 [INF] 开始搜索LP开头文件夹中的配置文件...
+2025-07-24 10:44:51.049 +08:00 [INF] 正在搜索目录: C:\
+2025-07-24 10:44:51.060 +08:00 [INF] 正在搜索目录: D:\
+2025-07-24 10:44:51.068 +08:00 [INF] 正在搜索目录: E:\
+2025-07-24 10:44:51.070 +08:00 [INF] 正在搜索目录: D:\RiderProjects\CangFenBao\AmericanQuickHands\bin\Debug\net8.0-windows\
+2025-07-24 10:44:51.071 +08:00 [INF] 未在LP文件夹下找到配置文件，开始搜索常规位置...
+2025-07-24 10:44:51.071 +08:00 [INF] 正在搜索目录: C:\
+2025-07-24 10:44:51.073 +08:00 [INF] 正在搜索目录: D:\
+2025-07-24 10:44:51.074 +08:00 [INF] 正在搜索目录: E:\
+2025-07-24 10:44:51.075 +08:00 [INF] 正在搜索目录: D:\RiderProjects\CangFenBao\AmericanQuickHands\bin\Debug\net8.0-windows\
+2025-07-24 10:44:51.076 +08:00 [WRN] 未找到LogisticsBase.cfg文件
+2025-07-24 10:44:51.076 +08:00 [ERR] 无法找到LogisticsBase.cfg配置文件
+2025-07-24 10:44:51.076 +08:00 [ERR] 无法找到LogisticsBase.cfg配置文件
+2025-07-24 10:44:51.076 +08:00 [WRN] [HuaRayCameraModule] HuaRayCameraService 启动失败，请检查日志。
+2025-07-24 10:44:51.076 +08:00 [INF] [HuaRayCameraModule] 模块初始化完成。
+2025-07-24 10:44:51.130 +08:00 [INF] 模块已通过 moduleManager.Run() 显式初始化于 CreateShell 内部或之前。
+2025-07-24 10:44:51.206 +08:00 [WRN] 扫描程序集 Camera, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null 时发生错误: Could not load type 'WIFI_AUTH_PARAM' from assembly 'Camera, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null' because it contains an object field at offset 0 that is incorrectly aligned or overlapped by a non-object field.
+2025-07-24 10:44:59.960 +08:00 [INF] 设备状态列表初始化完成。
+2025-07-24 10:44:59.962 +08:00 [INF] 统计信息项目初始化完成。
+2025-07-24 10:44:59.963 +08:00 [INF] 包裹信息项目初始化完成。
+2025-07-24 10:45:00.076 +08:00 [INF] 洛杉矶快手 MainViewModel 初始化完成。
+2025-07-24 10:53:16.994 +08:00 [INF] appsettings.json 中未找到 Serilog 配置或文件不存在。已使用基本备用日志记录器。
+2025-07-24 10:53:17.022 +08:00 [INF] 应用程序启动 (OnStartup)
+2025-07-24 10:53:17.023 +08:00 [INF] 全局异常处理程序已注册
+2025-07-24 10:53:17.040 +08:00 [INF] Serilog.ILogger instance registered in DI container.
+2025-07-24 10:53:17.077 +08:00 [INF] [HuaRayCameraModule] 模块初始化开始...
+2025-07-24 10:53:17.084 +08:00 [INF] [HuaRayCameraModule] 正在启动 HuaRayCameraService...
+2025-07-24 10:53:17.088 +08:00 [INF] 开始搜索配置文件...
+2025-07-24 10:53:17.092 +08:00 [INF] 开始搜索LogisticsBase.cfg文件...
+2025-07-24 10:53:17.097 +08:00 [INF] 检查桌面快捷方式: C:\Users\19531\Desktop
+2025-07-24 10:53:17.106 +08:00 [INF] 开始搜索LP开头文件夹中的配置文件...
+2025-07-24 10:53:17.107 +08:00 [INF] 正在搜索目录: C:\
+2025-07-24 10:53:17.117 +08:00 [INF] 正在搜索目录: D:\
+2025-07-24 10:53:17.121 +08:00 [INF] 正在搜索目录: E:\
+2025-07-24 10:53:17.121 +08:00 [INF] 正在搜索目录: D:\RiderProjects\CangFenBao\AmericanQuickHands\bin\Debug\net8.0-windows\
+2025-07-24 10:53:17.122 +08:00 [INF] 未在LP文件夹下找到配置文件，开始搜索常规位置...
+2025-07-24 10:53:17.122 +08:00 [INF] 正在搜索目录: C:\
+2025-07-24 10:53:17.123 +08:00 [INF] 正在搜索目录: D:\
+2025-07-24 10:53:17.123 +08:00 [INF] 正在搜索目录: E:\
+2025-07-24 10:53:17.123 +08:00 [INF] 正在搜索目录: D:\RiderProjects\CangFenBao\AmericanQuickHands\bin\Debug\net8.0-windows\
+2025-07-24 10:53:17.124 +08:00 [WRN] 未找到LogisticsBase.cfg文件
+2025-07-24 10:53:17.124 +08:00 [ERR] 无法找到LogisticsBase.cfg配置文件
+2025-07-24 10:53:17.124 +08:00 [ERR] 无法找到LogisticsBase.cfg配置文件
+2025-07-24 10:53:17.124 +08:00 [WRN] [HuaRayCameraModule] HuaRayCameraService 启动失败，请检查日志。
+2025-07-24 10:53:17.124 +08:00 [INF] [HuaRayCameraModule] 模块初始化完成。
+2025-07-24 10:53:17.153 +08:00 [INF] 模块已通过 moduleManager.Run() 显式初始化于 CreateShell 内部或之前。
+2025-07-24 10:53:17.205 +08:00 [WRN] 扫描程序集 Camera, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null 时发生错误: Could not load type 'WIFI_AUTH_PARAM' from assembly 'Camera, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null' because it contains an object field at offset 0 that is incorrectly aligned or overlapped by a non-object field.
+2025-07-24 10:53:18.594 +08:00 [INF] 设备状态列表初始化完成。
+2025-07-24 10:53:18.595 +08:00 [INF] 统计信息项目初始化完成。
+2025-07-24 10:53:18.595 +08:00 [INF] 包裹信息项目初始化完成。
+2025-07-24 10:53:18.608 +08:00 [INF] 洛杉矶快手 MainViewModel 初始化完成。
+2025-07-24 10:53:19.289 +08:00 [INF] PackageDbContext.OnModelCreating: Configuring entity for table Package_202507
+2025-07-24 10:53:19.655 +08:00 [INF] IPackageHistoryDataService 初始化成功。
+2025-07-24 10:53:19.664 +08:00 [INF] 主动更新设备初始状态: HuaRay Camera - Disconnected
+2025-07-24 10:53:26.796 +08:00 [INF] 美国快手API设置加载完成
+2025-07-24 10:53:36.195 +08:00 [INF] 正在释放 MainViewModel 资源...
+2025-07-24 10:53:36.204 +08:00 [INF] MainViewModel 资源释放完成。
+2025-07-24 10:53:36.204 +08:00 [INF] Main window ViewModels disposed.
+2025-07-24 10:53:36.249 +08:00 [INF] 应用程序退出 (OnExit). 退出代码: 0
+2025-07-24 10:53:36.254 +08:00 [INF] 开始关闭应用程序服务...
+2025-07-24 10:53:36.257 +08:00 [INF] ICameraService.Stop() 已调用。
+2025-07-24 10:53:36.258 +08:00 [INF] 应用程序服务关闭完成或已发起。
+2025-07-24 11:01:52.574 +08:00 [INF] appsettings.json 中未找到 Serilog 配置或文件不存在。已使用基本备用日志记录器。
+2025-07-24 11:01:52.609 +08:00 [INF] 应用程序启动 (OnStartup)
+2025-07-24 11:01:52.610 +08:00 [INF] 全局异常处理程序已注册
+2025-07-24 11:01:52.632 +08:00 [INF] Serilog.ILogger instance registered in DI container.
+2025-07-24 11:01:52.662 +08:00 [INF] [HuaRayCameraModule] 模块初始化开始...
+2025-07-24 11:01:52.668 +08:00 [INF] [HuaRayCameraModule] 正在启动 HuaRayCameraService...
+2025-07-24 11:01:52.673 +08:00 [INF] 开始搜索配置文件...
+2025-07-24 11:01:52.675 +08:00 [INF] 开始搜索LogisticsBase.cfg文件...
+2025-07-24 11:01:52.684 +08:00 [INF] 检查桌面快捷方式: C:\Users\19531\Desktop
+2025-07-24 11:01:52.702 +08:00 [INF] 开始搜索LP开头文件夹中的配置文件...
+2025-07-24 11:01:52.703 +08:00 [INF] 正在搜索目录: C:\
+2025-07-24 11:01:52.715 +08:00 [INF] 正在搜索目录: D:\
+2025-07-24 11:01:52.732 +08:00 [INF] 正在搜索目录: E:\
+2025-07-24 11:01:52.733 +08:00 [INF] 正在搜索目录: D:\RiderProjects\CangFenBao\AmericanQuickHands\bin\Debug\net8.0-windows\
+2025-07-24 11:01:52.734 +08:00 [INF] 未在LP文件夹下找到配置文件，开始搜索常规位置...
+2025-07-24 11:01:52.734 +08:00 [INF] 正在搜索目录: C:\
+2025-07-24 11:01:52.734 +08:00 [INF] 正在搜索目录: D:\
+2025-07-24 11:01:52.735 +08:00 [INF] 正在搜索目录: E:\
+2025-07-24 11:01:52.735 +08:00 [INF] 正在搜索目录: D:\RiderProjects\CangFenBao\AmericanQuickHands\bin\Debug\net8.0-windows\
+2025-07-24 11:01:52.735 +08:00 [WRN] 未找到LogisticsBase.cfg文件
+2025-07-24 11:01:52.735 +08:00 [ERR] 无法找到LogisticsBase.cfg配置文件
+2025-07-24 11:01:52.735 +08:00 [ERR] 无法找到LogisticsBase.cfg配置文件
+2025-07-24 11:01:52.735 +08:00 [WRN] [HuaRayCameraModule] HuaRayCameraService 启动失败，请检查日志。
+2025-07-24 11:01:52.735 +08:00 [INF] [HuaRayCameraModule] 模块初始化完成。
+2025-07-24 11:01:52.761 +08:00 [INF] 模块已通过 moduleManager.Run() 显式初始化于 CreateShell 内部或之前。
+2025-07-24 11:01:52.810 +08:00 [WRN] 扫描程序集 Camera, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null 时发生错误: Could not load type 'WIFI_AUTH_PARAM' from assembly 'Camera, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null' because it contains an object field at offset 0 that is incorrectly aligned or overlapped by a non-object field.
+2025-07-24 11:01:54.289 +08:00 [INF] 设备状态列表初始化完成。
+2025-07-24 11:01:54.290 +08:00 [INF] 统计信息项目初始化完成。
+2025-07-24 11:01:54.291 +08:00 [INF] 包裹信息项目初始化完成。
+2025-07-24 11:01:54.305 +08:00 [INF] 洛杉矶快手 MainViewModel 初始化完成。
+2025-07-24 11:01:55.357 +08:00 [INF] PackageDbContext.OnModelCreating: Configuring entity for table Package_202507
+2025-07-24 11:01:55.804 +08:00 [INF] IPackageHistoryDataService 初始化成功。
+2025-07-24 11:01:55.819 +08:00 [INF] 主动更新设备初始状态: HuaRay Camera - Disconnected
+2025-07-24 11:01:57.801 +08:00 [INF] 美国快手API设置加载完成
+2025-07-24 11:01:59.357 +08:00 [INF] 开始使用模拟数据测试API连接: TEST123456789
+2025-07-24 11:02:00.791 +08:00 [WRN] 分拣机扫码失败: TEST123456789, 错误: HTTP Unauthorized: {"error":"Authentication Failed","message":"Missing required authentication header: X-App-Key"}
+2025-07-24 11:02:00.791 +08:00 [WRN] API连接测试失败: HTTP Unauthorized: {"error":"Authentication Failed","message":"Missing required authentication header: X-App-Key"}
+2025-07-24 11:02:00.792 +08:00 [WRN] Swiftx API连接测试失败: 连接测试失败: HTTP Unauthorized: {"error":"Authentication Failed","message":"Missing required authentication header: X-App-Key"}

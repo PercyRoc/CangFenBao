@@ -47,6 +47,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "系统服务", "Server\系�
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "洛杉矶快手", "LosAngelesExpress\洛杉矶快手.csproj", "{63E8C5E8-0EEF-4289-BEDE-92B3D21E55F6}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "美国快手", "AmericanQuickHands\美国快手.csproj", "{19CFC46E-FC1E-46FE-ACC4-0831C88C6033}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -225,6 +227,18 @@ Global
 		{63E8C5E8-0EEF-4289-BEDE-92B3D21E55F6}.Release|x64.Build.0 = Release|Any CPU
 		{63E8C5E8-0EEF-4289-BEDE-92B3D21E55F6}.Release|x86.ActiveCfg = Release|Any CPU
 		{63E8C5E8-0EEF-4289-BEDE-92B3D21E55F6}.Release|x86.Build.0 = Release|Any CPU
+		{19CFC46E-FC1E-46FE-ACC4-0831C88C6033}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{19CFC46E-FC1E-46FE-ACC4-0831C88C6033}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{19CFC46E-FC1E-46FE-ACC4-0831C88C6033}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{19CFC46E-FC1E-46FE-ACC4-0831C88C6033}.Debug|x64.Build.0 = Debug|Any CPU
+		{19CFC46E-FC1E-46FE-ACC4-0831C88C6033}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{19CFC46E-FC1E-46FE-ACC4-0831C88C6033}.Debug|x86.Build.0 = Debug|Any CPU
+		{19CFC46E-FC1E-46FE-ACC4-0831C88C6033}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{19CFC46E-FC1E-46FE-ACC4-0831C88C6033}.Release|Any CPU.Build.0 = Release|Any CPU
+		{19CFC46E-FC1E-46FE-ACC4-0831C88C6033}.Release|x64.ActiveCfg = Release|Any CPU
+		{19CFC46E-FC1E-46FE-ACC4-0831C88C6033}.Release|x64.Build.0 = Release|Any CPU
+		{19CFC46E-FC1E-46FE-ACC4-0831C88C6033}.Release|x86.ActiveCfg = Release|Any CPU
+		{19CFC46E-FC1E-46FE-ACC4-0831C88C6033}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -246,6 +260,7 @@ Global
 		{30BB91F5-CFEE-4FF5-9B15-6740D48D709D} = {40F48CFF-AD2E-45F3-8257-B43E5ABB8EA1}
 		{7850C41A-4510-42E7-BE04-B46B3B48FB69} = {BAE0C484-FBAD-4385-AD30-02C620B0C00C}
 		{63E8C5E8-0EEF-4289-BEDE-92B3D21E55F6} = {1CD879A2-FB05-4388-B0D3-DF2BFCC6D1BE}
+		{19CFC46E-FC1E-46FE-ACC4-0831C88C6033} = {1CD879A2-FB05-4388-B0D3-DF2BFCC6D1BE}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {6D377202-0D2B-49BB-8FB3-D067A4AB4020}
