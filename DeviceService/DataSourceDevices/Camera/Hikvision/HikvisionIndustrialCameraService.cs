@@ -602,25 +602,25 @@
 //         {
 //             // 根据设备类型获取序列号
 //             case MyCamera.MV_GIGE_DEVICE:
-//             {
-//                 var gigeInfo = (MyCamera.MV_GIGE_DEVICE_INFO_EX)MyCamera.ByteToStruct(
-//                     deviceInfo.SpecialInfo.stGigEInfo,
-//                     typeof(MyCamera.MV_GIGE_DEVICE_INFO_EX));
+//                 {
+//                     var gigeInfo = (MyCamera.MV_GIGE_DEVICE_INFO_EX)MyCamera.ByteToStruct(
+//                         deviceInfo.SpecialInfo.stGigEInfo,
+//                         typeof(MyCamera.MV_GIGE_DEVICE_INFO_EX));
 //
-//                 // 假设 chSerialNumber 是字符数组
-//                 serialNumber = new string(gigeInfo.chSerialNumber).TrimEnd('\0');
-//                 break;
-//             }
+//                     // 假设 chSerialNumber 是字符数组
+//                     serialNumber = new string(gigeInfo.chSerialNumber).TrimEnd('\0');
+//                     break;
+//                 }
 //             case MyCamera.MV_USB_DEVICE:
-//             {
-//                 var usbInfo = (MyCamera.MV_USB3_DEVICE_INFO_EX)MyCamera.ByteToStruct(
-//                     deviceInfo.SpecialInfo.stUsb3VInfo,
-//                     typeof(MyCamera.MV_USB3_DEVICE_INFO_EX));
+//                 {
+//                     var usbInfo = (MyCamera.MV_USB3_DEVICE_INFO_EX)MyCamera.ByteToStruct(
+//                         deviceInfo.SpecialInfo.stUsb3VInfo,
+//                         typeof(MyCamera.MV_USB3_DEVICE_INFO_EX));
 //
-//                 // 假设 chSerialNumber 是字符数组
-//                 serialNumber = new string(usbInfo.chSerialNumber).TrimEnd('\0');
-//                 break;
-//             }
+//                     // 假设 chSerialNumber 是字符数组
+//                     serialNumber = new string(usbInfo.chSerialNumber).TrimEnd('\0');
+//                     break;
+//                 }
 //         }
 //         // 可以根据需要添加其他设备类型的处理
 //
@@ -640,21 +640,21 @@
 //         switch (deviceInfo.nTLayerType)
 //         {
 //             case MyCamera.MV_GIGE_DEVICE:
-//             {
-//                 var gigeInfo = (MyCamera.MV_GIGE_DEVICE_INFO_EX)MyCamera.ByteToStruct(
-//                     deviceInfo.SpecialInfo.stGigEInfo,
-//                     typeof(MyCamera.MV_GIGE_DEVICE_INFO_EX));
-//                 modelName = new string(gigeInfo.chModelName).TrimEnd('\0');
-//                 break;
-//             }
+//                 {
+//                     var gigeInfo = (MyCamera.MV_GIGE_DEVICE_INFO_EX)MyCamera.ByteToStruct(
+//                         deviceInfo.SpecialInfo.stGigEInfo,
+//                         typeof(MyCamera.MV_GIGE_DEVICE_INFO_EX));
+//                     modelName = new string(gigeInfo.chModelName).TrimEnd('\0');
+//                     break;
+//                 }
 //             case MyCamera.MV_USB_DEVICE:
-//             {
-//                 var usbInfo = (MyCamera.MV_USB3_DEVICE_INFO_EX)MyCamera.ByteToStruct(
-//                     deviceInfo.SpecialInfo.stUsb3VInfo,
-//                     typeof(MyCamera.MV_USB3_DEVICE_INFO_EX));
-//                 modelName = new string(usbInfo.chModelName).TrimEnd('\0');
-//                 break;
-//             }
+//                 {
+//                     var usbInfo = (MyCamera.MV_USB3_DEVICE_INFO_EX)MyCamera.ByteToStruct(
+//                         deviceInfo.SpecialInfo.stUsb3VInfo,
+//                         typeof(MyCamera.MV_USB3_DEVICE_INFO_EX));
+//                     modelName = new string(usbInfo.chModelName).TrimEnd('\0');
+//                     break;
+//                 }
 //         }
 //
 //         return modelName;

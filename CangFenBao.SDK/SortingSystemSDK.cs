@@ -18,7 +18,7 @@ namespace CangFenBao.SDK
         private IDisposable? _imageSubscription;
         private SdkImageService? _imageService;
         private HttpUploadService? _httpUploadService;
-        private DirectSorterService? _sorterService;
+        private DirectSorterService _sorterService;
         private SdkWeightService? _weightService;
         private WeightServiceSettings? _weightSettings;
 

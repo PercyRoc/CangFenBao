@@ -23,7 +23,7 @@ namespace FuzhouPolicyForce.ViewModels.Settings
             _settingsService = settingsService;
             _settings = _settingsService.LoadSettings<AnttoWeightSettings>();
 
-            SaveCommand = new DelegateCommand(async () => await ExecuteSaveCommand());
+            SaveCommand = new DelegateCommand(ExecuteSaveCommand);
             InitializeAvailableEnvironments();
         }
 
@@ -54,7 +54,7 @@ namespace FuzhouPolicyForce.ViewModels.Settings
             return attribute?.Description ?? value.ToString();
         }
 
-        private async Task ExecuteSaveCommand()
+        private void ExecuteSaveCommand()
         {
             try
             {
