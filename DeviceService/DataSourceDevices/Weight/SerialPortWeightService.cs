@@ -669,6 +669,65 @@ public class SerialPortWeightService : IDisposable
         }
     }
 
+    /// <summary>
+    /// 获取当前重量
+    /// </summary>
+    /// <returns>当前重量值（克），如果没有可用数据则返回0</returns>
+    public double GetCurrentWeight()
+    {
+        lock (_lock)
+        {
+            if (_weightCache.Count == 0)
+            {
+                Log.Debug("GetCurrentWeight: 重量缓存为空，返回0");
+                return 0;
+            }
+
+            var latestWeight = _weightCache.Last();
+            Log.Debug("GetCurrentWeight: 返回最新重量 {Weight:F2}g", latestWeight.Weight);
+            return latestWeight.Weight;
+        }
+    }
+
+    /// <summary>
+    /// 等待并获取有效的重量数据
+    /// </summary>
+    /// <param name="timeoutMs">超时时间（毫秒），默认10秒</param>
+    /// <returns>重量值（克），如果超时或无有效数据则返回0</returns>
+    public double WaitForValidWeight(int timeoutMs = 10000)
+    {
+        Log.Debug("WaitForValidWeight: 开始等待有效重量数据，超时时间: {Timeout}ms", timeoutMs);
+        
+        var startTime = DateTime.Now;
+        var timeout = TimeSpan.FromMilliseconds(timeoutMs);
+        
+        while (DateTime.Now - startTime < timeout)
+        {
+            lock (_lock)
+            {
+                if (_weightCache.Count > 0)
+                {
+                    var latestWeight = _weightCache.Last();
+                    // 检查重量是否有效（大于0且在合理范围内）
+                    if (latestWeight.Weight > 0 && latestWeight.Weight < 50000) // 最大50kg
+                    {
+                        Log.Debug("WaitForValidWeight: 获得有效重量 {Weight:F2}g", latestWeight.Weight);
+                        return latestWeight.Weight;
+                    }
+                }
+            }
+            
+            // 等待新的重量数据或超时
+            if (_weightReceived.WaitOne(100)) // 每100ms检查一次
+            {
+                _weightReceived.Reset();
+            }
+        }
+        
+        Log.Warning("WaitForValidWeight: 等待有效重量数据超时");
+        return 0;
+    }
+
     private void Dispose(bool disposing)
     {
         if (_disposed) return;

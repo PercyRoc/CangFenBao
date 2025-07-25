@@ -78,5 +78,10 @@ public enum PackageStatus
     /// <summary>
     ///     重试已完成（无论成功还是失败，都不再重试）
     /// </summary>
-    RetryCompleted
+    RetryCompleted,
+
+    /// <summary>
+    ///     处理中
+    /// </summary>
+    Processing
 }

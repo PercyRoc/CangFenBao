@@ -292,6 +292,68 @@ public class VolumeDataService : IDisposable
         return null;
     }
 
+    /// <summary>
+    /// 获取当前体积数据
+    /// </summary>
+    /// <returns>当前体积数据（长、宽、高），如果没有可用数据则返回null</returns>
+    public (double Length, double Width, double Height)? GetCurrentVolumeData()
+    {
+        lock (_lock)
+        {
+            if (_volumeCache.Count == 0)
+            {
+                Log.Debug("GetCurrentVolumeData: 体积缓存为空，返回null");
+                return null;
+            }
+
+            var latestVolume = _volumeCache.Last();
+            Log.Debug("GetCurrentVolumeData: 返回最新体积数据 L={Length}, W={Width}, H={Height}", 
+                latestVolume.Length, latestVolume.Width, latestVolume.Height);
+            return (latestVolume.Length, latestVolume.Width, latestVolume.Height);
+        }
+    }
+
+    /// <summary>
+    /// 等待并获取有效的体积数据
+    /// </summary>
+    /// <param name="timeoutMs">超时时间（毫秒），默认10秒</param>
+    /// <returns>体积数据（长、宽、高），如果超时或无有效数据则返回null</returns>
+    public (double Length, double Width, double Height)? WaitForValidVolumeData(int timeoutMs = 10000)
+    {
+        Log.Debug("WaitForValidVolumeData: 开始等待有效体积数据，超时时间: {Timeout}ms", timeoutMs);
+        
+        var startTime = DateTime.Now;
+        var timeout = TimeSpan.FromMilliseconds(timeoutMs);
+        
+        while (DateTime.Now - startTime < timeout)
+        {
+            lock (_lock)
+            {
+                if (_volumeCache.Count > 0)
+                {
+                    var latestVolume = _volumeCache.Last();
+                    // 检查体积数据是否有效（所有维度都大于0且在合理范围内）
+                    if (latestVolume.Length > 0 && latestVolume.Width > 0 && latestVolume.Height > 0 &&
+                        latestVolume.Length < 2000 && latestVolume.Width < 2000 && latestVolume.Height < 2000) // 最大2米
+                    {
+                        Log.Debug("WaitForValidVolumeData: 获得有效体积数据 L={Length}, W={Width}, H={Height}", 
+                            latestVolume.Length, latestVolume.Width, latestVolume.Height);
+                        return (latestVolume.Length, latestVolume.Width, latestVolume.Height);
+                    }
+                }
+            }
+            
+            // 等待新的体积数据或超时
+            if (_volumeReceived.WaitOne(100)) // 每100ms检查一次
+            {
+                // 收到新数据信号，继续循环检查
+            }
+        }
+        
+        Log.Warning("WaitForValidVolumeData: 等待有效体积数据超时");
+        return null;
+    }
+
     private void CleanupCache_NoLock()
     {
         var cutoff = DateTime.Now - CacheExpiry;

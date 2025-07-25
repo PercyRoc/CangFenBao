@@ -1,6 +1,7 @@
-﻿using System.Windows.Input;
+using System.Windows.Input;
 using Common.Services.Ui;
 using Serilog;
+using XinBa.ViewModels;
 
 namespace XinBa.Views;
 
@@ -29,6 +30,25 @@ public partial class MainWindow
         catch (Exception ex)
         {
             Log.Error(ex, "Error occurred while dragging window");
+        }
+    }
+
+    private void ManualBarcodeTextBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        try
+        {
+            if (e.Key == Key.Enter && DataContext is MainWindowViewModel viewModel)
+            {
+                // 触发手动条码处理命令
+                if (viewModel.ProcessManualBarcodeCommand.CanExecute())
+                {
+                    viewModel.ProcessManualBarcodeCommand.Execute();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error occurred while processing manual barcode input");
         }
     }
 }

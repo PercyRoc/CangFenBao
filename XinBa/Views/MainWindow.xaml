@@ -173,12 +173,19 @@
                                        Foreground="{StaticResource TextPrimaryBrush}" />
 
                             <ui:TextBox Icon="Barcode24"
-                                        Text="{Binding CurrentBarcode, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
-                                        IsReadOnly="True"
+                                        Text="{Binding ManualBarcodeInput, UpdateSourceTrigger=PropertyChanged}"
                                         FontSize="20"
                                         FontWeight="Bold"
                                         Foreground="{StaticResource AccentBrush}"
-                                        PlaceholderText="Waiting for scan..." />
+                                        PlaceholderText="Enter barcode and press Enter to process..."
+                                        KeyDown="ManualBarcodeTextBox_KeyDown" />
+                            
+                            <!-- Display current processed barcode -->
+                            <TextBlock Text="{Binding CurrentBarcode, StringFormat='Current: {0}'}"
+                                       Margin="0,8,0,0"
+                                       FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       Visibility="{Binding HasCurrentBarcode, Converter={StaticResource BooleanToVisibilityConverter}}" />
                         </StackPanel>
 
                         <!-- Information Card Grid -->
