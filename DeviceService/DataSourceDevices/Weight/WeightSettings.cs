@@ -31,12 +31,12 @@ public class WeightSettings
     /// <summary>
     ///     时间范围下限（毫秒）
     /// </summary>
-    public int TimeRangeLower { get; set; } = 500;
+    public int TimeRangeLower { get; set; } = -200;
 
     /// <summary>
     ///     时间范围上限（毫秒）
     /// </summary>
-    public int TimeRangeUpper { get; set; } = 2000;
+    public int TimeRangeUpper { get; set; } = 500;
 
     /// <summary>
     ///     最小重量（克）

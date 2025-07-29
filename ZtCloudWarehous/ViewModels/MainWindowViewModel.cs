@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Windows;
@@ -126,7 +126,8 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         _sortService.DeviceConnectionStatusChanged += OnDeviceConnectionStatusChanged;
         // 订阅包裹流
         _subscriptions.Add(packageTransferService.PackageStream
-            .Subscribe(package => { Application.Current.Dispatcher.BeginInvoke(() => OnPackageInfo(package)); }));
+            .ObserveOn(TaskPoolScheduler.Default) // 将处理切换到后台线程
+            .Subscribe(async package => await OnPackageInfo(package)));
     }
 
     public DelegateCommand OpenSettingsCommand { get; }
@@ -340,7 +341,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    private async void OnPackageInfo(PackageInfo package)
+    private async Task OnPackageInfo(PackageInfo package)
     {
         // --- 开始应用日志上下文 ---
         var packageContext = $"[包裹{package.Index}|{package.Barcode}]";
@@ -371,7 +372,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 }
 
                 // 步骤 2：更新当前条码 (UI)
-                Application.Current.Dispatcher.Invoke(() =>
+                await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     try
                     {
@@ -499,7 +500,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 }
 
                 // 步骤 7: 更新 UI (包裹详情)
-                Application.Current.Dispatcher.Invoke(() =>
+                await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     try
                     {
@@ -512,7 +513,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 });
 
                 // 步骤 8: 更新 UI (历史和统计)
-                Application.Current.Dispatcher.Invoke(() =>
+                await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     try
                     {
@@ -527,25 +528,16 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 });
 
                 // 步骤 9: 异步保存到数据库
-                Log.Debug("准备启动后台任务保存到数据库.");
-                var contextForDbTask = packageContext; // 捕获上下文
-                _ = Task.Run(async () =>
+                Log.Debug("准备直接异步保存到数据库.");
+                try
                 {
-                    using (LogContext.PushProperty("PackageContext", contextForDbTask)) // 恢复上下文
-                    {
-                        try
-                        {
-                            await _packageDataService.AddPackageAsync(package);
-                            Log.Debug("后台数据库保存成功."); // 使用 Debug
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Error(ex, "后台数据库保存失败.");
-                            // UI Notification should happen on UI thread if needed, consider event aggregation
-                            // _notificationService.ShowError($"保存包裹记录失败：{ex.Message}");
-                        }
-                    }
-                });
+                    await _packageDataService.SavePackageAsync(package);
+                    Log.Debug("包裹信息已成功异步保存到数据库.");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "异步保存包裹信息到数据库时发生严重错误");
+                }
 
                 // 步骤 10: 上传到西逸谷服务并等待
                 try

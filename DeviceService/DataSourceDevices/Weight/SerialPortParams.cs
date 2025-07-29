@@ -12,7 +12,7 @@ public class SerialPortParams
     /// <summary>
     ///     串口名称
     /// </summary>
-    public string PortName { get; set; } = string.Empty;
+    public string PortName { get; set; } = "COM1";
 
     /// <summary>
     ///     波特率

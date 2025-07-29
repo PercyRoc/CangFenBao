@@ -28,6 +28,7 @@
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
             <!-- 自定义转换器 -->
             <converters:InvertBooleanToVisibilityConverter x:Key="InvertBooleanToVisibilityConverter" />
+            <converters:ProgressToAngleConverter x:Key="ProgressToAngleConverter" />
             <!-- 默认图像资源 -->
         </ResourceDictionary>
     </ui:FluentWindow.Resources>
@@ -440,8 +441,9 @@
                                     Padding="16,12"
                                     CornerRadius="8"
                                     Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                                    BorderBrush="{Binding DeviceStatusColor, FallbackValue=#4CAF50}"
-                                    BorderThickness="2">
+                                    BorderBrush="{Binding PlcStatusColor, FallbackValue=#4CAF50}"
+                                    BorderThickness="2"
+                                    Margin="0,0,0,8">
                                 <Grid>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
@@ -451,23 +453,63 @@
                                     <!-- 状态和图标 -->
                                     <DockPanel Grid.Row="0">
                                         <ui:SymbolIcon Symbol="Warning24"
-                                                       Foreground="{Binding DeviceStatusColor, FallbackValue=#4CAF50}"
+                                                       Foreground="{Binding PlcStatusColor, FallbackValue=#4CAF50}"
                                                        VerticalAlignment="Center"
                                                        HorizontalAlignment="Right"
                                                        Width="24"
                                                        Height="24"
                                                        Margin="0,0,0,0"
                                                        DockPanel.Dock="Right" />
-                                        <TextBlock Text="{Binding DeviceStatusText, FallbackValue=正常}"
+                                        <TextBlock Text="{Binding PlcStatusText, FallbackValue=正常}"
                                                    FontSize="20"
                                                    FontWeight="SemiBold"
-                                                   Foreground="{Binding DeviceStatusColor, FallbackValue=#4CAF50}"
+                                                   Foreground="{Binding PlcStatusColor, FallbackValue=#4CAF50}"
                                                    VerticalAlignment="Center" />
                                     </DockPanel>
 
                                     <!-- 详细状态描述 -->
                                     <TextBlock Grid.Row="1"
-                                               Text="{Binding DeviceStatusDescription, FallbackValue=设备运行正常，可以扫码上包}"
+                                               Text="{Binding PlcStatusDescription, FallbackValue=设备运行正常，可以扫码上包}"
+                                               Margin="0,8,0,0"
+                                               TextWrapping="Wrap"
+                                               FontSize="14"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </Grid>
+                            </Border>
+
+                            <!-- JD WCS状态 -->
+                            <Border Grid.Row="1"
+                                    Padding="16,12"
+                                    CornerRadius="8"
+                                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{Binding JdWcsStatusColor, FallbackValue=#4CAF50}"
+                                    BorderThickness="2">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <!-- 状态和图标 -->
+                                    <DockPanel Grid.Row="0">
+                                        <ui:SymbolIcon Symbol="CloudSync24"
+                                                       Foreground="{Binding JdWcsStatusColor, FallbackValue=#4CAF50}"
+                                                       VerticalAlignment="Center"
+                                                       HorizontalAlignment="Right"
+                                                       Width="24"
+                                                       Height="24"
+                                                       Margin="0,0,0,0"
+                                                       DockPanel.Dock="Right" />
+                                        <TextBlock Text="{Binding JdWcsStatusText, FallbackValue=已连接}"
+                                                   FontSize="20"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{Binding JdWcsStatusColor, FallbackValue=#4CAF50}"
+                                                   VerticalAlignment="Center" />
+                                    </DockPanel>
+
+                                    <!-- 详细状态描述 -->
+                                    <TextBlock Grid.Row="1"
+                                               Text="{Binding JdWcsStatusDescription, FallbackValue=京东WCS服务连接正常，可以上传数据}"
                                                Margin="0,8,0,0"
                                                TextWrapping="Wrap"
                                                FontSize="14"
@@ -817,5 +859,68 @@
                     HorizontalAlignment="Right"
                     Margin="0,10,10,0"
                     Panel.ZIndex="1000" />
+
+        <!-- 倒计时遮罩层 -->
+        <Grid Grid.Row="1"
+              Background="#80000000"
+              Visibility="{Binding IsWaitingForUploadResult, Converter={StaticResource BooleanToVisibilityConverter}}"
+              Panel.ZIndex="2000">
+            <Border Background="#F5F5F5"
+                    CornerRadius="12"
+                    Padding="40,30"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    BorderBrush="#E0E0E0"
+                    BorderThickness="1">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="20"
+                                      Color="#40000000"
+                                      Direction="270"
+                                      Opacity="0.3"
+                                      ShadowDepth="8" />
+                </Border.Effect>
+                <StackPanel HorizontalAlignment="Center">
+                    <!-- 标题 -->
+                    <TextBlock Text="等待PLC上包确认"
+                               FontSize="24"
+                               FontWeight="SemiBold"
+                               Foreground="#333333"
+                               HorizontalAlignment="Center"
+                               Margin="0,0,0,20" />
+
+                    <!-- 倒计时圆环 -->
+                    <Grid Width="120" Height="120" Margin="0,0,0,20">
+                        <!-- 背景圆环 -->
+                        <Ellipse Stroke="#E0E0E0"
+                                 StrokeThickness="8"
+                                 Fill="Transparent" />
+                        
+                        <!-- 进度圆环 -->
+                        <ui:Arc Stroke="#2196F3"
+                                StrokeThickness="8"
+                                StartAngle="0"
+                                EndAngle="{Binding WaitingCountdownProgress, Converter={StaticResource ProgressToAngleConverter}}"
+                                Width="104"
+                                Height="104" />
+                        
+                        <!-- 倒计时数字 -->
+                        <TextBlock Text="{Binding WaitingCountdownSeconds}"
+                                   FontSize="36"
+                                   FontWeight="Bold"
+                                   Foreground="#2196F3"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+
+                    <!-- 状态文本 -->
+                    <TextBlock Text="{Binding WaitingStatusText}"
+                               FontSize="16"
+                               Foreground="#666666"
+                               HorizontalAlignment="Center"
+                               TextWrapping="Wrap"
+                               MaxWidth="300" />
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </ui:FluentWindow>

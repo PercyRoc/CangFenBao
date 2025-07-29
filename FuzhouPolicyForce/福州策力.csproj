@@ -7,7 +7,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
         <ApplicationIcon>Resources\logo2.ico</ApplicationIcon>
-        <AssemblyName>科仓重庆</AssemblyName>
+        <AssemblyName>科仓南昌</AssemblyName>
         <RootNamespace>FuzhouPolicyForce</RootNamespace>
     </PropertyGroup>
 

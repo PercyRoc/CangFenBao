@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using Common.Services.Settings;
 
@@ -53,6 +53,17 @@ public class PendulumSortConfig : BindableBase
     {
         get => _straightThroughTimeout;
         set => SetProperty(ref _straightThroughTimeout, value);
+    }
+    private int _sameSlotMaxWaitTime = 3000;
+
+    /// <summary>
+    ///     等待相同格口包裹的最大时间（毫秒）
+    ///     超过此时间后将强制执行回正操作，确保系统安全
+    /// </summary>
+    public int SameSlotMaxWaitTime
+    {
+        get => _sameSlotMaxWaitTime;
+        set => SetProperty(ref _sameSlotMaxWaitTime, value);
     }
 }
 

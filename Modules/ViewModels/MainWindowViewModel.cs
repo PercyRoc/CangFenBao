@@ -523,11 +523,10 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     /// <param name="isLocked">是否锁定</param>
     private async void OnChuteLockStatusChanged(int chuteNumber, bool isLocked)
     {
-        // 如果格口被锁定，则通知格口包裹记录服务进行数据上传和清空
-        if (isLocked)
-        {
-            await _chutePackageRecordService.SetChuteLockStatusAsync(chuteNumber, true);
-        }
+        // 通知格口包裹记录服务更新锁定状态
+        // 如果格口被锁定，会自动进行数据上传和清空
+        // 如果格口被解锁，会更新状态允许新包裹进入
+        await _chutePackageRecordService.SetChuteLockStatusAsync(chuteNumber, isLocked);
     }
 
     /// <summary>

@@ -6,7 +6,7 @@ using DeviceService.DataSourceDevices.Camera.Models.Camera.Enums;
 using DeviceService.DataSourceDevices.Camera.TCP;
 using Serilog;
 // using DeviceService.DataSourceDevices.Camera.Hikvision;
-using DeviceService.DataSourceDevices.Camera.HikvisionSmartSdk;
+// using DeviceService.DataSourceDevices.Camera.HikvisionSmartSdk;
 
 namespace DeviceService.DataSourceDevices.Camera;
 
@@ -94,8 +94,8 @@ public class CameraFactory : IDisposable
                 CameraManufacturer.HuaRay => new HuaRayCameraService(),
                 // CameraManufacturer.Hikvision when cameraType == CameraType.Industrial =>
                 //     new HikvisionIndustrialCameraService(),
-                CameraManufacturer.Hikvision when cameraType == CameraType.Smart =>
-                    new HikvisionSmartCameraService(),
+                // CameraManufacturer.Hikvision when cameraType == CameraType.Smart =>
+                //     new HikvisionSmartCameraService(),
                 CameraManufacturer.Tcp => new TcpCameraService(),
                 _ => throw new ArgumentException($"不支持的相机厂商和类型组合: {manufacturer} - {cameraType}")
             };

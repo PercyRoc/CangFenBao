@@ -317,7 +317,7 @@ internal class TcpCameraService : ICameraService
         {
             Log.Debug("开始处理单个数据包: {Data}", packetData);
             var parts = packetData.Split(',');
-            if (!ValidatePacket(parts.ToList()))
+            if (!ValidatePacket([.. parts]))
             {
                 Log.Warning("无效的数据包格式 (再次验证失败): {Data}", packetData);
                 return;

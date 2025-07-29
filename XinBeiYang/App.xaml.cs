@@ -108,6 +108,8 @@ public partial class App
 
         containerRegistry.RegisterSingleton<IHostedService, PlcCommunicationHostedService>();
 
+        containerRegistry.RegisterSingleton<IJdWcsCommunicationService, JdWcsCommunicationService>();
+
         containerRegistry.RegisterSingleton<IImageStorageService, LocalImageStorageService>();
     }
 
@@ -157,6 +159,10 @@ public partial class App
 
             var hostedService = Container.Resolve<PlcCommunicationHostedService>();
             await hostedService.StartAsync(CancellationToken.None);
+
+            var jdWcsService = Container.Resolve<IJdWcsCommunicationService>();
+            jdWcsService.Start();
+            Log.Information("JD WCS通信服务启动成功");
         }
         catch (Exception ex)
         {

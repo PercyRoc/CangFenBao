@@ -1,4 +1,5 @@
 using System.IO;
+using System.Threading.Tasks;
 using Common.Data;
 using Common.Services.Audio;
 using Common.Services.License;
@@ -55,7 +56,30 @@ public static class ServiceCollectionExtensions
         // 注册数据服务
         containerRegistry.RegisterSingleton<IPackageDataService, PackageDataService>();
 
+        // 初始化数据库并修复表结构
+        _ = Task.Run(async () => await InitializeDatabaseAsync(options));
+
         return containerRegistry;
+    }
+
+    /// <summary>
+    /// 异步初始化数据库并修复所有表结构
+    /// </summary>
+    private static async Task InitializeDatabaseAsync(DbContextOptions<PackageDbContext> options)
+    {
+        try
+        {
+            using var context = new PackageDbContext(options);
+            var packageDataService = new PackageDataService(options);
+            
+            // 修复所有表结构
+            await packageDataService.FixAllTablesStructureAsync();
+        }
+        catch (Exception ex)
+        {
+            // 记录错误但不阻止应用启动
+            System.Diagnostics.Debug.WriteLine($"数据库初始化失败: {ex.Message}");
+        }
     }
 
     /// <summary>

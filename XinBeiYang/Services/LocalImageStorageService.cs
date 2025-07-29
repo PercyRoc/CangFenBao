@@ -16,8 +16,8 @@ public class LocalImageStorageService : IImageStorageService
 
     public LocalImageStorageService()
     {
-        // 默认存储路径：应用程序基础目录\Images
-        _baseStoragePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Images");
+        // 默认存储路径：E:/Images，使用Path.GetFullPath标准化路径格式
+        _baseStoragePath = Path.GetFullPath("E:/Images");
         Log.Information("本地图像存储路径设置为: {Path}", _baseStoragePath);
     }
 
@@ -27,7 +27,8 @@ public class LocalImageStorageService : IImageStorageService
     /// <param name="baseStoragePath">存储图像的根目录。</param>
     public LocalImageStorageService(string baseStoragePath)
     {
-        _baseStoragePath = baseStoragePath;
+        // 使用Path.GetFullPath标准化路径格式，避免混合分隔符问题
+        _baseStoragePath = Path.GetFullPath(baseStoragePath);
         Log.Information("本地图像存储路径设置为: {Path}", _baseStoragePath);
     }
 

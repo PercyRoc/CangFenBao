@@ -51,6 +51,11 @@ public interface IPackageDataService
     Task AddPackageAsync(PackageInfo package);
 
     /// <summary>
+    ///     保存包裹记录（新增或更新）
+    /// </summary>
+    Task SavePackageAsync(PackageInfo package);
+
+    /// <summary>
     ///     根据条码查询包裹
     /// </summary>
     Task<PackageRecord?> GetPackageByBarcodeAsync(string barcode, DateTime? date = null);
@@ -96,7 +101,7 @@ internal class PackageDataService : IPackageDataService
     private readonly string _dbPath;
     private readonly SemaphoreSlim _initializationLock = new(1, 1);
     private readonly DbContextOptions<PackageDbContext> _options;
-    private readonly ConcurrentDictionary<string, bool> _tableExistsCache = new();
+    private readonly ConcurrentDictionary<string, Task> _initializationTasks = new();
     private bool _isInitialized;
 
     /// <summary>
@@ -135,9 +140,10 @@ internal class PackageDataService : IPackageDataService
                 record.CreateTime = DateTime.Now;
             }
 
-            // 确保表存在
-            await EnsureMonthlyTableExists(record.CreateTime);
+            // 确保表初始化完成（原子操作）
             var tableName = GetTableName(record.CreateTime);
+            var initializationTask = _initializationTasks.GetOrAdd(tableName, _ => InitializeTableAsync(record.CreateTime));
+            await initializationTask;
 
             // 使用原始SQL插入记录而不是EF Core的AddAsync，避免模型缓存问题
             await using var dbContext = CreateDbContext(record.CreateTime);
@@ -220,6 +226,13 @@ internal class PackageDataService : IPackageDataService
             Log.Error(ex, "添加包裹记录失败：{Barcode}", package.Barcode);
             throw;
         }
+    }
+
+    /// <inheritdoc />
+    public async Task SavePackageAsync(PackageInfo package)
+    {
+        // SavePackageAsync 是 AddPackageAsync 的别名，用于兼容调用
+        await AddPackageAsync(package);
     }
 
     /// <inheritdoc />
@@ -827,12 +840,6 @@ internal class PackageDataService : IPackageDataService
     /// </summary>
     private async Task<bool> TableExistsAsync(string tableName)
     {
-        // 先检查缓存
-        if (_tableExistsCache.TryGetValue(tableName, out var exists) && exists)
-        {
-            return true;
-        }
-
         try
         {
             await using var dbContext = CreateDbContext();
@@ -843,13 +850,7 @@ internal class PackageDataService : IPackageDataService
             command.CommandText = $"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='{tableName}'";
             var result = await command.ExecuteScalarAsync();
 
-            exists = Convert.ToInt32(result) > 0;
-
-            if (exists)
-            {
-                _tableExistsCache.TryAdd(tableName, true);
-            }
-
+            var exists = Convert.ToInt32(result) > 0;
             return exists;
         }
         catch (Exception ex)
@@ -863,7 +864,7 @@ internal class PackageDataService : IPackageDataService
     /// <summary>
     ///     检查并修复所有现有表的结构
     /// </summary>
-    private async Task FixAllTablesStructureAsync()
+    public async Task FixAllTablesStructureAsync()
     {
         try
         {
@@ -896,14 +897,21 @@ internal class PackageDataService : IPackageDataService
     }
 
     /// <summary>
+    ///     初始化月度表，包括创建和模式检查（此方法应是线程安全的）
+    /// </summary>
+    private async Task InitializeTableAsync(DateTime date)
+    {
+        await EnsureMonthlyTableExists(date);
+        await EnsureTableSchemaIsCorrectAsync(date); 
+    }
+
+
+    /// <summary>
     ///     确保月度表存在
     /// </summary>
     private async Task EnsureMonthlyTableExists(DateTime date)
     {
         var tableName = GetTableName(date);
-
-        // 检查缓存
-        if (_tableExistsCache.TryGetValue(tableName, out var exists) && exists) return;
 
         Log.Debug("检查数据表是否存在：{TableName}", tableName);
 
@@ -931,8 +939,7 @@ internal class PackageDataService : IPackageDataService
             else
                 Log.Debug("数据表已存在：{TableName}", tableName);
 
-            // 更新缓存
-            _tableExistsCache.TryAdd(tableName, true);
+
         }
         catch (Exception ex)
         {
@@ -944,6 +951,35 @@ internal class PackageDataService : IPackageDataService
     /// <summary>
     ///     创建月度数据表
     /// </summary>
+    private async Task EnsureTableSchemaIsCorrectAsync(DateTime date)
+    {
+        var tableName = GetTableName(date);
+        await using var dbContext = CreateDbContext(date);
+        var connection = dbContext.Database.GetDbConnection();
+        await connection.OpenAsync();
+
+        var expectedColumns = new HashSet<string> { "Id", "PackageIndex", "Barcode", "SegmentCode", "Weight", "ChuteNumber", "SortPortCode", "Status", "StatusDisplay", "CreateTime", "Length", "Width", "Height", "Volume", "Information", "ErrorMessage", "ImagePath", "PalletName", "PalletWeight", "PalletLength", "PalletWidth", "PalletHeight" };
+
+        var command = connection.CreateCommand();
+        command.CommandText = $"PRAGMA table_info({tableName})";
+        
+        var existingColumns = new HashSet<string>();
+        await using (var reader = await command.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+                existingColumns.Add(reader.GetString(1)); // 'name' is the second column
+            }
+        }
+
+        if (!expectedColumns.SetEquals(existingColumns))
+        {
+            Log.Warning("Table {TableName} schema is not correct. Expected: {ExpectedColumns}, Actual: {ActualColumns}", 
+                tableName, string.Join(", ", expectedColumns), string.Join(", ", existingColumns));
+            // In a real-world scenario, you might want to run an ALTER TABLE script here.
+        }
+    }
+
     private static async Task CreateMonthlyTableAsync(DbContext dbContext, string tableName)
     {
         try
@@ -1112,6 +1148,9 @@ internal class PackageDataService : IPackageDataService
                 },
                 {
                     "ChuteNumber", "INTEGER"
+                },
+                {
+                    "SortPortCode", "TEXT(50)"
                 },
                 {
                     "Status", "INTEGER"

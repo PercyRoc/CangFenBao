@@ -175,12 +175,12 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
         {
             var deviceNo = _config.DeviceId;
             var urlPrefix = _config.JdLocalHttpUrlPrefix.TrimEnd('/');
-            var imageBaseStoragePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Images");
+            // 使用与LocalImageStorageService一致的基础路径
+            var imageBaseStoragePath = Path.GetFullPath("E:/Images");
 
             var finalUrls = new List<string>();
-            foreach (var absolutePath in absoluteImageUrls)
+            foreach (var absolutePath in absoluteImageUrls.Where(absolutePath => !string.IsNullOrEmpty(absolutePath)))
             {
-                if (string.IsNullOrEmpty(absolutePath)) continue;
                 try
                 {
                     var relativePath = Path.GetRelativePath(imageBaseStoragePath, absolutePath);
@@ -194,7 +194,7 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
                 }
             }
 
-            if (!finalUrls.Any())
+            if (finalUrls.Count == 0)
             {
                 Log.Error("无法为 TaskNo: {TaskNo} 构造任何有效的图片URL", taskNo);
                 return false;

@@ -200,7 +200,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     private static readonly Brush
         BackgroundTimeout =
             new SolidColorBrush(Color.FromArgb(0xAA, 0xFF, 0xC1, 0x07)); // 黄色 (增加透明度) - 用于禁止上包状态
-    private readonly IAudioService _audioService;
+    private readonly IEnhancedAudioService _audioService;
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
     private readonly IImageStorageService _imageStorageService;
@@ -215,6 +215,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     // *** 移除: 不再需要等待最终结果的包裹超时管理 ***
     // private readonly ConcurrentDictionary<ushort, CancellationTokenSource> _pendingFinalResultTimeouts = new();
     private readonly IPlcCommunicationService _plcCommunicationService;
+    private readonly IJdWcsCommunicationService _jdWcsCommunicationService;
     private readonly object _processingLock = new();
     private readonly ISettingsService _settingsService;
     private readonly List<IDisposable> _subscriptions = [];
@@ -232,9 +233,15 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     private BitmapSource? _currentImage;
 
     private PackageInfo? _currentlyProcessingPackage;
-    private string _deviceStatusColor = "#F44336";
-    private string _deviceStatusDescription = "PLC设备未连接，请检查网络连接";
-    private string _deviceStatusText = "未连接";
+    // PLC状态独立属性
+    private string _plcStatusColor = "#F44336";
+    private string _plcStatusDescription = "PLC设备未连接，请检查网络连接";
+    private string _plcStatusText = "未连接";
+    
+    // JD WCS状态独立属性
+    private string _jdWcsStatusColor = "#F44336";
+    private string _jdWcsStatusDescription = "京东WCS服务未连接，请检查网络连接";
+    private string _jdWcsStatusText = "未连接";
     private bool _disposed;
     private int _gridColumns;
 
@@ -255,14 +262,18 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     private DispatcherTimer? _uploadCountdownTimer;
     private int _uploadCountdownValue;
 
+    // 等待PLC确认倒计时相关
+    private DispatcherTimer? _waitingCountdownTimer;
+    private int _waitingCountdownTotalSeconds;
+
     private int _viewModelPackageIndex;
 
     public MainWindowViewModel(
         IDialogService dialogService,
         ICameraService cameraService,
-        IAudioService audioService,
+        IEnhancedAudioService audioService,
         IPlcCommunicationService plcCommunicationService,
-
+        IJdWcsCommunicationService jdWcsCommunicationService,
         IImageStorageService imageStorageService,
         ISettingsService settingsService,
         WeightStartupService weightStartupService) // 修改为WeightStartupService参数
@@ -271,7 +282,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         _cameraService = cameraService;
         _audioService = audioService;
         _plcCommunicationService = plcCommunicationService;
-
+        _jdWcsCommunicationService = jdWcsCommunicationService;
         _imageStorageService = imageStorageService;
         _settingsService = settingsService;
         _weightService = weightStartupService.GetWeightService(); // 通过WeightStartupService获取重量称服务实例
@@ -297,6 +308,9 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
 
         // 初始化设备状态
         InitializeDeviceStatuses();
+        
+        // 初始化PLC和JD WCS独立状态属性
+        InitializeIndividualDeviceStatuses();
 
         // 初始化相机视图（添加加载中占位符）
         InitializeCameraPlaceholder();
@@ -312,6 +326,9 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
 
         // 订阅PLC设备状态变更事件 - 统一处理连接和状态变更
         _plcCommunicationService.DeviceStatusChanged += OnPlcDeviceStatusChanged;
+
+        // 订阅JD WCS连接状态变更事件
+        _jdWcsCommunicationService.ConnectionChanged += OnJdWcsConnectionChanged;
 
 
 
@@ -530,22 +547,42 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
 
     public ObservableCollection<CameraDisplayInfo> Cameras { get; } = [];
 
-    public string DeviceStatusText
+    // PLC状态独立属性
+    public string PlcStatusText
     {
-        get => _deviceStatusText;
-        private set => SetProperty(ref _deviceStatusText, value);
+        get => _plcStatusText;
+        private set => SetProperty(ref _plcStatusText, value);
     }
 
-    public string DeviceStatusDescription
+    public string PlcStatusDescription
     {
-        get => _deviceStatusDescription;
-        private set => SetProperty(ref _deviceStatusDescription, value);
+        get => _plcStatusDescription;
+        private set => SetProperty(ref _plcStatusDescription, value);
     }
 
-    public string DeviceStatusColor
+    public string PlcStatusColor
     {
-        get => _deviceStatusColor;
-        set => SetProperty(ref _deviceStatusColor, value);
+        get => _plcStatusColor;
+        private set => SetProperty(ref _plcStatusColor, value);
+    }
+    
+    // JD WCS状态独立属性
+    public string JdWcsStatusText
+    {
+        get => _jdWcsStatusText;
+        private set => SetProperty(ref _jdWcsStatusText, value);
+    }
+
+    public string JdWcsStatusDescription
+    {
+        get => _jdWcsStatusDescription;
+        private set => SetProperty(ref _jdWcsStatusDescription, value);
+    }
+
+    public string JdWcsStatusColor
+    {
+        get => _jdWcsStatusColor;
+        private set => SetProperty(ref _jdWcsStatusColor, value);
     }
 
     public BitmapSource? CurrentImage
@@ -672,6 +709,48 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
     {
         get => _isUploadCountdownVisible;
         private set => SetProperty(ref _isUploadCountdownVisible, value);
+    }
+
+    // 等待PLC上包确认的遮罩层相关属性
+    private bool _isWaitingForUploadResult;
+    private int _waitingCountdownSeconds;
+    private double _waitingCountdownProgress;
+    private string _waitingStatusText = "等待PLC确认上包...";
+
+    /// <summary>
+    ///     是否正在等待PLC上包确认结果
+    /// </summary>
+    public bool IsWaitingForUploadResult
+    {
+        get => _isWaitingForUploadResult;
+        private set => SetProperty(ref _isWaitingForUploadResult, value);
+    }
+
+    /// <summary>
+    ///     等待倒计时秒数
+    /// </summary>
+    public int WaitingCountdownSeconds
+    {
+        get => _waitingCountdownSeconds;
+        private set => SetProperty(ref _waitingCountdownSeconds, value);
+    }
+
+    /// <summary>
+    ///     等待倒计时圆环进度 (0-100)
+    /// </summary>
+    public double WaitingCountdownProgress
+    {
+        get => _waitingCountdownProgress;
+        private set => SetProperty(ref _waitingCountdownProgress, value);
+    }
+
+    /// <summary>
+    ///     等待状态文本
+    /// </summary>
+    public string WaitingStatusText
+    {
+        get => _waitingStatusText;
+        private set => SetProperty(ref _waitingStatusText, value);
     }
 
     public void Dispose()
@@ -900,12 +979,29 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                 _cameraService.IsConnected ? "#4CAF50" : "#F44336"),
             new DeviceStatusInfo("PLC", "Router24", _plcCommunicationService.IsConnected ? "正常" : "未连接",
                 _plcCommunicationService.IsConnected ? "#4CAF50" : "#F44336"), // Added PLC status
+            new DeviceStatusInfo("JD WCS", "CloudDatabase24", _jdWcsCommunicationService.IsConnected ? "已连接" : "未连接",
+                _jdWcsCommunicationService.IsConnected ? "#4CAF50" : "#F44336"), // Added JD WCS status
 
         ];
         // 初始更新合并PLC状态文本
         OnPlcDeviceStatusChanged(this,
             _plcCommunicationService.IsConnected ? DeviceStatusCode.Normal : DeviceStatusCode.Disconnected);
 
+    }
+    
+    private void InitializeIndividualDeviceStatuses()
+    {
+        // 初始化PLC状态
+        var plcStatusCode = _plcCommunicationService.IsConnected ? DeviceStatusCode.Normal : DeviceStatusCode.Disconnected;
+        PlcStatusText = GetDeviceStatusDisplayText(plcStatusCode);
+        PlcStatusDescription = GetDeviceStatusDescription(plcStatusCode);
+        PlcStatusColor = GetDeviceStatusColor(plcStatusCode);
+        
+        // 初始化JD WCS状态
+        var isJdWcsConnected = _jdWcsCommunicationService.IsConnected;
+        JdWcsStatusText = isJdWcsConnected ? "已连接" : "未连接";
+        JdWcsStatusDescription = isJdWcsConnected ? "京东WCS服务连接正常，可以上传数据" : "京东WCS服务未连接，请检查网络连接";
+        JdWcsStatusColor = isJdWcsConnected ? "#4CAF50" : "#F44336";
     }
 
     private void InitializeStatisticsItems()
@@ -1010,10 +1106,10 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         }
 
         // 检查PLC状态
-        if (DeviceStatusText != "正常") // 直接检查已更新的状态文本
+        if (PlcStatusText != "正常") // 直接检查已更新的状态文本
         {
-            Log.Warning("{Context} PLC状态异常 ({StatusText})，无法处理.", packageContext, DeviceStatusText); // 使用已更新的文本
-            package.SetStatus(PackageStatus.Error, $"PLC状态异常: {DeviceStatusText}");
+            Log.Warning("{Context} PLC状态异常 ({StatusText})，无法处理.", packageContext, PlcStatusText); // 使用已更新的文本
+            package.SetStatus(PackageStatus.Error, $"PLC状态异常: {PlcStatusText}");
             Application.Current.Dispatcher.Invoke(() => UpdateUiFromResult(package));
             _ = _audioService.PlayPresetAsync(AudioType.PlcDisconnected);
             IsPlcAbnormalWarningVisible = !IsPlcRejectWarningVisible;
@@ -1081,7 +1177,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                     package.SetStatus(PackageStatus.LoadingRejected, $"上包拒绝 (超时) (序号: {package.Index})");
                     _ = _audioService.PlayPresetAsync(AudioType.LoadingRejected);
                     // 添加超时包裹到历史记录
-                    Application.Current.Dispatcher.Invoke(() => 
+                    Application.Current.Dispatcher.Invoke(() =>
                     {
                         UpdatePackageHistory(package);
                         UpdateStatistics(package);
@@ -1124,26 +1220,110 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             // *** 播放允许上包语音 ***
             _ = _audioService.PlayPresetAsync(AudioType.LoadingAllowed);
 
-            // *** 直接设置包裹状态为上包成功 ***
-            package.SetStatus(PackageStatus.LoadingSuccess, $"上包成功 (序号: {package.Index})");
-
+            // *** 更新状态为等待上包完成 ***
             Application.Current.Dispatcher.Invoke(() =>
             {
                 MainWindowBackgroundBrush = BackgroundSuccess; // PLC 接受，允许下一个扫描
                 Log.Information("[状态][UI] 设置背景为 绿色 (允许上包) - PLC接受 ({Context})", packageContext);
                 var statusItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "状态");
                 if (statusItem == null) return;
-                statusItem.Value = $"上包成功 (序号: {package.Index})";
-                statusItem.Description = "PLC已接受上包请求";
-                statusItem.StatusColor = "#4CAF50"; // Green
-                
-                // *** 立即更新PackageHistory ***
-                UpdatePackageHistory(package);
-                UpdateStatistics(package);
-                Log.Information("{Context} PLC接受上包请求，已立即更新PackageHistory", packageContext);
+                statusItem.Value = $"等待上包完成 (序号: {package.Index})";
+                statusItem.Description = "PLC已接受，等待上包完成...";
+                statusItem.StatusColor = "#FFC107"; // Yellow - waiting
             });
 
-            Log.Information("{Context} 包裹处理完成，立即释放处理权限", packageContext);
+            // --- 等待PLC上包最终结果 ---
+            Log.Information("{Context} 开始等待PLC上包最终结果...", packageContext);
+            
+            // 获取配置的超时时间
+            var config = _settingsService.LoadSettings<HostConfiguration>();
+            var resultTimeoutSeconds = config.UploadResultTimeoutSeconds;
+            
+            // 启动倒计时遮罩层
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                StartWaitingCountdown(resultTimeoutSeconds); // 使用配置的超时时间
+            });
+            
+            try
+            {
+                // 创建配置的超时时间的取消令牌用于等待最终结果
+                using var finalResultTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(resultTimeoutSeconds));
+                using var finalResultLinkedCts = CancellationTokenSource.CreateLinkedTokenSource(finalResultTimeoutCts.Token, cancellationToken);
+
+                var (wasSuccess, isTimeout, packageId) = await _plcCommunicationService.WaitForUploadResultAsync(
+                    ackResult.CommandId, finalResultLinkedCts.Token);
+
+                if (isTimeout)
+                {
+                    Log.Warning("{Context} 等待PLC上包最终结果超时", packageContext);
+                    package.SetStatus(PackageStatus.LoadingTimeout, $"上包超时 (序号: {package.Index})");
+                    _ = _audioService.PlayPresetAsync(AudioType.LoadingTimeout);
+                }
+                else if (wasSuccess)
+                {
+                    Log.Information("{Context} PLC上包成功. PackageId={PackageId}", packageContext, packageId);
+                    package.SetStatus(PackageStatus.LoadingSuccess, $"上包成功 (序号: {package.Index})");
+                    _ = _audioService.PlayPresetAsync(AudioType.LoadingSuccess);
+                    
+                    // 处理图像保存和上传到WCS
+                    await HandleImageSavingAndUpload(package, packageContext, packageId);
+                }
+                else
+                {
+                    Log.Warning("{Context} PLC上包失败. PackageId={PackageId}", packageContext, packageId);
+                    package.SetStatus(PackageStatus.Error, $"上包失败 (序号: {package.Index})");
+                    _ = _audioService.PlayPresetAsync(AudioType.SystemError);
+                }
+
+                // 停止倒计时遮罩层
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    StopWaitingCountdown();
+                });
+
+                // 更新最终状态到UI
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    var statusItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "状态");
+                    if (statusItem != null)
+                    {
+                        statusItem.Value = package.StatusDisplay;
+                        statusItem.Description = wasSuccess ? "上包完成" : (isTimeout ? "上包超时" : "上包失败");
+                        statusItem.StatusColor = wasSuccess ? "#4CAF50" : "#F44336"; // Green for success, Red for failure/timeout
+                    }
+                    
+                    // 更新包裹历史和统计
+                    UpdatePackageHistory(package);
+                    UpdateStatistics(package);
+                    Log.Information("{Context} PLC上包最终结果处理完成，已更新PackageHistory", packageContext);
+                });
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                Log.Warning("{Context} 等待PLC上包最终结果时操作被取消", packageContext);
+                package.SetStatus(PackageStatus.Error, "操作取消 (等待上包结果)");
+                
+                // 停止倒计时遮罩层
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    StopWaitingCountdown();
+                });
+            }
+            catch (Exception finalResultEx)
+            {
+                Log.Error(finalResultEx, "{Context} 等待PLC上包最终结果时出错", packageContext);
+                package.SetStatus(PackageStatus.Error, $"等待上包结果错误: {finalResultEx.Message}");
+                _ = _audioService.PlayPresetAsync(AudioType.SystemError);
+                
+                // 停止倒计时遮罩层
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    StopWaitingCountdown();
+                });
+            }
+
+            Log.Information("{Context} 包裹处理完成，准备释放处理权限", packageContext);
         } // 结束 try (PLC 通信块)
         catch (OperationCanceledException) // 捕获 await 过程中的取消
         {
@@ -1177,12 +1357,9 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    // *** 新增: 处理图像保存的辅助方法 ***
-    // *** Add packageContext parameter ***
-    // ReSharper disable once UnusedMember.Local
-    private async Task HandleImageSaving(PackageInfo package, string packageContext)
+    // *** 新增: 处理图像保存和上传到WCS的方法 ***
+    private async Task HandleImageSavingAndUpload(PackageInfo package, string packageContext, int packageId)
     {
-        // *** Use passed context for logging ***
         if (package.Image == null)
         {
             Log.Warning("{Context} 包裹信息中无图像可保存或上传.", packageContext);
@@ -1191,7 +1368,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             return;
         }
 
-        Log.Debug("{Context} 开始处理图像保存.", packageContext);
+        Log.Debug("{Context} 开始处理图像保存和上传到WCS.", packageContext);
         BitmapSource? imageToSave;
         try
         {
@@ -1202,7 +1379,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         catch (Exception cloneEx)
         {
             Log.Error(cloneEx, "{Context} 克隆或冻结图像时出错.", packageContext);
-            imageToSave = null; // 出错则不处理
+            imageToSave = null;
         }
 
         if (imageToSave == null)
@@ -1212,7 +1389,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             return;
         }
 
-        // 保存图像
+        // 保存图像到指定路径
         string? imagePath = null;
         try
         {
@@ -1227,8 +1404,9 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         {
             package.ImagePath = imagePath;
             Log.Information("{Context} 图像保存成功: Path={ImagePath}", packageContext, imagePath);
-
-
+            
+            // 上传图片路径到WCS
+            await UploadImagePathToWcs(package, packageContext, packageId, imagePath);
         }
         else
         {
@@ -1236,7 +1414,60 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             var currentDisplay = package.StatusDisplay;
             package.SetStatus(package.Status, $"{currentDisplay} [图像保存失败]");
         }
-        // imageToSave 会在此方法结束后超出作用域
+    }
+    
+    // *** 新增: 上传图片路径到WCS的方法 ***
+    private async Task UploadImagePathToWcs(PackageInfo package, string packageContext, int packageId, string imagePath)
+    {
+        try
+        {
+            Log.Debug("{Context} 开始上传图片路径到WCS: ImagePath={ImagePath}", 
+                packageContext, imagePath);
+            
+            // 准备条码列表
+            var barcodeList = new List<string>();
+            if (!string.IsNullOrEmpty(package.Barcode))
+            {
+                barcodeList.Add(package.Barcode);
+            }
+            
+            // 准备二维码列表（如果有的话）
+            var matrixBarcodeList = new List<string>();
+            
+            // 准备图片绝对路径列表，JdWcsCommunicationService会自动处理路径转换
+            var absoluteImageUrls = new List<string> { imagePath };
+            
+            // 生成时间戳
+            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            
+            // 调用WCS服务上传图片路径，JdWcsCommunicationService会自动处理路径转换和URL生成
+            var uploadSuccess = await _jdWcsCommunicationService.UploadImageUrlsAsync(
+                packageId, 
+                barcodeList, 
+                matrixBarcodeList, 
+                absoluteImageUrls, 
+                timestamp);
+            
+            if (uploadSuccess)
+            {
+                Log.Information("{Context} 图片路径上传到WCS成功: TaskNo={PackageId}, ImagePath={ImagePath}", 
+                    packageContext, packageId, imagePath);
+            }
+            else
+            {
+                Log.Warning("{Context} 图片路径上传到WCS失败: TaskNo={PackageId}, ImagePath={ImagePath}", 
+                    packageContext, packageId, imagePath);
+                var currentDisplay = package.StatusDisplay;
+                package.SetStatus(package.Status, $"{currentDisplay} [WCS上传失败]");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "{Context} 上传图片路径到WCS时发生异常: TaskNo={PackageId}, ImagePath={ImagePath}", 
+                packageContext, packageId, imagePath);
+            var currentDisplay = package.StatusDisplay;
+            package.SetStatus(package.Status, $"{currentDisplay} [WCS上传异常]");
+        }
     }
 
 
@@ -1347,24 +1578,39 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         var statusItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "状态");
         if (statusItem == null) return;
 
+        // 提取PackageId用于显示
+        var packageId = GetPackageIdFromInformation(package.StatusDisplay);
+        
         if (string.IsNullOrEmpty(package.ErrorMessage)) // 成功
         {
-            statusItem.Value = package.StatusDisplay; // 使用提供的显示或默认
-            statusItem.Description = $"PLC 包裹流水号: {GetPackageIdFromInformation(package.StatusDisplay)}";
+            // 在状态值中包含PackageId信息
+            statusItem.Value = packageId != "N/A" 
+                ? $"{package.StatusDisplay} (ID: {packageId})"
+                : package.StatusDisplay;
+            statusItem.Description = packageId != "N/A" 
+                ? $"PLC 包裹流水号: {packageId}"
+                : "上包处理成功";
             statusItem.StatusColor = "#4CAF50"; // 绿色
         }
         else // Error
         {
-            statusItem.Value = package.ErrorMessage; // 例如, "上包超时 (序号: X)"
+            // 在错误状态中也尝试显示PackageId（如果有的话）
+            statusItem.Value = packageId != "N/A" 
+                ? $"{package.ErrorMessage} (ID: {packageId})"
+                : package.ErrorMessage;
 
             if (package.ErrorMessage.StartsWith("上包超时"))
             {
-                statusItem.Description = "上包请求未收到 PLC 响应";
+                statusItem.Description = packageId != "N/A" 
+                    ? $"上包请求未收到 PLC 响应 (流水号: {packageId})"
+                    : "上包请求未收到 PLC 响应";
                 statusItem.StatusColor = "#FFC107"; // 黄色 (超时)
             }
             else if (package.ErrorMessage.StartsWith("上包拒绝"))
             {
-                statusItem.Description = "PLC 拒绝了上包请求";
+                statusItem.Description = packageId != "N/A" 
+                    ? $"PLC 拒绝了上包请求 (流水号: {packageId})"
+                    : "PLC 拒绝了上包请求";
                 statusItem.StatusColor = "#F44336"; // 红色 (拒绝)
             }
             else if (package.ErrorMessage.StartsWith("PLC状态异常"))
@@ -1374,7 +1620,9 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             }
             else // 通用错误
             {
-                statusItem.Description = $"处理失败 (序号: {package.Index})";
+                statusItem.Description = packageId != "N/A" 
+                    ? $"处理失败 (序号: {package.Index}, 流水号: {packageId})"
+                    : $"处理失败 (序号: {package.Index})";
                 statusItem.StatusColor = "#F44336"; // 红色 (通用错误)
             }
         }
@@ -1701,6 +1949,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                 // 取消订阅
                 _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
                 _plcCommunicationService.DeviceStatusChanged -= OnPlcDeviceStatusChanged;
+                _jdWcsCommunicationService.ConnectionChanged -= OnJdWcsConnectionChanged;
                 // *** 移除: 不再订阅PLC最终结果事件 ***
                 // _plcCommunicationService.UploadResultReceived -= OnPlcUploadResultReceived;
                 foreach (var sub in _subscriptions) sub.Dispose();
@@ -1711,6 +1960,8 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
                 _timer.Stop();
                 _uploadCountdownTimer?.Stop();
                 if (_uploadCountdownTimer != null) _uploadCountdownTimer.Tick -= UploadCountdownTimer_Tick;
+                _waitingCountdownTimer?.Stop();
+                if (_waitingCountdownTimer != null) _waitingCountdownTimer.Tick -= WaitingCountdownTimer_Tick;
                 Log.Debug("[Dispose] 定时器已停止.");
 
                 // 清理包裹状态
@@ -1852,13 +2103,14 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         var statusText = GetDeviceStatusDisplayText(statusCode);
         var description = GetDeviceStatusDescription(statusCode);
         var color = GetDeviceStatusColor(statusCode);
-
-        // 通过统一方法更新状态 (确保在UI线程)
-        UpdateDeviceStatus(
-            statusText,
-            description,
-            color
-        );
+        
+        // 更新PLC独立状态属性
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            PlcStatusText = statusText;
+            PlcStatusDescription = description;
+            PlcStatusColor = color;
+        });
 
         // 更新 DeviceStatuses 列表中的 PLC 条目
         Application.Current.Dispatcher.Invoke(() =>
@@ -1869,6 +2121,7 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
             plcStatusEntry.StatusColor = color;
         });
 
+        Log.Information("PLC设备状态已更新: {Status}, {Description}", statusText, description);
 
         // 如果PLC状态恢复正常，隐藏PLC异常警告
         if (statusCode != DeviceStatusCode.Normal || !IsPlcAbnormalWarningVisible) return;
@@ -1877,32 +2130,34 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         // PLC异常状态的警告是在 ProcessSinglePackageAsync 中根据当前状态显示的
     }
 
-    // 统一更新设备状态的方法
-    private void UpdateDeviceStatus(string statusText, string description, string color)
+    // 处理JD WCS连接状态变更事件
+    private void OnJdWcsConnectionChanged(object? sender, bool isConnected)
     {
+        Log.Information("JD WCS连接状态变更: {Status}", isConnected ? "已连接" : "已断开");
+        
+        var statusText = isConnected ? "已连接" : "未连接";
+        var statusColor = isConnected ? "#4CAF50" : "#F44336";
+        var statusDescription = isConnected ? "京东WCS服务连接正常，可以上传数据" : "京东WCS服务未连接，请检查网络连接";
+        
+        // 更新JD WCS独立状态属性
         Application.Current.Dispatcher.Invoke(() =>
         {
-            try
-            {
-                if (DeviceStatusText == statusText && DeviceStatusDescription == description &&
-                    DeviceStatusColor == color)
-                {
-                    return;
-                }
+            JdWcsStatusText = statusText;
+            JdWcsStatusDescription = statusDescription;
+            JdWcsStatusColor = statusColor;
+        });
 
-                // 更新UI属性
-                DeviceStatusText = statusText;
-                DeviceStatusDescription = description;
-                DeviceStatusColor = color;
-
-                Log.Information("设备状态已更新: {Status}, {Description}", statusText, description);
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "更新设备状态时发生错误");
-            }
+        // 更新 DeviceStatuses 列表中的 JD WCS 条目
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            var jdWcsStatusEntry = DeviceStatuses.FirstOrDefault(s => s.Name == "JD WCS");
+            if (jdWcsStatusEntry == null) return;
+            jdWcsStatusEntry.Status = statusText;
+            jdWcsStatusEntry.StatusColor = statusColor;
         });
     }
+
+
 
     private static string GetDeviceStatusDisplayText(DeviceStatusCode statusCode)
     {
@@ -2089,7 +2344,68 @@ internal partial class MainWindowViewModel : BindableBase, IDisposable
         IsUploadCountdownVisible = false;
     }
 
+    // 等待PLC确认倒计时相关方法
+    private void StartWaitingCountdown(int totalSeconds)
+    {
+        try
+        {
+            if (totalSeconds <= 0)
+            {
+                Log.Warning("等待倒计时配置无效 ({Value})，将不启动倒计时", totalSeconds);
+                StopWaitingCountdown();
+                return;
+            }
 
+            _waitingCountdownTotalSeconds = totalSeconds;
+            WaitingCountdownSeconds = totalSeconds;
+            WaitingCountdownProgress = 100.0; // 开始时进度为100%
+            IsWaitingForUploadResult = true;
+            WaitingStatusText = "等待PLC确认上包...";
+
+            // 初始化定时器（如果还未初始化）
+            if (_waitingCountdownTimer == null)
+            {
+                _waitingCountdownTimer = new DispatcherTimer(DispatcherPriority.Normal)
+                {
+                    Interval = TimeSpan.FromSeconds(1)
+                };
+                _waitingCountdownTimer.Tick += WaitingCountdownTimer_Tick;
+            }
+
+            _waitingCountdownTimer.Start();
+            Log.Information("启动等待PLC确认倒计时: {Seconds} 秒", totalSeconds);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "启动等待倒计时出错");
+            StopWaitingCountdown();
+        }
+    }
+
+    private void WaitingCountdownTimer_Tick(object? sender, EventArgs e)
+    {
+        WaitingCountdownSeconds--;
+        
+        // 更新进度条（从100%递减到0%）
+        if (_waitingCountdownTotalSeconds > 0)
+        {
+            WaitingCountdownProgress = (double)WaitingCountdownSeconds / _waitingCountdownTotalSeconds * 100.0;
+        }
+
+        if (WaitingCountdownSeconds <= 0)
+        {
+            StopWaitingCountdown();
+            Log.Information("等待PLC确认倒计时结束");
+        }
+    }
+
+    private void StopWaitingCountdown()
+    {
+        _waitingCountdownTimer?.Stop();
+        IsWaitingForUploadResult = false;
+        WaitingCountdownSeconds = 0;
+        WaitingCountdownProgress = 0.0;
+    }
 
     // *** 新增: 清理包裹堆栈并释放资源 ***
     // *** Update signature to accept context string ***
