@@ -1,22 +1,18 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Net.Sockets;
-namespace RfidSdk
+﻿using System.Net.Sockets;
+
+namespace DeviceService.DataSourceDevices.Rfid.Sdk
 {
     public class AsyncSocketEventArgs : EventArgs
     {
         /// <summary>
         /// 提示信息
         /// </summary>
-        public string _msg;
+        public string Msg;
 
         /// <summary>
         /// 客户端状态封装类
         /// </summary>
-        public AsyncSocketState _state;
+        public AsyncSocketState State;
 
         /// <summary>
         /// 是否已经处理过了
@@ -25,18 +21,18 @@ namespace RfidSdk
 
         public AsyncSocketEventArgs(string msg)
         {
-            this._msg = msg;
+            this.Msg = msg;
             IsHandled = false;
         }
         public AsyncSocketEventArgs(AsyncSocketState state)
         {
-            this._state = state;
+            this.State = state;
             IsHandled = false;
         }
         public AsyncSocketEventArgs(string msg, AsyncSocketState state)
         {
-            this._msg = msg;
-            this._state = state;
+            this.Msg = msg;
+            this.State = state;
             IsHandled = false;
         }
     }
@@ -46,7 +42,7 @@ namespace RfidSdk
             /// <summary>
             /// 接收数据缓冲区
             /// </summary>
-            public byte[] _recvBuffer;
+            public byte[] RecvBuffer;
 
             /// <summary>
             /// 客户端发送到服务器的报文
@@ -59,8 +55,8 @@ namespace RfidSdk
             /// </summary>
             private Socket _clientSock;
 
-            public EnRecvStage _recvStage { get; set; }
-            public int _messageLen { get; set; }
+            public EnRecvStage RecvStage { get; set; }
+            public int MessageLen { get; set; }
             #endregion
 
         #region 属性
@@ -72,11 +68,11 @@ namespace RfidSdk
             {
                 get
                 {
-                    return _recvBuffer;
+                    return RecvBuffer;
                 }
                 set
                 {
-                    _recvBuffer = value;
+                    RecvBuffer = value;
                 }
             }
 
@@ -125,9 +121,9 @@ namespace RfidSdk
             /// </summary>
             public void InitBuffer()
             {
-                if (_recvBuffer == null && _clientSock != null)
+                if (RecvBuffer == null && _clientSock != null)
                 {
-                    _recvBuffer = new byte[_clientSock.ReceiveBufferSize];
+                    RecvBuffer = new byte[_clientSock.ReceiveBufferSize];
                 }
             }
 

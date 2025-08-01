@@ -91,7 +91,7 @@ public partial class App
 
         // 注册单摆轮分拣服务
         containerRegistry.RegisterPendulumSortService(PendulumServiceType.Single);
-        containerRegistry.RegisterSingleton<IHostedService, PendulumSortHostedService>();
+        containerRegistry.RegisterSingleton<PendulumSortService>();
     }
 
     protected override Window CreateShell()
@@ -465,10 +465,10 @@ public partial class App
             _ = Task.Run(() => cameraStartupService.StartAsync(CancellationToken.None))
                 .ContinueWith(t => LogUnhandledException(t.Exception!, "CameraStartupService Start Error"), TaskContinuationOptions.OnlyOnFaulted);
 
-            // 启动摆轮分拣托管服务
-            var pendulumHostedService = Container.Resolve<PendulumSortHostedService>();
-            _ = Task.Run(() => pendulumHostedService.StartAsync(CancellationToken.None))
-                .ContinueWith(t => LogUnhandledException(t.Exception!, "PendulumSortHostedService Start Error"), TaskContinuationOptions.OnlyOnFaulted);
+            // 启动摆轮分拣服务
+            var pendulumService = Container.Resolve<PendulumSortService>();
+            _ = Task.Run(() => pendulumService.StartAsync())
+                .ContinueWith(t => LogUnhandledException(t.Exception!, "PendulumSortService Start Error"), TaskContinuationOptions.OnlyOnFaulted);
 
             // 获取皮带设置并启动串口托管服务（如果启用）
             var settingsService = Container.Resolve<ISettingsService>();
@@ -652,34 +652,34 @@ public partial class App
         {
             Log.Information("正在解析容器中的服务...");
 
-            // 停止摆轮分拣托管服务
+            // 停止摆轮分拣服务
             try
             {
-                var pendulumHostedService = Container?.Resolve<PendulumSortHostedService>();
-                if (pendulumHostedService != null)
+                var pendulumService = Container?.Resolve<PendulumSortService>();
+                if (pendulumService != null)
                 {
-                    Log.Information("找到摆轮分拣托管服务，正在停止...");
+                    Log.Information("找到摆轮分拣服务，正在停止...");
                     tasks.Add(Task.Run(async () =>
                     {
                         try
                         {
-                            await pendulumHostedService.StopAsync(CancellationToken.None);
-                            Log.Information("摆轮分拣托管服务已停止");
+                            await pendulumService.StopAsync();
+                            Log.Information("摆轮分拣服务已停止");
                         }
                         catch (Exception ex)
                         {
-                            LogUnhandledException(ex, "PendulumSortHostedService Stop Error");
+                            LogUnhandledException(ex, "PendulumSortService Stop Error");
                         }
                     }));
                 }
                 else
                 {
-                    Log.Warning("未找到摆轮分拣托管服务");
+                    Log.Warning("未找到摆轮分拣服务");
                 }
             }
             catch (Exception ex)
             {
-                LogUnhandledException(ex, "PendulumSortHostedService Resolve Error");
+                LogUnhandledException(ex, "PendulumSortService Resolve Error");
             }
 
             // 停止相机托管服务

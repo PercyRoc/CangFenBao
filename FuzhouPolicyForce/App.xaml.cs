@@ -3,7 +3,6 @@ using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Windows;
-using System.Windows.Threading;
 using Common.Extensions;
 using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.License;
@@ -67,7 +66,7 @@ internal partial class App
 
         // 注册多摆轮分拣服务
         containerRegistry.RegisterPendulumSortService(PendulumServiceType.Multi);
-        containerRegistry.RegisterSingleton<IHostedService, PendulumSortHostedService>();
+        containerRegistry.RegisterSingleton<PendulumSortService>();
 
         // 注册旺店通API服务 V1
         // 注册 HttpClient
@@ -153,10 +152,8 @@ internal partial class App
                     rollOnFileSizeLimit: true)
                 .CreateLogger();
 
-            // 注册全局异常处理
-            DispatcherUnhandledException += App_DispatcherUnhandledException;
-            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
-            TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
+            // 初始化全局异常处理器
+            GlobalExceptionHandler.Initialize();
 
             // 启动DUMP文件清理任务
             StartCleanupTask();
@@ -192,10 +189,10 @@ internal partial class App
             await cameraStartupService.StartAsync(CancellationToken.None);
             Log.Information("相机托管服务启动成功");
 
-            // 启动摆轮分拣托管服务
-            var pendulumHostedService = Container.Resolve<PendulumSortHostedService>();
-            await pendulumHostedService.StartAsync(CancellationToken.None);
-            Log.Information("摆轮分拣托管服务启动成功");
+            // 启动摆轮分拣服务
+            var pendulumService = Container.Resolve<PendulumSortService>();
+            await pendulumService.StartAsync();
+            Log.Information("摆轮分拣服务启动成功");
         }
         catch (Exception ex)
         {
@@ -252,46 +249,7 @@ internal partial class App
         }
     }
 
-    private static void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
-    {
-        try
-        {
-            Log.Fatal(e.Exception, "UI线程发生未处理的异常");
-            MessageBox.Show($"程序发生错误：{e.Exception.Message}\n请查看日志了解详细信息。", "错误", MessageBoxButton.OK,
-                MessageBoxImage.Error);
-            e.Handled = true;
-        }
-        catch (Exception ex)
-        {
-            Log.Fatal(ex, "处理UI异常时发生错误");
-        }
-    }
 
-    private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
-    {
-        try
-        {
-            var exception = e.ExceptionObject as Exception;
-            Log.Fatal(exception, "应用程序域发生未处理的异常");
-        }
-        catch (Exception ex)
-        {
-            Log.Fatal(ex, "处理应用程序域异常时发生错误");
-        }
-    }
-
-    private static void TaskScheduler_UnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
-    {
-        try
-        {
-            Log.Fatal(e.Exception, "异步任务中发生未处理的异常");
-            e.SetObserved();
-        }
-        catch (Exception ex)
-        {
-            Log.Fatal(ex, "处理异步任务异常时发生错误");
-        }
-    }
 
     /// <summary>
     ///     启动定期清理任务
@@ -345,15 +303,27 @@ internal partial class App
 
             var deletedCount = 0;
             foreach (var file in dumpFiles)
+            {
                 try
                 {
+                    var fileName = Path.GetFileName(file);
+                    
+                    // 跳过以"crash"开头的崩溃转储文件
+                    if (fileName.StartsWith("crash_", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Log.Debug("保留崩溃转储文件: {FileName}", fileName);
+                        continue;
+                    }
+                    
                     File.Delete(file);
                     deletedCount++;
+                    Log.Debug("删除DUMP文件: {FileName}", fileName);
                 }
                 catch (Exception ex)
                 {
                     Log.Warning(ex, "删除DUMP文件失败: {FilePath}", file);
                 }
+            }
 
             if (deletedCount > 0) Log.Information("成功清理 {Count} 个DUMP文件", deletedCount);
         }
@@ -415,10 +385,10 @@ internal partial class App
     {
         try
         {
-            // 停止摆轮分拣托管服务
-            var pendulumHostedService = Container.Resolve<IHostedService>();
-            await pendulumHostedService.StopAsync(CancellationToken.None);
-            Log.Information("摆轮分拣托管服务已停止");
+            // 停止摆轮分拣服务
+            var pendulumService = Container.Resolve<PendulumSortService>();
+            await pendulumService.StopAsync();
+            Log.Information("摆轮分拣服务已停止");
 
             // 停止相机托管服务
             var cameraStartupService = Container.Resolve<CameraStartupService>();

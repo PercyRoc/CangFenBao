@@ -13,8 +13,9 @@ public interface ITtsService : IDisposable
     /// <param name="text">要播放的文本</param>
     /// <param name="rate">语音速度 (-10 到 10，默认为 0)</param>
     /// <param name="volume">音量 (0 到 100，默认为 100)</param>
+    /// <param name="volumeMultiplier">音量放大倍数 (1.0f 代表正常音量)</param>
     /// <returns>是否播放成功</returns>
-    Task<bool> SpeakAsync(string text, int rate = 0, int volume = 100);
+    Task<bool> SpeakAsync(string text, int rate = 0, int volume = 100, float volumeMultiplier = 1.0f);
 
     /// <summary>
     ///     播放预设文本语音
@@ -22,8 +23,9 @@ public interface ITtsService : IDisposable
     /// <param name="audioType">音频类型</param>
     /// <param name="rate">语音速度 (-10 到 10，默认为 0)</param>
     /// <param name="volume">音量 (0 到 100，默认为 100)</param>
+    /// <param name="volumeMultiplier">音量放大倍数 (1.0f 代表正常音量)</param>
     /// <returns>是否播放成功</returns>
-    Task<bool> SpeakPresetAsync(AudioType audioType, int rate = 0, int volume = 100);
+    Task<bool> SpeakPresetAsync(AudioType audioType, int rate = 0, int volume = 100, float volumeMultiplier = 1.0f);
 
     /// <summary>
     ///     停止当前播放

@@ -93,6 +93,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         // 订阅分拣设备连接事件
         _sortService.DeviceConnectionStatusChanged += OnDeviceConnectionStatusChanged;
 
+        // 【新增】订阅分拣完成事件
+        _sortService.SortingCompleted += OnSortingCompleted;
+
         // 订阅相机连接状态事件
         _cameraService.ConnectionChanged += OnCameraConnectionChanged;
 
@@ -115,6 +118,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                         try
                         {
                             // 更新UI
+                            bitmapSource.Freeze(); // 冻结BitmapSource，使其可在UI线程外访问
                             CurrentImage = bitmapSource;
                         }
                         catch (Exception ex)
@@ -459,12 +463,65 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         );
     }
 
+    /// <summary>
+    /// 【新增】处理分拣完成事件
+    /// </summary>
+    /// <param name="sender">事件发送者</param>
+    /// <param name="package">完成分拣的包裹</param>
+    private void OnSortingCompleted(object? sender, PackageInfo package)
+    {
+        try
+        {
+            Log.Information("收到分拣完成事件: 包裹 {Barcode} 状态为 {SortState}", package.Barcode, package.SortState);
+
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                try
+                {
+                    // 查找PackageHistory中的包裹并更新状态
+                    var existingPackage = PackageHistory.FirstOrDefault(p => p.Barcode == package.Barcode && p.Index == package.Index);
+                    if (existingPackage != null)
+                    {
+                        // 更新包裹状态以反映分拣结果
+                        existingPackage.SetSortState(package.SortState);
+                        Log.Information("包裹 {Barcode} 状态已更新为: {SortState}", package.Barcode, package.SortState);
+                        
+                        // 触发UI更新
+                        UpdatePackageInfoItems(existingPackage);
+                    }
+                    else
+                    {
+                        Log.Warning("未找到包裹 {Barcode} 在PackageHistory中", package.Barcode);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "处理分拣完成事件时发生错误");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "处理分拣完成事件时发生异常");
+        }
+    }
+
     private async void OnPackageInfo(PackageInfo package)
     {
         Interlocked.Increment(ref _totalPackageCount);
         try
         {
             Application.Current.Dispatcher.Invoke(() => { CurrentBarcode = package.Barcode; });
+
+            // 处理条码后缀 -1-1-，如果条码以-1-1-结尾，则去除该后缀
+            if (!string.IsNullOrEmpty(package.Barcode) && package.Barcode.EndsWith("-1-1-", StringComparison.OrdinalIgnoreCase))
+            {
+                var originalBarcode = package.Barcode;
+                var processedBarcode = package.Barcode[..^6]; // 去除-1-1-后缀
+                package.SetBarcode(processedBarcode);
+                Log.Information("包裹条码去除后缀 -1-1-：{OriginalBarcode} -> {ProcessedBarcode}", 
+                    originalBarcode, processedBarcode);
+            }
 
             // 获取格口规则配置 - 始终需要，用于本地规则和异常口
             var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
@@ -480,7 +537,12 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 Interlocked.Increment(ref _errorPackageCount);
 
                 // 直接处理包裹，跳过API调用和本地规则匹配
+                // 【新增】确保包裹分拣状态正确设置
+                package.SetSortState(PackageSortState.Pending);
+                Log.Debug("包裹 {Barcode} 分拣状态已设置为: {SortState}", package.Barcode, package.SortState);
+                
                 _sortService.ProcessPackage(package);
+                
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     try
@@ -543,8 +605,12 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 Interlocked.Increment(ref _errorPackageCount);
 
                 // 统一处理包裹分拣、UI更新和数据保存
+                // 【新增】确保包裹分拣状态正确设置
+                package.SetSortState(PackageSortState.Pending);
+                Log.Debug("包裹 {Barcode} 分拣状态已设置为: {SortState}", package.Barcode, package.SortState);
+                
                 _sortService.ProcessPackage(package);
-
+                
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     try
@@ -600,8 +666,12 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             }
 
             // 统一处理包裹分拣、UI更新和数据保存
+            // 【新增】确保包裹分拣状态正确设置
+            package.SetSortState(PackageSortState.Pending);
+            Log.Debug("包裹 {Barcode} 分拣状态已设置为: {SortState}", package.Barcode, package.SortState);
+            
             _sortService.ProcessPackage(package);
-
+            
             Application.Current.Dispatcher.Invoke(() =>
             {
                 try
@@ -821,6 +891,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
                 // 取消订阅事件
                 _sortService.DeviceConnectionStatusChanged -= OnDeviceConnectionStatusChanged;
+                _sortService.SortingCompleted -= OnSortingCompleted;
                 _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
                 // 释放订阅
                 foreach (var subscription in _subscriptions) subscription.Dispose();

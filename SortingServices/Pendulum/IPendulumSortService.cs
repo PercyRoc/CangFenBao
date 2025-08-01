@@ -11,6 +11,11 @@ public interface IPendulumSortService : IDisposable
     event EventHandler<(string Name, bool Connected)> DeviceConnectionStatusChanged;
 
     /// <summary>
+    ///     分拣完成事件
+    /// </summary>
+    event EventHandler<PackageInfo> SortingCompleted;
+
+    /// <summary>
     ///     初始化分检服务
     /// </summary>
     /// <param name="configuration">分检配置</param>

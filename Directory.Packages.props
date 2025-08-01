@@ -11,6 +11,7 @@
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="9.0.2" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="9.0.2" />
     <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="9.0.2" />
+    <PackageVersion Include="NAudio" Version="2.2.1" />
     <PackageVersion Include="Prism.Unity" Version="9.0.537" />
     <PackageVersion Include="Prism.Wpf" Version="9.0.537" />
     <PackageVersion Include="QRCoder" Version="1.6.0" />
@@ -29,7 +30,7 @@
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.2" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.0-preview.1.25080.5" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.2" />
-    <PackageVersion Include="SixLabors.ImageSharp" Version="3.1.7" />
+    <PackageVersion Include="SixLabors.ImageSharp" Version="3.1.11" />
     <PackageVersion Include="SixLabors.Fonts" Version="1.0.0-beta18" />
     <PackageVersion Include="TurboJpegWrapper" Version="1.5.2" />
     <PackageVersion Include="FluentFTP" Version="52.1.0" />

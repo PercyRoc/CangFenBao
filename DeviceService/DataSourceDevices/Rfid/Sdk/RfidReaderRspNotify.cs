@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace RfidSdk
+﻿namespace DeviceService.DataSourceDevices.Rfid.Sdk
 {
     public interface RfidReaderRspNotify
     {
@@ -53,23 +47,23 @@ namespace RfidSdk
 
         void OnRecvSetExtParam(RfidReader reader, byte result);
 
-        void OnRecvAudioPlayRsp(RfidSdk.RfidReader reader, byte result);
+        void OnRecvAudioPlayRsp(RfidReader reader, byte result);
 
-        void OnRecvRelayOpRsp(RfidSdk.RfidReader reader, byte result);
+        void OnRecvRelayOpRsp(RfidReader reader, byte result);
 
-        void OnRecvVerifyTagRsp(RfidSdk.RfidReader reader, byte result);
+        void OnRecvVerifyTagRsp(RfidReader reader, byte result);
 
-        void OnRecvSetUsbInfoRsp(RfidSdk.RfidReader reader, byte result);
+        void OnRecvSetUsbInfoRsp(RfidReader reader, byte result);
 
-        void OnRecvQueryUsbInfoRsp(RfidSdk.RfidReader reader,byte interfaceType,byte usbProto, byte enterflag);
+        void OnRecvQueryUsbInfoRsp(RfidReader reader,byte interfaceType,byte usbProto, byte enterflag);
 
-        void OnRecvSetDataFlagRsp(RfidSdk.RfidReader reader, byte result);
+        void OnRecvSetDataFlagRsp(RfidReader reader, byte result);
 
-        void OnRecvQueryDataFlagRsp(RfidSdk.RfidReader reader, UInt16 dataflag,byte dataformat);
+        void OnRecvQueryDataFlagRsp(RfidReader reader, UInt16 dataflag,byte dataformat);
 
-        void OnRecvQueryModbusParam(RfidSdk.RfidReader reader, byte tagNum, byte unionSize, byte startaddr, byte clearflag,int modbusProto);
+        void OnRecvQueryModbusParam(RfidReader reader, byte tagNum, byte unionSize, byte startaddr, byte clearflag,int modbusProto);
 
-        void OnRecvSetModbusParamRsp(RfidSdk.RfidReader reader, byte result);
+        void OnRecvSetModbusParamRsp(RfidReader reader, byte result);
 
         void OnRecvTagData(RfidReader reader, TlvValueItem[] tlvItems, byte tlvCount);
     }

@@ -54,17 +54,21 @@ public class PendulumSortConfig : BindableBase
         get => _straightThroughTimeout;
         set => SetProperty(ref _straightThroughTimeout, value);
     }
-    private int _sameSlotMaxWaitTime = 3000;
+
+
+    private int _continuousSortMaxIntervalMs = 2000;
 
     /// <summary>
-    ///     等待相同格口包裹的最大时间（毫秒）
-    ///     超过此时间后将强制执行回正操作，确保系统安全
+    ///     连续分拣的最大时间间隔（毫秒）
+    ///     只有当下一个相同格口的包裹预计在此时间窗口内到达时，才跳过回正
     /// </summary>
-    public int SameSlotMaxWaitTime
+    public int ContinuousSortMaxIntervalMs
     {
-        get => _sameSlotMaxWaitTime;
-        set => SetProperty(ref _sameSlotMaxWaitTime, value);
+        get => _continuousSortMaxIntervalMs;
+        set => SetProperty(ref _continuousSortMaxIntervalMs, value);
     }
+
+
 }
 
 public class TriggerPhotoelectric : BindableBase

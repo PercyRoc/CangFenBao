@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Text;
-using System.Threading.Channels;
 using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.TCP;
@@ -14,9 +13,6 @@ namespace SortingServices.Pendulum;
 public class MultiPendulumSortService(ISettingsService settingsService, IEventAggregator eventAggregator)
     : BasePendulumSortService(settingsService, eventAggregator)
 {
-    // 为每个光电创建一个动作队列和处理任务
-    private readonly ConcurrentDictionary<string, Channel<Func<Task>>> _actionChannels = new();
-    private readonly ConcurrentDictionary<string, Task> _actionProcessorTasks = new();
     private readonly SemaphoreSlim _initializationLock = new(1, 1);
     private readonly ConcurrentDictionary<string, TcpClientService> _sortingClients = new();
 
@@ -41,13 +37,14 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
             // 缓存配置
             _config = configuration;
 
-            // 初始化触发光电连接
+            // 初始化触发光电连接（禁用自动重连）
             TriggerClient = new TcpClientService(
                 "触发光电",
                 configuration.TriggerPhotoelectric.IpAddress,
                 configuration.TriggerPhotoelectric.Port,
                 ProcessTriggerData,
-                connected => UpdateDeviceConnectionState("触发光电", connected)
+                connected => UpdateDeviceConnectionState("触发光电", connected),
+                autoReconnect: false
             );
 
             try
@@ -58,7 +55,7 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
             catch (Exception ex)
             {
                 Log.Error(ex, "初始化触发光电连接失败");
-                // 连接失败不抛出异常，后续会自动重连
+                // 连接失败不抛出异常，已禁用自动重连
             }
 
             // 初始化分拣光电连接和动作队列
@@ -70,15 +67,12 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
                     photoelectric.IpAddress,
                     photoelectric.Port,
                     data => ProcessSortingData(data, photoelectric.Name),
-                    connected => UpdateDeviceConnectionState(photoelectric.Name, connected)
+                    connected => UpdateDeviceConnectionState(photoelectric.Name, connected),
+                    autoReconnect: false
                 );
 
                 _sortingClients[photoelectric.Name] = client;
                 PendulumStates[photoelectric.Name] = new PendulumState();
-
-                // 创建动作队列
-                var channel = Channel.CreateUnbounded<Func<Task>>();
-                _actionChannels[photoelectric.Name] = channel;
 
                 try
                 {
@@ -88,7 +82,7 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
                 catch (Exception ex)
                 {
                     Log.Error(ex, "初始化分拣光电 {Name} 连接失败", photoelectric.Name);
-                    // 连接失败不抛出异常，后续会自动重连
+                    // 连接失败不抛出异常，已禁用自动重连
                 }
             }
 
@@ -122,17 +116,6 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
 
             // 创建取消令牌
             CancellationTokenSource = new CancellationTokenSource();
-
-            // 启动每个光电的动作处理队列
-            foreach (var photoelectric in _config.SortingPhotoelectrics)
-            {
-                if (_actionChannels.TryGetValue(photoelectric.Name, out var channel))
-                {
-                    var processorTask = ProcessActionQueueAsync(photoelectric.Name, channel.Reader, CancellationTokenSource.Token);
-                    _actionProcessorTasks[photoelectric.Name] = processorTask;
-                    Log.Debug("已启动分拣光电 {Name} 的动作处理队列", photoelectric.Name);
-                }
-            }
 
             // 在启动服务前直接发送启动命令到所有连接的分拣光电
             try
@@ -179,14 +162,16 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
                             // 检查设备连接状态
                             if (TriggerClient != null && !TriggerClient.IsConnected())
                             {
-                                Log.Warning("触发光电连接断开，尝试重连");
-                                await ReconnectAsync();
+                                Log.Warning("触发光电连接断开，已禁用重连逻辑，跳过重连");
+                                // 已取消重连逻辑，直接标记为断开状态
+                                UpdateDeviceConnectionState("触发光电", false);
                             }
 
                             foreach (var client in _sortingClients.Where(static client => !client.Value.IsConnected()))
                             {
-                                Log.Warning("分拣光电 {Name} 连接断开，尝试重连", client.Key);
-                                await ReconnectAsync();
+                                Log.Warning("分拣光电 {Name} 连接断开，已禁用重连逻辑，跳过重连", client.Key);
+                                // 已取消重连服务，直接标记为断开状态
+                                UpdateDeviceConnectionState(client.Key, false);
                             }
 
                             await Task.Delay(1000, CancellationTokenSource.Token); // 每秒检查一次连接状态
@@ -212,7 +197,13 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
                     IsRunningFlag = false;
                     Log.Debug("多光电多摆轮分拣服务主循环结束运行");
                 }
-            }, CancellationTokenSource.Token);
+            }, CancellationTokenSource.Token).ContinueWith(t =>
+            {
+                if (t is { IsFaulted: true, Exception: not null })
+                {
+                    Log.Warning(t.Exception, "多光电多摆轮分拣服务主循环任务发生未观察的异常");
+                }
+            }, TaskContinuationOptions.OnlyOnFaulted);
 
             Log.Information("多光电多摆轮分拣服务启动完成");
         }
@@ -220,47 +211,6 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
         {
             Log.Error(ex, "启动多光电多摆轮分拣服务失败");
             throw;
-        }
-    }
-
-    /// <summary>
-    ///     为每个摆轮处理动作队列的专用方法
-    /// </summary>
-    private async Task ProcessActionQueueAsync(string photoelectricName, ChannelReader<Func<Task>> reader, CancellationToken token)
-    {
-        Log.Debug("开始处理分拣光电 {Name} 的动作队列", photoelectricName);
-
-        try
-        {
-            await foreach (var action in reader.ReadAllAsync(token))
-            {
-                try
-                {
-                    // 顺序执行队列中的每一个动作
-                    await action();
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "处理摆轮 {Name} 的动作时发生错误", photoelectricName);
-                    // 发生错误时强制复位状态
-                    if (PendulumStates.TryGetValue(photoelectricName, out var state))
-                    {
-                        state.ForceReset();
-                    }
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            Log.Debug("分拣光电 {Name} 的动作队列处理被取消", photoelectricName);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "分拣光电 {Name} 的动作队列处理发生致命错误", photoelectricName);
-        }
-        finally
-        {
-            Log.Debug("分拣光电 {Name} 的动作队列处理结束", photoelectricName);
         }
     }
 
@@ -306,39 +256,6 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
                 Log.Debug("已发送取消信号到主循环");
             }
 
-            // 关闭所有动作队列并等待处理任务完成
-            foreach (var (photoelectricName, channel) in _actionChannels)
-            {
-                try
-                {
-                    channel.Writer.Complete();
-                    Log.Debug("已关闭分拣光电 {Name} 的动作队列", photoelectricName);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "关闭分拣光电 {Name} 的动作队列时发生错误", photoelectricName);
-                }
-            }
-
-            // 等待所有动作处理任务完成
-            var waitTasks = _actionProcessorTasks.Values.ToArray();
-            if (waitTasks.Length > 0)
-            {
-                try
-                {
-                    await Task.WhenAll(waitTasks).WaitAsync(TimeSpan.FromSeconds(5));
-                    Log.Debug("所有动作处理任务已完成");
-                }
-                catch (TimeoutException)
-                {
-                    Log.Warning("等待动作处理任务完成超时");
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "等待动作处理任务完成时发生错误");
-                }
-            }
-
             IsRunningFlag = false;
 
             // 停止超时检查定时器
@@ -357,7 +274,6 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
             }
 
             PackageTimers.Clear();
-            _actionProcessorTasks.Clear();
 
             Log.Information("多光电多摆轮分拣服务已停止");
         }
@@ -390,60 +306,76 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
         {
             var message = Encoding.ASCII.GetString(data);
 
-            // 增加防抖逻辑，与触发光电保持一致
-            var config = SettingsService.LoadSettings<PendulumSortConfig>();
-            var debounceTime = config.GlobalDebounceTime;
-            var now = DateTime.Now;
-
-            if (LastSignalTimes.TryGetValue(photoelectricName, out var lastSignalTime))
+            // 只处理高电平信号，忽略低电平和其他信号
+            bool isHighLevelSignal;
+            string signalType;
+            
+            if (message.Contains("OCCH1:1"))
             {
-                if ((now - lastSignalTime).TotalMilliseconds < debounceTime)
-                {
-                    Log.Debug("分拣光电 {PhotoelectricName} 在 {DebounceTime}ms 防抖时间内收到重复信号 '{Signal}'，已忽略.",
-                        photoelectricName, debounceTime, message);
-                    return; // 忽略此信号
-                }
+                isHighLevelSignal = true;
+                signalType = "OCCH1高电平";
             }
-            LastSignalTimes[photoelectricName] = now; // 更新上次信号时间
-
-            if (!message.Contains("OCCH2:1"))
+            else if (message.Contains("OCCH2:1"))
             {
-                // 记录Debug日志表示收到了其他信号，但不会处理
-                Log.Debug("收到分拣光电 {Name} 的非上升沿信号: {Message}，已忽略", photoelectricName, message);
+                isHighLevelSignal = true;
+                signalType = "OCCH2高电平";
+            }
+            else if (message.Contains("OCCH1:0") || message.Contains("OCCH2:0"))
+            {
+                // 低电平信号，直接忽略
+                Log.Debug("分拣光电 {PhotoelectricName} 收到低电平信号 '{Message}'，已忽略", photoelectricName, message);
                 return;
-            }
-
-            var sortingTime = DateTime.Now;
-            Log.Information("分拣光电 {Name} 收到上升沿信号，开始匹配包裹", photoelectricName);
-
-            // 触发分拣光电信号事件
-            RaiseSortingPhotoelectricSignal(photoelectricName, sortingTime);
-
-            // 使用基类的匹配逻辑
-            var newPackage = MatchPackageForSorting(photoelectricName);
-            if (newPackage == null) return;
-
-            var matchTime = DateTime.Now;
-            var timeSinceTrigger = matchTime - newPackage.TriggerTimestamp;
-
-            Log.Information("分拣光电 {Name} 匹配到包裹 {Index}|{Barcode} (耗时: {MatchDuration:F2}ms)",
-                photoelectricName, newPackage.Index, newPackage.Barcode, timeSinceTrigger.TotalMilliseconds);
-
-            // 将 ExecuteSortingAction 的调用包装成一个 Func<Task> 并放入队列
-            if (_actionChannels.TryGetValue(photoelectricName, out var channel))
-            {
-                // 注意，这里传递的是当时的数据快照，避免闭包问题
-                var packageSnapshot = newPackage;
-                var success = channel.Writer.TryWrite(async () => await ExecuteSortingAction(packageSnapshot, photoelectricName));
-
-                if (!success)
-                {
-                    Log.Error("无法将分拣动作加入队列，光电 {Name} 的队列可能已关闭", photoelectricName);
-                }
             }
             else
             {
-                Log.Error("未找到分拣光电 {Name} 的动作队列", photoelectricName);
+                // 其他未知信号，直接忽略
+                Log.Debug("分拣光电 {PhotoelectricName} 收到未知信号 '{Message}'，已忽略", photoelectricName, message);
+                return;
+            }
+
+            // 只处理高电平信号
+            if (isHighLevelSignal)
+            {
+                // 检查防抖 - 只对高电平信号进行防抖检查
+                var config = SettingsService.LoadSettings<PendulumSortConfig>();
+                var debounceTime = config.GlobalDebounceTime;
+                var now = DateTime.Now;
+
+                if (LastSignalTimes.TryGetValue(photoelectricName, out var lastSignalTime))
+                {
+                    var elapsedSinceLastSignal = (now - lastSignalTime).TotalMilliseconds;
+                    if (elapsedSinceLastSignal < debounceTime)
+                    {
+                        Log.Debug("分拣光电 {PhotoelectricName} 在 {DebounceTime}ms 防抖时间内收到重复高电平信号 '{Message}'，已忽略.",
+                            photoelectricName, debounceTime, message);
+                        return; // 忽略此重复高电平信号
+                    }
+                }
+                
+                // 更新上次信号时间（只对高电平信号更新）
+                LastSignalTimes[photoelectricName] = now;
+                
+                Log.Debug("分拣光电 {PhotoelectricName} 收到有效高电平信号: {SignalType} - {Message}", 
+                    photoelectricName, signalType, message);
+
+                var sortingTime = DateTime.Now;
+                Log.Information("分拣光电 {Name} 收到上升沿信号，开始匹配包裹", photoelectricName);
+
+                // 触发分拣光电信号事件
+                RaiseSortingPhotoelectricSignal(photoelectricName, sortingTime);
+
+                // 使用基类的匹配逻辑
+                var newPackage = MatchPackageForSorting(photoelectricName);
+                if (newPackage == null) return;
+
+                var matchTime = DateTime.Now;
+                var timeSinceTrigger = matchTime - newPackage.TriggerTimestamp;
+
+                Log.Information("分拣光电 {Name} 匹配到包裹 {Index}|{Barcode} (耗时: {MatchDuration:F2}ms)",
+                    photoelectricName, newPackage.Index, newPackage.Barcode, timeSinceTrigger.TotalMilliseconds);
+
+                // 直接执行分拣动作，不再包装成队列
+                _ = ExecuteSortingAction(newPackage, photoelectricName);
             }
         }
         catch (Exception ex)
@@ -471,13 +403,14 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
             if (TriggerClient != null)
             {
                 TriggerClient.Dispose();
-                TriggerClient = new TcpClientService(
-                    "触发光电",
-                    _config.TriggerPhotoelectric.IpAddress,
-                    _config.TriggerPhotoelectric.Port,
-                    ProcessTriggerData,
-                    connected => UpdateDeviceConnectionState("触发光电", connected)
-                );
+                            TriggerClient = new TcpClientService(
+                "触发光电",
+                _config.TriggerPhotoelectric.IpAddress,
+                _config.TriggerPhotoelectric.Port,
+                ProcessTriggerData,
+                connected => UpdateDeviceConnectionState("触发光电", connected),
+                autoReconnect: false
+            );
                 TriggerClient.Connect();
             }
 
@@ -492,7 +425,8 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
                     photoelectric.IpAddress,
                     photoelectric.Port,
                     data => ProcessSortingData(data, photoelectric.Name),
-                    connected => UpdateDeviceConnectionState(photoelectric.Name, connected)
+                    connected => UpdateDeviceConnectionState(photoelectric.Name, connected),
+                    autoReconnect: false
                 );
                 _sortingClients[photoelectric.Name] = newClient;
                 newClient.Connect();

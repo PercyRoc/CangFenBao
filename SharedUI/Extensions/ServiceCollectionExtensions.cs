@@ -13,6 +13,7 @@ public static class ServiceCollectionExtensions
         services.RegisterForNavigation<CameraSettingsView, CameraSettingsViewModel>();
         services.RegisterForNavigation<BalanceSortSettingsView, BalanceSortSettingsViewModel>();
         services.RegisterForNavigation<ChineseWeightSettingsView, ChineseWeightSettingsViewModel>();
+        services.RegisterForNavigation<FridSettingsView, FridSettingsViewModel>();
         // 注册通用的确认对话框
         services.RegisterDialog<HistoryDialogView, HistoryDialogViewModel>();
         services.RegisterDialogWindow<HistoryDialogWindow>();

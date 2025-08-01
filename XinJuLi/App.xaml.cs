@@ -52,10 +52,10 @@ public partial class App
             cameraStartupService.StartAsync(CancellationToken.None).Wait();
             Log.Information("相机托管服务启动成功");
 
-            // // 启动摆轮分拣托管服务
-            // var pendulumHostedService = Container.Resolve<PendulumSortHostedService>();
-            // pendulumHostedService.StartAsync(CancellationToken.None).Wait();
-            // Log.Information("摆轮分拣托管服务启动成功");
+            // // 启动摆轮分拣服务
+            // var pendulumService = Container.Resolve<PendulumSortService>();
+            // pendulumService.StartAsync().Wait();
+            // Log.Information("摆轮分拣服务启动成功");
 
             // 启动ASN HTTP服务
             var asnHttpServer = Container.Resolve<AsnHttpServer>();
@@ -131,7 +131,7 @@ public partial class App
         containerRegistry.RegisterForNavigation<BalanceSortSettingsView, BalanceSortSettingsViewModel>();
         containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
         containerRegistry.RegisterPendulumSortService(PendulumServiceType.Multi);
-        containerRegistry.RegisterSingleton<IHostedService, PendulumSortHostedService>();
+        containerRegistry.RegisterSingleton<PendulumSortService>();
 
         // 先注册MainWindowViewModel以便ASN服务可以引用
         containerRegistry.RegisterSingleton<MainWindowViewModel>();
@@ -160,10 +160,10 @@ public partial class App
                     Log.Information("ASN HTTP服务已停止");
                 }
 
-                // 停止摆轮分拣托管服务
-                var pendulumHostedService = Container.Resolve<PendulumSortHostedService>();
-                pendulumHostedService.StopAsync(CancellationToken.None).Wait();
-                Log.Information("摆轮分拣托管服务已停止");
+                // 停止摆轮分拣服务
+                var pendulumService = Container.Resolve<PendulumSortService>();
+                pendulumService.StopAsync().Wait();
+                Log.Information("摆轮分拣服务已停止");
 
                 // 停止相机托管服务
                 var cameraStartupService = Container.Resolve<CameraStartupService>();

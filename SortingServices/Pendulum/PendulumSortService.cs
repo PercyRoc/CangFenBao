@@ -1,19 +1,17 @@
 using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
-using Microsoft.Extensions.Hosting;
 using Serilog;
 
 namespace SortingServices.Pendulum;
 
 /// <summary>
-///     摆轮分拣服务托管服务
+///     摆轮分拣服务
 /// </summary>
-public class PendulumSortHostedService(
+public class PendulumSortService(
     IPendulumSortService pendulumSortService,
     ISettingsService settingsService)
-    : IHostedService
 {
-    public async Task StartAsync(CancellationToken cancellationToken)
+    public async Task StartAsync()
     {
         try
         {
@@ -34,7 +32,7 @@ public class PendulumSortHostedService(
         }
     }
 
-    public async Task StopAsync(CancellationToken cancellationToken)
+    public async Task StopAsync()
     {
         try
         {

@@ -9,6 +9,17 @@ namespace DeviceService.DataSourceDevices.TCP;
 public class TcpClientService : IDisposable
 {
     private const int ReconnectInterval = 5000; // 重连间隔，单位毫秒
+    
+    // 静态构造函数，设置全局Task异常观察器
+    static TcpClientService()
+    {
+        // 设置全局Task异常观察器，防止未观察的异常导致应用程序崩溃
+        TaskScheduler.UnobservedTaskException += (sender, args) =>
+        {
+            Log.Warning(args.Exception, "检测到未观察的Task异常");
+            args.SetObserved(); // 标记异常已被观察，防止重新抛出
+        };
+    }
     private readonly Action<bool> _connectionStatusCallback;
     private readonly CancellationTokenSource _cts = new();
     private readonly Action<byte[]> _dataReceivedCallback;
@@ -44,6 +55,7 @@ public class TcpClientService : IDisposable
         _connectionStatusCallback = connectionStatusCallback;
         _autoReconnect = autoReconnect;
         _receiveBuffer = new byte[1024]; // 初始化接收缓冲区
+        
         Log.Debug("设备 {DeviceName} 创建TCP客户端服务，IP: {IpAddress}, 端口: {Port}", _deviceName, _ipAddress, _port);
     }
 
@@ -109,7 +121,7 @@ public class TcpClientService : IDisposable
                 if (!waitResult)
                 {
                     _client.Close();
-                    Log.Error("设备 {DeviceName} 连接超时", _deviceName);
+                    Log.Warning("设备 {DeviceName} 连接超时", _deviceName);
                     throw new TimeoutException($"连接超时: {_deviceName}");
                 }
 
@@ -154,6 +166,70 @@ public class TcpClientService : IDisposable
         {
             Log.Information("设备 {DeviceName} 连接操作被取消", _deviceName);
             Disconnect(); // 使用 Disconnect 处理清理
+        }
+        catch (TimeoutException ex)
+        {
+            _isConnected = false;
+            _connectionStatusCallback(false);
+            Log.Warning(ex, "连接设备 {DeviceName} ({IpAddress}:{Port}) 超时", _deviceName, _ipAddress, _port);
+
+            // 清理资源
+            lock (_lockObject)
+            {
+                _stream?.Dispose();
+                _client?.Dispose();
+                _stream = null;
+                _client = null;
+            }
+
+            // 如果不是初始连接，则启动自动重连
+            if (_autoReconnect && !isFromReconnectThread && !_disposed && !_cts.IsCancellationRequested)
+            {
+                Log.Debug("设备 {DeviceName} 启动自动重连", _deviceName);
+                StartReconnectThread();
+            }
+
+            throw;
+        }
+        catch (SocketException ex)
+        {
+            _isConnected = false;
+            _connectionStatusCallback(false);
+            
+            // 根据Socket错误代码决定日志级别
+            switch (ex.SocketErrorCode)
+            {
+                case SocketError.ConnectionRefused: // 连接被拒绝
+                case SocketError.TimedOut: // 连接超时
+                case SocketError.HostUnreachable: // 主机不可达
+                case SocketError.NetworkUnreachable: // 网络不可达
+                case SocketError.ConnectionReset: // 连接重置
+                    Log.Warning(ex, "连接设备 {DeviceName} ({IpAddress}:{Port}) 失败: {SocketError}", 
+                        _deviceName, _ipAddress, _port, ex.SocketErrorCode);
+                    break;
+                default:
+                    Log.Error(ex, "连接设备 {DeviceName} ({IpAddress}:{Port}) 失败: {SocketError}", 
+                        _deviceName, _ipAddress, _port, ex.SocketErrorCode);
+                    break;
+            }
+
+            // 清理资源
+            lock (_lockObject)
+            {
+                _stream?.Dispose();
+                _client?.Dispose();
+                _stream = null;
+                _client = null;
+            }
+
+            // 如果不是初始连接，则启动自动重连
+            if (_autoReconnect && !isFromReconnectThread && !_disposed && !_cts.IsCancellationRequested)
+            {
+                Log.Debug("设备 {DeviceName} 启动自动重连", _deviceName);
+                StartReconnectThread();
+            }
+
+            throw;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -549,7 +625,7 @@ public class TcpClientService : IDisposable
                 Array.Copy(_receiveBuffer, data, bytesRead);
 
                 // 使用 Task.Run 异步处理数据，避免阻塞接收线程
-                _ = Task.Run(() =>
+                var task = Task.Run(() =>
                 {
                     try
                     {
@@ -559,7 +635,16 @@ public class TcpClientService : IDisposable
                     {
                         Log.Error(callbackEx, "设备 {DeviceName} 处理接收到的数据时发生未处理的异常", _deviceName);
                     }
-                });
+                }, _cts.Token);
+                
+                // 确保Task异常被观察，防止未观察的异常导致应用程序崩溃
+                task.ContinueWith(t =>
+                {
+                    if (t.IsFaulted && t.Exception != null)
+                    {
+                        Log.Warning(t.Exception, "设备 {DeviceName} 异步数据处理任务发生异常", _deviceName);
+                    }
+                }, TaskContinuationOptions.OnlyOnFaulted);
             }
             catch (OperationCanceledException)
             {
@@ -747,6 +832,17 @@ public class TcpClientService : IDisposable
                 {
                     Log.Warning(ex, "设备 {DeviceName} 等待重连线程时发生异常", _deviceName);
                 }
+            }
+
+            // 给异步Task一些时间来完成，防止未观察的异常
+            try
+            {
+                // 等待一小段时间，让正在执行的异步Task有机会完成
+                Thread.Sleep(100);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "设备 {DeviceName} 等待异步任务完成时发生异常", _deviceName);
             }
 
             // 最后释放 CancellationTokenSource

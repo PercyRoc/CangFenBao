@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.IO.Ports;
-namespace RfidSdk
+﻿using System.IO.Ports;
+
+namespace DeviceService.DataSourceDevices.Rfid.Sdk
 {
     public enum EnRecvStage
     {
@@ -17,7 +13,7 @@ namespace RfidSdk
         EN_STAGE_COMPLETED
     }
 
-    class RfidSerialPort:SerialPort
+    class RfidSerialPort:System.IO.Ports.SerialPort
     {
         const int recv_buff_size = 1024;
         const int send_buff_size = 512;

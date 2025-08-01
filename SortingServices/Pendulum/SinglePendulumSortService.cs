@@ -18,13 +18,14 @@ public class SinglePendulumSortService(ISettingsService settingsService, IEventA
 
     public override Task InitializeAsync(PendulumSortConfig configuration)
     {
-        // 初始化触发光电连接
+        // 初始化触发光电连接（禁用自动重连）
         TriggerClient = new TcpClientService(
             "触发光电",
             configuration.TriggerPhotoelectric.IpAddress,
             configuration.TriggerPhotoelectric.Port,
             ProcessTriggerData,
-            connected => UpdateDeviceConnectionState("触发光电", connected)
+            connected => UpdateDeviceConnectionState("触发光电", connected),
+            autoReconnect: false
         );
 
         try
@@ -34,7 +35,7 @@ public class SinglePendulumSortService(ISettingsService settingsService, IEventA
         catch (Exception ex)
         {
             Log.Error(ex, "初始化触发光电连接失败");
-            // 连接失败不抛出异常，后续会自动重连
+            // 连接失败不抛出异常，已禁用自动重连
         }
 
         // 初始化摆轮状态
@@ -92,8 +93,9 @@ public class SinglePendulumSortService(ISettingsService settingsService, IEventA
                     // 检查设备连接状态
                     if (TriggerClient != null && !TriggerClient.IsConnected())
                     {
-                        Log.Warning("触发光电连接断开，尝试重连");
-                        await ReconnectAsync();
+                        Log.Warning("触发光电连接断开，已禁用重连逻辑，跳过重连");
+                        // 已取消重连逻辑，直接标记为断开状态
+                        UpdateDeviceConnectionState("触发光电", false);
                     }
 
                     await Task.Delay(1000, CancellationTokenSource.Token);
@@ -111,7 +113,13 @@ public class SinglePendulumSortService(ISettingsService settingsService, IEventA
             {
                 IsRunningFlag = false;
             }
-        }, CancellationTokenSource.Token);
+        }, CancellationTokenSource.Token).ContinueWith(t =>
+        {
+            if (t is { IsFaulted: true, Exception: not null })
+            {
+                Log.Warning(t.Exception, "单光电单摆轮分拣服务主循环任务发生未观察的异常");
+            }
+        }, TaskContinuationOptions.OnlyOnFaulted);
 
         return Task.CompletedTask;
     }
@@ -185,20 +193,44 @@ public class SinglePendulumSortService(ISettingsService settingsService, IEventA
             var message = Encoding.ASCII.GetString(data);
             Log.Debug("收到触发光电数据: {Message}", message);
 
-            // 更新触发光电信号状态
-            if (message.Contains("OCCH2:1"))
+            // 只处理高电平信号，忽略低电平和其他信号
+            bool isHighLevelSignal;
+            string signalType;
+            
+            if (message.Contains("OCCH1:1"))
             {
-                // 高电平
-                UpdatePhotoelectricSignalState("触发光电", true);
+                isHighLevelSignal = true;
+                signalType = "OCCH1高电平";
             }
-            else if (message.Contains("OCCH2:0"))
+            else if (message.Contains("OCCH2:1"))
             {
-                // 低电平
-                UpdatePhotoelectricSignalState("触发光电", false);
+                isHighLevelSignal = true;
+                signalType = "OCCH2高电平";
+            }
+            else if (message.Contains("OCCH1:0") || message.Contains("OCCH2:0"))
+            {
+                // 低电平信号，直接忽略
+                Log.Debug("触发光电收到低电平信号 '{Message}'，已忽略", message);
+                return;
+            }
+            else
+            {
+                // 其他未知信号，直接忽略
+                Log.Debug("触发光电收到未知信号 '{Message}'，已忽略", message);
+                return;
             }
 
-            // 使用基类的信号处理方法
-            HandlePhotoelectricSignal(message, "触发光电");
+            // 只处理高电平信号
+            if (isHighLevelSignal)
+            {
+                // 更新触发光电信号状态（只对高电平信号）
+                UpdatePhotoelectricSignalState("触发光电", true);
+                
+                Log.Debug("触发光电收到有效高电平信号: {SignalType} - {Message}", signalType, message);
+
+                // 使用基类的信号处理方法
+                HandlePhotoelectricSignal(message, "触发光电");
+            }
         }
         catch (Exception ex)
         {
@@ -237,15 +269,22 @@ public class SinglePendulumSortService(ISettingsService settingsService, IEventA
                 return;
             }
 
-            // 重新创建触发光电客户端
+            // 重新创建触发光电客户端（禁用自动重连）
             TriggerClient = new TcpClientService(
                 "触发光电",
                 config.TriggerPhotoelectric.IpAddress,
                 config.TriggerPhotoelectric.Port,
                 ProcessTriggerData,
-                connected => UpdateDeviceConnectionState("触发光电", connected)
+                connected => UpdateDeviceConnectionState("触发光电", connected),
+                autoReconnect: false
             );
-            await Task.Run(() => TriggerClient.Connect());
+            await Task.Run(() => TriggerClient.Connect()).ContinueWith(t =>
+            {
+                if (t is { IsFaulted: true, Exception: not null })
+                {
+                    Log.Warning(t.Exception, "单光电单摆轮重连任务发生未观察的异常");
+                }
+            }, TaskContinuationOptions.OnlyOnFaulted);
 
             // 如果服务正在运行，发送启动命令
             if (IsRunningFlag)

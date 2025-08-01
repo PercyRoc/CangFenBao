@@ -192,14 +192,7 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
             _hasTriggerTimeResult = false;
             _hasSortingTimeResult = false;
             
-            if (SelectedTarget?.Mode == CalibrationMode.CompleteFlow)
-            {
-                StatusMessage = $"已记录触发时间: {triggerTime:HH:mm:ss.fff}，等待包裹处理和分拣信号...";
-            }
-            else
-            {
-                StatusMessage = $"已记录触发时间: {triggerTime:HH:mm:ss.fff}，等待{SecondSignalName}信号...";
-            }
+            StatusMessage = SelectedTarget?.Mode == CalibrationMode.CompleteFlow ? $"已记录触发时间: {triggerTime:HH:mm:ss.fff}，等待包裹处理和分拣信号..." : $"已记录触发时间: {triggerTime:HH:mm:ss.fff}，等待{SecondSignalName}信号...";
             
             Log.Information("一次性标定模式：记录触发时间 {TriggerTime:HH:mm:ss.fff}", triggerTime);
         });

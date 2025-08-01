@@ -86,13 +86,15 @@ public enum AudioType
 }
 
 /// <summary>
-///     音频服务实现
+///     音频服务实现（自动使用TTS和音量增强）
 /// </summary>
 public class AudioService : IAudioService, IDisposable
 {
     private readonly SoundPlayer _player;
+    private readonly ITtsService _ttsService;
     private readonly SemaphoreSlim _playLock;
     private readonly Dictionary<AudioType, string> _presetAudios;
+    private readonly Dictionary<AudioType, string> _presetTexts;
     private bool _disposed;
 
     /// <summary>
@@ -101,6 +103,7 @@ public class AudioService : IAudioService, IDisposable
     public AudioService()
     {
         _player = new SoundPlayer();
+        _ttsService = new TtsService();
         _playLock = new SemaphoreSlim(1, 1);
 
         // 初始化预设音频
@@ -140,6 +143,22 @@ public class AudioService : IAudioService, IDisposable
             {
                 AudioType.WeightAbnormal, Path.Combine(audioDirectory, "重量异常.wav")
             }
+        };
+
+        // 初始化预设文本（用于TTS）
+        _presetTexts = new Dictionary<AudioType, string>
+        {
+            { AudioType.SystemError, "系统错误" },
+            { AudioType.Success, "操作成功" },
+            { AudioType.PlcDisconnected, "PLC未连接" },
+            { AudioType.WaitingScan, "等待扫码" },
+            { AudioType.WaitingForLoading, "等待上包" },
+            { AudioType.LoadingTimeout, "超时" },
+            { AudioType.LoadingRejected, "拒绝上包" },
+            { AudioType.LoadingSuccess, "上包成功" },
+            { AudioType.LoadingAllowed, "允许上包" },
+            { AudioType.VolumeAbnormal, "体积异常" },
+            { AudioType.WeightAbnormal, "重量异常" }
         };
 
         // 确保音频目录存在
@@ -199,8 +218,21 @@ public class AudioService : IAudioService, IDisposable
     /// <inheritdoc />
     public async Task<bool> PlayPresetAsync(AudioType audioType)
     {
-        if (_presetAudios.TryGetValue(audioType, out var audioPath)) return await PlayAsync(audioPath);
-        Log.Warning("未找到预设音频：{Type}", audioType);
+        // 优先尝试播放预录制音频文件
+        if (_presetAudios.TryGetValue(audioType, out var audioPath) && File.Exists(audioPath))
+        {
+            Log.Debug("使用预录制音频播放：{Type}", audioType);
+            return await PlayAsync(audioPath);
+        }
+
+        // 如果音频文件不存在，则使用TTS播放
+        if (_presetTexts.TryGetValue(audioType, out var text))
+        {
+            Log.Debug("使用TTS播放预设语音：{Type}", audioType);
+            return await _ttsService.SpeakAsync(text, 0, 100, 5.0f); // 默认音量增强5倍
+        }
+
+        Log.Warning("未找到预设音频或文本：{Type}", audioType);
         return false;
     }
 
@@ -212,6 +244,7 @@ public class AudioService : IAudioService, IDisposable
         try
         {
             _player.Dispose();
+            _ttsService.Dispose();
             _playLock.Dispose();
         }
         catch (Exception ex)

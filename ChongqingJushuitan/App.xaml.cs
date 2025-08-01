@@ -73,7 +73,7 @@ internal partial class App
 
         // 注册多摆轮分拣服务
         containerRegistry.RegisterPendulumSortService(PendulumServiceType.Multi);
-        containerRegistry.RegisterSingleton<IHostedService, PendulumSortHostedService>();
+        containerRegistry.RegisterSingleton<PendulumSortService>();
     }
 
     /// <summary>
@@ -108,10 +108,10 @@ internal partial class App
             cameraStartupService.StartAsync(CancellationToken.None).Wait();
             Log.Information("相机托管服务启动成功");
 
-            // 启动摆轮分拣托管服务
-            var pendulumHostedService = Container.Resolve<PendulumSortHostedService>();
-            pendulumHostedService.StartAsync(CancellationToken.None).Wait();
-            Log.Information("摆轮分拣托管服务启动成功");
+            // 启动摆轮分拣服务
+            var pendulumService = Container.Resolve<PendulumSortService>();
+            pendulumService.StartAsync().Wait();
+            Log.Information("摆轮分拣服务启动成功");
         }
         catch (Exception ex)
         {
@@ -177,10 +177,10 @@ internal partial class App
             {
                 Log.Information("正在停止托管服务...");
 
-                // 停止摆轮分拣托管服务
-                var pendulumHostedService = Container.Resolve<IHostedService>();
-                pendulumHostedService.StopAsync(CancellationToken.None).Wait();
-                Log.Information("摆轮分拣托管服务已停止");
+                // 停止摆轮分拣服务
+                var pendulumService = Container.Resolve<PendulumSortService>();
+                pendulumService.StopAsync().Wait();
+                Log.Information("摆轮分拣服务已停止");
 
                 // 停止相机托管服务
                 var cameraStartupService = Container.Resolve<CameraStartupService>();

@@ -456,11 +456,19 @@ public class HuaRayCameraService : ICameraService
     private async Task ProcessPackageInfoAsync(HuaRayCodeEventArgs args)
     {
         BitmapSource? processedBitmapSource = null;
+        
+        // 开始计时：整体处理时间
+        var overallStopwatch = Stopwatch.StartNew();
+        var semaphoreWaitStopwatch = Stopwatch.StartNew();
 
         try
         {
             // 1. 先处理图像
             await _imageProcessingSemaphore.WaitAsync();
+            semaphoreWaitStopwatch.Stop();
+            
+            // 开始计时：图像处理时间
+            var imageProcessingStopwatch = Stopwatch.StartNew();
             try
             {
                 if (args.OriginalImage.ImageData == IntPtr.Zero || args.OriginalImage.dataSize <= 0 ||
@@ -507,25 +515,34 @@ public class HuaRayCameraService : ICameraService
             }
             finally
             {
+                imageProcessingStopwatch.Stop();
                 _imageProcessingSemaphore.Release();
             }
 
             // 2. 处理 OutputResult == 1 的情况
             if (args.OutputResult == 1)
             {
+                // 开始计时：PackageInfo处理时间
+                var packageInfoStopwatch = Stopwatch.StartNew();
+                
                 // 创建 PackageInfo 对象
+                var packageCreateStopwatch = Stopwatch.StartNew();
                 var packageInfo = PackageInfo.Create();
+                packageCreateStopwatch.Stop();
 
                 // 设置条码
+                var barcodeSetStopwatch = Stopwatch.StartNew();
                 packageInfo.SetBarcode(args.CodeList.FirstOrDefault() ?? "noread");
+                barcodeSetStopwatch.Stop();
 
                 // --- 开始添加日志上下文 ---
                 var packageContext = $"[包裹{packageInfo.Index}|{packageInfo.Barcode}]";
                 using (LogContext.PushProperty("PackageContext", packageContext))
                 {
-                    Log.Debug("开始处理识别结果"); // 使用 Debug 级别标记开始
+                    Log.Information("相机SDK开始处理事件. 条码: {Barcode}, 触发时间: {TriggerTime:HH:mm:ss.fff}", packageInfo.Barcode, packageInfo.TriggerTimestamp);
 
                     // 设置触发时间戳
+                    var timestampSetStopwatch = Stopwatch.StartNew();
                     try
                     {
                         if (args.TriggerTimeTicks > 0)
@@ -543,9 +560,14 @@ public class HuaRayCameraService : ICameraService
                     {
                         Log.Error(ex, "转换 TriggerTimeTicks ({Ticks}) 失败.", args.TriggerTimeTicks);
                     }
+                    finally
+                    {
+                        timestampSetStopwatch.Stop();
+                    }
 
 
                     // 设置重量
+                    var weightSetStopwatch = Stopwatch.StartNew();
                     if (args.Weight > 0)
                     {
                         var weightKg = args.Weight / 1000.0;
@@ -553,8 +575,10 @@ public class HuaRayCameraService : ICameraService
                         // Log.Information("设置包裹重量: {Weight}", args.Weight); // 原有日志，考虑是否保留或改为 Debug
                         Log.Debug("设置包裹重量: {WeightKg} kg", weightKg); // 使用 Debug 级别记录详细信息
                     }
+                    weightSetStopwatch.Stop();
 
                     // 设置尺寸和体积
+                    var dimensionsSetStopwatch = Stopwatch.StartNew();
                     try
                     {
                         if (args.VolumeInfo is { length: > 0, width: > 0, height: > 0 })
@@ -574,8 +598,13 @@ public class HuaRayCameraService : ICameraService
                     {
                         Log.Warning(ex, "设置包裹尺寸时发生错误"); // 保留 Warning 级别
                     }
+                    finally
+                    {
+                        dimensionsSetStopwatch.Stop();
+                    }
 
                     // 设置图像
+                    var imageSetStopwatch = Stopwatch.StartNew();
                     if (processedBitmapSource != null)
                     {
                         packageInfo.SetImage(processedBitmapSource, null); // Set the processed image
@@ -585,13 +614,46 @@ public class HuaRayCameraService : ICameraService
                     {
                         Log.Warning("未能将图像设置到 PackageInfo，因为图像处理失败"); // 保留 Warning 级别
                     }
+                    imageSetStopwatch.Stop();
 
                     // 计算并记录处理时间
                     packageInfo.ProcessingTime = (packageInfo.CreateTime - packageInfo.TriggerTimestamp).TotalMilliseconds;
-                    Log.Information("包裹处理完成, 耗时: {ProcessingTime:F0}ms", packageInfo.ProcessingTime); // 保留 Information 级别标记完成
-
+                    
+                    // 停止PackageInfo处理计时器
+                    packageInfoStopwatch.Stop();
+                    
                     // 推送包裹信息
+                    var packagePushStopwatch = Stopwatch.StartNew();
                     _packageSubject.OnNext(packageInfo);
+                    packagePushStopwatch.Stop();
+                    
+                    // 停止整体计时器
+                    overallStopwatch.Stop();
+                    
+                    // 记录各阶段详细时间
+                    Log.Information("包裹处理完成 - 各阶段耗时统计: " +
+                        "总耗时={OverallTime:F1}ms, " +
+                        "信号量等待={SemaphoreWait:F1}ms, " +
+                        "图像处理={ImageProcessing:F1}ms, " +
+                        "对象创建={PackageCreate:F1}ms, " +
+                        "条码设置={BarcodeSet:F1}ms, " +
+                        "时间戳设置={TimestampSet:F1}ms, " + 
+                        "重量设置={WeightSet:F1}ms, " +
+                        "尺寸设置={DimensionsSet:F1}ms, " +
+                        "图像设置={ImageSet:F1}ms, " +
+                        "数据处理={PackageInfo:F1}ms, " +
+                        "推送耗时={PackagePush:F1}ms",
+                        overallStopwatch.Elapsed.TotalMilliseconds,
+                        semaphoreWaitStopwatch.Elapsed.TotalMilliseconds,
+                        imageProcessingStopwatch.Elapsed.TotalMilliseconds,
+                        packageCreateStopwatch.Elapsed.TotalMilliseconds,
+                        barcodeSetStopwatch.Elapsed.TotalMilliseconds,
+                        timestampSetStopwatch.Elapsed.TotalMilliseconds,
+                        weightSetStopwatch.Elapsed.TotalMilliseconds,
+                        dimensionsSetStopwatch.Elapsed.TotalMilliseconds,
+                        imageSetStopwatch.Elapsed.TotalMilliseconds,
+                        packageInfoStopwatch.Elapsed.TotalMilliseconds,
+                        packagePushStopwatch.Elapsed.TotalMilliseconds);
 
                 }
             }
@@ -599,8 +661,9 @@ public class HuaRayCameraService : ICameraService
         catch (Exception ex)
         {
             // 这个 catch 块在 LogContext 之外，不会有 PackageContext
-            Log.Error(ex, "处理华睿相机条码事件时发生未预期的错误 (ProcessPackageInfoAsync): {Message}, CameraId: {CameraId}", ex.Message,
-                args.CameraId);
+            overallStopwatch?.Stop();
+            Log.Error(ex, "处理华睿相机条码事件时发生未预期的错误 (ProcessPackageInfoAsync): {Message}, CameraId: {CameraId}, 总耗时: {OverallTime:F1}ms", 
+                ex.Message, args.CameraId, overallStopwatch?.Elapsed.TotalMilliseconds ?? 0);
         }
         finally
         {
@@ -914,7 +977,7 @@ public class HuaRayCameraService : ICameraService
                 .ToList();
 
             searchPaths.Add(AppDomain.CurrentDomain.BaseDirectory);
-            searchPaths = searchPaths.Distinct().ToList();
+            searchPaths = [.. searchPaths.Distinct()];
 
             Log.Information("开始搜索LP开头文件夹中的配置文件...");
 

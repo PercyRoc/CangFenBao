@@ -1,10 +1,12 @@
+using System.IO;
 using System.Speech.Synthesis;
+using NAudio.Wave;
 using Serilog;
 
 namespace Common.Services.Audio;
 
 /// <summary>
-///     文本转语音服务实现
+///     文本转语音服务实现（使用NAudio进行音量增强）
 /// </summary>
 public class TtsService : ITtsService
 {
@@ -21,7 +23,6 @@ public class TtsService : ITtsService
         _synthesizer = new SpeechSynthesizer();
         _speakLock = new SemaphoreSlim(1, 1);
 
-        // 初始化预设文本
         _presetTexts = new Dictionary<AudioType, string>
         {
             { AudioType.SystemError, "系统错误" },
@@ -37,18 +38,14 @@ public class TtsService : ITtsService
             { AudioType.WeightAbnormal, "重量异常" }
         };
 
-        // 设置默认语音属性
-        _synthesizer.Rate = 0;  // 正常语速
-        _synthesizer.Volume = 100;  // 最大音量
-
-        // 尝试设置中文语音
+        _synthesizer.SetOutputToDefaultAudioDevice();
         SetChineseVoice();
 
-        Log.Information("TTS语音服务已初始化");
+        Log.Information("TTS语音服务已初始化 (使用NAudio增强)");
     }
 
     /// <inheritdoc />
-    public async Task<bool> SpeakAsync(string text, int rate = 0, int volume = 100)
+    public async Task<bool> SpeakAsync(string text, int rate = 0, int volume = 100, float volumeMultiplier = 1.0f)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -56,52 +53,106 @@ public class TtsService : ITtsService
             return false;
         }
 
-        // 验证参数范围
-        rate = Math.Clamp(rate, -10, 10);
-        volume = Math.Clamp(volume, 0, 100);
+        Math.Clamp(rate, -10, 10);
+        Math.Clamp(volume, 0, 100);
+        volumeMultiplier = Math.Max(0.0f, volumeMultiplier);
+
+        if (!await _speakLock.WaitAsync(TimeSpan.FromSeconds(1)))
+        {
+            Log.Warning("等待语音播放锁超时");
+            return false;
+        }
 
         try
         {
-            // 使用信号量确保同一时间只播放一个语音
-            if (!await _speakLock.WaitAsync(TimeSpan.FromSeconds(1)))
+            
+            var tcs = new TaskCompletionSource<bool>();
+            
+            // 将合成器输出重定向到内存流
+            using var memoryStream = new MemoryStream();
+            _synthesizer.SetOutputToWaveStream(memoryStream);
+            
+            // 异步合成语音
+            _synthesizer.SpeakAsync(text);
+            
+            // 播放完成后的回调
+            _synthesizer.SpeakCompleted += async (_, e) =>
             {
-                Log.Warning("等待语音播放锁超时");
-                return false;
-            }
+                // 确保我们在正确的线程上处理
+                await Task.Yield();
 
-            try
-            {
-                await Task.Run(() =>
+                if (e.Error != null)
                 {
-                    _synthesizer.Rate = rate;
-                    _synthesizer.Volume = volume;
-                    _synthesizer.Speak(text);
-                });
+                    Log.Error(e.Error, "TTS aac synthesis failed");
+                    tcs.TrySetResult(false);
+                    return;
+                }
 
-                Log.Debug("开始播放TTS语音：{Text}", text);
-                return true;
-            }
-            finally
-            {
-                _speakLock.Release();
-            }
+                try
+                {
+                    memoryStream.Position = 0;
+                    using var waveReader = new WaveFileReader(memoryStream);
+                    var sampleProvider = new VolumeSampleProvider(waveReader.ToSampleProvider())
+                    {
+                        VolumeMultiplier = volumeMultiplier
+                    };
+
+                    // 使用 using 确保 WaveOutEvent 被释放
+                    using var waveOut = new WaveOutEvent();
+                    var playbackFinishedTcs = new TaskCompletionSource<bool>();
+                    
+                    waveOut.PlaybackStopped += (sender, args) =>
+                    {
+                        if (args.Exception != null)
+                        {
+                            Log.Error(args.Exception, "NAudio playback failed");
+                            playbackFinishedTcs.TrySetResult(false);
+                        }
+                        else
+                        {
+                            playbackFinishedTcs.TrySetResult(true);
+                        }
+                    };
+                    
+                    waveOut.Init(sampleProvider);
+                    waveOut.Play();
+                    
+                    // 等待播放完成
+                    var result = await playbackFinishedTcs.Task;
+                    tcs.TrySetResult(result);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "NAudio playback preparation failed");
+                    tcs.TrySetResult(false);
+                }
+            };
+            
+            // 等待整个操作完成
+            return await tcs.Task;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "播放TTS语音时发生错误：{Text}", text);
+            Log.Error(ex, "播放TTS语音时发生错误: {Text}", text);
             return false;
+        }
+        finally
+        {
+            _synthesizer.SetOutputToDefaultAudioDevice();
+            _speakLock.Release();
         }
     }
 
+
     /// <inheritdoc />
-    public async Task<bool> SpeakPresetAsync(AudioType audioType, int rate = 0, int volume = 100)
+    public async Task<bool> SpeakPresetAsync(AudioType audioType, int rate = 0, int volume = 100, float volumeMultiplier = 1.0f)
     {
         if (_presetTexts.TryGetValue(audioType, out var text))
         {
-            return await SpeakAsync(text, rate, volume);
+            return await SpeakAsync(text, rate, volume, volumeMultiplier);
         }
 
-        Log.Warning("未找到预设文本：{Type}", audioType);
+        Log.Warning("未找到预设文本: {Type}", audioType);
         return false;
     }
 
@@ -173,28 +224,29 @@ public class TtsService : ITtsService
         try
         {
             _synthesizer.SelectVoice(voiceName);
-            Log.Information("已设置语音：{VoiceName}", voiceName);
+            Log.Information("已设置语音: {VoiceName}", voiceName);
             return true;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "设置语音时发生错误：{VoiceName}", voiceName);
+            Log.Error(ex, "设置语音时发生错误: {VoiceName}", voiceName);
             return false;
         }
     }
 
-    /// <summary>
-    ///     设置中文语音
-    /// </summary>
     private void SetChineseVoice()
     {
         try
         {
             var voices = GetInstalledVoices().ToList();
-            Log.Information("可用语音：{Voices}", string.Join(", ", voices.Select(v => v.Name)));
+            if (voices.Count == 0)
+            {
+                Log.Warning("系统中未找到任何TTS语音");
+                return;
+            }
+            Log.Information("可用语音: {Voices}", string.Join(", ", voices.Select(v => v.Name)));
 
-            // 优先选择中文语音
-            var chineseVoice = voices.FirstOrDefault(v => 
+            var chineseVoice = voices.FirstOrDefault(v =>
                 v.Culture.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase) ||
                 v.Name.Contains("Chinese", StringComparison.OrdinalIgnoreCase) ||
                 v.Name.Contains("中文", StringComparison.OrdinalIgnoreCase));
@@ -202,11 +254,10 @@ public class TtsService : ITtsService
             if (chineseVoice != null)
             {
                 SetVoice(chineseVoice.Name);
-                Log.Information("已设置中文语音：{VoiceName}", chineseVoice.Name);
             }
             else
             {
-                Log.Warning("未找到中文语音，使用默认语音");
+                Log.Warning("未找到中文语音，将使用默认语音");
             }
         }
         catch (Exception ex)
@@ -222,7 +273,6 @@ public class TtsService : ITtsService
 
         try
         {
-            _synthesizer.SpeakAsyncCancelAll();
             _synthesizer.Dispose();
             _speakLock.Dispose();
         }

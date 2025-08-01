@@ -26,6 +26,7 @@
         <PackageReference Include="Microsoft.Extensions.Hosting"/>
         <PackageReference Include="Microsoft.Extensions.Options"/>
         <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions"/>
+        <PackageReference Include="NAudio" />
         <PackageReference Include="Prism.Wpf"/>
         <PackageReference Include="Prism.Unity"/>
         <PackageReference Include="Serilog"/>

@@ -1,5 +1,6 @@
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Camera.RenJia;
+using DeviceService.DataSourceDevices.Rfid;
 using DeviceService.DataSourceDevices.Scanner;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.DataSourceDevices.Weight;
@@ -59,5 +60,13 @@ public static class ContainerRegistryExtensions
             var weightStartupService = sp.Resolve<WeightStartupService>();
             return weightStartupService.GetWeightService();
         });
+    }
+
+    /// <summary>
+    ///     添加Frid设备服务
+    /// </summary>
+    public static void AddFridDevice(this IContainerRegistry containerRegistry)
+    {
+        containerRegistry.RegisterSingleton<IFridService, FridService>();
     }
 }
