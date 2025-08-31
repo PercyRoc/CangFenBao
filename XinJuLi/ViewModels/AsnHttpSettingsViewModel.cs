@@ -1,4 +1,6 @@
 using Common.Services.Settings;
+using Prism.Commands;
+using Prism.Mvvm;
 using Serilog;
 using XinJuLi.Models.ASN;
 
@@ -21,6 +23,7 @@ public class AsnHttpSettingsViewModel : BindableBase
         SaveConfigurationCommand = new DelegateCommand(ExecuteSaveConfiguration);
         Settings = _settingsService.LoadSettings<AsnSettings>();
     }
+
     public AsnSettings Settings { get; }
 
     /// <summary>

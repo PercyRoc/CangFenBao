@@ -1,4 +1,4 @@
-using System.Speech.Synthesis;
+// using System.Speech.Synthesis;
 
 namespace Common.Services.Audio;
 
@@ -46,7 +46,7 @@ public interface ITtsService : IDisposable
     ///     获取可用的语音
     /// </summary>
     /// <returns>可用语音列表</returns>
-    IEnumerable<VoiceInfo> GetInstalledVoices();
+    // IEnumerable<VoiceInfo> GetInstalledVoices();
 
     /// <summary>
     ///     设置语音

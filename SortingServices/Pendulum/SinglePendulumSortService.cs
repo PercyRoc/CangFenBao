@@ -3,6 +3,7 @@ using System.Text;
 using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.TCP;
+using Prism.Events;
 using Serilog;
 
 namespace SortingServices.Pendulum;
@@ -25,7 +26,7 @@ public class SinglePendulumSortService(ISettingsService settingsService, IEventA
             configuration.TriggerPhotoelectric.Port,
             ProcessTriggerData,
             connected => UpdateDeviceConnectionState("触发光电", connected),
-            autoReconnect: false
+            false
         );
 
         try
@@ -54,7 +55,6 @@ public class SinglePendulumSortService(ISettingsService settingsService, IEventA
 
         // 在启动服务前先发送启动命令
         if (TriggerClient != null && TriggerClient.IsConnected())
-        {
             try
             {
                 var startCommand = GetCommandBytes(PendulumCommands.Module2.Start);
@@ -69,11 +69,8 @@ public class SinglePendulumSortService(ISettingsService settingsService, IEventA
             {
                 Log.Error(ex, "发送启动命令到触发光电失败");
             }
-        }
         else
-        {
             Log.Warning("触发光电未连接，将在连接后自动发送启动命令");
-        }
 
         // 启动超时检查定时器
         TimeoutCheckTimer.Start();
@@ -81,6 +78,9 @@ public class SinglePendulumSortService(ISettingsService settingsService, IEventA
         // 创建取消令牌
         CancellationTokenSource = new CancellationTokenSource();
         IsRunningFlag = true;
+
+        // 启动消费者任务
+        StartConsumer();
 
         // 启动主循环
         _ = Task.Run(async () =>
@@ -115,10 +115,7 @@ public class SinglePendulumSortService(ISettingsService settingsService, IEventA
             }
         }, CancellationTokenSource.Token).ContinueWith(t =>
         {
-            if (t is { IsFaulted: true, Exception: not null })
-            {
-                Log.Warning(t.Exception, "单光电单摆轮分拣服务主循环任务发生未观察的异常");
-            }
+            if (t is { IsFaulted: true, Exception: not null }) Log.Warning(t.Exception, "单光电单摆轮分拣服务主循环任务发生未观察的异常");
         }, TaskContinuationOptions.OnlyOnFaulted);
 
         return Task.CompletedTask;
@@ -132,7 +129,6 @@ public class SinglePendulumSortService(ISettingsService settingsService, IEventA
         {
             // 先向触发光电发送停止命令，确保在改变服务状态前发送
             if (TriggerClient != null && TriggerClient.IsConnected())
-            {
                 try
                 {
                     // 先发送停止命令
@@ -151,14 +147,15 @@ public class SinglePendulumSortService(ISettingsService settingsService, IEventA
                 {
                     Log.Error(ex, "向触发光电发送停止命令失败");
                 }
-            }
             else
-            {
                 Log.Warning("触发光电未连接，无法发送停止命令");
-            }
 
             // 停止主循环
-            await CancellationTokenSource?.CancelAsync()!;
+            if (CancellationTokenSource != null) await CancellationTokenSource.CancelAsync();
+
+            // 停止消费者任务
+            await StopConsumer();
+
             IsRunningFlag = false;
 
             // 停止超时检查定时器
@@ -196,7 +193,7 @@ public class SinglePendulumSortService(ISettingsService settingsService, IEventA
             // 只处理高电平信号，忽略低电平和其他信号
             bool isHighLevelSignal;
             string signalType;
-            
+
             if (message.Contains("OCCH1:1"))
             {
                 isHighLevelSignal = true;
@@ -225,7 +222,7 @@ public class SinglePendulumSortService(ISettingsService settingsService, IEventA
             {
                 // 更新触发光电信号状态（只对高电平信号）
                 UpdatePhotoelectricSignalState("触发光电", true);
-                
+
                 Log.Debug("触发光电收到有效高电平信号: {SignalType} - {Message}", signalType, message);
 
                 // 使用基类的信号处理方法
@@ -244,16 +241,11 @@ public class SinglePendulumSortService(ISettingsService settingsService, IEventA
     protected override void HandleSecondPhotoelectric(string data)
     {
         var sortingTime = DateTime.Now;
+        Log.Debug("单摆轮模式收到第二光电信号(OCCH2)，准备入队处理: {Data}", data);
 
-        // 触发分拣光电信号事件
-        RaiseSortingPhotoelectricSignal("默认", sortingTime);
-
-        // 使用基类的匹配逻辑
-        var package = MatchPackageForSorting("默认");
-        if (package == null) return;
-
-        // 执行分拣动作
-        _ = ExecuteSortingAction(package, "默认");
+        // 【生产者】将信号放入队列，由后台消费者任务处理
+        // 在单摆轮模式中，分拣光电的名称约定为 "默认"
+        EnqueueSortingSignal("默认", sortingTime);
     }
 
     protected override async Task ReconnectAsync()
@@ -276,14 +268,11 @@ public class SinglePendulumSortService(ISettingsService settingsService, IEventA
                 config.TriggerPhotoelectric.Port,
                 ProcessTriggerData,
                 connected => UpdateDeviceConnectionState("触发光电", connected),
-                autoReconnect: false
+                false
             );
             await Task.Run(() => TriggerClient.Connect()).ContinueWith(t =>
             {
-                if (t is { IsFaulted: true, Exception: not null })
-                {
-                    Log.Warning(t.Exception, "单光电单摆轮重连任务发生未观察的异常");
-                }
+                if (t is { IsFaulted: true, Exception: not null }) Log.Warning(t.Exception, "单光电单摆轮重连任务发生未观察的异常");
             }, TaskContinuationOptions.OnlyOnFaulted);
 
             // 如果服务正在运行，发送启动命令
@@ -320,10 +309,7 @@ public class SinglePendulumSortService(ISettingsService settingsService, IEventA
     protected override string? GetPhotoelectricNameBySlot(int slot)
     {
         // 单光电单摆轮模式下，只处理1号和2号格口。其他格口为直行。
-        if (slot is 1 or 2)
-        {
-            return "默认";
-        }
+        if (slot is 1 or 2) return "默认";
         // 对于所有其他格口，返回null，这些包裹将被视为直行包裹
         return null;
     }
@@ -341,9 +327,7 @@ public class SinglePendulumSortService(ISettingsService settingsService, IEventA
 
         // 检查是否为连续两次低电平：当前记录状态为低电平，且新信号也是低电平
         if (!currentState && !isHighLevel)
-        {
             Log.Error("【光电信号异常】光电 {Name} 连续收到两次低电平信号，可能存在硬件故障或信号传输问题。请检查光电设备状态。", photoelectricName);
-        }
 
         // 记录当前信号状态
         Log.Debug("光电 {Name} 信号状态: {State}", photoelectricName, isHighLevel ? "高电平" : "低电平");

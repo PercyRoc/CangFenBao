@@ -55,7 +55,6 @@ public class CameraStartupService(
     {
         try
         {
-
             if (_cameraService != null)
             {
                 try
@@ -79,7 +78,7 @@ public class CameraStartupService(
         }
         finally
         {
-            _initLock.Dispose();
+            // _initLock.Dispose();
         }
 
         return Task.CompletedTask;

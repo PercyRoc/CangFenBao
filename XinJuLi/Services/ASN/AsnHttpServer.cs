@@ -91,7 +91,6 @@ public class AsnHttpServer(IAsnService asnService, ISettingsService settingsServ
     private async Task ListenAsync(CancellationToken cancellationToken)
     {
         while (_isRunning && !cancellationToken.IsCancellationRequested)
-        {
             try
             {
                 var context = await _listener!.GetContextAsync();
@@ -101,10 +100,7 @@ public class AsnHttpServer(IAsnService asnService, ISettingsService settingsServ
             }
             catch (HttpListenerException ex)
             {
-                if (_isRunning)
-                {
-                    Log.Error(ex, "HTTP监听异常");
-                }
+                if (_isRunning) Log.Error(ex, "HTTP监听异常");
 
                 break; // 如果已经停止，就不记录异常了
             }
@@ -116,7 +112,6 @@ public class AsnHttpServer(IAsnService asnService, ISettingsService settingsServ
             {
                 Log.Error(ex, "处理HTTP请求时发生未预期异常");
             }
-        }
     }
 
     /// <summary>
@@ -154,17 +149,11 @@ public class AsnHttpServer(IAsnService asnService, ISettingsService settingsServ
 
             // 根据路径分发请求
             if (urlPath.EndsWith("/send_asn_order_info"))
-            {
                 await HandleAsnOrderInfoAsync(request, response);
-            }
             else if (urlPath.EndsWith("/material_review"))
-            {
                 await HandleMaterialReviewAsync(request, response);
-            }
             else
-            {
                 await SendResponseAsync(response, 404, Response.CreateFailed("接口不存在", "NOT_FOUND"));
-            }
         }
         catch (Exception ex)
         {

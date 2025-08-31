@@ -6,15 +6,8 @@ namespace Common.Services.Validation;
 /// <summary>
 ///     单号校验服务实现
 /// </summary>
-public class BarcodeValidationService : IBarcodeValidationService
+public partial class BarcodeValidationService : IBarcodeValidationService
 {
-    // 正则表达式模式
-    private static readonly Regex InternalPackagePattern = new(@"^9\d{9}$", RegexOptions.Compiled);
-    private static readonly Regex StandardExpressPattern = new(@"^8\d{12}$", RegexOptions.Compiled);
-    private static readonly Regex ApiDirectElectronicPattern = new(@"^6\d{12}$", RegexOptions.Compiled);
-    private static readonly Regex JishidaElectronicPattern = new(@"^(2\d{12}|JS0\d{12})$", RegexOptions.Compiled);
-    private static readonly Regex TaobaoElectronicPattern = new(@"^67\d{11}$", RegexOptions.Compiled);
-
     /// <summary>
     ///     校验单号是否有效
     /// </summary>
@@ -22,10 +15,7 @@ public class BarcodeValidationService : IBarcodeValidationService
     /// <returns>校验结果</returns>
     public BarcodeValidationResult ValidateBarcode(string barcode)
     {
-        if (string.IsNullOrWhiteSpace(barcode))
-        {
-            return BarcodeValidationResult.Failure("单号不能为空");
-        }
+        if (string.IsNullOrWhiteSpace(barcode)) return BarcodeValidationResult.Failure("单号不能为空");
 
         // 去除首尾空格
         barcode = barcode.Trim();
@@ -42,18 +32,15 @@ public class BarcodeValidationService : IBarcodeValidationService
                 BarcodeType.ApiDirectElectronic => ValidateApiDirectElectronic(barcode),
                 BarcodeType.JishidaElectronic => ValidateJishidaElectronic(barcode),
                 BarcodeType.TaobaoElectronic => ValidateTaobaoElectronic(barcode),
+                BarcodeType.BnElectronic => ValidateBnElectronic(barcode),
                 _ => BarcodeValidationResult.Failure("无效的单号格式")
             };
 
             // 记录校验日志
             if (result.IsValid)
-            {
                 Log.Information("单号校验通过: {Barcode}, 类型: {Type}", barcode, result.BarcodeType);
-            }
             else
-            {
                 Log.Warning("单号校验失败: {Barcode}, 错误: {Error}", barcode, result.ErrorMessage);
-            }
 
             return result;
         }
@@ -71,41 +58,58 @@ public class BarcodeValidationService : IBarcodeValidationService
     /// <returns>单号类型，如果无法识别则返回Unknown</returns>
     public BarcodeType GetBarcodeType(string barcode)
     {
-        if (string.IsNullOrWhiteSpace(barcode))
-        {
-            return BarcodeType.Unknown;
-        }
+        if (string.IsNullOrWhiteSpace(barcode)) return BarcodeType.Unknown;
 
         barcode = barcode.Trim();
 
         // 按照优先级顺序检查
-        if (InternalPackagePattern.IsMatch(barcode))
+        if (InternalPackagePattern().IsMatch(barcode))
             return BarcodeType.InternalPackage;
 
-        if (StandardExpressPattern.IsMatch(barcode))
+        if (StandardExpressPattern().IsMatch(barcode))
             return BarcodeType.StandardExpress;
 
-        if (ApiDirectElectronicPattern.IsMatch(barcode))
+        if (ApiDirectElectronicPattern().IsMatch(barcode))
             return BarcodeType.ApiDirectElectronic;
 
-        if (JishidaElectronicPattern.IsMatch(barcode))
+        if (JishidaElectronicPattern().IsMatch(barcode))
             return BarcodeType.JishidaElectronic;
 
-        if (TaobaoElectronicPattern.IsMatch(barcode))
+        if (TaobaoElectronicPattern().IsMatch(barcode))
             return BarcodeType.TaobaoElectronic;
+
+        if (BnElectronicPattern().IsMatch(barcode))
+            return BarcodeType.BnElectronic;
 
         return BarcodeType.Unknown;
     }
+
+    // 源生成正则（性能更优，消除“使用 GeneratedRegexAttribute”提示）
+    [GeneratedRegex(@"^9\d{9}$")]
+    private static partial Regex InternalPackagePattern();
+
+    [GeneratedRegex(@"^8\d{12}$")]
+    private static partial Regex StandardExpressPattern();
+
+    [GeneratedRegex(@"^6\d{12}$")]
+    private static partial Regex ApiDirectElectronicPattern();
+
+    [GeneratedRegex(@"^(2\d{12}|JS0\d{12})$")]
+    private static partial Regex JishidaElectronicPattern();
+
+    [GeneratedRegex(@"^67\d{11}$")]
+    private static partial Regex TaobaoElectronicPattern();
+
+    [GeneratedRegex(@"^BN\d{14}$")]
+    private static partial Regex BnElectronicPattern();
 
     /// <summary>
     ///     校验内部包裹流转码
     /// </summary>
     private static BarcodeValidationResult ValidateInternalPackage(string barcode)
     {
-        if (InternalPackagePattern.IsMatch(barcode))
-        {
+        if (InternalPackagePattern().IsMatch(barcode))
             return BarcodeValidationResult.Success(BarcodeType.InternalPackage);
-        }
         return BarcodeValidationResult.Failure("内部包裹流转码格式错误，应为9开头的10位数字", BarcodeType.InternalPackage);
     }
 
@@ -114,10 +118,8 @@ public class BarcodeValidationService : IBarcodeValidationService
     /// </summary>
     private static BarcodeValidationResult ValidateStandardExpress(string barcode)
     {
-        if (StandardExpressPattern.IsMatch(barcode))
-        {
+        if (StandardExpressPattern().IsMatch(barcode))
             return BarcodeValidationResult.Success(BarcodeType.StandardExpress);
-        }
         return BarcodeValidationResult.Failure("标准快递面单格式错误，应为8开头的13位数字", BarcodeType.StandardExpress);
     }
 
@@ -126,10 +128,8 @@ public class BarcodeValidationService : IBarcodeValidationService
     /// </summary>
     private static BarcodeValidationResult ValidateApiDirectElectronic(string barcode)
     {
-        if (ApiDirectElectronicPattern.IsMatch(barcode))
-        {
+        if (ApiDirectElectronicPattern().IsMatch(barcode))
             return BarcodeValidationResult.Success(BarcodeType.ApiDirectElectronic);
-        }
         return BarcodeValidationResult.Failure("API直连电子面单格式错误，应为6开头的13位数字", BarcodeType.ApiDirectElectronic);
     }
 
@@ -138,20 +138,16 @@ public class BarcodeValidationService : IBarcodeValidationService
     /// </summary>
     private static BarcodeValidationResult ValidateJishidaElectronic(string barcode)
     {
-        if (!JishidaElectronicPattern.IsMatch(barcode))
-        {
-            return BarcodeValidationResult.Failure("吉时达电子面单格式错误，应为2开头的13位数字或JS0开头的15位字符", BarcodeType.JishidaElectronic);
-        }
+        if (!JishidaElectronicPattern().IsMatch(barcode))
+            return BarcodeValidationResult.Failure("吉时达电子面单格式错误，应为2开头的13位数字或JS0开头的15位字符",
+                BarcodeType.JishidaElectronic);
 
         // 对于JS开头的15位单号，需要进行校验位校验
         if (barcode.StartsWith("JS0") && barcode.Length == 15)
-        {
             try
             {
                 if (ValidateJishidaChecksum(barcode))
-                {
                     return BarcodeValidationResult.Success(BarcodeType.JishidaElectronic);
-                }
                 return BarcodeValidationResult.Failure("吉时达电子面单校验位验证失败", BarcodeType.JishidaElectronic);
             }
             catch (Exception ex)
@@ -159,7 +155,6 @@ public class BarcodeValidationService : IBarcodeValidationService
                 Log.Error(ex, "吉时达电子面单校验位计算异常: {Barcode}", barcode);
                 return BarcodeValidationResult.Failure($"吉时达电子面单校验位计算错误: {ex.Message}", BarcodeType.JishidaElectronic);
             }
-        }
 
         // 对于2开头的13位单号，只需要格式校验
         return BarcodeValidationResult.Success(BarcodeType.JishidaElectronic);
@@ -170,17 +165,12 @@ public class BarcodeValidationService : IBarcodeValidationService
     /// </summary>
     private static BarcodeValidationResult ValidateTaobaoElectronic(string barcode)
     {
-        if (!TaobaoElectronicPattern.IsMatch(barcode))
-        {
+        if (!TaobaoElectronicPattern().IsMatch(barcode))
             return BarcodeValidationResult.Failure("淘宝/菜鸟电子面单格式错误，应为67开头的13位数字", BarcodeType.TaobaoElectronic);
-        }
 
         try
         {
-            if (ValidateEan13Checksum(barcode))
-            {
-                return BarcodeValidationResult.Success(BarcodeType.TaobaoElectronic);
-            }
+            if (ValidateEan13Checksum(barcode)) return BarcodeValidationResult.Success(BarcodeType.TaobaoElectronic);
             return BarcodeValidationResult.Failure("淘宝/菜鸟电子面单EAN-13校验位验证失败", BarcodeType.TaobaoElectronic);
         }
         catch (Exception ex)
@@ -191,26 +181,74 @@ public class BarcodeValidationService : IBarcodeValidationService
     }
 
     /// <summary>
+    ///     校验BN新规则面单（BN开头，14位数字，去掉BN后按前13位计算校验位）
+    /// </summary>
+    private static BarcodeValidationResult ValidateBnElectronic(string barcode)
+    {
+        if (!BnElectronicPattern().IsMatch(barcode))
+            return BarcodeValidationResult.Failure("BN面单格式错误，应为BN开头加14位数字", BarcodeType.BnElectronic);
+
+        try
+        {
+            // 去掉前缀BN，取出13位主体与最后1位校验位
+            var body13 = barcode.Substring(2, 13);
+            var originalCheckDigitChar = barcode[15];
+
+            if (!MyRegex().IsMatch(body13))
+                return BarcodeValidationResult.Failure("BN面单主体需为13位数字", BarcodeType.BnElectronic);
+
+            var calculated = CalculateEan13ForBn(body13);
+
+            var originalCheckDigit = originalCheckDigitChar - '0';
+            if (originalCheckDigit < 0 || originalCheckDigit > 9)
+                return BarcodeValidationResult.Failure("BN面单校验位应为数字", BarcodeType.BnElectronic);
+
+            if (calculated == originalCheckDigit) return BarcodeValidationResult.Success(BarcodeType.BnElectronic);
+
+            return BarcodeValidationResult.Failure("BN面单校验位验证失败", BarcodeType.BnElectronic);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "BN面单校验位计算异常: {Barcode}", barcode);
+            return BarcodeValidationResult.Failure($"BN面单校验位计算错误: {ex.Message}", BarcodeType.BnElectronic);
+        }
+    }
+
+    /// <summary>
+    ///     计算BN规则校验位（与示例代码一致：从左到右，索引0开始，偶数位×1，奇数位×3）
+    /// </summary>
+    private static int CalculateEan13ForBn(string ean13Body)
+    {
+        if (string.IsNullOrEmpty(ean13Body) || ean13Body.Length != 13 || !Regex.IsMatch(ean13Body, @"^\d{13}$"))
+            throw new ArgumentException("BN主体必须是13位数字");
+
+        // 从左到右：i 为 0..12，i 为偶数权重 1，i 为奇数权重 3
+        var sum = 0;
+        for (var i = 0; i < 13; i++)
+        {
+            var digit = ean13Body[i] - '0';
+            if (digit < 0 || digit > 9) throw new ArgumentException("BN主体包含非数字字符");
+            sum += i % 2 == 0 ? digit : digit * 3;
+        }
+
+        return (10 - sum % 10) % 10;
+    }
+
+    /// <summary>
     ///     校验吉时达电子面单的校验位（JS开头的15位单号）
     /// </summary>
     /// <param name="barcode">15位的JS开头单号</param>
     /// <returns>校验是否通过</returns>
     private static bool ValidateJishidaChecksum(string barcode)
     {
-        if (barcode.Length != 15 || !barcode.StartsWith("JS0"))
-        {
-            throw new ArgumentException("输入必须是JS0开头的15位字符串");
-        }
+        if (barcode.Length != 15 || !barcode.StartsWith("JS0")) throw new ArgumentException("输入必须是JS0开头的15位字符串");
 
         // 提取单号的第6到第13位字符作为数字部分（总共8位数字）
         // 根据Java代码 substring(5, 13)，从索引5开始取8个字符
         var numberString = barcode.Substring(5, 8);
 
         // 验证是否为8位数字
-        if (!Regex.IsMatch(numberString, @"^\d{8}$"))
-        {
-            throw new ArgumentException("提取的数字部分必须是8位数字");
-        }
+        if (!Regex.IsMatch(numberString, @"^\d{8}$")) throw new ArgumentException("提取的数字部分必须是8位数字");
 
         // 提取单号的最后两位作为原始校验位
         var originalChecksum = barcode.Substring(13, 2);
@@ -230,16 +268,12 @@ public class BarcodeValidationService : IBarcodeValidationService
     private static string GenerateJishidaChecksum(string input)
     {
         if (string.IsNullOrEmpty(input) || input.Length != 8 || !Regex.IsMatch(input, @"^\d{8}$"))
-        {
             throw new ArgumentException("输入必须是8位的数字字符串");
-        }
 
         var sum = 0;
         foreach (var c in input)
-        {
             // 将每个字符的ASCII码加上'2'的ASCII码后累加
             sum += c + '2';
-        }
 
         // 对累加和进行按位取反操作（~），结果视为无符号长整型
         var unsignedResult = ~sum & 0xFFFFFFFFL;
@@ -262,9 +296,7 @@ public class BarcodeValidationService : IBarcodeValidationService
     private static bool ValidateEan13Checksum(string barcode)
     {
         if (barcode.Length != 13 || !Regex.IsMatch(barcode, @"^\d{13}$"))
-        {
             throw new ArgumentException("EAN-13 code must be 13 digits");
-        }
 
         // 提取前12位作为基础码
         var ean12 = barcode.Substring(0, 12);
@@ -287,9 +319,7 @@ public class BarcodeValidationService : IBarcodeValidationService
     private static int CalculateEan13CheckDigit(string ean12)
     {
         if (string.IsNullOrEmpty(ean12) || ean12.Length != 12 || !Regex.IsMatch(ean12, @"^\d{12}$"))
-        {
             throw new ArgumentException("EAN-12 code must be 12 digits");
-        }
 
         var sum = 0;
         for (var i = 0; i < 12; i++)
@@ -302,4 +332,7 @@ public class BarcodeValidationService : IBarcodeValidationService
         var remainder = sum % 10;
         return remainder == 0 ? 0 : 10 - remainder;
     }
+
+    [GeneratedRegex(@"^\d{13}$")]
+    private static partial Regex MyRegex();
 }

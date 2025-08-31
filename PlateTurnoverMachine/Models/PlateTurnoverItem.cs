@@ -1,3 +1,5 @@
+using Prism.Mvvm;
+
 namespace DongtaiFlippingBoardMachine.Models;
 
 /// <summary>

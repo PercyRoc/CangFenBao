@@ -163,12 +163,44 @@
                                VerticalAlignment="Center"
                                Margin="0,0,8,0" />
 
-                    <ui:NumberBox Value="{Binding Settings.TriggerPhotoelectricPort}"
-                                  Grid.Column="3"
-                                  Minimum="1"
-                                  Maximum="65535"
-                                  SpinButtonPlacementMode="Inline" />
+                    <ui:NumberBox
+                        Value="{Binding Settings.TriggerPhotoelectricPort, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                        Grid.Column="3"
+                        Minimum="1"
+                        Maximum="65535"
+                        SpinButtonPlacementMode="Inline" />
                 </Grid>
+            </Grid>
+        </Border>
+
+        <!-- 分拣模式配置 -->
+        <Border Margin="16,0,16,16"
+                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="4"
+                Padding="16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Text="分拣模式："
+                           Grid.Column="0"
+                           VerticalAlignment="Center"
+                           Margin="0,0,8,0" />
+
+                <ComboBox Grid.Column="1"
+                          SelectedValuePath="Tag"
+                          SelectedValue="{Binding Settings.SortingMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                          MinWidth="260">
+                    <ComboBoxItem Content="全部包裹都去异常口" Tag="{x:Static models:SortingMode.AllToError}" />
+                    <ComboBoxItem Content="非noread包裹去异常口" Tag="{x:Static models:SortingMode.NonNoreadToError}" />
+                    <ComboBoxItem Content="全部包裹循环分拣" Tag="{x:Static models:SortingMode.AllRoundRobin}" />
+                    <ComboBoxItem Content="非noread包裹循环分拣" Tag="{x:Static models:SortingMode.NonNoreadRoundRobin}" />
+                    <ComboBoxItem Content="正式分拣使用中通api" Tag="{x:Static models:SortingMode.FormalZtoApi}" />
+                </ComboBox>
             </Grid>
         </Border>
 

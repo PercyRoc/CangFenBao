@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Common.Services.Settings;
+using Prism.Mvvm;
 
 namespace FuzhouPolicyForce.Models;
 

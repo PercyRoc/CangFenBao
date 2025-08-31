@@ -16,6 +16,7 @@ public interface IScannerService : IDisposable
     ///     设置为false表示允许扫码枪字符同时进入文本框
     /// </summary>
     bool InterceptAllInput { get; set; }
+
     /// <summary>
     ///     开始监听扫码枪
     /// </summary>

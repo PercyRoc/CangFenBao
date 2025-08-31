@@ -12,6 +12,9 @@ using DongtaiFlippingBoardMachine.Models;
 using Microsoft.Win32;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
+using Prism.Commands;
+using Prism.Events;
+using Prism.Mvvm;
 using Serilog;
 
 namespace DongtaiFlippingBoardMachine.ViewModels.Settings;
@@ -78,10 +81,7 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
             Settings = _settingsService.LoadSettings<PlateTurnoverSettings>();
 
             // 如果配置为空，则根据格口数量初始化配置
-            if (Settings.Items.Count == 0)
-            {
-                InitializeSettingsByChuteCount();
-            }
+            if (Settings.Items.Count == 0) InitializeSettingsByChuteCount();
         }
         catch (Exception ex)
         {
@@ -314,10 +314,7 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
             _notificationService.ShowSuccess($"成功导入 {Settings.Items.Count} 条数据");
             Log.Information("从 Excel 成功导入 {Count} 条翻板机配置", Settings.Items.Count);
 
-            if (Settings.Items.Any())
-            {
-                await SaveSettingsAsync();
-            }
+            if (Settings.Items.Any()) await SaveSettingsAsync();
         }
         catch (Exception ex)
         {
@@ -465,6 +462,7 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
             }
         }
     }
+
     // 辅助方法：获取公式单元格的计算结果（数字）
     private static double GetFormulaNumericValue(ICell cell)
     {
@@ -494,33 +492,23 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
     private void SubscribeToItemChanges(ObservableCollection<PlateTurnoverItem> items)
     {
         items.CollectionChanged += OnItemsCollectionChanged;
-        foreach (var item in items)
-        {
-            item.PropertyChanged += OnItemPropertyChanged;
-        }
+        foreach (var item in items) item.PropertyChanged += OnItemPropertyChanged;
     }
 
     private void UnsubscribeFromItemChanges(ObservableCollection<PlateTurnoverItem> items)
     {
         items.CollectionChanged -= OnItemsCollectionChanged;
-        foreach (var item in items)
-        {
-            item.PropertyChanged -= OnItemPropertyChanged;
-        }
+        foreach (var item in items) item.PropertyChanged -= OnItemPropertyChanged;
     }
 
     private void OnItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (e.OldItems != null)
-        {
             foreach (INotifyPropertyChanged item in e.OldItems)
                 item.PropertyChanged -= OnItemPropertyChanged;
-        }
         if (e.NewItems != null)
-        {
             foreach (INotifyPropertyChanged item in e.NewItems)
                 item.PropertyChanged += OnItemPropertyChanged;
-        }
         DebouncedAutoSave();
     }
 
@@ -562,10 +550,7 @@ internal class PlateTurnoverSettingsViewModel : BindableBase, IDisposable
 
         if (_autoSaveCts != null)
         {
-            if (!_autoSaveCts.IsCancellationRequested)
-            {
-                _autoSaveCts.Cancel();
-            }
+            if (!_autoSaveCts.IsCancellationRequested) _autoSaveCts.Cancel();
             _autoSaveCts.Dispose();
             _autoSaveCts = null; // 确保被清理
         }

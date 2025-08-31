@@ -1,40 +1,38 @@
+using System.ComponentModel;
 using Common.Services.Settings;
 using Prism.Mvvm;
-using System.ComponentModel;
 
 namespace Common.Models.Settings;
 
 /// <summary>
-/// Frid连接类型枚举
+///     Frid连接类型枚举
 /// </summary>
 public enum FridConnectionType
 {
-    [Description("TCP连接")]
-    Tcp,
+    [Description("TCP连接")] Tcp,
 
-    [Description("串口连接")]
-    SerialPort
+    [Description("串口连接")] SerialPort
 }
 
 /// <summary>
-/// Frid设备设置
+///     Frid设备设置
 /// </summary>
 [Configuration("FridSettings")]
 public class FridSettings : BindableBase
 {
+    private int _baudRate = 115200;
     private FridConnectionType _connectionType = FridConnectionType.Tcp;
+    private int _dataBits = 8;
+    private bool _isEnabled = true;
+    private int _parity; // 0=无，1=奇，2=偶
+    private int _power = 30; // 功率设置，单位dBm
+    private string _serialPortName = "COM1";
+    private int _stopBits = 1;
     private string _tcpIpAddress = "127.0.0.1";
     private int _tcpPort = 8080;
-    private string _serialPortName = "COM1";
-    private int _baudRate = 115200;
-    private int _dataBits = 8;
-    private int _stopBits = 1;
-    private int _parity = 0; // 0=无，1=奇，2=偶
-    private int _power = 30; // 功率设置，单位dBm
-    private bool _isEnabled = true;
 
     /// <summary>
-    /// 是否启用Frid设备
+    ///     是否启用Frid设备
     /// </summary>
     public bool IsEnabled
     {
@@ -43,7 +41,7 @@ public class FridSettings : BindableBase
     }
 
     /// <summary>
-    /// 连接类型
+    ///     连接类型
     /// </summary>
     public FridConnectionType ConnectionType
     {
@@ -52,7 +50,7 @@ public class FridSettings : BindableBase
     }
 
     /// <summary>
-    /// TCP连接IP地址
+    ///     TCP连接IP地址
     /// </summary>
     public string TcpIpAddress
     {
@@ -61,7 +59,7 @@ public class FridSettings : BindableBase
     }
 
     /// <summary>
-    /// TCP连接端口
+    ///     TCP连接端口
     /// </summary>
     public int TcpPort
     {
@@ -70,7 +68,7 @@ public class FridSettings : BindableBase
     }
 
     /// <summary>
-    /// 串口名称
+    ///     串口名称
     /// </summary>
     public string SerialPortName
     {
@@ -79,7 +77,7 @@ public class FridSettings : BindableBase
     }
 
     /// <summary>
-    /// 波特率
+    ///     波特率
     /// </summary>
     public int BaudRate
     {
@@ -88,7 +86,7 @@ public class FridSettings : BindableBase
     }
 
     /// <summary>
-    /// 数据位
+    ///     数据位
     /// </summary>
     public int DataBits
     {
@@ -97,7 +95,7 @@ public class FridSettings : BindableBase
     }
 
     /// <summary>
-    /// 停止位
+    ///     停止位
     /// </summary>
     public int StopBits
     {
@@ -106,7 +104,7 @@ public class FridSettings : BindableBase
     }
 
     /// <summary>
-    /// 校验位（0=无，1=奇，2=偶）
+    ///     校验位（0=无，1=奇，2=偶）
     /// </summary>
     public int Parity
     {
@@ -115,11 +113,11 @@ public class FridSettings : BindableBase
     }
 
     /// <summary>
-    /// 功率设置（dBm）
+    ///     功率设置（dBm）
     /// </summary>
     public int Power
     {
         get => _power;
         set => SetProperty(ref _power, value);
     }
-} 
+}

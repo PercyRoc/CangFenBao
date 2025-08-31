@@ -32,12 +32,27 @@ public class CarSortingService : IAsyncDisposable
         Log.Information("CarSortingService 创建");
     }
 
-    public event Action<bool>? ConnectionChanged;
+    public bool IsConnected => _serialPortService?.IsConnected ?? false;
 
-    public bool IsConnected
+    public ValueTask DisposeAsync()
     {
-        get => _serialPortService?.IsConnected ?? false;
+        if (_serialPortService != null)
+        {
+            Log.Information("Disposing CarSortingService...");
+            _serialPortService.ConnectionChanged -= OnConnectionChanged;
+            _serialPortService.DataReceived -= OnDataReceived;
+            _serialPortService.Dispose();
+            _serialPortService = null;
+            Log.Information("CarSortingService Disposed.");
+        }
+
+        _isInitialized = false;
+        // Suppress finalization. If the base class is Disposable, call base.Dispose(true).
+        GC.SuppressFinalize(this);
+        return ValueTask.CompletedTask;
     }
+
+    public event Action<bool>? ConnectionChanged;
 
     public Task<bool> InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -107,6 +122,7 @@ public class CarSortingService : IAsyncDisposable
             return Task.FromResult(false);
         }
     }
+
     private static SerialPortParams ConvertToSerialPortParams(SerialPortSettings settings)
     {
         Log.Debug("Converting SerialPortSettings to SerialPortParams");
@@ -169,7 +185,8 @@ public class CarSortingService : IAsyncDisposable
             return Task.FromResult(false);
         }
 
-        Log.Information("开始为格口 {ChuteNumber} 发送 {Count} 条双帧小车命令(16字节)...", chuteNumber, chuteSequence.CarSequence.Count);
+        Log.Information("开始为格口 {ChuteNumber} 发送 {Count} 条双帧小车命令(16字节)...", chuteNumber,
+            chuteSequence.CarSequence.Count);
         var overallSuccess = true;
 
         // 使用 lock 确保同一时间只有一个序列在发送
@@ -183,7 +200,6 @@ public class CarSortingService : IAsyncDisposable
             }
 
             foreach (var carItem in chuteSequence.CarSequence)
-            {
                 try
                 {
                     // 使用自定义延迟时间
@@ -237,7 +253,6 @@ public class CarSortingService : IAsyncDisposable
                     overallSuccess = false;
                     // break; // 考虑是否中断
                 }
-            }
         }
 
         Log.Information("格口 {ChuteNumber} 的小车组合命令序列发送完成，总体结果: {Result}", chuteNumber,
@@ -268,21 +283,25 @@ public class CarSortingService : IAsyncDisposable
             Log.Warning("未找到小车地址 {Address} 的配置，无法生成命令", addr);
             return [];
         }
+
         if (addr < 1 || addr > 32) // 地址范围扩大到1-32以包含0x8A帧的寻址
         {
             Log.Warning("无效的小车地址 {Address} (必须在 1-32 之间)", addr);
             return [];
         }
+
         if (car.Speed < 30 || car.Speed > 1530)
         {
             Log.Warning("无效的速度 {Speed} RPM (必须在 30-1530 之间)", car.Speed);
             return [];
         }
+
         if (car.Delay < 0 || car.Delay > 2550)
         {
             Log.Warning("无效的延迟时间 {DelayMs} ms (必须在 0-2550 ms 之间)", car.Delay);
             return [];
         }
+
         if (timeMs < 0 || timeMs > 2550)
         {
             Log.Warning("无效的运行时间 {TimeMs} ms (必须在 0-2550 ms 之间)", timeMs);
@@ -300,27 +319,27 @@ public class CarSortingService : IAsyncDisposable
 
             // Byte 1: 地址 + 方向 + S7
             var speedVal = (byte)Math.Clamp(car.Speed / 6, 5, 255); // 速度计算
-            var s7 = (byte)(speedVal >> 7 & 0x01); // 获取速度的最高位
+            var s7 = (byte)((speedVal >> 7) & 0x01); // 获取速度的最高位
             var directionBit = (byte)(isReverse ? 0x40 : 0x00); // 方向位 (0x00=正向, 0x40=反向)
-            cmd[1] = (byte)(directionBit | s7 << 5 | addr & 0x1F); // 注意: 0x95帧地址只用到低5位(1-31)
+            cmd[1] = (byte)(directionBit | (s7 << 5) | (addr & 0x1F)); // 注意: 0x95帧地址只用到低5位(1-31)
 
             // Byte 2: 速度 S6-S0
             cmd[2] = (byte)(speedVal & 0x7F); // 速度低7位
 
             // Byte 3: 延迟 Dt6-Dt0
             var delayVal = (byte)Math.Clamp(car.Delay / 10, 0, 255);
-            var dt7 = (byte)(delayVal >> 7 & 0x01); // 获取延迟的最高位
+            var dt7 = (byte)((delayVal >> 7) & 0x01); // 获取延迟的最高位
             cmd[3] = (byte)(delayVal & 0x7F); // 获取延迟的低7位
 
             // Byte 4: 时间 T6-T0
             var timeVal = (byte)Math.Clamp(timeMs / 10, 0, 255);
-            var t7 = (byte)(timeVal >> 7 & 0x01); // 获取时间的最高位
+            var t7 = (byte)((timeVal >> 7) & 0x01); // 获取时间的最高位
             cmd[4] = (byte)(timeVal & 0x7F); // 获取时间的低7位
 
             // Byte 5: 复合数据 1
-            const byte piBits = piValue - 1 & 0x07; // PI值1对应0
+            const byte piBits = (piValue - 1) & 0x07; // PI值1对应0
             const byte controlModeBit = 0x00; // 时间模式 Bit2=0
-            cmd[5] = (byte)(piBits << 3 | controlModeBit | t7 << 1 | dt7);
+            cmd[5] = (byte)((piBits << 3) | controlModeBit | (t7 << 1) | dt7);
 
             // Byte 6: 复合数据 2 (暂不用)
             cmd[6] = 0x00;
@@ -343,19 +362,19 @@ public class CarSortingService : IAsyncDisposable
             {
                 // Reg 1
                 case <= 7:
-                    cmd[9] = (byte)(1 << addr - 1);
+                    cmd[9] = (byte)(1 << (addr - 1));
                     break;
                 // Reg 2
                 case >= 9 and <= 15:
-                    cmd[10] = (byte)(1 << addr - 9);
+                    cmd[10] = (byte)(1 << (addr - 9));
                     break;
                 // Reg 3
                 case >= 17 and <= 23:
-                    cmd[11] = (byte)(1 << addr - 17);
+                    cmd[11] = (byte)(1 << (addr - 17));
                     break;
                 // Reg 4
                 case >= 25 and <= 31:
-                    cmd[12] = (byte)(1 << addr - 25);
+                    cmd[12] = (byte)(1 << (addr - 25));
                     break;
                 case 8:
                     cmd[13] = 1 << 0;
@@ -375,9 +394,7 @@ public class CarSortingService : IAsyncDisposable
             cmd[14] = (byte)(_sequenceCounter & 0x7F); // 取低7位确保 B7=0
             _sequenceCounter++; // 递增计数器
             if (_sequenceCounter >= 128) // 循环使用 0-127
-            {
                 _sequenceCounter = 0;
-            }
 
             // Byte 15: CRC校验 (0x8A 帧)
             cmd[15] = CalculateCrc(cmd, 9, 14); // CRC for bytes 9-14
@@ -402,33 +419,10 @@ public class CarSortingService : IAsyncDisposable
     private static byte CalculateCrc(byte[] data, int startIndex, int endIndex)
     {
         if (data == null || data.Length <= endIndex || startIndex < 0 || startIndex > endIndex)
-        {
             throw new ArgumentException("CRC计算的输入参数无效");
-        }
 
         byte crc = 0;
-        for (var i = startIndex; i <= endIndex; i++)
-        {
-            crc ^= data[i];
-        }
+        for (var i = startIndex; i <= endIndex; i++) crc ^= data[i];
         return (byte)(crc & 0x7F); // 根据规范，最后与0x7F进行与操作
-    }
-
-    public ValueTask DisposeAsync()
-    {
-        if (_serialPortService != null)
-        {
-            Log.Information("Disposing CarSortingService...");
-            _serialPortService.ConnectionChanged -= OnConnectionChanged;
-            _serialPortService.DataReceived -= OnDataReceived;
-            _serialPortService.Dispose();
-            _serialPortService = null;
-            Log.Information("CarSortingService Disposed.");
-        }
-
-        _isInitialized = false;
-        // Suppress finalization. If the base class is Disposable, call base.Dispose(true).
-        GC.SuppressFinalize(this);
-        return ValueTask.CompletedTask;
     }
 }

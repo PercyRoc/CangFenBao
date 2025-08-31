@@ -1,5 +1,9 @@
 using BenFly.ViewModels.Settings;
 using Common.Services.Ui;
+using Prism.Commands;
+using Prism.Dialogs;
+using Prism.Ioc;
+using Prism.Mvvm;
 using Serilog;
 using SharedUI.ViewModels.Settings;
 
@@ -40,10 +44,7 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
     public DelegateCommand SaveCommand { get; }
     public DelegateCommand CancelCommand { get; }
 
-    public string Title
-    {
-        get => "系统设置";
-    }
+    public string Title => "系统设置";
 
     // Replace the event with the Prism 9.0 property
     public DialogCloseListener RequestClose { get; }

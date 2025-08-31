@@ -68,7 +68,6 @@ public partial class MainWindow
 
             // 释放MainWindowViewModel (保持异步释放)
             if (DataContext is MainWindowViewModel viewModel)
-            {
                 await Task.Run(() =>
                 {
                     try
@@ -81,7 +80,6 @@ public partial class MainWindow
                         Log.Error(ex, "释放ViewModel时发生错误");
                     }
                 });
-            }
 
             e.Cancel = false; // 允许关闭
             Application.Current.Shutdown();

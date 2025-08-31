@@ -8,6 +8,7 @@ using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Weight;
 using DeviceService.Extensions;
 using Microsoft.Extensions.DependencyInjection;
+using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 using SharedUI.ViewModels.Settings;
@@ -83,7 +84,7 @@ public partial class App
 
         // 注册二维码服务
         containerRegistry.RegisterSingleton<IQrCodeService, QrCodeService>();
-        
+
         // 注册WildberriesApi服务
         containerRegistry.RegisterSingleton<ITareAttributesApiService, TareAttributesApiService>();
 
@@ -147,7 +148,6 @@ public partial class App
     }
 
 
-
     /// <summary>
     ///     主窗口关闭事件处理程序
     /// </summary>
@@ -205,7 +205,6 @@ public partial class App
     }
 
 
-
     /// <summary>
     ///     退出
     /// </summary>
@@ -228,13 +227,15 @@ public partial class App
             _mutex = null;
             Log.CloseAndFlush();
         }
+
         Log.Information("应用程序退出处理程序 (OnExit) 完成。 ");
     }
 
     private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         Log.Fatal(e.Exception, "Unhandled Dispatcher Exception Caught by App.xaml.cs");
-        MessageBox.Show($"发生未处理的错误: {e.Exception.Message}\n\n应用程序可能不稳定。 ", "应用程序错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        MessageBox.Show($"发生未处理的错误: {e.Exception.Message}\n\n应用程序可能不稳定。 ", "应用程序错误", MessageBoxButton.OK,
+            MessageBoxImage.Error);
         e.Handled = true;
     }
 
@@ -247,24 +248,42 @@ public partial class App
         {
             Log.Information("手动启动后台服务... ");
             var cameraStarter = Container.Resolve<CameraStartupService>();
-            var weightStarter = Container.Resolve<WeightStartupService>();
+            var weightStarter = Container.Resolve<SerialPortWeightService>();
             var volumeStarter = Container.Resolve<VolumeDataHostedService>();
 
             // 使用 Task.Run 在后台启动，避免阻塞 UI
             _ = Task.Run(() =>
             {
-                try { cameraStarter.StartAsync(CancellationToken.None).Wait(); }
-                catch (Exception ex) { Log.Error(ex, "启动 CameraStartupService 时出错 "); }
+                try
+                {
+                    cameraStarter.StartAsync(CancellationToken.None).Wait();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "启动 CameraStartupService 时出错 ");
+                }
             });
             _ = Task.Run(() =>
             {
-                try { weightStarter.StartAsync(CancellationToken.None).Wait(); }
-                catch (Exception ex) { Log.Error(ex, "启动 WeightStartupService 时出错 "); }
+                try
+                {
+                    weightStarter.Start();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "启动 WeightStartupService 时出错 ");
+                }
             });
             _ = Task.Run(() =>
             {
-                try { volumeStarter.StartAsync(CancellationToken.None).Wait(); }
-                catch (Exception ex) { Log.Error(ex, "启动 VolumeDataHostedService 时出错 "); }
+                try
+                {
+                    volumeStarter.StartAsync(CancellationToken.None).Wait();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "启动 VolumeDataHostedService 时出错 ");
+                }
             });
 
             Log.Information("后台服务启动已发起。 ");
@@ -285,60 +304,66 @@ public partial class App
         try
         {
             var cameraStarter = Container?.Resolve<CameraStartupService>();
-            var weightStarter = Container?.Resolve<WeightStartupService>();
+            var weightStarter = Container?.Resolve<SerialPortWeightService>();
             var volumeStarter = Container?.Resolve<VolumeDataHostedService>();
 
             var tasks = new List<Task>();
             if (cameraStarter != null)
                 tasks.Add(Task.Run(() =>
                 {
-                    try { cameraStarter.StopAsync(CancellationToken.None).Wait(); }
-                    catch (Exception ex) { Log.Error(ex, "停止 CameraStartupService 时出错 "); }
+                    try
+                    {
+                        cameraStarter.StopAsync(CancellationToken.None).Wait();
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "停止 CameraStartupService 时出错 ");
+                    }
                 }));
             if (weightStarter != null)
                 tasks.Add(Task.Run(() =>
                 {
-                    try { weightStarter.StopAsync(CancellationToken.None).Wait(); }
-                    catch (Exception ex) { Log.Error(ex, "停止 WeightStartupService 时出错 "); }
+                    try
+                    {
+                        weightStarter.Stop();
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "停止 WeightStartupService 时出错 ");
+                    }
                 }));
             if (volumeStarter != null)
                 tasks.Add(Task.Run(() =>
                 {
-                    try { volumeStarter.StopAsync(CancellationToken.None).Wait(); }
-                    catch (Exception ex) { Log.Error(ex, "停止 VolumeDataHostedService 时出错 "); }
+                    try
+                    {
+                        volumeStarter.StopAsync(CancellationToken.None).Wait();
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "停止 VolumeDataHostedService 时出错 ");
+                    }
                 }));
 
             if (tasks.Count != 0 && waitForCompletion)
-            {
                 try
                 {
                     // 等待所有停止任务完成，最多等待 5 秒
                     if (!Task.WhenAll(tasks).Wait(TimeSpan.FromSeconds(5)))
-                    {
                         Log.Warning("一个或多个后台服务未在超时时间内正常停止。 ");
-                    }
                     else
-                    {
                         Log.Information("后台服务已停止。 ");
-                    }
                 }
                 catch (AggregateException aex)
                 {
                     Log.Error(aex, "等待后台服务停止时发生聚合错误。 ");
-                    foreach (var innerEx in aex.InnerExceptions)
-                    {
-                        Log.Error(innerEx, "  内部停止错误: ");
-                    }
+                    foreach (var innerEx in aex.InnerExceptions) Log.Error(innerEx, "  内部停止错误: ");
                 }
                 catch (Exception ex)
                 {
                     Log.Error(ex, "等待后台服务停止时发生错误。 ");
                 }
-            }
-            else if (!waitForCompletion)
-            {
-                Log.Information("后台服务停止已发起 (不等待完成)。 ");
-            }
+            else if (!waitForCompletion) Log.Information("后台服务停止已发起 (不等待完成)。 ");
         }
         catch (Exception ex)
         {

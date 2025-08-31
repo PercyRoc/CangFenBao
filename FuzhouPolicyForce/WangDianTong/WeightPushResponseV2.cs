@@ -38,8 +38,5 @@ public class WeightPushResponseV2
     /// <summary>
     ///     是否成功 (辅助属性，根据Code判断)
     /// </summary>
-    public bool IsSuccess
-    {
-        get => Code == "0";
-    }
+    public bool IsSuccess => Code == "0";
 }

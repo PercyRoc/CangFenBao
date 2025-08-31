@@ -51,10 +51,7 @@ public class HostSettingsViewModel : BindableBase
         try
         {
             // 验证配置的合理性
-            if (!ValidateConfiguration())
-            {
-                return; // 验证失败，不保存
-            }
+            if (!ValidateConfiguration()) return; // 验证失败，不保存
 
             _settingsService.SaveSettings(Configuration);
             Log.Information("主机配置已保存: AckTimeout={AckTimeout}s, ResultTimeout={ResultTimeout}s",

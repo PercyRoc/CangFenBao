@@ -12,6 +12,10 @@ using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
+using Prism.Commands;
+using Prism.Dialogs;
+using Prism.Events;
+using Prism.Mvvm;
 using Serilog;
 using SharedUI.Models;
 using SortingServices.Pendulum;
@@ -130,10 +134,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
         // 订阅ASN订单接收事件
         _subscriptions.Add(eventAggregator.GetEvent<AsnOrderReceivedEvent>()
-            .Subscribe(asnInfo =>
-            {
-                Application.Current.Dispatcher.BeginInvoke(() => OnAsnOrderReceived(asnInfo));
-            }));
+            .Subscribe(asnInfo => { Application.Current.Dispatcher.BeginInvoke(() => OnAsnOrderReceived(asnInfo)); }));
     }
 
     public DelegateCommand OpenSettingsCommand { get; }
@@ -326,11 +327,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
         var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
         // 从1开始循环到格口数量
         for (var i = 1; i <= chuteSettings.ChuteCount; i++)
-        {
             // 如果格口不存在或者SKU数量小于2，则可用
             if (!_chuteSkuCount.TryGetValue(i, out var value) || value < 2)
                 return i;
-        }
 
         // 没有可用格口
         return -1;

@@ -57,10 +57,7 @@ public class WangDianTongApiService(HttpClient httpClient, ISettingsService sett
             };
 
             // 如果有打包员编号，则添加
-            if (!string.IsNullOrEmpty(packagerNo))
-            {
-                requestParams.Add("packager_no", packagerNo);
-            }
+            if (!string.IsNullOrEmpty(packagerNo)) requestParams.Add("packager_no", packagerNo);
 
             // 计算签名
             var sign = CalculateSign(requestParams, settings.ApiSecret);
@@ -85,19 +82,16 @@ public class WangDianTongApiService(HttpClient httpClient, ISettingsService sett
             response.EnsureSuccessStatusCode();
 
             // 解析响应
-            var result = await response.Content.ReadFromJsonAsync<WeightPushResponse>(cancellationToken: cancellationToken);
+            var result = await response.Content.ReadFromJsonAsync<WeightPushResponse>(cancellationToken);
 
             // 记录响应详情
             if (result!.IsSuccess)
-            {
                 Log.Information("旺店通重量回传成功: 物流单号={LogisticsNo}, 重量={Weight}g, 物流名称={LogisticsName}, 响应数据={@Response}",
                     logisticsNo, weight, result.LogisticsName, result);
-            }
             else
-            {
-                Log.Warning("旺店通重量回传失败: 物流单号={LogisticsNo}, 重量={Weight}kg, 错误码={Code}, 错误信息={Message}, 响应数据={@Response}",
+                Log.Warning(
+                    "旺店通重量回传失败: 物流单号={LogisticsNo}, 重量={Weight}kg, 错误码={Code}, 错误信息={Message}, 响应数据={@Response}",
                     logisticsNo, weight, result.Code, result.Message, result);
-            }
 
             return result;
         }

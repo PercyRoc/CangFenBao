@@ -54,8 +54,5 @@ public class DwsResponse
     ///     优先使用 Success 属性；如果不存在，则尝试将 Code 解析为 200。
     /// </summary>
     [JsonIgnore] // 不参与序列化/反序列化
-    public bool IsSuccess
-    {
-        get => Success || Code is int intCode && intCode == 200;
-    }
+    public bool IsSuccess => Success || (Code is int intCode && intCode == 200);
 }

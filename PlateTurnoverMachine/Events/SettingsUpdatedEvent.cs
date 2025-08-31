@@ -1,4 +1,5 @@
 using DongtaiFlippingBoardMachine.Models;
+using Prism.Events;
 
 namespace DongtaiFlippingBoardMachine.Events;
 

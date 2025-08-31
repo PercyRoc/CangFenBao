@@ -16,5 +16,6 @@ public class VolumeSettings : CameraSettings
     /// <summary>
     ///     尺寸刻度图保存模式
     /// </summary>
-    public DimensionImageSaveMode ImageSaveMode { get; set; } = DimensionImageSaveMode.Vertical; // Default to Vertical view
+    public DimensionImageSaveMode ImageSaveMode { get; set; } =
+        DimensionImageSaveMode.Vertical; // Default to Vertical view
 }

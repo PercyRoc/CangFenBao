@@ -1,7 +1,9 @@
 ﻿using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Globalization;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -13,12 +15,16 @@ using DeviceService.DataSourceDevices.Services;
 using DongtaiFlippingBoardMachine.Events;
 using DongtaiFlippingBoardMachine.Models;
 using DongtaiFlippingBoardMachine.Services;
+using Prism.Commands;
+using Prism.Dialogs;
+using Prism.Events;
+using Prism.Mvvm;
 using Serilog;
 using SharedUI.Models;
 
 namespace DongtaiFlippingBoardMachine.ViewModels;
 
-public class MainWindowViewModel : BindableBase, IDisposable
+public partial class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
@@ -33,6 +39,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private BitmapSource? _currentImage;
     private bool _disposed;
     private int _historyIndexCounter;
+    private int _roundRobinChuteNumber;
     private PlateTurnoverSettings _settings;
     private SystemStatus _systemStatus = new();
 
@@ -82,8 +89,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         // 订阅相机连接状态事件
         _cameraService.ConnectionChanged += OnCameraConnectionChanged;
 
-        // 订阅触发光电连接状态事件
-        _tcpConnectionService.TriggerPhotoelectricConnectionChanged += OnTriggerPhotoelectricConnectionChanged;
+        // 不再订阅触发光电连接状态事件
 
         // 订阅TCP模块连接状态变化
         _tcpConnectionService.TcpModuleConnectionChanged += OnTcpModuleConnectionChanged;
@@ -128,6 +134,77 @@ public class MainWindowViewModel : BindableBase, IDisposable
         _ = InitializeSystemAsync();
     }
 
+    public class DuplicateRecordItem : INotifyPropertyChanged
+    {
+        private string _barcode = string.Empty;
+        private int _chuteNumber;
+        private int _count;
+        private DateTime _firstSeen;
+        private DateTime _lastSeen;
+
+        public string Barcode
+        {
+            get => _barcode;
+            set
+            {
+                if (_barcode == value) return;
+                _barcode = value;
+                OnPropertyChanged(nameof(Barcode));
+            }
+        }
+
+        public int ChuteNumber
+        {
+            get => _chuteNumber;
+            set
+            {
+                if (_chuteNumber == value) return;
+                _chuteNumber = value;
+                OnPropertyChanged(nameof(ChuteNumber));
+            }
+        }
+
+        public int Count
+        {
+            get => _count;
+            set
+            {
+                if (_count == value) return;
+                _count = value;
+                OnPropertyChanged(nameof(Count));
+            }
+        }
+
+        public DateTime FirstSeen
+        {
+            get => _firstSeen;
+            set
+            {
+                if (_firstSeen == value) return;
+                _firstSeen = value;
+                OnPropertyChanged(nameof(FirstSeen));
+            }
+        }
+
+        public DateTime LastSeen
+        {
+            get => _lastSeen;
+            set
+            {
+                if (_lastSeen == value) return;
+                _lastSeen = value;
+                OnPropertyChanged(nameof(LastSeen));
+            }
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        protected virtual void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+    }
+
     #region Properties
 
     public DelegateCommand OpenSettingsCommand { get; }
@@ -155,6 +232,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
     public ObservableCollection<StatisticsItem> StatisticsItems { get; } = [];
     public ObservableCollection<DeviceStatus> DeviceStatuses { get; } = [];
     public ObservableCollection<PackageInfoItem> PackageInfoItems { get; } = [];
+    public ObservableCollection<DuplicateRecordItem> DuplicateRecords { get; } = [];
+    private uint _currentModbusCounter;
+
+    public uint CurrentModbusCounter
+    {
+        get => _currentModbusCounter;
+        set => SetProperty(ref _currentModbusCounter, value);
+    }
 
     #endregion
 
@@ -189,6 +274,23 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private void Timer_Tick(object? sender, EventArgs e)
     {
         SystemStatus = SystemStatus.GetCurrentStatus();
+        // 更新 Modbus 当前计数
+        try
+        {
+            CurrentModbusCounter = _sortingService.CurrentModbusCounter;
+            // 更新 Modbus 连接状态显示
+            var modbusStatus = DeviceStatuses.FirstOrDefault(static s => s.Name == "Modbus");
+            if (modbusStatus != null)
+            {
+                var connected = _sortingService.IsModbusConnected;
+                modbusStatus.Status = connected ? "已连接" : "未连接";
+                modbusStatus.StatusColor = connected ? "#4CAF50" : "#F44336";
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "读取当前 Modbus 计数失败");
+        }
     }
 
     private void OnCameraConnectionChanged(string? cameraId, bool isConnected)
@@ -201,26 +303,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
             cameraStatus.Status = isConnected ? "已连接" : "已断开";
             cameraStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
         });
-    }
-
-    private void OnTriggerPhotoelectricConnectionChanged(object? sender, bool isConnected)
-    {
-        try
-        {
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                var status = DeviceStatuses.FirstOrDefault(static s => s.Name == "触发光电");
-                if (status == null) return;
-
-                status.Status = isConnected ? "已连接" : "已断开";
-                status.StatusColor = isConnected ? "#4CAF50" : "#F44336";
-                Log.Information("触发光电连接状态更新为：{Status}", status.Status);
-            });
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "更新触发光电状态时发生错误");
-        }
     }
 
     private void OnTcpModuleConnectionChanged(object? sender, ValueTuple<TcpConnectionConfig, bool> e)
@@ -245,53 +327,93 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            // 处理 noread 包裹，直接跳过
-            if (package.Barcode.Equals("noread", StringComparison.OrdinalIgnoreCase))
-            {
+            var isNoread = package.Barcode.Equals("noread", StringComparison.OrdinalIgnoreCase);
+
+            // 模式 2/4/5 下，noread 包裹直接跳过不处理
+            if (isNoread && (_settings.SortingMode == SortingMode.NonNoreadToError
+                             || _settings.SortingMode == SortingMode.NonNoreadRoundRobin
+                             || _settings.SortingMode == SortingMode.FormalZtoApi))
                 return;
-            }
 
-            // 调用中通API获取分拣信息
-            var sortingInfoResponse = await _ztoSortingService.GetSortingInfoAsync(
-                package.Barcode,
-                _settings.ZtoPipelineCode,
-                1, // 扫描次数，这里暂时固定为1
-                _settings.ZtoTrayCode);
-
-            if (sortingInfoResponse is { Status: true } && sortingInfoResponse.Result?.SortPortCode.Any() == true)
+            switch (_settings.SortingMode)
             {
-                var sortPortCode = sortingInfoResponse.Result.SortPortCode.First();
-                // 兼容 004-A 或 043-C 格式的格口号
-                var chuteCode = sortPortCode.Split('-')[0];
-
-                // API返回的SortPortCode是一个列表，我们取第一个作为格口号
-                if (int.TryParse(chuteCode, out var parsedChuteNumber))
-                {
-                    // 同时设置数字格口号和完整格口代码
-                    package.SetChute(parsedChuteNumber, sortPortCode);
-                    package.SetStatus(PackageStatus.Success, $"API 分配格口: {sortPortCode}");
-                    Log.Information("包裹 {Barcode} 已成功通过API分配到格口: {Chute}", package.Barcode, parsedChuteNumber);
-                }
-                else
-                {
-                    // 解析失败，按错误处理
-                    Log.Warning("包裹 {Barcode} 的API返回格口号无法解析：{SortPortCode}，已分配到异常口 {ErrorChute}",
-                        package.Barcode, sortPortCode, _settings.ErrorChute);
+                case SortingMode.AllToError:
                     package.SetChute(_settings.ErrorChute);
-                    package.SetStatus(PackageStatus.Error, "API 返回格口号无效，已分配到异常口。");
+                    package.SetStatus(PackageStatus.Success, "全部到异常口");
+                    break;
+                case SortingMode.NonNoreadToError:
+                    if (!isNoread)
+                    {
+                        package.SetChute(_settings.ErrorChute);
+                        package.SetStatus(PackageStatus.Success, "非noread到异常口");
+                        break;
+                    }
+
+                    // noread 继续按API
+                    goto case SortingMode.FormalZtoApi;
+                case SortingMode.AllRoundRobin:
+                case SortingMode.NonNoreadRoundRobin:
+                {
+                    if (_settings.SortingMode == SortingMode.NonNoreadRoundRobin && isNoread)
+                        goto case SortingMode.FormalZtoApi;
+                    // 简单循环 1..94
+                    var nextCounterValue = Interlocked.Increment(ref _roundRobinChuteNumber);
+                    var chuteNumber = (nextCounterValue - 1) % 94 + 1;
+                    package.SetChute(chuteNumber);
+                    package.SetStatus(PackageStatus.Success, $"循环分拣: {chuteNumber}");
+                    break;
                 }
-            }
-            else
-            {
-                // API返回错误或未分配格口
-                Log.Warning("包裹 {Barcode} 获取分拣信息失败或未分配格口。API消息：{Message}，已分配到异常口 {ErrorChute}",
-                    package.Barcode, sortingInfoResponse?.Message ?? "无消息", _settings.ErrorChute);
-                package.SetChute(_settings.ErrorChute);
-                package.SetStatus(PackageStatus.Error, $"API 错误: {sortingInfoResponse?.Message ?? "未分配格口"}");
+                case SortingMode.FormalZtoApi:
+                default:
+                {
+                    // 调用中通API获取分拣信息
+                    var sortingInfoResponse = await _ztoSortingService.GetSortingInfoAsync(
+                        package.Barcode,
+                        _settings.ZtoPipelineCode,
+                        1,
+                        _settings.ZtoTrayCode);
+
+                    if (sortingInfoResponse?.Status == true && sortingInfoResponse.Result?.SortPortCode is
+                            { Count: > 0 })
+                    {
+                        var sortPortCode = sortingInfoResponse.Result.SortPortCode[0];
+                        var match = MyRegex().Match(sortPortCode ?? string.Empty);
+                        var chuteNumber = match.Success && int.TryParse(match.Value, out var n) ? n : 0;
+
+                        if (chuteNumber <= 0)
+                        {
+                            chuteNumber = _settings.ErrorChute;
+                            package.SetChute(chuteNumber, sortPortCode);
+                            package.SetStatus(PackageStatus.Error, $"未能解析API格口代码: {sortPortCode}");
+                            Log.Warning("包裹 {Barcode} API返回格口代码无法解析，回退到异常格口: {SortPort}", package.Barcode,
+                                sortPortCode);
+                        }
+                        else
+                        {
+                            package.SetChute(chuteNumber, sortPortCode);
+                            package.SetStatus(PackageStatus.Success, $"API分配到格口: {sortPortCode}");
+                            Log.Information("包裹 {Barcode} API分拣分配到格口: {SortPort} (数字:{Chute})", package.Barcode,
+                                sortPortCode, chuteNumber);
+                        }
+                    }
+                    else
+                    {
+                        var errorChute = _settings.ErrorChute;
+                        package.SetChute(errorChute);
+                        package.SetStatus(PackageStatus.Error, "API未返回有效格口");
+                        Log.Warning("包裹 {Barcode} API未返回有效格口，分配到异常格口: {Chute}. 响应: {Status}/{Message}",
+                            package.Barcode, errorChute, sortingInfoResponse?.Status, sortingInfoResponse?.Message);
+                    }
+
+                    break;
+                }
             }
 
             // 将包裹加入队列以进行物理分拣 (无论API结果如何，都入队处理)
             _sortingService.EnqueuePackage(package);
+
+            // 记录重复条码（及格口）信息
+            TrackDuplicateBarcode(package);
 
             // 保存包裹到数据库（异步执行，不阻塞分拣流程）
             _ = Task.Run(async () =>
@@ -334,6 +456,61 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
+    private readonly Dictionary<string, int> _barcodeSeenCount = new();
+    private readonly Dictionary<string, DateTime> _barcodeFirstSeenTime = new();
+    private readonly Dictionary<string, DuplicateRecordItem> _duplicateRecordMap = new();
+
+    private void TrackDuplicateBarcode(PackageInfo package)
+    {
+        try
+        {
+            var barcode = package.Barcode ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(barcode)) return;
+
+            if (_barcodeSeenCount.TryGetValue(barcode, out var count))
+            {
+                _barcodeSeenCount[barcode] = ++count;
+            }
+            else
+            {
+                _barcodeSeenCount[barcode] = 1;
+                _barcodeFirstSeenTime[barcode] = package.CreateTime;
+                return; // 首次出现不记录为重复
+            }
+
+            if (count >= 2)
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    if (_duplicateRecordMap.TryGetValue(barcode, out var record))
+                    {
+                        record.Count = count;
+                        record.LastSeen = package.CreateTime;
+                        record.ChuteNumber = package.ChuteNumber;
+                    }
+                    else
+                    {
+                        var item = new DuplicateRecordItem
+                        {
+                            Barcode = barcode,
+                            ChuteNumber = package.ChuteNumber,
+                            Count = count,
+                            FirstSeen = _barcodeFirstSeenTime.TryGetValue(barcode, out var first)
+                                ? first
+                                : package.CreateTime,
+                            LastSeen = package.CreateTime
+                        };
+                        _duplicateRecordMap[barcode] = item;
+                        // 新记录插入到顶部
+                        DuplicateRecords.Insert(0, item);
+                    }
+                });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "记录重复条码时发生错误");
+        }
+    }
+
     private void UpdatePackageInfoItems(PackageInfo package)
     {
         var weightItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "重量");
@@ -344,10 +521,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         }
 
         var sizeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "尺寸");
-        if (sizeItem != null)
-        {
-            sizeItem.Value = package.VolumeDisplay;
-        }
+        if (sizeItem != null) sizeItem.Value = package.VolumeDisplay;
 
         var chuteItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "格口");
         if (chuteItem != null)
@@ -449,12 +623,12 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 StatusColor = "#F44336" // 红色表示未连接
             });
 
-            // 添加触发光电状态
+            // 添加 Modbus 状态
             DeviceStatuses.Add(new DeviceStatus
             {
-                Name = "触发光电",
+                Name = "Modbus",
                 Status = "未连接",
-                Icon = "Alert24",
+                Icon = "PlugConnected24",
                 StatusColor = "#F44336"
             });
 
@@ -602,7 +776,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                 // 取消订阅事件
                 _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
-                _tcpConnectionService.TriggerPhotoelectricConnectionChanged -= OnTriggerPhotoelectricConnectionChanged;
+                // 不再取消订阅触发光电连接状态事件
                 _tcpConnectionService.TcpModuleConnectionChanged -= OnTcpModuleConnectionChanged;
                 _eventAggregator.GetEvent<PlateTurnoverSettingsUpdatedEvent>().Unsubscribe(OnSettingsUpdated);
 
@@ -652,6 +826,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
             Log.Error(ex, "系统API初始化失败。");
         }
     }
+
+    [GeneratedRegex(@"\d+")]
+    private static partial Regex MyRegex();
 
     #endregion
 }

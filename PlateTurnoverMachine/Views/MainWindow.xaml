@@ -13,7 +13,7 @@
                  Width="1600"
                  WindowStartupLocation="CenterScreen"
                  Closing="MetroWindow_Closing"
-                 ExtendsContentIntoTitleBar="True" x:ClassModifier="internal">
+                 ExtendsContentIntoTitleBar="True" x:ClassModifier="internal" Loaded="Window_Loaded">
 
     <ui:FluentWindow.Resources>
         <ResourceDictionary>
@@ -355,6 +355,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="2*" />
                     <RowDefinition Height="*" />
+                    <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
                 <!-- 图片显示区域 -->
@@ -504,6 +505,90 @@
                         </DataGrid>
                     </Grid>
                 </Border>
+
+                <!-- 重复条码记录 -->
+                <Border Grid.Row="2" Margin="16"
+                        Style="{StaticResource CardStyle}">
+                    <Grid Margin="16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!-- 标题栏 -->
+                        <StackPanel Grid.Row="0"
+                                    Orientation="Horizontal"
+                                    Margin="0,0,0,8">
+                            <ui:SymbolIcon Symbol="Warning24"
+                                           Margin="0,0,8,0"
+                                           VerticalAlignment="Center" />
+                            <TextBlock Text="重复条码记录"
+                                       Foreground="{StaticResource AccentBrush}"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+
+                        <!-- 数据表格 -->
+                        <DataGrid Grid.Row="1"
+                                  Style="{DynamicResource DefaultDataGridStyle}"
+                                  ColumnHeaderStyle="{DynamicResource DefaultDataGridColumnHeaderStyle}"
+                                  CellStyle="{DynamicResource DefaultDataGridCellStyle}"
+                                  RowStyle="{DynamicResource DefaultDataGridRowStyle}"
+                                  ItemsSource="{Binding DuplicateRecords}"
+                                  CanUserAddRows="False"
+                                  CanUserDeleteRows="False"
+                                  GridLinesVisibility="Horizontal">
+                            <DataGrid.Columns>
+                                <DataGridTemplateColumn Header="条码" Width="160">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Barcode}" VerticalAlignment="Center"
+                                                       TextAlignment="Left" Padding="4,0"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <DataGridTemplateColumn Header="格口" Width="80">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding ChuteNumber}" VerticalAlignment="Center"
+                                                       TextAlignment="Center" Padding="4,0" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <DataGridTemplateColumn Header="重复次数" Width="80">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Count}" VerticalAlignment="Center"
+                                                       TextAlignment="Center" Padding="4,0" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <DataGridTemplateColumn Header="首次时间" Width="120">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding FirstSeen, StringFormat={}{0:HH:mm:ss}}"
+                                                       VerticalAlignment="Center" TextAlignment="Center" Padding="4,0" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <DataGridTemplateColumn Header="最后时间" Width="120">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding LastSeen, StringFormat={}{0:HH:mm:ss}}"
+                                                       VerticalAlignment="Center" TextAlignment="Center" Padding="4,0" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                </Border>
             </Grid>
         </Grid>
 
@@ -515,6 +600,7 @@
                 BorderThickness="0,1,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -581,7 +667,7 @@
                 </ItemsControl>
 
                 <!-- 设备状态 -->
-                <ItemsControl Grid.Column="4"
+                <ItemsControl Grid.Column="5"
                               ItemsSource="{Binding DeviceStatuses}"
                               Margin="8,0">
                     <ItemsControl.ItemsPanel>
@@ -612,9 +698,24 @@
                 </ItemsControl>
 
                 <!-- 运行时间 -->
-                <StackPanel Grid.Column="5"
+                <StackPanel Grid.Column="6"
                             Orientation="Horizontal"
                             Margin="8,0">
+                    <!-- 当前 Modbus 计数 -->
+                    <StackPanel
+                        Orientation="Horizontal"
+                        Margin="8,0">
+                        <ui:SymbolIcon Symbol="NumberSymbol16"
+                                       FontSize="14"
+                                       Margin="0,0,4,0"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        <TextBlock VerticalAlignment="Center"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                            <Run Text="Modbus计数: " />
+                            <Run Text="{Binding CurrentModbusCounter}" />
+                        </TextBlock>
+                    </StackPanel>
                     <ui:SymbolIcon Symbol="Timer24"
                                    FontSize="14"
                                    Margin="0,0,4,0"

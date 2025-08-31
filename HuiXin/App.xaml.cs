@@ -10,6 +10,7 @@ using HuiXin.ViewModels;
 using HuiXin.ViewModels.Dialogs;
 using HuiXin.Views;
 using HuiXin.Views.Dialogs;
+using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 using SharedUI.ViewModels;
@@ -81,10 +82,7 @@ public partial class App
             _mutex = new Mutex(true, MutexName, out var createdNew);
             _ownsMutex = createdNew;
 
-            if (createdNew)
-            {
-                return Container.Resolve<MainWindow>();
-            }
+            if (createdNew) return Container.Resolve<MainWindow>();
 
             // 尝试获取已存在的Mutex，如果无法获取，说明有一个正在运行的实例
             var canAcquire = _mutex.WaitOne(TimeSpan.Zero, false);
@@ -95,6 +93,7 @@ public partial class App
                 Environment.Exit(0); // 直接退出进程
                 return null!; // 虽然不会执行到这里，但需要满足返回类型
             }
+
             // 可以获取Mutex，说明前一个实例可能异常退出但Mutex已被释放
             _ownsMutex = true;
             return Container.Resolve<MainWindow>();
@@ -155,7 +154,8 @@ public partial class App
     private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         Log.Fatal(e.Exception, "Unhandled Dispatcher Exception Caught by App.xaml.cs");
-        MessageBox.Show($"发生未处理的严重错误: {e.Exception.Message}\n\n应用程序可能不稳定，建议重启。请联系技术支持并提供日志文件。", "应用程序错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        MessageBox.Show($"发生未处理的严重错误: {e.Exception.Message}\n\n应用程序可能不稳定，建议重启。请联系技术支持并提供日志文件。", "应用程序错误",
+            MessageBoxButton.OK, MessageBoxImage.Error);
         e.Handled = true; // 尝试阻止应用程序崩溃
     }
 
@@ -184,14 +184,16 @@ public partial class App
             // 启动相机托管服务
             var cameraStartupService = Container.Resolve<CameraStartupService>();
             _ = Task.Run(() => cameraStartupService.StartAsync(CancellationToken.None))
-                .ContinueWith(t => Log.Error(t.Exception, "启动 CameraStartupService 时出错"), TaskContinuationOptions.OnlyOnFaulted);
+                .ContinueWith(t => Log.Error(t.Exception, "启动 CameraStartupService 时出错"),
+                    TaskContinuationOptions.OnlyOnFaulted);
 
             Log.Information("后台服务启动已全部发起。");
         }
         catch (Exception ex)
         {
             Log.Error(ex, "解析或发起后台服务启动时出错。可能无法启动部分或全部服务。");
-            MessageBox.Show($"启动后台服务时发生错误: {ex.Message}\n请检查配置和设备连接。", "启动错误", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show($"启动后台服务时发生错误: {ex.Message}\n请检查配置和设备连接。", "启动错误", MessageBoxButton.OK,
+                MessageBoxImage.Warning);
         }
         finally
         {
@@ -304,6 +306,7 @@ public partial class App
                         _mutex.ReleaseMutex();
                         Log.Debug("Mutex已释放");
                     }
+
                     _mutex.Dispose();
                     _mutex = null;
                 }
@@ -316,6 +319,7 @@ public partial class App
             // 等待所有日志写入完成
             await Log.CloseAndFlushAsync();
         }
+
         Log.Information("应用程序退出处理程序 (OnExit) 完成。 ");
     }
 
@@ -410,10 +414,9 @@ public partial class App
             // 停止相机托管服务
             var cameraStartupService = Container?.Resolve<CameraStartupService>();
             if (cameraStartupService != null)
-            {
                 tasks.Add(Task.Run(() => cameraStartupService.StopAsync(CancellationToken.None))
-                    .ContinueWith(t => Log.Error(t.Exception, "停止 CameraStartupService 时出错"), TaskContinuationOptions.OnlyOnFaulted));
-            }
+                    .ContinueWith(t => Log.Error(t.Exception, "停止 CameraStartupService 时出错"),
+                        TaskContinuationOptions.OnlyOnFaulted));
 
             // 清理相机相关资源
             try
@@ -438,21 +441,14 @@ public partial class App
                 {
                     // 等待异步服务停止完成，设置超时
                     if (!Task.WhenAll(tasks).Wait(TimeSpan.FromSeconds(10)))
-                    {
                         Log.Warning("一个或多个后台服务未在超时时间内正常停止。");
-                    }
                     else
-                    {
                         Log.Information("后台服务已停止 (异步部分)。");
-                    }
                 }
                 catch (AggregateException aex)
                 {
                     Log.Error(aex, "等待后台服务停止时发生聚合错误。");
-                    foreach (var innerEx in aex.InnerExceptions)
-                    {
-                        Log.Error(innerEx, "  内部停止错误:");
-                    }
+                    foreach (var innerEx in aex.InnerExceptions) Log.Error(innerEx, "  内部停止错误:");
                 }
                 catch (Exception ex)
                 {
@@ -468,6 +464,7 @@ public partial class App
         {
             Log.Error(ex, "解析或发起后台服务停止时出错。可能无法完全停止服务。");
         }
+
         Log.Information("StopBackgroundServices 方法执行完毕。 ");
     }
 }

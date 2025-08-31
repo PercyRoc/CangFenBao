@@ -122,7 +122,6 @@ internal class BenNiaoPreReportService : IDisposable
     {
         try
         {
-
             const string url = "/api/openApi/dataDownload";
 
             // 构建请求参数

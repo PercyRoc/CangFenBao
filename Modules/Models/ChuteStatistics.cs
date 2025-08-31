@@ -1,3 +1,5 @@
+using Prism.Mvvm;
+
 namespace ShanghaiModuleBelt.Models;
 
 /// <summary>
@@ -22,7 +24,7 @@ public class ChuteStatistics : BindableBase
     /// </summary>
     public int PackageCount
     {
-        get => _packageCount;
+        get { return _packageCount; }
         set => SetProperty(ref _packageCount, value);
     }
 }

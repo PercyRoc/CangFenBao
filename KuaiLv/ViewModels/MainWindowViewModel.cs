@@ -13,6 +13,9 @@ using DeviceService.DataSourceDevices.Services;
 using KuaiLv.Models.Settings.App;
 using KuaiLv.Services.DWS;
 using KuaiLv.Services.Warning;
+using Prism.Commands;
+using Prism.Dialogs;
+using Prism.Mvvm;
 using Serilog;
 using SharedUI.Models;
 
@@ -219,7 +222,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         }
                         catch (Exception ex)
                         {
-                            Log.Error(ex, "Error updating camera UI image on dispatcher thread for CameraId: {CameraId}", cameraId);
+                            Log.Error(ex,
+                                "Error updating camera UI image on dispatcher thread for CameraId: {CameraId}",
+                                cameraId);
                         }
                     });
                 }
@@ -466,7 +471,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
             // --- Update general camera status in DeviceStatuses list ---
             var cameraStatus = DeviceStatuses.FirstOrDefault(static x => x.Name == "相机");
             if (cameraStatus != null)
-            {
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     // Reflect the status of the specific camera if ID is provided, or overall status
@@ -500,22 +504,18 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         }
                         else
                         {
-                            Log.Warning("OnCameraConnectionChanged: Received status for unknown CameraId: {CameraId}", deviceId);
-
+                            Log.Warning("OnCameraConnectionChanged: Received status for unknown CameraId: {CameraId}",
+                                deviceId);
                         }
                     }
                     else
                     {
                         cameraStatus.Status = isConnected ? "已连接" : "已断开";
                         cameraStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
-                        foreach (var cam in Cameras)
-                        {
-                            cam.IsOnline = isConnected;
-                        }
+                        foreach (var cam in Cameras) cam.IsOnline = isConnected;
                         Log.Information("相机总体连接状态更新: {IsConnected}", isConnected);
                     }
                 });
-            }
         }
         catch (Exception ex)
         {
@@ -812,9 +812,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         displayInfo.CameraId, displayInfo.CameraName, displayInfo.Row, displayInfo.Column);
                 }
             }
+
             // Initial update of the general camera status in DeviceStatuses
             UpdateOverallCameraDeviceStatus();
-
         }
         catch (Exception ex)
         {
@@ -915,6 +915,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 GridColumns = (int)Math.Ceiling((double)cameraCount / GridRows);
                 break;
         }
+
         Log.Information("根据相机数量 {Count} 计算布局: {Rows}x{Columns}", cameraCount, GridRows, GridColumns);
     }
 

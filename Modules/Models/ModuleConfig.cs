@@ -1,4 +1,5 @@
 using Common.Services.Settings;
+using Prism.Mvvm;
 
 namespace ShanghaiModuleBelt.Models;
 
@@ -11,8 +12,7 @@ public class ModuleConfig : BindableBase
     private int _minWaitTime = 1000;
     private int _port = 8080;
     private int _serverTimeout = 3000; // 默认服务器通讯超时时间（毫秒）
-    private string _siteCode = "1002"; // 默认为深圳站点
-    private string _token = "CADD04F33F0944E187EB4EB873EE23CD"; // 默认Token值
+    // 站点与 Token 不再在本地配置中管理
 
     public string Address
     {
@@ -38,11 +38,6 @@ public class ModuleConfig : BindableBase
         set => SetProperty(ref _maxWaitTime, value);
     }
 
-    public string SiteCode
-    {
-        get => _siteCode;
-        set => SetProperty(ref _siteCode, value);
-    }
 
     public int ServerTimeout
     {
@@ -56,9 +51,5 @@ public class ModuleConfig : BindableBase
         set => SetProperty(ref _exceptionChute, value);
     }
 
-    public string Token
-    {
-        get => _token;
-        set => SetProperty(ref _token, value);
-    }
+    // SiteCode 与 Token 已移除
 }

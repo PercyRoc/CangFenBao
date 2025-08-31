@@ -1,4 +1,5 @@
 using Common.Services.Settings;
+using Prism.Mvvm;
 
 namespace ZtCloudWarehous.ViewModels.Settings;
 
@@ -6,7 +7,9 @@ namespace ZtCloudWarehous.ViewModels.Settings;
 internal class WeighingSettings : BindableBase
 {
     private const string UatBaseUrl = "https://scm-gateway-uat.ztocwst.com/edi/service/inbound/bz";
+
     private const string ProdBaseUrl = "https://scm-openapi.ztocwst.com/edi/service/inbound/bz";
+
     // 公共参数
     private string _api = "shanhaitong.wms.dws.weight";
 
@@ -131,22 +134,17 @@ internal class WeighingSettings : BindableBase
         set => SetProperty(ref _newWeighingEnvironment, value);
     }
 
-    public string ApiUrl
-    {
-        get => IsProduction ? ProdBaseUrl : UatBaseUrl;
-    }
+    public string ApiUrl => IsProduction ? ProdBaseUrl : UatBaseUrl;
 
     /// <summary>
     ///     新称重接口URL
     /// </summary>
-    public string NewWeighingApiUrl
-    {
-        get => NewWeighingEnvironment.ToLower() switch
+    public string NewWeighingApiUrl =>
+        NewWeighingEnvironment.ToLower() switch
         {
             "uat" => "https://anapi-uat.annto.com/bop/T201904230000000014/xjyc/weighing",
             "ver" => "https://anapi-ver.annto.com/bop/T201904230000000014/xjyc/weighing",
             "prod" => "https://anapi.annto.com/bop/T201904230000000014/xjyc/weighing",
             _ => "https://anapi-uat.annto.com/bop/T201904230000000014/xjyc/weighing"
         };
-    }
 }

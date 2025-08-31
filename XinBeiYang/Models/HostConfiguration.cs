@@ -1,4 +1,5 @@
 using Common.Services.Settings;
+using Prism.Mvvm;
 using XinBeiYang.ViewModels;
 
 namespace XinBeiYang.Models;
@@ -8,6 +9,7 @@ public class HostConfiguration : BindableBase
 {
     // 条码模式配置
     private BarcodeMode _barcodeMode = BarcodeMode.MultiBarcode; // 默认多条码模式
+
     // 设备基本配置
     private string _deviceId = "DEV001"; // 默认设备编号 (也用作扫描仪序号和主设备号 - 根据用户要求)
 

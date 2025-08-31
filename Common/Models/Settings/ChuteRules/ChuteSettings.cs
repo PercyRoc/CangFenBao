@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.RegularExpressions;
 using Common.Services.Settings;
+using Prism.Mvvm;
 using Serilog;
 
 namespace Common.Models.Settings.ChuteRules;
@@ -93,17 +94,15 @@ public class ChuteSettings : BindableBase
         foreach (var (chuteNumber, chuteRule) in orderedRules)
         {
             if (!chuteRule.IsMatching(barcode, weight)) continue;
-            
+
             // 如果规则是默认规则，并且不是唯一的匹配，则跳过继续寻找更具体的规则。
             // 如果只有默认规则匹配，或者该格口是唯一的匹配，则返回它。
             if (!chuteRule.IsEffectivelyDefault()) return chuteNumber; // 返回第一个匹配的非默认规则
-            
+
             // 检查是否存在其他非默认规则也匹配
-            var hasSpecificMatch = ChuteRules.Any(r => r.Key != chuteNumber && r.Value.IsMatching(barcode, weight) && !r.Value.IsEffectivelyDefault());
-            if (hasSpecificMatch)
-            {
-                continue; // 存在更具体的匹配，跳过此默认规则
-            }
+            var hasSpecificMatch = ChuteRules.Any(r =>
+                r.Key != chuteNumber && r.Value.IsMatching(barcode, weight) && !r.Value.IsEffectivelyDefault());
+            if (hasSpecificMatch) continue; // 存在更具体的匹配，跳过此默认规则
             return chuteNumber; // 返回第一个匹配的默认规则
         }
 
@@ -298,10 +297,7 @@ public class BarcodeMatchRule : BindableBase
     internal bool IsMatching(string barcode, double? weight)
     {
         // 检查是否为"仅字符类型"的默认规则，如果是则不匹配
-        if (IsCharacterTypeOnlyRule())
-        {
-            return false; // 不匹配仅字符类型的默认规则
-        }
+        if (IsCharacterTypeOnlyRule()) return false; // 不匹配仅字符类型的默认规则
 
         // 检查重量限制
         if (UseWeightRule && weight.HasValue)

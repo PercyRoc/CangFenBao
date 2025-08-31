@@ -24,7 +24,7 @@ public class SystemStatus
         {
             CpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
             MemCounter = new PerformanceCounter("Memory", "% Committed Bytes In Use");
-            
+
             // 初始化CPU计数器 - 第一次调用通常返回0
             _ = CpuCounter.NextValue();
         }
@@ -55,14 +55,14 @@ public class SystemStatus
             if (CpuCounter != null)
             {
                 var cpuValue = CpuCounter.NextValue();
-                
+
                 // 避免第一次调用返回0的问题
                 if (cpuValue > 0 || (DateTime.Now - _lastCpuCheck).TotalSeconds > 1)
                 {
                     _lastCpuValue = cpuValue;
                     _lastCpuCheck = DateTime.Now;
                 }
-                
+
                 status.CpuUsage = _lastCpuValue;
             }
             else

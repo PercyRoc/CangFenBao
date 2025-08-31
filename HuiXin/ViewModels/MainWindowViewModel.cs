@@ -11,6 +11,9 @@ using Common.Models.Settings.ChuteRules;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
+using Prism.Commands;
+using Prism.Dialogs;
+using Prism.Mvvm;
 using Serilog;
 using SharedUI.Models;
 using SortingServices.Car.Service;
@@ -392,9 +395,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
             // 如果包裹状态不是错误，设为成功
             if (package.Status != PackageStatus.Error && package.Status != PackageStatus.Failed)
-            {
                 package.SetStatus(PackageStatus.Success);
-            }
 
             // 更新UI
             Application.Current.Dispatcher.Invoke(() =>
@@ -442,13 +443,9 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     var added = await _carSortService.ProcessPackageSortingAsync(package);
 
                     if (added)
-                    {
                         Log.Information("包裹 {Barcode} 已成功添加到分拣队列", package.Barcode);
-                    }
                     else
-                    {
                         Log.Error("包裹 {Barcode} 添加到分拣队列失败", package.Barcode);
-                    }
                 }
                 catch (Exception ex)
                 {

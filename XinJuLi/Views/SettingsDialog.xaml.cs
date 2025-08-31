@@ -15,6 +15,7 @@ public partial class SettingsDialog
         // 在控件加载完成后导航
         Loaded += OnLoaded;
     }
+
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         // 导航到相机设置页面

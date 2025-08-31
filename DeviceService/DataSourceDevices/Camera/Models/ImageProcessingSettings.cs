@@ -24,4 +24,4 @@ public class ImageProcessingSettings
     ///     水印格式
     /// </summary>
     public string WatermarkFormat { get; set; } = "SN: {barcode}\r\n{dateTime}";
-} 
+}

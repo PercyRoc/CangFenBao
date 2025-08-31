@@ -51,35 +51,28 @@ public class OfflinePackageService(IPackageDataService packageDataService)
             foreach (var record in offlineRecords)
             {
                 // 跳过"noread"条码的包裹
-                if (string.IsNullOrEmpty(record.Barcode) || record.Barcode.Equals("noread", StringComparison.OrdinalIgnoreCase))
+                if (string.IsNullOrEmpty(record.Barcode) ||
+                    record.Barcode.Equals("noread", StringComparison.OrdinalIgnoreCase))
                 {
                     Log.Debug("跳过noread条码的离线包裹：{Barcode}", record.Barcode);
                     continue;
                 }
-                
+
                 var package = PackageInfo.Create();
 
                 package.SetBarcode(record.Barcode);
 
                 package.SetWeight(record.Weight);
                 if (record is { Length: not null, Width: not null, Height: not null })
-                {
                     package.SetDimensions(record.Length.Value, record.Width.Value, record.Height.Value);
-                }
                 // 直接使用数据库的状态和显示文本
                 package.SetStatus(record.Status, record.StatusDisplay);
 
-                if (!string.IsNullOrEmpty(record.ErrorMessage))
-                {
-                    package.ErrorMessage = record.ErrorMessage;
-                }
+                if (!string.IsNullOrEmpty(record.ErrorMessage)) package.ErrorMessage = record.ErrorMessage;
                 package.CreateTime = record.CreateTime;
 
                 // 设置图片路径
-                if (!string.IsNullOrEmpty(record.ImagePath))
-                {
-                    package.SetImage(null, record.ImagePath);
-                }
+                if (!string.IsNullOrEmpty(record.ImagePath)) package.SetImage(null, record.ImagePath);
                 packages.Add(package);
             }
 
@@ -125,14 +118,10 @@ public class OfflinePackageService(IPackageDataService packageDataService)
                 packageTime);
 
             if (success)
-            {
                 Log.Information("离线包裹已成功标记为上传状态：{Barcode}", barcode);
-            }
             else
-            {
                 // UpdatePackageStatusAsync 内部已经记录了更详细的 Warning 或 Error
                 Log.Warning("未能标记离线包裹 {Barcode} 为上传状态（可能未找到记录或更新出错）", barcode);
-            }
         }
         catch (Exception ex)
         {
@@ -190,13 +179,9 @@ public class OfflinePackageService(IPackageDataService packageDataService)
                 packageTime);
 
             if (updateSuccess)
-            {
                 Log.Information("离线包裹 {Barcode} 已标记为重试完成状态：{Status}", barcode, finalStatus);
-            }
             else
-            {
                 Log.Warning("未能标记离线包裹 {Barcode} 为重试完成状态（可能未找到记录或更新出错）", barcode);
-            }
         }
         catch (Exception ex)
         {

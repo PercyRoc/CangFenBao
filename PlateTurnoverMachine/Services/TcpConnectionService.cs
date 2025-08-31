@@ -47,10 +47,7 @@ internal class TcpConnectionService : ITcpConnectionService
     /// <summary>
     ///     获取TCP模块客户端字典
     /// </summary>
-    public IReadOnlyDictionary<TcpConnectionConfig, TcpClient> TcpModuleClients
-    {
-        get => _tcpModuleClients;
-    }
+    public IReadOnlyDictionary<TcpConnectionConfig, TcpClient> TcpModuleClients => _tcpModuleClients;
 
     /// <summary>
     ///     触发光电数据接收事件
@@ -90,10 +87,7 @@ internal class TcpConnectionService : ITcpConnectionService
             var connectTask = client.ConnectAsync(config.GetIpEndPoint());
             var timeoutTask = Task.Delay(10000); // 10秒超时
 
-            if (await Task.WhenAny(connectTask, timeoutTask) == timeoutTask)
-            {
-                return false;
-            }
+            if (await Task.WhenAny(connectTask, timeoutTask) == timeoutTask) return false;
 
             // 确保连接任务完成
             await connectTask;
@@ -183,15 +177,11 @@ internal class TcpConnectionService : ITcpConnectionService
             .ToList();
 
         var newConnections = new Dictionary<TcpConnectionConfig, TcpClient>();
-        if (!configsToConnect.Any())
-        {
-            return newConnections; // 没有需要连接的，直接返回
-        }
+        if (!configsToConnect.Any()) return newConnections; // 没有需要连接的，直接返回
 
         Log.Information("检测到 {Count} 个需要连接/重连的TCP模块。", configsToConnect.Count);
 
         foreach (var config in configsToConnect)
-        {
             try
             {
                 // 如果存在旧的、已断开的客户端实例，先移除
@@ -218,7 +208,7 @@ internal class TcpConnectionService : ITcpConnectionService
                 Log.Error(ex, "连接TCP模块失败: {Config}", config.IpAddress);
                 OnTcpModuleConnectionChanged(config, false); // 确保在失败时也触发状态变更
             }
-        }
+
         return newConnections;
     }
 
@@ -270,7 +260,6 @@ internal class TcpConnectionService : ITcpConnectionService
             {
                 var stream = localClient.GetStream();
                 while (!localCts.Token.IsCancellationRequested && localClient.Connected)
-                {
                     try
                     {
                         Log.Debug("触发光电: 等待数据...");
@@ -315,7 +304,6 @@ internal class TcpConnectionService : ITcpConnectionService
                         TriggerPhotoelectricConnectionChanged?.Invoke(this, false);
                         break;
                     }
-                }
             }
             catch (ObjectDisposedException)
             {
@@ -328,10 +316,7 @@ internal class TcpConnectionService : ITcpConnectionService
             finally
             {
                 Log.Information("触发光电监听任务结束");
-                if (!localClient.Connected)
-                {
-                    TriggerPhotoelectricConnectionChanged?.Invoke(this, false);
-                }
+                if (!localClient.Connected) TriggerPhotoelectricConnectionChanged?.Invoke(this, false);
                 // 不在此处关闭 Client 或 Stream，由 Dispose 或 Connect 方法管理
             }
         }, localCts.Token);
@@ -416,7 +401,6 @@ internal class TcpConnectionService : ITcpConnectionService
             {
                 var stream = localClient.GetStream();
                 while (!cts.Token.IsCancellationRequested && localClient.Connected)
-                {
                     try
                     {
                         Log.Debug("TCP模块 {Config}: 等待数据...", localConfig.IpAddress);
@@ -462,7 +446,6 @@ internal class TcpConnectionService : ITcpConnectionService
                         OnTcpModuleConnectionChanged(localConfig, false);
                         break;
                     }
-                }
             }
             catch (ObjectDisposedException)
             {
@@ -475,10 +458,7 @@ internal class TcpConnectionService : ITcpConnectionService
             finally
             {
                 Log.Information("TCP模块监听任务结束: {Config}", localConfig.IpAddress);
-                if (!localClient.Connected)
-                {
-                    OnTcpModuleConnectionChanged(localConfig, false);
-                }
+                if (!localClient.Connected) OnTcpModuleConnectionChanged(localConfig, false);
                 // 不在此处关闭 Client 或 Stream，由 Dispose 或 Connect 方法管理
             }
         }, cts.Token);
@@ -558,12 +538,8 @@ internal class TcpConnectionService : ITcpConnectionService
 
         // 停止所有TCP模块的监听
         var moduleConfigs = _tcpModuleClients.Keys.ToList(); // 创建副本以安全迭代
-        foreach (var config in moduleConfigs)
-        {
-            StopListeningTcpModuleAsync(config).Wait();
-            // 不需要手动触发 OnTcpModuleConnectionChanged，任务结束时会处理
-        }
-
+        foreach (var config in moduleConfigs) StopListeningTcpModuleAsync(config).Wait();
+        // 不需要手动触发 OnTcpModuleConnectionChanged，任务结束时会处理
         _tcpModuleListeningTasks.Clear(); // 清理任务字典
         _tcpModuleListeningCts.Clear(); // 清理CTS字典
 
@@ -584,7 +560,6 @@ internal class TcpConnectionService : ITcpConnectionService
         }
 
         foreach (var client in _tcpModuleClients.Values)
-        {
             try
             {
                 client.Close();
@@ -593,7 +568,6 @@ internal class TcpConnectionService : ITcpConnectionService
             {
                 Log.Warning(ex, "关闭TCP模块客户端时出错: {IpAddress}", client.Client.RemoteEndPoint);
             }
-        }
 
         _tcpModuleClients.Clear();
 

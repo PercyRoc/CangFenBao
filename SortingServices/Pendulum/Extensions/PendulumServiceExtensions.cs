@@ -1,4 +1,5 @@
 using Common.Models.Settings.Sort.PendulumSort;
+using Prism.Ioc;
 
 namespace SortingServices.Pendulum.Extensions;
 

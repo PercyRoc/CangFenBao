@@ -3,6 +3,8 @@ using System.IO.Ports;
 using System.Windows.Input;
 using Common.Services.Settings;
 using Common.Services.Ui;
+using Prism.Commands;
+using Prism.Mvvm;
 using Serilog;
 using SortingServices.Car;
 
@@ -128,15 +130,10 @@ public class SerialPortSettingsViewModel : BindableBase
     {
         AvailablePorts.Clear();
         var ports = SerialPort.GetPortNames();
-        foreach (var port in ports)
-        {
-            AvailablePorts.Add(port);
-        }
+        foreach (var port in ports) AvailablePorts.Add(port);
 
         // 如果当前选择的端口不在可用列表中且有可用端口，则选择第一个可用端口
-        if (!string.IsNullOrEmpty(Settings.PortName) && !AvailablePorts.Contains(Settings.PortName) && AvailablePorts.Count > 0)
-        {
-            Settings.PortName = AvailablePorts[0];
-        }
+        if (!string.IsNullOrEmpty(Settings.PortName) && !AvailablePorts.Contains(Settings.PortName) &&
+            AvailablePorts.Count > 0) Settings.PortName = AvailablePorts[0];
     }
 }

@@ -15,7 +15,7 @@ using FuzhouPolicyForce.ViewModels.Settings;
 using FuzhouPolicyForce.Views;
 using FuzhouPolicyForce.Views.Settings;
 using FuzhouPolicyForce.WangDianTong;
-using Microsoft.Extensions.Hosting;
+using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 using SharedUI.ViewModels.Dialogs;
@@ -93,10 +93,7 @@ internal partial class App
             _mutex = new Mutex(true, MutexName, out var createdNew);
             _ownsMutex = createdNew;
 
-            if (createdNew)
-            {
-                return Container.Resolve<MainWindow>();
-            }
+            if (createdNew) return Container.Resolve<MainWindow>();
 
             // 尝试获取已存在的Mutex，如果无法获取，说明有一个正在运行的实例
             var canAcquire = _mutex.WaitOne(TimeSpan.Zero, false);
@@ -106,6 +103,7 @@ internal partial class App
                 Current.Shutdown();
                 return null!;
             }
+
             // 可以获取Mutex，说明前一个实例可能异常退出但Mutex已被释放
             _ownsMutex = true;
             return Container.Resolve<MainWindow>();
@@ -250,7 +248,6 @@ internal partial class App
     }
 
 
-
     /// <summary>
     ///     启动定期清理任务
     /// </summary>
@@ -303,18 +300,17 @@ internal partial class App
 
             var deletedCount = 0;
             foreach (var file in dumpFiles)
-            {
                 try
                 {
                     var fileName = Path.GetFileName(file);
-                    
+
                     // 跳过以"crash"开头的崩溃转储文件
                     if (fileName.StartsWith("crash_", StringComparison.OrdinalIgnoreCase))
                     {
                         Log.Debug("保留崩溃转储文件: {FileName}", fileName);
                         continue;
                     }
-                    
+
                     File.Delete(file);
                     deletedCount++;
                     Log.Debug("删除DUMP文件: {FileName}", fileName);
@@ -323,7 +319,6 @@ internal partial class App
                 {
                     Log.Warning(ex, "删除DUMP文件失败: {FilePath}", file);
                 }
-            }
 
             if (deletedCount > 0) Log.Information("成功清理 {Count} 个DUMP文件", deletedCount);
         }
@@ -368,6 +363,7 @@ internal partial class App
                         _mutex.ReleaseMutex();
                         Log.Information("Mutex已释放");
                     }
+
                     _mutex.Dispose();
                     _mutex = null;
                 }

@@ -21,6 +21,7 @@ public interface IJdWcsCommunicationService : IDisposable
     ///     是否已连接
     /// </summary>
     bool IsConnected { get; }
+
     /// <summary>
     ///     连接状态变更事件
     /// </summary>
@@ -46,7 +47,8 @@ public interface IJdWcsCommunicationService : IDisposable
     /// <param name="timestamp">时间戳</param>
     /// <param name="cancellationToken">取消令牌</param>
     /// <returns>上传结果</returns>
-    Task<bool> UploadImageUrlsAsync(int taskNo, List<string> barcode, List<string> matrixBarcode, List<string> absoluteImageUrls, long timestamp, CancellationToken cancellationToken = default);
+    Task<bool> UploadImageUrlsAsync(int taskNo, List<string> barcode, List<string> matrixBarcode,
+        List<string> absoluteImageUrls, long timestamp, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -62,6 +64,7 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
+
     private readonly ConcurrentDictionary<int, TaskCompletionSource<AckMessage>> _pendingCommands = new();
     private readonly List<byte> _receivedBuffer = new(); // 用于接收数据的缓冲区
     private readonly object _receivedBufferLock = new(); // 保护缓冲区的锁
@@ -97,13 +100,9 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
         _ = Task.Run(async () =>
         {
             while (!token.IsCancellationRequested)
-            {
                 try
                 {
-                    if (!IsConnected)
-                    {
-                        await ConnectAsync();
-                    }
+                    if (!IsConnected) await ConnectAsync();
 
                     await Task.Delay(JdWcsConstants.ReconnectInterval, token);
                 }
@@ -121,7 +120,6 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
                         Log.Information("京东WCS连接状态（异常捕获）: 已断开");
                     }
                 }
-            }
         }, token);
     }
 
@@ -163,7 +161,8 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
     /// <param name="timestamp">时间戳</param>
     /// <param name="cancellationToken">取消令牌</param>
     /// <returns>上传结果</returns>
-    public async Task<bool> UploadImageUrlsAsync(int taskNo, List<string> barcode, List<string> matrixBarcode, List<string> absoluteImageUrls, long timestamp, CancellationToken cancellationToken = default)
+    public async Task<bool> UploadImageUrlsAsync(int taskNo, List<string> barcode, List<string> matrixBarcode,
+        List<string> absoluteImageUrls, long timestamp, CancellationToken cancellationToken = default)
     {
         if (absoluteImageUrls.Count == 0)
         {
@@ -180,7 +179,6 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
 
             var finalUrls = new List<string>();
             foreach (var absolutePath in absoluteImageUrls.Where(absolutePath => !string.IsNullOrEmpty(absolutePath)))
-            {
                 try
                 {
                     var relativePath = Path.GetRelativePath(imageBaseStoragePath, absolutePath);
@@ -192,7 +190,6 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
                     Log.Error(ex, "处理图片路径时出错: Base={BasePath}, Absolute={AbsolutePath}, TaskNo={TaskNo}",
                         imageBaseStoragePath, absolutePath, taskNo);
                 }
-            }
 
             if (finalUrls.Count == 0)
             {
@@ -212,10 +209,12 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
                 {
                     DeviceNo = deviceNo,
                     TaskNo = taskNo,
-                    Barcode = barcode.Count == 0 || barcode[0] == "noread" ? new List<string>
-                    {
-                        "noread"
-                    } : barcode,
+                    Barcode = barcode.Count == 0 || barcode[0] == "noread"
+                        ? new List<string>
+                        {
+                            "noread"
+                        }
+                        : barcode,
                     MatrixBarcode = matrixBarcode,
                     ImageUrl = imageUrlString,
                     Timestamp = timestamp,
@@ -228,7 +227,8 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
                 var bodyBytes = Encoding.UTF8.GetBytes(json);
 
                 var sequence = Interlocked.Increment(ref _messageSequence);
-                var ack = await SendMessageAsync(JdWcsMessageType.ImageUrlReport, sequence, bodyBytes, true, cancellationToken);
+                var ack = await SendMessageAsync(JdWcsMessageType.ImageUrlReport, sequence, bodyBytes, true,
+                    cancellationToken);
 
                 if (ack == null || ack.Code != JdWcsConstants.AckSuccess)
                 {
@@ -238,7 +238,8 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
                 }
                 else
                 {
-                    Log.Information("图片地址上报成功, TaskNo: {TaskNo}, 序号: {Sequence}, 批次: {Batch}/{TotalBatch}, 图片数: {Count}",
+                    Log.Information(
+                        "图片地址上报成功, TaskNo: {TaskNo}, 序号: {Sequence}, 批次: {Batch}/{TotalBatch}, 图片数: {Count}",
                         taskNo, sequence, i + 1, totalMessages, finalUrls.Count);
                 }
             }
@@ -266,10 +267,7 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
             _cancellationTokenSource?.Cancel();
 
             // 同步清理待处理请求
-            foreach (var command in _pendingCommands.Values)
-            {
-                command.TrySetCanceled();
-            }
+            foreach (var command in _pendingCommands.Values) command.TrySetCanceled();
             _pendingCommands.Clear();
 
             // 立即释放TcpClientService
@@ -277,11 +275,12 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
             _tcpClientService = null;
 
             // 释放取消令牌
-            _cancellationTokenSource?.Dispose();
+            // _cancellationTokenSource?.Dispose();
             _cancellationTokenSource = null;
 
             Log.Information("京东WCS通信服务资源已释放");
         }
+
         _disposed = true;
     }
 
@@ -324,7 +323,6 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
                 catch (Exception ex)
                 {
                     Log.Error(ex, "连接京东WCS服务器失败");
-                    throw;
                 }
             });
         }
@@ -338,7 +336,9 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
     // 处理连接状态变更的回调
     private void OnConnectionStatusChanged(bool isConnected)
     {
-        Log.Debug("[JdWCS] OnConnectionStatusChanged received callback with isConnected = {IsConnected}. Current internal _isConnected = {_CurrentIsConnected}", isConnected, IsConnected);
+        Log.Debug(
+            "[JdWCS] OnConnectionStatusChanged received callback with isConnected = {IsConnected}. Current internal _isConnected = {_CurrentIsConnected}",
+            isConnected, IsConnected);
         if (_disposed)
         {
             Log.Debug("[JdWCS] Service is disposed, ignoring OnConnectionStatusChanged callback.");
@@ -349,7 +349,6 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
         // 1. 始终触发事件
         var handler = ConnectionChanged;
         if (handler != null)
-        {
             try
             {
                 handler.Invoke(this, isConnected);
@@ -358,11 +357,8 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
             {
                 Log.Error(ex, "[JdWCS] Error invoking ConnectionChanged event handler.");
             }
-        }
         else
-        {
             Log.Warning("[JdWCS] ConnectionChanged event has no subscribers.");
-        }
 
         // 2. 更新内部状态
         IsConnected = isConnected;
@@ -394,10 +390,7 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
         else
         {
             // 清理所有等待的请求
-            foreach (var command in _pendingCommands.Values)
-            {
-                command.TrySetCanceled();
-            }
+            foreach (var command in _pendingCommands.Values) command.TrySetCanceled();
             _pendingCommands.Clear();
             Log.Debug("京东WCS连接断开，已清理待处理的命令。");
         }
@@ -438,17 +431,13 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
                 // 检查缓冲区是否包含完整消息（头部+数据部分）
                 var totalLength = JdWcsMessageHeader.Size + header.DataLength;
                 if (_receivedBuffer.Count < totalLength)
-                {
                     // 消息不完整，等待更多数据
                     break;
-                }
 
                 // 提取消息体
-                var bodyBuffer = new byte[0];
+                var bodyBuffer = Array.Empty<byte>();
                 if (header.DataLength > 0)
-                {
                     bodyBuffer = _receivedBuffer.Skip(JdWcsMessageHeader.Size).Take(header.DataLength).ToArray();
-                }
 
                 // 从缓冲区移除已处理的数据
                 _receivedBuffer.RemoveRange(0, totalLength);
@@ -472,10 +461,7 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
         var baseAckType = (short)((short)requestType + 1000);
 
         // 检查计算出的ACK类型是否在枚举中定义
-        if (Enum.IsDefined(typeof(JdWcsMessageType), baseAckType))
-        {
-            return (JdWcsMessageType)baseAckType;
-        }
+        if (Enum.IsDefined(typeof(JdWcsMessageType), baseAckType)) return (JdWcsMessageType)baseAckType;
 
         // 如果没有找到精确匹配，返回HeartbeatAck作为备用
         Log.Warning("无法找到请求类型 {RequestType} 对应的特定ACK类型，将使用 HeartbeatAck", requestType);
@@ -485,16 +471,14 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
     /// <summary>
     ///     处理接收到的消息
     /// </summary>
-    private async Task ProcessMessageAsync(JdWcsMessageHeader header, byte[] bodyBuffer, CancellationToken cancellationToken)
+    private async Task ProcessMessageAsync(JdWcsMessageHeader header, byte[] bodyBuffer,
+        CancellationToken cancellationToken)
     {
         var ackSent = false; // 标记是否已发送ACK
         var ackType = JdWcsMessageType.HeartbeatAck; // 默认ACK类型
         var needsSpecificAck = header.NeedAck == 1 && (short)header.MessageType < 1000;
 
-        if (needsSpecificAck)
-        {
-            ackType = GetAckTypeForRequest(header.MessageType);
-        }
+        if (needsSpecificAck) ackType = GetAckTypeForRequest(header.MessageType);
 
         try
         {
@@ -507,6 +491,7 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
                     await SendAckAsync(ackType, header.MessageSequence, false, cancellationToken);
                     ackSent = true;
                 }
+
                 return;
             }
 
@@ -537,6 +522,7 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
                         await SendAckAsync(ackType, header.MessageSequence, true, cancellationToken);
                         ackSent = true;
                     }
+
                     break;
 
                 // 示例: 处理格口状态控制
@@ -547,6 +533,7 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
                         await SendAckAsync(ackType, header.MessageSequence, true, cancellationToken);
                         ackSent = true;
                     }
+
                     break;
 
                 // TODO: 添加处理其他需要ACK的请求消息的case...
@@ -562,6 +549,7 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
                         await SendAckAsync(ackType, header.MessageSequence, false, cancellationToken);
                         ackSent = true;
                     }
+
                     break;
             }
         }
@@ -570,12 +558,14 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
             Log.Error(ex, "处理消息时发生错误, 类型: {Type}, 序号: {Sequence}", header.MessageType, header.MessageSequence);
             // 发生异常时发送失败ACK (如果需要且尚未发送)
             if (needsSpecificAck && !ackSent)
-            {
-                try { await SendAckAsync(ackType, header.MessageSequence, false, cancellationToken); }
-                catch
-                { /* Ignore ACK send error */
+                try
+                {
+                    await SendAckAsync(ackType, header.MessageSequence, false, cancellationToken);
                 }
-            }
+                catch
+                {
+                    /* Ignore ACK send error */
+                }
         }
     }
 
@@ -625,13 +615,11 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
             {
                 Log.Warning("收到空的ACK消息体, 类型: {Type}, 序号: {Sequence}", header.MessageType, header.MessageSequence);
                 if (_pendingCommands.TryRemove(header.MessageSequence, out var emptyTcs))
-                {
                     emptyTcs.TrySetResult(new AckMessage
                     {
                         Code = JdWcsConstants.AckFailure,
                         DeviceNo = "UNKNOWN"
                     });
-                }
                 return;
             }
 
@@ -642,36 +630,24 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
             {
                 Log.Error("无法反序列化ACK消息JSON: {Json}", json);
                 if (_pendingCommands.TryRemove(header.MessageSequence, out var deserializeTcs))
-                {
                     deserializeTcs.TrySetException(new JsonException("Failed to deserialize ACK message"));
-                }
                 return;
             }
 
             if (_pendingCommands.TryRemove(header.MessageSequence, out var tcs))
-            {
                 tcs.TrySetResult(ackMessage);
-            }
             else
-            {
                 Log.Warning("收到未知的ACK消息, 序号: {Sequence}", header.MessageSequence);
-            }
         }
         catch (JsonException jsonEx)
         {
             Log.Error(jsonEx, "解析ACK消息JSON时发生错误, 序号: {Sequence}", header.MessageSequence);
-            if (_pendingCommands.TryRemove(header.MessageSequence, out var jsonTcs))
-            {
-                jsonTcs.TrySetException(jsonEx);
-            }
+            if (_pendingCommands.TryRemove(header.MessageSequence, out var jsonTcs)) jsonTcs.TrySetException(jsonEx);
         }
         catch (Exception ex)
         {
             Log.Error(ex, "处理ACK消息时发生内部错误, 序号: {Sequence}", header.MessageSequence);
-            if (_pendingCommands.TryRemove(header.MessageSequence, out var errorTcs))
-            {
-                errorTcs.TrySetException(ex);
-            }
+            if (_pendingCommands.TryRemove(header.MessageSequence, out var errorTcs)) errorTcs.TrySetException(ex);
         }
     }
 
@@ -682,7 +658,8 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
     /// <param name="messageSequence">要确认的原始消息序号</param>
     /// <param name="isSuccess">确认结果</param>
     /// <param name="cancellationToken">取消令牌</param>
-    private async Task SendAckAsync(JdWcsMessageType ackType, int messageSequence, bool isSuccess, CancellationToken cancellationToken)
+    private async Task SendAckAsync(JdWcsMessageType ackType, int messageSequence, bool isSuccess,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -715,7 +692,6 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
             try
             {
                 while (!cancellationToken.IsCancellationRequested && IsConnected)
-                {
                     try
                     {
                         await SendHeartbeatAsync(cancellationToken);
@@ -731,7 +707,6 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
                         await DisconnectAsync();
                         break;
                     }
-                }
             }
             catch (Exception ex)
             {
@@ -764,9 +739,7 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
             var ack = await SendMessageAsync(JdWcsMessageType.Heartbeat, sequence, bodyBytes, true, cancellationToken);
 
             if (ack == null || ack.Code != JdWcsConstants.AckSuccess)
-            {
                 Log.Warning("心跳消息未得到成功确认, 序号: {Sequence}", sequence);
-            }
         }
         catch (Exception ex)
         {
@@ -783,10 +756,7 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
         try
         {
             // 清除所有待处理的命令
-            foreach (var command in _pendingCommands.Values)
-            {
-                command.TrySetCanceled();
-            }
+            foreach (var command in _pendingCommands.Values) command.TrySetCanceled();
             _pendingCommands.Clear();
 
             // 关闭并释放TCP客户端
@@ -812,6 +782,7 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
                 {
                     // 忽略任务取消异常
                 }
+
                 _heartbeatTask = null;
             }
         }
@@ -820,7 +791,8 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
     /// <summary>
     ///     发送消息 (核心发送逻辑)
     /// </summary>
-    private async Task<AckMessage?> SendMessageAsync(JdWcsMessageType messageType, int sequence, byte[] bodyBytes, bool needAck, CancellationToken cancellationToken)
+    private async Task<AckMessage?> SendMessageAsync(JdWcsMessageType messageType, int sequence, byte[] bodyBytes,
+        bool needAck, CancellationToken cancellationToken)
     {
         if (!IsConnected || _tcpClientService == null)
         {
@@ -861,11 +833,14 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
             AckMessage? ackResult = null;
             var messageSentSuccessfully = false;
 
-            for (var retryCount = 0; retryCount <= JdWcsConstants.MaxRetryCount && !cancellationToken.IsCancellationRequested; retryCount++)
+            for (var retryCount = 0;
+                 retryCount <= JdWcsConstants.MaxRetryCount && !cancellationToken.IsCancellationRequested;
+                 retryCount++)
             {
                 if (!IsConnected || _tcpClientService == null)
                 {
-                    Log.Warning("连接断开，无法发送消息 (重试 {RetryCount}), 类型: {Type}, 序号: {Sequence}", retryCount, messageType, sequence);
+                    Log.Warning("连接断开，无法发送消息 (重试 {RetryCount}), 类型: {Type}, 序号: {Sequence}", retryCount, messageType,
+                        sequence);
                     _pendingCommands.TryRemove(commandKey, out _);
                     return null;
                 }
@@ -877,13 +852,16 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
                         // 使用TcpClientService发送数据
                         _tcpClientService.Send(fullMessage);
                     }
+
                     messageSentSuccessfully = true;
-                    Log.Debug("消息已发送 (尝试 {RetryCount}), 类型: {Type}, 序号: {Sequence}, 长度: {Length}", retryCount + 1, messageType, sequence, fullMessage.Length);
+                    Log.Debug("消息已发送 (尝试 {RetryCount}), 类型: {Type}, 序号: {Sequence}, 长度: {Length}", retryCount + 1,
+                        messageType, sequence, fullMessage.Length);
 
                     if (needAck && tcs != null)
                     {
                         using var timeoutCts = new CancellationTokenSource(JdWcsConstants.MessageResponseTimeout);
-                        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+                        using var linkedCts =
+                            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
                         try
                         {
@@ -894,7 +872,9 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
                                 _pendingCommands.TryRemove(commandKey, out _);
                                 return ackResult;
                             }
-                            Log.Warning("收到失败ACK (Code: {AckCode}), 类型: {Type}, 序号: {Sequence}, 重试 {RetryCount}/{MaxRetry}",
+
+                            Log.Warning(
+                                "收到失败ACK (Code: {AckCode}), 类型: {Type}, 序号: {Sequence}, 重试 {RetryCount}/{MaxRetry}",
                                 ackResult.Code, messageType, sequence, retryCount + 1, JdWcsConstants.MaxRetryCount);
                         }
                         catch (OperationCanceledException)
@@ -924,21 +904,21 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
                 }
                 catch (IOException ioEx)
                 {
-                    Log.Error(ioEx, "发送消息IO错误 (重试 {RetryCount}), 类型: {Type}, 序号: {Sequence}", retryCount, messageType, sequence);
+                    Log.Error(ioEx, "发送消息IO错误 (重试 {RetryCount}), 类型: {Type}, 序号: {Sequence}", retryCount, messageType,
+                        sequence);
                     await DisconnectAsync();
                     _pendingCommands.TryRemove(commandKey, out _);
                     return null;
                 }
                 catch (Exception sendEx)
                 {
-                    Log.Error(sendEx, "发送消息时发生内部错误 (重试 {RetryCount}), 类型: {Type}, 序号: {Sequence}", retryCount, messageType, sequence);
+                    Log.Error(sendEx, "发送消息时发生内部错误 (重试 {RetryCount}), 类型: {Type}, 序号: {Sequence}", retryCount,
+                        messageType, sequence);
                     messageSentSuccessfully = false;
                 }
 
                 if (retryCount < JdWcsConstants.MaxRetryCount && !cancellationToken.IsCancellationRequested)
-                {
                     await Task.Delay(100, cancellationToken);
-                }
             }
 
             if (needAck)
@@ -956,10 +936,7 @@ public class JdWcsCommunicationService(ISettingsService settingsService) : IJdWc
         catch (Exception ex)
         {
             Log.Error(ex, "SendMessageAsync 内部发生严重错误, 类型: {Type}, 序号: {Sequence}", messageType, sequence);
-            if (needAck)
-            {
-                _pendingCommands.TryRemove(commandKey, out _);
-            }
+            if (needAck) _pendingCommands.TryRemove(commandKey, out _);
             await DisconnectAsync();
             throw;
         }

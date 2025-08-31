@@ -36,15 +36,15 @@
         <PackageReference Include="WPF-UI"/>
         <PackageReference Include="HandyControl"/>
         <PackageReference Include="WPFLocalizeExtension"/>
-        <PackageReference Include="Newtonsoft.Json" />
+        <PackageReference Include="Newtonsoft.Json"/>
     </ItemGroup>
     <ItemGroup>
         <Resource Include="Resources\favicon.ico">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Resource>
-        <None Remove="Resources\logo2.ico" />
+        <None Remove="Resources\logo2.ico"/>
         <Resource Include="Resources\logo2.ico">
-          <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </Resource>
     </ItemGroup>
 </Project>

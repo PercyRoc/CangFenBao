@@ -1,4 +1,8 @@
 ﻿using Common.Services.Ui;
+using Prism.Commands;
+using Prism.Dialogs;
+using Prism.Ioc;
+using Prism.Mvvm;
 using Rookie.ViewModels.Settings;
 using Serilog;
 using SharedUI.ViewModels.Settings;
@@ -24,6 +28,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
     }
+
     public DelegateCommand SaveCommand { get; }
     public DelegateCommand CancelCommand { get; }
 

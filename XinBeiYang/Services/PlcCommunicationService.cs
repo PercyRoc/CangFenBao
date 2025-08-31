@@ -22,6 +22,7 @@ internal class PlcCommunicationService(
 
     private readonly ConcurrentDictionary<ushort, TaskCompletionSource<(bool IsTimeout, int PackageId)>>
         _pendingUploadResults = new(); // 新增：等待最终上包结果的TCS
+
     private readonly List<byte> _receivedBuffer = []; // 用于接收数据的缓冲区
     private readonly object _receivedBufferLock = new(); // 保护缓冲区的锁
 
@@ -48,10 +49,7 @@ internal class PlcCommunicationService(
         _cancellationTokenSource.Cancel();
 
         // 取消所有等待的上传结果
-        foreach (var tcs in _pendingUploadResults.Values)
-        {
-            tcs.TrySetCanceled();
-        }
+        foreach (var tcs in _pendingUploadResults.Values) tcs.TrySetCanceled();
 
         _pendingUploadResults.Clear();
 
@@ -60,17 +58,14 @@ internal class PlcCommunicationService(
         _tcpClientService = null;
 
         // 释放取消令牌
-        _cancellationTokenSource.Dispose();
+        // _cancellationTokenSource.Dispose();
 
         Log.Information("PLC通信服务已关闭");
         _isDisposed = true;
         GC.SuppressFinalize(this);
     }
 
-    public bool IsConnected
-    {
-        get => _tcpClientService?.IsConnected() ?? false;
-    }
+    public bool IsConnected => _tcpClientService?.IsConnected() ?? false;
 
     public async Task ConnectAsync(string ipAddress, int port)
     {
@@ -154,9 +149,7 @@ internal class PlcCommunicationService(
             // 4. 触发状态变更
             // TcpClientService的Dispose应该触发OnConnectionStatusChanged(false)，但为确保状态更新，可以再次调用
             if (IsConnected) // 检查状态是否已更新
-            {
                 ConnectionStatusChanged?.Invoke(this, false); // 手动触发回调以更新状态
-            }
 
             Log.Information("PLC连接已断开 (DisconnectAsync)");
         }
@@ -168,10 +161,7 @@ internal class PlcCommunicationService(
         {
             // 只有在不是全局停止时才恢复 isStopping 状态
             // 如果是 Dispose 调用的 DisconnectAsync，则 _isStopping 保持 true
-            if (!wasStopping)
-            {
-                _isStopping = false;
-            }
+            if (!wasStopping) _isStopping = false;
         }
 
         return Task.CompletedTask;
@@ -238,13 +228,9 @@ internal class PlcCommunicationService(
         {
             // Don't log error if cancellation was requested externally
             if (cancellationToken.IsCancellationRequested)
-            {
                 Log.Information("发送上包请求或等待ACK时操作被外部取消: CommandId={CommandId}", commandId);
-            }
             else
-            {
                 Log.Warning(opCancelEx, "发送上包请求或等待ACK时操作被取消(非外部): CommandId={CommandId}", commandId);
-            }
 
             return (false, commandId); // Return not accepted if cancelled
         }
@@ -271,7 +257,8 @@ internal class PlcCommunicationService(
             // 从配置获取最终结果的超时时间
             var config = settingsService.LoadSettings<HostConfiguration>();
             // 使用新的 UploadResultTimeoutSeconds 作为最终结果超时时间
-            var timeoutSeconds = config.UploadResultTimeoutSeconds > 0 ? config.UploadResultTimeoutSeconds : 60; // 默认60秒
+            var timeoutSeconds =
+                config.UploadResultTimeoutSeconds > 0 ? config.UploadResultTimeoutSeconds : 60; // 默认60秒
             using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
             // 链接外部取消令牌和最终结果超时令牌
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancellationToken);
@@ -281,10 +268,8 @@ internal class PlcCommunicationService(
             await using var registration = linkedCts.Token.Register(() =>
             {
                 if (tcs.TrySetResult((true, 0)))
-                {
                     // Set timeout result
                     Log.Warning("等待 CommandId={CommandId} 的最终上包结果超时或被取消。", commandId);
-                }
             });
 
             // 等待 TaskCompletionSource 完成 (由 HandlePacket 或上面的注册回调完成)
@@ -309,9 +294,7 @@ internal class PlcCommunicationService(
         {
             // 无论结果如何，都尝试移除 TCS
             if (_pendingUploadResults.TryRemove(commandId, out _))
-            {
                 Log.Debug("已移除 CommandId={CommandId} 的待处理上包结果 Tcs。", commandId);
-            }
         }
     }
 
@@ -403,12 +386,10 @@ internal class PlcCommunicationService(
             var data = packet.ToBytes();
             // 只记录非心跳包的日志
             if (packet is not HeartbeatPacket and not HeartbeatAckPacket)
-            {
                 Log.Debug("发送数据包：CommandId={CommandId}, Type={Type}, Data={Data}",
                     packet.CommandId,
                     packet.GetType().Name,
                     BitConverter.ToString(data).Replace("-", " "));
-            }
 
             // 使用TcpClientService发送数据
             await Task.Run(() =>
@@ -427,18 +408,15 @@ internal class PlcCommunicationService(
 
             // 只记录非心跳包的日志
             if (response is not HeartbeatPacket and not HeartbeatAckPacket)
-            {
                 Log.Debug("收到响应包：CommandId={CommandId}, Type={Type}",
                     response.CommandId,
                     response.GetType().Name);
-            }
 
             if (response is T typedResponse)
                 return typedResponse;
 
             // 理论上不应发生，因为 tcs 是 PlcPacket 类型
             throw new InvalidOperationException($"收到意外的响应类型: {response.GetType().Name}");
-
         }
         // 捕获 OperationCanceledException，这可能由外部取消或通过注册回调触发的超时引起
         catch (OperationCanceledException)
@@ -453,9 +431,7 @@ internal class PlcCommunicationService(
                 packet.CommandId, packet.GetType().Name);
 
             if (packet is HeartbeatPacket) // 特殊处理心跳包失败
-            {
                 DeviceStatusChanged?.Invoke(this, DeviceStatusCode.Disconnected);
-            }
             // 重新抛出原始的 OperationCanceledException，指示调用者操作未成功
             throw;
         }
@@ -464,20 +440,16 @@ internal class PlcCommunicationService(
         {
             _pendingRequests.TryRemove(packet.CommandId, out _); // 确保移除 TCS
             if (packet is not HeartbeatPacket and not HeartbeatAckPacket)
-            {
                 Log.Error(ex, "发送数据包失败：CommandId={CommandId}, Type={Type}",
                     packet.CommandId,
                     packet.GetType().Name);
-            }
 
             // 失败，记录错误并抛出异常
             Log.Error(ex, "发送数据包失败：CommandId={CommandId}, Type={Type}",
                 packet.CommandId, packet.GetType().Name);
 
             if (packet is HeartbeatPacket) // 特殊处理心跳包失败
-            {
                 DeviceStatusChanged?.Invoke(this, DeviceStatusCode.Disconnected);
-            }
 
             throw; // 重新抛出异常
         }
@@ -503,7 +475,6 @@ internal class PlcCommunicationService(
                     throw new InvalidOperationException("发送时连接已断开");
                 _tcpClientService.Send(data);
             }, cancellationToken);
-
         }
         catch (OperationCanceledException)
         {
@@ -572,18 +543,12 @@ internal class PlcCommunicationService(
     private void ClearPendingRequestsAndResults()
     {
         // 清理等待 ACK 的请求
-        foreach (var kvp in _pendingRequests)
-        {
-            kvp.Value.TrySetCanceled();
-        }
+        foreach (var kvp in _pendingRequests) kvp.Value.TrySetCanceled();
 
         _pendingRequests.Clear();
 
         // 清理等待最终上传结果的请求
-        foreach (var kvp in _pendingUploadResults)
-        {
-            kvp.Value.TrySetResult((true, 0)); // 设置为超时结果
-        }
+        foreach (var kvp in _pendingUploadResults) kvp.Value.TrySetResult((true, 0)); // 设置为超时结果
 
         _pendingUploadResults.Clear();
         Log.Debug("已清理所有待处理的PLC请求和上传结果（标记为超时）。");
@@ -616,7 +581,7 @@ internal class PlcCommunicationService(
             }
 
             // 获取包长度
-            var length = _receivedBuffer[2] << 8 | _receivedBuffer[3];
+            var length = (_receivedBuffer[2] << 8) | _receivedBuffer[3];
             if (_receivedBuffer.Count < length)
                 break;
 
@@ -641,13 +606,9 @@ internal class PlcCommunicationService(
             case HeartbeatAckPacket heartbeatAck:
                 // 处理心跳应答
                 if (_pendingRequests.TryRemove(heartbeatAck.CommandId, out var heartbeatTcs))
-                {
                     heartbeatTcs.SetResult(heartbeatAck);
-                }
                 else
-                {
                     Log.Warning("未找到等待的心跳请求：CommandId={CommandId}", heartbeatAck.CommandId);
-                }
 
                 break;
 
@@ -663,11 +624,9 @@ internal class PlcCommunicationService(
                     // 这里只应该处理 UploadResultAckPacket 和 DeviceStatusAckPacket （如果SendAckPacket等待的话）
                     // 实际上，我们并不等待 ACK 包的 ACK，所以这里可能只需要记录日志
                     if (packet is not UploadRequestAckPacket)
-                    {
                         Log.Warning("收到未找到对应请求的ACK包：CommandId={CommandId}, Type={Type}",
                             packet.CommandId,
                             packet.GetType().Name);
-                    }
                 }
 
                 break;
@@ -682,7 +641,8 @@ internal class PlcCommunicationService(
                 // *** 新增: 触发上包最终结果事件 ***
                 try
                 {
-                    UploadResultReceived?.Invoke(this, (uploadResult.CommandId, uploadResult.IsTimeout, uploadResult.PackageId));
+                    UploadResultReceived?.Invoke(this,
+                        (uploadResult.CommandId, uploadResult.IsTimeout, uploadResult.PackageId));
                     Log.Debug("已触发 UploadResultReceived 事件: CommandId={CommandId}", uploadResult.CommandId);
                 }
                 catch (Exception ex)
@@ -695,13 +655,9 @@ internal class PlcCommunicationService(
                 {
                     // TrySetResult returns false if the task was already completed (e.g., by timeout/cancellation)
                     if (resultTcs.TrySetResult((uploadResult.IsTimeout, uploadResult.PackageId)))
-                    {
                         Log.Debug("为 CommandId={CommandId} 设置了最终上包结果.", uploadResult.CommandId);
-                    }
                     else
-                    {
                         Log.Warning("尝试为 CommandId={CommandId} 设置最终上包结果失败，TCS 可能已完成 (例如超时).", uploadResult.CommandId);
-                    }
                 }
                 else
                 {

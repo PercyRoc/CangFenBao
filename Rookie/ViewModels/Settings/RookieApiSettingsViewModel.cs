@@ -1,4 +1,5 @@
 using Common.Services.Settings;
+using Prism.Mvvm;
 using Rookie.Models.Settings;
 using Serilog;
 

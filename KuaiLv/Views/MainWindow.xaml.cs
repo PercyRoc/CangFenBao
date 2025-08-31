@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Input;
 using Common.Services.Ui;
 using KuaiLv.Services.DWS;
+using Prism.Ioc;
 using Serilog;
 using MessageBox = HandyControl.Controls.MessageBox;
 
@@ -17,7 +18,8 @@ public partial class MainWindow
     private readonly OfflinePackageService _offlinePackageService;
     private bool _isClosing;
 
-    public MainWindow(INotificationService notificationService, IContainerProvider containerProvider, OfflinePackageService offlinePackageService)
+    public MainWindow(INotificationService notificationService, IContainerProvider containerProvider,
+        OfflinePackageService offlinePackageService)
     {
         _containerProvider = containerProvider;
         _offlinePackageService = offlinePackageService;
@@ -85,6 +87,7 @@ public partial class MainWindow
                 e.Cancel = true; // 阻止关闭
                 return;
             }
+
             Log.Information("未检测到离线包裹，继续关闭流程。");
         }
         catch (Exception ex)
@@ -102,13 +105,9 @@ public partial class MainWindow
         try
         {
             if (Application.Current is App app)
-            {
                 await app.ShutdownServicesAsync(_containerProvider);
-            }
             else
-            {
                 Log.Error("无法获取应用程序实例以关闭服务");
-            }
 
             Application.Current.Shutdown();
         }

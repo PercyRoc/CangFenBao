@@ -47,6 +47,7 @@ public class ApiService : IApiService
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true
     };
+
     private readonly HttpClient _httpClient;
 
     private readonly INotificationService _notificationService;
@@ -81,7 +82,6 @@ public class ApiService : IApiService
         // 设置请求头
         _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
     }
-
 
 
     /// <inheritdoc />

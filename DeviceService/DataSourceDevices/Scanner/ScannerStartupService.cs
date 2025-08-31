@@ -61,7 +61,7 @@ public class ScannerStartupService : IHostedService
         }
         finally
         {
-            _initLock.Dispose();
+            // _initLock.Dispose();
         }
 
         return Task.CompletedTask;

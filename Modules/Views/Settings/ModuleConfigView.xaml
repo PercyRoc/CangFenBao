@@ -71,45 +71,7 @@
                                       Maximum="65535" />
                     </Grid>
 
-                    <!-- 站点选择 -->
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="120" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-
-                        <TextBlock Text="站点选择："
-                                   Grid.Column="0"
-                                   VerticalAlignment="Center"
-                                   HorizontalAlignment="Right"
-                                   Margin="0,0,8,0" />
-
-                        <ComboBox Grid.Column="1"
-                                  Width="200"
-                                  HorizontalAlignment="Left"
-                                  SelectedValue="{Binding Config.SiteCode, UpdateSourceTrigger=PropertyChanged}"
-                                  SelectedValuePath="Value"
-                                  DisplayMemberPath="Display"
-                                  ItemsSource="{Binding SiteOptions}" />
-                    </Grid>
-
-                    <Grid Margin="0,8,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="120" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-
-                        <TextBlock Text="Token："
-                                   Grid.Column="0"
-                                   VerticalAlignment="Center"
-                                   HorizontalAlignment="Right"
-                                   Margin="0,0,8,0" />
-
-                        <ui:TextBox Grid.Column="1"
-                                    Text="{Binding Config.Token, UpdateSourceTrigger=PropertyChanged}"
-                                    PlaceholderText="请输入Token"
-                                    Icon="Key24" />
-                    </Grid>
+                    <!-- 已移除：站点选择与 Token 配置，由服务端或其他配置管理 -->
                 </StackPanel>
             </ui:Card>
 

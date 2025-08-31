@@ -1,13 +1,15 @@
 using System.Collections.Concurrent;
 using System.Text;
 using System.Timers;
+using Common.Events;
 using Common.Models.Package;
 using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.TCP;
+using JetBrains.Annotations;
+using Prism.Events;
 using Serilog;
 using Serilog.Context;
-using Common.Events;
 using Timer = System.Timers.Timer;
 
 namespace SortingServices.Pendulum;
@@ -18,29 +20,34 @@ namespace SortingServices.Pendulum;
 public abstract class BasePendulumSortService : IPendulumSortService
 {
     private readonly ConcurrentDictionary<string, bool> _deviceConnectionStates = new();
-    protected readonly ConcurrentDictionary<string, DateTime> LastSignalTimes = new(); // 用于存储上次收到信号的时间
-    
-    // 【新增】光电信号状态跟踪，用于验证信号完整性
-    private readonly ConcurrentDictionary<string, PhotoelectricSignalState> _signalStates = new();
-    
+    private readonly IEventAggregator _eventAggregator;
+
     // 【新增】用于管理每个摆轮的等待超时定时器
     private readonly ConcurrentDictionary<string, Timer> _pendulumWaitingTimers = new();
-    
-    // 【新增】分拣结果跟踪，用于验证分拣是否正确
-    private readonly ConcurrentDictionary<int, SortingResultRecord> _sortingResults = new();
-    protected readonly ISettingsService SettingsService;
+
+    // 【新增】光电信号状态跟踪，用于验证信号完整性
+    private readonly ConcurrentDictionary<string, PhotoelectricSignalState> _signalStates = new();
+
+    // 【生产者-消费者模式】用于解耦信号接收和处理的事件队列
+    private readonly BlockingCollection<(string PhotoelectricName, DateTime SignalTime)> _sortingSignalQueue =
+        new(new ConcurrentQueue<(string, DateTime)>());
+
     private readonly Queue<DateTime> _triggerTimes = new();
+    protected readonly ConcurrentDictionary<string, DateTime> LastSignalTimes = new(); // 用于存储上次收到信号的时间
 
     protected readonly ConcurrentDictionary<int, Timer> PackageTimers = new();
     protected readonly ConcurrentDictionary<int, PackageInfo> PendingSortPackages = new();
     protected readonly ConcurrentDictionary<string, PendulumState> PendulumStates = new();
     protected readonly ConcurrentDictionary<string, ProcessingStatus> ProcessingPackages = new();
+
+
+    protected readonly ISettingsService SettingsService;
     protected readonly Timer TimeoutCheckTimer;
     private bool _disposed;
+    private Task? _signalConsumerTask;
     protected CancellationTokenSource? CancellationTokenSource;
     protected bool IsRunningFlag;
     protected TcpClientService? TriggerClient;
-    private readonly IEventAggregator _eventAggregator;
 
     protected BasePendulumSortService(ISettingsService settingsService, IEventAggregator eventAggregator)
     {
@@ -51,6 +58,9 @@ public abstract class BasePendulumSortService : IPendulumSortService
         TimeoutCheckTimer = new Timer(2000); // 2秒检查一次
         TimeoutCheckTimer.Elapsed += CheckTimeoutPackages;
         TimeoutCheckTimer.AutoReset = true;
+
+        // 确保硬件命令调度器已启动
+        HardwareCommandScheduler.Start();
     }
 
     public event EventHandler<(string Name, bool Connected)>? DeviceConnectionStatusChanged;
@@ -110,7 +120,15 @@ public abstract class BasePendulumSortService : IPendulumSortService
             // 如果包裹已经有关联的触发时间戳
             if (package.TriggerTimestamp != default)
             {
-                Log.Debug("已有触发时间戳 {Timestamp:HH:mm:ss.fff}，跳过匹配逻辑.", package.TriggerTimestamp);
+                Log.Debug("已有触发时间戳 {Timestamp:HH:mm:ss.fff}，直接计算处理时间.", package.TriggerTimestamp);
+
+                // 【修改】直接使用触发时间戳计算处理时间：当前时间 - 触发时间
+                var currentTime = DateTime.Now;
+                var calculatedProcessingTime = (currentTime - package.TriggerTimestamp).TotalMilliseconds;
+                package.ProcessingTime = calculatedProcessingTime;
+                Log.Information(
+                    "包裹 {Barcode} 处理时间已计算: {ProcessingTime:F0}ms (触发: {TriggerTime:HH:mm:ss.fff} → 当前: {CurrentTime:HH:mm:ss.fff})",
+                    package.Barcode, calculatedProcessingTime, package.TriggerTimestamp, currentTime);
             }
             else
             {
@@ -165,8 +183,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
                             matchedTriggerTime = triggerTime;
                             found = true;
                             Log.Information("匹配到触发时间 {TriggerTime:HH:mm:ss.fff}，延迟 {Delay:F0}ms", triggerTime, delay);
-                            package.ProcessingTime = delay; // 设置处理时间
-                            // 不再将此时间戳重新入队，消耗掉这个时间
+                            // 【修改】不再在这里设置处理时间，而是在匹配成功后统一计算
                         }
                         else // 如果已经找到过匹配项，则将这个也保留
                         {
@@ -176,10 +193,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
                     } // End while TryDequeue
 
                     // 将剩余的有效时间放回主队列
-                    while (stillValidTimes.TryDequeue(out var validTime))
-                    {
-                        _triggerTimes.Enqueue(validTime);
-                    }
+                    while (stillValidTimes.TryDequeue(out var validTime)) _triggerTimes.Enqueue(validTime);
 
                     if (matchCount > 1)
                         Log.Warning("在时间范围内找到 {MatchCount} 个潜在匹配，建议检查触发时间范围 ({Lower}-{Upper}ms)",
@@ -197,6 +211,14 @@ public abstract class BasePendulumSortService : IPendulumSortService
                 if (matchedTriggerTime.HasValue)
                 {
                     package.SetTriggerTimestamp(matchedTriggerTime.Value);
+
+                    // 【修改】匹配成功后，计算处理时间：当前时间 - 触发时间
+                    var currentTime = DateTime.Now;
+                    var calculatedProcessingTime = (currentTime - matchedTriggerTime.Value).TotalMilliseconds;
+                    package.ProcessingTime = calculatedProcessingTime;
+                    Log.Information(
+                        "包裹 {Barcode} 处理时间已计算: {ProcessingTime:F0}ms (触发: {TriggerTime:HH:mm:ss.fff} → 当前: {CurrentTime:HH:mm:ss.fff})",
+                        package.Barcode, calculatedProcessingTime, matchedTriggerTime.Value, currentTime);
                 }
                 else
                 {
@@ -213,14 +235,14 @@ public abstract class BasePendulumSortService : IPendulumSortService
             // 【新增】验证包裹状态是否正确设置
             if (package.SortState != PackageSortState.Pending)
             {
-                Log.Warning("⚠️ 包裹 {Index}|{Barcode} 状态设置异常: 期望状态=Pending, 实际状态={ActualState}", 
+                Log.Warning("⚠️ 包裹 {Index}|{Barcode} 状态设置异常: 期望状态=Pending, 实际状态={ActualState}",
                     package.Index, package.Barcode, package.SortState);
                 // 强制设置为待处理状态
                 package.SetSortState(PackageSortState.Pending);
             }
             else
             {
-                Log.Debug("✅ 包裹 {Index}|{Barcode} 状态设置正确: {SortState}", 
+                Log.Debug("✅ 包裹 {Index}|{Barcode} 状态设置正确: {SortState}",
                     package.Index, package.Barcode, package.SortState);
             }
 
@@ -253,6 +275,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
                         upperLimit = photoelectricConfig.SortingTimeRangeUpper;
                         timeoutInterval = upperLimit + 500;
                     }
+
                     timeoutReason = $"光电 '{photoelectricName}' 上限 {upperLimit}ms + 500ms";
                 }
                 catch (Exception ex)
@@ -296,6 +319,74 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// </summary>
     protected abstract Task ReconnectAsync();
 
+    /// <summary>
+    ///     调度延迟回正命令到硬件命令调度器
+    /// </summary>
+    private void ScheduleDelayedResetCommand(TcpClientService? client, PendulumState pendulumState,
+        string photoelectricName, int resetDelay, int slotToResetFrom)
+    {
+        if (client == null)
+        {
+            Log.Warning("无法调度延迟回正命令，客户端为空: {PhotoelectricName}", photoelectricName);
+            // 直接设置状态为重置，允许后续信号处理
+            pendulumState.SetReset();
+            return;
+        }
+
+        // 【最终修复】不再信任任何来自PendulumState的状态，只根据需要回正的格口号来决定回正方向。
+        // 这是最可靠的事实来源。
+        var directionForReset = ShouldSwingLeft(slotToResetFrom)
+            ? PendulumDirection.SwingingLeft
+            : PendulumDirection.SwingingRight;
+        Log.Debug("根据上一个格口 {LastSlot} 确定回正方向为: {Direction}", slotToResetFrom, directionForReset);
+
+        var resetCommand = directionForReset == PendulumDirection.SwingingLeft
+            ? PendulumCommands.Module2.ResetLeft
+            : PendulumCommands.Module2.ResetRight;
+
+        var resetCmdBytes = GetCommandBytes(resetCommand);
+        var resetDir = directionForReset == PendulumDirection.SwingingLeft ? "左" : "右";
+
+        Log.Debug("准备调度延迟 {ResetDir} 回正命令 ({ResetCommand}) 到硬件命令调度器", resetDir, resetCommand);
+
+        // 创建包含状态恢复逻辑的重试回调
+        bool RetryCallbackWithStateReset(TcpClientService? tcpClient, byte[] cmdBytes, string deviceName)
+        {
+            try
+            {
+                var success = SendCommandWithRetryAsync(tcpClient, cmdBytes, deviceName);
+
+                if (success)
+                {
+                    Log.Information("硬件调度器执行延迟 {ResetDir} 回正命令 ({ResetCommand}) 成功", resetDir, resetCommand);
+                    pendulumState.SetReset();
+                }
+                else
+                {
+                    Log.Error("硬件调度器执行延迟 {ResetDir} 回正命令 ({ResetCommand}) 失败，强制复位状态", resetDir, resetCommand);
+                    pendulumState.ForceReset();
+                }
+
+                return success;
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "硬件调度器执行延迟回正命令时发生异常");
+                pendulumState.ForceReset();
+                return false;
+            }
+        }
+
+        // 使用硬件命令调度器
+        HardwareCommandScheduler.ScheduleDelayedReset(
+            client,
+            resetCommand,
+            resetCmdBytes,
+            photoelectricName,
+            resetDelay,
+            RetryCallbackWithStateReset
+        );
+    }
 
     /// <summary>
     ///     处理包裹超时
@@ -309,28 +400,15 @@ public abstract class BasePendulumSortService : IPendulumSortService
         using (LogContext.PushProperty("PackageContext", packageContext))
         {
             // 1. 清理包裹自身的资源
-            if (PackageTimers.TryRemove(package.Index, out var timer))
-            {
-                timer.Dispose();
-            }
-
-            // 2. 从待处理队列中移除，并标记为错误
             if (PendingSortPackages.TryRemove(package.Index, out var pkg))
             {
-                pkg.SetSortState(PackageSortState.Error);
-                Log.Error("【分拣失败-超时】包裹 {Index}|{Barcode} 分拣超时，错过目标光电 '{PhotoelectricName}'。该包裹将直行至末端。", pkg.Index, pkg.Barcode, photoelectricName);
-            }
-            else
-            {
-                // 如果包裹已经不在队列，可能已被正常处理或被其他机制移除，无需再做任何事
-                Log.Debug("超时触发，但包裹已不在待处理队列，无需操作。");
-                return;
-            }
+                pkg.SetSortState(PackageSortState.Error, "分拣超时");
+                Log.Error("【分拣失败-超时】包裹 {Index}|{Barcode} 分拣超时，错过目标光电 '{PhotoelectricName}'。该包裹将直行至末端。", pkg.Index,
+                    pkg.Barcode, photoelectricName);
 
-            // 注意：不再执行回正操作
-            // - 对于格口3（直行）包裹：摆轮本来就不动作，保持复位状态，无需回正
-            // - 对于格口1、2包裹：如果超时说明错过了分拣时机，强制回正可能影响后续正常包裹的分拣
-            Log.Information("包裹超时处理完成，摆轮状态保持不变。");
+                // 【新增】触发分拣完成事件，通知订阅者（如UI）
+                SortingCompleted?.Invoke(this, pkg);
+            }
         }
     }
 
@@ -343,17 +421,14 @@ public abstract class BasePendulumSortService : IPendulumSortService
         using (LogContext.PushProperty("PackageContext", packageContext))
         {
             // 清理定时器
-            if (PackageTimers.TryRemove(package.Index, out var timer))
-            {
-                timer.Dispose();
-            }
+            if (PackageTimers.TryRemove(package.Index, out var timer)) timer.Dispose();
 
             // 直行包裹超时是正常流程
             if (PendingSortPackages.TryRemove(package.Index, out var pkg))
             {
                 pkg.SetSortState(PackageSortState.Sorted);
                 Log.Information("直行包裹超时，视为分拣成功。已从待处理队列移除。");
-                
+
                 // 【新增】触发分拣完成事件
                 SortingCompleted?.Invoke(this, pkg);
             }
@@ -386,16 +461,21 @@ public abstract class BasePendulumSortService : IPendulumSortService
             foreach (var timer in PackageTimers.Values) timer.Dispose();
 
             PackageTimers.Clear();
-            
+
             // 【新增】停止并释放所有等待定时器
             foreach (var timer in _pendulumWaitingTimers.Values)
             {
                 timer.Stop();
                 timer.Dispose();
             }
+
             _pendulumWaitingTimers.Clear();
-            
+
             CancellationTokenSource?.Dispose();
+            _sortingSignalQueue.Dispose();
+
+            // 注意：硬件命令调度器是全局单例，不在这里停止
+            // 调度器会在应用程序关闭时自动停止
             Log.Debug("BasePendulumSortService 托管资源已释放.");
         }
 
@@ -405,7 +485,128 @@ public abstract class BasePendulumSortService : IPendulumSortService
     }
 
     /// <summary>
-    /// 【新增】启动或更新用于等待下一个包裹的超时定时器
+    ///     【生产者】将分拣信号放入处理队列
+    /// </summary>
+    protected void EnqueueSortingSignal(string photoelectricName, DateTime signalTime)
+    {
+        if (!IsRunningFlag || _sortingSignalQueue.IsAddingCompleted) return;
+
+        try
+        {
+            // 非阻塞添加，如果队列已满（理论上不应该），可以记录日志但不会阻塞TCP线程
+            if (_sortingSignalQueue.TryAdd((photoelectricName, signalTime)))
+                Log.Debug("分拣信号已入队: 光电 {Name}, 时间 {Time:HH:mm:ss.fff}", photoelectricName, signalTime);
+            else
+                Log.Warning("分拣信号队列已满或已关闭，无法添加信号: 光电 {Name}", photoelectricName);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "将分拣信号入队时发生错误");
+        }
+    }
+
+    /// <summary>
+    ///     【消费者】启动后台任务以处理分拣信号队列
+    /// </summary>
+    protected void StartConsumer()
+    {
+        _signalConsumerTask = Task.Run(ProcessSortingSignalsLoop, CancellationTokenSource!.Token);
+    }
+
+    /// <summary>
+    ///     【消费者】停止分拣信号处理任务
+    /// </summary>
+    protected async Task StopConsumer()
+    {
+        // 告知队列不再接受新项目
+        if (!_sortingSignalQueue.IsAddingCompleted) _sortingSignalQueue.CompleteAdding();
+
+        if (_signalConsumerTask != null)
+        {
+            Log.Debug("等待分拣信号消费者任务完成...");
+            // 等待消费者处理完队列中剩余的项目
+            await _signalConsumerTask;
+            Log.Debug("分拣信号消费者任务已完成.");
+        }
+    }
+
+    /// <summary>
+    ///     【消费者】处理分拣信号的循环
+    /// </summary>
+    private void ProcessSortingSignalsLoop()
+    {
+        Log.Information("分拣信号处理消费者任务已启动.");
+        try
+        {
+            // 使用 GetConsumingEnumerable 会在队列为空且被标记为完成后自动退出循环
+            foreach (var (photoelectricName, signalTime) in _sortingSignalQueue.GetConsumingEnumerable(
+                         CancellationTokenSource!.Token))
+                try
+                {
+                    Log.Information("从队列中取出分拣信号，开始处理. 光电: {Name}", photoelectricName);
+
+                    // 触发分拣光电信号事件
+                    RaiseSortingPhotoelectricSignal(photoelectricName, signalTime);
+
+                    // 使用基类的匹配逻辑
+                    var package = MatchPackageForSorting(photoelectricName);
+                    if (package == null)
+                    {
+                        Log.Debug("消费者任务：光电 {Name} 未匹配到包裹.", photoelectricName);
+
+                        // 【修复】检查此信号是否中断了正在等待的摆轮
+                        if (PendulumStates.TryGetValue(photoelectricName, out var pendulumState) &&
+                            pendulumState.CurrentDirection == PendulumDirection.WaitingForNext)
+                        {
+                            Log.Warning("光电 {Name} 触发但未匹配到包裹，而其摆轮正处于等待状态。立即执行强制回正！", photoelectricName);
+                            // 1. 解除看门狗
+                            StopWaitingTimer(photoelectricName);
+                            // 2. 立即发送回正命令
+                            var client = GetSortingClient(photoelectricName);
+                            if (client != null)
+                            {
+                                ExecuteImmediateReset(client, pendulumState, photoelectricName, "WaitingInterrupted");
+                            }
+                            else
+                            {
+                                Log.Error("无法获取客户端，对 {Name} 的中断回正失败！将强制软件复位。", photoelectricName);
+                                pendulumState.ForceReset(); // 最后的保障
+                            }
+                        }
+
+                        continue;
+                    }
+
+                    var matchTime = DateTime.Now;
+                    var timeSinceTrigger = matchTime - package.TriggerTimestamp;
+
+                    Log.Information("消费者任务：光电 {Name} 匹配到包裹 {Index}|{Barcode} (耗时: {MatchDuration:F2}ms)",
+                        photoelectricName, package.Index, package.Barcode, timeSinceTrigger.TotalMilliseconds);
+
+                    // 异步执行分拣动作
+                    _ = ExecuteSortingAction(package, photoelectricName);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "处理单个分拣信号时发生错误. 光电: {Name}", photoelectricName);
+                }
+        }
+        catch (OperationCanceledException)
+        {
+            Log.Information("分拣信号处理消费者任务已通过取消令牌正常停止.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "分拣信号处理消费者任务发生致命错误.");
+        }
+        finally
+        {
+            Log.Information("分拣信号处理消费者任务已结束.");
+        }
+    }
+
+    /// <summary>
+    ///     【新增】启动或更新用于等待下一个包裹的超时定时器
     /// </summary>
     private void StartOrUpdateWaitingTimer(string photoelectricName, PendulumState pendulumState, double timeoutMs)
     {
@@ -413,11 +614,11 @@ public abstract class BasePendulumSortService : IPendulumSortService
         StopWaitingTimer(photoelectricName);
 
         var timer = new Timer(timeoutMs) { AutoReset = false };
-        timer.Elapsed += (sender, args) =>
+        timer.Elapsed += (_, _) =>
         {
             Log.Warning("摆轮 {Name} 等待下一个连续包裹超时 (持续 {TimeoutMs:F0}ms)，将执行强制回正",
                 photoelectricName, timeoutMs);
-            
+
             try
             {
                 var client = GetSortingClient(photoelectricName);
@@ -451,7 +652,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
     }
 
     /// <summary>
-    /// 【新增】停止并移除等待超时定时器
+    ///     【新增】停止并移除等待超时定时器
     /// </summary>
     private void StopWaitingTimer(string photoelectricName)
     {
@@ -469,7 +670,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
     private void CheckTimeoutPackages(object? sender, ElapsedEventArgs e)
     {
         var now = DateTime.Now;
-        
+
         // 检查处理中的包裹超时
         if (!ProcessingPackages.IsEmpty)
         {
@@ -490,21 +691,10 @@ public abstract class BasePendulumSortService : IPendulumSortService
                 ProcessingPackages.TryRemove(barcode, out _);
             }
         }
-        
-        // 【新增】定期报告分拣统计信息（每5分钟一次）
-        if (now.Minute % 5 == 0 && now.Second < 2)
-        {
-            ReportSortingStatistics();
-        }
-        
+
+
         // 【新增】定期监控包裹状态分布（每2分钟一次）
-        if (now.Minute % 2 == 0 && now.Second < 2)
-        {
-            MonitorPackageStates();
-        }
-        
-        // 【新增】清理过期的分拣结果记录（保留最近1小时的记录）
-        CleanupOldSortingResults(now);
+        if (now.Minute % 2 == 0 && now.Second < 2) MonitorPackageStates();
     }
 
     /// <summary>
@@ -565,14 +755,10 @@ public abstract class BasePendulumSortService : IPendulumSortService
         };
         // TryAdd 通常比索引器或 AddOrUpdate 略快，如果确定键不存在
         if (!ProcessingPackages.TryAdd(barcode, status))
-        {
             // 如果添加失败，说明可能并发冲突，记录警告
             Log.Warning("尝试标记包裹 {Barcode} 为处理中失败 (可能已被标记).", barcode);
-        }
         else
-        {
             Log.Debug("包裹 {Barcode} 已标记为由光电 {PhotoelectricId} 处理中.", barcode, photoelectricId);
-        }
     }
 
     /// <summary>
@@ -580,35 +766,73 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// </summary>
     private void HandleTriggerPhotoelectric(string data)
     {
-        var triggerTime = DateTime.Now;
-        Log.Debug("收到触发信号: {Signal}，记录触发时间: {TriggerTime:HH:mm:ss.fff}", data, triggerTime);
-
-        // 通过 EventAggregator 发布触发光电信号事件
-        try
+        // 检查是否为触发光电的特殊信号格式 010501#
+        if (data.Contains("010501#"))
         {
-            _eventAggregator.GetEvent<TriggerSignalEvent>().Publish(triggerTime);
-            Log.Debug("已通过 EventAggregator 发布 TriggerSignalEvent.");
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "通过 EventAggregator 发布 TriggerSignalEvent 时发生错误");
-        }
+            var triggerTime = DateTime.Now;
+            Log.Information("收到触发光电特殊信号: {Signal}，记录触发时间: {TriggerTime:HH:mm:ss.fff}", data, triggerTime);
 
-        lock (_triggerTimes)
-        {
-            _triggerTimes.Enqueue(triggerTime);
-            Log.Verbose("触发时间已入队，当前队列长度: {Count}", _triggerTimes.Count);
-
-            const int maxQueueSize = 5; // 定义最大队列长度常量
-            while (_triggerTimes.Count > maxQueueSize)
+            // 通过 EventAggregator 发布触发光电信号事件
+            try
             {
-                var removed = _triggerTimes.Dequeue();
-                Log.Warning("触发时间队列超过 {MaxSize} 个，移除最早的时间戳: {RemovedTime:HH:mm:ss.fff}", maxQueueSize, removed);
+                _eventAggregator.GetEvent<TriggerSignalEvent>().Publish(triggerTime);
+                Log.Debug("已通过 EventAggregator 发布 TriggerSignalEvent.");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "通过 EventAggregator 发布 TriggerSignalEvent 时发生错误");
             }
 
-            if (_triggerTimes.Count != 0)
-                Log.Verbose("当前触发时间队列: {Times}",
-                    string.Join(", ", _triggerTimes.Select(static t => t.ToString("HH:mm:ss.fff"))));
+            lock (_triggerTimes)
+            {
+                _triggerTimes.Enqueue(triggerTime);
+                Log.Verbose("触发时间已入队，当前队列长度: {Count}", _triggerTimes.Count);
+
+                const int maxQueueSize = 5; // 定义最大队列长度常量
+                while (_triggerTimes.Count > maxQueueSize)
+                {
+                    var removed = _triggerTimes.Dequeue();
+                    Log.Warning("触发时间队列超过 {MaxSize} 个，移除最早的时间戳: {RemovedTime:HH:mm:ss.fff}", maxQueueSize, removed);
+                }
+
+                if (_triggerTimes.Count != 0)
+                    Log.Verbose("当前触发时间队列: {Times}",
+                        string.Join(", ", _triggerTimes.Select(static t => t.ToString("HH:mm:ss.fff"))));
+            }
+        }
+        else
+        {
+            // 处理其他格式的触发信号（兼容原有逻辑）
+            var triggerTime = DateTime.Now;
+            Log.Debug("收到触发信号: {Signal}，记录触发时间: {TriggerTime:HH:mm:ss.fff}", data, triggerTime);
+
+            // 通过 EventAggregator 发布触发光电信号事件
+            try
+            {
+                _eventAggregator.GetEvent<TriggerSignalEvent>().Publish(triggerTime);
+                Log.Debug("已通过 EventAggregator 发布 TriggerSignalEvent.");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "通过 EventAggregator 发布 TriggerSignalEvent 时发生错误");
+            }
+
+            lock (_triggerTimes)
+            {
+                _triggerTimes.Enqueue(triggerTime);
+                Log.Verbose("触发时间已入队，当前队列长度: {Count}", _triggerTimes.Count);
+
+                const int maxQueueSize = 5; // 定义最大队列长度常量
+                while (_triggerTimes.Count > maxQueueSize)
+                {
+                    var removed = _triggerTimes.Dequeue();
+                    Log.Warning("触发时间队列超过 {MaxSize} 个，移除最早的时间戳: {RemovedTime:HH:mm:ss.fff}", maxQueueSize, removed);
+                }
+
+                if (_triggerTimes.Count != 0)
+                    Log.Verbose("当前触发时间队列: {Times}",
+                        string.Join(", ", _triggerTimes.Select(static t => t.ToString("HH:mm:ss.fff"))));
+            }
         }
     }
 
@@ -631,11 +855,18 @@ public abstract class BasePendulumSortService : IPendulumSortService
 
         foreach (var line in lines)
         {
-
             // 只处理高电平信号，忽略低电平和其他信号
             bool isHighLevelSignal;
             string signalType;
-            if (line.Contains("OCCH1:1"))
+
+            // 【新增】特殊处理触发光电的 010501# 信号
+            if (photoelectricName == "触发光电" && line.Contains("010501#"))
+            {
+                isHighLevelSignal = true;
+                signalType = "触发光电特殊信号";
+                Log.Information("触发光电收到特殊信号: {Signal}", line);
+            }
+            else if (line.Contains("OCCH1:1"))
             {
                 isHighLevelSignal = true;
                 signalType = "OCCH1高电平";
@@ -649,7 +880,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
             {
                 // 低电平信号，记录但不处理
                 Log.Debug("光电 {PhotoelectricName} 收到低电平信号 '{SignalLine}'，已忽略", photoelectricName, line);
-                
+
                 // 【新增】验证低电平信号的完整性
                 ValidateLowLevelSignal(photoelectricName, line);
                 continue;
@@ -663,7 +894,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
 
             // 【新增】更新信号状态跟踪
             UpdateSignalStateTracking(photoelectricName, isHighLevelSignal, now);
-            
+
             // 只处理高电平信号
             if (isHighLevelSignal)
             {
@@ -678,25 +909,23 @@ public abstract class BasePendulumSortService : IPendulumSortService
                         continue; // 忽略此重复高电平信号
                     }
                 }
-                
+
                 // 更新上次信号时间（只对高电平信号更新）
                 LastSignalTimes[photoelectricName] = now;
-                
-                Log.Debug("光电 {PhotoelectricName} 收到有效高电平信号: {SignalType} - {SignalLine}", 
+
+                Log.Debug("光电 {PhotoelectricName} 收到有效高电平信号: {SignalType} - {SignalLine}",
                     photoelectricName, signalType, line);
-                
+
                 // 【新增】验证设备身份和信号来源
                 ValidateSignalSource(photoelectricName, line, signalType);
-                
+
                 // 根据信号类型分发处理
-                if (line.Contains("OCCH1:1"))
-                {
+                if (photoelectricName == "触发光电" && line.Contains("010501#"))
+                    // 触发光电的特殊信号处理
                     HandleTriggerPhotoelectric(line);
-                }
-                else if (line.Contains("OCCH2:1"))
-                {
-                    HandleSecondPhotoelectric(line);
-                }
+                else if (line.Contains("OCCH1:1"))
+                    HandleTriggerPhotoelectric(line);
+                else if (line.Contains("OCCH2:1")) HandleSecondPhotoelectric(line);
             }
         }
     }
@@ -704,48 +933,9 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// <summary>
     ///     处理分拣信号并匹配包裹
     /// </summary>
-    protected PackageInfo? MatchPackageForSorting(string photoelectricName)
+    private PackageInfo? MatchPackageForSorting(string photoelectricName)
     {
         Log.Debug("分拣光电 {Name} 触发，开始匹配包裹...", photoelectricName);
-
-        // 检查摆轮状态
-        if (PendulumStates.TryGetValue(photoelectricName, out var pendulumState))
-        {
-            // 如果摆轮正在回正延迟中，忽略此信号
-            if (pendulumState.CurrentDirection == PendulumDirection.Resetting)
-            {
-                Log.Debug("光电 {Name} 的摆轮正在回正延迟中，忽略分拣信号", photoelectricName);
-                return null;
-            }
-
-            // 如果摆轮处于等待下一个包裹状态，检查是否为等待的相同格口包裹
-            if (pendulumState.CurrentDirection == PendulumDirection.WaitingForNext)
-            {
-                // 检查当前包裹是否为等待的相同格口包裹
-                var nextPackage = GetNextPendingPackageForSameSlot(pendulumState.WaitingForSlot);
-                if (nextPackage != null)
-                {
-                    Log.Information("找到等待的相同格口包裹，继续处理");
-                    pendulumState.ClearWaitingState();
-                }
-                else
-                {
-                    Log.Information("队列中没有符合条件的相同格口包裹，立即执行回正");
-                    // 清除等待状态并执行回正
-                    pendulumState.ClearWaitingState();
-                    var client = GetSortingClient(photoelectricName);
-                    _ = Task.Run(() => ExecuteDelayedReset(client, pendulumState, photoelectricName))
-                        .ContinueWith(t =>
-                        {
-                            if (t is { IsFaulted: true, Exception: not null })
-                            {
-                                Log.Warning(t.Exception, "摆轮 {Name} 立即执行回正任务发生未观察的异常", photoelectricName);
-                            }
-                        }, TaskContinuationOptions.OnlyOnFaulted);
-                    return null;
-                }
-            }
-        }
 
         var currentTime = DateTime.Now;
         PackageInfo? matchedPackage = null;
@@ -775,18 +965,19 @@ public abstract class BasePendulumSortService : IPendulumSortService
                 var packageContext = $"[包裹{pkg.Index}|{pkg.Barcode}]";
                 using (LogContext.PushProperty("PackageContext", packageContext))
                 {
-                    Log.Information("🔍 检查包裹匹配条件 - 包裹条码: {Barcode}, 目标格口: {Chute}, 触发时间: {Timestamp:HH:mm:ss.fff}, 分拣状态: {SortState}",
+                    Log.Information(
+                        "🔍 检查包裹匹配条件 - 包裹条码: {Barcode}, 目标格口: {Chute}, 触发时间: {Timestamp:HH:mm:ss.fff}, 分拣状态: {SortState}",
                         pkg.Barcode, pkg.ChuteNumber, pkg.TriggerTimestamp, pkg.SortState);
 
                     // 【新增】详细的状态检查日志
                     Log.Debug("📋 包裹详细状态检查:");
-                    Log.Debug("  - 触发时间戳: {TriggerTimestamp} (默认值: {IsDefault})", 
+                    Log.Debug("  - 触发时间戳: {TriggerTimestamp} (默认值: {IsDefault})",
                         pkg.TriggerTimestamp, pkg.TriggerTimestamp == default);
-                    Log.Debug("  - 分拣状态: {SortState} (是否为Pending: {IsPending})", 
+                    Log.Debug("  - 分拣状态: {SortState} (是否为Pending: {IsPending})",
                         pkg.SortState, pkg.SortState == PackageSortState.Pending);
-                    Log.Debug("  - 是否已标记为处理中: {IsProcessing}", 
+                    Log.Debug("  - 是否已标记为处理中: {IsProcessing}",
                         IsPackageProcessing(pkg.Barcode));
-                    Log.Debug("  - 定时器状态: {TimerEnabled}", 
+                    Log.Debug("  - 定时器状态: {TimerEnabled}",
                         PackageTimers.TryGetValue(pkg.Index, out var pkgTimer) ? pkgTimer.Enabled : "无定时器");
 
                     // 使用统一的包裹验证方法
@@ -797,7 +988,8 @@ public abstract class BasePendulumSortService : IPendulumSortService
                     }
 
                     var delay = (currentTime - pkg.TriggerTimestamp).TotalMilliseconds;
-                    Log.Information("⏱️ 时间差计算: 当前时间 {CurrentTime:HH:mm:ss.fff} - 触发时间 {TriggerTime:HH:mm:ss.fff} = {Delay:F1}ms",
+                    Log.Information(
+                        "⏱️ 时间差计算: 当前时间 {CurrentTime:HH:mm:ss.fff} - 触发时间 {TriggerTime:HH:mm:ss.fff} = {Delay:F1}ms",
                         currentTime, pkg.TriggerTimestamp, delay);
                     Log.Information("📏 时间范围检查: 延迟 {Delay:F1}ms, 允许范围 [{Lower:F1} - {Upper:F1}]ms, 结果: ✅ 符合",
                         delay, timeRangeLower, timeRangeUpper);
@@ -849,19 +1041,14 @@ public abstract class BasePendulumSortService : IPendulumSortService
         var sortConfig = SettingsService.LoadSettings<PendulumSortConfig>();
         var photoelectricConfig = sortConfig.SortingPhotoelectrics.FirstOrDefault(p => p.Name == photoelectricName);
 
-        if (photoelectricConfig != null)
-        {
-            return photoelectricConfig;
-        }
+        if (photoelectricConfig != null) return photoelectricConfig;
 
         // 如果在分拣光电中找不到，检查是否为触发光电 (适用于单摆轮)
-        if (photoelectricName is "触发光电" or "默认")
-        {
-            return sortConfig.TriggerPhotoelectric;
-        }
-
-        // 都找不到则抛出异常
-        throw new KeyNotFoundException($"无法找到名为 '{photoelectricName}' 的光电配置.");
+        return photoelectricName is "触发光电" or "默认"
+            ? sortConfig.TriggerPhotoelectric
+            : throw
+                // 都找不到则抛出异常
+                new KeyNotFoundException($"无法找到名为 '{photoelectricName}' 的光电配置.");
     }
 
     /// <summary>
@@ -875,7 +1062,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// <summary>
     ///     执行分拣动作
     /// </summary>
-    protected async Task ExecuteSortingAction(PackageInfo package, string photoelectricName)
+    private async Task ExecuteSortingAction(PackageInfo package, string photoelectricName)
     {
         // --- 开始应用日志上下文 ---
         var packageContext = $"[包裹{package.Index}|{package.Barcode}]";
@@ -914,33 +1101,34 @@ public abstract class BasePendulumSortService : IPendulumSortService
                 var needsResetLater = false;
 
                 // 【重构】摆动前状态检查：在发送物理摆动命令前进行最终状态检查
-                var targetDirection = swingLeft ? PendulumDirection.SwingingLeft : 
-                                   swingRight ? PendulumDirection.SwingingRight : 
-                                   PendulumDirection.Reset;
+                var targetDirection = swingLeft ? PendulumDirection.SwingingLeft :
+                    swingRight ? PendulumDirection.SwingingRight :
+                    PendulumDirection.Reset;
                 var currentDirection = pendulumState.CurrentDirection;
 
-                Log.Debug("摆动前状态检查 - 目标方向: {TargetDirection}, 当前状态: {CurrentDirection}", 
+                Log.Debug("摆动前状态检查 - 目标方向: {TargetDirection}, 当前状态: {CurrentDirection}",
                     targetDirection, currentDirection);
 
                 if (swingLeft || swingRight) // 包裹需要摆动
                 {
                     // 【修改】改进状态匹配逻辑：当状态为WaitingForNext时，检查等待的格口是否与目标方向匹配
-                    bool shouldSkipSwing = false;
-                    string skipReason = "";
-                    
+                    var shouldSkipSwing = false;
+                    var skipReason = "";
+
                     if (currentDirection == PendulumDirection.WaitingForNext)
                     {
                         // 检查等待的格口是否与当前目标格口相同，且方向匹配
                         if (pendulumState.WaitingForSlot == targetSlot)
                         {
                             // 检查等待的格口是否需要相同的摆动方向
-                            bool waitingSlotNeedsLeftSwing = ShouldSwingLeft(pendulumState.WaitingForSlot);
-                            bool currentSlotNeedsLeftSwing = ShouldSwingLeft(targetSlot);
-                            
+                            var waitingSlotNeedsLeftSwing = ShouldSwingLeft(pendulumState.WaitingForSlot);
+                            var currentSlotNeedsLeftSwing = ShouldSwingLeft(targetSlot);
+
                             if (waitingSlotNeedsLeftSwing == currentSlotNeedsLeftSwing)
                             {
                                 shouldSkipSwing = true;
-                                skipReason = $"连续分拣优化：等待格口 {pendulumState.WaitingForSlot} 与目标格口 {targetSlot} 方向一致({(currentSlotNeedsLeftSwing ? "左摆" : "右摆")})";
+                                skipReason =
+                                    $"连续分拣优化：等待格口 {pendulumState.WaitingForSlot} 与目标格口 {targetSlot} 方向一致({(currentSlotNeedsLeftSwing ? "左摆" : "右摆")})";
                             }
                             else
                             {
@@ -958,22 +1146,19 @@ public abstract class BasePendulumSortService : IPendulumSortService
                         shouldSkipSwing = true;
                         skipReason = $"连续分拣优化：目标方向 {targetDirection} 与当前状态 {currentDirection} 一致";
                     }
-                    
+
                     if (shouldSkipSwing)
                     {
                         Log.Information("{SkipReason}，跳过重复的摆动命令", skipReason);
                         needsResetLater = true;
-                        
+
                         // 【新增】如果是因为匹配了等待中的格口而跳过摆动，则需要停止对应的等待超时定时器
-                        if (currentDirection == PendulumDirection.WaitingForNext)
-                        {
-                            StopWaitingTimer(photoelectricName);
-                        }
+                        if (currentDirection == PendulumDirection.WaitingForNext) StopWaitingTimer(photoelectricName);
                     }
                     else
                     {
                         // 状态不匹配：需要先回正再摆动到正确方向
-                        Log.Information("状态不匹配：目标方向 {TargetDirection} 与当前状态 {CurrentDirection} 不一致，执行纠正流程", 
+                        Log.Information("状态不匹配：目标方向 {TargetDirection} 与当前状态 {CurrentDirection} 不一致，执行纠正流程",
                             targetDirection, currentDirection);
 
                         // 如果当前不是复位状态，先发送回正命令
@@ -981,28 +1166,28 @@ public abstract class BasePendulumSortService : IPendulumSortService
                         {
                             Log.Debug("当前摆轮不在复位状态，先执行回正");
                             ExecuteImmediateReset(client, pendulumState, photoelectricName, "摆动前状态检查-回正");
-                            
+
                             // 延迟20ms给硬件反应时间
                             await Task.Delay(20);
                         }
 
                         // 发送正确的摆动命令
-                        var commandToSend = swingLeft ? PendulumCommands.Module2.SwingLeft : PendulumCommands.Module2.SwingRight;
+                        var commandToSend = swingLeft
+                            ? PendulumCommands.Module2.SwingLeft
+                            : PendulumCommands.Module2.SwingRight;
                         var commandLogName = swingLeft ? "左摆" : "右摆";
-                        var expectedDirection = swingLeft ? PendulumDirection.SwingingLeft : PendulumDirection.SwingingRight;
                         needsResetLater = true;
 
                         Log.Debug("发送摆动命令: {CommandLogName} ({CommandToSend})", commandLogName, commandToSend);
                         var commandBytes = GetCommandBytes(commandToSend);
 
                         // 【新增】记录分拣操作详情，用于后续验证
-                        RecordSortingOperation(package, photoelectricName, commandToSend, expectedDirection);
+                        RecordSortingOperation(package, photoelectricName, commandToSend);
 
                         if (!SendCommandWithRetryAsync(client, commandBytes, photoelectricName))
                         {
                             Log.Error("发送摆动命令 '{CommandLogName}' ({CommandToSend}) 失败", commandLogName, commandToSend);
-                            // 【新增】记录命令发送失败
-                            UpdateSortingResult(package.Index, "CommandSendFailed");
+                            // 命令发送失败
                             ProcessingPackages.TryRemove(package.Barcode, out _);
                             pendulumState.ForceReset();
                             return;
@@ -1012,7 +1197,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
                         pendulumState.SetSwinging(swingLeft);
                         Log.Information("已发送摆动命令: {CommandLogName} ({CommandToSend}) 并更新状态为: {State}",
                             commandLogName, commandToSend, pendulumState.GetCurrentState());
-                        
+
                         // 【新增】验证命令发送与预期格口的匹配性
                         ValidateSortingCommand(package, photoelectricName, commandLogName, targetSlot);
                     }
@@ -1036,78 +1221,63 @@ public abstract class BasePendulumSortService : IPendulumSortService
                 // 4. 如果需要，执行延迟回正或智能回正
                 if (needsResetLater)
                 {
-                    var nextPackage = GetNextPendingPackageForSameSlot(targetSlot, package.TriggerTimestamp, package.Index);
+                    var nextPackage =
+                        GetNextPendingPackageForSameSlot(targetSlot, package.TriggerTimestamp, package.Index);
                     if (nextPackage != null)
                     {
                         // 基于触发时间差计算动态等待时间
                         var timeDiff = (nextPackage.TriggerTimestamp - package.TriggerTimestamp).TotalMilliseconds;
                         var dynamicWaitTime = Math.Max(timeDiff + 100, 500); // 至少等待500ms，包含100ms误差
-                        
+
                         // 发现下一个包裹格口相同且时间间隔合适，跳过回正，设置等待状态
                         pendulumState.SetWaitingForNext(targetSlot, dynamicWaitTime);
-                        
+
                         // 【新增】启动或更新等待下一个包裹的超时定时器
                         StartOrUpdateWaitingTimer(photoelectricName, pendulumState, dynamicWaitTime);
 
-                        Log.Information("连续分拣优化: 发现下一个包裹格口相同({Slot})，基于触发时间差({TimeDiff:F1}ms)设置动态等待时间({WaitTime:F1}ms)，跳过回正，等待下一个包裹 (包裹: {NextIndex})",
+                        Log.Information(
+                            "连续分拣优化: 发现下一个包裹格口相同({Slot})，基于触发时间差({TimeDiff:F1}ms)设置动态等待时间({WaitTime:F1}ms)，跳过回正，等待下一个包裹 (包裹: {NextIndex})",
                             targetSlot, timeDiff, dynamicWaitTime, nextPackage.Index);
 
 
                         // 跳过回正，直接完成当前包裹处理
                         // 从待处理队列中移除包裹
                         if (PendingSortPackages.TryRemove(package.Index, out _))
-                        {
                             Log.Debug("分拣动作完成，已从待处理队列移除 (智能回正-跳过回正)");
-                        }
 
                         // 设置包裹分拣状态为已分拣
                         package.SetSortState(PackageSortState.Sorted);
-                        
+
                         // 【新增】触发分拣完成事件
                         SortingCompleted?.Invoke(this, package);
-                        
+
                         return;
                     }
 
-                    // 正常执行回正逻辑
+                    // 正常执行回正逻辑 - 使用硬件命令调度器替代Task.Delay
                     Log.Debug("未找到合适的连续分拣包裹，执行正常回正流程");
                     var resetDelay = photoelectricConfig.ResetDelay;
-                    Log.Debug("开始回正延迟等待 {ResetDelay}ms，期间将忽略新的分拣信号...", resetDelay);
+                    Log.Debug("将回正命令调度到硬件命令调度器，延迟 {ResetDelay}ms", resetDelay);
+
                     // 标记摆轮进入回正延迟状态，阻止新信号处理
                     pendulumState.SetResetting();
-                    try
-                    {
-                        // 完整执行回正延迟，不可中断
-                        await Task.Delay(resetDelay);
-                        Log.Debug("回正延迟正常结束，开始执行回正");
-                        // 执行回正逻辑
-                        ExecuteDelayedReset(client, pendulumState, photoelectricName);
-                    }
-                    finally
-                    {
-                        // 确保状态被正确重置，允许后续信号处理
-                        if (pendulumState.CurrentDirection == PendulumDirection.Resetting)
-                        {
-                            pendulumState.SetReset();
-                        }
-                    }
+
+                    // 【核心修改】使用硬件命令调度器替代Task.Delay，避免线程饥饿
+                    ScheduleDelayedResetCommand(client, pendulumState, photoelectricName, resetDelay,
+                        package.ChuteNumber);
                 }
 
                 // 从待处理队列中移除包裹
                 if (PendingSortPackages.TryRemove(package.Index, out _))
-                {
                     Log.Debug("分拣动作完成，已从待处理队列移除. {NeedsReset}",
                         needsResetLater ? "已处理回正" : "无需回正");
-                }
                 else
-                {
                     Log.Warning("尝试移除已完成的包裹失败 (可能已被移除).");
-                }
 
                 // 设置包裹分拣状态为已分拣
                 package.SetSortState(PackageSortState.Sorted);
                 Log.Debug("包裹分拣状态已更新为: Sorted");
-                
+
                 // 【新增】触发分拣完成事件
                 SortingCompleted?.Invoke(this, package);
             }
@@ -1127,14 +1297,12 @@ public abstract class BasePendulumSortService : IPendulumSortService
                         try
                         {
                             var exceptionClient = GetSortingClient(photoelectricName);
-                            if (exceptionClient != null && exceptionClient.IsConnected() && pendulumState.CurrentDirection != PendulumDirection.Reset)
-                            {
-                                ExecuteImmediateReset(exceptionClient, pendulumState, photoelectricName, "ExceptionRecovery");
-                            }
+                            if (exceptionClient != null && exceptionClient.IsConnected() &&
+                                pendulumState.CurrentDirection != PendulumDirection.Reset)
+                                ExecuteImmediateReset(exceptionClient, pendulumState, photoelectricName,
+                                    "ExceptionRecovery");
                             else
-                            {
                                 pendulumState.ForceReset(); // 如果无法发送命令，至少软件复位
-                            }
                         }
                         catch (Exception resetEx)
                         {
@@ -1144,26 +1312,23 @@ public abstract class BasePendulumSortService : IPendulumSortService
                     }).ContinueWith(t =>
                     {
                         if (t is { IsFaulted: true, Exception: not null })
-                        {
                             Log.Warning(t.Exception, "摆轮 {Name} 异常恢复回正任务发生未观察的异常", photoelectricName);
-                        }
                     }, TaskContinuationOptions.OnlyOnFaulted);
                 }
 
                 // 异常情况下也要更新状态，避免包裹卡在Processing状态
-                package.SetSortState(PackageSortState.Error);
+                package.SetSortState(PackageSortState.Error, "分拣异常");
                 Log.Error("【分拣失败-异常】包裹 {Index}|{Barcode} 在执行分拣动作时发生异常，状态已设为Error.", package.Index, package.Barcode);
+
+                // 【新增】触发分拣完成事件，通知UI
+                SortingCompleted?.Invoke(this, package);
             }
             finally
             {
                 if (ProcessingPackages.TryRemove(package.Barcode, out _))
-                {
                     Log.Debug("已从处理中状态移除.");
-                }
                 else
-                {
                     Log.Warning("尝试从处理中状态移除失败 (可能已被移除).");
-                }
             }
         }
     }
@@ -1198,14 +1363,14 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// <summary>
     ///     发送命令（单次发送，不重试）
     /// </summary>
-    private bool SendCommandWithRetryAsync(TcpClientService client, byte[] command,
+    private bool SendCommandWithRetryAsync(TcpClientService? client, byte[] command,
         string photoelectricName)
     {
         var commandString = Encoding.ASCII.GetString(command).Trim(); // 用于日志记录
         Log.Debug("准备向 {Name} 发送命令: {Command}", photoelectricName, commandString);
 
         // 检查连接状态，如果未连接则直接返回失败
-        if (!client.IsConnected())
+        if (client != null && !client.IsConnected())
         {
             Log.Warning("客户端 {Name} 未连接，无法发送命令 {Command}", photoelectricName, commandString);
             UpdateDeviceConnectionState(photoelectricName, false);
@@ -1215,7 +1380,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
         // 单次发送命令
         try
         {
-            client.Send(command);
+            client?.Send(command);
             Log.Debug("命令 {Command} 已成功发送到 {Name}", commandString, photoelectricName);
             return true;
         }
@@ -1227,8 +1392,6 @@ public abstract class BasePendulumSortService : IPendulumSortService
         }
     }
 
-
-
     /// <summary>
     ///     验证包裹是否可以被处理
     /// </summary>
@@ -1236,11 +1399,12 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// <param name="photoelectricName">光电名称（可选，用于格口匹配检查）</param>
     /// <param name="currentTime">当前时间</param>
     /// <returns>包裹是否可以被处理</returns>
-    private bool IsPackageValidForProcessing(PackageInfo package, string? photoelectricName = null, DateTime? currentTime = null)
+    private bool IsPackageValidForProcessing(PackageInfo package, string? photoelectricName = null,
+        DateTime? currentTime = null)
     {
         // 【新增】详细的状态检查日志
         Log.Debug("🔍 包裹 {Index}|{Barcode} 详细验证检查:", package.Index, package.Barcode);
-        
+
         // 基本条件检查
         if (package.TriggerTimestamp == default)
         {
@@ -1251,14 +1415,16 @@ public abstract class BasePendulumSortService : IPendulumSortService
         // 只处理待处理状态的包裹
         if (package.SortState != PackageSortState.Pending)
         {
-            Log.Debug("包裹 {Index}|{Barcode} 匹配失败: 分拣状态为 {SortState}，非待处理.", package.Index, package.Barcode, package.SortState);
+            Log.Debug("包裹 {Index}|{Barcode} 匹配失败: 分拣状态为 {SortState}，非待处理.", package.Index, package.Barcode,
+                package.SortState);
             return false;
         }
 
         // 如果指定了光电名称，检查格口是否属于该光电
         if (photoelectricName != null && !SlotBelongsToPhotoelectric(package.ChuteNumber, photoelectricName))
         {
-            Log.Debug("包裹 {Index}|{Barcode} 匹配失败: 格口 {ChuteNumber} 不属于光电 {PhotoelectricName}.", package.Index, package.Barcode, package.ChuteNumber, photoelectricName);
+            Log.Debug("包裹 {Index}|{Barcode} 匹配失败: 格口 {ChuteNumber} 不属于光电 {PhotoelectricName}.", package.Index,
+                package.Barcode, package.ChuteNumber, photoelectricName);
             return false;
         }
 
@@ -1295,10 +1461,11 @@ public abstract class BasePendulumSortService : IPendulumSortService
             var delay = (currentTime.Value - package.TriggerTimestamp).TotalMilliseconds;
             const double tolerance = 10.0;
             var delayInRange = delay >= timeRangeLower - tolerance && delay <= timeRangeUpper + tolerance;
-            
+
             if (!delayInRange)
             {
-                Log.Information("包裹 {Index}|{Barcode} 匹配失败: 时间范围不匹配. 时间差: {Delay:F1}ms, 允许范围: [{Lower:F1} - {Upper:F1}]ms.",
+                Log.Information(
+                    "包裹 {Index}|{Barcode} 匹配失败: 时间范围不匹配. 时间差: {Delay:F1}ms, 允许范围: [{Lower:F1} - {Upper:F1}]ms.",
                     package.Index, package.Barcode, delay, timeRangeLower, timeRangeUpper);
                 return false;
             }
@@ -1316,18 +1483,19 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// <param name="currentPackageTriggerTime">当前包裹的触发时间</param>
     /// <param name="currentPackageIndex">当前包裹的序号</param>
     /// <returns>下一个相同格口的包裹，如果没有或时间间隔不合适则返回null</returns>
-    private PackageInfo? GetNextPendingPackageForSameSlot(int currentSlot, DateTime? currentPackageTriggerTime = null, int? currentPackageIndex = null)
+    private PackageInfo? GetNextPendingPackageForSameSlot(int currentSlot, DateTime? currentPackageTriggerTime = null,
+        int? currentPackageIndex = null)
     {
-        PackageInfo? nextPackage = null;
+        PackageInfo? nextPackage;
 
         // 如果提供了当前包裹的Index，优先查找Index+1的包裹（真正的连续包裹）
         if (currentPackageIndex.HasValue)
         {
             var expectedNextIndex = currentPackageIndex.Value + 1;
             nextPackage = PendingSortPackages.Values
-                .FirstOrDefault(p => p.Index == expectedNextIndex && 
-                               p.ChuteNumber == currentSlot &&
-                               IsPackageValidForProcessing(p));
+                .FirstOrDefault(p => p.Index == expectedNextIndex &&
+                                     p.ChuteNumber == currentSlot &&
+                                     IsPackageValidForProcessing(p));
 
             if (nextPackage != null)
             {
@@ -1353,14 +1521,10 @@ public abstract class BasePendulumSortService : IPendulumSortService
             if (nextPackage == null || nextPackage.ChuteNumber != currentSlot)
             {
                 if (nextPackage == null)
-                {
                     Log.Debug("未找到下一个待处理包裹用于连续分拣.");
-                }
                 else
-                {
                     Log.Debug("找到下一个待处理包裹 {Index}|{Barcode}，但格口 {NextChute} 与当前格口 {CurrentChute} 不符.",
                         nextPackage.Index, nextPackage.Barcode, nextPackage.ChuteNumber, currentSlot);
-                }
                 return null;
             }
         }
@@ -1370,19 +1534,21 @@ public abstract class BasePendulumSortService : IPendulumSortService
         {
             var timeDiff = (nextPackage.TriggerTimestamp - currentPackageTriggerTime.Value).TotalMilliseconds;
             const double toleranceMs = 100.0; // 允许100ms误差
-            
+
             // 获取配置的最大连续分拣间隔作为上限
             var config = SettingsService.LoadSettings<PendulumSortConfig>();
             var maxIntervalMs = config.ContinuousSortMaxIntervalMs;
-            
+
             if (timeDiff < 0 || timeDiff > maxIntervalMs + toleranceMs)
             {
-                Log.Debug("下一个包裹 {Index}|{Barcode} 时间间隔不合适: {TimeDiff:F1}ms (允许范围: 0 - {MaxInterval}ms + {Tolerance}ms误差)，不进行连续分拣.",
+                Log.Debug(
+                    "下一个包裹 {Index}|{Barcode} 时间间隔不合适: {TimeDiff:F1}ms (允许范围: 0 - {MaxInterval}ms + {Tolerance}ms误差)，不进行连续分拣.",
                     nextPackage.Index, nextPackage.Barcode, timeDiff, maxIntervalMs, toleranceMs);
                 return null;
             }
-            
-            Log.Information("连续分拣时间检查通过: 当前包裹触发时间 {CurrentTime:HH:mm:ss.fff}，下一个包裹触发时间 {NextTime:HH:mm:ss.fff}，时间差 {TimeDiff:F1}ms (在允许范围内)",
+
+            Log.Information(
+                "连续分拣时间检查通过: 当前包裹触发时间 {CurrentTime:HH:mm:ss.fff}，下一个包裹触发时间 {NextTime:HH:mm:ss.fff}，时间差 {TimeDiff:F1}ms (在允许范围内)",
                 currentPackageTriggerTime.Value, nextPackage.TriggerTimestamp, timeDiff);
         }
 
@@ -1391,55 +1557,12 @@ public abstract class BasePendulumSortService : IPendulumSortService
         return nextPackage;
     }
 
-    /// <summary>
-    ///     执行延迟回正
-    /// </summary>
-    private void ExecuteDelayedReset(TcpClientService? client, PendulumState pendulumState, string photoelectricName)
-    {
-        Log.Debug("执行延迟回正.");
-
-        if (client == null || !client.IsConnected())
-        {
-            Log.Warning("延迟回正时客户端 '{Name}' 未连接.", photoelectricName);
-            pendulumState.ForceReset();
-            return;
-        }
-
-        // 检查回正方向，避免重复发送回正命令
-        var directionForReset = pendulumState.GetDirectionForReset();
-        if (directionForReset == PendulumDirection.Reset)
-        {
-            Log.Debug("摆轮回正方向为Reset状态，无需发送延迟回正命令");
-            return;
-        }
-
-        // 执行回正，使用保存的回正方向
-        var resetCommand = directionForReset == PendulumDirection.SwingingLeft
-            ? PendulumCommands.Module2.ResetLeft
-            : PendulumCommands.Module2.ResetRight;
-        var resetCmdBytes = GetCommandBytes(resetCommand);
-        var resetDir = directionForReset == PendulumDirection.SwingingLeft ? "左" : "右";
-
-        Log.Debug("根据保存的摆轮方向 {DirectionForReset} 确定回正方向为: {ResetDir}", directionForReset, resetDir);
-
-        Log.Debug("准备发送延迟 {ResetDir} 回正命令 ({ResetCommand})...", resetDir, resetCommand);
-        if (SendCommandWithRetryAsync(client, resetCmdBytes, photoelectricName))
-        {
-            Log.Information("延迟 {ResetDir} 回正命令 ({ResetCommand}) 发送成功.", resetDir, resetCommand);
-            pendulumState.SetReset();
-        }
-        else
-        {
-            Log.Error("发送延迟 {ResetDir} 回正命令 ({ResetCommand}) 失败，强制复位状态.", resetDir, resetCommand);
-            pendulumState.ForceReset();
-        }
-    }
-
 
     /// <summary>
     ///     执行立即回正（用于强制同步）
     /// </summary>
-    private void ExecuteImmediateReset(TcpClientService client, PendulumState pendulumState, string photoelectricName, string reason)
+    private void ExecuteImmediateReset(TcpClientService client, PendulumState pendulumState, string photoelectricName,
+        string reason)
     {
         Log.Information("执行立即回正 (原因: {Reason}, 光电: {Name})", reason, photoelectricName);
 
@@ -1452,23 +1575,29 @@ public abstract class BasePendulumSortService : IPendulumSortService
 
         try
         {
-            // 检查回正方向，避免重复发送回正命令
-            var directionForReset = pendulumState.GetDirectionForReset();
-            if (directionForReset == PendulumDirection.Reset)
+            // 【BUG修复】不再信任来自 PendulumState 的当前方向，因为它在 WaitingForNext 状态下是模糊的。
+            // 而是根据上一个处理的格口号来可靠地确定回正方向。
+            // 这是最可靠的事实来源，与 ScheduleDelayedResetCommand 中的逻辑保持一致。
+            var lastSlot = PendulumState.LastSlot;
+            if (lastSlot == 0)
             {
-                Log.Debug("摆轮回正方向为Reset状态，无需发送立即回正命令");
+                Log.Warning("无法执行立即回正，因为没有记录上一个格口号。将执行强制软件复位。");
+                pendulumState.ForceReset();
                 return;
             }
 
-            // 根据保存的摆轮方向发送对应的回正命令
+            var directionForReset = ShouldSwingLeft(lastSlot)
+                ? PendulumDirection.SwingingLeft
+                : PendulumDirection.SwingingRight;
+            Log.Debug("根据上一个格口 {LastSlot} 确定立即回正方向为: {Direction}", lastSlot, directionForReset);
+
+            // 根据计算出的方向发送对应的回正命令
             var resetCommand = directionForReset == PendulumDirection.SwingingLeft
                 ? PendulumCommands.Module2.ResetLeft
                 : PendulumCommands.Module2.ResetRight;
 
             var commandBytes = GetCommandBytes(resetCommand);
             var resetDirection = directionForReset == PendulumDirection.SwingingLeft ? "左" : "右";
-
-            Log.Debug("根据保存的摆轮方向 {DirectionForReset} 确定立即回正方向为: {ResetDirection}", directionForReset, resetDirection);
 
             Log.Debug("发送 {Direction} 回正命令 ({Command})...", resetDirection, resetCommand);
 
@@ -1493,7 +1622,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// <summary>
     ///     触发分拣光电信号事件
     /// </summary>
-    protected void RaiseSortingPhotoelectricSignal(string photoelectricName, DateTime signalTime)
+    private void RaiseSortingPhotoelectricSignal(string photoelectricName, DateTime signalTime)
     {
         try
         {
@@ -1517,11 +1646,11 @@ public abstract class BasePendulumSortService : IPendulumSortService
         {
             state.LastHighSignalTime = signalTime;
             state.TotalHighSignals++;
-            
+
             if (state.LastSignalWasHigh)
             {
                 state.ConsecutiveHighCount++;
-                Log.Warning("【信号异常】光电 {Name} 连续收到 {Count} 次高电平信号，可能存在信号异常!", 
+                Log.Warning("【信号异常】光电 {Name} 连续收到 {Count} 次高电平信号，可能存在信号异常!",
                     photoelectricName, state.ConsecutiveHighCount);
             }
             else
@@ -1529,18 +1658,18 @@ public abstract class BasePendulumSortService : IPendulumSortService
                 state.ConsecutiveHighCount = 1;
                 state.ConsecutiveLowCount = 0;
             }
-            
+
             state.LastSignalWasHigh = true;
         }
         else
         {
             state.LastLowSignalTime = signalTime;
             state.TotalLowSignals++;
-            
+
             if (!state.LastSignalWasHigh)
             {
                 state.ConsecutiveLowCount++;
-                Log.Warning("【信号异常】光电 {Name} 连续收到 {Count} 次低电平信号，可能存在信号异常!", 
+                Log.Warning("【信号异常】光电 {Name} 连续收到 {Count} 次低电平信号，可能存在信号异常!",
                     photoelectricName, state.ConsecutiveLowCount);
             }
             else
@@ -1548,32 +1677,26 @@ public abstract class BasePendulumSortService : IPendulumSortService
                 state.ConsecutiveLowCount = 1;
                 state.ConsecutiveHighCount = 0;
             }
-            
+
             state.LastSignalWasHigh = false;
         }
 
         // 检查信号异常
         if (state.IsSignalAbnormal())
-        {
-            Log.Error("【信号严重异常】光电 {Name} 信号异常：连续高电平 {HighCount} 次，连续低电平 {LowCount} 次", 
+            Log.Error("【信号严重异常】光电 {Name} 信号异常：连续高电平 {HighCount} 次，连续低电平 {LowCount} 次",
                 photoelectricName, state.ConsecutiveHighCount, state.ConsecutiveLowCount);
-        }
 
         // 检查高低电平信号不匹配
         if (state.HasSignalMismatch())
-        {
-            Log.Warning("【信号不匹配】光电 {Name} 高低电平信号数量不匹配：高电平 {HighTotal} 次，低电平 {LowTotal} 次，差值 {Diff}", 
-                photoelectricName, state.TotalHighSignals, state.TotalLowSignals, 
+            Log.Warning("【信号不匹配】光电 {Name} 高低电平信号数量不匹配：高电平 {HighTotal} 次，低电平 {LowTotal} 次，差值 {Diff}",
+                photoelectricName, state.TotalHighSignals, state.TotalLowSignals,
                 Math.Abs(state.TotalHighSignals - state.TotalLowSignals));
-        }
 
         // 定期输出信号统计
         var totalSignals = state.TotalHighSignals + state.TotalLowSignals;
         if (totalSignals > 0 && totalSignals % 100 == 0)
-        {
-            Log.Information("【信号统计】光电 {Name} 累计接收信号: 高电平 {High} 次，低电平 {Low} 次，总计 {Total} 次", 
+            Log.Information("【信号统计】光电 {Name} 累计接收信号: 高电平 {High} 次，低电平 {Low} 次，总计 {Total} 次",
                 photoelectricName, state.TotalHighSignals, state.TotalLowSignals, totalSignals);
-        }
     }
 
     /// <summary>
@@ -1584,7 +1707,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
         try
         {
             // 检查信号格式是否符合预期
-            bool isValidFormat = signalData.Contains("OCCH1:") || signalData.Contains("OCCH2:");
+            var isValidFormat = signalData.Contains("OCCH1:") || signalData.Contains("OCCH2:");
             if (!isValidFormat)
             {
                 Log.Warning("【信号格式异常】光电 {Name} 收到格式异常的信号: '{Signal}'", photoelectricName, signalData);
@@ -1595,39 +1718,18 @@ public abstract class BasePendulumSortService : IPendulumSortService
             if (photoelectricName.Contains("触发"))
             {
                 if (signalData.Contains("OCCH2:1"))
-                {
                     Log.Information("【触发光电】{Name} 收到 OCCH2 高电平信号，这通常用于分拣触发", photoelectricName);
-                }
                 else if (signalData.Contains("OCCH1:1"))
-                {
                     Log.Information("【触发光电】{Name} 收到 OCCH1 高电平信号，这通常用于包裹检测", photoelectricName);
-                }
             }
             else if (photoelectricName.Contains("光电"))
             {
-                Log.Information("【分拣光电】{Name} 收到 {SignalType} 信号: '{Signal}'", 
+                Log.Information("【分拣光电】{Name} 收到 {SignalType} 信号: '{Signal}'",
                     photoelectricName, signalType, signalData.Trim());
-                
+
                 // 检查分拣光电是否收到了意外的信号类型
                 if (signalData.Contains("OCCH1:1"))
-                {
                     Log.Debug("【分拣光电验证】{Name} 收到 OCCH1 信号，确认这是预期的分拣信号", photoelectricName);
-                }
-            }
-
-            // 验证信号时序
-            var now = DateTime.Now;
-            if (LastSignalTimes.TryGetValue(photoelectricName, out var lastTime))
-            {
-                var interval = (now - lastTime).TotalMilliseconds;
-                if (interval < 10) // 小于10ms的信号可能是干扰
-                {
-                    Log.Warning("【信号时序异常】光电 {Name} 信号间隔过短: {Interval:F1}ms", photoelectricName, interval);
-                }
-                else if (interval > 30000) // 超过30秒没有信号可能是设备问题
-                {
-                    Log.Information("【信号恢复】光电 {Name} 在 {Interval:F1}ms 后恢复信号", photoelectricName, interval);
-                }
             }
         }
         catch (Exception ex)
@@ -1639,85 +1741,46 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// <summary>
     ///     记录分拣操作详情
     /// </summary>
-    private void RecordSortingOperation(PackageInfo package, string photoelectricName, string command, PendulumDirection direction)
+    private void RecordSortingOperation(PackageInfo package, string photoelectricName, string command)
     {
-        try
-        {
-            var record = new SortingResultRecord
-            {
-                PackageIndex = package.Index,
-                Barcode = package.Barcode,
-                ExpectedChute = package.ChuteNumber,
-                ProcessingPhotoelectric = photoelectricName,
-                SortingTime = DateTime.Now,
-                SentCommand = command,
-                SentDirection = direction
-            };
-
-            _sortingResults[package.Index] = record;
-
-            Log.Information("【分拣记录】包裹 {Index}|{Barcode} - 预期格口: {ExpectedChute}, 处理光电: {Photoelectric}, 发送命令: {Command}",
-                package.Index, package.Barcode, package.ChuteNumber, photoelectricName, command);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "记录分拣操作时发生错误，包裹: {Index}|{Barcode}", package.Index, package.Barcode);
-        }
+        Log.Information("【分拣记录】包裹 {Index}|{Barcode} - 预期格口: {ExpectedChute}, 处理光电: {Photoelectric}, 发送命令: {Command}",
+            package.Index, package.Barcode, package.ChuteNumber, photoelectricName, command);
     }
 
-    /// <summary>
-    ///     更新分拣结果
-    /// </summary>
-    private void UpdateSortingResult(int packageIndex, string result)
-    {
-        if (_sortingResults.TryGetValue(packageIndex, out var record))
-        {
-            record.ActualResult = result;
-            Log.Information("【分拣结果更新】包裹 {Index} 结果: {Result}", packageIndex, result);
-        }
-    }
 
     /// <summary>
     ///     验证分拣命令与预期格口的匹配性
     /// </summary>
-    private void ValidateSortingCommand(PackageInfo package, string photoelectricName, string commandName, int targetSlot)
+    private void ValidateSortingCommand(PackageInfo package, string photoelectricName, string commandName,
+        int targetSlot)
     {
         try
         {
             // 验证光电与格口的对应关系
             var expectedPhotoelectric = GetPhotoelectricNameBySlot(targetSlot);
             if (expectedPhotoelectric != null && expectedPhotoelectric != photoelectricName)
-            {
-                Log.Error("【分拣逻辑错误】包裹 {Index}|{Barcode} 目标格口 {TargetSlot} 应由光电 '{ExpectedPhotoelectric}' 处理，但实际由 '{ActualPhotoelectric}' 处理!",
+                Log.Error(
+                    "【分拣逻辑错误】包裹 {Index}|{Barcode} 目标格口 {TargetSlot} 应由光电 '{ExpectedPhotoelectric}' 处理，但实际由 '{ActualPhotoelectric}' 处理!",
                     package.Index, package.Barcode, targetSlot, expectedPhotoelectric, photoelectricName);
-            }
 
             // 验证摆动方向与格口的对应关系
             var shouldSwingLeft = targetSlot % 2 == 1; // 奇数格口左摆
             var shouldSwingRight = targetSlot % 2 == 0; // 偶数格口右摆
-            
+
             if (shouldSwingLeft && !commandName.Contains("左"))
-            {
                 Log.Error("【摆动方向错误】包裹 {Index}|{Barcode} 目标格口 {TargetSlot}(奇数) 应该左摆，但发送了 '{CommandName}' 命令!",
                     package.Index, package.Barcode, targetSlot, commandName);
-            }
             else if (shouldSwingRight && !commandName.Contains("右"))
-            {
                 Log.Error("【摆动方向错误】包裹 {Index}|{Barcode} 目标格口 {TargetSlot}(偶数) 应该右摆，但发送了 '{CommandName}' 命令!",
                     package.Index, package.Barcode, targetSlot, commandName);
-            }
             else
-            {
                 Log.Debug("【分拣验证通过】包裹 {Index}|{Barcode} 格口 {TargetSlot} 摆动方向 '{CommandName}' 正确",
                     package.Index, package.Barcode, targetSlot, commandName);
-            }
 
             // 验证格口范围
             if (targetSlot < 1)
-            {
                 Log.Error("【格口异常】包裹 {Index}|{Barcode} 目标格口 {TargetSlot} 无效（小于1）!",
                     package.Index, package.Barcode, targetSlot);
-            }
 
             // 记录详细的分拣映射信息
             Log.Information("【分拣映射验证】包裹 {Index}|{Barcode}: 格口{TargetSlot} → 光电'{Photoelectric}' → 命令'{Command}'",
@@ -1743,23 +1806,17 @@ public abstract class BasePendulumSortService : IPendulumSortService
             if (_signalStates.TryGetValue(photoelectricName, out var state))
             {
                 var timeSinceLastHigh = DateTime.Now - state.LastHighSignalTime;
-                
+
                 // 如果低电平信号出现但没有对应的高电平信号，可能有问题
                 if (state.LastHighSignalTime == default)
-                {
                     Log.Warning("【信号完整性问题】光电 {Name} 收到低电平信号 '{Signal}'，但没有记录到对应的高电平信号",
                         photoelectricName, signalData.Trim());
-                }
                 else if (timeSinceLastHigh.TotalMilliseconds > 5000) // 超过5秒没有高电平
-                {
                     Log.Warning("【信号时序异常】光电 {Name} 收到低电平信号，但距离上次高电平信号已过 {Time:F1}ms",
                         photoelectricName, timeSinceLastHigh.TotalMilliseconds);
-                }
                 else
-                {
                     Log.Verbose("【信号配对正常】光电 {Name} 高低电平信号配对正常，间隔 {Time:F1}ms",
                         photoelectricName, timeSinceLastHigh.TotalMilliseconds);
-                }
             }
         }
         catch (Exception ex)
@@ -1771,7 +1828,8 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// <summary>
     ///     验证包裹匹配的合理性
     /// </summary>
-    private void ValidatePackageMatching(PackageInfo package, string photoelectricName, double delay, double timeRangeLower, double timeRangeUpper)
+    private void ValidatePackageMatching(PackageInfo package, string photoelectricName, double delay,
+        double timeRangeLower, double timeRangeUpper)
     {
         try
         {
@@ -1781,43 +1839,17 @@ public abstract class BasePendulumSortService : IPendulumSortService
             var maxDeviation = (timeRangeUpper - timeRangeLower) / 4; // 允许1/4范围的偏差
 
             if (delayDeviation > maxDeviation)
-            {
-                Log.Warning("【时间偏差异常】包裹 {Index}|{Barcode} 延迟时间 {Delay:F1}ms 偏离正常值 {Normal:F1}ms 较大，偏差: {Deviation:F1}ms",
+                Log.Warning(
+                    "【时间偏差异常】包裹 {Index}|{Barcode} 延迟时间 {Delay:F1}ms 偏离正常值 {Normal:F1}ms 较大，偏差: {Deviation:F1}ms",
                     package.Index, package.Barcode, delay, normalDelayRange, delayDeviation);
-            }
 
-            // 检查包裹序号的连续性
-            if (_sortingResults.Count > 0)
-            {
-                var lastPackageIndex = _sortingResults.Keys.Max();
-                var indexGap = package.Index - lastPackageIndex;
-                
-                if (indexGap > 5) // 序号间隔超过5可能有问题
-                {
-                    Log.Warning("【包裹序号异常】包裹 {Index}|{Barcode} 与上一个包裹 {LastIndex} 序号间隔较大: {Gap}",
-                        package.Index, package.Barcode, lastPackageIndex, indexGap);
-                }
-            }
-
-            // 检查同一光电短时间内的重复匹配
-            var recentMatches = _sortingResults.Values
-                .Where(r => r.ProcessingPhotoelectric == photoelectricName && 
-                           (DateTime.Now - r.SortingTime).TotalMilliseconds < 2000)
-                .Count();
-
-            if (recentMatches > 2)
-            {
-                Log.Warning("【匹配频率异常】光电 {Name} 在2秒内匹配了 {Count} 个包裹，可能存在误匹配",
-                    photoelectricName, recentMatches + 1);
-            }
 
             // 验证格口与光电的对应关系
             var expectedPhotoelectric = GetPhotoelectricNameBySlot(package.ChuteNumber);
             if (expectedPhotoelectric != photoelectricName && expectedPhotoelectric != null)
-            {
-                Log.Error("【匹配逻辑严重错误】包裹 {Index}|{Barcode} 格口 {Chute} 被错误的光电 '{ActualPhotoelectric}' 匹配，应该由 '{ExpectedPhotoelectric}' 匹配!",
+                Log.Error(
+                    "【匹配逻辑严重错误】包裹 {Index}|{Barcode} 格口 {Chute} 被错误的光电 '{ActualPhotoelectric}' 匹配，应该由 '{ExpectedPhotoelectric}' 匹配!",
                     package.Index, package.Barcode, package.ChuteNumber, photoelectricName, expectedPhotoelectric);
-            }
 
             Log.Debug("【匹配验证】包裹 {Index}|{Barcode} 匹配验证完成：延迟 {Delay:F1}ms，光电 '{Photoelectric}'，格口 {Chute}",
                 package.Index, package.Barcode, delay, photoelectricName, package.ChuteNumber);
@@ -1828,105 +1860,9 @@ public abstract class BasePendulumSortService : IPendulumSortService
         }
     }
 
-    /// <summary>
-    ///     定期报告分拣统计信息
-    /// </summary>
-    protected void ReportSortingStatistics()
-    {
-        try
-        {
-            if (_sortingResults.IsEmpty) return;
-
-            var now = DateTime.Now;
-            var recentResults = _sortingResults.Values
-                .Where(r => (now - r.SortingTime).TotalMinutes < 10) // 最近10分钟
-                .ToList();
-
-            if (recentResults.Count == 0) return;
-
-            // 按光电统计
-            var photoelectricStats = recentResults
-                .GroupBy(r => r.ProcessingPhotoelectric)
-                .ToDictionary(g => g.Key, g => g.Count());
-
-            // 按格口统计
-            var chuteStats = recentResults
-                .GroupBy(r => r.ExpectedChute)
-                .ToDictionary(g => g.Key, g => g.Count());
-
-            // 检查异常分布
-            var totalCount = recentResults.Count;
-            foreach (var (photoelectric, count) in photoelectricStats)
-            {
-                var percentage = (double)count / totalCount * 100;
-                if (percentage > 80) // 某个光电处理超过80%的包裹可能有问题
-                {
-                    Log.Warning("【分拣分布异常】光电 '{Name}' 处理了 {Percentage:F1}% 的包裹 ({Count}/{Total})，分布可能不均匀",
-                        photoelectric, percentage, count, totalCount);
-                }
-            }
-
-            // 信号完整性统计
-            var signalStats = _signalStates.Values
-                .Select(s => new { 
-                    High = s.TotalHighSignals, 
-                    Low = s.TotalLowSignals,
-                    Mismatch = s.HasSignalMismatch(),
-                    Abnormal = s.IsSignalAbnormal()
-                })
-                .ToList();
-
-            var abnormalSignals = signalStats.Count(s => s.Abnormal);
-            var mismatchSignals = signalStats.Count(s => s.Mismatch);
-
-            if (abnormalSignals > 0 || mismatchSignals > 0)
-            {
-                Log.Warning("【信号质量报告】发现异常信号: {Abnormal} 个光电信号异常，{Mismatch} 个光电高低电平不匹配",
-                    abnormalSignals, mismatchSignals);
-            }
-
-            Log.Information("【分拣统计报告】最近10分钟处理 {Total} 个包裹，光电分布: {PhotoelectricStats}，格口分布: {ChuteStats}",
-                totalCount, 
-                string.Join(", ", photoelectricStats.Select(kv => $"{kv.Key}:{kv.Value}")),
-                string.Join(", ", chuteStats.Select(kv => $"格口{kv.Key}:{kv.Value}")));
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "报告分拣统计信息时发生错误");
-        }
-    }
 
     /// <summary>
-    ///     清理过期的分拣结果记录
-    /// </summary>
-    private void CleanupOldSortingResults(DateTime now)
-    {
-        try
-        {
-            var cutoffTime = now.AddHours(-1); // 保留最近1小时的记录
-            var expiredKeys = _sortingResults
-                .Where(kv => kv.Value.SortingTime < cutoffTime)
-                .Select(kv => kv.Key)
-                .ToList();
-
-            foreach (var key in expiredKeys)
-            {
-                _sortingResults.TryRemove(key, out _);
-            }
-
-            if (expiredKeys.Count > 0)
-            {
-                Log.Debug("【数据清理】已清理 {Count} 条过期分拣记录", expiredKeys.Count);
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "清理过期分拣结果时发生错误");
-        }
-    }
-
-    /// <summary>
-    /// 【新增】监控包裹状态分布，用于诊断状态问题
+    ///     【新增】监控包裹状态分布，用于诊断状态问题
     /// </summary>
     private void MonitorPackageStates()
     {
@@ -1943,10 +1879,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
                 .ToDictionary(g => g.Key, g => g.Count());
 
             Log.Information("📊 包裹状态分布监控:");
-            foreach (var (state, count) in stateGroups)
-            {
-                Log.Information("  - {State}: {Count} 个包裹", state, count);
-            }
+            foreach (var (state, count) in stateGroups) Log.Information("  - {State}: {Count} 个包裹", state, count);
 
             // 检查异常状态
             var nonPendingCount = stateGroups
@@ -1956,7 +1889,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
             if (nonPendingCount > 0)
             {
                 Log.Warning("⚠️ 发现 {Count} 个非待处理状态的包裹在待处理队列中", nonPendingCount);
-                
+
                 // 详细列出异常包裹
                 var abnormalPackages = PendingSortPackages.Values
                     .Where(p => p.SortState != PackageSortState.Pending)
@@ -1964,15 +1897,11 @@ public abstract class BasePendulumSortService : IPendulumSortService
                     .ToList();
 
                 foreach (var pkg in abnormalPackages)
-                {
-                    Log.Warning("  - 包裹 {Index}|{Barcode}: 状态={State}, 触发时间={TriggerTime:HH:mm:ss.fff}", 
+                    Log.Warning("  - 包裹 {Index}|{Barcode}: 状态={State}, 触发时间={TriggerTime:HH:mm:ss.fff}",
                         pkg.Index, pkg.Barcode, pkg.SortState, pkg.TriggerTimestamp);
-                }
 
-                if (abnormalPackages.Count < PendingSortPackages.Count - stateGroups.GetValueOrDefault(PackageSortState.Pending, 0))
-                {
-                    Log.Warning("  ... 还有更多异常包裹未显示");
-                }
+                if (abnormalPackages.Count < PendingSortPackages.Count -
+                    stateGroups.GetValueOrDefault(PackageSortState.Pending, 0)) Log.Warning("  ... 还有更多异常包裹未显示");
             }
         }
         catch (Exception ex)
@@ -2001,10 +1930,10 @@ public abstract class BasePendulumSortService : IPendulumSortService
             {
                 Start = "AT+STACH1=1",
                 Stop = "AT+STACH1=0",
-                SwingLeft = "AT+STACH2=1",
-                ResetLeft = "AT+STACH2=0",
-                SwingRight = "AT+STACH3=1",
-                ResetRight = "AT+STACH3=0"
+                SwingLeft = "AT+STACH3=1",
+                ResetLeft = "AT+STACH3=0",
+                SwingRight = "AT+STACH2=1",
+                ResetRight = "AT+STACH2=0"
             };
 
         public string Start { get; private init; }
@@ -2033,6 +1962,11 @@ public abstract class BasePendulumSortService : IPendulumSortService
     protected class PendulumState
     {
         /// <summary>
+        ///     【修复】记录最后一次操作的格口号，作为最可靠的事实来源
+        /// </summary>
+        public static int LastSlot { get; private set; }
+
+        /// <summary>
         ///     获取当前摆轮方向
         /// </summary>
         public PendulumDirection CurrentDirection { get; private set; } = PendulumDirection.Reset;
@@ -2050,12 +1984,12 @@ public abstract class BasePendulumSortService : IPendulumSortService
         /// <summary>
         ///     进入等待状态的时间戳，用于超时监控
         /// </summary>
-        public DateTime? WaitingStartTime { get; private set; }
+        private DateTime? WaitingStartTime { get; set; }
 
         /// <summary>
         ///     动态计算的等待超时时间（毫秒）
         /// </summary>
-        public double DynamicWaitTimeoutMs { get; private set; }
+        private double DynamicWaitTimeoutMs { get; set; }
 
         /// <summary>
         ///     设置摆动状态
@@ -2091,6 +2025,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
                 PreviousDirection = CurrentDirection;
                 Log.Debug("保存摆轮方向 {PreviousDirection} 用于回正", PreviousDirection);
             }
+
             CurrentDirection = PendulumDirection.Resetting;
             WaitingStartTime = null; // 清除等待时间戳
             Log.Debug("摆轮状态更新为: Resetting (回正延迟中)");
@@ -2123,6 +2058,7 @@ public abstract class BasePendulumSortService : IPendulumSortService
         /// </summary>
         public static void UpdateLastSlot(int slot)
         {
+            LastSlot = slot; // 【修复】实际更新静态属性
             Log.Debug("更新最后处理的格口为: {Slot}", slot);
         }
 
@@ -2133,25 +2069,13 @@ public abstract class BasePendulumSortService : IPendulumSortService
         /// <param name="dynamicWaitTimeMs">动态计算的等待超时时间（毫秒），如果不提供则使用配置值</param>
         public void SetWaitingForNext(int slotNumber, double? dynamicWaitTimeMs = null)
         {
-            if (CurrentDirection != PendulumDirection.Resetting)
-            {
-                PreviousDirection = CurrentDirection;
-            }
+            if (CurrentDirection != PendulumDirection.Resetting) PreviousDirection = CurrentDirection;
             CurrentDirection = PendulumDirection.WaitingForNext;
             WaitingForSlot = slotNumber;
             WaitingStartTime = DateTime.Now; // 记录进入等待状态的时间
             DynamicWaitTimeoutMs = dynamicWaitTimeMs ?? 3000; // 默认3秒
-            Log.Debug("摆轮状态更新为: WaitingForNext，等待格口: {Slot}，开始时间: {StartTime}，动态等待超时: {Timeout}ms", 
+            Log.Debug("摆轮状态更新为: WaitingForNext，等待格口: {Slot}，开始时间: {StartTime}，动态等待超时: {Timeout}ms",
                 slotNumber, WaitingStartTime, DynamicWaitTimeoutMs);
-        }
-
-        /// <summary>
-        ///     清除等待状态
-        /// </summary>
-        public void ClearWaitingState()
-        {
-            WaitingForSlot = 0;
-            WaitingStartTime = null; // 清除等待时间戳
         }
 
         /// <summary>
@@ -2174,55 +2098,30 @@ public abstract class BasePendulumSortService : IPendulumSortService
     /// <summary>
     ///     光电信号状态跟踪类，用于验证信号完整性
     /// </summary>
-    protected class PhotoelectricSignalState
+    private class PhotoelectricSignalState
     {
         public DateTime LastHighSignalTime { get; set; }
-        public DateTime LastLowSignalTime { get; set; }
+        public DateTime LastLowSignalTime { [UsedImplicitly] get; set; }
         public bool LastSignalWasHigh { get; set; }
         public int ConsecutiveHighCount { get; set; }
         public int ConsecutiveLowCount { get; set; }
         public int TotalHighSignals { get; set; }
         public int TotalLowSignals { get; set; }
-        
+
         /// <summary>
-        /// 检查信号是否异常（例如连续多次相同信号）
+        ///     检查信号是否异常（例如连续多次相同信号）
         /// </summary>
         public bool IsSignalAbnormal()
         {
             return ConsecutiveHighCount > 3 || ConsecutiveLowCount > 3;
         }
-        
+
         /// <summary>
-        /// 检查高低电平信号是否不匹配
+        ///     检查高低电平信号是否不匹配
         /// </summary>
         public bool HasSignalMismatch()
         {
             return Math.Abs(TotalHighSignals - TotalLowSignals) > 2;
-        }
-    }
-
-    /// <summary>
-    ///     分拣结果记录类，用于验证分拣准确性
-    /// </summary>
-    protected class SortingResultRecord
-    {
-        public int PackageIndex { get; set; }
-        public string Barcode { get; set; } = string.Empty;
-        public int ExpectedChute { get; set; }
-        public string ProcessingPhotoelectric { get; set; } = string.Empty;
-        public DateTime SortingTime { get; set; }
-        public string SentCommand { get; set; } = string.Empty;
-        public PendulumDirection SentDirection { get; set; }
-        public string ActualResult { get; set; } = "Unknown"; // 需要后续验证
-        
-        /// <summary>
-        /// 验证分拣结果是否符合预期
-        /// </summary>
-        public bool IsResultExpected()
-        {
-            // 这里可以根据实际情况添加验证逻辑
-            // 例如通过传感器反馈或其他方式验证实际分拣结果
-            return ActualResult == "Expected";
         }
     }
 }

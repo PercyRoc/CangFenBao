@@ -1,7 +1,7 @@
 ﻿using System.Collections.ObjectModel;
-using System.Text.RegularExpressions;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -9,6 +9,9 @@ using Common.Models.Package;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.DataSourceDevices.Weight;
+using Prism.Commands;
+using Prism.Dialogs;
+using Prism.Mvvm;
 using Serilog;
 using SharedUI.Models;
 using XinBa.Services;
@@ -23,45 +26,45 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
+    private readonly IQrCodeService _qrCodeService;
     private readonly List<IDisposable> _subscriptions = [];
+    private readonly ITareAttributesApiService _tareAttributesApiService;
     private readonly DispatcherTimer _timer;
     private readonly VolumeDataService _volumeDataService;
     private readonly SerialPortWeightService? _weightService;
-    private readonly IQrCodeService _qrCodeService;
-    private readonly ITareAttributesApiService _tareAttributesApiService;
     private string _currentBarcode = string.Empty;
-    private string _manualBarcodeInput = string.Empty;
     private BitmapSource? _currentImage;
     private MeasurementResultViewModel? _currentMeasurementResult;
     private bool _disposed;
-    private bool _isProcessingManualBarcode; // 标志位：是否正在处理手动输入的条码
     private int _failedPackages;
+
     private DateTime _lastRateCalculationTime = DateTime.Now;
+    private string _manualBarcodeInput = string.Empty;
+
+    private int _packageHistoryIndex = 1; // 用于PackageHistory的连续序号
     private int _packagesInLastHour;
     private int _processingRate;
     private int _successPackages;
     private int _totalPackages;
-    private int _packageHistoryIndex = 1; // 用于PackageHistory的连续序号
 
     public MainWindowViewModel(
         IDialogService dialogService,
         PackageTransferService packageTransferService,
         ICameraService cameraService,
         VolumeDataService volumeDataService,
-        WeightStartupService weightStartupService,
+        SerialPortWeightService weightService,
         IQrCodeService qrCodeService,
         ITareAttributesApiService tareAttributesApiService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
         _volumeDataService = volumeDataService;
-        _weightService = weightStartupService.GetWeightService();
+        _weightService = weightService;
         _qrCodeService = qrCodeService;
         _tareAttributesApiService = tareAttributesApiService;
 
         // Initialize commands
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
-        ProcessManualBarcodeCommand = new DelegateCommand(ExecuteProcessManualBarcode, CanExecuteProcessManualBarcode);
 
         // Initialize system status update timer
         _timer = new DispatcherTimer
@@ -134,9 +137,7 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
         OnCameraConnectionChanged(null, _cameraService.IsConnected);
         OnVolumeConnectionChanged(_volumeDataService.IsConnected);
         if (_weightService == null) // 如果服务为空，显式设置为断开
-        {
             Application.Current.Dispatcher.Invoke(() => UpdateDeviceStatus("Weight", false));
-        }
         // --- 结束修改 ---
     }
 
@@ -151,130 +152,6 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
     {
         _dialogService.ShowDialog("SettingsDialog");
     }
-
-    /// <summary>
-    /// 执行手动条码处理
-    /// </summary>
-    private async void ExecuteProcessManualBarcode()
-    {
-        try
-        {
-            var barcode = ManualBarcodeInput.Trim();
-            if (string.IsNullOrEmpty(barcode))
-            {
-                Log.Warning("手动输入的条码为空");
-                return;
-            }
-
-            // 设置标志位，暂停处理相机数据
-            _isProcessingManualBarcode = true;
-            Log.Information("开始处理手动输入的条码: {Barcode}，暂停处理相机数据", barcode);
-
-            // 验证条码格式
-            var barcodeMatch = MyRegex().Match(barcode);
-            if (!barcodeMatch.Success)
-            {
-                Log.Warning("手动输入的条码 {Barcode} 格式不符合要求", barcode);
-                return;
-            }
-
-            // 创建包裹信息
-            var package = PackageInfo.Create();
-            package.SetBarcode(barcode);
-            package.SetStatus(PackageStatus.Processing, "Manual Input Processing");
-
-            // 更新当前条码显示
-            CurrentBarcode = barcode;
-
-            // 并行获取重量和体积数据
-            var tasks = new List<Task>();
-
-            // 获取重量数据
-            if (_weightService != null)
-            {
-                tasks.Add(Task.Run(() =>
-                {
-                    // 手动输入时，等待有效的重量数据
-                    var weightInGrams = _weightService.WaitForValidWeight();
-                    if (weightInGrams > 0)
-                    {
-                        var weightInKg = weightInGrams / 1000.0;
-                        package.SetWeight(weightInKg);
-                        Log.Information("为手动输入包裹设置重量: {Weight} kg ({Grams} g)",
-                            weightInKg.ToString("F3"), weightInGrams.ToString("F2"));
-                    }
-                    else
-                    {
-                        Log.Warning("等待有效重量数据超时或失败");
-                    }
-                }));
-            }
-
-            // 获取体积数据
-            tasks.Add(Task.Run(() =>
-            {
-                // 手动输入时，等待有效的体积数据
-                var volumeData = _volumeDataService.WaitForValidVolumeData();
-                if (volumeData != null)
-                {
-                    package.SetDimensions(volumeData.Value.Length, volumeData.Value.Width, volumeData.Value.Height);
-                    Log.Information("为手动输入包裹设置体积: {Length}×{Width}×{Height} mm",
-                        volumeData.Value.Length, volumeData.Value.Width, volumeData.Value.Height);
-                }
-                else
-                {
-                    Log.Warning("等待有效体积数据超时或失败");
-                }
-            }));
-
-            // 等待所有任务完成
-            await Task.WhenAll(tasks);
-
-            // 设置包裹状态为成功
-            package.SetStatus(PackageStatus.Success, "Manual Input Processing Completed");
-
-            // 上传数据到API
-            await UploadPackageDataAsync(package, "手动输入");
-
-            // 记录原始序号并添加到历史记录
-            var originalIndex = package.Index;
-            AddToPackageHistory(package);
-
-            Log.Information("手动输入包裹处理完成 - 条码: {Barcode}, 原始序号: {OriginalIndex}, 历史序号: {HistoryIndex}",
-                package.Barcode, originalIndex, package.Index);
-
-            // 更新UI
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                UpdatePackageInfoItems(package);
-                UpdateStatistics(package);
-            });
-
-            // 清空输入框
-            ManualBarcodeInput = string.Empty;
-            
-            Log.Information("手动输入条码处理完成，恢复处理相机数据");
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "处理手动输入条码时发生错误");
-        }
-        finally
-        {
-            // 无论成功还是失败，都要重置标志位，恢复相机数据处理
-            _isProcessingManualBarcode = false;
-        }
-    }
-
-    /// <summary>
-    /// 判断是否可以执行手动条码处理
-    /// </summary>
-    /// <returns>如果输入不为空则返回true</returns>
-    private bool CanExecuteProcessManualBarcode()
-    {
-        return !string.IsNullOrWhiteSpace(ManualBarcodeInput);
-    }
-
 
     private void Timer_Tick(object? sender, EventArgs e)
     {
@@ -410,12 +287,7 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            // 如果正在处理手动输入的条码，则暂停处理相机数据
-            if (_isProcessingManualBarcode)
-            {
-                Log.Debug("正在处理手动输入条码，跳过相机数据: 条码={Barcode}", package.Barcode);
-                return;
-            }
+
 
             var barcodeMatch = MyRegex().Match(package.Barcode);
             if (!barcodeMatch.Success)
@@ -430,10 +302,9 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
 
             // 如果需要，并行获取重量
             if (package.Weight <= 0.0 && _weightService != null)
-            {
                 tasks.Add(Task.Run(() =>
                 {
-                    var weightInGrams = _weightService.FindNearestWeight(package.CreateTime);
+                    var weightInGrams = _weightService.GetLatestWeight();
                     if (weightInGrams.HasValue)
                     {
                         var weightInKg = weightInGrams.Value / 1000.0;
@@ -446,11 +317,9 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
                         Log.Warning("未找到包裹 {Index} 的重量数据", package.Index);
                     }
                 }));
-            }
 
             // 如果需要，并行获取体积
             if (!package.Length.HasValue || !package.Width.HasValue || !package.Height.HasValue)
-            {
                 tasks.Add(Task.Run(() =>
                 {
                     var volume = _volumeDataService.FindVolumeData(package);
@@ -465,12 +334,8 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
                         Log.Warning("未找到包裹 {Index} 的体积数据", package.Index);
                     }
                 }));
-            }
 
-            if (tasks.Count != 0)
-            {
-                await Task.WhenAll(tasks);
-            }
+            if (tasks.Count != 0) await Task.WhenAll(tasks);
 
             // 上传数据到API
             await UploadPackageDataAsync(package, "相机数据");
@@ -482,8 +347,8 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
                 UpdatePackageInfoItems(package);
                 UpdateStatistics(package);
                 AddToPackageHistory(package);
-                
-                Log.Debug("包裹已添加到历史记录: 原始序号={OriginalIndex}, 历史序号={HistoryIndex}, 条码={Barcode}", 
+
+                Log.Debug("包裹已添加到历史记录: 原始序号={OriginalIndex}, 历史序号={HistoryIndex}, 条码={Barcode}",
                     originalIndex, package.Index, package.Barcode);
             });
         }
@@ -509,10 +374,7 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
             // 更新重量
             var weightItem = PackageInfoItems.FirstOrDefault(static p => p.Label == "Weight");
 
-            if (weightItem != null)
-            {
-                weightItem.Value = $"{package.Weight:F2}";
-            }
+            if (weightItem != null) weightItem.Value = $"{package.Weight:F2}";
 
             // 更新尺寸
             var dimensionsItem = PackageInfoItems.FirstOrDefault(static p => p.Label == "Dimensions");
@@ -526,17 +388,11 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
 
             // 更新时间
             var timeItem = PackageInfoItems.FirstOrDefault(static p => p.Label == "Time");
-            if (timeItem != null)
-            {
-                timeItem.Value = package.CreateTime.ToString("HH:mm:ss");
-            }
+            if (timeItem != null) timeItem.Value = package.CreateTime.ToString("HH:mm:ss");
 
             // 更新状态
             var statusItem = PackageInfoItems.FirstOrDefault(static p => p.Label == "Status");
-            if (statusItem != null)
-            {
-                statusItem.Value = package.StatusDisplay;
-            }
+            if (statusItem != null) statusItem.Value = package.StatusDisplay;
         }
         catch (Exception ex)
         {
@@ -555,10 +411,7 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
             // 更新总包裹数
             _totalPackages++;
             var totalItem = StatisticsItems.FirstOrDefault(static s => s.Label == "Total Packages");
-            if (totalItem != null)
-            {
-                totalItem.Value = _totalPackages.ToString();
-            }
+            if (totalItem != null) totalItem.Value = _totalPackages.ToString();
 
             // 更新成功/失败数量 (基于 PackageStatus.Success 和 PackageStatus.Error)
             var isSuccess = package.Status == PackageStatus.Success;
@@ -569,19 +422,13 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
             {
                 _successPackages++;
                 var successItem = StatisticsItems.FirstOrDefault(static s => s.Label == "Success Count");
-                if (successItem != null)
-                {
-                    successItem.Value = _successPackages.ToString();
-                }
+                if (successItem != null) successItem.Value = _successPackages.ToString();
             }
             else if (isFailure) // 如果不是成功，且是明确的失败状态
             {
                 _failedPackages++;
                 var failureItem = StatisticsItems.FirstOrDefault(static s => s.Label == "Failure Count");
-                if (failureItem != null)
-                {
-                    failureItem.Value = _failedPackages.ToString();
-                }
+                if (failureItem != null) failureItem.Value = _failedPackages.ToString();
             }
             // 注意：如果状态既不是 Success 也不是明确的 Failure (例如 Created)，则不计入成功或失败
 
@@ -595,7 +442,7 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 上传包裹数据到API
+    ///     上传包裹数据到API
     /// </summary>
     /// <param name="package">包裹信息</param>
     /// <param name="dataSource">数据来源（相机数据或手动输入）</param>
@@ -606,7 +453,7 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
             // 检查API服务是否可用
             if (!_tareAttributesApiService.IsServiceAvailable())
             {
-                Log.Warning("TareAttributesApiService 不可用，跳过数据上传 - 条码: {Barcode}, 数据来源: {DataSource}", 
+                Log.Warning("TareAttributesApiService 不可用，跳过数据上传 - 条码: {Barcode}, 数据来源: {DataSource}",
                     package.Barcode, dataSource);
                 return;
             }
@@ -618,7 +465,7 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
                 TareSticker = package.Barcode,
                 PlaceId = 971319209, // 默认机器地点ID，可以从配置文件读取
                 SizeAMm = (long)(package.Length ?? 0), // 已经是毫米单位
-                SizeBMm = (long)(package.Width ?? 0),  // 已经是毫米单位
+                SizeBMm = (long)(package.Width ?? 0), // 已经是毫米单位
                 SizeCMm = (long)(package.Height ?? 0), // 已经是毫米单位
                 WeightG = (int)(package.Weight * 1000) // 转换为克
             };
@@ -626,22 +473,19 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
             // 计算体积
             request.CalculateVolume();
 
-            Log.Information("开始上传包裹数据到API - 条码: {Barcode}, 数据来源: {DataSource}, 尺寸: {Length}x{Width}x{Height}cm, 重量: {Weight}kg",
+            Log.Information(
+                "开始上传包裹数据到API - 条码: {Barcode}, 数据来源: {DataSource}, 尺寸: {Length}x{Width}x{Height}cm, 重量: {Weight}kg",
                 package.Barcode, dataSource, package.Length, package.Width, package.Height, package.Weight);
 
             // 调用API
             var response = await _tareAttributesApiService.SubmitTareAttributesAsync(request);
 
             if (response.Success)
-            {
                 Log.Information("包裹数据上传成功 - 条码: {Barcode}, 数据来源: {DataSource}",
                     package.Barcode, dataSource);
-            }
             else
-            {
                 Log.Error("包裹数据上传失败 - 条码: {Barcode}, 数据来源: {DataSource}, 错误: {Error}",
                     package.Barcode, dataSource, response.ErrorMessage);
-            }
         }
         catch (Exception ex)
         {
@@ -662,10 +506,7 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
             _packagesInLastHour = 0; // 重置计数器
 
             var rateItem = StatisticsItems.FirstOrDefault(static s => s.Label == "Processing Rate");
-            if (rateItem != null)
-            {
-                rateItem.Value = _processingRate.ToString();
-            }
+            if (rateItem != null) rateItem.Value = _processingRate.ToString();
         }
         catch (Exception ex)
         {
@@ -684,7 +525,7 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
             // 为包裹重新分配连续的历史序号，确保PackageHistory中的序号连续
             // 这解决了由于条码过滤导致的序号不连续问题
             package.Index = _packageHistoryIndex++;
-            
+
             // 添加到历史记录的开头
             PackageHistory.Insert(0, package);
 
@@ -816,7 +657,6 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
     #region Properties
 
     public DelegateCommand OpenSettingsCommand { get; }
-    public DelegateCommand ProcessManualBarcodeCommand { get; }
 
     public string ManualBarcodeInput
     {

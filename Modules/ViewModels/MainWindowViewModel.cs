@@ -3,11 +3,11 @@ using System.Windows;
 using System.Windows.Threading;
 using Common.Models.Package;
 using Common.Services.Settings;
-using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using Serilog;
 using ShanghaiModuleBelt.Models;
+using Common.Models.Settings.ChuteRules;
 using ShanghaiModuleBelt.Services;
 using ShanghaiModuleBelt.Views;
 using SharedUI.Models;
@@ -18,39 +18,36 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 {
     private readonly ICameraService _cameraService;
 
+    // 格口锁定状态字典
+
     // 格口统计计数器 - 维护完整的统计数据
     private readonly Dictionary<int, int> _chutePackageCount = new();
-
-    // 格口锁定状态字典
-    private readonly ChuteMappingService _chuteMappingService;
-    private readonly IDialogService _dialogService;
-    private readonly LockingService _lockingService;
-    private readonly IModuleConnectionService _moduleConnectionService;
-    private readonly INotificationService _notificationService;
     private readonly ChutePackageRecordService _chutePackageRecordService;
+    private readonly IDialogService _dialogService;
+    private readonly IModuleConnectionService _moduleConnectionService;
     private readonly ISettingsService _settingsService;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly DispatcherTimer _timer;
     private string _currentBarcode = string.Empty;
     private bool _disposed;
     private SystemStatus _systemStatus = new();
+    // 统计计数器（使用独立计数而不是受限的 PackageHistory）
+    private int _totalProcessed;
+    private int _successCount;
+    private int _failedCount;
+    private readonly object _statsLock = new();
+    private readonly Queue<DateTime> _processedTimestamps = new();
 
     public MainWindowViewModel(IDialogService dialogService,
-        INotificationService notificationService,
         ICameraService cameraService,
         PackageTransferService packageTransferService, ISettingsService settingsService,
         IModuleConnectionService moduleConnectionService,
-        ChuteMappingService chuteMappingService,
-        LockingService lockingService,
         ChutePackageRecordService chutePackageRecordService)
     {
         _dialogService = dialogService;
-        _notificationService = notificationService;
         _cameraService = cameraService;
         _settingsService = settingsService;
         _moduleConnectionService = moduleConnectionService;
-        _chuteMappingService = chuteMappingService;
-        _lockingService = lockingService;
         _chutePackageRecordService = chutePackageRecordService;
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
         ShowChuteStatisticsCommand = new DelegateCommand(ExecuteShowChuteStatistics);
@@ -78,21 +75,16 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         // 订阅模组带连接状态事件
         _moduleConnectionService.ConnectionStateChanged += OnModuleConnectionChanged;
 
-        // 订阅锁格状态变更事件
-        _lockingService.ChuteLockStatusChanged += OnChuteLockStatusChanged;
-
-        // 订阅锁格设备连接状态变更事件
-        _lockingService.ConnectionStatusChanged += OnLockingDeviceConnectionChanged;
         // 订阅包裹流
         _subscriptions.Add(packageTransferService.PackageStream
             .Subscribe(package => { Application.Current.Dispatcher.BeginInvoke(() => OnPackageInfo(package)); }));
 
-        // 初始检查锁格设备状态
-        UpdateLockingDeviceStatus(_lockingService.IsConnected());
+        // 不再使用锁格服务
     }
 
     public DelegateCommand OpenSettingsCommand { get; }
     public DelegateCommand ShowChuteStatisticsCommand { get; }
+
     public string CurrentBarcode
     {
         get => _currentBarcode;
@@ -126,7 +118,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             var dialog = new ChuteStatisticsDialog();
-            var viewModel = new ChuteStatisticsDialogViewModel(_notificationService);
+            var viewModel = new ChuteStatisticsDialogViewModel();
 
             // 更新统计数据
             viewModel.UpdateStatistics(_chutePackageCount);
@@ -137,10 +129,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             // 设置刷新动作的处理逻辑
             viewModel.RefreshAction = () =>
             {
-                Application.Current.Dispatcher.Invoke(() =>
-                {
-                    viewModel.UpdateStatistics(_chutePackageCount);
-                });
+                Application.Current.Dispatcher.Invoke(() => { viewModel.UpdateStatistics(_chutePackageCount); });
             };
 
             // 设置父窗口并显示对话框
@@ -182,14 +171,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 StatusColor = "#F44336" // 红色表示未连接
             });
 
-            // 添加锁格设备状态
-            DeviceStatuses.Add(new DeviceStatus
-            {
-                Name = "锁格设备",
-                Status = "未连接",
-                Icon = "Lock24",
-                StatusColor = "#F44336" // 红色表示未连接
-            });
+            // 不再添加锁格设备状态
         }
         catch (Exception ex)
         {
@@ -305,7 +287,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         }
     }
 
-    private async void OnPackageInfo(PackageInfo package)
+    private void OnPackageInfo(PackageInfo package)
     {
         try
         {
@@ -322,19 +304,20 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             }
             else
             {
-                // 根据条码查找匹配的格口
-                var chuteNumber = await _chuteMappingService.GetChuteNumberAsync(package);
+                // 使用本地规则匹配格口（不再调用远程锁格/分配服务）
+                var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
+                var chuteNumber = chuteSettings.FindMatchingChute(package.Barcode, package.Weight);
 
                 if (chuteNumber == null)
                 {
-                    Log.Warning("无法获取格口号，使用异常格口: {Barcode}", package.Barcode);
-                    package.SetChute(moduleConfig.ExceptionChute); // 使用 ChuteSettings 中的异常格口
+                    Log.Warning("本地规则未匹配到格口，使用异常格口: {Barcode}", package.Barcode);
+                    package.SetChute(moduleConfig.ExceptionChute);
                     package.SetStatus(PackageStatus.Error, "格口分配失败");
                 }
                 else
                 {
                     // 设置包裹的格口
-                    package.SetChute(chuteNumber.Value); // 不再有原始格口的概念，因为直接匹配规则
+                    package.SetChute(chuteNumber.Value);
                 }
             }
 
@@ -350,15 +333,25 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             _moduleConnectionService.OnPackageReceived(package);
 
             // 更新格口统计计数器
-            if (!_chutePackageCount.TryAdd(package.ChuteNumber, 1))
-            {
-                _chutePackageCount[package.ChuteNumber]++;
-            }
+            if (!_chutePackageCount.TryAdd(package.ChuteNumber, 1)) _chutePackageCount[package.ChuteNumber]++;
 
             // 如果没有错误，设置为正常状态
-            if (string.IsNullOrEmpty(package.ErrorMessage))
+            if (string.IsNullOrEmpty(package.ErrorMessage)) package.SetStatus(PackageStatus.Success, "正常");
+
+            // 更新独立统计计数器（不依赖于 PackageHistory 的上限）
+            lock (_statsLock)
             {
-                package.SetStatus(PackageStatus.Success, "正常");
+                _totalProcessed++;
+                if (string.IsNullOrEmpty(package.ErrorMessage))
+                    _successCount++;
+                else
+                    _failedCount++;
+
+                _processedTimestamps.Enqueue(DateTime.Now);
+
+                // 保持队列只包含过去一小时的记录，用于计算处理速率
+                while (_processedTimestamps.Count > 0 && (DateTime.Now - _processedTimestamps.Peek()).TotalHours > 1)
+                    _processedTimestamps.Dequeue();
             }
             // 更新UI
             Application.Current.Dispatcher.Invoke(() =>
@@ -457,9 +450,10 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         var rateItem = StatisticsItems.FirstOrDefault(static x => x.Label == "处理速率");
         if (rateItem == null) return;
 
+        // 使用独立队列统计最近一小时的处理数
+        lock (_statsLock)
         {
-            var hourAgo = DateTime.Now.AddHours(-1);
-            var hourlyCount = PackageHistory.Count(p => p.CreateTime > hourAgo);
+            var hourlyCount = _processedTimestamps.Count;
             rateItem.Value = hourlyCount.ToString();
             rateItem.Description = $"最近一小时处理 {hourlyCount} 个";
         }
@@ -478,8 +472,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 // 取消事件订阅
                 _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
                 _moduleConnectionService.ConnectionStateChanged -= OnModuleConnectionChanged;
-                _lockingService.ChuteLockStatusChanged -= OnChuteLockStatusChanged;
-                _lockingService.ConnectionStatusChanged -= OnLockingDeviceConnectionChanged;
+                // 无锁格服务事件可取消
 
                 // 释放订阅
                 foreach (var subscription in _subscriptions) subscription.Dispose();
@@ -493,48 +486,5 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         _disposed = true;
     }
 
-    /// <summary>
-    ///     更新锁格设备状态
-    /// </summary>
-    /// <param name="isConnected"></param>
-    private void UpdateLockingDeviceStatus(bool isConnected)
-    {
-        try
-        {
-            var lockingDeviceStatus = DeviceStatuses.FirstOrDefault(static x => x.Name == "锁格设备");
-            if (lockingDeviceStatus == null) return;
-
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                lockingDeviceStatus.Status = isConnected ? "已连接" : "已断开";
-                lockingDeviceStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
-            });
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "更新锁格设备状态时发生错误");
-        }
-    }
-
-    /// <summary>
-    ///     处理锁格状态变更事件
-    /// </summary>
-    /// <param name="chuteNumber">格口号</param>
-    /// <param name="isLocked">是否锁定</param>
-    private async void OnChuteLockStatusChanged(int chuteNumber, bool isLocked)
-    {
-        // 通知格口包裹记录服务更新锁定状态
-        // 如果格口被锁定，会自动进行数据上传和清空
-        // 如果格口被解锁，会更新状态允许新包裹进入
-        await _chutePackageRecordService.SetChuteLockStatusAsync(chuteNumber, isLocked);
-    }
-
-    /// <summary>
-    ///     处理锁格设备连接状态变更事件
-    /// </summary>
-    /// <param name="isConnected">是否已连接</param>
-    private void OnLockingDeviceConnectionChanged(bool isConnected)
-    {
-        UpdateLockingDeviceStatus(isConnected);
-    }
+    // 不再使用锁格服务相关事件与状态更新
 }

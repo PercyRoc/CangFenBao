@@ -26,14 +26,14 @@
         <PackageReference Include="Microsoft.Extensions.Hosting"/>
         <PackageReference Include="Microsoft.Extensions.Options"/>
         <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions"/>
-        <PackageReference Include="NAudio" />
+        <PackageReference Include="NAudio"/>
         <PackageReference Include="Prism.Wpf"/>
         <PackageReference Include="Prism.Unity"/>
         <PackageReference Include="Serilog"/>
         <PackageReference Include="SixLabors.ImageSharp"/>
         <PackageReference Include="System.IO.Ports"/>
-        <PackageReference Include="System.Speech"/>
         <PackageReference Include="HandyControl"/>
+        <PackageReference Include="System.Speech" />
         <PackageReference Include="WPF-UI"/>
     </ItemGroup>
 </Project>

@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using Common.Services.Ui;
 using ShanghaiModuleBelt.Models;
 
 namespace ShanghaiModuleBelt.ViewModels;
@@ -9,14 +8,11 @@ namespace ShanghaiModuleBelt.ViewModels;
 /// </summary>
 internal class ChuteStatisticsDialogViewModel : BindableBase
 {
-    private readonly INotificationService _notificationService;
-
-    public ChuteStatisticsDialogViewModel(INotificationService notificationService)
+    public ChuteStatisticsDialogViewModel()
     {
-        _notificationService = notificationService;
         RefreshCommand = new DelegateCommand(ExecuteRefresh);
-        RetryFailedDataCommand = new DelegateCommand(ExecuteRetryFailedData);
     }
+
     /// <summary>
     ///     格口统计集合
     /// </summary>
@@ -32,7 +28,7 @@ internal class ChuteStatisticsDialogViewModel : BindableBase
     /// </summary>
     public Action? RefreshAction { get; set; }
 
-    public DelegateCommand RetryFailedDataCommand { get; }
+    // 重传功能已移除
 
     /// <summary>
     ///     更新格口统计数据
@@ -61,9 +57,5 @@ internal class ChuteStatisticsDialogViewModel : BindableBase
         RefreshAction?.Invoke();
     }
 
-    private void ExecuteRetryFailedData()
-        {
-        // 重传功能已被移除
-        _notificationService.ShowWarning("重传功能已被禁用");
-    }
+    // 重传功能已移除
 }

@@ -40,7 +40,7 @@ public class ChuteMappingService(HttpClient httpClient, ISettingsService setting
 
         try
         {
-            // 根据站点代码确定handlers
+            // 根据站点代码确定handlers（站点代码与 Token 已移除，使用默认 handlers）
             const string handlers = "上海收货组08";
 
             // 构建请求数据
@@ -50,7 +50,7 @@ public class ChuteMappingService(HttpClient httpClient, ISettingsService setting
                 scanTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
                 handlers,
                 weight = package.Weight.ToString("0.000"),
-                siteCode = config.SiteCode
+                // siteCode 已移除，不再发送
             };
 
             // 序列化为JSON
@@ -65,9 +65,8 @@ public class ChuteMappingService(HttpClient httpClient, ISettingsService setting
             // 发送请求
             Log.Information("正在请求格口号: {Barcode}", package.Barcode);
 
-            // 设置请求头
+            // 设置请求
             using var request = new HttpRequestMessage(HttpMethod.Post, ApiUrl);
-            request.Headers.Add("equickToken", config.Token);
             request.Content = content;
 
             var response = await httpClient.SendAsync(request, cts.Token);

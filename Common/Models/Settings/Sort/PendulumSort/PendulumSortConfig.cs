@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using Common.Services.Settings;
+using Prism.Mvvm;
 
 namespace Common.Models.Settings.Sort.PendulumSort;
 
@@ -10,6 +11,7 @@ namespace Common.Models.Settings.Sort.PendulumSort;
 [Configuration("PendulumSort")]
 public class PendulumSortConfig : BindableBase
 {
+    private int _continuousSortMaxIntervalMs = 2000;
     private int _globalDebounceTime;
     private ObservableCollection<SortPhotoelectric> _sortingPhotoelectrics = [];
 
@@ -55,9 +57,6 @@ public class PendulumSortConfig : BindableBase
         set => SetProperty(ref _straightThroughTimeout, value);
     }
 
-
-    private int _continuousSortMaxIntervalMs = 2000;
-
     /// <summary>
     ///     连续分拣的最大时间间隔（毫秒）
     ///     只有当下一个相同格口的包裹预计在此时间窗口内到达时，才跳过回正
@@ -67,8 +66,6 @@ public class PendulumSortConfig : BindableBase
         get => _continuousSortMaxIntervalMs;
         set => SetProperty(ref _continuousSortMaxIntervalMs, value);
     }
-
-
 }
 
 public class TriggerPhotoelectric : BindableBase

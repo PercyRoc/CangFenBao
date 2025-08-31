@@ -1,7 +1,39 @@
 using System.Collections.ObjectModel;
 using Common.Services.Settings;
+using Prism.Mvvm;
 
 namespace DongtaiFlippingBoardMachine.Models;
+
+/// <summary>
+///     分拣模式
+/// </summary>
+public enum SortingMode
+{
+    /// <summary>
+    ///     全部包裹都去异常口
+    /// </summary>
+    AllToError = 1,
+
+    /// <summary>
+    ///     非noread包裹去异常口
+    /// </summary>
+    NonNoreadToError = 2,
+
+    /// <summary>
+    ///     全部包裹循环分拣
+    /// </summary>
+    AllRoundRobin = 3,
+
+    /// <summary>
+    ///     非noread包裹循环分拣
+    /// </summary>
+    NonNoreadRoundRobin = 4,
+
+    /// <summary>
+    ///     正式分拣使用中通api
+    /// </summary>
+    FormalZtoApi = 5
+}
 
 /// <summary>
 ///     翻板机配置
@@ -13,8 +45,9 @@ public class PlateTurnoverSettings : BindableBase
     private double _defaultInterval = 200; // 默认间隔时间（毫秒）
     private int _errorChute; // 异常格口号
     private ObservableCollection<PlateTurnoverItem> _items = [];
-    private string _triggerPhotoelectricIp = "192.168.1.100"; // 默认IP地址
-    private int _triggerPhotoelectricPort = 2000; // 默认端口号
+    private SortingMode _sortingMode = SortingMode.FormalZtoApi; // 默认正式分拣
+    private string _triggerPhotoelectricIp = "192.168.1.50"; // 默认IP地址
+    private int _triggerPhotoelectricPort = 502; // 默认端口号
 
     /// <summary>
     ///     格口总数
@@ -24,10 +57,7 @@ public class PlateTurnoverSettings : BindableBase
         get => _chuteCount;
         set
         {
-            if (SetProperty(ref _chuteCount, value))
-            {
-                OnSettingsChanged();
-            }
+            if (SetProperty(ref _chuteCount, value)) OnSettingsChanged();
         }
     }
 
@@ -53,10 +83,7 @@ public class PlateTurnoverSettings : BindableBase
         get => _triggerPhotoelectricIp;
         set
         {
-            if (SetProperty(ref _triggerPhotoelectricIp, value))
-            {
-                OnSettingsChanged();
-            }
+            if (SetProperty(ref _triggerPhotoelectricIp, value)) OnSettingsChanged();
         }
     }
 
@@ -68,10 +95,19 @@ public class PlateTurnoverSettings : BindableBase
         get => _triggerPhotoelectricPort;
         set
         {
-            if (SetProperty(ref _triggerPhotoelectricPort, value))
-            {
-                OnSettingsChanged();
-            }
+            if (SetProperty(ref _triggerPhotoelectricPort, value)) OnSettingsChanged();
+        }
+    }
+
+    /// <summary>
+    ///     分拣模式
+    /// </summary>
+    public SortingMode SortingMode
+    {
+        get => _sortingMode;
+        set
+        {
+            if (SetProperty(ref _sortingMode, value)) OnSettingsChanged();
         }
     }
 
@@ -83,10 +119,7 @@ public class PlateTurnoverSettings : BindableBase
         get => _defaultInterval;
         set
         {
-            if (SetProperty(ref _defaultInterval, value))
-            {
-                OnSettingsChanged();
-            }
+            if (SetProperty(ref _defaultInterval, value)) OnSettingsChanged();
         }
     }
 
@@ -98,10 +131,7 @@ public class PlateTurnoverSettings : BindableBase
         get => _errorChute;
         set
         {
-            if (SetProperty(ref _errorChute, value))
-            {
-                OnSettingsChanged();
-            }
+            if (SetProperty(ref _errorChute, value)) OnSettingsChanged();
         }
     }
 
@@ -135,10 +165,7 @@ public class PlateTurnoverSettings : BindableBase
     /// </summary>
     public int MaxConfiguredDistance
     {
-        get
-        {
-            return Items.Count == 0 ? 0 : (int)Items.Max(static item => item.Distance);
-        }
+        get { return Items.Count == 0 ? 0 : (int)Items.Max(static item => item.Distance); }
     }
 
     /// <summary>

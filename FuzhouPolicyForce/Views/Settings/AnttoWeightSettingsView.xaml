@@ -24,9 +24,10 @@
                           MinWidth="200"
                           HorizontalAlignment="Left"
                           Margin="0,0,0,10" />
-                
-                <TextBlock Text="请选择要使用的API环境" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,8,0,0" />
+
+                <TextBlock Text="请选择要使用的API环境" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Margin="0,8,0,0" />
             </StackPanel>
         </ui:Card>
     </StackPanel>
-</UserControl> 
+</UserControl>

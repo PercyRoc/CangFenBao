@@ -93,10 +93,7 @@ public class AsnService(
             var settings = settingsService.LoadSettings<AsnSettings>();
             var reviewUrl = settings.ReviewServerUrl.Trim();
 
-            if (string.IsNullOrWhiteSpace(reviewUrl))
-            {
-                return Response.CreateFailed("未配置复核服务器地址", "NO_SERVER_URL");
-            }
+            if (string.IsNullOrWhiteSpace(reviewUrl)) return Response.CreateFailed("未配置复核服务器地址", "NO_SERVER_URL");
 
             // 从设置中获取月台值，并覆盖请求中的值
             request.ExitArea = settings.ReviewExitArea;
@@ -108,9 +105,7 @@ public class AsnService(
             var httpResponse = await httpClient.PostAsync(reviewUrl, content);
 
             if (!httpResponse.IsSuccessStatusCode)
-            {
                 return Response.CreateFailed($"服务器返回错误: {httpResponse.StatusCode}", "HTTP_ERROR");
-            }
 
             var responseString = await httpResponse.Content.ReadAsStringAsync();
 

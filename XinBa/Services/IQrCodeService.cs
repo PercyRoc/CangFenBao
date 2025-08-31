@@ -13,4 +13,4 @@ public interface IQrCodeService
     /// <param name="text">要编码到二维码中的文本</param>
     /// <returns>生成的二维码图像，如果生成失败则返回 null</returns>
     BitmapSource? Generate(string text);
-} 
+}

@@ -16,6 +16,9 @@ using DeviceService.DataSourceDevices.Services;
 using FuzhouPolicyForce.Models.AnttoWeight;
 using FuzhouPolicyForce.Services.AnttoWeight;
 using FuzhouPolicyForce.WangDianTong;
+using Prism.Commands;
+using Prism.Dialogs;
+using Prism.Mvvm;
 using Serilog;
 using SharedUI.Models;
 using SortingServices.Pendulum;
@@ -24,6 +27,7 @@ namespace FuzhouPolicyForce.ViewModels;
 
 internal class MainWindowViewModel : BindableBase, IDisposable
 {
+    private readonly IAnttoWeightService _anttoWeightService;
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
     private readonly IPackageDataService _packageDataService;
@@ -34,7 +38,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     private readonly DispatcherTimer _timer;
 
     private readonly IWangDianTongApiService _wangDianTongApiService;
-    private readonly IAnttoWeightService _anttoWeightService;
 
     private string _currentBarcode = string.Empty;
 
@@ -182,7 +185,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             var targets = new List<CalibrationTarget>
             {
                 // 添加完整标定流程目标
-                new CalibrationTarget
+                new()
                 {
                     Id = "Trigger", // 特殊ID，用于匹配
                     DisplayName = "完整标定流程 (触发时间 + 分拣时间)",
@@ -203,7 +206,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 var updatedTargets = r.Parameters.GetValue<List<CalibrationTarget>>("targets");
 
                 foreach (var target in updatedTargets)
-                {
                     if (target.Id == "Trigger")
                     {
                         config.TriggerPhotoelectric.SortingTimeRangeLower = (int)target.TimeRangeLower;
@@ -211,7 +213,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                         config.TriggerPhotoelectric.SortingDelay = (int)target.SortingDelay;
                         config.TriggerPhotoelectric.ResetDelay = (int)target.ResetDelay;
                     }
-                }
 
                 _settingsService.SaveSettings(config);
                 Log.Information("标定设置已从对话框回调中成功保存。");
@@ -415,7 +416,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
     }
 
     /// <summary>
-    /// 检查旺店通API响应是否表示退款订单
+    ///     检查旺店通API响应是否表示退款订单
     /// </summary>
     /// <param name="response">旺店通API响应</param>
     /// <returns>是否为退款订单</returns>
@@ -425,46 +426,42 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         if (!string.IsNullOrEmpty(response.Message))
         {
             var message = response.Message.ToLower();
-            if (message.Contains("退款") || message.Contains("refund") || 
+            if (message.Contains("退款") || message.Contains("refund") ||
                 message.Contains("退货") || message.Contains("return"))
-            {
                 return true;
-            }
         }
-        
+
         // 检查物流名称中是否包含退款相关关键词
         if (!string.IsNullOrEmpty(response.LogisticsName))
         {
             var logisticsName = response.LogisticsName.ToLower();
-            if (logisticsName.Contains("退款") || logisticsName.Contains("refund") || 
+            if (logisticsName.Contains("退款") || logisticsName.Contains("refund") ||
                 logisticsName.Contains("退货") || logisticsName.Contains("return"))
-            {
                 return true;
-            }
         }
-        
+
         return false;
     }
 
     /// <summary>
-    /// 检查旺店通API响应是否表示重量不匹配
+    ///     检查旺店通API响应是否表示重量不匹配
     /// </summary>
     /// <param name="response">旺店通API响应</param>
     /// <returns>是否为重量不匹配</returns>
     private static bool IsWeightMismatch(WeightPushResponse response)
     {
         if (string.IsNullOrEmpty(response.Message)) return false;
-        
+
         var message = response.Message.ToLower();
         return message.Contains("重量") && (
             message.Contains("不匹配") || message.Contains("不符") || message.Contains("超限") ||
-            message.Contains("weight") && (message.Contains("mismatch") || message.Contains("exceed") || 
-                                         message.Contains("invalid") || message.Contains("error"))
+            (message.Contains("weight") && (message.Contains("mismatch") || message.Contains("exceed") ||
+                                            message.Contains("invalid") || message.Contains("error")))
         );
     }
 
     /// <summary>
-    /// 【新增】处理分拣完成事件
+    ///     【新增】处理分拣完成事件
     /// </summary>
     /// <param name="sender">事件发送者</param>
     /// <param name="package">完成分拣的包裹</param>
@@ -479,13 +476,14 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 try
                 {
                     // 查找PackageHistory中的包裹并更新状态
-                    var existingPackage = PackageHistory.FirstOrDefault(p => p.Barcode == package.Barcode && p.Index == package.Index);
+                    var existingPackage =
+                        PackageHistory.FirstOrDefault(p => p.Barcode == package.Barcode && p.Index == package.Index);
                     if (existingPackage != null)
                     {
                         // 更新包裹状态以反映分拣结果
                         existingPackage.SetSortState(package.SortState);
                         Log.Information("包裹 {Barcode} 状态已更新为: {SortState}", package.Barcode, package.SortState);
-                        
+
                         // 触发UI更新
                         UpdatePackageInfoItems(existingPackage);
                     }
@@ -512,16 +510,18 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         try
         {
             Application.Current.Dispatcher.Invoke(() => { CurrentBarcode = package.Barcode; });
-
-            // 处理条码后缀 -1-1-，如果条码以-1-1-结尾，则去除该后缀
-            if (!string.IsNullOrEmpty(package.Barcode) && package.Barcode.EndsWith("-1-1-", StringComparison.OrdinalIgnoreCase))
-            {
-                var originalBarcode = package.Barcode;
-                var processedBarcode = package.Barcode[..^6]; // 去除-1-1-后缀
-                package.SetBarcode(processedBarcode);
-                Log.Information("包裹条码去除后缀 -1-1-：{OriginalBarcode} -> {ProcessedBarcode}", 
-                    originalBarcode, processedBarcode);
-            }
+            // 条码规范化处理（互斥规则）：
+            // - 若以 JD 开头：仅截取前 15 位，跳过其它规则
+            if (!string.IsNullOrEmpty(package.Barcode))
+                if (package.Barcode.StartsWith("JD", StringComparison.OrdinalIgnoreCase))
+                    if (package.Barcode.Length > 15)
+                    {
+                        var originalBarcode = package.Barcode;
+                        var processedBarcode = package.Barcode[..15];
+                        package.SetBarcode(processedBarcode);
+                        Log.Information("包裹条码以JD开头，截取前15位：{OriginalBarcode} -> {ProcessedBarcode}",
+                            originalBarcode, processedBarcode);
+                    }
 
             // 获取格口规则配置 - 始终需要，用于本地规则和异常口
             var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
@@ -540,9 +540,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 // 【新增】确保包裹分拣状态正确设置
                 package.SetSortState(PackageSortState.Pending);
                 Log.Debug("包裹 {Barcode} 分拣状态已设置为: {SortState}", package.Barcode, package.SortState);
-                
+
                 _sortService.ProcessPackage(package);
-                
+
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     try
@@ -555,9 +555,13 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                             PackageHistory.RemoveAt(PackageHistory.Count - 1);
                             removedPackage.Dispose();
                         }
+
                         UpdateStatistics();
                     }
-                    catch (Exception ex) { Log.Error(ex, "更新UI时发生错误"); }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "更新UI时发生错误");
+                    }
                 });
                 await SavePackageRecordAsync(package); // 保存记录
                 package.ReleaseImage(); // 释放资源
@@ -608,9 +612,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                 // 【新增】确保包裹分拣状态正确设置
                 package.SetSortState(PackageSortState.Pending);
                 Log.Debug("包裹 {Barcode} 分拣状态已设置为: {SortState}", package.Barcode, package.SortState);
-                
+
                 _sortService.ProcessPackage(package);
-                
+
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     try
@@ -623,15 +627,19 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                             PackageHistory.RemoveAt(PackageHistory.Count - 1);
                             removedPackage.Dispose();
                         }
+
                         UpdateStatistics();
                     }
-                    catch (Exception ex) { Log.Error(ex, "更新UI时发生错误"); }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "更新UI时发生错误");
+                    }
                 });
                 await SavePackageRecordAsync(package); // 保存记录
                 package.ReleaseImage(); // 释放资源
                 return; // 处理完毕，退出方法
             }
-            
+
             // 如果安通API调用成功，继续执行本地规则匹配
             try
             {
@@ -669,9 +677,9 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             // 【新增】确保包裹分拣状态正确设置
             package.SetSortState(PackageSortState.Pending);
             Log.Debug("包裹 {Barcode} 分拣状态已设置为: {SortState}", package.Barcode, package.SortState);
-            
+
             _sortService.ProcessPackage(package);
-            
+
             Application.Current.Dispatcher.Invoke(() =>
             {
                 try
@@ -708,13 +716,14 @@ internal class MainWindowViewModel : BindableBase, IDisposable
             {
                 var chuteSettings = _settingsService.LoadSettings<ChuteSettings>();
                 package.SetChute(chuteSettings.ErrorChuteNumber);
-                Log.Warning("包裹 {Barcode} 发生未处理异常，分配到错误格口 {ErrorChute}", 
+                Log.Warning("包裹 {Barcode} 发生未处理异常，分配到错误格口 {ErrorChute}",
                     package.Barcode, chuteSettings.ErrorChuteNumber);
             }
             catch
-            { 
+            {
                 Log.Error("无法加载格口设置，无法设置错误格口");
             }
+
             Interlocked.Increment(ref _errorPackageCount);
 
             // 尝试保存异常记录
@@ -733,9 +742,13 @@ internal class MainWindowViewModel : BindableBase, IDisposable
                         PackageHistory.RemoveAt(PackageHistory.Count - 1);
                         removedPackage.Dispose();
                     }
+
                     UpdateStatistics();
                 }
-                catch (Exception uiEx) { Log.Error(uiEx, "顶层异常处理后更新UI时发生错误"); }
+                catch (Exception uiEx)
+                {
+                    Log.Error(uiEx, "顶层异常处理后更新UI时发生错误");
+                }
             });
         }
         finally
@@ -780,10 +793,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         }
 
         var sizeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "尺寸");
-        if (sizeItem != null)
-        {
-            sizeItem.Value = package.VolumeDisplay;
-        }
+        if (sizeItem != null) sizeItem.Value = package.VolumeDisplay;
 
         var segmentItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "段码");
         if (segmentItem != null)
@@ -811,7 +821,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         if (processingTimeItem == null) return;
 
         processingTimeItem.Value = $"{package.ProcessingTime:F0}";
-        processingTimeItem.Description = $"耗时 {package.ProcessingTime:F0} 毫秒";
+        processingTimeItem.Description = $"耗时 {package.ProcessingTime:F0} 毫秒 (触发→当前)";
     }
 
     private void UpdateStatistics()

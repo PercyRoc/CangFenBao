@@ -53,10 +53,7 @@ public class WaybillUploadService : IWaybillUploadService
         }
 
         // 如果后台队列没有正在上传，则开始后台上传
-        if (!_isUploading)
-        {
-            _ = ProcessUploadQueueAsync(); // 触发后台处理，不等待
-        }
+        if (!_isUploading) _ = ProcessUploadQueueAsync(); // 触发后台处理，不等待
     }
 
     /// <summary>
@@ -131,6 +128,7 @@ public class WaybillUploadService : IWaybillUploadService
             Log.Warning("尝试上传 null 包裹信息，已跳过。");
             return;
         }
+
         if (string.IsNullOrEmpty(_apiSettings.MachineMx))
         {
             Log.Warning("MachineMx 未配置，无法上传包裹: {Barcode}", package.Barcode);
@@ -151,14 +149,10 @@ public class WaybillUploadService : IWaybillUploadService
 
                 // 直接使用包裹对象中的图片属性
                 if (package.Image != null)
-                {
                     // 上传包裹图片
                     await UploadPackageImageAsync(package);
-                }
                 else
-                {
                     Log.Warning("包裹没有图片，仅上传运单信息：{Barcode}", package.Barcode);
-                }
             }
             else
             {
@@ -183,17 +177,13 @@ public class WaybillUploadService : IWaybillUploadService
         var sizeStr = string.Empty;
         if (package is { Length: not null, Width: not null, Height: not null })
             // 修改为长*宽*高格式，保持厘米单位
-        {
             sizeStr = $"{package.Length.Value:F0}*{package.Width.Value:F0}*{package.Height.Value:F0}";
-        }
 
         // 计算体积字符串
         var volumeStr = string.Empty;
         if (package.Volume.HasValue)
-        {
             // 将立方厘米转换为立方米，保留6位小数
             volumeStr = package.Volume.Value.ToString(CultureInfo.InvariantCulture);
-        }
 
         return new WaybillRecord
         {
@@ -344,6 +334,7 @@ public class WaybillUploadService : IWaybillUploadService
                     {
                         encoder.Save(fileStream);
                     }
+
                     Log.Information("已将包裹图片 (BitmapSource) 保存到临时文件: {FilePath}", tempImagePath);
                 }
                 else
@@ -492,7 +483,8 @@ public class WaybillUploadService : IWaybillUploadService
             var fileName = Path.GetFileName(imageFilePath);
             formData.Add(fileContent, "file", fileName);
 
-            Log.Information("正在上传运单图片，URL: {Url}, 运单号: {WaybillNumber}, AesKey长度: {AesKeyLength}, MachineMx: {MachineMx}, 文件: {FileName}",
+            Log.Information(
+                "正在上传运单图片，URL: {Url}, 运单号: {WaybillNumber}, AesKey长度: {AesKeyLength}, MachineMx: {MachineMx}, 文件: {FileName}",
                 url, waybillNumber, _apiSettings.AesKey.Length, machineMx, fileName);
 
             // 7. 发送请求

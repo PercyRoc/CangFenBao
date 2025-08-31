@@ -8,11 +8,31 @@ namespace XinBeiYang.Services;
 public interface IImageStorageService
 {
     /// <summary>
-    ///     异步保存提供的图像。
+    ///     异步保存带水印的图像（水印位于左上角，绿色字体，包含条码/重量/体积/时间）。
     /// </summary>
     /// <param name="image">要保存的 BitmapSource 图像。</param>
-    /// <param name="barcode">与图像关联的条码，用于命名。</param>
-    /// <param name="createTime">包裹的创建时间，用于命名和组织。</param>
-    /// <returns>保存的图像文件的完整路径，如果保存失败则返回 null。</returns>
-    Task<string?> SaveImageAsync(BitmapSource? image, string barcode, DateTime createTime);
+    /// <param name="barcode">条码。</param>
+    /// <param name="weightKg">重量（kg）。</param>
+    /// <param name="lengthCm">长度（cm）。</param>
+    /// <param name="widthCm">宽度（cm）。</param>
+    /// <param name="heightCm">高度（cm）。</param>
+    /// <param name="createTime">创建时间。</param>
+    /// <returns>保存路径，失败返回 null。</returns>
+    Task<string?> SaveImageWithWatermarkAsync(
+        BitmapSource? image,
+        string barcode,
+        double weightKg,
+        double? lengthCm,
+        double? widthCm,
+        double? heightCm,
+        DateTime createTime);
+
+    /// <summary>
+    ///     异步保存原始图像（不加水印）。
+    /// </summary>
+    /// <param name="image">要保存的 BitmapSource 图像。</param>
+    /// <param name="barcode">条码。</param>
+    /// <param name="createTime">创建时间。</param>
+    /// <returns>保存路径，失败返回 null。</returns>
+    Task<string?> SaveOriginalAsync(BitmapSource? image, string barcode, DateTime createTime);
 }

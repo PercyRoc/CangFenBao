@@ -1,8 +1,12 @@
 using System.Collections.ObjectModel;
 using System.Windows;
-using JetBrains.Annotations;
-using Serilog;
 using Common.Events;
+using JetBrains.Annotations;
+using Prism.Commands;
+using Prism.Dialogs;
+using Prism.Events;
+using Prism.Mvvm;
+using Serilog;
 using SharedUI.Models;
 
 namespace SharedUI.ViewModels.Dialogs;
@@ -10,32 +14,33 @@ namespace SharedUI.ViewModels.Dialogs;
 public class CalibrationDialogViewModel : BindableBase, IDialogAware
 {
     private readonly IEventAggregator _eventAggregator;
+    private bool _hasSortingTimeResult;
+    private bool _hasTriggerTimeResult;
     private bool _isCalibrationMode;
     private double _measuredDelay;
+
+    // 完整标定流程的状态
+    private DateTime? _packageProcessingTime;
+    private SubscriptionToken? _packageProcessingToken;
     private double _resetDelay = 1000;
+    private DateTime? _secondSignalTime;
     private CalibrationTarget? _selectedTarget;
     private double _sortingDelay = 50;
-    private DateTime? _secondSignalTime;
+    private SubscriptionToken? _sortingToken;
     private string _statusMessage = "请启用一次性标定模式，然后让包裹通过触发标定";
     private double _timeRangeLower = 1000;
     private double _timeRangeUpper = 3000;
     private string _title = "一次性标定";
     private DateTime? _triggerTime;
     private SubscriptionToken? _triggerToken;
-    private SubscriptionToken? _sortingToken;
-    private SubscriptionToken? _packageProcessingToken;
-
-    // 完整标定流程的状态
-    private DateTime? _packageProcessingTime;
-    private bool _hasTriggerTimeResult;
-    private bool _hasSortingTimeResult;
 
     public CalibrationDialogViewModel(IEventAggregator eventAggregator)
     {
         _eventAggregator = eventAggregator;
 
         ToggleCalibrationModeCommand = new DelegateCommand(() => IsCalibrationMode = !IsCalibrationMode);
-        ApplyRecommendedSettingsCommand = new DelegateCommand(ExecuteApplyRecommendedSettings, CanApplyRecommendedSettings);
+        ApplyRecommendedSettingsCommand =
+            new DelegateCommand(ExecuteApplyRecommendedSettings, CanApplyRecommendedSettings);
         SaveCommand = new DelegateCommand(ExecuteSave);
         CancelCommand = new DelegateCommand(ExecuteCancel);
     }
@@ -53,10 +58,7 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
         [UsedImplicitly] get => _triggerTime;
         private set
         {
-            if (SetProperty(ref _triggerTime, value))
-            {
-                RaisePropertyChanged(nameof(IsResultVisible));
-            }
+            if (SetProperty(ref _triggerTime, value)) RaisePropertyChanged(nameof(IsResultVisible));
         }
     }
 
@@ -66,8 +68,7 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
         private set => SetProperty(ref _secondSignalTime, value);
     }
 
-    [UsedImplicitly]
-    public bool IsResultVisible => TriggerTime.HasValue;
+    [UsedImplicitly] public bool IsResultVisible => TriggerTime.HasValue;
 
     public double MeasuredDelay
     {
@@ -138,21 +139,20 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
         set => SetProperty(ref _resetDelay, value);
     }
 
-    [UsedImplicitly]
-    public ObservableCollection<CalibrationTarget> AvailableTargets { get; } = new();
+    [UsedImplicitly] public ObservableCollection<CalibrationTarget> AvailableTargets { get; } = new();
 
-    [UsedImplicitly]
-    public ObservableCollection<CalibrationResult> CalibrationHistory { get; } = new();
+    [UsedImplicitly] public ObservableCollection<CalibrationResult> CalibrationHistory { get; } = new();
 
     /// <summary>
-    /// Gets the name for the second signal based on the current calibration mode.
+    ///     Gets the name for the second signal based on the current calibration mode.
     /// </summary>
     public string SecondSignalName => SelectedTarget?.Mode == CalibrationMode.TriggerTime ? "处理时间" : "分拣时间";
 
     /// <summary>
-    /// Determines if the SortingDelay and ResetDelay controls should be visible.
+    ///     Determines if the SortingDelay and ResetDelay controls should be visible.
     /// </summary>
-    public bool IsSortingDelayVisible => SelectedTarget?.Mode == CalibrationMode.SortingTime || SelectedTarget?.Mode == CalibrationMode.CompleteFlow;
+    public bool IsSortingDelayVisible => SelectedTarget?.Mode == CalibrationMode.SortingTime ||
+                                         SelectedTarget?.Mode == CalibrationMode.CompleteFlow;
 
     #endregion
 
@@ -180,7 +180,7 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
     private void OnTriggerSignal(DateTime triggerTime)
     {
         Log.Debug("收到触发信号事件: {TriggerTime:HH:mm:ss.fff}, 标定模式: {IsCalibrationMode}", triggerTime, IsCalibrationMode);
-        
+
         if (!IsCalibrationMode) return;
 
         Application.Current.Dispatcher.Invoke(() =>
@@ -191,58 +191,54 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
             MeasuredDelay = 0;
             _hasTriggerTimeResult = false;
             _hasSortingTimeResult = false;
-            
-            StatusMessage = SelectedTarget?.Mode == CalibrationMode.CompleteFlow ? $"已记录触发时间: {triggerTime:HH:mm:ss.fff}，等待包裹处理和分拣信号..." : $"已记录触发时间: {triggerTime:HH:mm:ss.fff}，等待{SecondSignalName}信号...";
-            
+
+            StatusMessage = SelectedTarget?.Mode == CalibrationMode.CompleteFlow
+                ? $"已记录触发时间: {triggerTime:HH:mm:ss.fff}，等待包裹处理和分拣信号..."
+                : $"已记录触发时间: {triggerTime:HH:mm:ss.fff}，等待{SecondSignalName}信号...";
+
             Log.Information("一次性标定模式：记录触发时间 {TriggerTime:HH:mm:ss.fff}", triggerTime);
         });
     }
 
     private void OnSortingSignal((string PhotoelectricName, DateTime SignalTime) args)
     {
-        Log.Debug("收到分拣信号事件: 光电={PhotoelectricName}, 时间={SignalTime:HH:mm:ss.fff}, 标定模式={IsCalibrationMode}, 目标模式={TargetMode}", 
+        Log.Debug(
+            "收到分拣信号事件: 光电={PhotoelectricName}, 时间={SignalTime:HH:mm:ss.fff}, 标定模式={IsCalibrationMode}, 目标模式={TargetMode}",
             args.PhotoelectricName, args.SignalTime, IsCalibrationMode, SelectedTarget?.Mode);
-        
+
         if (SelectedTarget?.Mode == CalibrationMode.SortingTime || SelectedTarget?.Mode == CalibrationMode.CompleteFlow)
-        {
             ProcessSortingSignal(args.PhotoelectricName, args.SignalTime);
-        }
         else
-        {
             Log.Debug("分拣信号被忽略，当前模式不匹配");
-        }
     }
-    
+
     private void OnPackageProcessing(DateTime processingTime)
     {
-        Log.Debug("收到包裹处理事件: {ProcessingTime:HH:mm:ss.fff}, 标定模式={IsCalibrationMode}, 目标模式={TargetMode}", 
+        Log.Debug("收到包裹处理事件: {ProcessingTime:HH:mm:ss.fff}, 标定模式={IsCalibrationMode}, 目标模式={TargetMode}",
             processingTime, IsCalibrationMode, SelectedTarget?.Mode);
-        
+
         if (SelectedTarget?.Mode == CalibrationMode.TriggerTime || SelectedTarget?.Mode == CalibrationMode.CompleteFlow)
-        {
             ProcessPackageProcessing(processingTime);
-        }
         else
-        {
             Log.Debug("包裹处理事件被忽略，当前模式不匹配");
-        }
     }
 
     private void ProcessSortingSignal(string signalId, DateTime signalTime)
     {
-        Log.Debug("处理分拣信号: 光电ID={SignalId}, 时间={SignalTime:HH:mm:ss.fff}, 标定模式={IsCalibrationMode}, 触发时间={TriggerTime}, 目标ID={TargetId}", 
+        Log.Debug(
+            "处理分拣信号: 光电ID={SignalId}, 时间={SignalTime:HH:mm:ss.fff}, 标定模式={IsCalibrationMode}, 触发时间={TriggerTime}, 目标ID={TargetId}",
             signalId, signalTime, IsCalibrationMode, TriggerTime, SelectedTarget?.Id);
-        
-        if (!IsCalibrationMode || !TriggerTime.HasValue || SelectedTarget == null) 
+
+        if (!IsCalibrationMode || !TriggerTime.HasValue || SelectedTarget == null)
         {
-            Log.Debug("分拣信号处理被跳过：标定模式={IsCalibrationMode}, 触发时间={HasTriggerTime}, 目标={HasTarget}", 
+            Log.Debug("分拣信号处理被跳过：标定模式={IsCalibrationMode}, 触发时间={HasTriggerTime}, 目标={HasTarget}",
                 IsCalibrationMode, TriggerTime.HasValue, SelectedTarget != null);
             return;
         }
 
         // 对于完整标定流程，接受任何分拣光电的信号
         // 对于其他模式，需要匹配特定的光电ID
-        if (SelectedTarget.Mode != CalibrationMode.CompleteFlow && signalId != SelectedTarget.Id) 
+        if (SelectedTarget.Mode != CalibrationMode.CompleteFlow && signalId != SelectedTarget.Id)
         {
             Log.Debug("分拣信号ID不匹配：收到={SignalId}, 期望={TargetId}", signalId, SelectedTarget.Id);
             return;
@@ -257,17 +253,16 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
             if (SelectedTarget.Mode == CalibrationMode.CompleteFlow)
             {
                 _hasSortingTimeResult = true;
-                StatusMessage = $"分拣时间测量完成！时间差: {delay:F1}ms (触发: {TriggerTime:HH:mm:ss.fff} → 分拣: {signalTime:HH:mm:ss.fff})";
-                
+                StatusMessage =
+                    $"分拣时间测量完成！时间差: {delay:F1}ms (触发: {TriggerTime:HH:mm:ss.fff} → 分拣: {signalTime:HH:mm:ss.fff})";
+
                 // 如果已经有触发时间结果，完成完整标定
-                if (_hasTriggerTimeResult)
-                {
-                    CompleteFullCalibration();
-                }
+                if (_hasTriggerTimeResult) CompleteFullCalibration();
             }
             else
             {
-                StatusMessage = $"测量完成！时间差: {delay:F1}ms (触发: {TriggerTime:HH:mm:ss.fff} → {SecondSignalName}: {signalTime:HH:mm:ss.fff})";
+                StatusMessage =
+                    $"测量完成！时间差: {delay:F1}ms (触发: {TriggerTime:HH:mm:ss.fff} → {SecondSignalName}: {signalTime:HH:mm:ss.fff})";
                 CompleteCalibration(delay, signalTime);
             }
 
@@ -277,12 +272,13 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
 
     private void ProcessPackageProcessing(DateTime processingTime)
     {
-        Log.Debug("处理包裹处理信号: 时间={ProcessingTime:HH:mm:ss.fff}, 标定模式={IsCalibrationMode}, 触发时间={TriggerTime}, 目标={HasTarget}", 
+        Log.Debug(
+            "处理包裹处理信号: 时间={ProcessingTime:HH:mm:ss.fff}, 标定模式={IsCalibrationMode}, 触发时间={TriggerTime}, 目标={HasTarget}",
             processingTime, IsCalibrationMode, TriggerTime, SelectedTarget != null);
-        
-        if (!IsCalibrationMode || !TriggerTime.HasValue || SelectedTarget == null) 
+
+        if (!IsCalibrationMode || !TriggerTime.HasValue || SelectedTarget == null)
         {
-            Log.Debug("包裹处理信号被跳过：标定模式={IsCalibrationMode}, 触发时间={HasTriggerTime}, 目标={HasTarget}", 
+            Log.Debug("包裹处理信号被跳过：标定模式={IsCalibrationMode}, 触发时间={HasTriggerTime}, 目标={HasTarget}",
                 IsCalibrationMode, TriggerTime.HasValue, SelectedTarget != null);
             return;
         }
@@ -295,17 +291,16 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
             if (SelectedTarget.Mode == CalibrationMode.CompleteFlow)
             {
                 _hasTriggerTimeResult = true;
-                StatusMessage = $"触发时间测量完成！时间差: {delay:F1}ms (触发: {TriggerTime:HH:mm:ss.fff} → 处理: {processingTime:HH:mm:ss.fff})";
-                
+                StatusMessage =
+                    $"触发时间测量完成！时间差: {delay:F1}ms (触发: {TriggerTime:HH:mm:ss.fff} → 处理: {processingTime:HH:mm:ss.fff})";
+
                 // 如果已经有分拣时间结果，完成完整标定
-                if (_hasSortingTimeResult)
-                {
-                    CompleteFullCalibration();
-                }
+                if (_hasSortingTimeResult) CompleteFullCalibration();
             }
             else
             {
-                StatusMessage = $"测量完成！时间差: {delay:F1}ms (触发: {TriggerTime:HH:mm:ss.fff} → 处理: {processingTime:HH:mm:ss.fff})";
+                StatusMessage =
+                    $"测量完成！时间差: {delay:F1}ms (触发: {TriggerTime:HH:mm:ss.fff} → 处理: {processingTime:HH:mm:ss.fff})";
                 CompleteCalibration(delay, processingTime);
             }
 
@@ -333,16 +328,13 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
         };
 
         CalibrationHistory.Insert(0, result);
-        
-        while (CalibrationHistory.Count > 20)
-        {
-            CalibrationHistory.RemoveAt(CalibrationHistory.Count - 1);
-        }
+
+        while (CalibrationHistory.Count > 20) CalibrationHistory.RemoveAt(CalibrationHistory.Count - 1);
 
         ApplyRecommendedSettingsCommand.RaiseCanExecuteChanged();
-        
+
         StatusMessage = $"完整标定完成！触发时间: {triggerTimeDelay:F1}ms, 分拣时间: {sortingTimeDelay:F1}ms";
-        Log.Information("完整标定完成 - 标定项: {Target}, 触发延迟: {TriggerDelay:F1}ms, 分拣延迟: {SortingDelay:F1}ms", 
+        Log.Information("完整标定完成 - 标定项: {Target}, 触发延迟: {TriggerDelay:F1}ms, 分拣延迟: {SortingDelay:F1}ms",
             SelectedTarget?.DisplayName, triggerTimeDelay, sortingTimeDelay);
 
         // 一次性标定：测量完成后自动关闭标定模式
@@ -364,11 +356,8 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
         };
 
         CalibrationHistory.Insert(0, result);
-        
-        while (CalibrationHistory.Count > 20)
-        {
-            CalibrationHistory.RemoveAt(CalibrationHistory.Count - 1);
-        }
+
+        while (CalibrationHistory.Count > 20) CalibrationHistory.RemoveAt(CalibrationHistory.Count - 1);
 
         ApplyRecommendedSettingsCommand.RaiseCanExecuteChanged();
 
@@ -403,7 +392,7 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
                 StatusMessage = "无足够的测量数据以应用推荐设置";
                 return;
             }
-            
+
             var avgDelay = recentResults.Average(r => r.MeasuredDelay);
             var minDelay = recentResults.Min(r => r.MeasuredDelay);
             var maxDelay = recentResults.Max(r => r.MeasuredDelay);
@@ -412,8 +401,9 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
             TimeRangeUpper = maxDelay + 100;
             SortingDelay = Math.Max(0, avgDelay - 50);
 
-            StatusMessage = $"已应用推荐设置 (基于最近{recentResults.Count}次测量): 范围 {TimeRangeLower:F0}-{TimeRangeUpper:F0}ms, 延迟 {SortingDelay:F0}ms";
-            Log.Information("应用推荐设置 (模式: {Mode}): 时间范围 {Lower:F0}-{Upper:F0}ms, 分拣延迟 {Delay:F0}ms", 
+            StatusMessage =
+                $"已应用推荐设置 (基于最近{recentResults.Count}次测量): 范围 {TimeRangeLower:F0}-{TimeRangeUpper:F0}ms, 延迟 {SortingDelay:F0}ms";
+            Log.Information("应用推荐设置 (模式: {Mode}): 时间范围 {Lower:F0}-{Upper:F0}ms, 分拣延迟 {Delay:F0}ms",
                 SelectedTarget?.Mode, TimeRangeLower, TimeRangeUpper, SortingDelay);
         }
         catch (Exception ex)
@@ -426,18 +416,20 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
     private void ExecuteSave()
     {
         if (SelectedTarget == null) return;
-        
+
         SelectedTarget.TimeRangeLower = TimeRangeLower;
         SelectedTarget.TimeRangeUpper = TimeRangeUpper;
         SelectedTarget.SortingDelay = SortingDelay;
         SelectedTarget.ResetDelay = ResetDelay;
-        
-        Log.Information("标定配置已更新: 光电 {PhotoelectricName}, 时间范围 {Lower:F0}-{Upper:F0}ms, 分拣延迟 {SortingDelay:F0}ms, 回正延迟 {ResetDelay:F0}ms",
+
+        Log.Information(
+            "标定配置已更新: 光电 {PhotoelectricName}, 时间范围 {Lower:F0}-{Upper:F0}ms, 分拣延迟 {SortingDelay:F0}ms, 回正延迟 {ResetDelay:F0}ms",
             SelectedTarget.DisplayName, TimeRangeLower, TimeRangeUpper, SortingDelay, ResetDelay);
 
         StatusMessage = "配置已在本地更新，请在主设置页面保存以持久化";
 
-        RequestClose.Invoke(new DialogResult(ButtonResult.OK) { Parameters = new DialogParameters { { "targets", AvailableTargets.ToList() } } });
+        RequestClose.Invoke(new DialogResult(ButtonResult.OK)
+            { Parameters = new DialogParameters { { "targets", AvailableTargets.ToList() } } });
     }
 
     private void ExecuteCancel()
@@ -448,22 +440,27 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
     private void SubscribeToEvents()
     {
         UnsubscribeFromEvents();
-        
-        _triggerToken = _eventAggregator.GetEvent<TriggerSignalEvent>().Subscribe(OnTriggerSignal, ThreadOption.UIThread);
+
+        _triggerToken = _eventAggregator.GetEvent<TriggerSignalEvent>()
+            .Subscribe(OnTriggerSignal, ThreadOption.UIThread);
 
         if (SelectedTarget?.Mode == CalibrationMode.SortingTime)
         {
-            _sortingToken = _eventAggregator.GetEvent<SortingSignalEvent>().Subscribe(OnSortingSignal, ThreadOption.UIThread);
+            _sortingToken = _eventAggregator.GetEvent<SortingSignalEvent>()
+                .Subscribe(OnSortingSignal, ThreadOption.UIThread);
         }
         else if (SelectedTarget?.Mode == CalibrationMode.TriggerTime)
         {
-            _packageProcessingToken = _eventAggregator.GetEvent<PackageProcessingEvent>().Subscribe(OnPackageProcessing, ThreadOption.UIThread);
+            _packageProcessingToken = _eventAggregator.GetEvent<PackageProcessingEvent>()
+                .Subscribe(OnPackageProcessing, ThreadOption.UIThread);
         }
         else if (SelectedTarget?.Mode == CalibrationMode.CompleteFlow)
         {
             // 完整流程需要同时订阅两种信号
-            _sortingToken = _eventAggregator.GetEvent<SortingSignalEvent>().Subscribe(OnSortingSignal, ThreadOption.UIThread);
-            _packageProcessingToken = _eventAggregator.GetEvent<PackageProcessingEvent>().Subscribe(OnPackageProcessing, ThreadOption.UIThread);
+            _sortingToken = _eventAggregator.GetEvent<SortingSignalEvent>()
+                .Subscribe(OnSortingSignal, ThreadOption.UIThread);
+            _packageProcessingToken = _eventAggregator.GetEvent<PackageProcessingEvent>()
+                .Subscribe(OnPackageProcessing, ThreadOption.UIThread);
         }
     }
 
@@ -480,7 +477,10 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
 
     public DialogCloseListener RequestClose { get; } = new();
 
-    public bool CanCloseDialog() => true;
+    public bool CanCloseDialog()
+    {
+        return true;
+    }
 
     public void OnDialogClosed()
     {
@@ -500,4 +500,4 @@ public class CalibrationDialogViewModel : BindableBase, IDialogAware
     }
 
     #endregion
-} 
+}

@@ -1,4 +1,6 @@
 using Common.Services.Settings;
+using Prism.Commands;
+using Prism.Mvvm;
 using Serilog;
 using ShanghaiModuleBelt.Models.Jitu.Settings;
 
@@ -6,8 +8,8 @@ namespace ShanghaiModuleBelt.ViewModels.Jitu.Settings;
 
 public class JituSettingsViewModel : BindableBase
 {
-    private readonly ISettingsService _settingsService;
     private readonly JituApiSettings _jituApiSettings;
+    private readonly ISettingsService _settingsService;
 
     public JituSettingsViewModel(ISettingsService settingsService)
     {

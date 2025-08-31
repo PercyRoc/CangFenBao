@@ -7,6 +7,7 @@ using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Camera.Models.Camera;
 using Serilog;
 using Serilog.Context;
+
 // Add for ObserveOn
 
 // 添加 Serilog.Context 命名空间
@@ -47,18 +48,21 @@ public class PackageTransferService : IDisposable
     /// <summary>
     ///     包裹信息流 (公开给外部订阅，包含过滤和图像保存逻辑)
     /// </summary>
-    public IObservable<PackageInfo> PackageStream
-    {
-        get => _cameraService.PackageStream
+    public IObservable<PackageInfo> PackageStream =>
+        _cameraService.PackageStream
             .Where(package =>
-            { // 第一个过滤: 确保有条码
+            {
+                // 第一个过滤: 确保有条码
                 var hasBarcode = !string.IsNullOrWhiteSpace(package.Barcode);
                 if (!hasBarcode) Log.Verbose("包裹 {Index} 因缺少条码被过滤.", package.Index);
                 return hasBarcode;
             })
-            .Select(package => (Package: package, IsProcessable: IsBarcodeProcessable(package.Barcode))) // 修复: 传递 package.Barcode 而不是 package
+            .Select(package =>
+                (Package: package,
+                    IsProcessable: IsBarcodeProcessable(package.Barcode))) // 修复: 传递 package.Barcode 而不是 package
             .Do(tuple =>
-            { // 记录过滤结果
+            {
+                // 记录过滤结果
                 if (!tuple.IsProcessable)
                 {
                     // 在这里记录过滤掉的信息, 因为 LogContext 尚未应用
@@ -79,9 +83,7 @@ public class PackageTransferService : IDisposable
 
                     // 更新已处理条码的时间戳 (移到这里确保只对通过的包裹更新)
                     if (package.Barcode != "NOREAD" && _cameraSettings.BarcodeRepeatFilterEnabled)
-                    {
                         _processedBarcodes[package.Barcode] = DateTime.Now;
-                    }
 
                     var originalImage = package.Image; // 获取原始图像引用
                     string? generatedPath = null;
@@ -97,15 +99,10 @@ public class PackageTransferService : IDisposable
                             if (generatedPath != null) Log.Debug("生成潜在图像路径: {Path}", generatedPath);
                             else Log.Warning("无法生成图像路径 (可能未配置 ImageSavePath?).");
                         }
-                        else
-                        {
-                            Log.Debug("图像保存功能已禁用, 跳过路径生成和保存.");
-                        }
 
                         // 2. 更新 PackageInfo 的 Image 和 ImagePath
                         // 无论后续保存是否成功, 都应将原始图像(如果存在)和生成的路径(如果存在)设置回包裹
                         package.SetImage(originalImage, generatedPath);
-                        Log.Debug("已更新 PackageInfo 的 ImagePath (可能为 null).");
 
                         // 3. 如果图像保存已启用且有图像，则触发异步保存
                         if (imageSavingEnabled && originalImage != null)
@@ -127,22 +124,21 @@ public class PackageTransferService : IDisposable
                                     Log.Debug("后台保存任务开始.");
                                     try
                                     {
-                                        var actualSavedPath = await _imageSavingService.SaveImageWithWatermarkAsync(cloneForSave, packageForTask);
+                                        var actualSavedPath =
+                                            await _imageSavingService.SaveImageWithWatermarkAsync(cloneForSave,
+                                                packageForTask);
 
                                         if (actualSavedPath != null)
-                                        {
                                             Log.Information("后台带水印图像保存成功, 路径: {ImagePath}", actualSavedPath);
-                                        }
                                         else
-                                        {
                                             // SaveImageWithWatermarkAsync 返回 null 的原因已经在该服务内部记录 (例如禁用, 路径错误等)
                                             Log.Warning("后台带水印图像保存任务返回 null (可能已禁用或失败).");
-                                        }
                                     }
                                     catch (Exception ex)
                                     {
                                         Log.Error(ex, "后台带水印图像保存任务发生异常.");
                                     }
+
                                     // cloneForSave 在此任务完成后超出作用域, 可被 GC 回收.
                                     Log.Debug("后台保存任务结束.");
                                 }
@@ -153,7 +149,6 @@ public class PackageTransferService : IDisposable
                             Log.Warning("图像保存已启用, 但包裹中无可用图像.");
                         }
                         // 如果 imageSavingEnabled == false, 此前已记录日志
-
                     }
                     catch (Exception ex)
                     {
@@ -162,12 +157,9 @@ public class PackageTransferService : IDisposable
                         package.SetImage(originalImage, generatedPath);
                     }
 
-                    Log.Debug("图像处理和保存流程完成 (保存任务可能仍在后台运行).");
                     return package; // 返回更新后的包裹
-
                 } // --- 日志上下文结束 ---
             });
-    }
 
     /// <summary>
     ///     释放资源
@@ -219,10 +211,8 @@ public class PackageTransferService : IDisposable
         if (!_cameraSettings.BarcodeRepeatFilterEnabled || barcode == "NOREAD") return true;
 
         if (!_processedBarcodes.TryGetValue(barcode, out var lastProcessedTime))
-        {
             // 最近未见过此条码, 处理它
             return true;
-        }
 
         var timeSinceLastProcess = DateTime.Now - lastProcessedTime;
         var timeWindow = TimeSpan.FromMilliseconds(_cameraSettings.RepeatTimeMs);
@@ -232,6 +222,7 @@ public class PackageTransferService : IDisposable
         // 过滤日志移至 Do 操作符中，以便在上下文中记录
         // Log.Debug("过滤掉在 {TimeWindow} 毫秒内重复的条码 {Barcode}.", barcode, _cameraSettings.RepeatTimeMs);
     }
+
     /// <summary>
     ///     定期清理过期的条码记录
     /// </summary>
@@ -250,9 +241,6 @@ public class PackageTransferService : IDisposable
 
         if (expiredBarcodes.Count <= 0) return;
         Log.Debug("清理 {Count} 条过期的条码记录.", expiredBarcodes.Count);
-        foreach (var barcode in expiredBarcodes)
-        {
-            _processedBarcodes.TryRemove(barcode, out _);
-        }
+        foreach (var barcode in expiredBarcodes) _processedBarcodes.TryRemove(barcode, out _);
     }
 }

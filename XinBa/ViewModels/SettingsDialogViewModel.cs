@@ -1,4 +1,8 @@
 ﻿using Common.Services.Ui;
+using Prism.Commands;
+using Prism.Dialogs;
+using Prism.Ioc;
+using Prism.Mvvm;
 using Serilog;
 using SharedUI.ViewModels.Settings;
 using XinBa.ViewModels.Settings;
@@ -30,10 +34,7 @@ public class SettingsDialogViewModel : BindableBase, IDialogAware
     public DelegateCommand SaveCommand { get; }
     public DelegateCommand CancelCommand { get; }
 
-    public string Title
-    {
-        get => "System Settings";
-    }
+    public string Title => "System Settings";
 
     public DialogCloseListener RequestClose { get; } = default!;
 

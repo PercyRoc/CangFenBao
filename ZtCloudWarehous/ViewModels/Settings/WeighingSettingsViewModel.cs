@@ -1,5 +1,7 @@
 using Common.Services.Settings;
 using Common.Services.Ui;
+using Prism.Commands;
+using Prism.Mvvm;
 using Serilog;
 using ZtCloudWarehous.Models;
 using ZtCloudWarehous.Services;
@@ -41,9 +43,7 @@ internal class WeighingSettingsViewModel : BindableBase
         Settings.PropertyChanged += (_, args) =>
         {
             if (args.PropertyName == nameof(Settings.UseNewWeighingApi))
-            {
                 TestNewWeighingApiCommand.RaiseCanExecuteChanged();
-            }
         };
     }
 
@@ -95,8 +95,10 @@ internal class WeighingSettingsViewModel : BindableBase
 
             if (response.IsSuccess)
             {
-                _notificationService.ShowSuccess($"新称重接口测试成功！\n承运商代码: {response.Data?.CarrierCode}\n省份名称: {response.Data?.ProvinceName}");
-                Log.Information("新称重接口测试成功: WaybillCode={WaybillCode}, CarrierCode={CarrierCode}, ProvinceName={ProvinceName}",
+                _notificationService.ShowSuccess(
+                    $"新称重接口测试成功！\n承运商代码: {response.Data?.CarrierCode}\n省份名称: {response.Data?.ProvinceName}");
+                Log.Information(
+                    "新称重接口测试成功: WaybillCode={WaybillCode}, CarrierCode={CarrierCode}, ProvinceName={ProvinceName}",
                     testRequest.WaybillCode, response.Data?.CarrierCode, response.Data?.ProvinceName);
             }
             else

@@ -75,6 +75,11 @@ public enum AudioType
     LoadingAllowed,
 
     /// <summary>
+    ///     请上包
+    /// </summary>
+    PleasePlacePackage,
+
+    /// <summary>
     ///     体积异常
     /// </summary>
     VolumeAbnormal,
@@ -91,7 +96,8 @@ public enum AudioType
 public class AudioService : IAudioService, IDisposable
 {
     private readonly SoundPlayer _player;
-    private readonly ITtsService _ttsService;
+
+    private readonly TtsService _ttsService;
     private readonly SemaphoreSlim _playLock;
     private readonly Dictionary<AudioType, string> _presetAudios;
     private readonly Dictionary<AudioType, string> _presetTexts;
@@ -157,6 +163,7 @@ public class AudioService : IAudioService, IDisposable
             { AudioType.LoadingRejected, "拒绝上包" },
             { AudioType.LoadingSuccess, "上包成功" },
             { AudioType.LoadingAllowed, "允许上包" },
+            { AudioType.PleasePlacePackage, "请上包" },
             { AudioType.VolumeAbnormal, "体积异常" },
             { AudioType.WeightAbnormal, "重量异常" }
         };
@@ -226,14 +233,8 @@ public class AudioService : IAudioService, IDisposable
         }
 
         // 如果音频文件不存在，则使用TTS播放
-        if (_presetTexts.TryGetValue(audioType, out var text))
-        {
-            Log.Debug("使用TTS播放预设语音：{Type}", audioType);
-            return await _ttsService.SpeakAsync(text, 0, 100, 5.0f); // 默认音量增强5倍
-        }
-
-        Log.Warning("未找到预设音频或文本：{Type}", audioType);
-        return false;
+        if (_presetTexts.TryGetValue(audioType, out var text)) Log.Debug("使用TTS播放预设语音：{Type}", audioType);
+        return await _ttsService.SpeakAsync(text, 0, 100, 5.0f); // 默认音量增强5倍
     }
 
     /// <inheritdoc />
@@ -244,7 +245,7 @@ public class AudioService : IAudioService, IDisposable
         try
         {
             _player.Dispose();
-            _ttsService.Dispose();
+            // _ttsService.Dispose();
             _playLock.Dispose();
         }
         catch (Exception ex)

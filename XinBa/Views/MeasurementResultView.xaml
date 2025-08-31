@@ -36,19 +36,19 @@
                     <StackPanel Grid.Column="0"
                                 VerticalAlignment="Center"
                                 HorizontalAlignment="Center">
-                        
+
                         <!-- Barcode Display -->
                         <StackPanel Margin="0,0,0,20" HorizontalAlignment="Center">
                             <TextBlock Text="Штрих-код"
                                        FontSize="24"
                                        Foreground="White"
                                        Opacity="0.8"
-                                       HorizontalAlignment="Center"/>
+                                       HorizontalAlignment="Center" />
                             <TextBlock Text="{Binding Barcode}"
                                        FontSize="32"
                                        FontWeight="SemiBold"
                                        Foreground="White"
-                                       HorizontalAlignment="Center"/>
+                                       HorizontalAlignment="Center" />
                         </StackPanel>
 
                         <StackPanel Orientation="Horizontal" Margin="0,10">
@@ -80,23 +80,23 @@
                                 <TextBlock Text="Ширина"
                                            FontSize="24"
                                            Foreground="White"
-                                           Opacity="0.8" HorizontalAlignment="Center"/>
+                                           Opacity="0.8" HorizontalAlignment="Center" />
                                 <TextBlock Text="{Binding WidthDimText}"
                                            FontSize="36"
                                            FontWeight="SemiBold"
-                                           Foreground="White" HorizontalAlignment="Center"/>
+                                           Foreground="White" HorizontalAlignment="Center" />
                             </StackPanel>
-    
+
                             <!-- Высота (Height) -->
                             <StackPanel Margin="0,0,30,0" HorizontalAlignment="Center">
                                 <TextBlock Text="Высота"
                                            FontSize="24"
                                            Foreground="White"
-                                           Opacity="0.8" HorizontalAlignment="Center"/>
+                                           Opacity="0.8" HorizontalAlignment="Center" />
                                 <TextBlock Text="{Binding HeightDimText}"
                                            FontSize="36"
                                            FontWeight="SemiBold"
-                                           Foreground="White" HorizontalAlignment="Center"/>
+                                           Foreground="White" HorizontalAlignment="Center" />
                             </StackPanel>
 
                             <!-- Глубина (Depth/Length) -->
@@ -104,11 +104,11 @@
                                 <TextBlock Text="Глубина"
                                            FontSize="24"
                                            Foreground="White"
-                                           Opacity="0.8" HorizontalAlignment="Center"/>
+                                           Opacity="0.8" HorizontalAlignment="Center" />
                                 <TextBlock Text="{Binding LengthDimText}"
                                            FontSize="36"
                                            FontWeight="SemiBold"
-                                           Foreground="White" HorizontalAlignment="Center"/>
+                                           Foreground="White" HorizontalAlignment="Center" />
                             </StackPanel>
                         </StackPanel>
 
@@ -131,4 +131,4 @@
             </Viewbox>
         </Grid>
     </Border>
-</UserControl> 
+</UserControl>

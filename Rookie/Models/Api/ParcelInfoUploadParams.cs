@@ -4,17 +4,13 @@ namespace Rookie.Models.Api;
 
 public class ParcelInfoUploadParams
 {
-    [JsonPropertyName("bcrName")]
-    public string BcrName { get; set; } = string.Empty;
+    [JsonPropertyName("bcrName")] public string BcrName { get; set; } = string.Empty;
 
-    [JsonPropertyName("barCode")]
-    public string BarCode { get; set; } = string.Empty;
+    [JsonPropertyName("barCode")] public string BarCode { get; set; } = string.Empty;
 
-    [JsonPropertyName("bcrCode")]
-    public string BcrCode { get; set; } = string.Empty;
+    [JsonPropertyName("bcrCode")] public string BcrCode { get; set; } = string.Empty;
 
-    [JsonPropertyName("weight")]
-    public long Weight { get; set; } // API expects grams (g)
+    [JsonPropertyName("weight")] public long Weight { get; set; } // API expects grams (g)
 
     [JsonPropertyName("height")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

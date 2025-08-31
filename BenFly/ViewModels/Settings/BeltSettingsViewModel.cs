@@ -3,6 +3,8 @@ using System.IO.Ports;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Belt;
+using Prism.Commands;
+using Prism.Mvvm;
 using Serilog;
 
 namespace BenFly.ViewModels.Settings;

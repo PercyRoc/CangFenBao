@@ -35,20 +35,8 @@ public partial class MainWindow
 
     private void ManualBarcodeTextBox_KeyDown(object sender, KeyEventArgs e)
     {
-        try
-        {
-            if (e.Key == Key.Enter && DataContext is MainWindowViewModel viewModel)
-            {
-                // 触发手动条码处理命令
-                if (viewModel.ProcessManualBarcodeCommand.CanExecute())
-                {
-                    viewModel.ProcessManualBarcodeCommand.Execute();
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "Error occurred while processing manual barcode input");
-        }
+        // 保留输入框但不处理条码输入功能
+        // 可以在这里添加其他按键处理逻辑如果需要
     }
+
 }

@@ -86,9 +86,6 @@ public partial class MainWindow
     {
         if (e.Key != Key.Enter) return;
 
-        if (DataContext is MainWindowViewModel viewModel)
-        {
-            viewModel.OnBarcodeInput();
-        }
+        if (DataContext is MainWindowViewModel viewModel) viewModel.OnBarcodeInput();
     }
 }

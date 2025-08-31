@@ -16,6 +16,7 @@ public class JdWcsMessageHeader
     {
         Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     }
+
     /// <summary>
     ///     魔数，固定值20230101
     /// </summary>
@@ -74,10 +75,7 @@ public class JdWcsMessageHeader
     /// <summary>
     ///     获取消息头长度（固定32字节）
     /// </summary>
-    public static int Size
-    {
-        get => 32;
-    }
+    public static int Size => 32;
 
     /// <summary>
     ///     将消息头序列化为字节数组 (使用大端字节序)
@@ -108,9 +106,7 @@ public class JdWcsMessageHeader
     public static JdWcsMessageHeader FromBytes(byte[] bytes)
     {
         if (bytes.Length < Size)
-        {
             throw new ArgumentException(@"Byte array too short to be a valid header.", nameof(bytes));
-        }
         var span = bytes.AsSpan();
 
         var header = new JdWcsMessageHeader

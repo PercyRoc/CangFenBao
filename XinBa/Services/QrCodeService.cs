@@ -41,4 +41,4 @@ public class QrCodeService : IQrCodeService
             return null;
         }
     }
-} 
+}

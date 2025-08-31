@@ -1,7 +1,5 @@
 namespace FuzhouPolicyForce.WangDianTong;
 
-using System.Threading;
-
 /// <summary>
 ///     旺店通API服务接口
 /// </summary>
@@ -59,8 +57,5 @@ public class WeightPushResponse
     /// <summary>
     ///     是否成功
     /// </summary>
-    public bool IsSuccess
-    {
-        get => Code == 0;
-    }
+    public bool IsSuccess => Code == 0;
 }

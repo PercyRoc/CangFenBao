@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Windows.Media.Imaging;
 using Common.Models.Package;
+using Prism.Mvvm;
 using Serilog;
 using XinBa.Services;
 
@@ -137,4 +138,4 @@ public class MeasurementResultViewModel : BindableBase
             Log.Error(ex, "为包裹 {Barcode} 更新测量结果数据失败", _packageInfo.Barcode);
         }
     }
-} 
+}

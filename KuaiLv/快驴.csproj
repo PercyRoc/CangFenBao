@@ -21,7 +21,7 @@
         <!-- Prism -->
         <PackageReference Include="Prism.Wpf"/>
 
-        <!-- Serilog -->
+        <!-- Serilog -->    
         <PackageReference Include="Serilog"/>
         <PackageReference Include="Serilog.Sinks.Console"/>
         <PackageReference Include="Serilog.Sinks.File"/>

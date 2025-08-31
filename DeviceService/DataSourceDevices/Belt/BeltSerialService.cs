@@ -47,10 +47,7 @@ public class BeltSerialService : IDisposable
     /// <summary>
     ///     是否已连接
     /// </summary>
-    public bool IsOpen
-    {
-        get => _serialPortService.IsConnected;
-    }
+    public bool IsOpen => _serialPortService.IsConnected;
 
     /// <summary>
     ///     释放资源
@@ -95,10 +92,7 @@ public class BeltSerialService : IDisposable
             _beltParams.Parity = latestParams.Parity;
 
             // 如果已经连接，先断开
-            if (_serialPortService.IsConnected)
-            {
-                _serialPortService.Disconnect();
-            }
+            if (_serialPortService.IsConnected) _serialPortService.Disconnect();
         }
 
         // 启动命令和停止命令也需要更新
@@ -133,6 +127,7 @@ public class BeltSerialService : IDisposable
                 return false;
             }
         }
+
         return _serialPortService.Send(data);
     }
 
@@ -153,6 +148,7 @@ public class BeltSerialService : IDisposable
                 return false;
             }
         }
+
         return _serialPortService.Send(command);
     }
 
@@ -171,6 +167,7 @@ public class BeltSerialService : IDisposable
                 Log.Error("皮带控制 - 启动皮带前连接串口失败");
                 return false;
             }
+
             Log.Information("皮带控制 - 启动皮带前连接串口成功");
         }
 
@@ -197,6 +194,7 @@ public class BeltSerialService : IDisposable
                 Log.Error("皮带控制 - 停止皮带前连接串口失败");
                 return false;
             }
+
             Log.Information("皮带控制 - 停止皮带前连接串口成功");
         }
 

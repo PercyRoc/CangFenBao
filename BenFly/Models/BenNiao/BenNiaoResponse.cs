@@ -29,8 +29,5 @@ public class BenNiaoResponse<T>
     /// <summary>
     ///     是否成功
     /// </summary>
-    public bool IsSuccess
-    {
-        get => Code == 200;
-    }
+    public bool IsSuccess => Code == 200;
 }

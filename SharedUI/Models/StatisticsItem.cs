@@ -1,3 +1,5 @@
+using Prism.Mvvm;
+
 namespace SharedUI.Models;
 
 public class StatisticsItem : BindableBase

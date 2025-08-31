@@ -4,6 +4,8 @@ using System.ComponentModel;
 using System.Windows.Input;
 using Common.Models.Settings.ChuteRules;
 using Common.Services.Settings;
+using Prism.Commands;
+using Prism.Mvvm;
 using SortingServices.Car.Models;
 
 namespace SharedUI.ViewModels;
@@ -47,27 +49,18 @@ public class CarSequenceViewModel : BindableBase
             .ObservesProperty(() => SelectedCarItem);
 
         // 选择第一个格口
-        if (ChuteSequences.Count > 0)
-        {
-            SelectedChute = ChuteSequences[0]; // 这会触发 set 访问器中的订阅逻辑
-        }
+        if (ChuteSequences.Count > 0) SelectedChute = ChuteSequences[0]; // 这会触发 set 访问器中的订阅逻辑
     }
 
     /// <summary>
     ///     格口集合
     /// </summary>
-    public ObservableCollection<ChuteCarSequence> ChuteSequences
-    {
-        get => _carSequenceSettings.ChuteSequences;
-    }
+    public ObservableCollection<ChuteCarSequence> ChuteSequences => _carSequenceSettings.ChuteSequences;
 
     /// <summary>
     ///     可用小车配置
     /// </summary>
-    public ObservableCollection<CarConfig>? AvailableCars
-    {
-        get => _carConfigModel.CarConfigs;
-    }
+    public ObservableCollection<CarConfig>? AvailableCars => _carConfigModel.CarConfigs;
 
     /// <summary>
     ///     选中的格口
@@ -101,10 +94,7 @@ public class CarSequenceViewModel : BindableBase
     /// <summary>
     ///     当前选中格口的小车序列
     /// </summary>
-    public ObservableCollection<CarSequenceItem>? CarSequence
-    {
-        get => _selectedChute?.CarSequence;
-    }
+    public ObservableCollection<CarSequenceItem>? CarSequence => _selectedChute?.CarSequence;
 
     /// <summary>
     ///     添加小车命令
@@ -174,13 +164,9 @@ public class CarSequenceViewModel : BindableBase
 
         // 选择下一个项
         if (SelectedChute.CarSequence.Count > 0)
-        {
             SelectedCarItem = SelectedChute.CarSequence[0];
-        }
         else
-        {
             SelectedCarItem = null;
-        }
 
         // 保存设置
         SaveSettings();
@@ -245,10 +231,7 @@ public class CarSequenceViewModel : BindableBase
         CarSequence.CollectionChanged += OnCarSequenceCollectionChanged;
 
         // 订阅现有项的事件
-        foreach (var item in CarSequence)
-        {
-            item.PropertyChanged += OnCarSequenceItemPropertyChanged;
-        }
+        foreach (var item in CarSequence) item.PropertyChanged += OnCarSequenceItemPropertyChanged;
     }
 
     /// <summary>
@@ -262,10 +245,7 @@ public class CarSequenceViewModel : BindableBase
         CarSequence.CollectionChanged -= OnCarSequenceCollectionChanged;
 
         // 取消订阅现有项的事件
-        foreach (var item in CarSequence)
-        {
-            item.PropertyChanged -= OnCarSequenceItemPropertyChanged;
-        }
+        foreach (var item in CarSequence) item.PropertyChanged -= OnCarSequenceItemPropertyChanged;
     }
 
     /// <summary>
@@ -275,21 +255,13 @@ public class CarSequenceViewModel : BindableBase
     {
         // 当有新项添加时，订阅其 PropertyChanged 事件
         if (e.NewItems != null)
-        {
             foreach (var item in e.NewItems.OfType<CarSequenceItem>())
-            {
                 item.PropertyChanged += OnCarSequenceItemPropertyChanged;
-            }
-        }
 
         // 当有旧项移除时，取消订阅其 PropertyChanged 事件
         if (e.OldItems != null)
-        {
             foreach (var item in e.OldItems.OfType<CarSequenceItem>())
-            {
                 item.PropertyChanged -= OnCarSequenceItemPropertyChanged;
-            }
-        }
     }
 
     /// <summary>
@@ -298,9 +270,7 @@ public class CarSequenceViewModel : BindableBase
     private void OnCarSequenceItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         // 只在 DelayMs 或 IsReverse 属性改变时保存
-        if (e.PropertyName == nameof(CarSequenceItem.DelayMs) || e.PropertyName == nameof(CarSequenceItem.IsReverse))
-        {
-            SaveSettings();
-        }
+        if (e.PropertyName == nameof(CarSequenceItem.DelayMs) ||
+            e.PropertyName == nameof(CarSequenceItem.IsReverse)) SaveSettings();
     }
 }

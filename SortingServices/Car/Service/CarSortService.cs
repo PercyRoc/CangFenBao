@@ -35,10 +35,7 @@ public class CarSortService
         Log.Information("CarSortService 创建成功，最大并行处理数: {MaxConcurrent}", MaxConcurrentSorting);
     }
 
-    public bool IsConnected
-    {
-        get => _carSortingService.IsConnected;
-    }
+    public bool IsConnected => _carSortingService.IsConnected;
 
     public bool IsRunning { get; private set; }
 
@@ -136,9 +133,7 @@ public class CarSortService
             {
                 // 忽略任务取消异常
                 if (!(ae.InnerExceptions is [TaskCanceledException]))
-                {
                     Log.Warning("停止处理队列时发生异常: {Exception}", ae.Message);
-                }
             }
 
             IsRunning = false;
@@ -190,7 +185,9 @@ public class CarSortService
         try
         {
             // 清空队列
-            while (_sortingQueue.TryDequeue(out _)) { }
+            while (_sortingQueue.TryDequeue(out _))
+            {
+            }
 
             // 记录当前正在处理的包裹
             var currentlyProcessing = _processingPackages.Values.ToList();

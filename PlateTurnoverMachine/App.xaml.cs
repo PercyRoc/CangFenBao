@@ -1,9 +1,9 @@
 ﻿using System.Globalization;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Windows;
 using System.Windows.Threading;
 using Common.Extensions;
-using WPFLocalizeExtension.Engine;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
@@ -15,10 +15,12 @@ using DongtaiFlippingBoardMachine.ViewModels.Settings;
 using DongtaiFlippingBoardMachine.Views;
 using DongtaiFlippingBoardMachine.Views.Settings;
 using Microsoft.Extensions.Hosting;
+using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 using SharedUI.ViewModels;
 using SharedUI.Views.Dialogs;
+using WPFLocalizeExtension.Engine;
 
 namespace DongtaiFlippingBoardMachine;
 
@@ -61,7 +63,7 @@ internal partial class App
 
         // 注册设置窗口
         containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>("SettingsDialog");
-        
+
         // 注册历史记录对话框
         containerRegistry.RegisterDialog<HistoryDialogView, HistoryDialogViewModel>("HistoryDialog");
 
@@ -86,11 +88,11 @@ internal partial class App
         var culture = new CultureInfo("zh-CN");
         Thread.CurrentThread.CurrentCulture = culture;
         Thread.CurrentThread.CurrentUICulture = culture;
-        
+
         // 初始化 WPFLocalizeExtension
         LocalizeDictionary.Instance.Culture = culture;
         LocalizeDictionary.Instance.SetCurrentThreadCulture = true;
-        
+
         // 配置Serilog
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Debug()
@@ -137,13 +139,9 @@ internal partial class App
                 Log.Information("正在调用中通上线接口...");
                 var response = await ztoSortingService.ReportPipelineStatusAsync(settings.ZtoPipelineCode, "start");
                 if (response?.Status == true)
-                {
                     Log.Information("中通上线接口调用成功");
-                }
                 else
-                {
                     Log.Warning("中通上线接口调用失败: {Message}", response?.Message);
-                }
             }
             else
             {
@@ -189,13 +187,9 @@ internal partial class App
                 {
                     var response = await ztoSortingService.ReportPipelineStatusAsync(settings.ZtoPipelineCode, "stop");
                     if (response?.Status == true)
-                    {
                         Log.Information("中通下线接口调用成功");
-                    }
                     else
-                    {
                         Log.Warning("中通下线接口调用失败: {Message}", response?.Message);
-                    }
                 }
                 catch (Exception downEx)
                 {
@@ -292,27 +286,43 @@ internal partial class App
         e.Handled = true; // 标记为已处理，防止默认的崩溃对话框
 
         // 尝试优雅地关闭
-        _ = PerformShutdownAsync().ContinueWith(_ =>
-        {
-            Current.Dispatcher.Invoke(Current.Shutdown);
-        });
+        _ = PerformShutdownAsync().ContinueWith(_ => { Current.Dispatcher.Invoke(Current.Shutdown); });
     }
 
     private void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
         var exception = e.ExceptionObject as Exception;
-        Log.Fatal(exception, "非UI线程发生未经处理的异常 (AppDomain Unhandled Exception). IsTerminating: {IsTerminating}", e.IsTerminating);
+        Log.Fatal(exception, "非UI线程发生未经处理的异常 (AppDomain Unhandled Exception). IsTerminating: {IsTerminating}",
+            e.IsTerminating);
 
         // 如果应用程序即将终止，确保日志被写入
-        if (e.IsTerminating)
-        {
-            Log.CloseAndFlush();
-        }
+        if (e.IsTerminating) Log.CloseAndFlush();
     }
 
     private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
     {
-        Log.Fatal(e.Exception, "一个后台任务发生未经观察的异常 (Unobserved Task Exception)");
-        e.SetObserved(); // 防止进程终止
+        try
+        {
+            var ex = e.Exception;
+
+            // 将 995 (I/O 操作中止)、OperationCanceled 视为正常关停噪音，降低日志级别
+            static bool IsBenign(Exception x)
+            {
+                if (x is OperationCanceledException) return true;
+                if (x is AggregateException ag) return ag.InnerExceptions.Any(IsBenign);
+                if (x is SocketException se) return se.ErrorCode == 995; // ERROR_OPERATION_ABORTED
+                if (x.InnerException != null) return IsBenign(x.InnerException);
+                return false;
+            }
+
+            if (IsBenign(ex))
+                Log.Information(ex, "UnobservedTaskException: 捕获到可忽略的关停异常(995/取消)，已标记观察");
+            else
+                Log.Error(ex, "一个后台任务发生未经观察的异常 (Unobserved Task Exception)");
+        }
+        finally
+        {
+            e.SetObserved(); // 防止进程终止
+        }
     }
 }

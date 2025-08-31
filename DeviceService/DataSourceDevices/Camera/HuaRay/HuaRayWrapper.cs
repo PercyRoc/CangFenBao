@@ -26,10 +26,7 @@ public sealed class HuaRayWrapper
     /// <summary>
     ///     获取单例实例
     /// </summary>
-    public static HuaRayWrapper Instance
-    {
-        get => LazyInstance.Value;
-    }
+    public static HuaRayWrapper Instance => LazyInstance.Value;
 
     #endregion
 
@@ -69,12 +66,10 @@ public sealed class HuaRayWrapper
     private void OnLogisticsCodeEvent(object? sender, LogisticsCodeEventArgs e)
     {
         if (CodeHandle == null) return;
-
         try
         {
             var args = new HuaRayCodeEventArgs
             {
-
                 OutputResult = e.OutputResult,
                 CameraId = e.CameraID ?? string.Empty,
                 CodeList = e.CodeList ?? [],
@@ -93,7 +88,6 @@ public sealed class HuaRayWrapper
 
 
             if (e.OriginalImage.ImageData != IntPtr.Zero)
-            {
                 try
                 {
                     var safeSize = Math.Min(e.OriginalImage.dataSize, 50_000_000);
@@ -127,10 +121,8 @@ public sealed class HuaRayWrapper
                 {
                     Log.Error(ex, "处理原始图像信息时发生错误");
                 }
-            }
 
             if (e.WaybillImage.ImageData != IntPtr.Zero)
-            {
                 try
                 {
                     var safeSize = Math.Min(e.WaybillImage.dataSize, 50_000_000);
@@ -164,12 +156,9 @@ public sealed class HuaRayWrapper
                 {
                     Log.Error(ex, "处理面单图像信息时发生错误");
                 }
-            }
 
             if (e.CodesInfo is { Length: > 0 })
-            {
                 args.CodeList.AddRange(e.CodesInfo.Select(code => code?.ToString() ?? string.Empty));
-            }
 
             CodeHandle(this, args);
         }
@@ -188,16 +177,37 @@ public sealed class HuaRayWrapper
 
         try
         {
+            // 创建事件参数
             var args = new CameraStatusArgs
             {
                 CameraUserId = e.CameraUserID,
                 IsOnline = e.IsOnline
             };
-            CameraDisconnectEventHandler(this, args);
+
+            // 异步调用事件处理，避免阻塞相机SDK线程
+            Task.Run(() =>
+            {
+                try
+                {
+                    CameraDisconnectEventHandler(this, args);
+                }
+                catch (Exception handlerEx)
+                {
+                    Log.Error(handlerEx, "异步调用相机断开事件处理器时发生错误: CameraID={CameraID}, Status={Status}",
+                        args.CameraUserId, args.IsOnline ? "在线" : "离线");
+                }
+            }).ContinueWith(t =>
+            {
+                if (t.IsFaulted && t.Exception != null)
+                {
+                    Log.Error(t.Exception, "启动相机状态事件异步任务时发生错误");
+                }
+            }, TaskContinuationOptions.OnlyOnFaulted);
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "处理相机状态事件时发生错误");
+            Log.Error(ex, "处理相机状态事件时发生错误: CameraID={CameraID}, Status={Status}",
+                e.CameraUserID, e.IsOnline ? "在线" : "离线");
         }
     }
 

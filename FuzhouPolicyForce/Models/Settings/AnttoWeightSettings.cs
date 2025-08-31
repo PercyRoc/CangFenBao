@@ -1,21 +1,17 @@
-using Common.Services.Settings;
 using System.ComponentModel;
+using Common.Services.Settings;
 
-namespace FuzhouPolicyForce.Models.Settings
+namespace FuzhouPolicyForce.Models.Settings;
+
+public enum AnttoWeightEnvironment
 {
-    public enum AnttoWeightEnvironment
-    {
-        [Description("测试环境")]
-        Uat,
-        [Description("验证环境")]
-        Ver,
-        [Description("生产环境")]
-        Prod
-    }
+    [Description("测试环境")] Uat,
+    [Description("验证环境")] Ver,
+    [Description("生产环境")] Prod
+}
 
-    [Configuration("AnttoWeightSettings")]
-    public class AnttoWeightSettings
-    {
-        public AnttoWeightEnvironment SelectedEnvironment { get; set; } = AnttoWeightEnvironment.Uat;
-    }
+[Configuration("AnttoWeightSettings")]
+public class AnttoWeightSettings
+{
+    public AnttoWeightEnvironment SelectedEnvironment { get; set; } = AnttoWeightEnvironment.Uat;
 }

@@ -50,13 +50,11 @@ public partial class MainWindow
         );
 
         if (result == MessageBoxResult.OK)
-        {
             // 用户确认退出，允许关闭并关闭应用程序
             Dispatcher.Invoke(() =>
             {
                 Closing -= MainWindow_Closing; // 取消订阅以避免再次触发
                 Application.Current.Shutdown();
             });
-        }
     }
 }

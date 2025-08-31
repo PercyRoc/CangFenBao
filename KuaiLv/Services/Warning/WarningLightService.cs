@@ -42,13 +42,9 @@ public class WarningLightService(
 
             // 连接状态改变时记录日志
             if (value)
-            {
                 Log.Information("警示灯连接已建立");
-            }
             else
-            {
                 Log.Warning("警示灯连接已断开");
-            }
         }
     }
 
@@ -184,13 +180,9 @@ public class WarningLightService(
             }
 
             if (wasConnected)
-            {
                 Log.Information("警示灯断开连接流程完成");
-            }
             else
-            {
                 Log.Debug("警示灯断开连接处理完成 (初始状态或已为断开)");
-            }
         }
         catch (Exception ex)
         {
@@ -266,7 +258,7 @@ public class WarningLightService(
         }
     }
 
-    protected void Dispose(bool disposing)
+    private void Dispose(bool disposing)
     {
         if (_disposed) return;
 

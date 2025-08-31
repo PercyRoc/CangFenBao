@@ -88,14 +88,16 @@ internal class WeighingService(ISettingsService settingsService, HttpClient http
             // ** 在这里重新构建业务 JSON，确保与签名使用的 JSON 一致 **
             var businessParamNamesInOrder = new[]
             {
-                "tenantId", "warehouseCode", "waybillCode", "packagingMaterialCode", "actualVolume", "actualWeight", "weighingEquipment", "userId", "userRealName"
+                "tenantId", "warehouseCode", "waybillCode", "packagingMaterialCode", "actualVolume", "actualWeight",
+                "weighingEquipment", "userId", "userRealName"
             };
             var businessJsonBuilder = new StringBuilder("{");
             var isFirst = true;
             foreach (var key in businessParamNamesInOrder)
             {
-                if (!businessParams.TryGetValue(key, out var value)) continue; // 使用从 SignatureHelper.GetBusinessParameters 获取的 businessParams
-                if (!isFirst) { businessJsonBuilder.Append(','); }
+                if (!businessParams.TryGetValue(key, out var value))
+                    continue; // 使用从 SignatureHelper.GetBusinessParameters 获取的 businessParams
+                if (!isFirst) businessJsonBuilder.Append(',');
                 businessJsonBuilder.Append('"').Append(key).Append("\":");
                 switch (value)
                 {
@@ -112,13 +114,17 @@ internal class WeighingService(ISettingsService settingsService, HttpClient http
                         businessJsonBuilder.Append(value); // 数字等
                         break;
                 }
+
                 isFirst = false;
             }
+
             businessJsonBuilder.Append('}');
             var businessParamsJsonForBody = businessJsonBuilder.ToString();
             // ** 结束重新构建业务 JSON **
 
-            var requestBody = new StringContent(businessParamsJsonForBody, Encoding.UTF8, MediaTypeNames.Application.Json); // 使用 MediaTypeNames 修正类型
+            var requestBody =
+                new StringContent(businessParamsJsonForBody, Encoding.UTF8,
+                    MediaTypeNames.Application.Json); // 使用 MediaTypeNames 修正类型
             // 记录请求 URL 和 Body
             Log.Debug("发送称重请求 URL: {RequestUrl}", requestUrl);
             Log.Debug("发送称重请求 Body: {RequestBody}", businessParamsJsonForBody);
@@ -135,17 +141,11 @@ internal class WeighingService(ISettingsService settingsService, HttpClient http
             // 记录耗时区间 (使用 Debug 级别，或根据需要调整)
             string durationCategory;
             if (elapsedMs < 1000)
-            {
                 durationCategory = "< 1s";
-            }
             else if (elapsedMs < 2000)
-            {
                 durationCategory = "1s - 2s";
-            }
             else
-            {
                 durationCategory = ">= 2s";
-            }
             Log.Debug("称重请求耗时区间: Barcode={Barcode}, 区间={DurationCategory}", request.WaybillCode, durationCategory);
 
             // 读取响应内容
@@ -177,13 +177,10 @@ internal class WeighingService(ISettingsService settingsService, HttpClient http
                 }
 
                 if (!result.Success)
-                {
-                    Log.Warning("称重请求业务失败: Code={Code}, Message={Message}, Barcode={Barcode}", result.Code, result.Message, request.WaybillCode);
-                }
+                    Log.Warning("称重请求业务失败: Code={Code}, Message={Message}, Barcode={Barcode}", result.Code,
+                        result.Message, request.WaybillCode);
                 else
-                {
                     Log.Information("称重请求业务成功: Barcode={Barcode}", request.WaybillCode);
-                }
 
                 return result;
             }
@@ -199,7 +196,8 @@ internal class WeighingService(ISettingsService settingsService, HttpClient http
             stopwatch.Stop(); // 确保 stopwatch 停止计时 (可能已停止)
             elapsedMs = stopwatch.ElapsedMilliseconds; // 更新耗时变量
             // 记录错误时包含耗时
-            Log.Error(ex, "发送称重数据时发生错误: Barcode={Barcode}, 耗时={ElapsedMilliseconds}ms (请求可能未完成)", request.WaybillCode, elapsedMs);
+            Log.Error(ex, "发送称重数据时发生错误: Barcode={Barcode}, 耗时={ElapsedMilliseconds}ms (请求可能未完成)", request.WaybillCode,
+                elapsedMs);
             throw; // 重新抛出异常
         }
     }
@@ -234,20 +232,14 @@ internal class WeighingService(ISettingsService settingsService, HttpClient http
                 request.WaybillCode, request.Weight, elapsedMs);
 
             // 记录耗时区间
-            string durationCategory;
-            if (elapsedMs < 1000)
+            var durationCategory = elapsedMs switch
             {
-                durationCategory = "< 1s";
-            }
-            else if (elapsedMs < 2000)
-            {
-                durationCategory = "1s - 2s";
-            }
-            else
-            {
-                durationCategory = ">= 2s";
-            }
-            Log.Debug("新称重请求耗时区间: WaybillCode={WaybillCode}, 区间={DurationCategory}", request.WaybillCode, durationCategory);
+                < 1000 => "< 1s",
+                < 2000 => "1s - 2s",
+                _ => ">= 2s"
+            };
+            Log.Debug("新称重请求耗时区间: WaybillCode={WaybillCode}, 区间={DurationCategory}", request.WaybillCode,
+                durationCategory);
 
             // 读取响应内容
             var responseContent = await response.Content.ReadAsStringAsync();
@@ -277,15 +269,12 @@ internal class WeighingService(ISettingsService settingsService, HttpClient http
                 }
 
                 if (!result.IsSuccess)
-                {
                     Log.Warning("新称重请求业务失败: Code={Code}, Message={Message}, WaybillCode={WaybillCode}",
                         result.Code, result.Msg, request.WaybillCode);
-                }
                 else
-                {
-                    Log.Information("新称重请求业务成功: WaybillCode={WaybillCode}, CarrierCode={CarrierCode}, ProvinceName={ProvinceName}",
+                    Log.Information(
+                        "新称重请求业务成功: WaybillCode={WaybillCode}, CarrierCode={CarrierCode}, ProvinceName={ProvinceName}",
                         request.WaybillCode, result.Data?.CarrierCode, result.Data?.ProvinceName);
-                }
 
                 return result;
             }
@@ -311,8 +300,9 @@ internal class WeighingService(ISettingsService settingsService, HttpClient http
     /// <param name="waybillCode">运单号</param>
     /// <param name="weight">重量</param>
     /// <param name="volume">体积（可选，仅旧接口使用）</param>
-    /// <returns>是否成功</returns>
-    public async Task<bool> SendWeightDataAutoAsync(string waybillCode, decimal weight, decimal? volume = null)
+    /// <returns>包含详细结果的称重响应对象</returns>
+    public async Task<WeighingResult> SendWeightDataAutoAsync(string waybillCode, decimal weight,
+        decimal? volume = null)
     {
         try
         {
@@ -328,8 +318,11 @@ internal class WeighingService(ISettingsService settingsService, HttpClient http
                 };
 
                 var newResponse = await SendNewWeightDataAsync(newRequest);
-                return newResponse.IsSuccess;
+                return newResponse.IsSuccess
+                    ? WeighingResult.Success
+                    : WeighingResult.Fail(newResponse.Code, newResponse.Msg);
             }
+
             // 使用旧接口
             var oldRequest = new WeighingRequest
             {
@@ -341,12 +334,14 @@ internal class WeighingService(ISettingsService settingsService, HttpClient http
             };
 
             var oldResponse = await SendWeightDataAsync(oldRequest);
-            return oldResponse.Success;
+            return oldResponse.Success
+                ? WeighingResult.Success
+                : WeighingResult.Fail(oldResponse.Code, oldResponse.Message);
         }
         catch (Exception ex)
         {
             Log.Error(ex, "自动发送称重数据时发生错误: WaybillCode={WaybillCode}, Weight={Weight}", waybillCode, weight);
-            return false;
+            return WeighingResult.Fail("Exception", ex.Message);
         }
     }
 }

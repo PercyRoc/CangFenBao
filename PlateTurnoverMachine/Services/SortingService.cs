@@ -1,9 +1,12 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text;
 using Common.Models.Package;
 using Common.Services.Settings;
 using DongtaiFlippingBoardMachine.Events;
 using DongtaiFlippingBoardMachine.Models;
+using EasyModbus;
+using Prism.Events;
 using Serilog;
 
 namespace DongtaiFlippingBoardMachine.Services;
@@ -13,16 +16,29 @@ namespace DongtaiFlippingBoardMachine.Services;
 /// </summary>
 public class SortingService : IDisposable
 {
+    private const int CounterHistoryCapacity = 2048;
+    private const double PulseEmaAlpha = 0.3; // 指数平滑系数
+
+    private const int FineAdjustWindowMs = 5; // 微调提前窗口(ms)
+
+    // 记录 Modbus 边沿历史 (计数值, 时间戳)
+    private readonly ConcurrentQueue<(uint Counter, DateTime Timestamp)> _counterHistory = new();
     private readonly IEventAggregator _eventAggregator;
+    private readonly ConcurrentDictionary<PackageInfo, uint> _packagePendingDistances = new();
     private readonly ConcurrentQueue<PackageInfo> _packageQueue = new();
+    private readonly ConcurrentDictionary<PackageInfo, uint> _packageTargetCounters = new();
     private readonly Dictionary<string, TcpConnectionConfig> _tcpConfigs = [];
     private readonly ITcpConnectionService _tcpConnectionService;
     private readonly IZtoSortingService _ztoSortingService;
     private bool _disposed;
+    private DateTime _lastCounterUpdateTime;
     private double _lastIntervalMs;
-    private DateTime _lastLowSignalTime; // 新增：记录上一次低电平信号的时间
-    private bool _lastSignalWasLow; // 新增：标记上一个信号是否为低电平
-    private DateTime _lastTriggerTime;
+
+    private ModbusClient? _modbusClient;
+
+    // Modbus 轮询所需字段
+    private CancellationTokenSource? _modbusPollingCts;
+    private double _smoothedPulseMs; // 平滑后的单脉冲时长
 
     public SortingService(ITcpConnectionService tcpConnectionService,
         ISettingsService settingsService,
@@ -35,14 +51,14 @@ public class SortingService : IDisposable
 
         Settings = settingsService.LoadSettings<PlateTurnoverSettings>();
 
-        _tcpConnectionService.TriggerPhotoelectricDataReceived += OnTriggerPhotoelectricDataReceived;
-        _lastTriggerTime = DateTime.Now;
-
         // 订阅配置更新事件
         _eventAggregator.GetEvent<PlateTurnoverSettingsUpdatedEvent>().Subscribe(OnSettingsUpdated);
 
         // 初始化TCP配置
         UpdateTcpConfigs();
+
+        // 始终使用 Modbus 轮询（固定地址，不再读取配置）
+        StartModbusPolling("192.168.1.50", 502);
     }
 
     private PlateTurnoverSettings Settings { get; set; }
@@ -50,12 +66,20 @@ public class SortingService : IDisposable
     /// <summary>
     ///     获取最近一次计算的高电平信号时间间隔（毫秒）
     /// </summary>
-    private double LastIntervalMs
-    {
-        get => // 如果 _lastIntervalMs 尚未被有效计算（仍为0或初始值），则使用默认间隔
-            // 增加一个检查确保返回的是合理的值
-            _lastIntervalMs > 0 ? _lastIntervalMs : Settings.DefaultInterval;
-    }
+    private double LastIntervalMs =>
+        // 如果 _lastIntervalMs 尚未被有效计算（仍为0或初始值），则使用默认间隔
+        // 增加一个检查确保返回的是合理的值
+        _lastIntervalMs > 0 ? _lastIntervalMs : Settings.DefaultInterval;
+
+    /// <summary>
+    ///     当前 Modbus 计数（32位无符号）
+    /// </summary>
+    public uint CurrentModbusCounter { get; private set; }
+
+    /// <summary>
+    ///     Modbus 连接状态
+    /// </summary>
+    public bool IsModbusConnected => _modbusClient?.Connected ?? false;
 
     public void Dispose()
     {
@@ -81,28 +105,64 @@ public class SortingService : IDisposable
             }
             else
             {
-                Log.Information("包裹 {Barcode} 需要触发 {Distance} 次光电信号", package.Barcode, turnoverItem.Distance);
+                Log.Information("包裹 {Barcode} 目标距离(脉冲): {Distance}", package.Barcode, turnoverItem.Distance);
             }
 
-            // 计算初始 PackageCount
-            var timeSinceCreation = DateTime.Now - package.TriggerTimestamp;
-            var interval = LastIntervalMs > 0 ? LastIntervalMs : Settings.DefaultInterval;
-            var initialCount = 0;
-            if (interval > 0)
+            // 记录 Modbus 目标计数: 从触发后的下一脉冲开始数
+            var distancePulses = (uint)Math.Round(turnoverItem?.Distance ?? 0, MidpointRounding.AwayFromZero);
+            if (_lastCounterUpdateTime == DateTime.MinValue)
             {
-                initialCount = (int)Math.Floor(timeSinceCreation.TotalMilliseconds / interval);
-                Log.Debug("包裹 {Barcode} 创建后已过去 {ElapsedMs:F2} ms，估算初始光电计数为 {InitialCount} (间隔: {IntervalMs:F2} ms)",
-                    package.Barcode, timeSinceCreation.TotalMilliseconds, initialCount, interval);
+                // 尚未获得 Modbus 计数，等首次轮询后补记
+                _packagePendingDistances[package] = distancePulses;
+                Log.Debug("包裹 {Barcode} 在首次Modbus更新后将设置目标计数 (+{Distance})", package.Barcode, distancePulses);
             }
             else
             {
-                Log.Warning("无法计算包裹 {Barcode} 的初始光电计数，因为光电触发间隔无效 ({Interval}ms)", package.Barcode, interval);
+                var history = _counterHistory.ToArray();
+                var nextIdx = -1;
+                var nowForEdge = DateTime.Now;
+                for (var i = 0; i < history.Length; i++)
+                    if (history[i].Timestamp >= nowForEdge)
+                    {
+                        nextIdx = i;
+                        break;
+                    }
+
+                // 基于“当前时间距触发时间”与单脉冲时长的关系，决定是否在下一边沿基础上再 +1
+                var effectivePulseMs = _smoothedPulseMs > 0 ? _smoothedPulseMs : LastIntervalMs;
+                var elapsedSinceTriggerMs = (DateTime.Now - package.TriggerTimestamp).TotalMilliseconds;
+                var shiftPulses = elapsedSinceTriggerMs >= effectivePulseMs ? 1u : 0u;
+                uint target;
+                uint logStartCounter;
+                DateTime? refEdgeTime;
+                if (nextIdx >= 0)
+                {
+                    var nextCounter = history[nextIdx].Counter;
+                    var kMinusOne = distancePulses > 0 ? distancePulses - 1u : 0u;
+                    target = unchecked(nextCounter + kMinusOne + shiftPulses);
+                    logStartCounter = unchecked(nextCounter + shiftPulses); // shift=1 表示从“下一边沿”的再下一拍起算
+                    refEdgeTime = history[nextIdx].Timestamp;
+                }
+                else
+                {
+                    // next 尚未到达：按照“始终从下一边沿起算”的语义，目标=prev+distance；若超一拍（shiftPulses==1）则再+1
+                    target = unchecked(CurrentModbusCounter + distancePulses + shiftPulses);
+                    logStartCounter = unchecked(CurrentModbusCounter + 1u + shiftPulses);
+                    refEdgeTime = null; // 无法可靠给出下一边沿时间
+                }
+
+                _packageTargetCounters[package] = target;
+                Log.Information(
+                    refEdgeTime.HasValue
+                        ? "包裹 {Barcode} 记录目标计数: {Target} (起算脉冲={Start} 基准边沿时间={Edge:o} 距离={Distance} shift={Shift} elapsedSinceTriggerMs={Elapsed:F2} perPulseMs={Pulse:F2})，Trigger={Trigger:o}"
+                        : "包裹 {Barcode} 记录目标计数: {Target} (回退: 起算脉冲={Start} 距离={Distance} shift={Shift} elapsedSinceTriggerMs={Elapsed:F2} perPulseMs={Pulse:F2})，Trigger={Trigger:o}",
+                    package.Barcode, target, logStartCounter, refEdgeTime ?? default, distancePulses, shiftPulses,
+                    elapsedSinceTriggerMs, effectivePulseMs, package.TriggerTimestamp);
             }
-            package.PackageCount = initialCount; // 使用计算出的初始值
 
             package.SetStatus(PackageStatus.Success);
             _packageQueue.Enqueue(package);
-            Log.Information("包裹 {Barcode} 已添加到分拣队列，目标格口：{ChuteNumber}, 初始计数: {InitialCount}", package.Barcode, package.ChuteNumber, package.PackageCount);
+            Log.Information("包裹 {Barcode} 已添加到分拣队列，目标格口：{ChuteNumber}", package.Barcode, package.ChuteNumber);
         }
         catch (Exception ex)
         {
@@ -111,263 +171,6 @@ public class SortingService : IDisposable
         }
     }
 
-    private void OnTriggerPhotoelectricDataReceived(object? sender, TcpDataReceivedEventArgs e)
-    {
-        // 添加详细日志，显示收到的原始数据
-        try
-        {
-            var rawData = e.Data is { Length: > 0 }
-                ? Encoding.ASCII.GetString(e.Data)
-                : "<空数据>";
-            Log.Information("收到触发光电原始数据: {RawData}", rawData);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "尝试解析触发光电原始数据时出错");
-        }
-
-        ProcessSignalInternal(e.Data, e.ReceivedTime);
-    }
-
-    /// <summary>
-    ///     内部处理信号的核心逻辑
-    /// </summary>
-    private void ProcessSignalInternal(byte[]? data, DateTime triggerTime)
-    {
-        try
-        {
-            // 检查数据是否为空
-            if (data == null || data.Length == 0)
-            {
-                Log.Warning("收到空的触发光电数据");
-                _lastSignalWasLow = false; // 重置状态
-                return;
-            }
-
-            // 解析消息
-            var message = Encoding.ASCII.GetString(data);
-            Log.Information("解析触发光电数据: {Message} at {Timestamp}", message, triggerTime.ToString("O"));
-
-            var isHighSignal = message.Contains("+OCCH1:1");
-            var isLowSignal = message.Contains("+OCCH1:0");
-
-            if (isHighSignal)
-            {
-                Log.Debug("检测到高电平信号");
-                var intervalMs = (triggerTime - _lastTriggerTime).TotalMilliseconds;
-                Log.Debug("高电平信号时间间隔：{Interval:F2}毫秒 (Raw)", intervalMs);
-
-                // 只有当间隔看起来合理时才更新 (避免初始启动或长时间无信号导致异常间隔)
-                if (intervalMs > 0 && intervalMs < Settings.DefaultInterval * 5) // 设定一个合理上限，例如默认间隔的5倍
-                {
-                    _lastIntervalMs = intervalMs;
-                    Log.Debug("使用高电平信号更新 LastIntervalMs: {Interval:F2}ms", _lastIntervalMs);
-                }
-                else
-                {
-                    Log.Warning("高电平信号间隔 {IntervalMs:F2}ms 不在合理范围 (0, {MaxInterval}ms)，未更新 LastIntervalMs", intervalMs, Settings.DefaultInterval * 5);
-                }
-
-                _lastTriggerTime = triggerTime;
-                _lastSignalWasLow = false;
-
-                // 处理计数增加和距离检查
-                ProcessPackageCountingAndTriggering(triggerTime, "Real High Signal");
-            }
-            else if (isLowSignal)
-            {
-                Log.Debug("检测到低电平信号");
-                if (_lastSignalWasLow)
-                {
-                    // 连续第二次收到低电平，触发补偿逻辑
-                    Log.Warning("连续收到两次低电平信号，可能丢失高电平，触发补偿逻辑");
-                    var intervalMs = (triggerTime - _lastLowSignalTime).TotalMilliseconds;
-                    Log.Debug("两次低电平信号时间间隔：{Interval:F2}毫秒", intervalMs);
-
-                    // 更新 LastIntervalMs (使用两次低电平的间隔)
-                    if (intervalMs > 0 && intervalMs < Settings.DefaultInterval * 5) // 设定一个合理上限
-                    {
-                        _lastIntervalMs = intervalMs;
-                        Log.Debug("使用补偿逻辑更新 LastIntervalMs: {Interval:F2}ms", _lastIntervalMs);
-                    }
-                    else
-                    {
-                        Log.Warning("补偿逻辑计算的间隔 {IntervalMs:F2}ms 不在合理范围 (0, {MaxInterval}ms)，未更新 LastIntervalMs", intervalMs, Settings.DefaultInterval * 5);
-                    }
-
-
-                    // 估算丢失的高电平时间 (中点)
-                    var estimatedHighTime = _lastLowSignalTime + TimeSpan.FromMilliseconds(intervalMs / 2);
-                    Log.Debug("估算丢失的高电平时间: {EstimatedTime}", estimatedHighTime.ToString("O"));
-                    _lastTriggerTime = estimatedHighTime; // 更新最后触发时间为估算时间
-
-                    _lastSignalWasLow = false; // 重置标志
-
-                    // 处理补偿计数增加和距离检查
-                    ProcessPackageCountingAndTriggering(estimatedHighTime, "Compensated Low Signal");
-                }
-                else
-                {
-                    // 第一次收到低电平
-                    _lastSignalWasLow = true;
-                    _lastLowSignalTime = triggerTime;
-                    Log.Debug("记录第一次低电平信号时间: {LowTime}", _lastLowSignalTime.ToString("O"));
-                }
-            }
-            else
-            {
-                Log.Warning("收到无法识别的光电信号: {Message}", message);
-                _lastSignalWasLow = false; // 重置状态
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "处理光电信号内部逻辑时发生错误");
-            _lastSignalWasLow = false; // 发生错误时重置状态
-        }
-    }
-
-    /// <summary>
-    ///     处理包裹计数增加和检查触发距离的通用逻辑
-    /// </summary>
-    /// <param name="signalTime">信号触发时间（真实或估算）</param>
-    /// <param name="triggerSource">触发源描述 (用于日志)</param>
-    private void ProcessPackageCountingAndTriggering(DateTime signalTime, string triggerSource)
-    {
-        Log.Debug("开始更新包裹计数 (触发源: {Source})...", triggerSource);
-        var totalPackages = _packageQueue.Count;
-        var updatedPackages = 0;
-        foreach (var package in _packageQueue)
-        {
-            package.PackageCount++;
-            package.SetTriggerTimestamp(signalTime); // 同时更新最后触发时间
-            Log.Debug("包裹 {Barcode} 计数增加为: {Count}", package.Barcode, package.PackageCount);
-            updatedPackages++;
-        }
-        Log.Debug("包裹计数更新完毕 (更新了 {UpdatedCount}/{TotalCount} 个)", updatedPackages, totalPackages);
-
-        // 遍历队列判断是否达到距离 (此部分逻辑不变)
-        Log.Debug("开始检查队列中包裹是否到达目标距离 (触发源: {Source})...", triggerSource);
-        var checkedPackages = 0;
-        var packagesToDequeue = new List<PackageInfo>(); // 存储需要移除的包裹
-
-        foreach (var package in _packageQueue)
-        {
-            checkedPackages++;
-            // 获取包裹对应的翻板机配置
-            var turnoverItem = Settings.Items.FirstOrDefault(item => item.MappingChute == package.ChuteNumber);
-            if (turnoverItem == null) continue;
-
-            Log.Debug("检查包裹 {Barcode} 目标距离: {Distance}, 当前计数: {Count}", package.Barcode, turnoverItem.Distance, package.PackageCount);
-
-            if (!(package.PackageCount >= turnoverItem.Distance)) continue;
-
-            Log.Information("包裹 {Barcode} 满足距离条件 ({Count} >= {Distance}) (触发源: {Source})，准备触发落格",
-                package.Barcode, package.PackageCount, turnoverItem.Distance, triggerSource);
-
-            Log.Information("包裹 {Barcode} 已到达目标位置，触发次数：{Count}，目标格口：{ChuteNumber}，总耗时：{TotalTime:F2}毫秒",
-                package.Barcode, package.PackageCount, package.ChuteNumber,
-                (signalTime - package.CreateTime).TotalMilliseconds);
-
-            // 计算延迟时间，使用 LastIntervalMs
-            var delayMs = (int)(LastIntervalMs * turnoverItem.DelayFactor);
-            Log.Debug("包裹 {Barcode} 将在 {Delay} 毫秒后触发落格，使用最近间隔：{Interval:F2}毫秒，延迟系数：{Factor:F2}",
-                package.Barcode, delayMs, LastIntervalMs, turnoverItem.DelayFactor);
-
-            // --- 参数快照 ---
-            // 在启动任务前，捕获所有需要的参数，避免竞态条件
-            var magnetTime = turnoverItem.MagnetTime;
-            var tcpAddress = turnoverItem.TcpAddress;
-            var ioPoint = turnoverItem.IoPoint;
-
-            // 异步发送落格命令 (将包裹实例传递给异步方法)
-            var packageToSend = package; // 捕获当前循环的包裹实例
-            packagesToDequeue.Add(packageToSend); // 标记此包裹需要被移除
-
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    // *** 新增：在这里执行计算好的延迟 ***
-                    if (delayMs > 0)
-                    {
-                        await Task.Delay(delayMs);
-                    }
-
-                    // 1. 检查配置的 TCP 地址
-                    if (string.IsNullOrEmpty(tcpAddress))
-                    {
-                        Log.Error("包裹 {Barcode} 的翻板机未配置TCP地址", packageToSend.Barcode);
-                        return;
-                    }
-
-                    // 2. 从字典中查找对应的 TcpConnectionConfig
-                    if (!_tcpConfigs.TryGetValue(tcpAddress, out var targetConfig))
-                    {
-                        Log.Error("包裹 {Barcode} 配置的TCP地址 {TcpAddress} 在配置字典中未找到", packageToSend.Barcode, tcpAddress);
-                        return;
-                    }
-
-                    // 准备落格命令
-                    var outNumber = ioPoint!.ToUpper().Replace("OUT", "");
-                    var lockCommand = $"AT+STACH{outNumber}=1\r\n"; // 直接使用 \r\n
-                    var commandData = Encoding.ASCII.GetBytes(lockCommand);
-
-                    // === 添加日志：确认发送目标和命令 ===
-                    Log.Information("准备向TCP模块 {TargetIp} 发送落格命令 {Command} (包裹 {Barcode})",
-                        targetConfig.IpAddress, lockCommand.TrimEnd('\r', '\n'), packageToSend.Barcode); // 日志中移除换行符
-
-                    // 3. 发送落格命令到目标配置
-                    await _tcpConnectionService.SendToTcpModuleAsync(targetConfig, commandData);
-                    Log.Information("包裹 {Barcode} 已发送落格命令：{Command} 到 {TargetIp}", packageToSend.Barcode, lockCommand.TrimEnd('\r', '\n'), targetConfig.IpAddress);
-
-                    // 等待磁铁吸合时间后复位
-                    await Task.Delay(magnetTime);
-                    var resetCommand = $"AT+STACH{outNumber}=0\r\n"; // 直接使用 \r\n
-                    var resetData = Encoding.ASCII.GetBytes(resetCommand);
-
-                    // === 添加日志：确认发送目标和命令 ===
-                    Log.Information("准备向TCP模块 {TargetIp} 发送复位命令 {Command} (包裹 {Barcode})",
-                        targetConfig.IpAddress, resetCommand.TrimEnd('\r', '\n'), packageToSend.Barcode); // 日志中移除换行符
-
-                    // 4. 发送复位命令到目标配置
-                    await _tcpConnectionService.SendToTcpModuleAsync(targetConfig, resetData);
-                    Log.Debug("包裹 {Barcode} 已发送复位命令：{Command} 到 {TargetIp}", packageToSend.Barcode, resetCommand.TrimEnd('\r', '\n'), targetConfig.IpAddress);
-
-                    _ = ReportSortingResultAsync(packageToSend);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "包裹 {Barcode} 发送落格命令时发生错误", packageToSend.Barcode);
-                }
-            });
-        }
-
-        // 安全地移除已处理的包裹
-        if (packagesToDequeue.Count > 0)
-        {
-            Log.Debug("准备从队列中移除 {Count} 个已处理的包裹...", packagesToDequeue.Count);
-            // 由于 ConcurrentQueue 不支持直接按值移除，我们需要重建队列或采用过滤出队的方式
-            // 这里采用更健壮的方式：创建一个新的队列，只包含未处理的包裹
-            var remainingPackages = _packageQueue.Where(p => !packagesToDequeue.Contains(p));
-            var newQueue = new ConcurrentQueue<PackageInfo>(remainingPackages);
-
-            // 替换旧队列 (这里需要考虑线程安全，但对于单线程处理信号的场景，这样是可接受的)
-            // 或者，如果 _packageQueue 的修改总是在这个方法内，可以直接操作
-            // 为了简单起见，假设信号处理是串行的
-            while (_packageQueue.TryDequeue(out _)) { } // 清空旧队列
-            foreach (var p in newQueue) { _packageQueue.Enqueue(p); } // 填入新队列
-
-            foreach (var dequeuedPackage in packagesToDequeue)
-            {
-                Log.Information("包裹 {Barcode} 已处理并从逻辑队列中移除", dequeuedPackage.Barcode);
-            }
-            Log.Debug("队列移除操作完成，当前队列大小: {Size}", _packageQueue.Count);
-        }
-
-
-        Log.Debug("检查了 {CheckedCount} 个包裹是否到达距离 (触发源: {Source})", checkedPackages, triggerSource);
-    }
 
     /// <summary>
     ///     接收来自UI的实时配置更新
@@ -378,6 +181,7 @@ public class SortingService : IDisposable
         Log.Information("接收到来自UI的实时配置更新...");
         Settings = newSettings;
         UpdateTcpConfigs();
+        // 不再根据配置变更重启 Modbus（固定地址）
         Log.Information("翻板机实时配置已应用。");
     }
 
@@ -409,8 +213,158 @@ public class SortingService : IDisposable
         }
 
         if (ipsToAdd.Count != 0 || ipsToRemove.Count != 0)
-        {
             Log.Information("TCP配置更新完成. 新增: {AddCount}, 移除: {RemoveCount}", ipsToAdd.Count, ipsToRemove.Count);
+    }
+
+    // 按计数过线触发分拣：如果包裹目标计数位于 [prevCounter, newCounter] 区间内，则在对应时间点 + 延迟后执行落格
+    private void CheckAndTriggerByCounter(uint prevCounter, uint newCounter, DateTime windowStartTime,
+        double perPulseMs)
+    {
+        try
+        {
+            if (_packageTargetCounters.IsEmpty) return;
+
+            // 处理溢出：统一转换到64位并判断区间
+            ulong start = prevCounter;
+            var end = newCounter >= prevCounter
+                ? newCounter
+                : uint.MaxValue + 1UL + newCounter; // 跨越溢出
+
+            var toTrigger = new List<(PackageInfo Package, uint Target)>();
+            foreach (var kv in _packageTargetCounters)
+            {
+                var t = kv.Value;
+                var ut = t >= prevCounter ? t : uint.MaxValue + 1UL + t; // 与区间同处理
+                if (ut > start && ut <= end) toTrigger.Add((kv.Key, kv.Value));
+            }
+
+            if (toTrigger.Count == 0) return;
+
+            foreach (var (package, target) in toTrigger)
+            {
+                // 计算对应的理论到达时间点
+                var pulsesFromStart = target >= prevCounter
+                    ? target - prevCounter
+                    : (ulong)uint.MaxValue - prevCounter + 1UL + target;
+                var arrivalTime = windowStartTime + TimeSpan.FromMilliseconds(pulsesFromStart * perPulseMs);
+                var nowTime = DateTime.Now;
+                var roughDelay = arrivalTime > nowTime ? arrivalTime - nowTime : TimeSpan.Zero;
+
+                // 取包裹配置参数快照
+                var turnoverItem = Settings.Items.FirstOrDefault(item => item.MappingChute == package.ChuteNumber);
+                if (turnoverItem == null) continue;
+
+                var delayMs = (int)(LastIntervalMs * turnoverItem.DelayFactor);
+                var magnetTime = turnoverItem.MagnetTime;
+                var tcpAddress = turnoverItem.TcpAddress;
+                var ioPoint = turnoverItem.IoPoint;
+
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var arriveDeltaMs = (arrivalTime - package.TriggerTimestamp).TotalMilliseconds;
+                        Log.Information(
+                            "分拣调度: 包裹={Barcode} 目标计数={Target} 起始={Start} 结束={End} 跨越={Pulses} 到达={Arrival:o} perPulse={Per:F2}ms delayMs={Delay} arriveVsTriggerMs={ArriveDeltaMs:F2} trigger={Trigger:o} chute={Chute} tcp={Tcp} io={Io}",
+                            package.Barcode,
+                            target,
+                            prevCounter,
+                            newCounter,
+                            pulsesFromStart,
+                            arrivalTime,
+                            perPulseMs,
+                            delayMs,
+                            arriveDeltaMs,
+                            package.TriggerTimestamp,
+                            package.ChuteNumber,
+                            tcpAddress,
+                            ioPoint);
+                        // 等到理论到达时间（粗等待）
+                        if (roughDelay > TimeSpan.Zero)
+                        {
+                            var coarse = roughDelay - TimeSpan.FromMilliseconds(FineAdjustWindowMs);
+                            if (coarse > TimeSpan.Zero) await Task.Delay(coarse);
+                            // 微调自旋，尽量贴近目标时刻
+                            var sw = Stopwatch.StartNew();
+                            while (sw.ElapsedMilliseconds < FineAdjustWindowMs) await Task.Yield();
+                        }
+
+                        // 再按延迟系数等待
+                        if (delayMs > 0)
+                        {
+                            // 两段式：先等待 delayMs - FineAdjustWindowMs，再微调
+                            if (delayMs > FineAdjustWindowMs)
+                            {
+                                await Task.Delay(delayMs - FineAdjustWindowMs);
+                                var sw2 = Stopwatch.StartNew();
+                                while (sw2.ElapsedMilliseconds < FineAdjustWindowMs) await Task.Yield();
+                            }
+                            else
+                            {
+                                await Task.Delay(delayMs);
+                            }
+                        }
+
+                        if (string.IsNullOrEmpty(tcpAddress))
+                        {
+                            Log.Error("包裹 {Barcode} 的翻板机未配置TCP地址", package.Barcode);
+                            return;
+                        }
+
+                        if (!_tcpConfigs.TryGetValue(tcpAddress, out var targetConfig))
+                        {
+                            Log.Error("包裹 {Barcode} 配置的TCP地址 {TcpAddress} 在配置字典中未找到", package.Barcode, tcpAddress);
+                            return;
+                        }
+
+                        var outNumber = ioPoint!.ToUpper().Replace("OUT", "");
+                        var lockCommand = $"AT+STACH{outNumber}=1\r\n";
+                        var commandData = Encoding.ASCII.GetBytes(lockCommand);
+
+                        Log.Information("准备向TCP模块 {TargetIp} 发送落格命令 {Command} (包裹 {Barcode})",
+                            targetConfig.IpAddress, lockCommand.TrimEnd('\r', '\n'), package.Barcode);
+
+                        await _tcpConnectionService.SendToTcpModuleAsync(targetConfig, commandData);
+                        Log.Information("包裹 {Barcode} 已发送落格命令：{Command} 到 {TargetIp}", package.Barcode,
+                            lockCommand.TrimEnd('\r', '\n'), targetConfig.IpAddress);
+
+                        await Task.Delay(magnetTime);
+                        var resetCommand = $"AT+STACH{outNumber}=0\r\n";
+                        var resetData = Encoding.ASCII.GetBytes(resetCommand);
+
+                        Log.Information("准备向TCP模块 {TargetIp} 发送复位命令 {Command} (包裹 {Barcode})",
+                            targetConfig.IpAddress, resetCommand.TrimEnd('\r', '\n'), package.Barcode);
+
+                        await _tcpConnectionService.SendToTcpModuleAsync(targetConfig, resetData);
+                        Log.Information("包裹 {Barcode} 已发送复位命令：{Command} 到 {TargetIp}", package.Barcode,
+                            resetCommand.TrimEnd('\r', '\n'), targetConfig.IpAddress);
+
+                        _ = ReportSortingResultAsync(package);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "包裹 {Barcode} 发送落格命令时发生错误", package.Barcode);
+                    }
+                });
+
+                // 从队列移除该包裹
+                _packageTargetCounters.TryRemove(package, out _);
+                // 从逻辑队列移除
+                // 重建队列（仅保留未触发的包裹）
+                var remainingPackages = _packageQueue.Where(p => p != package);
+                var newQueue = new ConcurrentQueue<PackageInfo>(remainingPackages);
+                while (_packageQueue.TryDequeue(out _))
+                {
+                }
+
+                foreach (var p in newQueue) _packageQueue.Enqueue(p);
+
+                Log.Information("包裹 {Barcode} 已达到目标计数并从队列中移除", package.Barcode);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "按计数触发分拣时发生错误");
         }
     }
 
@@ -418,10 +372,7 @@ public class SortingService : IDisposable
     {
         try
         {
-            if (string.IsNullOrEmpty(Settings.ZtoPipelineCode))
-            {
-                return;
-            }
+            if (string.IsNullOrEmpty(Settings.ZtoPipelineCode)) return;
 
             // === 修改：使用包裹的最终独立计数上报 ===
             await _ztoSortingService.ReportSortingResultAsync(
@@ -445,7 +396,7 @@ public class SortingService : IDisposable
     {
         Log.Information("正在向所有已配置的格口发送复位命令...");
         var allItems = Settings.Items.ToList(); // 创建副本以安全迭代
-        if (!allItems.Any())
+        if (allItems.Count == 0)
         {
             Log.Information("没有配置任何格口，跳过复位操作。");
             return;
@@ -459,13 +410,16 @@ public class SortingService : IDisposable
                 {
                     if (!_tcpConfigs.TryGetValue(item.TcpAddress!, out var targetConfig))
                     {
-                        Log.Error("格口 {MappingChute} 配置的TCP地址 {TcpAddress} 在配置字典中未找到，无法发送复位命令", item.MappingChute, item.TcpAddress);
+                        Log.Error("格口 {MappingChute} 配置的TCP地址 {TcpAddress} 在配置字典中未找到，无法发送复位命令", item.MappingChute,
+                            item.TcpAddress);
                         return;
                     }
 
-                    if (!_tcpConnectionService.TcpModuleClients.TryGetValue(targetConfig, out var client) || !client.Connected)
+                    if (!_tcpConnectionService.TcpModuleClients.TryGetValue(targetConfig, out var client) ||
+                        !client.Connected)
                     {
-                        Log.Warning("TCP模块 {IpAddress} 未连接，无法为格口 {MappingChute} 发送复位命令", targetConfig.IpAddress, item.MappingChute);
+                        Log.Warning("TCP模块 {IpAddress} 未连接，无法为格口 {MappingChute} 发送复位命令", targetConfig.IpAddress,
+                            item.MappingChute);
                         return;
                     }
 
@@ -489,17 +443,206 @@ public class SortingService : IDisposable
         Log.Information("所有格口的复位命令已发送完毕。");
     }
 
-    protected void Dispose(bool disposing)
+    private void Dispose(bool disposing)
     {
         if (_disposed)
             return;
 
         if (disposing)
         {
-            _tcpConnectionService.TriggerPhotoelectricDataReceived -= OnTriggerPhotoelectricDataReceived;
             _eventAggregator.GetEvent<PlateTurnoverSettingsUpdatedEvent>().Unsubscribe(OnSettingsUpdated);
+            StopModbusPolling();
         }
 
         _disposed = true;
+    }
+
+    // ================== Modbus TCP 轮询实现 ==================
+    private void StartModbusPolling(string ip, int port)
+    {
+        try
+        {
+            StopModbusPolling();
+            _modbusPollingCts = new CancellationTokenSource();
+            var token = _modbusPollingCts.Token;
+            _ = Task.Run(async () =>
+            {
+                Log.Information("Modbus 轮询启动，目标 {Ip}:{Port}，读取保持寄存器 0 和 1", ip, port);
+                CurrentModbusCounter = 0;
+                // 使用 MinValue 表示尚未获得任何有效计数边沿时间
+                _lastCounterUpdateTime = DateTime.MinValue;
+                _lastIntervalMs = 0;
+                _smoothedPulseMs = 0;
+
+                while (!token.IsCancellationRequested)
+                {
+                    var loopStartTicks = Stopwatch.GetTimestamp();
+                    try
+                    {
+                        if (_modbusClient == null || !_modbusClient.Connected)
+                        {
+                            try
+                            {
+                                _modbusClient?.Disconnect();
+                            }
+                            catch
+                            {
+                                // ignored
+                            }
+
+                            _modbusClient = new ModbusClient(ip, port)
+                            {
+                                ConnectionTimeout = 3000,
+                                UnitIdentifier = 1
+                            };
+                            try
+                            {
+                                _modbusClient.Connect();
+                                Log.Information("Modbus 已连接: {Ip}:{Port}", ip, port);
+                            }
+                            catch (Exception)
+                            {
+                                Log.Warning("Modbus 连接失败或超时，3秒后重试");
+                                await Task.Delay(3000, token);
+                                continue;
+                            }
+                        }
+
+                        var now = DateTime.Now;
+                        int[]? regs;
+                        try
+                        {
+                            regs = _modbusClient.ReadHoldingRegisters(0, 2);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Warning(ex, "读取 Modbus 保持寄存器失败，将重连");
+                            try
+                            {
+                                _modbusClient.Disconnect();
+                            }
+                            catch
+                            {
+                                // ignored
+                            }
+
+                            await Task.Delay(500, token);
+                            continue;
+                        }
+
+                        if (regs.Length == 2)
+                        {
+                            // 0 为高 16 位，1 为低 16 位
+                            uint hi = (ushort)regs[0];
+                            uint lo = (ushort)regs[1];
+                            var combined = (hi << 16) | lo;
+
+                            if (_lastCounterUpdateTime == DateTime.MinValue)
+                            {
+                                CurrentModbusCounter = combined;
+                                _lastCounterUpdateTime = now;
+                                Log.Information("Modbus首次读取: 值={Value} (HI={Hi}, LO={Lo}) 时间={Time}", combined, hi, lo,
+                                    now.ToString("O"));
+                                // 为待定包裹设置目标
+                                if (!_packagePendingDistances.IsEmpty)
+                                    foreach (var kv in _packagePendingDistances.ToArray())
+                                    {
+                                        var target = unchecked(CurrentModbusCounter + kv.Value);
+                                        _packageTargetCounters[kv.Key] = target;
+                                        _packagePendingDistances.TryRemove(kv.Key, out _);
+                                        Log.Information(
+                                            "包裹 {Barcode} 首次目标计数: Target={Target}, Current={Current}, 距离(脉冲)={Distance}",
+                                            kv.Key.Barcode, target, CurrentModbusCounter, kv.Value);
+                                    }
+                            }
+                            else if (combined != CurrentModbusCounter)
+                            {
+                                var delta = combined >= CurrentModbusCounter
+                                    ? combined - CurrentModbusCounter
+                                    : (ulong)uint.MaxValue - CurrentModbusCounter + 1UL + combined;
+
+                                var span = now - _lastCounterUpdateTime;
+                                var perPulseMs = delta > 0 ? span.TotalMilliseconds / delta : 0;
+                                if (perPulseMs > 0 && perPulseMs < Settings.DefaultInterval * 5)
+                                {
+                                    _lastIntervalMs = perPulseMs;
+                                    // 指数平滑
+                                    _smoothedPulseMs = _smoothedPulseMs <= 0
+                                        ? perPulseMs
+                                        : PulseEmaAlpha * perPulseMs + (1 - PulseEmaAlpha) * _smoothedPulseMs;
+                                }
+
+                                Log.Information(
+                                    "Modbus变化: {Prev}->{Curr} Δ={Delta} 窗口={SpanMs:F2}ms perPulseMs={Per:F2}ms smoothed={Smoothed:F2}ms @ {Time}",
+                                    CurrentModbusCounter, combined, delta, span.TotalMilliseconds, perPulseMs,
+                                    _smoothedPulseMs, now.ToString("O"));
+                                // 基于计数过线触发分拣（使用平滑后的脉冲间隔）
+                                var effectivePulseMs = _smoothedPulseMs > 0 ? _smoothedPulseMs : perPulseMs;
+                                CheckAndTriggerByCounter(CurrentModbusCounter, combined, _lastCounterUpdateTime,
+                                    effectivePulseMs);
+
+                                CurrentModbusCounter = combined;
+                                _lastCounterUpdateTime = now;
+
+                                // 记录边沿历史（仅在发生变化时）
+                                _counterHistory.Enqueue((combined, now));
+                                while (_counterHistory.Count > CounterHistoryCapacity &&
+                                       _counterHistory.TryDequeue(out _))
+                                {
+                                }
+                            }
+                        }
+
+                        // 维持 ~10ms 轮询周期（扣除本轮耗时）
+                        var elapsedMs =
+                            (int)((Stopwatch.GetTimestamp() - loopStartTicks) * 1000.0 / Stopwatch.Frequency);
+                        var sleepMs = 10 - elapsedMs;
+                        if (sleepMs > 0) await Task.Delay(sleepMs, token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "Modbus 轮询异常，1秒后重试");
+                        await Task.Delay(1000, token);
+                    }
+                }
+
+                Log.Information("Modbus 轮询结束");
+            }, _modbusPollingCts.Token);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "启动 Modbus 轮询时发生异常");
+        }
+    }
+
+    private void StopModbusPolling()
+    {
+        try
+        {
+            _modbusPollingCts?.Cancel();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "停止 Modbus 轮询时发生异常");
+        }
+        finally
+        {
+            try
+            {
+                _modbusClient?.Disconnect();
+            }
+            catch
+            {
+                // ignore
+            }
+
+            _modbusClient = null;
+            _modbusPollingCts?.Dispose();
+            _modbusPollingCts = null;
+        }
     }
 }

@@ -1,5 +1,5 @@
+using System.Diagnostics;
 using System.IO;
-using System.Threading.Tasks;
 using Common.Data;
 using Common.Services.Audio;
 using Common.Services.License;
@@ -7,6 +7,7 @@ using Common.Services.Settings;
 using Common.Services.Ui;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Prism.Ioc;
 
 namespace Common.Extensions;
 
@@ -31,8 +32,8 @@ public static class ServiceCollectionExtensions
         containerRegistry.RegisterSingleton<INotificationService, NotificationService>();
 
         // 注册TTS服务
-        containerRegistry.RegisterSingleton<ITtsService, TtsService>();
-        
+        // containerRegistry.RegisterSingleton<ITtsService, TtsService>();
+
         // 注册音频服务（支持预录制音频和TTS）
         containerRegistry.RegisterSingleton<IAudioService, AudioService>();
 
@@ -60,22 +61,22 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// 异步初始化数据库并修复所有表结构
+    ///     异步初始化数据库并修复所有表结构
     /// </summary>
     private static async Task InitializeDatabaseAsync(DbContextOptions<PackageDbContext> options)
     {
         try
         {
-            using var context = new PackageDbContext(options);
+            await using var context = new PackageDbContext(options);
             var packageDataService = new PackageDataService(options);
-            
+
             // 修复所有表结构
             await packageDataService.FixAllTablesStructureAsync();
         }
         catch (Exception ex)
         {
             // 记录错误但不阻止应用启动
-            System.Diagnostics.Debug.WriteLine($"数据库初始化失败: {ex.Message}");
+            Debug.WriteLine($"数据库初始化失败: {ex.Message}");
         }
     }
 

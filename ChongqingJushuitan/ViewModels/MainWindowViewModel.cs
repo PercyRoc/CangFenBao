@@ -12,6 +12,9 @@ using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Scanner;
 using DeviceService.DataSourceDevices.Services;
+using Prism.Commands;
+using Prism.Dialogs;
+using Prism.Mvvm;
 using Serilog;
 using SharedUI.Models;
 using SortingServices.Pendulum;
@@ -88,15 +91,13 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         // 订阅图像流
         _subscriptions.Add(_cameraService.ImageStream
             .ObserveOn(Scheduler.CurrentThread) // 直接在 UI 线程观察
-            .Subscribe(imageData => // imageData is a tuple (BitmapSource image, IReadOnlyList<BarcodeLocation> barcodes)
+            .Subscribe(
+                imageData => // imageData is a tuple (BitmapSource image, IReadOnlyList<BarcodeLocation> barcodes)
                 {
                     try
                     {
                         // 确保 BitmapSource 可以在 UI 线程之外访问（如果需要跨线程访问）
-                        if (imageData is { CanFreeze: true, IsFrozen: false })
-                        {
-                            imageData.Freeze();
-                        }
+                        if (imageData is { CanFreeze: true, IsFrozen: false }) imageData.Freeze();
                         // 更新UI
                         CurrentImage = imageData;
                     }
@@ -253,7 +254,6 @@ internal class MainWindowViewModel : BindableBase, IDisposable
 
     private void InitializePackageInfoItems()
     {
-
         PackageInfoItems.Add(new PackageInfoItem(
             "重量",
             "--",
@@ -466,10 +466,7 @@ internal class MainWindowViewModel : BindableBase, IDisposable
         }
 
         var sizeItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "尺寸");
-        if (sizeItem != null)
-        {
-            sizeItem.Value = package.VolumeDisplay;
-        }
+        if (sizeItem != null) sizeItem.Value = package.VolumeDisplay;
 
         var segmentItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "段码");
         if (segmentItem != null)

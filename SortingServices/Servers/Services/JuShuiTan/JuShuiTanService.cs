@@ -107,7 +107,8 @@ public class JuShuiTanService : IJuShuiTanService
                 throw new HttpRequestException($"API request failed with status code: {response.StatusCode}");
             }
 
-            var result = JsonSerializer.Deserialize<WeightSendResponse>(responseContent, _jsonOptions) ?? throw new JsonException("Failed to deserialize response");
+            var result = JsonSerializer.Deserialize<WeightSendResponse>(responseContent, _jsonOptions) ??
+                         throw new JsonException("Failed to deserialize response");
             if (result.Code != 0) Log.Warning("聚水潭API返回错误: {Code}, {Message}", result.Code, result.Message);
 
             return result;
@@ -128,10 +129,9 @@ public class JuShuiTanService : IJuShuiTanService
 
             // 构建签名字符串
             var signBuilder = new StringBuilder();
-            foreach (var param in sortedParams.Where(static param => !string.IsNullOrEmpty(param.Value) && param.Key != "sign"))
-            {
+            foreach (var param in sortedParams.Where(static param =>
+                         !string.IsNullOrEmpty(param.Value) && param.Key != "sign"))
                 signBuilder.Append(param.Key).Append(param.Value);
-            }
 
             // 添加app_secret到开头
             var resultStr = _settings.AppSecret + signBuilder;
@@ -169,7 +169,6 @@ public class JuShuiTanService : IJuShuiTanService
             builder.Append(char.ToLowerInvariant(name[0]));
 
             for (var i = 1; i < name.Length; i++)
-            {
                 if (char.IsUpper(name[i]))
                 {
                     builder.Append('_');
@@ -179,7 +178,6 @@ public class JuShuiTanService : IJuShuiTanService
                 {
                     builder.Append(name[i]);
                 }
-            }
 
             return builder.ToString();
         }

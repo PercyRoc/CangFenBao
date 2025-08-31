@@ -179,7 +179,7 @@
                                         Foreground="{StaticResource AccentBrush}"
                                         PlaceholderText="Enter barcode and press Enter to process..."
                                         KeyDown="ManualBarcodeTextBox_KeyDown" />
-                            
+
                             <!-- Display current processed barcode -->
                             <TextBlock Text="{Binding CurrentBarcode, StringFormat='Current: {0}'}"
                                        Margin="0,8,0,0"

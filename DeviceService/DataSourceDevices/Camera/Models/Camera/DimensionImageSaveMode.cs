@@ -9,14 +9,17 @@ public enum DimensionImageSaveMode
     ///     不保存任何图像
     /// </summary>
     None,
+
     /// <summary>
     ///     只保存俯视图
     /// </summary>
     Vertical,
+
     /// <summary>
     ///     只保存侧视图
     /// </summary>
     Side,
+
     /// <summary>
     ///     保存俯视图和侧视图
     /// </summary>

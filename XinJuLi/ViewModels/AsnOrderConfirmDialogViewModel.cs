@@ -1,3 +1,6 @@
+using Prism.Commands;
+using Prism.Dialogs;
+using Prism.Mvvm;
 using XinJuLi.Models.ASN;
 
 namespace XinJuLi.ViewModels;
@@ -61,10 +64,7 @@ public class AsnOrderConfirmDialogViewModel : BindableBase, IDialogAware
     /// <summary>
     ///     对话框标题
     /// </summary>
-    public string Title
-    {
-        get => "确认ASN单信息";
-    }
+    public string Title => "确认ASN单信息";
 
     /// <summary>
     ///     请求关闭事件

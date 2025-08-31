@@ -1,4 +1,5 @@
 ﻿using System.Windows;
+using Prism.Dialogs;
 
 namespace SharedUI.Views.Windows;
 
@@ -17,10 +18,7 @@ public partial class HistoryDialogWindow : IDialogWindow
 
     protected override void OnClosed(EventArgs e)
     {
-        if (DataContext is IDialogAware dialogAwareViewModel)
-        {
-            dialogAwareViewModel.OnDialogClosed();
-        }
+        if (DataContext is IDialogAware dialogAwareViewModel) dialogAwareViewModel.OnDialogClosed();
         base.OnClosed(e);
     }
 }

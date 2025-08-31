@@ -20,6 +20,11 @@ public class JituService : IJituService, IDisposable
         Log.Information("JituApiSettings loaded. OpScanUrl: {OpScanUrl}", _jituApiSettings.OpScanUrl);
     }
 
+    public void Dispose()
+    {
+        _httpClient.Dispose();
+    }
+
     public async Task<JituOpScanResponse> SendOpScanRequestAsync(JituOpScanRequest request)
     {
         if (string.IsNullOrEmpty(_jituApiSettings.OpScanUrl))
@@ -38,7 +43,8 @@ public class JituService : IJituService, IDisposable
             var jsonContent = JsonConvert.SerializeObject(request);
             var httpContent = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
-            Log.Information("Sending Jitu OpScan request to {Url} with content: {Content}", _jituApiSettings.OpScanUrl, jsonContent);
+            Log.Information("Sending Jitu OpScan request to {Url} with content: {Content}", _jituApiSettings.OpScanUrl,
+                jsonContent);
             var response = await _httpClient.PostAsync(_jituApiSettings.OpScanUrl, httpContent);
             response.EnsureSuccessStatusCode();
 
@@ -90,10 +96,5 @@ public class JituService : IJituService, IDisposable
                 Message = $"服务暂停：未知错误 ({ex.Message})"
             };
         }
-    }
-
-    public void Dispose()
-    {
-        _httpClient.Dispose();
     }
 }

@@ -1,11 +1,12 @@
+using System.Globalization;
+using System.Windows;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Common.Models.Package;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.Camera.Models.Camera;
 using DeviceService.DataSourceDevices.Camera.Models.Camera.Enums;
 using Serilog;
-using System.Windows.Media;
-using System.Windows;
-using Common.Models.Package;
 
 namespace DeviceService.DataSourceDevices.Services;
 
@@ -23,11 +24,9 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
         var cameraSettings = _settingsService.LoadSettings<CameraSettings>();
 
         // 检查是否是NOREAD条码，如果是则无条件生成路径
-        var isNoRead = string.IsNullOrWhiteSpace(barcode) || barcode.Equals("NOREAD", StringComparison.OrdinalIgnoreCase);
-        if (isNoRead)
-        {
-            return BuildNoreadImagePath(cameraSettings, timestamp);
-        }
+        var isNoRead = string.IsNullOrWhiteSpace(barcode) ||
+                       barcode.Equals("NOREAD", StringComparison.OrdinalIgnoreCase);
+        if (isNoRead) return BuildNoreadImagePath(cameraSettings, timestamp);
 
         return !cameraSettings.EnableImageSaving
             ? null
@@ -41,25 +40,22 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
         var cameraSettings = _settingsService.LoadSettings<CameraSettings>();
 
         // 检查是否是NOREAD条码
-        var isNoRead = string.IsNullOrWhiteSpace(barcode) || barcode.Equals("NOREAD", StringComparison.OrdinalIgnoreCase);
+        var isNoRead = string.IsNullOrWhiteSpace(barcode) ||
+                       barcode.Equals("NOREAD", StringComparison.OrdinalIgnoreCase);
 
         // 如果不是NOREAD条码且图像保存功能关闭，则不保存
-        if (!isNoRead && !cameraSettings.EnableImageSaving)
-        {
-            return null;
-        }
+        if (!isNoRead && !cameraSettings.EnableImageSaving) return null;
 
         // 如果没有提供图像，则不保存
-        if (image == null)
-        {
-            return null;
-        }
+        if (image == null) return null;
 
         try
         {
             var fullPath =
                 // NOREAD条码使用专门的路径构建逻辑
-                isNoRead ? BuildNoreadImagePath(cameraSettings, timestamp) :
+                isNoRead
+                    ? BuildNoreadImagePath(cameraSettings, timestamp)
+                    :
                     // 普通条码使用原有的路径构建逻辑
                     BuildImagePath(cameraSettings, barcode, timestamp);
 
@@ -85,13 +81,9 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
             var imageFormat = cameraSettings.ImageFormat;
 
             // 确保传入的图像已冻结（虽然调用者应该已经做了）
-            if (!image.IsFrozen)
-            {
-                Log.Warning("图像保存服务收到一个未冻结的图像 (条码: {Barcode})。保存可能失败。", barcode);
-                // 注意：在这里尝试冻结通常是无效的，因为它可能不在正确的线程上。
-                // 依赖调用者（PackageTransferService）正确地冻结它。
-            }
-
+            if (!image.IsFrozen) Log.Warning("图像保存服务收到一个未冻结的图像 (条码: {Barcode})。保存可能失败。", barcode);
+            // 注意：在这里尝试冻结通常是无效的，因为它可能不在正确的线程上。
+            // 依赖调用者（PackageTransferService）正确地冻结它。
             await Task.Run(() => // 在此后台线程执行所有WPF对象交互和保存
             {
                 var encoder = GetEncoder(imageFormat); // 在这里创建编码器
@@ -120,16 +112,13 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
     public async Task<string?> SaveImageWithWatermarkAsync(BitmapSource? image, PackageInfo packageInfo)
     {
         // 如果没有提供图像，则不保存
-        if (image == null)
-        {
-            return null;
-        }
+        if (image == null) return null;
 
         try
         {
             // 生成带水印的图像
             var watermarkedImage = AddWatermarkToImage(image, packageInfo);
-            
+
             // 使用带水印的图像保存
             return await SaveImageAsync(watermarkedImage, packageInfo.Barcode, packageInfo.CreateTime);
         }
@@ -137,6 +126,34 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
         {
             Log.Error(ex, "保存带水印的图像失败，条码: {Barcode}", packageInfo.Barcode);
             return null;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task CleanupOldImagesAsync(int? retentionDays = null)
+    {
+        const int defaultRetentionDays = 7; // 默认保留7天
+        var effectiveRetentionDays = retentionDays ?? defaultRetentionDays;
+
+        try
+        {
+            var cameraSettings = _settingsService.LoadSettings<CameraSettings>();
+
+            // 清理普通图片保存路径
+            if (!string.IsNullOrEmpty(cameraSettings.ImageSavePath))
+                await CleanupExpiredImagesAsync(cameraSettings.ImageSavePath, effectiveRetentionDays);
+
+            // 清理NoreadImage路径
+            var appBasePath = AppDomain.CurrentDomain.BaseDirectory;
+            var noreadImagePath = Path.Combine(appBasePath, "NoreadImage");
+            await CleanupExpiredImagesAsync(noreadImagePath, effectiveRetentionDays);
+
+            Log.Information("手动清理过期图片完成，保留天数: {RetentionDays}", effectiveRetentionDays);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "手动清理过期图片时发生错误，保留天数: {RetentionDays}", effectiveRetentionDays);
+            throw;
         }
     }
 
@@ -149,10 +166,7 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
     private static BitmapSource AddWatermarkToImage(BitmapSource originalImage, PackageInfo packageInfo)
     {
         // 确保原始图像已冻结
-        if (!originalImage.IsFrozen)
-        {
-            originalImage.Freeze();
-        }
+        if (!originalImage.IsFrozen) originalImage.Freeze();
 
         // 创建DrawingVisual进行绘制
         var visual = new DrawingVisual();
@@ -163,30 +177,22 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
 
             // 准备水印文本
             var watermarkTexts = new List<string>();
-            
+
             // 添加条码
-            if (!string.IsNullOrEmpty(packageInfo.Barcode))
-            {
-                watermarkTexts.Add($"Barcode: {packageInfo.Barcode}");
-            }
-            
+            if (!string.IsNullOrEmpty(packageInfo.Barcode)) watermarkTexts.Add($"Barcode: {packageInfo.Barcode}");
+
             // 添加重量
-            if (packageInfo.Weight > 0)
-            {
-                watermarkTexts.Add($"Weight: {packageInfo.Weight:F2}kg");
-            }
-            
+            if (packageInfo.Weight > 0) watermarkTexts.Add($"Weight: {packageInfo.Weight:F2}kg");
+
             // 添加尺寸
             if (packageInfo.Length.HasValue && packageInfo.Width.HasValue && packageInfo.Height.HasValue)
-            {
                 watermarkTexts.Add($"Size: {packageInfo.Length:F1}*{packageInfo.Width:F1}*{packageInfo.Height:F1}cm");
-            }
-            
+
             // 添加时间
             watermarkTexts.Add($"Time: {packageInfo.CreateTime:yyyy-MM-dd HH:mm:ss}");
 
             // 设置字体样式
-            var typeface = new Typeface(new FontFamily("Microsoft YaHei"), 
+            var typeface = new Typeface(new FontFamily("Microsoft YaHei"),
                 FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
             var fontSize = Math.Max(12, originalImage.Width / 60); // 根据图像宽度调整字体大小
             var brush = new SolidColorBrush(Colors.Lime); // 绿色字体
@@ -201,7 +207,7 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
             {
                 var formattedText = new FormattedText(
                     text,
-                    System.Globalization.CultureInfo.CurrentCulture,
+                    CultureInfo.CurrentCulture,
                     FlowDirection.LeftToRight,
                     typeface,
                     fontSize,
@@ -211,8 +217,8 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
                 // 添加黑色背景以提高可读性
                 var backgroundBrush = new SolidColorBrush(Color.FromArgb(128, 0, 0, 0)); // 半透明黑色
                 backgroundBrush.Freeze();
-                
-                var backgroundRect = new Rect(xOffset - 2, yOffset - 2, 
+
+                var backgroundRect = new Rect(xOffset - 2, yOffset - 2,
                     formattedText.Width + 4, formattedText.Height + 4);
                 drawingContext.DrawRectangle(backgroundBrush, null, backgroundRect);
 
@@ -234,36 +240,6 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
         renderTargetBitmap.Freeze();
 
         return renderTargetBitmap;
-    }
-
-    /// <inheritdoc />
-    public async Task CleanupOldImagesAsync(int? retentionDays = null)
-    {
-        const int defaultRetentionDays = 7; // 默认保留7天
-        var effectiveRetentionDays = retentionDays ?? defaultRetentionDays;
-
-        try
-        {
-            var cameraSettings = _settingsService.LoadSettings<CameraSettings>();
-
-            // 清理普通图片保存路径
-            if (!string.IsNullOrEmpty(cameraSettings.ImageSavePath))
-            {
-                await CleanupExpiredImagesAsync(cameraSettings.ImageSavePath, effectiveRetentionDays);
-            }
-
-            // 清理NoreadImage路径
-            var appBasePath = AppDomain.CurrentDomain.BaseDirectory;
-            var noreadImagePath = Path.Combine(appBasePath, "NoreadImage");
-            await CleanupExpiredImagesAsync(noreadImagePath, effectiveRetentionDays);
-
-            Log.Information("手动清理过期图片完成，保留天数: {RetentionDays}", effectiveRetentionDays);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "手动清理过期图片时发生错误，保留天数: {RetentionDays}", effectiveRetentionDays);
-            throw;
-        }
     }
 
     private static BitmapEncoder GetEncoder(ImageFormat format)
@@ -376,10 +352,7 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
     /// <param name="directoryPath">要检查的目录路径</param>
     private async Task CheckAndCleanupDirectoryAsync(string directoryPath)
     {
-        if (!Directory.Exists(directoryPath))
-        {
-            return;
-        }
+        if (!Directory.Exists(directoryPath)) return;
 
         try
         {
@@ -440,7 +413,6 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
                 }
 
                 foreach (var file in oldestFiles)
-                {
                     try
                     {
                         File.Delete(file.FullName);
@@ -452,17 +424,13 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
                         if (deletedCount % 10 == 0)
                         {
                             currentUsage = GetDiskUsagePercentage(rootPath);
-                            if (currentUsage < targetUsagePercentage)
-                            {
-                                break;
-                            }
+                            if (currentUsage < targetUsagePercentage) break;
                         }
                     }
                     catch (Exception ex)
                     {
                         Log.Error(ex, "删除图片文件 {FilePath} 时发生错误", file.FullName);
                     }
-                }
 
                 // 更新当前使用率
                 currentUsage = GetDiskUsagePercentage(rootPath);
@@ -509,10 +477,7 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
     /// <param name="retentionDays">保留天数</param>
     private async Task CleanupExpiredImagesAsync(string directoryPath, int retentionDays)
     {
-        if (!Directory.Exists(directoryPath))
-        {
-            return;
-        }
+        if (!Directory.Exists(directoryPath)) return;
 
         try
         {
@@ -524,7 +489,6 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
                 var expiredFiles = GetExpiredImageFiles(directoryPath, cutoffDate);
 
                 foreach (var file in expiredFiles)
-                {
                     try
                     {
                         File.Delete(file.FullName);
@@ -537,17 +501,14 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
                     {
                         Log.Error(ex, "删除过期图片文件 {FilePath} 时发生错误", file.FullName);
                     }
-                }
 
                 // 清理空的日期文件夹
                 CleanupEmptyDirectories(directoryPath);
             });
 
             if (deletedCount > 0)
-            {
                 Log.Information("过期图片清理完成，共删除 {DeletedCount} 个超过{RetentionDays}天的文件，目录: {DirectoryPath}",
                     deletedCount, retentionDays, directoryPath);
-            }
         }
         catch (Exception ex)
         {
@@ -597,7 +558,6 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
                 .ToList();
 
             foreach (var directory in directories)
-            {
                 try
                 {
                     if (IsDirectoryEmpty(directory))
@@ -610,7 +570,6 @@ public class ImageSavingService(ISettingsService settingsService) : IImageSaving
                 {
                     Log.Error(ex, "删除空目录 {DirectoryPath} 时发生错误", directory);
                 }
-            }
         }
         catch (Exception ex)
         {

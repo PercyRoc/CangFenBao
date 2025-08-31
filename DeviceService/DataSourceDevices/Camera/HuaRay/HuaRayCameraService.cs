@@ -106,26 +106,17 @@ public class HuaRayCameraService : ICameraService
     /// <summary>
     ///     包裹信息流
     /// </summary>
-    public IObservable<PackageInfo> PackageStream
-    {
-        get => _packageSubject.AsObservable();
-    }
+    public IObservable<PackageInfo> PackageStream => _packageSubject.AsObservable();
 
     /// <summary>
     ///     图像信息流
     /// </summary>
-    IObservable<BitmapSource> ICameraService.ImageStream
-    {
-        get => _imageSubject.Select(tuple => tuple.bitmapSource);
-    }
+    IObservable<BitmapSource> ICameraService.ImageStream => _imageSubject.Select(tuple => tuple.bitmapSource);
 
     /// <summary>
     ///     带相机ID的图像信息流
     /// </summary>
-    public IObservable<(BitmapSource Image, string CameraId)> ImageStreamWithId
-    {
-        get => _imageSubject.AsObservable();
-    }
+    public IObservable<(BitmapSource Image, string CameraId)> ImageStreamWithId => _imageSubject.AsObservable();
 
     #endregion
 
@@ -198,8 +189,15 @@ public class HuaRayCameraService : ICameraService
         return huaRayCameras.Select((camera, index) =>
         {
             // 构造与事件/ViewModel中使用的相机ID格式一致的ID
-            var constructedCameraId = !string.IsNullOrWhiteSpace(camera.camDevVendor) && !string.IsNullOrWhiteSpace(camera.camDevSerialNumber) ? $"{camera.camDevVendor}:{camera.camDevSerialNumber}" :
-                !string.IsNullOrEmpty(camera.camDevID) ? camera.camDevID : $"fallback_{index}";
+            var constructedCameraId =
+                !string.IsNullOrWhiteSpace(camera.camDevVendor) &&
+                !string.IsNullOrWhiteSpace(camera.camDevSerialNumber)
+                    ?
+                    $"{camera.camDevVendor}:{camera.camDevSerialNumber}"
+                    :
+                    !string.IsNullOrEmpty(camera.camDevID)
+                        ? camera.camDevID
+                        : $"fallback_{index}";
 
             var cameraName = string.IsNullOrEmpty(camera.camDevSerialNumber)
                 ? $"相机 {index + 1}"
@@ -294,10 +292,7 @@ public class HuaRayCameraService : ICameraService
     /// </summary>
     private void StopService()
     {
-        if (!IsConnected && _consumerTask == null)
-        {
-            return;
-        }
+        if (!IsConnected && _consumerTask == null) return;
 
         Log.Information("正在停止华睿相机服务...");
 
@@ -309,22 +304,15 @@ public class HuaRayCameraService : ICameraService
 
             _eventChannel?.Writer.TryComplete();
 
-            if (_cts is { IsCancellationRequested: false })
-            {
-                _cts.Cancel();
-            }
+            if (_cts is { IsCancellationRequested: false }) _cts.Cancel();
 
             if (_consumerTask != null)
             {
                 var finished = _consumerTask.Wait(TimeSpan.FromSeconds(10));
                 if (!finished)
-                {
                     Log.Warning("消费者任务未在超时时间内完成.");
-                }
                 else
-                {
                     Log.Information("消费者任务已完成.");
-                }
 
                 _consumerTask = null;
             }
@@ -406,7 +394,6 @@ public class HuaRayCameraService : ICameraService
             }
 
             await foreach (var args in _eventChannel.Reader.ReadAllAsync(cancellationToken))
-            {
                 try
                 {
                     await ProcessPackageInfoAsync(args);
@@ -419,7 +406,6 @@ public class HuaRayCameraService : ICameraService
                     Log.Warning("ConsumeChannelAsync: 在 catch 块中尝试保护性释放 args.");
                     args.Dispose();
                 }
-            }
         }
         catch (OperationCanceledException)
         {
@@ -440,14 +426,58 @@ public class HuaRayCameraService : ICameraService
     }
 
     /// <summary>
+    ///     异步执行操作，避免阻塞当前线程
+    /// </summary>
+    private static Task DispatchInvokeAsyncFireAndForget(Action action)
+    {
+        return Task.Run(() =>
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "异步操作执行失败");
+            }
+        });
+    }
+
+    /// <summary>
     ///     相机断线事件处理
     /// </summary>
     private void OnCameraDisconnect(object? sender, CameraStatusArgs args)
     {
-        Log.Warning("华睿相机状态变化: 相机ID={CameraID}, 状态={Status}",
-            args.CameraUserId, args.IsOnline ? "在线" : "离线");
+        try
+        {
+            if (_disposed)
+            {
+                Log.Debug("相机服务已释放，跳过断线事件处理");
+                return;
+            }
 
-        ConnectionChanged?.Invoke(args.CameraUserId, args.IsOnline);
+            Log.Warning("华睿相机状态变化: 相机ID={CameraID}, 状态={Status}",
+                args.CameraUserId, args.IsOnline ? "在线" : "离线");
+
+            // 异步调用事件，避免阻塞相机SDK线程
+            _ = DispatchInvokeAsyncFireAndForget(() =>
+            {
+                try
+                {
+                    ConnectionChanged?.Invoke(args.CameraUserId, args.IsOnline);
+                }
+                catch (Exception eventEx)
+                {
+                    Log.Error(eventEx, "调用相机连接状态变更事件时发生错误: CameraID={CameraID}",
+                        args.CameraUserId);
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "处理相机断线事件时发生错误: CameraID={CameraID}, Status={Status}",
+                args.CameraUserId, args.IsOnline ? "在线" : "离线");
+        }
     }
 
     /// <summary>
@@ -456,7 +486,7 @@ public class HuaRayCameraService : ICameraService
     private async Task ProcessPackageInfoAsync(HuaRayCodeEventArgs args)
     {
         BitmapSource? processedBitmapSource = null;
-        
+
         // 开始计时：整体处理时间
         var overallStopwatch = Stopwatch.StartNew();
         var semaphoreWaitStopwatch = Stopwatch.StartNew();
@@ -466,7 +496,7 @@ public class HuaRayCameraService : ICameraService
             // 1. 先处理图像
             await _imageProcessingSemaphore.WaitAsync();
             semaphoreWaitStopwatch.Stop();
-            
+
             // 开始计时：图像处理时间
             var imageProcessingStopwatch = Stopwatch.StartNew();
             try
@@ -493,10 +523,7 @@ public class HuaRayCameraService : ICameraService
                     bitmapCreationStopwatch.Stop();
                     if (currentBitmapSource != null)
                     {
-                        if (!currentBitmapSource.IsFrozen)
-                        {
-                            currentBitmapSource.Freeze();
-                        }
+                        if (!currentBitmapSource.IsFrozen) currentBitmapSource.Freeze();
 
                         processedBitmapSource = currentBitmapSource;
                         _imageSubject.OnNext((processedBitmapSource,
@@ -524,7 +551,7 @@ public class HuaRayCameraService : ICameraService
             {
                 // 开始计时：PackageInfo处理时间
                 var packageInfoStopwatch = Stopwatch.StartNew();
-                
+
                 // 创建 PackageInfo 对象
                 var packageCreateStopwatch = Stopwatch.StartNew();
                 var packageInfo = PackageInfo.Create();
@@ -535,11 +562,20 @@ public class HuaRayCameraService : ICameraService
                 packageInfo.SetBarcode(args.CodeList.FirstOrDefault() ?? "noread");
                 barcodeSetStopwatch.Stop();
 
+                // noread: 不输出日志，直接发布并返回
+                if (packageInfo.Barcode.Equals("noread", StringComparison.OrdinalIgnoreCase))
+                {
+                    _packageSubject.OnNext(packageInfo);
+                    overallStopwatch.Stop();
+                    return;
+                }
+
                 // --- 开始添加日志上下文 ---
                 var packageContext = $"[包裹{packageInfo.Index}|{packageInfo.Barcode}]";
                 using (LogContext.PushProperty("PackageContext", packageContext))
                 {
-                    Log.Information("相机SDK开始处理事件. 条码: {Barcode}, 触发时间: {TriggerTime:HH:mm:ss.fff}", packageInfo.Barcode, packageInfo.TriggerTimestamp);
+                    Log.Information("相机SDK开始处理事件. 条码: {Barcode}, 触发时间: {TriggerTime:HH:mm:ss.fff}", packageInfo.Barcode,
+                        packageInfo.TriggerTimestamp);
 
                     // 设置触发时间戳
                     var timestampSetStopwatch = Stopwatch.StartNew();
@@ -547,7 +583,8 @@ public class HuaRayCameraService : ICameraService
                     {
                         if (args.TriggerTimeTicks > 0)
                         {
-                            var triggerTime = DateTimeOffset.FromUnixTimeMilliseconds(args.TriggerTimeTicks).LocalDateTime;
+                            var triggerTime = DateTimeOffset.FromUnixTimeMilliseconds(args.TriggerTimeTicks)
+                                .LocalDateTime;
                             packageInfo.SetTriggerTimestamp(triggerTime);
                             Log.Debug("设置触发时间戳: {TriggerTimestamp}", triggerTime);
                         }
@@ -575,6 +612,7 @@ public class HuaRayCameraService : ICameraService
                         // Log.Information("设置包裹重量: {Weight}", args.Weight); // 原有日志，考虑是否保留或改为 Debug
                         Log.Debug("设置包裹重量: {WeightKg} kg", weightKg); // 使用 Debug 级别记录详细信息
                     }
+
                     weightSetStopwatch.Stop();
 
                     // 设置尺寸和体积
@@ -614,35 +652,37 @@ public class HuaRayCameraService : ICameraService
                     {
                         Log.Warning("未能将图像设置到 PackageInfo，因为图像处理失败"); // 保留 Warning 级别
                     }
+
                     imageSetStopwatch.Stop();
 
                     // 计算并记录处理时间
-                    packageInfo.ProcessingTime = (packageInfo.CreateTime - packageInfo.TriggerTimestamp).TotalMilliseconds;
-                    
+                    packageInfo.ProcessingTime =
+                        (packageInfo.CreateTime - packageInfo.TriggerTimestamp).TotalMilliseconds;
+
                     // 停止PackageInfo处理计时器
                     packageInfoStopwatch.Stop();
-                    
+
                     // 推送包裹信息
                     var packagePushStopwatch = Stopwatch.StartNew();
                     _packageSubject.OnNext(packageInfo);
                     packagePushStopwatch.Stop();
-                    
+
                     // 停止整体计时器
                     overallStopwatch.Stop();
-                    
+
                     // 记录各阶段详细时间
                     Log.Information("包裹处理完成 - 各阶段耗时统计: " +
-                        "总耗时={OverallTime:F1}ms, " +
-                        "信号量等待={SemaphoreWait:F1}ms, " +
-                        "图像处理={ImageProcessing:F1}ms, " +
-                        "对象创建={PackageCreate:F1}ms, " +
-                        "条码设置={BarcodeSet:F1}ms, " +
-                        "时间戳设置={TimestampSet:F1}ms, " + 
-                        "重量设置={WeightSet:F1}ms, " +
-                        "尺寸设置={DimensionsSet:F1}ms, " +
-                        "图像设置={ImageSet:F1}ms, " +
-                        "数据处理={PackageInfo:F1}ms, " +
-                        "推送耗时={PackagePush:F1}ms",
+                                    "总耗时={OverallTime:F1}ms, " +
+                                    "信号量等待={SemaphoreWait:F1}ms, " +
+                                    "图像处理={ImageProcessing:F1}ms, " +
+                                    "对象创建={PackageCreate:F1}ms, " +
+                                    "条码设置={BarcodeSet:F1}ms, " +
+                                    "时间戳设置={TimestampSet:F1}ms, " +
+                                    "重量设置={WeightSet:F1}ms, " +
+                                    "尺寸设置={DimensionsSet:F1}ms, " +
+                                    "图像设置={ImageSet:F1}ms, " +
+                                    "数据处理={PackageInfo:F1}ms, " +
+                                    "推送耗时={PackagePush:F1}ms",
                         overallStopwatch.Elapsed.TotalMilliseconds,
                         semaphoreWaitStopwatch.Elapsed.TotalMilliseconds,
                         imageProcessingStopwatch.Elapsed.TotalMilliseconds,
@@ -654,7 +694,6 @@ public class HuaRayCameraService : ICameraService
                         imageSetStopwatch.Elapsed.TotalMilliseconds,
                         packageInfoStopwatch.Elapsed.TotalMilliseconds,
                         packagePushStopwatch.Elapsed.TotalMilliseconds);
-
                 }
             }
         }
@@ -662,7 +701,8 @@ public class HuaRayCameraService : ICameraService
         {
             // 这个 catch 块在 LogContext 之外，不会有 PackageContext
             overallStopwatch?.Stop();
-            Log.Error(ex, "处理华睿相机条码事件时发生未预期的错误 (ProcessPackageInfoAsync): {Message}, CameraId: {CameraId}, 总耗时: {OverallTime:F1}ms", 
+            Log.Error(ex,
+                "处理华睿相机条码事件时发生未预期的错误 (ProcessPackageInfoAsync): {Message}, CameraId: {CameraId}, 总耗时: {OverallTime:F1}ms",
                 ex.Message, args.CameraId, overallStopwatch?.Elapsed.TotalMilliseconds ?? 0);
         }
         finally
@@ -698,7 +738,10 @@ public class HuaRayCameraService : ICameraService
                 if (retImg.Data == null || retImg.Data.Length == 0)
                     throw new InvalidOperationException("JPEG解压缩数据为空");
 
-                decompressedData = retImg.Data;
+                // 复制解压后的数据到独立数组，避免使用可能被复用的内部缓冲区
+                decompressedData = new byte[retImg.Data.Length];
+                Buffer.BlockCopy(retImg.Data, 0, decompressedData, 0, retImg.Data.Length);
+
                 width = retImg.Width;
                 height = retImg.Height;
                 pixelFormat = PixelFormats.Bgr24;
@@ -719,6 +762,17 @@ public class HuaRayCameraService : ICameraService
                 null,
                 decompressedData,
                 stride);
+
+            try
+            {
+                if (bmpSource.CanFreeze)
+                    bmpSource.Freeze();
+            }
+            catch
+            {
+                // Freeze 失败不是致命错误；调用方需要在使用前保证线程安全
+            }
+
             return bmpSource;
         }
         catch (Exception ex)
@@ -798,60 +852,64 @@ public class HuaRayCameraService : ICameraService
             // 如果实际拷贝的数据小于缓冲区大小，记录警告并清空剩余部分 (防止潜在的垃圾数据)
             if (copySize < bufferSize)
             {
-                Log.Warning("ProcessNonJpeg: 原始图像数据大小 ({DataSize}) 小于预期 ({BufferSize})，可能导致图像不完整。", dataSize, bufferSize);
+                Log.Warning("ProcessNonJpeg: 原始图像数据大小 ({DataSize}) 小于预期 ({BufferSize})，可能导致图像不完整。", dataSize,
+                    bufferSize);
                 // 清空数组中未被覆盖的部分
                 pixelData.AsSpan(copySize).Clear();
             }
 
             // 创建 BitmapSource 对象
             // 注意：即使使用了 ArrayPool，BitmapSource.Create 内部仍可能分配内存，如果系统极度缺乏内存，这里仍可能抛出 OutOfMemoryException
+            // 为避免 BitmapSource 持有对已归还租用数组的引用，先复制到独立数组
+            var managedBuffer = new byte[bufferSize];
+            Buffer.BlockCopy(pixelData, 0, managedBuffer, 0, bufferSize);
+
             var bmpSource = BitmapSource.Create(
                 width, height,
                 dpiX, dpiY,
                 pixelFormat,
                 palette,
-                pixelData, // 直接使用租用的数组
+                managedBuffer,
                 stride);
 
             // Freeze the BitmapSource to make it cross-thread accessible
             if (bmpSource.CanFreeze)
-            {
                 bmpSource.Freeze();
-            }
             else
-            {
                 Log.Warning("ProcessNonJpeg: 创建的 BitmapSource 无法冻结. Width={Width}, Height={Height}", width, height);
-                // 根据需要决定是否返回非冻结的 BitmapSource 或 null
-            }
+
+            // 归还租用数组
+            ArrayPool<byte>.Shared.Return(pixelData);
+            pixelData = null;
 
             return bmpSource; // 返回创建的 BitmapSource
         }
         catch (ArgumentException argEx)
         {
             // BitmapSource.Create 可能因 stride 不匹配等原因抛出 ArgumentException
-            Log.Error(argEx, "ProcessNonJpeg: 创建 BitmapSource 时参数错误. Width={Width}, Height={Height}, ExpectedStride={ExpectedStride}",
+            Log.Error(argEx,
+                "ProcessNonJpeg: 创建 BitmapSource 时参数错误. Width={Width}, Height={Height}, ExpectedStride={ExpectedStride}",
                 width, height, (long)width * bytesPerPixel); // 使用已声明的 bytesPerPixel
             return null;
         }
         catch (OutOfMemoryException oomEx)
         {
             // 即使有检查和 ArrayPool，极端情况下仍可能发生 OOM
-            Log.Error(oomEx, "ProcessNonJpeg: 处理图像时内存不足. Width={Width}, Height={Height}, ExpectedBufferSize={ExpectedBufferSize}",
+            Log.Error(oomEx,
+                "ProcessNonJpeg: 处理图像时内存不足. Width={Width}, Height={Height}, ExpectedBufferSize={ExpectedBufferSize}",
                 width, height, (long)width * bytesPerPixel * height); // 使用已声明的 bytesPerPixel
             return null;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "ProcessNonJpeg: 处理非JPEG指针到BitmapSource时发生未知错误. Width={Width}, Height={Height}", width, height);
+            Log.Error(ex, "ProcessNonJpeg: 处理非JPEG指针到BitmapSource时发生未知错误. Width={Width}, Height={Height}", width,
+                height);
             return null;
         }
         finally
         {
             // 确保租用的数组总是被归还给池
-            if (pixelData != null)
-            {
-                ArrayPool<byte>.Shared.Return(pixelData);
-            }
+            if (pixelData != null) ArrayPool<byte>.Shared.Return(pixelData);
         }
     }
 
@@ -860,10 +918,7 @@ public class HuaRayCameraService : ICameraService
     /// </summary>
     private static string? GetConfigPath()
     {
-        if (string.IsNullOrEmpty(_cachedConfigPath))
-        {
-            _cachedConfigPath = LoadCachedConfigPath();
-        }
+        if (string.IsNullOrEmpty(_cachedConfigPath)) _cachedConfigPath = LoadCachedConfigPath();
 
         if (!string.IsNullOrEmpty(_cachedConfigPath) && File.Exists(_cachedConfigPath))
         {
@@ -982,7 +1037,6 @@ public class HuaRayCameraService : ICameraService
             Log.Information("开始搜索LP开头文件夹中的配置文件...");
 
             foreach (var basePath in searchPaths)
-            {
                 try
                 {
                     Log.Information("正在搜索目录: {Path}", basePath);
@@ -992,7 +1046,6 @@ public class HuaRayCameraService : ICameraService
                 {
                     Log.Warning(ex, "在 {Path} 中搜索LP文件夹时发生错误", basePath);
                 }
-            }
 
             if (foundFiles.Count > 0)
             {
@@ -1019,7 +1072,6 @@ public class HuaRayCameraService : ICameraService
             foundFiles.Clear();
 
             foreach (var basePath in searchPaths)
-            {
                 try
                 {
                     if (!Directory.Exists(basePath))
@@ -1048,7 +1100,6 @@ public class HuaRayCameraService : ICameraService
                     try
                     {
                         foreach (var dir in Directory.GetDirectories(basePath))
-                        {
                             try
                             {
                                 configPath = Path.Combine(dir, "LogisticsBase.cfg");
@@ -1069,7 +1120,6 @@ public class HuaRayCameraService : ICameraService
                             {
                                 // 忽略权限问题
                             }
-                        }
                     }
                     catch (UnauthorizedAccessException)
                     {
@@ -1080,7 +1130,6 @@ public class HuaRayCameraService : ICameraService
                 {
                     Log.Warning(ex, "搜索路径 {Path} 时发生错误", basePath);
                 }
-            }
 
             switch (foundFiles.Count)
             {
@@ -1186,7 +1235,6 @@ public class HuaRayCameraService : ICameraService
                 return result;
 
             foreach (var file in Directory.GetFiles(directory, "*.lnk"))
-            {
                 try
                 {
                     var fileName = Path.GetFileNameWithoutExtension(file);
@@ -1201,7 +1249,6 @@ public class HuaRayCameraService : ICameraService
                 {
                     Log.Warning(ex, "处理快捷方式 {Path} 时发生错误", file);
                 }
-            }
         }
         catch (Exception ex)
         {
@@ -1241,7 +1288,6 @@ public class HuaRayCameraService : ICameraService
             if (!string.IsNullOrEmpty(output)) return output;
             Log.Warning("无法获取快捷方式 {Path} 的目标路径", shortcutPath);
             return null;
-
         }
         catch (Exception ex)
         {

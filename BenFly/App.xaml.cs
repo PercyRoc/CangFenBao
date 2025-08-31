@@ -21,7 +21,7 @@ using DeviceService.DataSourceDevices.Belt;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.Extensions;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
+using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 using SharedUI.ViewModels;
@@ -49,6 +49,7 @@ public partial class App
     private bool _isShuttingDown;
     private bool _ownsMutex;
     private static ResxLocalizationProvider ResxProvider { get; } = ResxLocalizationProvider.Instance;
+
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
         // 注册主窗口
@@ -111,10 +112,7 @@ public partial class App
             _mutex = new Mutex(true, MutexName, out var createdNew);
             _ownsMutex = createdNew;
 
-            if (createdNew)
-            {
-                return Container.Resolve<MainWindow>();
-            }
+            if (createdNew) return Container.Resolve<MainWindow>();
 
             // 尝试获取已存在的Mutex，如果无法获取，说明有一个正在运行的实例
             var canAcquire = _mutex.WaitOne(TimeSpan.Zero, false);
@@ -125,6 +123,7 @@ public partial class App
                 Environment.Exit(0); // 直接退出进程
                 return null!; // 虽然不会执行到这里，但需要满足返回类型
             }
+
             // 可以获取Mutex，说明前一个实例可能异常退出但Mutex已被释放
             _ownsMutex = true;
             return Container.Resolve<MainWindow>();
@@ -291,6 +290,7 @@ public partial class App
                         _mutex.ReleaseMutex();
                         Log.Debug("Mutex已释放");
                     }
+
                     _mutex.Dispose();
                     _mutex = null;
                 }
@@ -303,6 +303,7 @@ public partial class App
             // 等待所有日志写入完成
             await Log.CloseAndFlushAsync();
         }
+
         Log.Information("应用程序退出处理程序 (OnExit) 完成。 ");
     }
 
@@ -324,7 +325,9 @@ public partial class App
     private static void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         LogUnhandledException(e.Exception, "Unhandled Dispatcher Exception");
-        MessageBox.Show($"An unhandled error occurred: {e.Exception.Message}\n\nApplication may be unstable. Please restart and contact technical support with log files.", "Application Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        MessageBox.Show(
+            $"An unhandled error occurred: {e.Exception.Message}\n\nApplication may be unstable. Please restart and contact technical support with log files.",
+            "Application Error", MessageBoxButton.OK, MessageBoxImage.Error);
         e.Handled = true;
     }
 
@@ -333,21 +336,22 @@ public partial class App
     /// </summary>
     private static void App_UnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
-        var exception = e.ExceptionObject as Exception ?? new Exception($"Unknown exception object: {e.ExceptionObject}");
+        var exception = e.ExceptionObject as Exception ??
+                        new Exception($"Unknown exception object: {e.ExceptionObject}");
         LogUnhandledException(exception, "Unhandled AppDomain Exception", e.IsTerminating);
 
         if (e.IsTerminating)
-        {
             // 应用程序即将终止，尝试显示错误信息
             try
             {
-                MessageBox.Show($"A fatal error occurred: {exception.Message}\n\nApplication will terminate. Please contact technical support with log files.", "Fatal Application Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(
+                    $"A fatal error occurred: {exception.Message}\n\nApplication will terminate. Please contact technical support with log files.",
+                    "Fatal Application Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             catch
             {
                 // 如果无法显示MessageBox，忽略错误
             }
-        }
     }
 
     /// <summary>
@@ -370,11 +374,9 @@ public partial class App
                          $"StackTrace:\n{exception.StackTrace}\n";
 
         if (exception.InnerException != null)
-        {
             logMessage += $"Inner Exception: {exception.InnerException.GetType().FullName}\n" +
                           $"Inner Message: {exception.InnerException.Message}\n" +
                           $"Inner StackTrace:\n{exception.InnerException.StackTrace}\n";
-        }
 
         logMessage += new string('=', 80) + "\n";
 
@@ -419,14 +421,16 @@ public partial class App
                 {
                     Source = "BenFly Application"
                 };
-                eventLog.WriteEntry($"Failed to write to backup log. Original message:\n{logMessage}", EventLogEntryType.Error);
+                eventLog.WriteEntry($"Failed to write to backup log. Original message:\n{logMessage}",
+                    EventLogEntryType.Error);
             }
             catch
             {
                 // 最后的手段：尝试写入临时文件
                 try
                 {
-                    var tempLogFile = Path.Combine(Path.GetTempPath(), $"BenFly_CriticalError_{DateTime.Now:yyyyMMdd_HHmmss}.log");
+                    var tempLogFile = Path.Combine(Path.GetTempPath(),
+                        $"BenFly_CriticalError_{DateTime.Now:yyyyMMdd_HHmmss}.log");
                     File.WriteAllText(tempLogFile, logMessage, Encoding.UTF8);
                 }
                 catch
@@ -463,12 +467,14 @@ public partial class App
             // 启动相机托管服务
             var cameraStartupService = Container.Resolve<CameraStartupService>();
             _ = Task.Run(() => cameraStartupService.StartAsync(CancellationToken.None))
-                .ContinueWith(t => LogUnhandledException(t.Exception!, "CameraStartupService Start Error"), TaskContinuationOptions.OnlyOnFaulted);
+                .ContinueWith(t => LogUnhandledException(t.Exception!, "CameraStartupService Start Error"),
+                    TaskContinuationOptions.OnlyOnFaulted);
 
             // 启动摆轮分拣服务
             var pendulumService = Container.Resolve<PendulumSortService>();
             _ = Task.Run(() => pendulumService.StartAsync())
-                .ContinueWith(t => LogUnhandledException(t.Exception!, "PendulumSortService Start Error"), TaskContinuationOptions.OnlyOnFaulted);
+                .ContinueWith(t => LogUnhandledException(t.Exception!, "PendulumSortService Start Error"),
+                    TaskContinuationOptions.OnlyOnFaulted);
 
             // 获取皮带设置并启动串口托管服务（如果启用）
             var settingsService = Container.Resolve<ISettingsService>();
@@ -490,7 +496,9 @@ public partial class App
         catch (Exception ex)
         {
             LogUnhandledException(ex, "Background Services Startup Error");
-            MessageBox.Show($"Error starting background services: {ex.Message}\n\nPlease check configuration and device connections.", "Startup Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(
+                $"Error starting background services: {ex.Message}\n\nPlease check configuration and device connections.",
+                "Startup Error", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         finally
         {
@@ -551,7 +559,8 @@ public partial class App
     /// </summary>
     private async Task MainWindowClosingAsync(CancelEventArgs e)
     {
-        Log.Information("MainWindow_Closing 事件触发。 IsShuttingDown: {IsShuttingDown}, EventCanceled: {EventCanceled}", _isShuttingDown, e.Cancel);
+        Log.Information("MainWindow_Closing 事件触发。 IsShuttingDown: {IsShuttingDown}, EventCanceled: {EventCanceled}",
+            _isShuttingDown, e.Cancel);
 
         // 如果关闭事件已被取消（用户点击了"否"），则不执行关闭流程
         if (e.Cancel)
@@ -578,7 +587,6 @@ public partial class App
             try
             {
                 if (Current.MainWindow?.DataContext is IDisposable viewModel)
-                {
                     await Task.Run(() =>
                     {
                         try
@@ -591,7 +599,6 @@ public partial class App
                             LogUnhandledException(ex, "ViewModel Dispose Error");
                         }
                     });
-                }
             }
             catch (Exception ex)
             {
@@ -779,18 +786,15 @@ public partial class App
                 {
                     // 等待异步服务停止完成，设置超时
                     if (!Task.WhenAll(tasks).Wait(TimeSpan.FromSeconds(15))) // 增加超时时间到15秒
-                    {
                         Log.Warning("一个或多个后台服务未在15秒超时时间内正常停止。");
-                    }
                     else
-                    {
                         Log.Information("所有后台服务已成功停止 (异步部分)。");
-                    }
                 }
                 catch (AggregateException aex)
                 {
                     // 检查是否所有内部异常都是任务取消异常
-                    var allCanceled = aex.InnerExceptions.All(ex => ex is TaskCanceledException or OperationCanceledException);
+                    var allCanceled =
+                        aex.InnerExceptions.All(ex => ex is TaskCanceledException or OperationCanceledException);
 
                     if (allCanceled)
                     {
@@ -800,10 +804,9 @@ public partial class App
                     {
                         // 记录非取消类型的异常
                         LogUnhandledException(aex, "Background Services Stop Aggregate Error");
-                        foreach (var innerEx in aex.InnerExceptions.Where(ex => ex is not TaskCanceledException and not OperationCanceledException))
-                        {
+                        foreach (var innerEx in aex.InnerExceptions.Where(ex =>
+                                     ex is not TaskCanceledException and not OperationCanceledException))
                             LogUnhandledException(innerEx, "Background Services Stop Inner Error");
-                        }
                     }
                 }
                 catch (Exception ex)
@@ -824,6 +827,7 @@ public partial class App
         {
             LogUnhandledException(ex, "Background Services Stop Error");
         }
+
         Log.Information("=== StopBackgroundServices 方法执行完毕。 ===");
     }
 }

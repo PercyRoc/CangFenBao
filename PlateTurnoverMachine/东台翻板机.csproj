@@ -14,6 +14,7 @@
 
     <ItemGroup>
         <!-- Prism -->
+        <PackageReference Include="EasyModbusTCP.NETCore"/>
         <PackageReference Include="Prism.Wpf"/>
 
         <!-- Serilog -->

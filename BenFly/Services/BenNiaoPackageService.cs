@@ -32,6 +32,7 @@ internal class BenNiaoPackageService : IDisposable
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         WriteIndented = true
     };
+
     private readonly ISettingsService _settingsService;
 
     private readonly SemaphoreSlim _sftpSemaphore = new(1, 1);
@@ -73,7 +74,8 @@ internal class BenNiaoPackageService : IDisposable
 
     private HttpClient CreateHttpClient()
     {
-        var baseUrl = _settingsService.LoadSettings<UploadConfiguration>().BenNiaoEnvironment == BenNiaoEnvironment.Production
+        var baseUrl = _settingsService.LoadSettings<UploadConfiguration>().BenNiaoEnvironment ==
+                      BenNiaoEnvironment.Production
             ? "https://bnsy.benniaosuyun.com"
             : "https://sit.bnsy.rhb56.cn";
 
@@ -133,15 +135,19 @@ internal class BenNiaoPackageService : IDisposable
                 }
 
             // 创建新客户端
-            _sftpClient = new SftpClient(_settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpHost, _settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpPort,
-                _settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpUsername, _settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpPassword)
+            _sftpClient = new SftpClient(_settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpHost,
+                _settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpPort,
+                _settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpUsername,
+                _settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpPassword)
             {
                 // 配置SFTP客户端超时设置
                 OperationTimeout = TimeSpan.FromSeconds(30)
             };
             _sftpClient.ConnectionInfo.Timeout = TimeSpan.FromSeconds(15);
 
-            Log.Debug("正在连接到SFTP服务器 {Host}:{Port}...", _settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpHost, _settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpPort);
+            Log.Debug("正在连接到SFTP服务器 {Host}:{Port}...",
+                _settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpHost,
+                _settingsService.LoadSettings<UploadConfiguration>().BenNiaoFtpPort);
             _sftpClient.Connect();
             Log.Debug("已成功连接到SFTP服务器");
 
@@ -206,7 +212,8 @@ internal class BenNiaoPackageService : IDisposable
     ///     实时查询三段码
     /// </summary>
     /// <returns>包含段码和错误消息的元组。如果成功，ErrorMessage 为 null。</returns>
-    internal async Task<(string? SegmentCode, string? ErrorMessage)> GetRealTimeSegmentCodeAsync(string waybillNum, CancellationToken cancellationToken)
+    internal async Task<(string? SegmentCode, string? ErrorMessage)> GetRealTimeSegmentCodeAsync(string waybillNum,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -237,16 +244,15 @@ internal class BenNiaoPackageService : IDisposable
             if (!response.IsSuccessStatusCode)
             {
                 var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-                var httpErrorMessage = $"HTTP请求失败: {(int)response.StatusCode} {response.ReasonPhrase}. 内容: {errorContent}";
+                var httpErrorMessage =
+                    $"HTTP请求失败: {(int)response.StatusCode} {response.ReasonPhrase}. 内容: {errorContent}";
                 Log.Error("实时查询三段码失败: {ErrorMessage}", httpErrorMessage);
                 return (null, httpErrorMessage);
             }
 
-            var result = await response.Content.ReadFromJsonAsync<BenNiaoResponse<string>>(_jsonOptions, cancellationToken: cancellationToken);
-            if (result is { IsSuccess: true })
-            {
-                return (result.Result, null); // 成功，无错误消息
-            }
+            var result =
+                await response.Content.ReadFromJsonAsync<BenNiaoResponse<string>>(_jsonOptions, cancellationToken);
+            if (result is { IsSuccess: true }) return (result.Result, null); // 成功，无错误消息
 
             var apiErrorMessage = result?.Message ?? "API返回未知错误";
             Log.Error("实时查询三段码失败：{Message}", apiErrorMessage);
@@ -263,7 +269,8 @@ internal class BenNiaoPackageService : IDisposable
     /// <summary>
     ///     上传包裹数据
     /// </summary>
-    internal async Task<(bool Success, DateTime UploadTime, string ErrorMessage)> UploadPackageDataAsync(PackageInfo package, CancellationToken cancellationToken)
+    internal async Task<(bool Success, DateTime UploadTime, string ErrorMessage)> UploadPackageDataAsync(
+        PackageInfo package, CancellationToken cancellationToken)
     {
         try
         {
@@ -298,13 +305,13 @@ internal class BenNiaoPackageService : IDisposable
             var response = await _httpClient.PostAsync(url, content, cancellationToken);
             response.EnsureSuccessStatusCode();
 
-            var result = await response.Content.ReadFromJsonAsync<BenNiaoResponse<object>>(_jsonOptions, cancellationToken: cancellationToken);
+            var result =
+                await response.Content.ReadFromJsonAsync<BenNiaoResponse<object>>(_jsonOptions, cancellationToken);
             if (result is { IsSuccess: true }) return (true, uploadTime, string.Empty);
 
             var errorMessage = result?.Message ?? "未知错误";
             Log.Error("上传包裹 {Barcode} 数据失败：{Message}", package.Barcode, errorMessage);
             return (false, DateTime.MinValue, $"API返回错误: {errorMessage}");
-
         }
         catch (Exception ex)
         {
@@ -317,7 +324,8 @@ internal class BenNiaoPackageService : IDisposable
     ///     上传图片到SFTP服务器
     /// </summary>
     /// <returns>包含成功状态和错误消息的元组。如果成功，ErrorMessage 为 null。</returns>
-    internal async Task<(bool Success, string? ErrorMessage)> UploadImageAsync(string waybillNum, DateTime scanTime, string imagePath)
+    internal async Task<(bool Success, string? ErrorMessage)> UploadImageAsync(string waybillNum, DateTime scanTime,
+        string imagePath)
     {
         string? currentErrorMessage = null;
         try
@@ -390,31 +398,20 @@ internal class BenNiaoPackageService : IDisposable
 
                     // 创建dws目录（如果不存在）
                     if (!await sftpClient.ExistsAsync("/dws"))
-                    {
                         await sftpClient.CreateDirectoryAsync("/dws");
-                    }
                     else
-                    {
                         Log.Debug("/dws 目录已存在");
-                    }
 
                     // 创建日期目录和小时目录
                     var dateDirPath = $"/dws/{scanTime:yyyyMMdd}";
                     var fullDateDir = $"/{dateDir}";
 
-                    if (!await sftpClient.ExistsAsync(dateDirPath))
-                    {
-                        await sftpClient.CreateDirectoryAsync(dateDirPath);
-                    }
+                    if (!await sftpClient.ExistsAsync(dateDirPath)) await sftpClient.CreateDirectoryAsync(dateDirPath);
 
                     if (!await sftpClient.ExistsAsync(fullDateDir))
-                    {
                         await sftpClient.CreateDirectoryAsync(fullDateDir);
-                    }
                     else
-                    {
                         Log.Debug("{DateDir} 目录已存在", fullDateDir);
-                    }
 
                     // 上传文件
                     var remotePath = $"/{dateDir}/{fileName}";
@@ -484,7 +481,8 @@ internal class BenNiaoPackageService : IDisposable
     /// <summary>
     ///     将图片保存到临时文件
     /// </summary>
-    public string? SaveImageToTempFileAsync(BitmapSource image, string waybillNum, DateTime scanTime, PackageInfo package)
+    public string? SaveImageToTempFileAsync(BitmapSource image, string waybillNum, DateTime scanTime,
+        PackageInfo package)
     {
         try
         {
@@ -612,7 +610,8 @@ internal class BenNiaoPackageService : IDisposable
     ///     上传异常数据（Noread或空条码）
     /// </summary>
     /// <returns>包含成功状态和错误消息的元组。如果成功，ErrorMessage 为 null。</returns>
-    internal async Task<(bool Success, string? ErrorMessage)> UploadNoReadDataAsync(PackageInfo package, BitmapSource? imageCopy)
+    internal async Task<(bool Success, string? ErrorMessage)> UploadNoReadDataAsync(PackageInfo package,
+        BitmapSource? imageCopy)
     {
         try
         {
@@ -668,7 +667,8 @@ internal class BenNiaoPackageService : IDisposable
 
             if (!response.IsSuccessStatusCode)
             {
-                var httpErrorMessage = $"HTTP请求失败: {(int)response.StatusCode} {response.ReasonPhrase}. 内容: {responseContent}";
+                var httpErrorMessage =
+                    $"HTTP请求失败: {(int)response.StatusCode} {response.ReasonPhrase}. 内容: {responseContent}";
                 Log.Error("上传异常包裹数据失败: {ErrorMessage}", httpErrorMessage);
                 return (false, httpErrorMessage);
             }

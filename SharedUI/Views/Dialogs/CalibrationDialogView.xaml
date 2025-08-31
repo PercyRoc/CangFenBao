@@ -201,10 +201,13 @@
                                                 <TextBlock.ToolTip>
                                                     <StackPanel>
                                                         <TextBlock Text="{Binding PhotoelectricName}" FontWeight="Bold" />
-                                                        <TextBlock Text="{Binding Timestamp, StringFormat='时间: {0:HH:mm:ss}'}" />
-                                                        <TextBlock Text="{Binding MeasuredDelay, StringFormat='分拣延迟: {0:F1}ms'}" />
-                                                        <TextBlock Text="{Binding TriggerTimeDelay, StringFormat='触发延迟: {0:F1}ms'}" 
-                                                                   Visibility="{Binding Mode, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=CompleteFlow}" />
+                                                        <TextBlock
+                                                            Text="{Binding Timestamp, StringFormat='时间: {0:HH:mm:ss}'}" />
+                                                        <TextBlock
+                                                            Text="{Binding MeasuredDelay, StringFormat='分拣延迟: {0:F1}ms'}" />
+                                                        <TextBlock
+                                                            Text="{Binding TriggerTimeDelay, StringFormat='触发延迟: {0:F1}ms'}"
+                                                            Visibility="{Binding Mode, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=CompleteFlow}" />
                                                     </StackPanel>
                                                 </TextBlock.ToolTip>
                                             </TextBlock>

@@ -1,5 +1,7 @@
 using Common.Services.Settings;
 using Common.Services.Ui;
+using Prism.Commands;
+using Prism.Mvvm;
 using Serilog;
 using XinBa.Services.Models;
 
@@ -28,6 +30,7 @@ public class VolumeSettingsViewModel : BindableBase
         get => _settings;
         set => SetProperty(ref _settings, value);
     }
+
     public DelegateCommand SaveConfigurationCommand { get; }
 
     private void LoadSettings()

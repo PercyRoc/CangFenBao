@@ -23,10 +23,7 @@ public class BooleanToStringConverter : IValueConverter
     /// </summary>
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (value is bool boolValue)
-        {
-            return boolValue ? TrueValue : FalseValue;
-        }
+        if (value is bool boolValue) return boolValue ? TrueValue : FalseValue;
 
         return FalseValue;
     }
@@ -37,10 +34,7 @@ public class BooleanToStringConverter : IValueConverter
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         if (value is not string stringValue) return false;
-        if (stringValue == TrueValue)
-        {
-            return true;
-        }
+        if (stringValue == TrueValue) return true;
         return stringValue == FalseValue && false;
     }
 }

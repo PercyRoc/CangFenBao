@@ -26,12 +26,12 @@ public class TareAttributesApiService : ITareAttributesApiService, IDisposable
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true
     };
+
     private readonly HttpClient _httpClient;
     private bool _disposed;
 
     public TareAttributesApiService()
     {
-
         // 配置 HttpClient
         var handler = new HttpClientHandler
         {
@@ -79,8 +79,10 @@ public class TareAttributesApiService : ITareAttributesApiService, IDisposable
             // 自动计算体积
             request.CalculateVolume();
 
-            Log.Information("开始提交 Tare Attributes: OfficeId={OfficeId}, PlaceId={PlaceId}, TareSticker={TareSticker}, Size={Length}x{Width}x{Height}mm, Weight={Weight}g, Volume={Volume}mm³",
-                request.OfficeId, request.PlaceId, request.TareSticker, request.SizeAMm, request.SizeBMm, request.SizeCMm, request.WeightG, request.VolumeMm);
+            Log.Information(
+                "开始提交 Tare Attributes: OfficeId={OfficeId}, PlaceId={PlaceId}, TareSticker={TareSticker}, Size={Length}x{Width}x{Height}mm, Weight={Weight}g, Volume={Volume}mm³",
+                request.OfficeId, request.PlaceId, request.TareSticker, request.SizeAMm, request.SizeBMm,
+                request.SizeCMm, request.WeightG, request.VolumeMm);
 
             // 序列化请求数据
             var jsonContent = JsonSerializer.Serialize(request, JsonOptions);
@@ -93,8 +95,8 @@ public class TareAttributesApiService : ITareAttributesApiService, IDisposable
 
             // 读取响应内容
             var responseContent = await response.Content.ReadAsStringAsync();
-            
-            Log.Information("Tare Attributes API 响应: StatusCode={StatusCode}, Content={Content}", 
+
+            Log.Information("Tare Attributes API 响应: StatusCode={StatusCode}, Content={Content}",
                 response.StatusCode, responseContent);
 
             // 检查响应状态和内容
@@ -103,28 +105,27 @@ public class TareAttributesApiService : ITareAttributesApiService, IDisposable
                 // 204 No Content 也被认为是成功
                 if (response.StatusCode == HttpStatusCode.NoContent)
                 {
-                    Log.Information("Tare Attributes 提交成功 (StatusCode: NoContent): TareSticker={TareSticker}", 
+                    Log.Information("Tare Attributes 提交成功 (StatusCode: NoContent): TareSticker={TareSticker}",
                         request.TareSticker);
                     return (true, null);
                 }
-                
+
                 // 检查响应内容是否为"1"（表示成功）
                 var trimmedContent = responseContent.Trim();
                 if (trimmedContent == "1")
                 {
-                    Log.Information("Tare Attributes 提交成功: TareSticker={TareSticker}, 响应内容={ResponseContent}", 
+                    Log.Information("Tare Attributes 提交成功: TareSticker={TareSticker}, 响应内容={ResponseContent}",
                         request.TareSticker, trimmedContent);
                     return (true, null);
                 }
-                else
-                {
-                    // HTTP状态码成功但响应内容不是"1"
-                    Log.Warning("Tare Attributes 提交失败 - 意外的响应内容: TareSticker={TareSticker}, StatusCode={StatusCode}, Content={Content}",
-                        request.TareSticker, response.StatusCode, responseContent);
-                    
-                    var errorMessage = $"API returned unexpected response: '{responseContent}' (expected '1')";
-                    return (false, errorMessage);
-                }
+
+                // HTTP状态码成功但响应内容不是"1"
+                Log.Warning(
+                    "Tare Attributes 提交失败 - 意外的响应内容: TareSticker={TareSticker}, StatusCode={StatusCode}, Content={Content}",
+                    request.TareSticker, response.StatusCode, responseContent);
+
+                var errorMessage = $"API returned unexpected response: '{responseContent}' (expected '1')";
+                return (false, errorMessage);
             }
             else
             {
@@ -170,16 +171,14 @@ public class TareAttributesApiService : ITareAttributesApiService, IDisposable
         try
         {
             if (string.IsNullOrEmpty(errorContent))
-            {
                 return Task.FromResult($"HTTP {(int)response.StatusCode} - {response.StatusCode}");
-            }
 
             var errorResponse = JsonSerializer.Deserialize<TareAttributesErrorResponse>(errorContent, JsonOptions);
-            if (!(errorResponse?.Errors.Count > 0)) return Task.FromResult($"HTTP {(int)response.StatusCode} - {response.StatusCode}");
+            if (!(errorResponse?.Errors.Count > 0))
+                return Task.FromResult($"HTTP {(int)response.StatusCode} - {response.StatusCode}");
             var firstError = errorResponse.Errors[0];
             var message = !string.IsNullOrEmpty(firstError.Message) ? firstError.Message : firstError.Error;
             return Task.FromResult(!string.IsNullOrEmpty(message) ? message : $"HTTP {(int)response.StatusCode}");
-
         }
         catch (JsonException ex)
         {

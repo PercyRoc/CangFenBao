@@ -44,7 +44,8 @@ public interface IPlcCommunicationService : IDisposable
     /// <param name="scanTimestamp">扫描时间戳。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>一个元组，包含是否接受了请求以及命令ID。</returns>
-    Task<(bool IsAccepted, ushort CommandId)> SendUploadRequestAsync(float weight, float length, float width, float height,
+    Task<(bool IsAccepted, ushort CommandId)> SendUploadRequestAsync(float weight, float length, float width,
+        float height,
         string barcode1D, string barcode2D, ulong scanTimestamp, CancellationToken cancellationToken);
 
     /// <summary>
@@ -53,5 +54,6 @@ public interface IPlcCommunicationService : IDisposable
     /// <param name="commandId">要等待结果的命令ID。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>一个元组，包含操作是否成功（非超时）、是否超时以及PLC分配的包裹ID。</returns>
-    Task<(bool WasSuccess, bool IsTimeout, int PackageId)> WaitForUploadResultAsync(ushort commandId, CancellationToken cancellationToken);
+    Task<(bool WasSuccess, bool IsTimeout, int PackageId)> WaitForUploadResultAsync(ushort commandId,
+        CancellationToken cancellationToken);
 }

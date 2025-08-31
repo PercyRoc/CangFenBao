@@ -11,11 +11,14 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using SharedUI.Extensions;
+using System.Windows.Media;
 using XinBeiYang.Services;
 using XinBeiYang.ViewModels;
 using XinBeiYang.ViewModels.Settings;
 using XinBeiYang.Views;
 using XinBeiYang.Views.Settings;
+// using XinBeiYang.Logging; // 已移除MemoryRingBufferSink引用
+// using XinBeiYang.Diagnostics; // 已移除GlobalExceptionHandler相关功能
 using Timer = System.Timers.Timer;
 
 namespace XinBeiYang;
@@ -45,10 +48,7 @@ public partial class App
             _mutex = new Mutex(true, MutexName, out var createdNew);
             _ownsMutex = createdNew;
 
-            if (createdNew)
-            {
-                return Container.Resolve<MainWindow>();
-            }
+            if (createdNew) return Container.Resolve<MainWindow>();
 
             var canAcquire = _mutex.WaitOne(TimeSpan.Zero, false);
             if (!canAcquire)
@@ -58,6 +58,7 @@ public partial class App
                 Environment.Exit(0);
                 return null!;
             }
+
             _ownsMutex = true;
             return Container.Resolve<MainWindow>();
         }
@@ -89,6 +90,7 @@ public partial class App
 
         Log.Logger = new LoggerConfiguration()
             .ReadFrom.Configuration(configuration)
+            .Enrich.FromLogContext()
             .CreateLogger();
         Log.Information("Serilog 已根据 appsettings.json 配置.");
 
@@ -117,18 +119,31 @@ public partial class App
     {
         Log.Information("应用程序启动 (OnStartup)");
 
+        // 读取配置（渲染模式）
+        var config = new ConfigurationBuilder()
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.json", false, true)
+            .Build();
+
+        // 渲染模式：默认自动（硬件优先）；如配置 Rendering:ForceSoftwareOnly=true 则强制软件渲染
+        var forceSoftware = bool.TryParse(config["Rendering:ForceSoftwareOnly"], out var f) && f;
+        RenderOptions.ProcessRenderMode = forceSoftware
+            ? System.Windows.Interop.RenderMode.SoftwareOnly
+            : System.Windows.Interop.RenderMode.Default;
+        var tier = (RenderCapability.Tier >> 16);
+        Log.Information("WPF Render Tier={Tier}, Mode={Mode}, ForceSoftwareOnly={Force}", tier,
+            RenderOptions.ProcessRenderMode, forceSoftware);
+
         StartCleanupTask();
 
-        TaskScheduler.UnobservedTaskException += (_, args) =>
-        {
-            Log.Error(args.Exception, "在应用程序中捕获到未观察的任务异常");
-            args.SetObserved();
-        };
+        // GlobalExceptionHandler 已完全删除，避免AccessViolationException
 
         base.OnStartup(e);
 
-        Task.Run(InitializeServicesAsync)
-            .ContinueWith(task =>
+        // 在UI线程中同步启动服务，避免线程模型问题
+        try
+        {
+            InitializeServicesAsync().ContinueWith(task =>
             {
                 if (!task.IsFaulted) return;
                 Log.Error(task.Exception, "初始化服务时发生错误");
@@ -143,26 +158,61 @@ public partial class App
                     Current.Shutdown();
                 });
             });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "启动服务初始化时发生同步异常");
+            MessageBox.Show(
+                $"启动服务时发生错误，应用程序将关闭。\n\n错误: {ex.Message}",
+                "启动错误",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            Current.Shutdown();
+        }
     }
 
     private async Task InitializeServicesAsync()
     {
         try
         {
+            // 1. 在UI线程中同步启动重量称服务，确保线程模型正确
+            var weightService = Container.Resolve<SerialPortWeightService>();
+            try
+            {
+                // 直接在当前线程（UI线程）启动重量称服务
+                Log.Information("正在UI线程中启动重量称服务...");
+                var weightStartResult = weightService.Start();
+
+                if (weightStartResult)
+                {
+                    Log.Information("重量称服务启动成功 (在UI线程中)");
+                }
+                else
+                {
+                    Log.Warning("重量称服务启动失败，返回false");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "在UI线程中启动重量称服务时发生错误");
+                // 重量称服务失败不应该阻止其他服务启动
+            }
+
+            // 2. 启动相机服务
             var cameraStartupService = Container.Resolve<CameraStartupService>();
             await cameraStartupService.StartAsync(CancellationToken.None);
             Log.Information("相机托管服务启动成功");
 
-            var weightStartupService = Container.Resolve<WeightStartupService>();
-            await weightStartupService.StartAsync(CancellationToken.None);
-            Log.Information("重量称服务启动成功");
-
+            // 3. 启动PLC通信服务
             var hostedService = Container.Resolve<PlcCommunicationHostedService>();
             await hostedService.StartAsync(CancellationToken.None);
 
+            // 4. 启动JD WCS通信服务
             var jdWcsService = Container.Resolve<IJdWcsCommunicationService>();
             jdWcsService.Start();
             Log.Information("JD WCS通信服务启动成功");
+
+            Log.Information("所有服务启动完成");
         }
         catch (Exception ex)
         {
@@ -266,7 +316,8 @@ public partial class App
                 Log.CloseAndFlush();
             }
             catch
-            { /* ignored */
+            {
+                /* ignored */
             }
         }
         finally
@@ -277,16 +328,16 @@ public partial class App
                 if (_mutex != null)
                 {
                     if (_ownsMutex && _mutex.SafeWaitHandle is { IsClosed: false, IsInvalid: false })
-                    {
                         try
                         {
                             _mutex.ReleaseMutex();
                             Log.Information("Mutex已释放");
                         }
                         catch
-                        { /* ignored */
+                        {
+                            /* ignored */
                         }
-                    }
+
                     _mutex.Dispose();
                     _mutex = null;
                 }
@@ -299,9 +350,11 @@ public partial class App
                     Log.CloseAndFlush();
                 }
                 catch
-                { /* ignored */
+                {
+                    /* ignored */
                 }
             }
+
             base.OnExit(e);
         }
     }
@@ -320,9 +373,17 @@ public partial class App
             Log.Information("相机托管服务已停止");
 
             // 停止重量称服务
-            var weightStartupService = Container.Resolve<WeightStartupService>();
-            await weightStartupService.StopAsync(CancellationToken.None);
-            Log.Information("重量称服务已停止");
+            try
+            {
+                var weightService = Container.Resolve<SerialPortWeightService>();
+                weightService.Stop();
+                weightService.Dispose();
+                Log.Information("重量称服务已停止 (直接通过 SerialPortWeightService)");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "停止重量称服务时发生错误（直接通过 SerialPortWeightService）");
+            }
 
             // 停止PLC托管服务
             var hostedService = Container.Resolve<PlcCommunicationHostedService>();

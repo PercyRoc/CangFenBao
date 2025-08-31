@@ -1,4 +1,6 @@
 using System.IO;
+using System.Net;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
@@ -12,6 +14,21 @@ namespace FuzhouPolicyForce;
 /// </summary>
 internal static class GlobalExceptionHandler
 {
+    // Constants for Windows Error Reporting
+    private const uint SemFailcriticalerrors = 0x0001;
+    private const uint SemNogpfaulterrorbox = 0x0002;
+    private const uint SemNoalignmentfaultexcept = 0x0004;
+    private const uint SemNoopenfileerrorbox = 0x8000;
+
+    private const int MinidumpTypeWithFullMemory = 0x00000002;
+
+    private const uint GenericWrite = 0x40000000;
+    private const uint FileShareWrite = 0x00000002;
+    private const uint CreateAlways = 2;
+    private const uint FileAttributeNormal = 0x00000080;
+
+    private static readonly IntPtr InvalidHandleValue = new(-1);
+
     // Windows Error Reporting P/Invoke declarations
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool SetErrorMode(uint uMode);
@@ -42,19 +59,6 @@ internal static class GlobalExceptionHandler
         uint dwFlagsAndAttributes,
         IntPtr hTemplateFile);
 
-    // Constants for Windows Error Reporting
-    private const uint SemFailcriticalerrors = 0x0001;
-    private const uint SemNogpfaulterrorbox = 0x0002;
-    private const uint SemNoalignmentfaultexcept = 0x0004;
-    private const uint SemNoopenfileerrorbox = 0x8000;
-
-    private const int MinidumpTypeWithFullMemory = 0x00000002;
-    
-    private const uint GenericWrite = 0x40000000;
-    private const uint FileShareWrite = 0x00000002;
-    private const uint CreateAlways = 2;
-    private const uint FileAttributeNormal = 0x00000080;
-    private static readonly IntPtr InvalidHandleValue = new(-1);
     /// <summary>
     ///     初始化全局异常处理器
     /// </summary>
@@ -63,7 +67,8 @@ internal static class GlobalExceptionHandler
         try
         {
             // 配置Windows错误模式，禁用系统错误对话框
-            SetErrorMode(SemFailcriticalerrors | SemNogpfaulterrorbox | SemNoalignmentfaultexcept | SemNoopenfileerrorbox);
+            SetErrorMode(SemFailcriticalerrors | SemNogpfaulterrorbox | SemNoalignmentfaultexcept |
+                         SemNoopenfileerrorbox);
             Log.Information("Windows错误模式已配置");
 
             // 订阅UI线程异常
@@ -115,7 +120,7 @@ internal static class GlobalExceptionHandler
             e.SetObserved();
             return;
         }
-        
+
         HandleException(e.Exception, "异步任务");
         e.SetObserved();
     }
@@ -158,13 +163,9 @@ internal static class GlobalExceptionHandler
                     IntPtr.Zero);
 
                 if (success)
-                {
                     Log.Information("崩溃转储文件已生成: {DumpPath}", dumpPath);
-                }
                 else
-                {
                     Log.Warning("生成崩溃转储文件失败");
-                }
             }
             else
             {
@@ -186,58 +187,47 @@ internal static class GlobalExceptionHandler
     {
         // 递归检查AggregateException中的所有内部异常
         if (exception is AggregateException aggregateEx)
-        {
             return aggregateEx.InnerExceptions.All(IsNetworkRelatedException);
-        }
 
         // 检查异常本身
-        if (exception is System.Net.Sockets.SocketException socketEx)
-        {
+        if (exception is SocketException socketEx)
             // 网络连接相关的Socket错误不应该导致应用程序崩溃
             return socketEx.SocketErrorCode switch
             {
-                System.Net.Sockets.SocketError.ConnectionRefused => true, // 连接被拒绝
-                System.Net.Sockets.SocketError.TimedOut => true, // 连接超时
-                System.Net.Sockets.SocketError.HostUnreachable => true, // 主机不可达
-                System.Net.Sockets.SocketError.NetworkUnreachable => true, // 网络不可达
-                System.Net.Sockets.SocketError.ConnectionReset => true, // 连接重置
-                System.Net.Sockets.SocketError.ConnectionAborted => true, // 连接中止
-                System.Net.Sockets.SocketError.Shutdown => true, // 连接关闭
-                System.Net.Sockets.SocketError.OperationAborted => true, // 操作被中止 (995)
+                SocketError.ConnectionRefused => true, // 连接被拒绝
+                SocketError.TimedOut => true, // 连接超时
+                SocketError.HostUnreachable => true, // 主机不可达
+                SocketError.NetworkUnreachable => true, // 网络不可达
+                SocketError.ConnectionReset => true, // 连接重置
+                SocketError.ConnectionAborted => true, // 连接中止
+                SocketError.Shutdown => true, // 连接关闭
+                SocketError.OperationAborted => true, // 操作被中止 (995)
                 _ => false
             };
-        }
 
         // 检查内部异常
-        if (exception.InnerException is System.Net.Sockets.SocketException innerSocketEx)
-        {
+        if (exception.InnerException is SocketException innerSocketEx)
             return innerSocketEx.SocketErrorCode switch
             {
-                System.Net.Sockets.SocketError.ConnectionRefused => true,
-                System.Net.Sockets.SocketError.TimedOut => true,
-                System.Net.Sockets.SocketError.HostUnreachable => true,
-                System.Net.Sockets.SocketError.NetworkUnreachable => true,
-                System.Net.Sockets.SocketError.ConnectionReset => true,
-                System.Net.Sockets.SocketError.ConnectionAborted => true,
-                System.Net.Sockets.SocketError.Shutdown => true,
-                System.Net.Sockets.SocketError.OperationAborted => true, // 操作被中止 (995)
+                SocketError.ConnectionRefused => true,
+                SocketError.TimedOut => true,
+                SocketError.HostUnreachable => true,
+                SocketError.NetworkUnreachable => true,
+                SocketError.ConnectionReset => true,
+                SocketError.ConnectionAborted => true,
+                SocketError.Shutdown => true,
+                SocketError.OperationAborted => true, // 操作被中止 (995)
                 _ => false
             };
-        }
 
         // 检查其他网络相关异常
-        if (exception is System.Net.WebException or
+        if (exception is WebException or
             IOException or
             OperationCanceledException)
-        {
             return true;
-        }
 
         // 递归检查内部异常
-        if (exception.InnerException != null)
-        {
-            return IsNetworkRelatedException(exception.InnerException);
-        }
+        if (exception.InnerException != null) return IsNetworkRelatedException(exception.InnerException);
 
         return false;
     }
@@ -268,8 +258,9 @@ internal static class GlobalExceptionHandler
             Log.CloseAndFlush();
 
             // 显示用户友好的错误消息
-            var message = $"程序发生严重错误，即将关闭。\n\n错误类型: {exception?.GetType().Name}\n错误信息: {exception?.Message}\n\n请查看日志文件和崩溃转储文件了解详细信息。";
-            
+            var message =
+                $"程序发生严重错误，即将关闭。\n\n错误类型: {exception?.GetType().Name}\n错误信息: {exception?.Message}\n\n请查看日志文件和崩溃转储文件了解详细信息。";
+
             // 在UI线程中显示消息框
             Application.Current.Dispatcher.Invoke(() =>
             {
@@ -304,4 +295,4 @@ internal static class GlobalExceptionHandler
             Environment.Exit(1);
         }
     }
-} 
+}

@@ -38,7 +38,8 @@ public interface IZtoSortingService
     /// <param name="trayCode">小车编号</param>
     /// <param name="weight">重量</param>
     /// <returns>分拣信息</returns>
-    Task<SortingInfoResponse?> GetSortingInfoAsync(string billCode, string pipeline, int turnNumber, string trayCode = "", float? weight = null);
+    Task<SortingInfoResponse?> GetSortingInfoAsync(string billCode, string pipeline, int turnNumber,
+        string trayCode = "", float? weight = null);
 
     /// <summary>
     ///     推送分拣结果
@@ -48,7 +49,8 @@ public interface IZtoSortingService
     /// <param name="turnNumber">扫描次数</param>
     /// <param name="trayCode">小车编号</param>
     /// <returns>分拣结果响应</returns>
-    Task<SortingResultResponse> ReportSortingResultAsync(PackageInfo package, string pipeline, int turnNumber, string trayCode = "");
+    Task<SortingResultResponse> ReportSortingResultAsync(PackageInfo package, string pipeline, int turnNumber,
+        string trayCode = "");
 
     /// <summary>
     ///     校验服务器时间

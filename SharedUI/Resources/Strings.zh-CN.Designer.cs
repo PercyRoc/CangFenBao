@@ -58,5 +58,401 @@ namespace SharedUI.Resources {
                 resourceCulture = value;
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 全部.
+        /// </summary>
+        internal static string HistoryDialog_All {
+            get {
+                return ResourceManager.GetString("HistoryDialog_All", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 导出Excel.
+        /// </summary>
+        internal static string HistoryDialog_Button_ExportExcel {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Button_ExportExcel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 查询.
+        /// </summary>
+        internal static string HistoryDialog_Button_Query {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Button_Query", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 导出失败: {0}.
+        /// </summary>
+        internal static string HistoryDialog_ExportFailedFormat {
+            get {
+                return ResourceManager.GetString("HistoryDialog_ExportFailedFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 包裹记录.
+        /// </summary>
+        internal static string HistoryDialog_ExportFileNamePrefix {
+            get {
+                return ResourceManager.GetString("HistoryDialog_ExportFileNamePrefix", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Excel 文件|*.xlsx.
+        /// </summary>
+        internal static string HistoryDialog_ExportFilter {
+            get {
+                return ResourceManager.GetString("HistoryDialog_ExportFilter", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 包裹记录.
+        /// </summary>
+        internal static string HistoryDialog_ExportSheetName {
+            get {
+                return ResourceManager.GetString("HistoryDialog_ExportSheetName", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 成功导出 {0} 条记录到 {1}.
+        /// </summary>
+        internal static string HistoryDialog_ExportSuccessFormat {
+            get {
+                return ResourceManager.GetString("HistoryDialog_ExportSuccessFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 导出包裹记录.
+        /// </summary>
+        internal static string HistoryDialog_ExportTitle {
+            get {
+                return ResourceManager.GetString("HistoryDialog_ExportTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 条码.
+        /// </summary>
+        internal static string HistoryDialog_Header_Barcode {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Header_Barcode", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 格口.
+        /// </summary>
+        internal static string HistoryDialog_Header_Chute {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Header_Chute", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 创建时间.
+        /// </summary>
+        internal static string HistoryDialog_Header_CreateTime {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Header_CreateTime", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 高度(cm).
+        /// </summary>
+        internal static string HistoryDialog_Header_Height {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Header_Height", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 编号.
+        /// </summary>
+        internal static string HistoryDialog_Header_Id {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Header_Id", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 图片.
+        /// </summary>
+        internal static string HistoryDialog_Header_Image {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Header_Image", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 长度(cm).
+        /// </summary>
+        internal static string HistoryDialog_Header_Length {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Header_Length", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 备注.
+        /// </summary>
+        internal static string HistoryDialog_Header_Remarks {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Header_Remarks", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 真实格口.
+        /// </summary>
+        internal static string HistoryDialog_Header_SortPortCode {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Header_SortPortCode", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 状态.
+        /// </summary>
+        internal static string HistoryDialog_Header_Status {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Header_Status", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 体积(cm³).
+        /// </summary>
+        internal static string HistoryDialog_Header_Volume {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Header_Volume", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 重量(kg).
+        /// </summary>
+        internal static string HistoryDialog_Header_Weight {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Header_Weight", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 宽度(cm).
+        /// </summary>
+        internal static string HistoryDialog_Header_Width {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Header_Width", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 图片文件未找到: {0}.
+        /// </summary>
+        internal static string HistoryDialog_ImageNotFoundFormat {
+            get {
+                return ResourceManager.GetString("HistoryDialog_ImageNotFoundFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 无法打开图片: {0}.
+        /// </summary>
+        internal static string HistoryDialog_ImageOpenFailedFormat {
+            get {
+                return ResourceManager.GetString("HistoryDialog_ImageOpenFailedFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 条码:.
+        /// </summary>
+        internal static string HistoryDialog_Label_Barcode {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Label_Barcode", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 格口:.
+        /// </summary>
+        internal static string HistoryDialog_Label_Chute {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Label_Chute", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 结束日期:.
+        /// </summary>
+        internal static string HistoryDialog_Label_EndDate {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Label_EndDate", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 开始日期:.
+        /// </summary>
+        internal static string HistoryDialog_Label_StartDate {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Label_StartDate", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 状态:.
+        /// </summary>
+        internal static string HistoryDialog_Label_Status {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Label_Status", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 输入条码....
+        /// </summary>
+        internal static string HistoryDialog_Placeholder_Barcode {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Placeholder_Barcode", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 输入格口号....
+        /// </summary>
+        internal static string HistoryDialog_Placeholder_Chute {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Placeholder_Chute", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 查询失败.
+        /// </summary>
+        internal static string HistoryDialog_QueryFailed {
+            get {
+                return ResourceManager.GetString("HistoryDialog_QueryFailed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 查询成功.
+        /// </summary>
+        internal static string HistoryDialog_QuerySuccess {
+            get {
+                return ResourceManager.GetString("HistoryDialog_QuerySuccess", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 已创建.
+        /// </summary>
+        internal static string HistoryDialog_Status_Created {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Status_Created", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 错误.
+        /// </summary>
+        internal static string HistoryDialog_Status_Error {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Status_Error", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 失败.
+        /// </summary>
+        internal static string HistoryDialog_Status_Failed {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Status_Failed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 装载拒绝.
+        /// </summary>
+        internal static string HistoryDialog_Status_LoadingRejected {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Status_LoadingRejected", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 装载成功.
+        /// </summary>
+        internal static string HistoryDialog_Status_LoadingSuccess {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Status_LoadingSuccess", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 装载超时.
+        /// </summary>
+        internal static string HistoryDialog_Status_LoadingTimeout {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Status_LoadingTimeout", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 离线.
+        /// </summary>
+        internal static string HistoryDialog_Status_Offline {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Status_Offline", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 成功.
+        /// </summary>
+        internal static string HistoryDialog_Status_Success {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Status_Success", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 超时.
+        /// </summary>
+        internal static string HistoryDialog_Status_Timeout {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Status_Timeout", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 等待装载.
+        /// </summary>
+        internal static string HistoryDialog_Status_WaitingForLoading {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Status_WaitingForLoading", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 打开图片.
+        /// </summary>
+        internal static string HistoryDialog_Tooltip_OpenImage {
+            get {
+                return ResourceManager.GetString("HistoryDialog_Tooltip_OpenImage", resourceCulture);
+            }
+        }
     }
 }

@@ -20,6 +20,9 @@ using XinBeiYang.Models;
 using XinBeiYang.Models.Communication;
 using XinBeiYang.Services;
 
+// 添加 System.Threading.Channels 命名空间用于队列处理
+using System.Threading.Channels;
+
 // 添加 Serilog.Context 命名空间
 
 // Added for CancellationTokenSource
@@ -181,6 +184,19 @@ public class CameraDisplayInfo : BindableBase
 
 #endregion
 
+#region 图像处理任务记录
+
+/// <summary>
+///     图像处理任务记录
+/// </summary>
+internal record ImageProcessingTask(
+    PackageInfo Package,
+    string PackageContext,
+    int PackageId,
+    BitmapSource? ClonedImage);
+
+#endregion
+
 /// <summary>
 ///     主窗口视图模型
 /// </summary>
@@ -205,27 +221,26 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
     private readonly ICameraService _cameraService;
     private readonly IDialogService _dialogService;
     private readonly IImageStorageService _imageStorageService;
+    private readonly IJdWcsCommunicationService _jdWcsCommunicationService;
 
 
     // *** 新增: 包裹缓冲栈 ***
     private readonly ConcurrentStack<PackageInfo> _packageStack = new();
-
-    // *** 移除: 不再需要等待最终结果的包裹缓存 ***
-    // private readonly ConcurrentDictionary<ushort, PackageInfo> _pendingFinalResultPackages = new();
-
-    // *** 移除: 不再需要等待最终结果的包裹超时管理 ***
-    // private readonly ConcurrentDictionary<ushort, CancellationTokenSource> _pendingFinalResultTimeouts = new();
     private readonly IPlcCommunicationService _plcCommunicationService;
-    private readonly IJdWcsCommunicationService _jdWcsCommunicationService;
     private readonly object _processingLock = new();
-    private readonly ISettingsService _settingsService;
+    private readonly ISettingsService _settings_service;
     private readonly List<IDisposable> _subscriptions = [];
 
     // *** 新增: 用于存储最近超时的条码前缀 ***
     private readonly ConcurrentDictionary<string, DateTime> _timedOutPrefixes = new();
     private readonly DispatcherTimer _timer;
     private readonly CancellationTokenSource _viewModelCts = new(); // 视图模型的主要取消标记
-    private readonly SerialPortWeightService _weightService; // 添加重量称服务依赖
+    private readonly SerialPortWeightService _weight_service; // 添加重量称服务依赖
+
+    // *** 新增: 图像处理队列 - 用于顺序处理图像保存和上传，避免并发问题 ***
+    private readonly Channel<ImageProcessingTask> _imageProcessingChannel;
+    private readonly Task _imageProcessingTask;
+    private readonly CancellationTokenSource _imageProcessingCts = new();
     private BarcodeMode _barcodeMode = BarcodeMode.MultiBarcode; // 默认为多条码模式
 
     // 新增：相机初始化标志
@@ -234,16 +249,6 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
     private BitmapSource? _currentImage;
 
     private PackageInfo? _currentlyProcessingPackage;
-
-    // PLC状态独立属性
-    private string _plcStatusColor = "#F44336";
-    private string _plcStatusDescription = "PLC设备未连接，请检查网络连接";
-    private string _plcStatusText = "未连接";
-
-    // JD WCS状态独立属性
-    private string _jdWcsStatusColor = "#F44336";
-    private string _jdWcsStatusDescription = "京东WCS服务未连接，请检查网络连接";
-    private string _jdWcsStatusText = "未连接";
     private bool _disposed;
     private int _gridColumns;
 
@@ -252,11 +257,23 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
 
     private bool _isNextPackageWaiting; // 用于UI指示 (现在指示 _packageStack 是否非空)
     private bool _isPlcAbnormalWarningVisible; // PLC异常警告可见性标志
-    private bool _isPlcRejectWarningVisible; // PLC拒绝警告可见性标志
     private bool _isUploadCountdownVisible;
+
+    // 等待PLC上包确认的遮罩层相关属性
+    private bool _isWaitingForUploadResult;
+
+    // JD WCS状态独立属性
+    private string _jdWcsStatusColor = "#F44336";
+    private string _jdWcsStatusDescription = "京东WCS服务未连接，请检查网络连接";
+    private string _jdWcsStatusText = "未连接";
 
     private bool _lastPackageWasSuccessful = true; // 初始状态为成功
     private Brush _mainWindowBackgroundBrush = BackgroundSuccess; // 初始为绿色（允许上包）
+
+    // PLC状态独立属性
+    private string _plcStatusColor = "#F44336";
+    private string _plcStatusDescription = "PLC设备未连接，请检查网络连接";
+    private string _plcStatusText = "未连接";
     private int _selectedBarcodeModeIndex; // 新增：用于绑定 ComboBox 的 SelectedIndex
     private SystemStatus _systemStatus = new();
 
@@ -264,11 +281,15 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
     private DispatcherTimer? _uploadCountdownTimer;
     private int _uploadCountdownValue;
 
+    private int _viewModelPackageIndex;
+    private double _waitingCountdownProgress;
+    private int _waitingCountdownSeconds;
+
     // 等待PLC确认倒计时相关
+    private readonly object _countdownLock = new();
     private DispatcherTimer? _waitingCountdownTimer;
     private int _waitingCountdownTotalSeconds;
-
-    private int _viewModelPackageIndex;
+    private string _waitingStatusText = "等待PLC确认上包...";
 
     public MainWindowViewModel(
         IDialogService dialogService,
@@ -278,7 +299,7 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
         IJdWcsCommunicationService jdWcsCommunicationService,
         IImageStorageService imageStorageService,
         ISettingsService settingsService,
-        WeightStartupService weightStartupService) // 修改为WeightStartupService参数
+        SerialPortWeightService weightService)
     {
         _dialogService = dialogService;
         _cameraService = cameraService;
@@ -286,8 +307,8 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
         _plcCommunicationService = plcCommunicationService;
         _jdWcsCommunicationService = jdWcsCommunicationService;
         _imageStorageService = imageStorageService;
-        _settingsService = settingsService;
-        _weightService = weightStartupService.GetWeightService(); // 通过WeightStartupService获取重量称服务实例
+        _settings_service = settingsService;
+        _weight_service = weightService; // 直接注入 SerialPortWeightService 实例
 
         // --- 初始化 ---
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
@@ -307,6 +328,18 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
 
         // 初始化上包倒计时器
         InitializeUploadCountdownTimer();
+
+        // 初始化图像处理队列 - 使用有界的通道来控制并发数量
+        _imageProcessingChannel = Channel.CreateBounded<ImageProcessingTask>(
+            new BoundedChannelOptions(10) // 最多缓冲10个图像处理任务
+            {
+                FullMode = BoundedChannelFullMode.Wait, // 队列满时等待
+                SingleReader = true, // 单个读取器
+                SingleWriter = false // 多个写入器
+            });
+
+        // 启动图像处理任务 - 顺序处理队列中的任务
+        _imageProcessingTask = Task.Run(ProcessImageQueueAsync, _imageProcessingCts.Token);
 
         // 初始化设备状态
         InitializeDeviceStatuses();
@@ -351,13 +384,24 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
                     p.Index, p.Barcode); // Grouping 日志改为 Verbose
                 return prefix;
             })
-            .SelectMany(group => group
-                    // Buffer 超时或数量满足时触发
-                    .Buffer(TimeSpan.FromMilliseconds(500), 2) // 保持 Buffer 设置
-                    .Where(buffer => buffer.Count > 0) // 确保 Buffer 不为空
-            )
+            .SelectMany(group =>
+            {
+                if (BarcodeMode == BarcodeMode.MultiBarcode)
+                {
+                    // 多条码模式：使用 Buffer 进行配对，有 500ms 超时
+                    return group
+                        .Buffer(TimeSpan.FromMilliseconds(500), 2)
+                        .Where(buffer => buffer.Count > 0);
+                }
+
+                // 母/子条码模式：立即处理每个包裹，不等待
+                // 将单个包裹包装成列表以匹配订阅者期望的类型 (IList<PackageInfo>)
+                return group.Select(p => (IList<PackageInfo>)[p]);
+            })
             .ObserveOn(Scheduler.Default) // 在后台线程处理 Buffer 结果
-            .Subscribe(async void (buffer) => // 使用 async lambda
+            .SelectMany(buffer =>
+            {
+                try
                 {
                     var firstPackage = buffer[0];
                     var currentPrefix = GetBarcodePrefix(firstPackage.Barcode);
@@ -381,7 +425,7 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
                                         firstPackage.Index, firstPackage.Barcode);
                                     firstPackage.ReleaseImage();
                                     _timedOutPrefixes.TryRemove(currentPrefix, out _); // 收到后移除标记
-                                    return;
+                                    return Task.FromResult<IList<PackageInfo>[]>([]);
                                 }
 
                                 Log.Warning("[Stream] 收到配对，但此前记录了前缀超时，继续处理并移除标记.");
@@ -469,8 +513,7 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
                                 Log.Information("{Context} [接收] 包裹进入处理流程", finalPackageContext);
 
                                 // *** Pass the context string explicitly ***
-                                await FetchWeightAndHandlePackageAsync(packageToProcess, finalPackageContext,
-                                    _viewModelCts.Token);
+                                FetchWeightAndHandlePackageAsync(packageToProcess, finalPackageContext);
                             }
                         }
                         catch (Exception ex)
@@ -482,45 +525,110 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
                             foreach (var pkg in buffer) pkg.ReleaseImage();
                         }
                     } // 结束 initialPackageContext using
-                },
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "[Stream] 包裹流处理中发生未处理的异步异常");
+                }
+
+                // SelectMany需要返回一个序列，这里返回空序列表示处理完成
+                return Task.FromResult(Array.Empty<IList<PackageInfo>>());
+            })
+            .Subscribe(_ => { }, // 忽略SelectMany的结果
                 ex => Log.Error(ex, "[Stream] 包裹流处理中发生未处理的顶层异常"))); // 流的顶层错误处理
 
-        // +++ 订阅来自 ICameraService 的带 ID 图像流 +++
+        // +++ 订阅来自 ICameraService 的带 ID 图像流 +++ (优化版：节流 + 缓存 + 后台处理)
         _subscriptions.Add(_cameraService.ImageStreamWithId
-            .ObserveOn(Scheduler.Default) // 在UI线程外处理转换，但WPF对象需要UI线程访问
-            .Subscribe(imageData =>
+            .ObserveOn(Scheduler.Default) // 在UI线程外处理转换
+            .GroupBy(data => data.CameraId) // 按相机ID分组
+            .SelectMany(group => group
+                .ObserveOn(Scheduler.Default)) // 继续在后台处理节流结果
+            .SelectMany(async imageData =>
             {
-                var cameraId = imageData.CameraId; // 获取相机ID
-                var image = imageData.Image; // 获取图像
+                var cameraId = imageData.CameraId;
+                var image = imageData.Image;
+
+                Log.Verbose("[Camera] 接收到图像数据: CameraId={CameraId}, ImageSize={Width}x{Height}, ImageFormat={Format}",
+                    cameraId, image.PixelWidth, image.PixelHeight, image.Format.ToString());
+
                 try
                 {
-                    // 仅为UI更新切换到UI线程
-                    Application.Current.Dispatcher.Invoke(() =>
+                    // 后台线程：异步准备图像（仅克隆和冻结）
+                    var processedImage = await Task.Run(() =>
                     {
-                        // 在UI线程上查找目标相机
-                        var targetCamera = Cameras.FirstOrDefault(c => c.CameraId == cameraId);
-                        if (targetCamera == null)
-                        {
-                            Log.Warning("未找到相机ID={CameraId}的显示区域", cameraId);
-                            return;
-                        }
-
                         try
                         {
-                            // 使用本地副本更新UI属性，而不是外部变量
-                            targetCamera.CurrentImage = image;
+                            // 克隆并冻结图像（保持原始尺寸）
+                            var safeImage = image.Clone();
+                            if (safeImage.CanFreeze)
+                            {
+                                safeImage.Freeze();
+                                Log.Debug("图像冻结成功: CameraId={CameraId}, Size={Width}x{Height}",
+                                    cameraId, safeImage.PixelWidth, safeImage.PixelHeight);
+                            }
+                            else
+                            {
+                                Log.Warning("图像无法冻结: CameraId={CameraId}, Size={Width}x{Height}",
+                                    cameraId, safeImage.PixelWidth, safeImage.PixelHeight);
+                            }
+
+                            return safeImage;
                         }
-                        catch (Exception innerEx) // 捕获UI更新期间的潜在错误
+                        catch (Exception ex)
                         {
-                            Log.Error(innerEx, "在UI线程上更新UI时出错: CameraId={CameraId}", cameraId);
+                            Log.Error(ex, "后台处理图像时出错: CameraId={CameraId}", cameraId);
+                            return null;
                         }
-                    }); // 结束Dispatcher.Invoke
+                    });
+
+                    if (processedImage == null)
+                    {
+                        Log.Warning("相机 {CameraId} 图像处理失败，跳过UI更新", cameraId);
+                        return [];
+                    }
+
+                    // UI线程：快速更新UI（只做必要的查找和赋值）
+                    await DispatchInvokeAsyncFireAndForget(() =>
+                    {
+                        try
+                        {
+                            // 记录当前相机列表状态
+                            Log.Debug("[Camera] 当前相机列表: {CameraList}",
+                                string.Join(", ", Cameras.Select(c => $"{c.CameraId}({c.CameraName})")));
+
+                            var targetCamera = Cameras.FirstOrDefault(c => c.CameraId == cameraId);
+                            if (targetCamera == null)
+                            {
+                                Log.Warning("未找到相机ID={CameraId}的显示区域，可用相机: {AvailableCameras}",
+                                    cameraId, string.Join(", ", Cameras.Select(c => c.CameraId)));
+                                return;
+                            }
+
+                            // 记录图像更新
+                            var oldImage = targetCamera.CurrentImage;
+                            targetCamera.CurrentImage = processedImage;
+
+                            Log.Debug("相机图像更新成功: CameraId={CameraId}, 旧图像={OldImageExists}, 新图像大小={Width}x{Height}",
+                                cameraId, oldImage != null, processedImage.PixelWidth, processedImage.PixelHeight);
+                        }
+                        catch (Exception uiEx)
+                        {
+                            Log.Error(uiEx, "UI线程更新相机图像时出错: CameraId={CameraId}", cameraId);
+                        }
+                    }, DispatcherPriority.Render); // 使用Render优先级，确保UI流畅
                 }
-                catch (Exception ex) // 捕获后台处理期间的错误
+                catch (Exception ex)
                 {
-                    Log.Error(ex, "处理图像时发生错误: CameraId={CameraId}, Message={Message}", cameraId, ex.Message);
+                    Log.Error(ex, "处理相机图像流时发生错误: CameraId={CameraId}", cameraId);
                 }
-            }));
+
+                // SelectMany需要返回一个序列，这里返回空序列
+                return Array.Empty<(BitmapSource Image, string CameraId)>();
+            })
+            .Subscribe(
+                _ => { }, // 忽略SelectMany的结果
+                ex => Log.Error(ex, "[Camera] 图像流处理中发生未处理的顶层异常"),
+                () => Log.Information("[Camera] 图像流处理完成"))); // 图像流的顶层错误处理
 
         // *** 初始化 IsNextPackageWaiting ***
         IsNextPackageWaiting = !_packageStack.IsEmpty;
@@ -532,6 +640,44 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
         if (!_cameraService.IsConnected || _camerasInitialized) return;
         Log.Information("相机服务已连接，立即填充相机列表");
         PopulateCameraList();
+    }
+
+    // Helper: 安全地在 UI 线程上异步执行一个无返回值的操作并记录异常
+    // 返回 Task 以便调用者可选择 await 或 fire-and-forget
+    private static Task DispatchInvokeAsyncFireAndForget(Action action, DispatcherPriority priority = DispatcherPriority.Normal)
+    {
+        try
+        {
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher == null || dispatcher.HasShutdownStarted)
+            {
+                // 无法调度到 UI 线程，直接运行（谨慎）
+                try { action(); } catch (Exception ex) { Log.Error(ex, "DispatchInvokeAsyncFireAndForget: 直接执行动作失败"); }
+                return Task.CompletedTask;
+            }
+
+            // 使用 InvokeAsync 并返回其 Task，调用者可以 await 或忽略
+            var op = dispatcher.InvokeAsync(() =>
+            {
+                try { action(); }
+                catch (Exception ex) { Log.Error(ex, "DispatchInvokeAsyncFireAndForget: UI 操作抛出异常"); }
+
+            }, priority);
+
+            // Attach continuation to observe exceptions from the DispatcherOperation if any
+            op.Task.ContinueWith(t =>
+            {
+                if (t is { IsFaulted: true, Exception: not null })
+                    Log.Error(t.Exception, "DispatchInvokeAsyncFireAndForget: 调度任务失败");
+            }, TaskContinuationOptions.OnlyOnFaulted);
+
+            return op.Task;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "DispatchInvokeAsyncFireAndForget: 包装调度调用失败");
+            return Task.CompletedTask;
+        }
     }
 
     /// <summary>
@@ -625,15 +771,7 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
         get => _mainWindowBackgroundBrush;
         private set => SetProperty(ref _mainWindowBackgroundBrush, value);
     }
-
-    /// <summary>
-    ///     控制PLC拒绝警告覆盖层的可见性
-    /// </summary>
-    public bool IsPlcRejectWarningVisible
-    {
-        get => _isPlcRejectWarningVisible;
-        private set => SetProperty(ref _isPlcRejectWarningVisible, value);
-    }
+    
 
     /// <summary>
     ///     控制PLC异常警告覆盖层的可见性
@@ -674,11 +812,9 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
         {
             // 使用 SetProperty 检查值是否真的改变
             if (SetProperty(ref _selectedBarcodeModeIndex, value))
-            {
                 // 当 Index 改变时，更新 BarcodeMode 枚举属性
                 // BarcodeMode 的 setter 会处理日志记录和保存设置
                 BarcodeMode = (BarcodeMode)value;
-            }
         }
     }
 
@@ -713,12 +849,6 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
         get => _isUploadCountdownVisible;
         private set => SetProperty(ref _isUploadCountdownVisible, value);
     }
-
-    // 等待PLC上包确认的遮罩层相关属性
-    private bool _isWaitingForUploadResult;
-    private int _waitingCountdownSeconds;
-    private double _waitingCountdownProgress;
-    private string _waitingStatusText = "等待PLC确认上包...";
 
     /// <summary>
     ///     是否正在等待PLC上包确认结果
@@ -800,10 +930,8 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
         };
 
         if (!pass)
-        {
             Log.Debug("[Filter] 包裹因模式 {Mode} 与条码类型 (IsParent: {IsParent}) 不符被过滤: {Barcode}",
                 BarcodeMode, isParentBarcode, package.Barcode);
-        }
 
         return pass;
     }
@@ -833,6 +961,115 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "初始化相机占位符时发生错误");
+        }
+    }
+
+    /// <summary>
+    ///     手动刷新相机显示（用于解决显示问题）
+    /// </summary>
+    public void RefreshCameraDisplay()
+    {
+        try
+        {
+            // 添加线程安全检查
+            if (_disposed)
+            {
+                Log.Warning("[CameraRefresh] ViewModel已释放，跳过相机刷新");
+                return;
+            }
+
+            Log.Information("[CameraRefresh] 开始手动刷新相机显示");
+
+            // 重置初始化标志，强制重新初始化
+            _camerasInitialized = false;
+
+            // 清空当前相机列表
+            Cameras.Clear();
+
+            // 重新初始化相机占位符
+            InitializeCameraPlaceholder();
+
+            // 如果相机服务已连接，重新填充相机列表
+            if (_cameraService.IsConnected)
+            {
+                Log.Information("[CameraRefresh] 相机服务已连接，重新填充相机列表");
+                PopulateCameraList();
+            }
+            else
+            {
+                Log.Warning("[CameraRefresh] 相机服务未连接，等待连接后自动刷新");
+            }
+
+            Log.Information("[CameraRefresh] 相机显示刷新完成");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[CameraRefresh] 刷新相机显示时发生错误");
+        }
+    }
+
+    /// <summary>
+    ///     调试相机状态（用于排查显示问题）
+    /// </summary>
+    private void DebugCameraStatus()
+    {
+        try
+        {
+            if (_disposed)
+            {
+                Log.Warning("[CameraDebug] ViewModel已释放，跳过相机状态调试");
+                return;
+            }
+
+            Log.Information("[CameraDebug] === 相机状态调试信息 ===");
+            Log.Information("[CameraDebug] 相机服务连接状态: {Connected}", _cameraService.IsConnected);
+            Log.Information("[CameraDebug] 相机初始化状态: {Initialized}", _camerasInitialized);
+            Log.Information("[CameraDebug] 相机列表数量: {Count}", Cameras.Count);
+
+            foreach (var camera in Cameras)
+            {
+                try
+                {
+                    Log.Information("[CameraDebug] 相机信息: ID={Id}, 名称={Name}, 在线={Online}, 图像={HasImage}, 图像大小={Size}",
+                        camera.CameraId,
+                        camera.CameraName,
+                        camera.IsOnline,
+                        camera.CurrentImage != null,
+                        camera.CurrentImage != null ? $"{camera.CurrentImage.PixelWidth}x{camera.CurrentImage.PixelHeight}" : "无");
+                }
+                catch (Exception cameraEx)
+                {
+                    Log.Error(cameraEx, "[CameraDebug] 调试相机信息时发生错误: CameraId={CameraId}", camera.CameraId);
+                }
+            }
+
+            // 检查相机服务的可用相机
+            try
+            {
+                if (_cameraService.IsConnected)
+                {
+                    var availableCameras = _cameraService.GetAvailableCameras().ToList();
+                    Log.Information("[CameraDebug] 服务报告的可用相机数量: {Count}", availableCameras.Count);
+                    foreach (var cam in availableCameras)
+                    {
+                        Log.Information("[CameraDebug] 可用相机: ID={Id}, 名称={Name}", cam.Id, cam.Name);
+                    }
+                }
+                else
+                {
+                    Log.Information("[CameraDebug] 相机服务未连接，跳过可用相机检查");
+                }
+            }
+            catch (Exception serviceEx)
+            {
+                Log.Error(serviceEx, "[CameraDebug] 检查相机服务可用相机时发生错误");
+            }
+
+            Log.Information("[CameraDebug] === 调试信息结束 ===");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[CameraDebug] 调试相机状态时发生错误");
         }
     }
 
@@ -922,56 +1159,154 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
 
     private void OnCameraConnectionChanged(string? cameraId, bool isConnected)
     {
-        Application.Current.Dispatcher.Invoke(() =>
+        try
         {
-            var cameraStatus = DeviceStatuses.FirstOrDefault(static s => s.Name == "相机");
-            if (cameraStatus != null)
-            {
-                cameraStatus.Status = isConnected ? "已连接" : "已断开";
-                cameraStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
-            }
+            Log.Information("[Camera] 相机连接状态变更: CameraId={CameraId}, IsConnected={Connected}",
+                cameraId ?? "ALL", isConnected);
 
-            // 首次整体连接成功时，填充相机列表
-            if (string.IsNullOrEmpty(cameraId) && isConnected && !_camerasInitialized)
+            _ = DispatchInvokeAsyncFireAndForget(() =>
             {
-                Log.Information("相机服务整体连接成功，开始填充相机列表");
-                PopulateCameraList();
-                return;
-            }
-
-            // 处理相机断开连接
-            if (!isConnected && string.IsNullOrEmpty(cameraId))
-            {
-                foreach (var cam in Cameras)
+                try
                 {
-                    cam.IsOnline = false;
+                    // 检查ViewModel是否已被释放
+                    if (_disposed)
+                    {
+                        Log.Debug("[Camera] ViewModel已释放，跳过相机状态更新");
+                        return;
+                    }
+
+                    var cameraStatus = DeviceStatuses.FirstOrDefault(static s => s.Name == "相机");
+                    if (cameraStatus != null)
+                    {
+                        cameraStatus.Status = isConnected ? "已连接" : "已断开";
+                        cameraStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
+                    }
+
+                    // 首次整体连接成功时，填充相机列表
+                    if (string.IsNullOrEmpty(cameraId) && isConnected && !_camerasInitialized)
+                    {
+                        try
+                        {
+                            Log.Information("[Camera] 相机服务整体连接成功，开始填充相机列表");
+                            PopulateCameraList();
+
+                            // 连接成功后执行一次状态调试
+                            Task.Delay(1000).ContinueWith(_ =>
+                            {
+                                try
+                                {
+                                    DebugCameraStatus();
+                                }
+                                catch (Exception debugEx)
+                                {
+                                    Log.Error(debugEx, "[Camera] 连接成功后的状态调试失败");
+                                }
+                            });
+                        }
+                        catch (Exception populateEx)
+                        {
+                            Log.Error(populateEx, "[Camera] 填充相机列表失败");
+                        }
+                        return;
+                    }
+
+                    // 处理相机断开连接
+                    if (!isConnected && string.IsNullOrEmpty(cameraId))
+                    {
+                        try
+                        {
+                            Log.Information("[Camera] 相机服务整体断开，清空所有相机状态");
+                            foreach (var cam in Cameras)
+                            {
+                                cam.IsOnline = false;
+                                cam.CurrentImage = null; // 清空图像
+                            }
+                        }
+                        catch (Exception clearEx)
+                        {
+                            Log.Error(clearEx, "[Camera] 清空相机状态失败");
+                        }
+                        return;
+                    }
+
+                    // 更新单个相机状态
+                    if (string.IsNullOrEmpty(cameraId)) return;
+
+                    try
+                    {
+                        var found = false;
+                        foreach (var cam in Cameras)
+                        {
+                            if (cam.CameraId != cameraId) continue;
+                            cam.IsOnline = isConnected;
+                            if (!isConnected)
+                            {
+                                cam.CurrentImage = null; // 相机断开时清空图像
+                            }
+                            Log.Information("[Camera] 更新相机 {ID} 状态为: {Status}", cameraId, isConnected ? "在线" : "离线");
+                            found = true;
+                            break;
+                        }
+
+                        if (!found)
+                        {
+                            Log.Warning("[Camera] 未找到ID为 {CameraId} 的相机，无法更新状态", cameraId);
+                        }
+                    }
+                    catch (Exception updateEx)
+                    {
+                        Log.Error(updateEx, "[Camera] 更新单个相机状态失败: CameraId={CameraId}", cameraId);
+                    }
                 }
-
-                return;
-            }
-
-            // 更新单个相机状态
-            if (string.IsNullOrEmpty(cameraId)) return;
-            {
-                foreach (var cam in Cameras)
+                catch (Exception ex)
                 {
-                    if (cam.CameraId != cameraId) continue;
-                    cam.IsOnline = isConnected;
-                    Log.Information("更新相机 {ID} 状态为: {Status}", cameraId, isConnected ? "在线" : "离线");
-                    break;
+                    Log.Error(ex, "[Camera] 处理相机连接状态变更时发生错误: CameraId={CameraId}, IsConnected={Connected}",
+                        cameraId ?? "ALL", isConnected);
                 }
-            }
-        });
+            });
+        }
+        catch (Exception dispatchEx)
+        {
+            Log.Error(dispatchEx, "[Camera] 调度相机连接状态变更处理失败: CameraId={CameraId}, IsConnected={Connected}",
+                cameraId ?? "ALL", isConnected);
+        }
     }
 
     private void ExecuteOpenSettings()
     {
-        _dialogService.ShowDialog("SettingsDialog");
+        try
+        {
+            if (_disposed)
+            {
+                Log.Warning("ViewModel已释放，跳过打开设置对话框");
+                return;
+            }
+
+            _dialogService.ShowDialog("SettingsDialog");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "打开设置对话框时发生错误");
+        }
     }
 
     private void Timer_Tick(object? sender, EventArgs e)
     {
-        SystemStatus = SystemStatus.GetCurrentStatus();
+        try
+        {
+            if (_disposed)
+            {
+                Log.Debug("[Timer] ViewModel已释放，停止定时器更新");
+                _timer.Stop();
+                return;
+            }
+
+            SystemStatus = SystemStatus.GetCurrentStatus();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[Timer] 系统状态更新时发生错误");
+        }
     }
 
     private void InitializeDeviceStatuses()
@@ -983,7 +1318,7 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
             new DeviceStatusInfo("PLC", "Router24", _plcCommunicationService.IsConnected ? "正常" : "未连接",
                 _plcCommunicationService.IsConnected ? "#4CAF50" : "#F44336"), // Added PLC status
             new DeviceStatusInfo("JD WCS", "CloudDatabase24", _jdWcsCommunicationService.IsConnected ? "已连接" : "未连接",
-                _jdWcsCommunicationService.IsConnected ? "#4CAF50" : "#F44336"), // Added JD WCS status
+                _jdWcsCommunicationService.IsConnected ? "#4CAF50" : "#F44336") // Added JD WCS status
         ];
         // 初始更新合并PLC状态文本
         OnPlcDeviceStatusChanged(this,
@@ -1041,24 +1376,104 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
             }
             else
             {
-                // Create context for the currently processing package for logging
-                var currentProcessingContext = _currentlyProcessingPackage.Index >= 0
+                // 检查堆栈是否已满（只保留一个待处理包裹）
+                if (!_packageStack.IsEmpty)
+                {
+                    // 堆栈已满，直接跳过新包裹
+                    var currentProcessingContext = _currentlyProcessingPackage.Index >= 0
+                        ? $"[包裹{_currentlyProcessingPackage.Index}|{_currentlyProcessingPackage.Barcode}]"
+                        : "[未知处理中包裹]";
+                    Log.Warning("{NewContext} [调度] 系统正忙且堆栈已满 (处理中: {CurrentContext}, 堆栈大小: {StackCount}), 跳过新包裹",
+                        packageContext, currentProcessingContext, _packageStack.Count);
+
+                    // 释放跳过包裹的图像资源
+                    package.ReleaseImage();
+                    return; // 直接返回，不再处理
+                }
+
+                // 堆栈为空，将新包裹放入堆栈
+                var processingContext = _currentlyProcessingPackage.Index >= 0
                     ? $"[包裹{_currentlyProcessingPackage.Index}|{_currentlyProcessingPackage.Barcode}]"
                     : "[未知处理中包裹]";
-                Log.Warning("{NewContext} [调度] 系统正忙 (处理中: {CurrentContext}), 将新包裹推入堆栈",
-                    packageContext, currentProcessingContext);
+                Log.Information("{NewContext} [调度] 系统正忙 (处理中: {CurrentContext}), 将新包裹放入堆栈等待",
+                    packageContext, processingContext);
                 _packageStack.Push(package);
                 IsNextPackageWaiting = true;
-                Application.Current.Dispatcher.Invoke(() =>
+
+                // 确保UI状态为忙碌状态
+                _ = DispatchInvokeAsyncFireAndForget(() =>
                 {
                     if (MainWindowBackgroundBrush != BackgroundTimeout) // 避免重复设置
                     {
                         MainWindowBackgroundBrush = BackgroundTimeout;
-                        // Log UI change without specific package context here, or pass context if needed
                         Log.Information("[状态][UI] 设置背景为 黄色 (禁止上包) - 系统忙");
                     }
                 });
             }
+        }
+    }
+
+    // *** 新增: 强制释放处理权限的方法 - 用于异常恢复 ***
+    private void ForceReleaseProcessingLock(string packageContext)
+    {
+        Log.Warning("{Context} [强制释放] 开始强制释放处理权限", packageContext);
+
+        try
+        {
+            lock (_processingLock)
+            {
+                // 强制设置当前处理包裹为空
+                _currentlyProcessingPackage = null;
+
+                // 检查堆栈并尝试处理下一个包裹
+                if (_packageStack.TryPop(out var nextPackage))
+                {
+                    var nextContext = $"[包裹{nextPackage.Index}|{nextPackage.Barcode}]";
+                    Log.Warning("{Context} [强制释放] 发现堆栈中有待处理包裹: {NextContext}", packageContext, nextContext);
+
+                    _currentlyProcessingPackage = nextPackage;
+                    IsNextPackageWaiting = !_packageStack.IsEmpty;
+
+                    // 在锁外启动下一个处理
+                    Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await ProcessSinglePackageAsync(nextPackage, nextContext, _viewModelCts.Token);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error(ex, "{Context} [强制释放] 启动下一个包裹处理时发生异常", nextContext);
+                        }
+                    });
+                }
+                else
+                {
+                    IsNextPackageWaiting = false;
+                    // 设置UI为空闲状态
+                    _ = DispatchInvokeAsyncFireAndForget(() =>
+                    {
+                        try
+                        {
+                            if (MainWindowBackgroundBrush != BackgroundSuccess)
+                            {
+                                MainWindowBackgroundBrush = BackgroundSuccess;
+                                Log.Information("[状态][UI] [强制释放] 设置背景为绿色 (允许上包) - 系统空闲");
+                            }
+                        }
+                        catch (Exception uiEx)
+                        {
+                            Log.Error(uiEx, "[强制释放] 更新UI状态时发生异常");
+                        }
+                    });
+                }
+            }
+
+            Log.Information("{Context} [强制释放] 处理权限已强制释放", packageContext);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "{Context} [强制释放] 强制释放处理权限时发生异常", packageContext);
         }
     }
 
@@ -1067,348 +1482,474 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
     private async Task ProcessSinglePackageAsync(PackageInfo package, string packageContext,
         CancellationToken cancellationToken)
     {
-        // *** Use passed context for logging ***
-        Log.Information("{Context} 开始核心处理流程", packageContext);
-
-        // 1. 更新UI状态 (禁止上包, 显示基础信息)
-        Application.Current.Dispatcher.Invoke(() =>
+        // Ensure LogContext is pushed for the entire duration of processing this package
+        using (LogContext.PushProperty("PackageContext", packageContext))
         {
-            if (MainWindowBackgroundBrush != BackgroundTimeout)
+            Log.Information("{Context} 开始核心处理流程", packageContext);
+
+            try // New outer try block to guarantee finally execution
             {
-                MainWindowBackgroundBrush = BackgroundTimeout;
-                Log.Information("[状态][UI] 设置背景为 黄色 (禁止上包) - 处理开始 ({Context})",
-                    packageContext); // Optional: add context here if helpful
-            }
+                // Entering processing logic means increment total packages (only here +1)
+                IncrementTotalPackages();
 
-            CurrentBarcode = package.Barcode;
-            UpdatePackageInfoItemsBasic(package); // 更新重量、尺寸、时间
-            var statusItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "状态");
-            if (statusItem == null) return;
-            statusItem.Value = $"处理中 (序号: {package.Index})";
-            statusItem.Description = "检查PLC状态..."; // 更新描述
-            statusItem.StatusColor = "#FFC107"; // Yellow
-        });
-
-        // --- 初始检查 ---
-        if (cancellationToken.IsCancellationRequested)
-        {
-            Log.Warning("{Context} 处理在开始时被取消.", packageContext);
-            package.ReleaseImage();
-            FinalizeProcessing(null, packageContext + " (取消)"); // Pass context & reason
-            return;
-        }
-
-        // noread 应该在流处理阶段被过滤掉，这里保险起见
-        if (string.Equals(package.Barcode, "noread", StringComparison.OrdinalIgnoreCase))
-        {
-            Log.Warning("{Context} 收到 'noread' 条码 (理论上应已过滤)，跳过.", packageContext);
-            _ = _audioService.PlayPresetAsync(AudioType.WaitingScan);
-            package.ReleaseImage();
-            FinalizeProcessing(null, packageContext + " (noread)"); // Pass context & reason
-            return;
-        }
-
-        // 检查PLC状态
-        if (PlcStatusText != "正常") // 直接检查已更新的状态文本
-        {
-            Log.Warning("{Context} PLC状态异常 ({StatusText})，无法处理.", packageContext, PlcStatusText); // 使用已更新的文本
-            package.SetStatus(PackageStatus.Error, $"PLC状态异常: {PlcStatusText}");
-            Application.Current.Dispatcher.Invoke(() => UpdateUiFromResult(package));
-            _ = _audioService.PlayPresetAsync(AudioType.PlcDisconnected);
-            IsPlcAbnormalWarningVisible = !IsPlcRejectWarningVisible;
-            package.ReleaseImage();
-            FinalizeProcessing(package, packageContext); // Pass context
-            return;
-        }
-
-        if (IsPlcAbnormalWarningVisible) IsPlcAbnormalWarningVisible = false; // 状态正常，隐藏警告
-
-        // --- 发送上包请求 ---
-        try
-        {
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                var statusItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "状态");
-                if (statusItem != null) statusItem.Description = "请求PLC上包...";
-            });
-
-            // *** Use passed context for logging ***
-            Log.Information("{Context} 向PLC发送上传请求: W={Weight:F3}, L={L:F1}, W={W:F1}, H={H:F1}",
-                packageContext, package.Weight, package.Length ?? 0, package.Width ?? 0, package.Height ?? 0);
-
-            var plcRequestTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-
-            // 1. 发送请求并等待ACK（1秒超时）
-            (bool IsAccepted, ushort CommandId) ackResult;
-            try
-            {
-                Application.Current.Dispatcher.Invoke(() =>
+                // 1. Update UI status (disallow upload, show basic info)
+                _ = DispatchInvokeAsyncFireAndForget(() =>
                 {
+                    if (MainWindowBackgroundBrush != BackgroundTimeout)
+                    {
+                        MainWindowBackgroundBrush = BackgroundTimeout;
+                        Log.Information("[状态][UI] 设置背景为 黄色 (禁止上包) - 处理开始");
+                    }
+
+                    CurrentBarcode = package.Barcode;
+                    UpdatePackageInfoItemsBasic(package); // Update weight, dimensions, time
                     var statusItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "状态");
                     if (statusItem == null) return;
-                    statusItem.Value = $"等待PLC确认 (序号: {package.Index})";
-                    statusItem.Description = "等待PLC确认接受...";
+                    statusItem.Value = $"处理中 (序号: {package.Index})";
+                    statusItem.Description = "检查PLC状态..."; // Update description
                     statusItem.StatusColor = "#FFC107"; // Yellow
                 });
 
-                Log.Debug("{Context} 等待PLC ACK...", packageContext);
-
-                // *** Use passed context for logging ***
-                Log.Information(
-                    "{Context} 准备调用 SendUploadRequestAsync: Barcode='{Barcode}', W={Weight:F3}, L={L:F1}, W={W:F1}, H={H:F1}, Timestamp={Ts}",
-                    packageContext, package.Barcode, package.Weight, package.Length ?? 0, package.Width ?? 0,
-                    package.Height ?? 0, plcRequestTimestamp);
-
-                // 创建2秒超时的取消令牌
-                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                using var linkedCts =
-                    CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancellationToken);
-
-                ackResult = await _plcCommunicationService.SendUploadRequestAsync(
-                    (float)package.Weight, (float)(package.Length ?? 0), (float)(package.Width ?? 0),
-                    (float)(package.Height ?? 0),
-                    package.Barcode, string.Empty, (ulong)plcRequestTimestamp, linkedCts.Token);
-            }
-            catch (OperationCanceledException ex) when (ex.CancellationToken.IsCancellationRequested)
-            {
-                // 检查是否是超时导致的取消
+                // --- Initial Check ---
                 if (cancellationToken.IsCancellationRequested)
                 {
-                    Log.Warning("{Context} 等待PLC ACK时操作被取消.", packageContext);
-                    package.SetStatus(PackageStatus.Error, "操作取消 (等待PLC确认)");
+                    Log.Warning("处理在开始时被取消.");
+                    package.ReleaseImage();
+                    package.SetStatus(PackageStatus.Error, "操作取消 (开始时)");
+                    // *** 确保释放处理权限 ***
+                    try { FinalizeProcessing(package, packageContext); }
+                    catch (Exception ex) { Log.Error(ex, "{Context} 释放处理权限时出错", packageContext); }
+                    return;
                 }
-                else
+
+                // Check PLC Status
+                if (PlcStatusText != "正常") // Directly check updated status text
                 {
-                    Log.Warning("{Context} 等待PLC ACK超时（2秒），视为拒绝上包.", packageContext);
-                    package.SetStatus(PackageStatus.LoadingRejected, $"上包拒绝 (超时) (序号: {package.Index})");
-                    _ = _audioService.PlayPresetAsync(AudioType.LoadingRejected);
-                    // 添加超时包裹到历史记录
-                    Application.Current.Dispatcher.Invoke(() =>
+                    Log.Warning("PLC状态异常 ({StatusText})，无法处理.", PlcStatusText);
+                    package.SetStatus(PackageStatus.Error, $"PLC状态异常: {PlcStatusText}");
+                    _ = DispatchInvokeAsyncFireAndForget(() => UpdateUiFromResult(package));
+                    _ = _audioService.PlayPresetAsync(AudioType.PlcDisconnected);
+                    package.ReleaseImage();
+                    // *** 确保释放处理权限 ***
+                    try { FinalizeProcessing(package, packageContext); }
+                    catch (Exception ex) { Log.Error(ex, "{Context} 释放处理权限时出错", packageContext); }
+                    return;
+                }
+
+                if (IsPlcAbnormalWarningVisible) IsPlcAbnormalWarningVisible = false; // Status normal, hide warning
+
+                // --- Send Upload Request ---
+                try
+                {
+                    _ = DispatchInvokeAsyncFireAndForget(() =>
                     {
-                        UpdatePackageHistory(package);
-                        UpdateStatistics(package);
-                        Log.Information("{Context} 超时包裹已添加到历史记录", packageContext);
+                        var statusItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "状态");
+                        if (statusItem != null) statusItem.Description = "请求PLC上包...";
                     });
-                }
 
-                Application.Current.Dispatcher.Invoke(() => MainWindowBackgroundBrush = BackgroundSuccess);
-                return; // 直接返回，不抛出异常
-            }
-            catch (Exception ackEx)
-            {
-                Log.Error(ackEx, "{Context} 发送PLC请求或等待ACK时出错.", packageContext);
-                package.SetStatus(PackageStatus.Error, $"PLC通信错误 (ACK): {ackEx.Message}");
-                Application.Current.Dispatcher.Invoke(() => MainWindowBackgroundBrush = BackgroundSuccess);
-                throw; // 抛出以触发 finally 清理
-            }
+                    Log.Information("向PLC发送上传请求: W={Weight:F3}, L={L:F1}, W={W:F1}, H={H:F1}",
+                        package.Weight, package.Length ?? 0, package.Width ?? 0, package.Height ?? 0);
 
-            // --- 处理ACK结果 ---
-            if (!ackResult.IsAccepted)
-            {
-                Log.Warning("{Context} PLC拒绝上包请求. CommandId={CommandId}", packageContext, ackResult.CommandId);
-                package.SetStatus(PackageStatus.LoadingRejected, $"上包拒绝 (序号: {package.Index})"); // 使用专用状态
-                _ = _audioService.PlayPresetAsync(AudioType.LoadingRejected);
-                StopUploadCountdown();
-                Application.Current.Dispatcher.Invoke(() =>
-                {
-                    MainWindowBackgroundBrush = BackgroundSuccess;
-                    Log.Information("[状态][UI] 设置背景为 绿色 (允许上包) - PLC拒绝 ({Context})", packageContext);
-                    // 添加被拒绝的包裹到历史记录
-                    UpdatePackageHistory(package);
-                    UpdateStatistics(package);
-                    Log.Information("{Context} 被拒绝的包裹已添加到历史记录", packageContext);
-                });
-                return; // 不再处理此包裹，将在 finally 中更新 UI
-            }
+                    var plcRequestTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-            // --- PLC接受 ---
-            Log.Information("{Context} PLC接受上包请求. CommandId={CommandId}", packageContext, ackResult.CommandId);
-
-            // *** 播放允许上包语音 ***
-            _ = _audioService.PlayPresetAsync(AudioType.LoadingAllowed);
-
-            // *** 更新状态为等待上包完成 ***
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                MainWindowBackgroundBrush = BackgroundSuccess; // PLC 接受，允许下一个扫描
-                Log.Information("[状态][UI] 设置背景为 绿色 (允许上包) - PLC接受 ({Context})", packageContext);
-                var statusItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "状态");
-                if (statusItem == null) return;
-                statusItem.Value = $"等待上包完成 (序号: {package.Index})";
-                statusItem.Description = "PLC已接受，等待上包完成...";
-                statusItem.StatusColor = "#FFC107"; // Yellow - waiting
-            });
-
-            // --- 等待PLC上包最终结果 ---
-            Log.Information("{Context} 开始等待PLC上包最终结果...", packageContext);
-
-            // 获取配置的超时时间
-            var config = _settingsService.LoadSettings<HostConfiguration>();
-            var resultTimeoutSeconds = config.UploadResultTimeoutSeconds;
-
-            // 启动倒计时遮罩层
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                Log.Debug("{Context} 准备启动等待PLC确认倒计时: {TimeoutSeconds}秒", packageContext, resultTimeoutSeconds);
-                StartWaitingCountdown(resultTimeoutSeconds); // 使用配置的超时时间
-            });
-
-            try
-            {
-                // 创建配置的超时时间的取消令牌用于等待最终结果
-                using var finalResultTimeoutCts =
-                    new CancellationTokenSource(TimeSpan.FromSeconds(resultTimeoutSeconds));
-                using var finalResultLinkedCts =
-                    CancellationTokenSource.CreateLinkedTokenSource(finalResultTimeoutCts.Token, cancellationToken);
-
-                var (wasSuccess, isTimeout, packageId) = await _plcCommunicationService.WaitForUploadResultAsync(
-                    ackResult.CommandId, finalResultLinkedCts.Token);
-
-                if (isTimeout)
-                {
-                    Log.Warning("{Context} 等待PLC上包最终结果超时", packageContext);
-                    package.SetStatus(PackageStatus.LoadingTimeout, $"上包超时 (序号: {package.Index})");
-                    _ = _audioService.PlayPresetAsync(AudioType.LoadingTimeout);
-                }
-                else if (wasSuccess)
-                {
-                    Log.Information("{Context} PLC上包成功. PackageId={PackageId}", packageContext, packageId);
-                    package.SetStatus(PackageStatus.LoadingSuccess, $"上包成功 (序号: {package.Index})");
-                    _ = _audioService.PlayPresetAsync(AudioType.LoadingSuccess);
-
-                    // 处理图像保存和上传到WCS
-                    await HandleImageSavingAndUpload(package, packageContext, packageId);
-                }
-                else
-                {
-                    Log.Warning("{Context} PLC上包失败. PackageId={PackageId}", packageContext, packageId);
-                    package.SetStatus(PackageStatus.Error, $"上包失败 (序号: {package.Index})");
-                    _ = _audioService.PlayPresetAsync(AudioType.SystemError);
-                }
-
-                // 停止倒计时遮罩层
-                Application.Current.Dispatcher.Invoke(() =>
-                {
-                    Log.Debug("{Context} 准备停止等待PLC确认倒计时", packageContext);
-                    StopWaitingCountdown();
-                });
-
-                // 更新最终状态到UI
-                Application.Current.Dispatcher.Invoke(() =>
-                {
-                    var statusItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "状态");
-                    if (statusItem != null)
+                    // 1. Send request and wait for ACK (2 second timeout)
+                    (bool IsAccepted, ushort CommandId) ackResult;
+                    try
                     {
-                        statusItem.Value = package.StatusDisplay;
-                        statusItem.Description = wasSuccess ? "上包完成" : (isTimeout ? "上包超时" : "上包失败");
-                        statusItem.StatusColor =
-                            wasSuccess ? "#4CAF50" : "#F44336"; // Green for success, Red for failure/timeout
+                        _ = DispatchInvokeAsyncFireAndForget(() =>
+                        {
+                            var statusItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "状态");
+                            if (statusItem == null) return;
+                            statusItem.Value = $"等待PLC确认 (序号: {package.Index})";
+                            statusItem.Description = "等待PLC确认接受...";
+                            statusItem.StatusColor = "#FFC107"; // Yellow
+                        });
+
+                        Log.Debug("等待PLC ACK...");
+
+                        Log.Information(
+                            "准备调用 SendUploadRequestAsync: Barcode='{Barcode}', W={Weight:F3}, L={L:F1}, W={W:F1}, H={H:F1}, Timestamp={Ts}",
+                            package.Barcode, package.Weight, package.Length ?? 0, package.Width ?? 0,
+                            package.Height ?? 0, plcRequestTimestamp);
+
+                        // Create 2-second timeout cancellation token
+                        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                        using var linkedCts =
+                            CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancellationToken);
+
+                        ackResult = await _plcCommunicationService.SendUploadRequestAsync(
+                            (float)package.Weight, (float)(package.Length ?? 0), (float)(package.Width ?? 0),
+                            (float)(package.Height ?? 0),
+                            package.Barcode, string.Empty, (ulong)plcRequestTimestamp, linkedCts.Token);
+                    }
+                    catch (OperationCanceledException ex) when (ex.CancellationToken.IsCancellationRequested)
+                    {
+                        if (cancellationToken.IsCancellationRequested)
+                        {
+                            Log.Warning("等待PLC ACK时操作被取消.");
+                            package.SetStatus(PackageStatus.Error, "操作取消 (等待PLC确认)");
+                        }
+                        else
+                        {
+                            Log.Warning("等待PLC ACK超时（2秒），视为拒绝上包.");
+                            package.SetStatus(PackageStatus.LoadingRejected, $"上包拒绝 (超时) (序号: {package.Index})");
+                            _ = _audioService.PlayPresetAsync(AudioType.LoadingRejected);
+                            Log.Information("上包ACK超时，标记结果，等待统一统计");
+                        }
+                        _ = DispatchInvokeAsyncFireAndForget(() => MainWindowBackgroundBrush = BackgroundSuccess);
+                        // *** 确保释放处理权限 ***
+                        try { FinalizeProcessing(package, packageContext); }
+                        catch (Exception finalizeEx) { Log.Error(finalizeEx, "{Context} 释放处理权限时出错", packageContext); }
+                        return;
+                    }
+                    catch (Exception ackEx)
+                    {
+                        Log.Error(ackEx, "{Context} 发送PLC请求或等待ACK时出错", packageContext);
+                        package.SetStatus(PackageStatus.Error, $"PLC通信错误 (ACK): {ackEx.Message}");
+
+                        // 确保UI状态正确设置
+                        try
+                        {
+                            _ = DispatchInvokeAsyncFireAndForget(() => MainWindowBackgroundBrush = BackgroundSuccess);
+                        }
+                        catch (Exception uiEx)
+                        {
+                            Log.Error(uiEx, "{Context} 设置UI背景为成功状态时发生异常", packageContext);
+                        }
+
+                        // 确保倒计时被停止
+                        try { StopUploadCountdown(); }
+                        catch (Exception countdownEx)
+                        {
+                            Log.Error(countdownEx, "{Context} 停止上传倒计时失败", packageContext);
+                        }
+
+                        // *** 确保释放处理权限 ***
+                        try { FinalizeProcessing(package, packageContext); }
+                        catch (Exception finalizeEx) { Log.Error(finalizeEx, "{Context} 释放处理权限时出错", packageContext); }
+                        return;
                     }
 
-                    // 更新包裹历史和统计
+                    // --- Process ACK Result ---
+                    if (!ackResult.IsAccepted)
+                    {
+                        Log.Warning("PLC拒绝上包请求. CommandId={CommandId}", ackResult.CommandId);
+                        package.SetStatus(PackageStatus.LoadingRejected, $"上包拒绝 (序号: {package.Index})");
+                        _ = _audioService.PlayPresetAsync(AudioType.LoadingRejected);
+                        StopUploadCountdown();
+                        _ = DispatchInvokeAsyncFireAndForget(() =>
+                        {
+                            MainWindowBackgroundBrush = BackgroundSuccess;
+                            Log.Information("[状态][UI] 设置背景为 绿色 (允许上包) - PLC拒绝");
+                        });
+                        // *** 确保释放处理权限 ***
+                        try { FinalizeProcessing(package, packageContext); }
+                        catch (Exception finalizeEx) { Log.Error(finalizeEx, "{Context} 释放处理权限时出错", packageContext); }
+                        return;
+                    }
+
+                    // --- PLC Accepted ---
+                    Log.Information("PLC接受上包请求. CommandId={CommandId}", ackResult.CommandId);
+
+                    _ = _audioService.PlayPresetAsync(AudioType.PleasePlacePackage);
+
+                    _ = DispatchInvokeAsyncFireAndForget(() =>
+                    {
+                        MainWindowBackgroundBrush = BackgroundSuccess;
+                        Log.Information("[状态][UI] 设置背景为 绿色 (允许上包) - PLC接受");
+                        var statusItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "状态");
+                        if (statusItem == null) return;
+                        statusItem.Value = $"等待上包完成 (序号: {package.Index})";
+                        statusItem.Description = "PLC已接受，等待上包完成...";
+                        statusItem.StatusColor = "#FFC107"; // Yellow - waiting
+                    });
+
+                    // --- Wait for PLC Final Result ---
+                    Log.Information("开始等待PLC上包最终结果...");
+
+                    var config = _settings_service.LoadSettings<HostConfiguration>();
+                    var resultTimeoutSeconds = config.UploadResultTimeoutSeconds;
+
+                    Log.Debug("准备启动等待PLC确认倒计时: {TimeoutSeconds}秒", resultTimeoutSeconds);
+                    StartWaitingCountdown(resultTimeoutSeconds);
+
+                    try
+                    {
+                        using var finalResultTimeoutCts =
+                            new CancellationTokenSource(TimeSpan.FromSeconds(resultTimeoutSeconds));
+                        using var finalResultLinkedCts =
+                            CancellationTokenSource.CreateLinkedTokenSource(finalResultTimeoutCts.Token, cancellationToken);
+
+                        var (wasSuccess, isTimeout, packageId) = await _plcCommunicationService.WaitForUploadResultAsync(
+                            ackResult.CommandId, finalResultLinkedCts.Token);
+
+                        if (isTimeout)
+                        {
+                            Log.Warning("等待PLC上包最终结果超时");
+                            package.SetStatus(PackageStatus.LoadingTimeout, $"上包超时 (序号: {package.Index})");
+                            _ = _audioService.PlayPresetAsync(AudioType.LoadingTimeout);
+                        }
+                        else if (wasSuccess)
+                        {
+                            Log.Information("PLC上包成功. PackageId={PackageId}", packageId);
+                            package.SetStatus(PackageStatus.LoadingSuccess, $"上包成功 (序号: {package.Index})");
+                            _ = _audioService.PlayPresetAsync(AudioType.LoadingSuccess);
+
+                            // *** 优化: 图像处理和上传改为异步执行，不阻塞主流程 ***
+                            // 先克隆一份图像以避免后台处理期间主流程释放原始图像导致丢失
+                            BitmapSource? clonedImage = null;
+                            try
+                            {
+                                if (package.Image != null)
+                                {
+                                    clonedImage = package.Image.Clone();
+                                    if (clonedImage.CanFreeze) clonedImage.Freeze();
+                                }
+                            }
+                            catch (Exception cloneEx)
+                            {
+                                Log.Warning(cloneEx, "{Context} 克隆图像用于异步处理失败，后台处理将尝试再次克隆", packageContext);
+                                clonedImage = null;
+                            }
+
+                            // 将图像处理任务添加到队列 - 使用更高效的fire-and-forget方式
+                            _ = DispatchInvokeAsyncFireAndForget(async void () =>
+                            {
+                                try
+                                {
+                                    await QueueImageProcessingTaskAsync(package, packageContext, packageId, clonedImage);
+                                }
+                                catch (Exception queueEx)
+                                {
+                                    Log.Error(queueEx, "{Context} 将图像处理任务添加到队列时发生异常: PackageId={PackageId}",
+                                        packageContext, packageId);
+
+                                    // 如果队列添加失败，尝试异步更新状态显示
+                                    try
+                                    {
+                                        await DispatchInvokeAsyncFireAndForget(() =>
+                                        {
+                                            try
+                                            {
+                                                var currentDisplay = package.StatusDisplay;
+                                                package.SetStatus(package.Status, $"{currentDisplay} [队列异常]");
+                                            }
+                                            catch (Exception uiEx)
+                                            {
+                                                Log.Error(uiEx, "{Context} 异步更新队列异常状态时发生UI异常", packageContext);
+                                            }
+                                        });
+                                    }
+                                    catch (Exception dispatcherEx)
+                                    {
+                                        Log.Error(dispatcherEx, "{Context} 异步更新队列异常状态时发生调度异常", packageContext);
+                                    }
+                                }
+                            });
+                        }
+                        else
+                        {
+                            Log.Warning("PLC上包失败. PackageId={PackageId}", packageId);
+                            package.SetStatus(PackageStatus.Error, $"上包失败 (序号: {package.Index})");
+                            _ = _audioService.PlayPresetAsync(AudioType.SystemError);
+                        }
+
+                        Log.Debug("准备停止等待PLC确认倒计时");
+                        StopWaitingCountdown();
+
+                        _ = DispatchInvokeAsyncFireAndForget(() =>
+                        {
+                            var statusItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "状态");
+                            if (statusItem != null)
+                            {
+                                statusItem.Value = package.StatusDisplay;
+                                statusItem.Description = wasSuccess ? "上包完成" : isTimeout ? "上包超时" : "上包失败";
+                                statusItem.StatusColor =
+                                    wasSuccess ? "#4CAF50" : "#F44336"; // Green for success, Red for failure/timeout
+                            }
+                        });
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        Log.Warning("等待PLC上包最终结果时操作被取消");
+                        package.SetStatus(PackageStatus.Error, "操作取消 (等待上包结果)");
+                        Log.Debug("操作取消，准备停止等待PLC确认倒计时");
+                        StopWaitingCountdown();
+                    }
+                    catch (Exception finalResultEx)
+                    {
+                        Log.Error(finalResultEx, "等待PLC上包最终结果时出错");
+                        package.SetStatus(PackageStatus.Error, $"等待上包结果错误: {finalResultEx.Message}");
+                        _ = _audioService.PlayPresetAsync(AudioType.SystemError);
+                        Log.Debug("发生异常，准备停止等待PLC确认倒计时");
+                        StopWaitingCountdown();
+                    }
+
+                    Log.Information("包裹处理完成，准备释放处理权限");
+                }
+                catch (OperationCanceledException cancelEx) // Catch cancellation during await
+                {
+                    Log.Warning(cancelEx, "{Context} PLC通信或后续处理被取消", packageContext);
+                    StopUploadCountdown();
+                    package.SetStatus(PackageStatus.Error, "操作取消 (PLC通信)");
+                    // 确保音频服务调用不会抛出异常
+                    try { _ = _audioService.PlayPresetAsync(AudioType.SystemError); }
+                    catch (Exception audioEx) { Log.Error(audioEx, "{Context} 播放错误音频时发生异常", packageContext); }
+                    // *** 确保释放处理权限 ***
+                    try { FinalizeProcessing(package, packageContext); }
+                    catch (Exception finalizeEx) { Log.Error(finalizeEx, "{Context} 释放处理权限时出错", packageContext); }
+                }
+                catch (TimeoutException timeoutEx) // 更具体的超时异常处理
+                {
+                    Log.Error(timeoutEx, "{Context} PLC通信超时", packageContext);
+                    if (package.Status == PackageStatus.Created)
+                        package.SetStatus(PackageStatus.Error, $"PLC通信超时: {timeoutEx.Message}");
+                    StopUploadCountdown();
+                    try { _ = _audioService.PlayPresetAsync(AudioType.SystemError); }
+                    catch (Exception audioEx) { Log.Error(audioEx, "{Context} 播放错误音频时发生异常", packageContext); }
+                    // *** 确保释放处理权限 ***
+                    try { FinalizeProcessing(package, packageContext); }
+                    catch (Exception finalizeEx) { Log.Error(finalizeEx, "{Context} 释放处理权限时出错", packageContext); }
+                }
+                catch (System.Net.Sockets.SocketException socketEx) // 网络连接异常
+                {
+                    Log.Error(socketEx, "{Context} PLC网络连接异常", packageContext);
+                    if (package.Status == PackageStatus.Created)
+                        package.SetStatus(PackageStatus.Error, $"PLC网络错误: {socketEx.Message}");
+                    StopUploadCountdown();
+                    try { _ = _audioService.PlayPresetAsync(AudioType.SystemError); }
+                    catch (Exception audioEx) { Log.Error(audioEx, "{Context} 播放错误音频时发生异常", packageContext); }
+                    // *** 确保释放处理权限 ***
+                    try { FinalizeProcessing(package, packageContext); }
+                    catch (Exception finalizeEx) { Log.Error(finalizeEx, "{Context} 释放处理权限时出错", packageContext); }
+                }
+                catch (Exception ex) // Catch other exceptions in PLC communication block
+                {
+                    Log.Error(ex, "{Context} 处理PLC通信时发生未预料错误", packageContext);
+                    if (package.Status == PackageStatus.Created)
+                        package.SetStatus(PackageStatus.Error, $"未知PLC通信错误: {ex.Message}");
+                    StopUploadCountdown();
+                    // 确保音频服务调用不会抛出异常
+                    try { _ = _audioService.PlayPresetAsync(AudioType.SystemError); }
+                    catch (Exception audioEx) { Log.Error(audioEx, "{Context} 播放错误音频时发生异常", packageContext); }
+                    // *** 确保释放处理权限 ***
+                    try { FinalizeProcessing(package, packageContext); }
+                    catch (Exception finalizeEx) { Log.Error(finalizeEx, "{Context} 释放处理权限时出错", packageContext); }
+                }
+            } // End of outer try block
+            finally
+            {
+                // This finally block is now guaranteed to execute
+                Log.Debug("{Context} === Entering ProcessSinglePackageAsync finally block ===", packageContext);
+
+                // *** 增强: 确保所有资源都被正确释放，即使在异常情况下 ***
+                try
+                {
+                    // Unified update of history and statistics, ensuring each package is updated only once
                     UpdatePackageHistory(package);
                     UpdateStatistics(package);
-                    Log.Information("{Context} PLC上包最终结果处理完成，已更新PackageHistory", packageContext);
-                });
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                Log.Warning("{Context} 等待PLC上包最终结果时操作被取消", packageContext);
-                package.SetStatus(PackageStatus.Error, "操作取消 (等待上包结果)");
 
-                // 停止倒计时遮罩层
-                Application.Current.Dispatcher.Invoke(() =>
+                    // 确保UI更新在异常情况下也能执行
+                    _ = DispatchInvokeAsyncFireAndForget(() =>
+                    {
+                        try { UpdateUiFromResult(package); }
+                        catch (Exception uiEx)
+                        {
+                            Log.Error(uiEx, "{Context} 更新UI结果时发生异常", packageContext);
+                        }
+                    });
+
+                    // 释放图像资源
+                    try
+                    {
+                        package.ReleaseImage();
+                        Log.Debug("{Context} 图像资源已释放", packageContext);
+                    }
+                    catch (Exception releaseEx)
+                    {
+                        Log.Error(releaseEx, "{Context} 释放图像资源时发生异常", packageContext);
+                    }
+
+                    // *** 关键: 释放处理权限，确保下一个包裹能被处理 ***
+                    try
+                    {
+                        FinalizeProcessing(package, packageContext);
+                        Log.Information("{Context} 核心处理流程结束，处理权限已释放", packageContext);
+                    }
+                    catch (Exception finalizeEx)
+                    {
+                        Log.Error(finalizeEx, "{Context} 释放处理权限时发生异常 - 严重错误，可能导致系统卡住", packageContext);
+                        // 在finalize失败的情况下，尝试强制释放
+                        try
+                        {
+                            ForceReleaseProcessingLock(packageContext);
+                        }
+                        catch (Exception forceEx)
+                        {
+                            Log.Error(forceEx, "{Context} 强制释放处理权限失败 - 系统可能已卡住", packageContext);
+                        }
+                    }
+                }
+                catch (Exception finallyEx)
                 {
-                    Log.Debug("{Context} 操作取消，准备停止等待PLC确认倒计时", packageContext);
-                    StopWaitingCountdown();
-                });
+                    Log.Error(finallyEx, "{Context} finally块中发生未预料异常", packageContext);
+                    // 最后的努力：确保处理权限被释放
+                    try { ForceReleaseProcessingLock(packageContext); }
+                    catch { /* 忽略最后的异常 */ }
+                }
             }
-            catch (Exception finalResultEx)
-            {
-                Log.Error(finalResultEx, "{Context} 等待PLC上包最终结果时出错", packageContext);
-                package.SetStatus(PackageStatus.Error, $"等待上包结果错误: {finalResultEx.Message}");
-                _ = _audioService.PlayPresetAsync(AudioType.SystemError);
-
-                // 停止倒计时遮罩层
-                Application.Current.Dispatcher.Invoke(() =>
-                {
-                    Log.Debug("{Context} 发生异常，准备停止等待PLC确认倒计时", packageContext);
-                    StopWaitingCountdown();
-                });
-            }
-
-            Log.Information("{Context} 包裹处理完成，准备释放处理权限", packageContext);
-        } // 结束 try (PLC 通信块)
-        catch (OperationCanceledException) // 捕获 await 过程中的取消
-        {
-            Log.Warning("{Context} PLC通信或后续处理被取消.", packageContext);
-            StopUploadCountdown();
-        }
-        catch (Exception ex) // 捕获 PLC 通信块中的其他异常
-        {
-            Log.Error(ex, "{Context} 处理PLC通信时发生未预料错误.", packageContext);
-            if (package.Status == PackageStatus.Created) // 如果状态未被内部设置
-            {
-                package.SetStatus(PackageStatus.Error, $"未知PLC通信错误: {ex.Message}");
-            }
-
-            _ = _audioService.PlayPresetAsync(AudioType.SystemError);
-            StopUploadCountdown();
-        }
-        finally
-        {
-            Log.Debug("{Context} 进入 ProcessSinglePackageAsync 的 finally 块", packageContext);
-
-            // --- 最终UI更新 ---
-            Application.Current.Dispatcher.Invoke(() => UpdateUiFromResult(package));
-            // --- 释放图像 ---
-            package.ReleaseImage();
-            Log.Debug("{Context} 图像资源已释放", packageContext);
-
-            // --- 结束处理，可能启动下一个 ---
-            // *** Pass context ***
-            FinalizeProcessing(package, packageContext);
-            Log.Information("{Context} 核心处理流程结束", packageContext);
-        }
+        } // End of LogContext push
     }
 
     // *** 新增: 处理图像保存和上传到WCS的方法 ***
-    private async Task HandleImageSavingAndUpload(PackageInfo package, string packageContext, int packageId)
+    // 支持可选的外部克隆图像参数，以避免被外部释放
+    private async Task HandleImageSavingAndUpload(PackageInfo package, string packageContext, int packageId, BitmapSource? externalClonedImage = null)
     {
-        if (package.Image == null)
-        {
-            Log.Warning("{Context} 包裹信息中无图像可保存或上传.", packageContext);
-            var currentDisplay = package.StatusDisplay;
-            package.SetStatus(package.Status, $"{currentDisplay} [无图像]");
-            return;
-        }
-
-        Log.Debug("{Context} 开始处理图像保存和上传到WCS.", packageContext);
-        BitmapSource? imageToSave;
-        try
-        {
-            imageToSave = package.Image.Clone();
-            if (imageToSave.CanFreeze) imageToSave.Freeze();
-            else Log.Warning("{Context} 克隆的图像无法冻结，仍尝试使用.", packageContext);
-        }
-        catch (Exception cloneEx)
-        {
-            Log.Error(cloneEx, "{Context} 克隆或冻结图像时出错.", packageContext);
-            imageToSave = null;
-        }
-
+        // 优先使用外部传入的克隆图像（由调用方在外部克隆并 Freeze），否则尝试从 package.Image 克隆
+        Log.Debug("{Context} 开始处理图像保存和上传到WCS (externalClonedImage set: {HasExternal}).", packageContext, externalClonedImage != null);
+        BitmapSource? imageToSave = externalClonedImage;
         if (imageToSave == null)
         {
-            var currentDisplay = package.StatusDisplay;
-            package.SetStatus(package.Status, $"{currentDisplay} [图像克隆失败]");
-            return;
+            if (package.Image == null)
+            {
+                Log.Warning("{Context} 包裹信息中无图像可保存或上传 (package.Image == null).", packageContext);
+                var currentDisplay = package.StatusDisplay;
+                package.SetStatus(package.Status, $"{currentDisplay} [无图像]");
+                return;
+            }
+
+            try
+            {
+                imageToSave = package.Image.Clone();
+                if (imageToSave.CanFreeze) imageToSave.Freeze();
+                else Log.Warning("{Context} 克隆的图像无法冻结，仍尝试使用.", packageContext);
+            }
+            catch (Exception cloneEx)
+            {
+                Log.Error(cloneEx, "{Context} 克隆或冻结图像时出错.", packageContext);
+                imageToSave = null;
+            }
+
+            if (imageToSave == null)
+            {
+                var currentDisplay = package.StatusDisplay;
+                package.SetStatus(package.Status, $"{currentDisplay} [图像克隆失败]");
+                return;
+            }
         }
 
         // 保存图像到指定路径
         string? imagePath = null;
         try
         {
-            imagePath = await _imageStorageService.SaveImageAsync(imageToSave, package.Barcode, package.CreateTime);
+            imagePath = await _imageStorageService.SaveImageWithWatermarkAsync(
+                imageToSave,
+                package.Barcode,
+                package.Weight,
+                package.Length,
+                package.Width,
+                package.Height,
+                package.CreateTime);
         }
         catch (Exception saveEx)
         {
@@ -1441,10 +1982,7 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
 
             // 准备条码列表
             var barcodeList = new List<string>();
-            if (!string.IsNullOrEmpty(package.Barcode))
-            {
-                barcodeList.Add(package.Barcode);
-            }
+            if (!string.IsNullOrEmpty(package.Barcode)) barcodeList.Add(package.Barcode);
 
             // 准备二维码列表（如果有的话）
             var matrixBarcodeList = new List<string>();
@@ -1486,19 +2024,9 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
     }
 
 
-    // ReSharper disable once UnusedMember.Local
-    private void HidePlcRejectionWarning()
-    {
-        if (!IsPlcRejectWarningVisible) return; // 已经隐藏
-
-        IsPlcRejectWarningVisible = false;
-        // Log UI change without specific context
-        Log.Debug("隐藏PLC拒绝警告");
-    }
-
-
     // *** 添加: 处理PLC拒绝警告UI的方法 ***
     // *** Add processedPackageContext parameter ***
+
     private void FinalizeProcessing(PackageInfo? processedPackage, string processedPackageContext)
     {
         PackageInfo? nextPackageToProcess; // Initialize here
@@ -1544,7 +2072,7 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
                 IsNextPackageWaiting = false;
                 Log.Information("{Context} [调度] 堆栈为空，系统转为空闲状态", processedPackageContext);
                 // 设置背景为绿色 (允许上包 / 空闲)
-                Application.Current.Dispatcher.Invoke(() =>
+                _ = DispatchInvokeAsyncFireAndForget(() =>
                 {
                     if (MainWindowBackgroundBrush == BackgroundSuccess) return;
                     MainWindowBackgroundBrush = BackgroundSuccess;
@@ -1652,7 +2180,7 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
     private void UpdatePackageInfoItemsBasic(PackageInfo package)
     {
         // Ensure runs on UI thread
-        Application.Current.Dispatcher.Invoke(() =>
+        _ = DispatchInvokeAsyncFireAndForget(() =>
         {
             var weightItem = PackageInfoItems.FirstOrDefault(static x => x.Label == "重量");
             if (weightItem != null)
@@ -1683,12 +2211,16 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
     private void UpdatePackageHistory(PackageInfo package)
     {
         // Ensure runs on UI thread
-        Application.Current.Dispatcher.Invoke(() =>
+        _ = DispatchInvokeAsyncFireAndForget(() =>
         {
-            // Create context for logging inside the UI thread if needed
-            var context = $"[包裹{package.Index}|{package.Barcode}]";
             try
             {
+                if (_disposed)
+                {
+                    Log.Debug("ViewModel已释放，跳过更新包裹历史记录");
+                    return;
+                }
+
                 // 限制历史记录数量，保持最新的1000条记录
                 const int maxHistoryCount = 1000;
 
@@ -1702,20 +2234,17 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
                     package.SetStatus(package.Status, defaultDisplay);
                 }
 
-
                 // 创建一个浅拷贝以避免UI保持主对象?
                 // 或者假设PackageInfo设计为按原样显示。目前假设后者。
                 PackageHistory.Insert(0, package);
 
                 // 如果超出最大数量，移除多余的记录
-                while (PackageHistory.Count > maxHistoryCount)
-                {
-                    PackageHistory.RemoveAt(PackageHistory.Count - 1);
-                }
+                while (PackageHistory.Count > maxHistoryCount) PackageHistory.RemoveAt(PackageHistory.Count - 1);
             }
             catch (Exception ex)
             {
                 // Use context in error log
+                var context = $"[包裹{package.Index}|{package.Barcode}]";
                 Log.Error(ex, "{Context} 更新历史包裹列表时发生错误", context);
             }
         });
@@ -1741,31 +2270,19 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
     private void UpdateStatistics(PackageInfo package)
     {
         // 确保在UI线程上运行
-        Application.Current.Dispatcher.Invoke(() =>
+        _ = DispatchInvokeAsyncFireAndForget(() =>
         {
             try
             {
-                // 更新总包裹数
-                var totalItem = StatisticsItems.FirstOrDefault(static x => x.Label == "总包裹数");
-                if (totalItem != null)
-                {
-                    totalItem.Value =
-                        int.TryParse(totalItem.Value, out var total)
-                            ? (total + 1).ToString()
-                            : "1"; // 如果解析失败则重置
-                }
-
                 // 更新成功/失败数
                 var isSuccess = string.IsNullOrEmpty(package.ErrorMessage);
                 var targetLabel = isSuccess ? "成功数" : "失败数";
                 var statusItem = StatisticsItems.FirstOrDefault(x => x.Label == targetLabel);
                 if (statusItem != null)
-                {
                     statusItem.Value =
                         int.TryParse(statusItem.Value, out var count)
                             ? (count + 1).ToString()
                             : "1"; // 如果解析失败则重置
-                }
 
                 // 更新处理速率（每小时包裹数）
                 var speedItem = StatisticsItems.FirstOrDefault(static x => x.Label == "处理速率");
@@ -1779,7 +2296,7 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
 
                 var timeSpan = latestTime - earliestTime;
 
-                if (timeSpan.TotalSeconds > 1) // 避免除以零或极小的间隔
+                if (timeSpan.TotalSeconds > 1)
                 {
                     // 计算每小时处理数量
                     var hourlyRate = PackageHistory.Count / timeSpan.TotalHours;
@@ -1803,12 +2320,38 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
         });
     }
 
+    // 新增：仅在进入处理逻辑时递增"总包裹数"
+    private void IncrementTotalPackages()
+    {
+        _ = DispatchInvokeAsyncFireAndForget(() =>
+        {
+            try
+            {
+                if (_disposed)
+                {
+                    Log.Debug("ViewModel已释放，跳过递增总包裹数");
+                    return;
+                }
+
+                var totalItem = StatisticsItems.FirstOrDefault(static x => x.Label == "总包裹数");
+                if (totalItem == null) return;
+                totalItem.Value = int.TryParse(totalItem.Value, out var total)
+                    ? (total + 1).ToString()
+                    : "1"; // 如果解析失败则重置
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "递增总包裹数时发生错误");
+            }
+        });
+    }
+
     /// <summary>
-    ///     检查条码是否为母条码（以 "-2-2-" 或 "-1-2-" 结尾）
+    ///     检查条码是否为母条码（以 "-2-2-" 或 "-1-2-" 或 "-1-1-" 结尾）
     /// </summary>
     private static bool IsParentBarcode(string? barcode)
     {
-        return barcode != null && (barcode.EndsWith("-2-2-") || barcode.EndsWith("-1-2-"));
+        return barcode != null && (barcode.EndsWith("-2-2-") || barcode.EndsWith("-1-2-") || barcode.EndsWith("-1-1-"));
     }
 
     /// <summary>
@@ -1818,15 +2361,11 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
     {
         if (barcode == null) return string.Empty;
 
-        if (barcode.EndsWith("-2-2-"))
-        {
-            return barcode[..^5]; // 移除 "-2-2-"
-        }
+        if (barcode.EndsWith("-2-2-")) return barcode[..^5]; // 移除 "-2-2-"
 
-        if (barcode.EndsWith("-1-2-"))
-        {
-            return barcode[..^5]; // 移除 "-1-2-"
-        }
+        if (barcode.EndsWith("-1-2-")) return barcode[..^5]; // 移除 "-1-2-"
+
+        if (barcode.EndsWith("-1-1-")) return barcode[..^5]; // 移除 "-1-1-"
 
         return barcode;
     }
@@ -1848,11 +2387,13 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
             ? basePackage.CreateTime
             : suffixPackage.CreateTime);
 
-        // 合并条码: prefix;suffix-barcode
+        // 合并条码: prefix,suffix-barcode，并添加母条码后缀 -1-1-
         var prefix = GetBarcodePrefix(basePackage.Barcode);
         // 确保 suffixPackage 条码不为空/空
         var combinedBarcode =
             string.IsNullOrEmpty(suffixPackage.Barcode) ? prefix : $"{prefix},{suffixPackage.Barcode}";
+        // 添加母条码后缀 -1-1-
+        combinedBarcode = $"{combinedBarcode}-1-1-";
         mergedPackage.SetBarcode(combinedBarcode);
 
 
@@ -1862,14 +2403,10 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
 
         // 优先使用 basePackage 的尺寸
         if (basePackage is { Length: > 0, Width: > 0, Height: > 0 })
-        {
             mergedPackage.SetDimensions(basePackage.Length.Value, basePackage.Width.Value, basePackage.Height.Value);
-        }
         else if (suffixPackage is { Length: > 0, Width: > 0, Height: > 0 })
-        {
             mergedPackage.SetDimensions(suffixPackage.Length.Value, suffixPackage.Width.Value,
                 suffixPackage.Height.Value);
-        }
 
         // 图像处理：优先使用 basePackage 的图像，并克隆/冻结
         BitmapSource? imageToUse = null;
@@ -1879,7 +2416,6 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
         var sourceImagePath = basePackage.ImagePath ?? suffixPackage.ImagePath; // 获取可能的路径
 
         if (sourceImage != null)
-        {
             try
             {
                 imageToUse = sourceImage.Clone(); // 克隆图像
@@ -1901,7 +2437,6 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
                 imageToUse = null; // Don't set image on error
                 imagePathToUse = null;
             }
-        }
 
         mergedPackage.SetImage(imageToUse, imagePathToUse); // 设置克隆/冻结的图像和路径
 
@@ -1922,7 +2457,13 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            var config = _settingsService.LoadSettings<HostConfiguration>();
+            if (_disposed)
+            {
+                Log.Debug("ViewModel已释放，跳过加载条码模式配置");
+                return;
+            }
+
+            var config = _settings_service.LoadSettings<HostConfiguration>();
             // 设置模式，但不触发保存 (避免循环)
             _barcodeMode = config.BarcodeMode;
             Log.Information("从配置加载条码模式: {Mode}", GetBarcodeModeDisplayText(_barcodeMode));
@@ -1941,11 +2482,17 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
     {
         try
         {
-            var config = _settingsService.LoadSettings<HostConfiguration>();
+            if (_disposed)
+            {
+                Log.Debug("ViewModel已释放，跳过保存条码模式配置");
+                return;
+            }
+
+            var config = _settings_service.LoadSettings<HostConfiguration>();
             if (config.BarcodeMode == mode) return; // 不需要更改
 
             config.BarcodeMode = mode;
-            _settingsService.SaveSettings(config);
+            _settings_service.SaveSettings(config);
             Log.Information("条码模式已保存到配置: {Mode}", GetBarcodeModeDisplayText(mode));
         }
         catch (Exception ex)
@@ -1957,56 +2504,201 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
     private void Dispose(bool disposing)
     {
         if (_disposed) return;
+
         Log.Information("[Dispose] 开始释放 MainWindowViewModel (disposing={IsDisposing})...", disposing);
-        if (disposing)
+
+        try
         {
-            try
+            if (disposing)
             {
-                _viewModelCts.Cancel(); // 取消所有操作
-                Log.Debug("[Dispose] CancellationToken已取消.");
-
-                // 取消订阅
-                _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
-                _plcCommunicationService.DeviceStatusChanged -= OnPlcDeviceStatusChanged;
-                _jdWcsCommunicationService.ConnectionChanged -= OnJdWcsConnectionChanged;
-                // *** 移除: 不再订阅PLC最终结果事件 ***
-                // _plcCommunicationService.UploadResultReceived -= OnPlcUploadResultReceived;
-                foreach (var sub in _subscriptions) sub.Dispose();
-                _subscriptions.Clear();
-                Log.Debug("[Dispose] 所有事件订阅已取消并清理.");
-
-                // 停止定时器
-                _timer.Stop();
-                _uploadCountdownTimer?.Stop();
-                if (_uploadCountdownTimer != null) _uploadCountdownTimer.Tick -= UploadCountdownTimer_Tick;
-                _waitingCountdownTimer?.Stop();
-                if (_waitingCountdownTimer != null) _waitingCountdownTimer.Tick -= WaitingCountdownTimer_Tick;
-                Log.Debug("[Dispose] 定时器已停止 - 上包倒计时: {UploadTimerStopped}, 等待倒计时: {WaitingTimerStopped}", 
-                    _uploadCountdownTimer?.IsEnabled == false, _waitingCountdownTimer?.IsEnabled == false);
-
-                // 清理包裹状态
-                // Pass a string context for the reason
-                ClearPackageStack("[Dispose] 清理包裹堆栈", "[DisposeCtx]");
-                // *** 移除: 不再需要清理等待最终结果的包裹缓存 ***
-                // ClearPendingFinalResultPackages("[Dispose] 清理等待最终结果的包裹缓存");
-                lock (_processingLock)
+                try
                 {
-                    _currentlyProcessingPackage?.ReleaseImage();
-                    _currentlyProcessingPackage = null;
+                    _viewModelCts.Cancel(); // 取消所有操作
+                    Log.Debug("[Dispose] CancellationToken已取消.");
+                }
+                catch (Exception ctsEx)
+                {
+                    Log.Error(ctsEx, "[Dispose] 取消CancellationToken时发生错误");
                 }
 
-                Log.Debug("[Dispose] 当前处理和堆栈中的包裹已清理.");
+                // 停止图像处理队列
+                try
+                {
+                    _imageProcessingCts.Cancel();
+                    _imageProcessingChannel.Writer.Complete();
 
-                _viewModelCts.Dispose(); // 处置 CancellationTokenSource
-                Log.Information("[Dispose] MainWindowViewModel 处置完毕.");
+                    // 等待图像处理任务完成，最多等待5秒
+                    try
+                    {
+                        var waitTask = _imageProcessingTask.WaitAsync(TimeSpan.FromSeconds(5));
+                        waitTask.Wait(); // 等待任务完成
+
+                        if (waitTask.IsCompletedSuccessfully)
+                        {
+                            Log.Debug("[Dispose] 图像处理队列已正常停止.");
+                        }
+                        else
+                        {
+                            Log.Warning("[Dispose] 图像处理队列在5秒内未能完成，已强制终止.");
+                        }
+                    }
+                    catch (AggregateException)
+                    {
+                        Log.Warning("[Dispose] 等待图像处理队列完成时发生异常，已强制终止.");
+                    }
+                }
+                catch (Exception imageQueueEx)
+                {
+                    Log.Error(imageQueueEx, "[Dispose] 停止图像处理队列时发生错误");
+                }
+
+                // 取消订阅 - 每个操作都单独try-catch
+                try
+                {
+                    _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
+                }
+                catch (Exception cameraEx)
+                {
+                    Log.Error(cameraEx, "[Dispose] 取消相机连接事件订阅时发生错误");
+                }
+
+                try
+                {
+                    _plcCommunicationService.DeviceStatusChanged -= OnPlcDeviceStatusChanged;
+                }
+                catch (Exception plcEx)
+                {
+                    Log.Error(plcEx, "[Dispose] 取消PLC状态变更事件订阅时发生错误");
+                }
+
+                try
+                {
+                    _jdWcsCommunicationService.ConnectionChanged -= OnJdWcsConnectionChanged;
+                }
+                catch (Exception jdWcsEx)
+                {
+                    Log.Error(jdWcsEx, "[Dispose] 取消JD WCS连接事件订阅时发生错误");
+                }
+
+                try
+                {
+                    foreach (var sub in _subscriptions) sub.Dispose();
+                    _subscriptions.Clear();
+                    Log.Debug("[Dispose] 所有事件订阅已取消并清理.");
+                }
+                catch (Exception subEx)
+                {
+                    Log.Error(subEx, "[Dispose] 清理订阅时发生错误");
+                }
+
+                // 停止定时器 - 每个定时器都单独try-catch
+                try
+                {
+                    _timer.Stop();
+                }
+                catch (Exception timerEx)
+                {
+                    Log.Error(timerEx, "[Dispose] 停止主定时器时发生错误");
+                }
+
+                try
+                {
+                    _uploadCountdownTimer?.Stop();
+                    if (_uploadCountdownTimer != null) _uploadCountdownTimer.Tick -= UploadCountdownTimer_Tick;
+                }
+                catch (Exception uploadTimerEx)
+                {
+                    Log.Error(uploadTimerEx, "[Dispose] 停止上包倒计时定时器时发生错误");
+                }
+
+                // 安全停止等待倒计时定时器（使用同步块）
+                try
+                {
+                    lock (_countdownLock)
+                    {
+                        _waitingCountdownTimer?.Stop();
+                        if (_waitingCountdownTimer != null) _waitingCountdownTimer.Tick -= WaitingCountdownTimer_Tick;
+                    }
+                }
+                catch (Exception waitingTimerEx)
+                {
+                    Log.Error(waitingTimerEx, "[Dispose] 停止等待倒计时定时器时发生错误");
+                }
+
+                try
+                {
+                    var uploadTimerStopped = _uploadCountdownTimer?.IsEnabled == false;
+                    var waitingTimerStopped = IsWaitingCountdownTimerRunning();
+                    Log.Debug("[Dispose] 定时器已停止 - 上包倒计时: {UploadTimerStopped}, 等待倒计时: {WaitingTimerStopped}",
+                        uploadTimerStopped, !waitingTimerStopped);
+                }
+                catch (Exception statusEx)
+                {
+                    Log.Error(statusEx, "[Dispose] 检查定时器状态时发生错误");
+                }
+
+                // 清理包裹状态
+                try
+                {
+                    // Pass a string context for the reason
+                    ClearPackageStack("[Dispose] 清理包裹堆栈", "[DisposeCtx]");
+                }
+                catch (Exception stackEx)
+                {
+                    Log.Error(stackEx, "[Dispose] 清理包裹堆栈时发生错误");
+                }
+
+                try
+                {
+                    lock (_processingLock)
+                    {
+                        _currentlyProcessingPackage?.ReleaseImage();
+                        _currentlyProcessingPackage = null;
+                    }
+                }
+                catch (Exception processingEx)
+                {
+                    Log.Error(processingEx, "[Dispose] 清理当前处理包裹时发生错误");
+                }
+
+                try
+                {
+                    Log.Debug("[Dispose] 当前处理和堆栈中的包裹已清理.");
+                }
+                catch (Exception)
+                {
+                    // 日志失败时不抛出异常
+                }
+
+                try
+                {
+                    _viewModelCts.Dispose(); // 处置 CancellationTokenSource
+                }
+                catch (Exception ctsDisposeEx)
+                {
+                    Log.Error(ctsDisposeEx, "[Dispose] 处置CancellationTokenSource时发生错误");
+                }
+
+                try
+                {
+                    _imageProcessingCts.Dispose(); // 处置图像处理CancellationTokenSource
+                }
+                catch (Exception imageCtsDisposeEx)
+                {
+                    Log.Error(imageCtsDisposeEx, "[Dispose] 处置图像处理CancellationTokenSource时发生错误");
+                }
             }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "[Dispose] 释放资源时发生错误");
-            }
+
+            Log.Information("[Dispose] MainWindowViewModel 处置完毕.");
         }
-
-        _disposed = true;
+        catch (Exception overallEx)
+        {
+            Log.Error(overallEx, "[Dispose] 释放资源时发生总体错误");
+        }
+        finally
+        {
+            _disposed = true;
+        }
     }
 
     [GeneratedRegex(
@@ -2020,10 +2712,10 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
         var cutoff = DateTime.UtcNow - maxAge;
         var keysToRemove = _timedOutPrefixes.Where(kvp => kvp.Value < cutoff).Select(kvp => kvp.Key).ToList();
         foreach (var key in keysToRemove.Where(key => _timedOutPrefixes.TryRemove(key, out _)))
-        {
             Log.Debug("[State] 清理了过期的超时前缀: {Prefix}", key);
-        }
     }
+
+
 
     // *** 移除: 不再处理PLC上包最终结果事件 ***
     // private void OnPlcUploadResultReceived(object? sender, (ushort CommandId, bool IsTimeout, int PackageId) result)
@@ -2094,7 +2786,7 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
     //         }
     //
     //         // 更新UI (不再重复更新PackageHistory和Statistics，因为已在PLC接受时更新)
-    //         Application.Current.Dispatcher.Invoke(() =>
+    //         _ = DispatchInvokeAsyncFireAndForget(() =>
     //         {
     //             UpdateUiFromResult(package);
     //             // *** 移除重复的PackageHistory和Statistics更新，因为已在PLC接受时更新 ***
@@ -2106,7 +2798,7 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
     //     {
     //         Log.Error(ex, "{Context} 处理最终上包结果时发生内部错误", packageContext);
     //         package.SetStatus(PackageStatus.Error, $"处理最终结果时出错: {ex.Message}");
-    //         Application.Current.Dispatcher.Invoke(() => UpdateUiFromResult(package));
+    //         _ = DispatchInvokeAsyncFireAndForget(() => UpdateUiFromResult(package));
     //     }
     //     finally
     //     {
@@ -2119,62 +2811,141 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
     // 处理PLC设备状态变更事件 - 统一处理所有状态变更
     private void OnPlcDeviceStatusChanged(object? sender, DeviceStatusCode statusCode)
     {
-        // 获取对应的状态信息
-        var statusText = GetDeviceStatusDisplayText(statusCode);
-        var description = GetDeviceStatusDescription(statusCode);
-        var color = GetDeviceStatusColor(statusCode);
-
-        // 更新PLC独立状态属性
-        Application.Current.Dispatcher.Invoke(() =>
+        try
         {
-            PlcStatusText = statusText;
-            PlcStatusDescription = description;
-            PlcStatusColor = color;
-        });
+            // 获取对应的状态信息
+            var statusText = GetDeviceStatusDisplayText(statusCode);
+            var description = GetDeviceStatusDescription(statusCode);
+            var color = GetDeviceStatusColor(statusCode);
 
-        // 更新 DeviceStatuses 列表中的 PLC 条目
-        Application.Current.Dispatcher.Invoke(() =>
+            // 更新PLC独立状态属性
+            _ = DispatchInvokeAsyncFireAndForget(() =>
+            {
+                try
+                {
+                    if (_disposed)
+                    {
+                        Log.Debug("[PLC] ViewModel已释放，跳过PLC状态更新");
+                        return;
+                    }
+
+                    PlcStatusText = statusText;
+                    PlcStatusDescription = description;
+                    PlcStatusColor = color;
+                }
+                catch (Exception uiEx)
+                {
+                    Log.Error(uiEx, "[PLC] 更新PLC独立状态属性时发生错误");
+                }
+            });
+
+            // 更新 DeviceStatuses 列表中的 PLC 条目
+            _ = DispatchInvokeAsyncFireAndForget(() =>
+            {
+                try
+                {
+                    if (_disposed)
+                    {
+                        Log.Debug("[PLC] ViewModel已释放，跳过DeviceStatuses更新");
+                        return;
+                    }
+
+                    var plcStatusEntry = DeviceStatuses.FirstOrDefault(s => s.Name == "PLC");
+                    if (plcStatusEntry == null) return;
+                    plcStatusEntry.Status = statusText; // 使用翻译的文本
+                    plcStatusEntry.StatusColor = color;
+                }
+                catch (Exception statusEx)
+                {
+                    Log.Error(statusEx, "[PLC] 更新DeviceStatuses列表时发生错误");
+                }
+            });
+
+            Log.Information("PLC设备状态已更新: {Status}, {Description}", statusText, description);
+
+            // 如果PLC状态恢复正常，隐藏PLC异常警告
+            if (statusCode != DeviceStatusCode.Normal || !IsPlcAbnormalWarningVisible) return;
+
+            Log.Information("PLC状态恢复正常，隐藏PLC异常警告。");
+            _ = DispatchInvokeAsyncFireAndForget(() =>
+            {
+                try
+                {
+                    if (!_disposed)
+                    {
+                        IsPlcAbnormalWarningVisible = false;
+                    }
+                }
+                catch (Exception warningEx)
+                {
+                    Log.Error(warningEx, "[PLC] 隐藏PLC异常警告时发生错误");
+                }
+            });
+        }
+        catch (Exception overallEx)
         {
-            var plcStatusEntry = DeviceStatuses.FirstOrDefault(s => s.Name == "PLC");
-            if (plcStatusEntry == null) return;
-            plcStatusEntry.Status = statusText; // 使用翻译的文本
-            plcStatusEntry.StatusColor = color;
-        });
-
-        Log.Information("PLC设备状态已更新: {Status}, {Description}", statusText, description);
-
-        // 如果PLC状态恢复正常，隐藏PLC异常警告
-        if (statusCode != DeviceStatusCode.Normal || !IsPlcAbnormalWarningVisible) return;
-        Log.Information("PLC状态恢复正常，隐藏PLC异常警告。");
-        Application.Current.Dispatcher.Invoke(() => IsPlcAbnormalWarningVisible = false);
-        // PLC异常状态的警告是在 ProcessSinglePackageAsync 中根据当前状态显示的
+            Log.Error(overallEx, "[PLC] 处理PLC设备状态变更时发生总体错误: StatusCode={StatusCode}", statusCode);
+        }
     }
 
     // 处理JD WCS连接状态变更事件
     private void OnJdWcsConnectionChanged(object? sender, bool isConnected)
     {
-        Log.Information("JD WCS连接状态变更: {Status}", isConnected ? "已连接" : "已断开");
-
-        var statusText = isConnected ? "已连接" : "未连接";
-        var statusColor = isConnected ? "#4CAF50" : "#F44336";
-        var statusDescription = isConnected ? "京东WCS服务连接正常，可以上传数据" : "京东WCS服务未连接，请检查网络连接";
-
-        // 更新JD WCS独立状态属性
-        Application.Current.Dispatcher.Invoke(() =>
+        try
         {
-            JdWcsStatusText = statusText;
-            JdWcsStatusDescription = statusDescription;
-            JdWcsStatusColor = statusColor;
-        });
+            Log.Information("JD WCS连接状态变更: {Status}", isConnected ? "已连接" : "已断开");
 
-        // 更新 DeviceStatuses 列表中的 JD WCS 条目
-        Application.Current.Dispatcher.Invoke(() =>
+            var statusText = isConnected ? "已连接" : "未连接";
+            var statusColor = isConnected ? "#4CAF50" : "#F44336";
+            var statusDescription = isConnected ? "京东WCS服务连接正常，可以上传数据" : "京东WCS服务未连接，请检查网络连接";
+
+            // 更新JD WCS独立状态属性
+            _ = DispatchInvokeAsyncFireAndForget(() =>
+            {
+                try
+                {
+                    if (_disposed)
+                    {
+                        Log.Debug("[JD WCS] ViewModel已释放，跳过JD WCS状态更新");
+                        return;
+                    }
+
+                    JdWcsStatusText = statusText;
+                    JdWcsStatusDescription = statusDescription;
+                    JdWcsStatusColor = statusColor;
+                }
+                catch (Exception uiEx)
+                {
+                    Log.Error(uiEx, "[JD WCS] 更新JD WCS独立状态属性时发生错误");
+                }
+            });
+
+            // 更新 DeviceStatuses 列表中的 JD WCS 条目
+            _ = DispatchInvokeAsyncFireAndForget(() =>
+            {
+                try
+                {
+                    if (_disposed)
+                    {
+                        Log.Debug("[JD WCS] ViewModel已释放，跳过DeviceStatuses更新");
+                        return;
+                    }
+
+                    var jdWcsStatusEntry = DeviceStatuses.FirstOrDefault(s => s.Name == "JD WCS");
+                    if (jdWcsStatusEntry == null) return;
+                    jdWcsStatusEntry.Status = statusText;
+                    jdWcsStatusEntry.StatusColor = statusColor;
+                }
+                catch (Exception statusEx)
+                {
+                    Log.Error(statusEx, "[JD WCS] 更新DeviceStatuses列表时发生错误");
+                }
+            });
+        }
+        catch (Exception overallEx)
         {
-            var jdWcsStatusEntry = DeviceStatuses.FirstOrDefault(s => s.Name == "JD WCS");
-            if (jdWcsStatusEntry == null) return;
-            jdWcsStatusEntry.Status = statusText;
-            jdWcsStatusEntry.StatusColor = statusColor;
-        });
+            Log.Error(overallEx, "[JD WCS] 处理JD WCS连接状态变更时发生总体错误: IsConnected={IsConnected}", isConnected);
+        }
     }
 
 
@@ -2324,51 +3095,24 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
 
     private void UploadCountdownTimer_Tick(object? sender, EventArgs e)
     {
-        var previousValue = UploadCountdownValue;
-        UploadCountdownValue--;
-        
-        Log.Debug("[倒计时] UploadCountdownTimer Tick事件 - 值: {Previous} -> {Current}", previousValue, UploadCountdownValue);
-        
-        if (UploadCountdownValue > 0) return;
-        StopUploadCountdown();
-        Log.Information("[倒计时] 上包倒计时结束");
-    }
-
-    // ReSharper disable once UnusedMember.Local
-    private void StartUploadCountdown()
-    {
         try
         {
-            // 添加状态检查日志
-            Log.Debug("[倒计时] StartUploadCountdown 被调用 - 当前状态: IsVisible={IsVisible}, Value={Value}, TimerRunning={TimerRunning}", 
-                IsUploadCountdownVisible, UploadCountdownValue, _uploadCountdownTimer?.IsEnabled ?? false);
-            
-            var config = _settingsService.LoadSettings<HostConfiguration>();
-            var countdownSeconds = config.UploadCountdownSeconds;
+            if (Application.Current?.Dispatcher?.HasShutdownStarted == true) return;
+            if (Application.Current?.MainWindow == null || !Application.Current.MainWindow.IsLoaded) return;
 
-            if (countdownSeconds <= 0)
-            {
-                Log.Warning("上包倒计时配置无效 ({Value})，将不启动倒计时", countdownSeconds);
-                StopUploadCountdown(); // 确保如果配置无效则停止
-                return;
-            }
+            var previousValue = UploadCountdownValue;
+            UploadCountdownValue--;
 
-            // 检查是否已经在运行
-            if (IsUploadCountdownVisible && _uploadCountdownTimer?.IsEnabled == true)
-            {
-                Log.Warning("[倒计时] 上包倒计时已在运行中，跳过重复启动 - 当前值: {CurrentValue}", UploadCountdownValue);
-                return;
-            }
+            Log.Debug("[倒计时] UploadCountdownTimer Tick事件 - 值: {Previous} -> {Current}", previousValue,
+                UploadCountdownValue);
 
-            UploadCountdownValue = countdownSeconds;
-            IsUploadCountdownVisible = true;
-            _uploadCountdownTimer?.Start();
-            Log.Information("[倒计时] 启动上包倒计时: {Seconds} 秒", countdownSeconds);
+            if (UploadCountdownValue > 0) return;
+            StopUploadCountdown();
+            Log.Information("[倒计时] 上包倒计时结束");
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "启动上包倒计时出错");
-            StopUploadCountdown(); // 在错误时停止
+            Log.Error(ex, "UploadCountdownTimer_Tick 发生错误");
         }
     }
 
@@ -2377,99 +3121,483 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
         var wasRunning = _uploadCountdownTimer?.IsEnabled ?? false;
         var wasVisible = IsUploadCountdownVisible;
         var currentValue = UploadCountdownValue;
-        
+
         _uploadCountdownTimer?.Stop();
         IsUploadCountdownVisible = false;
-        
-        Log.Information("[倒计时] 停止上包倒计时 - 之前状态: TimerRunning={WasRunning}, IsVisible={WasVisible}, Value={CurrentValue}", 
+
+        Log.Information("[倒计时] 停止上包倒计时 - 之前状态: TimerRunning={WasRunning}, IsVisible={WasVisible}, Value={CurrentValue}",
             wasRunning, wasVisible, currentValue);
+    }
+
+    /// <summary>
+    ///     安全地检查等待倒计时定时器是否正在运行
+    /// </summary>
+    private bool IsWaitingCountdownTimerRunning()
+    {
+        lock (_countdownLock)
+        {
+            return _waitingCountdownTimer?.IsEnabled ?? false;
+        }
     }
 
     // 等待PLC确认倒计时相关方法
     private void StartWaitingCountdown(int totalSeconds)
     {
-        try
+        lock (_countdownLock)
         {
-            // 添加状态检查日志
-            Log.Debug("[等待倒计时] StartWaitingCountdown 被调用 - 参数: {TotalSeconds}秒, 当前状态: IsWaiting={IsWaiting}, Seconds={Seconds}, TimerRunning={TimerRunning}", 
-                totalSeconds, IsWaitingForUploadResult, WaitingCountdownSeconds, _waitingCountdownTimer?.IsEnabled ?? false);
-            
-            if (totalSeconds <= 0)
+            try
             {
-                Log.Warning("等待倒计时配置无效 ({Value})，将不启动倒计时", totalSeconds);
-                StopWaitingCountdown();
-                return;
-            }
+                // 添加状态检查日志
+                Log.Debug(
+                    "[等待倒计时] StartWaitingCountdown 被调用 - 参数: {TotalSeconds}秒, 当前状态: IsWaiting={IsWaiting}, Seconds={Seconds}, TimerRunning={TimerRunning}",
+                    totalSeconds, IsWaitingForUploadResult, WaitingCountdownSeconds,
+                    IsWaitingCountdownTimerRunning());
 
-            // 检查是否已经在运行
-            if (IsWaitingForUploadResult && _waitingCountdownTimer?.IsEnabled == true)
-            {
-                Log.Warning("[等待倒计时] 等待倒计时已在运行中，跳过重复启动 - 当前值: {CurrentSeconds}", WaitingCountdownSeconds);
-                return;
-            }
-
-            _waitingCountdownTotalSeconds = totalSeconds;
-            WaitingCountdownSeconds = totalSeconds;
-            WaitingCountdownProgress = 100.0; // 开始时进度为100%
-            IsWaitingForUploadResult = true;
-            WaitingStatusText = "等待PLC确认上包...";
-
-            // 初始化定时器（如果还未初始化）
-            if (_waitingCountdownTimer == null)
-            {
-                _waitingCountdownTimer = new DispatcherTimer(DispatcherPriority.Normal)
+                if (totalSeconds <= 0)
                 {
-                    Interval = TimeSpan.FromSeconds(1)
-                };
-                _waitingCountdownTimer.Tick += WaitingCountdownTimer_Tick;
-                Log.Debug("[等待倒计时] 创建新的等待倒计时定时器");
-            }
+                    Log.Warning("等待倒计时配置无效 ({Value})，将不启动倒计时", totalSeconds);
+                    StopWaitingCountdown();
+                    return;
+                }
 
-            _waitingCountdownTimer.Start();
-            Log.Information("[等待倒计时] 启动等待PLC确认倒计时: {Seconds} 秒", totalSeconds);
+                // 检查是否已经在运行
+                if (IsWaitingForUploadResult && IsWaitingCountdownTimerRunning())
+                {
+                    Log.Warning("[等待倒计时] 等待倒计时已在运行中，跳过重复启动 - 当前值: {CurrentSeconds}", WaitingCountdownSeconds);
+                    return;
+                }
+
+                // 异步启动倒计时，避免死锁
+                try
+                {
+                    if (Application.Current?.Dispatcher != null &&
+                        !Application.Current.Dispatcher.HasShutdownStarted)
+                    {
+                        // 总是使用异步方式，避免死锁
+                        _ = Application.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            try
+                            {
+                                StartWaitingCountdownOnUIThread(totalSeconds);
+                            }
+                            catch (Exception uiEx)
+                            {
+                                Log.Error(uiEx, "[等待倒计时] 在UI线程上启动倒计时失败");
+                            }
+                        }, DispatcherPriority.Normal);
+                    }
+                    else
+                    {
+                        // Dispatcher不可用，直接执行（可能在测试环境中）
+                        StartWaitingCountdownOnUIThread(totalSeconds);
+                    }
+                }
+                catch (Exception dispatcherEx)
+                {
+                    Log.Error(dispatcherEx, "[等待倒计时] 启动倒计时失败");
+                    // 尝试使用现有的fire-and-forget方法作为fallback
+                    try
+                    {
+                        _ = DispatchInvokeAsyncFireAndForget(() =>
+                        {
+                            try
+                            {
+                                StartWaitingCountdownOnUIThread(totalSeconds);
+                            }
+                            catch (Exception asyncEx)
+                            {
+                                Log.Error(asyncEx, "[等待倒计时] 异步启动倒计时也失败");
+                            }
+                        });
+                    }
+                    catch (Exception fallbackEx)
+                    {
+                        Log.Error(fallbackEx, "[等待倒计时] 所有启动方式都失败");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "[等待倒计时] 启动等待倒计时出现异常");
+                // 在异常情况下也要重置状态，但避免递归调用StopWaitingCountdown
+                try
+                {
+                    if (Application.Current?.Dispatcher != null &&
+                        !Application.Current.Dispatcher.HasShutdownStarted)
+                    {
+                        Application.Current.Dispatcher.Invoke(() =>
+                        {
+                            IsWaitingForUploadResult = false;
+                            WaitingCountdownSeconds = 0;
+                            WaitingCountdownProgress = 0.0;
+                        });
+                    }
+                    else
+                    {
+                        IsWaitingForUploadResult = false;
+                        WaitingCountdownSeconds = 0;
+                        WaitingCountdownProgress = 0.0;
+                    }
+                }
+                catch (Exception resetEx)
+                {
+                    Log.Error(resetEx, "[等待倒计时] 重置状态也失败");
+                }
+            }
         }
-        catch (Exception ex)
+    }
+
+    /// <summary>
+    ///     在UI线程上启动等待倒计时的实际操作
+    /// </summary>
+    private void StartWaitingCountdownOnUIThread(int totalSeconds)
+    {
+        lock (_countdownLock)
         {
-            Log.Error(ex, "启动等待倒计时出错");
-            StopWaitingCountdown();
+            try
+            {
+                // 检查ViewModel是否已释放
+                if (_disposed)
+                {
+                    Log.Debug("[等待倒计时] ViewModel已释放，跳过启动倒计时");
+                    return;
+                }
+
+                // 检查是否已经在运行
+                if (IsWaitingForUploadResult && IsWaitingCountdownTimerRunning())
+                {
+                    Log.Warning("[等待倒计时] 倒计时已在UI线程上运行，跳过重复启动");
+                    return;
+                }
+
+                // 原子性地设置所有相关属性
+                try
+                {
+                    _waitingCountdownTotalSeconds = totalSeconds;
+                    WaitingCountdownSeconds = totalSeconds;
+                    WaitingCountdownProgress = 100.0; // 开始时进度为100%
+                    WaitingStatusText = "等待PLC确认上包...";
+                    IsWaitingForUploadResult = true; // 最后设置这个属性，触发UI更新
+                }
+                catch (Exception stateEx)
+                {
+                    Log.Error(stateEx, "[等待倒计时] 设置倒计时状态失败");
+                    return;
+                }
+
+                // 初始化定时器（如果还未初始化）
+                try
+                {
+                    if (_waitingCountdownTimer == null)
+                    {
+                        _waitingCountdownTimer = new DispatcherTimer(DispatcherPriority.Normal)
+                        {
+                            Interval = TimeSpan.FromSeconds(1)
+                        };
+                        _waitingCountdownTimer.Tick += WaitingCountdownTimer_Tick;
+                        Log.Debug("[等待倒计时] 创建新的等待倒计时定时器");
+                    }
+                }
+                catch (Exception timerCreateEx)
+                {
+                    Log.Error(timerCreateEx, "[等待倒计时] 创建定时器失败");
+                    // 重置状态
+                    try
+                    {
+                        IsWaitingForUploadResult = false;
+                        WaitingCountdownSeconds = 0;
+                        WaitingCountdownProgress = 0.0;
+                    }
+                    catch (Exception resetEx)
+                    {
+                        Log.Error(resetEx, "[等待倒计时] 重置状态失败");
+                    }
+                    return;
+                }
+
+                // 启动定时器
+                try
+                {
+                    _waitingCountdownTimer.Start();
+                    Log.Information("[等待倒计时] 启动等待PLC确认倒计时: {Seconds} 秒", totalSeconds);
+                }
+                catch (Exception startEx)
+                {
+                    Log.Error(startEx, "[等待倒计时] 启动定时器失败");
+                    // 重置状态
+                    try
+                    {
+                        IsWaitingForUploadResult = false;
+                        WaitingCountdownSeconds = 0;
+                        WaitingCountdownProgress = 0.0;
+                    }
+                    catch (Exception resetEx)
+                    {
+                        Log.Error(resetEx, "[等待倒计时] 重置状态失败");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "[等待倒计时] 在UI线程上启动倒计时出现总体错误");
+                // 最后的努力：重置状态
+                try
+                {
+                    IsWaitingForUploadResult = false;
+                    WaitingCountdownSeconds = 0;
+                    WaitingCountdownProgress = 0.0;
+                }
+                catch (Exception finalEx)
+                {
+                    Log.Error(finalEx, "[等待倒计时] 最终状态重置也失败");
+                }
+            }
         }
     }
 
     private void WaitingCountdownTimer_Tick(object? sender, EventArgs e)
     {
-        var previousSeconds = WaitingCountdownSeconds;
-        WaitingCountdownSeconds--;
-
-        // 更新进度条（从100%递减到0%）
-        if (_waitingCountdownTotalSeconds > 0)
+        lock (_countdownLock)
         {
-            WaitingCountdownProgress = (double)WaitingCountdownSeconds / _waitingCountdownTotalSeconds * 100.0;
-        }
+            try
+            {
+                // 检查应用状态
+                if (Application.Current?.Dispatcher?.HasShutdownStarted == true) return;
+                if (Application.Current?.MainWindow == null || !Application.Current.MainWindow.IsLoaded) return;
 
-        Log.Debug("[等待倒计时] Tick事件 - 秒数: {Previous} -> {Current}, 进度: {Progress:F1}%", 
-            previousSeconds, WaitingCountdownSeconds, WaitingCountdownProgress);
+                // 再次检查ViewModel是否已释放
+                if (_disposed)
+                {
+                    Log.Debug("[等待倒计时] ViewModel已释放，停止倒计时");
+                    _waitingCountdownTimer?.Stop();
+                    return;
+                }
 
-        if (WaitingCountdownSeconds <= 0)
-        {
-            StopWaitingCountdown();
-            Log.Information("[等待倒计时] 等待PLC确认倒计时结束");
+                // 检查倒计时是否仍然有效
+                if (!IsWaitingForUploadResult || WaitingCountdownSeconds <= 0)
+                {
+                    try
+                    {
+                        StopWaitingCountdown();
+                        if (WaitingCountdownSeconds <= 0)
+                        {
+                            Log.Information("[等待倒计时] 等待PLC确认倒计时结束");
+                        }
+                    }
+                    catch (Exception stopEx)
+                    {
+                        Log.Error(stopEx, "[等待倒计时] Tick事件中停止倒计时失败");
+                    }
+                    return;
+                }
+
+                var previousSeconds = WaitingCountdownSeconds;
+                try
+                {
+                    WaitingCountdownSeconds--;
+                }
+                catch (Exception updateEx)
+                {
+                    Log.Error(updateEx, "[等待倒计时] 更新倒计时秒数失败");
+                    return;
+                }
+
+                // 更新进度条（从100%递减到0%）
+                try
+                {
+                    if (_waitingCountdownTotalSeconds > 0)
+                    {
+                        WaitingCountdownProgress = (double)WaitingCountdownSeconds / _waitingCountdownTotalSeconds * 100.0;
+                    }
+                }
+                catch (Exception progressEx)
+                {
+                    Log.Error(progressEx, "[等待倒计时] 更新进度条失败");
+                }
+
+                try
+                {
+                    Log.Debug("[等待倒计时] Tick事件 - 秒数: {Previous} -> {Current}, 进度: {Progress:F1}%",
+                        previousSeconds, WaitingCountdownSeconds, WaitingCountdownProgress);
+                }
+                catch (Exception)
+                {
+                    // 日志失败不影响倒计时继续
+                }
+
+                // 检查是否到达结束时间
+                if (WaitingCountdownSeconds <= 0)
+                {
+                    Log.Information("[等待倒计时] 等待PLC确认倒计时结束");
+                    try
+                    {
+                        StopWaitingCountdown();
+                    }
+                    catch (Exception stopEx)
+                    {
+                        Log.Error(stopEx, "[等待倒计时] Tick事件中到达结束时间时停止倒计时失败");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "[等待倒计时] WaitingCountdownTimer_Tick发生错误");
+                // 发生异常时停止倒计时
+                try
+                {
+                    StopWaitingCountdown();
+                }
+                catch (Exception stopEx)
+                {
+                    Log.Error(stopEx, "[等待倒计时] 在处理Tick异常时停止倒计时也失败了");
+                    // 最后的努力：直接重置状态
+                    try
+                    {
+                        IsWaitingForUploadResult = false;
+                        WaitingCountdownSeconds = 0;
+                        WaitingCountdownProgress = 0.0;
+                        _waitingCountdownTimer?.Stop();
+                    }
+                    catch (Exception finalEx)
+                    {
+                        Log.Error(finalEx, "[等待倒计时] 所有清理操作都失败");
+                    }
+                }
+            }
         }
     }
 
     private void StopWaitingCountdown()
     {
-        var wasWaiting = IsWaitingForUploadResult;
-        var wasRunning = _waitingCountdownTimer?.IsEnabled ?? false;
-        var currentSeconds = WaitingCountdownSeconds;
-        var currentProgress = WaitingCountdownProgress;
-        
-        _waitingCountdownTimer?.Stop();
-        IsWaitingForUploadResult = false;
-        WaitingCountdownSeconds = 0;
-        WaitingCountdownProgress = 0.0;
-        
-        Log.Information("[等待倒计时] 停止等待PLC确认倒计时 - 之前状态: IsWaiting={WasWaiting}, TimerRunning={WasRunning}, Seconds={CurrentSeconds}, Progress={CurrentProgress:F1}%", 
-            wasWaiting, wasRunning, currentSeconds, currentProgress);
+        lock (_countdownLock)
+        {
+            try
+            {
+                var wasWaiting = IsWaitingForUploadResult;
+                var wasRunning = IsWaitingCountdownTimerRunning();
+                var currentSeconds = WaitingCountdownSeconds;
+                var currentProgress = WaitingCountdownProgress;
+
+                // 停止定时器
+                try
+                {
+                    _waitingCountdownTimer?.Stop();
+                }
+                catch (Exception timerEx)
+                {
+                    Log.Error(timerEx, "[等待倒计时] 停止定时器时发生错误");
+                }
+
+                // 异步重置UI属性，避免死锁
+                try
+                {
+                    if (Application.Current?.Dispatcher != null &&
+                        !Application.Current.Dispatcher.HasShutdownStarted)
+                    {
+                        // 总是使用异步方式，避免死锁
+                        _ = Application.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            try
+                            {
+                                ResetCountdownUiProperties();
+                            }
+                            catch (Exception uiEx)
+                            {
+                                Log.Error(uiEx, "[等待倒计时] 在UI线程上重置属性失败");
+                            }
+                        }, DispatcherPriority.Normal);
+                    }
+                    else
+                    {
+                        // Dispatcher不可用，直接执行
+                        ResetCountdownUiProperties();
+                    }
+                }
+                catch (Exception dispatcherEx)
+                {
+                    Log.Error(dispatcherEx, "[等待倒计时] 重置UI属性失败");
+                    // 尝试使用现有的fire-and-forget方法作为fallback
+                    try
+                    {
+                        _ = DispatchInvokeAsyncFireAndForget(() =>
+                        {
+                            try
+                            {
+                                ResetCountdownUiProperties();
+                            }
+                            catch (Exception asyncEx)
+                            {
+                                Log.Error(asyncEx, "[等待倒计时] 异步重置UI属性也失败");
+                                // 最后的努力：直接重置状态
+                                try
+                                {
+                                    IsWaitingForUploadResult = false;
+                                    WaitingCountdownSeconds = 0;
+                                    WaitingCountdownProgress = 0.0;
+                                }
+                                catch (Exception finalEx)
+                                {
+                                    Log.Error(finalEx, "[等待倒计时] 所有重置方式都失败");
+                                }
+                            }
+                        });
+                    }
+                    catch (Exception fallbackEx)
+                    {
+                        Log.Error(fallbackEx, "[等待倒计时] 异步fallback也失败");
+                    }
+                }
+
+                Log.Information(
+                    "[等待倒计时] 停止等待PLC确认倒计时 - 之前状态: IsWaiting={WasWaiting}, TimerRunning={WasRunning}, Seconds={CurrentSeconds}, Progress={CurrentProgress:F1}%",
+                    wasWaiting, wasRunning, currentSeconds, currentProgress);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "[等待倒计时] StopWaitingCountdown出现异常");
+                // 最后的努力：确保状态被重置
+                try
+                {
+                    IsWaitingForUploadResult = false;
+                    WaitingCountdownSeconds = 0;
+                    WaitingCountdownProgress = 0.0;
+                }
+                catch (Exception resetEx)
+                {
+                    Log.Error(resetEx, "[等待倒计时] 最终状态重置也失败");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    ///     重置倒计时UI属性（在UI线程上执行）
+    /// </summary>
+    private void ResetCountdownUiProperties()
+    {
+        try
+        {
+            // 原子性地重置所有属性
+            IsWaitingForUploadResult = false;
+            WaitingCountdownSeconds = 0;
+            WaitingCountdownProgress = 0.0;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[等待倒计时] 重置倒计时UI属性时发生错误");
+            // 如果UI线程操作失败，至少在后台线程上重置状态
+            try
+            {
+                IsWaitingForUploadResult = false;
+                WaitingCountdownSeconds = 0;
+                WaitingCountdownProgress = 0.0;
+                Log.Warning("[等待倒计时] 在异常情况下直接重置状态（UI可能不会更新）");
+            }
+            catch (Exception resetEx)
+            {
+                Log.Error(resetEx, "[等待倒计时] 即使直接重置状态也失败了");
+            }
+        }
     }
 
     // *** 新增: 清理包裹堆栈并释放资源 ***
@@ -2495,60 +3623,89 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
         }
 
         if (count > 0)
-        {
             Log.Information("{Context} 共清理了 {Count} 个堆栈中的包裹", reasonContext, count);
-        }
         else
-        {
             Log.Debug("{Context} 包裹堆栈已为空，无需清理.", reasonContext);
-        }
-        // UI update (IsNextPackageWaiting) is handled in FinalizeProcessing
     }
 
-    // *** 移除: 不再需要清理等待最终结果的包裹缓存 ***
-    // private void ClearPendingFinalResultPackages(string reason)
-    // {
-    //     Log.Debug("开始清理等待最终结果的包裹缓存. 原因: {Reason}", reason);
-    //     var count = 0;
-    //     foreach (var kvp in _pendingFinalResultPackages)
-    //     {
-    //         var package = kvp.Value;
-    //         var packageContext = $"[包裹{package.Index}|{package.Barcode}]";
-    //         Log.Warning("{Context} 正在丢弃等待最终结果的包裹", packageContext);
-    //         package.ReleaseImage();
-    //         count++;
-    //     }
-    //     _pendingFinalResultPackages.Clear();
-    //
-    //     // *** 新增: 清理所有超时管理器 ***
-    //     var timeoutCount = 0;
-    //     foreach (var kvp in _pendingFinalResultTimeouts)
-    //     {
-    //         kvp.Value.Cancel();
-    //         kvp.Value.Dispose();
-    //         timeoutCount++;
-    //     }
-    //     _pendingFinalResultTimeouts.Clear();
-    //
-    //     if (count > 0)
-    //     {
-    //         Log.Information("共清理了 {Count} 个等待最终结果的包裹和 {TimeoutCount} 个超时管理器", count, timeoutCount);
-    //     }
-    // }
+    // *** 新增: 图像队列处理方法 - 顺序处理图像保存和上传，避免并发问题 ***
+    private async Task ProcessImageQueueAsync()
+    {
+        Log.Information("[图像队列] 图像处理队列已启动，等待处理任务...");
+
+        try
+        {
+            await foreach (var task in _imageProcessingChannel.Reader.ReadAllAsync(_imageProcessingCts.Token))
+            {
+                try
+                {
+                    Log.Debug("[图像队列] 开始处理图像任务: {Context}", task.PackageContext);
+
+                    // 调用原有的图像处理方法
+                    await HandleImageSavingAndUpload(task.Package, task.PackageContext, task.PackageId, task.ClonedImage);
+
+                    Log.Debug("[图像队列] 图像任务处理完成: {Context}", task.PackageContext);
+
+                    // 添加小延迟，避免处理过快
+                    await Task.Delay(100, _imageProcessingCts.Token);
+                }
+                catch (OperationCanceledException) when (_imageProcessingCts.Token.IsCancellationRequested)
+                {
+                    Log.Information("[图像队列] 图像处理任务被取消");
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "[图像队列] 处理图像任务时发生异常: {Context}", task.PackageContext);
+                    // 继续处理下一个任务，不因为一个任务失败而停止整个队列
+                }
+            }
+        }
+        catch (OperationCanceledException) when (_imageProcessingCts.Token.IsCancellationRequested)
+        {
+            Log.Information("[图像队列] 图像处理队列被取消");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[图像队列] 图像处理队列出现严重错误");
+        }
+
+        Log.Information("[图像队列] 图像处理队列已停止");
+    }
+
+    // *** 新增: 队列图像处理任务的方法 ***
+    private async Task QueueImageProcessingTaskAsync(PackageInfo package, string packageContext, int packageId, BitmapSource? clonedImage)
+    {
+        try
+        {
+            var task = new ImageProcessingTask(package, packageContext, packageId, clonedImage);
+
+            // 将任务写入队列，如果队列满则等待
+            await _imageProcessingChannel.Writer.WriteAsync(task, _imageProcessingCts.Token);
+
+            Log.Debug("[图像队列] 图像处理任务已添加到队列: {Context}", packageContext);
+        }
+        catch (OperationCanceledException) when (_imageProcessingCts.Token.IsCancellationRequested)
+        {
+            Log.Warning("[图像队列] 图像处理任务被取消: {Context}", packageContext);
+        }
+        catch (ChannelClosedException)
+        {
+            Log.Warning("[图像队列] 图像处理队列已关闭，无法添加任务: {Context}", packageContext);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[图像队列] 添加图像处理任务到队列时发生异常: {Context}", packageContext);
+        }
+    }
 
     // *** 新增: 获取重量并处理包裹的方法 ***
-    // *** Add packageContext parameter ***
-    private async Task FetchWeightAndHandlePackageAsync(PackageInfo package, string packageContext,
-        CancellationToken cancellationToken)
+    private void FetchWeightAndHandlePackageAsync(PackageInfo package, string packageContext)
     {
-        // *** Use passed context for logging ***
         Log.Debug("{Context} 开始获取重量", packageContext);
         try
         {
-            var weightTask = Task.Run(() => _weightService.FindNearestWeight(DateTime.Now), cancellationToken);
-            Log.Debug("{Context} 等待重量查询结果...", packageContext);
-            var weightFromScale = await weightTask;
-            Log.Debug("{Context} 重量查询完成.", packageContext);
+            var weightFromScale = _weight_service.GetLatestWeight();
 
             if (weightFromScale is > 0)
             {
@@ -2561,10 +3718,19 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
                 var packageWeightOriginal = package.Weight;
                 if (packageWeightOriginal <= 0)
                 {
-                    var weightSettings = _settingsService.LoadSettings<WeightSettings>();
-                    var minimumWeight = weightSettings.MinimumWeight / 1000.0;
-                    package.SetWeight(minimumWeight);
-                    Log.Warning("{Context} 未获取到有效重量，使用最小重量: {MinWeight:F3}kg", packageContext, minimumWeight);
+                    try
+                    {
+                        var weightSettings = _settings_service.LoadSettings<WeightSettings>();
+                        var minimumWeight = weightSettings.MinimumWeight / 1000.0;
+                        package.SetWeight(minimumWeight);
+                        Log.Warning("{Context} 未获取到有效重量，使用最小重量: {MinWeight:F3}kg", packageContext, minimumWeight);
+                    }
+                    catch (Exception settingsEx)
+                    {
+                        Log.Error(settingsEx, "{Context} 加载重量设置失败，使用默认最小重量", packageContext);
+                        const double defaultMinWeight = 0.1; // 100g 默认最小重量
+                        package.SetWeight(defaultMinWeight);
+                    }
                 }
                 else
                 {
@@ -2580,12 +3746,61 @@ public partial class MainWindowViewModel : BindableBase, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "{Context} 获取重量时出错.", packageContext);
-            _ = _audioService.PlayPresetAsync(AudioType.SystemError);
+            try
+            {
+                _ = _audioService.PlayPresetAsync(AudioType.SystemError);
+            }
+            catch (Exception audioEx)
+            {
+                Log.Error(audioEx, "{Context} 播放错误音频时发生异常", packageContext);
+            }
+        }
+
+        // 检查重量称连接状态
+        try
+        {
+            var weightService = _weight_service;
+            if (!weightService.IsConnected)
+            {
+                Log.Warning("{Context} 重量称服务未连接或不可用，将使用默认重量", packageContext);
+                try
+                {
+                    var weightSettings = _settings_service.LoadSettings<WeightSettings>();
+                    var defaultWeight = weightSettings.MinimumWeight / 1000.0;
+                    package.SetWeight(defaultWeight);
+                }
+                catch (Exception settingsEx)
+                {
+                    Log.Error(settingsEx, "{Context} 加载重量设置失败，使用默认重量", packageContext);
+                    const double defaultMinWeight = 0.1; // 100g 默认最小重量
+                    package.SetWeight(defaultMinWeight);
+                }
+            }
+        }
+        catch (Exception weightServiceEx)
+        {
+            Log.Error(weightServiceEx, "{Context} 检查重量称连接状态时发生异常", packageContext);
         }
 
         // 调用调度入口
-        // *** Pass context ***
-        HandleIncomingPackage(package, packageContext);
-        Log.Debug("{Context} 重量获取完成，已提交到调度 HandleIncomingPackage", packageContext);
+        try
+        {
+            // *** Pass context ***
+            HandleIncomingPackage(package, packageContext);
+            Log.Debug("{Context} 重量获取完成，已提交到调度 HandleIncomingPackage", packageContext);
+        }
+        catch (Exception handleEx)
+        {
+            Log.Error(handleEx, "{Context} 调用HandleIncomingPackage时发生异常", packageContext);
+            // 如果调度失败，至少释放图像资源
+            try
+            {
+                package.ReleaseImage();
+            }
+            catch (Exception releaseEx)
+            {
+                Log.Error(releaseEx, "{Context} 释放图像资源时发生异常", packageContext);
+            }
+        }
     }
 }

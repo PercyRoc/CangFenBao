@@ -7,6 +7,9 @@ using Common.Services.Ui;
 using Microsoft.Win32;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
+using Prism.Commands;
+using Prism.Mvvm;
+
 // NPOI Core Interface
 
 // NPOI implementation for .xlsx
@@ -104,7 +107,8 @@ internal class ChuteSettingsViewModel : BindableBase
 
                 if (!int.TryParse(chuteStr, out var chuteValue))
                 {
-                    _notificationService.ShowWarningWithToken($"第{rowIndex + 1}行: 格口号 '{chuteStr}' 必须是有效的数字。", NotificationToken);
+                    _notificationService.ShowWarningWithToken($"第{rowIndex + 1}行: 格口号 '{chuteStr}' 必须是有效的数字。",
+                        NotificationToken);
                     return;
                 }
 
@@ -123,7 +127,8 @@ internal class ChuteSettingsViewModel : BindableBase
                 if (!Validator.TryValidateObject(rule, validationContext, validationResults, true))
                 {
                     // Use validationResults.FirstOrDefault() for safer access
-                    _notificationService.ShowWarningWithToken($"第{rowIndex + 1}行: {validationResults.FirstOrDefault()?.ErrorMessage ?? "验证错误"}",
+                    _notificationService.ShowWarningWithToken(
+                        $"第{rowIndex + 1}行: {validationResults.FirstOrDefault()?.ErrorMessage ?? "验证错误"}",
                         NotificationToken);
                     return;
                 }
@@ -138,7 +143,8 @@ internal class ChuteSettingsViewModel : BindableBase
         }
         catch (Exception ex)
         {
-            _notificationService.ShowWarningWithToken($"Excel导入失败: {ex.GetType().Name} - {ex.Message}", NotificationToken);
+            _notificationService.ShowWarningWithToken($"Excel导入失败: {ex.GetType().Name} - {ex.Message}",
+                NotificationToken);
             // Consider logging the full exception ex here for debugging
         }
     }
@@ -210,10 +216,7 @@ internal class ChuteSettingsViewModel : BindableBase
             }
 
             // --- Auto Adjust Column Widths ---
-            for (var i = 0; i < headers.Length; i++)
-            {
-                worksheet.AutoSizeColumn(i);
-            }
+            for (var i = 0; i < headers.Length; i++) worksheet.AutoSizeColumn(i);
 
             // --- Save File ---
             using var fileStream = new FileStream(dialog.FileName, FileMode.Create, FileAccess.Write);
@@ -223,7 +226,8 @@ internal class ChuteSettingsViewModel : BindableBase
         }
         catch (Exception ex)
         {
-            _notificationService.ShowWarningWithToken($"Excel导出失败: {ex.GetType().Name} - {ex.Message}", NotificationToken);
+            _notificationService.ShowWarningWithToken($"Excel导出失败: {ex.GetType().Name} - {ex.Message}",
+                NotificationToken);
         }
     }
 
@@ -235,7 +239,8 @@ internal class ChuteSettingsViewModel : BindableBase
         var validationResults = new List<ValidationResult>();
         if (!Validator.TryValidateObject(Configuration, validationContext, validationResults, true))
         {
-            _notificationService.ShowWarningWithToken(validationResults.FirstOrDefault()?.ErrorMessage ?? "配置验证失败", NotificationToken);
+            _notificationService.ShowWarningWithToken(validationResults.FirstOrDefault()?.ErrorMessage ?? "配置验证失败",
+                NotificationToken);
             return;
         }
 
@@ -246,7 +251,8 @@ internal class ChuteSettingsViewModel : BindableBase
             validationResults = []; // Reset for each rule
             if (Validator.TryValidateObject(rule, validationContext, validationResults, true)) continue;
 
-            _notificationService.ShowWarningWithToken(validationResults.FirstOrDefault()?.ErrorMessage ?? $"规则 '{rule.Chute}' 验证失败", NotificationToken);
+            _notificationService.ShowWarningWithToken(
+                validationResults.FirstOrDefault()?.ErrorMessage ?? $"规则 '{rule.Chute}' 验证失败", NotificationToken);
             return;
         }
 

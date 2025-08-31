@@ -14,7 +14,8 @@ namespace FuzhouPolicyForce.WangDianTong;
 /// <summary>
 ///     旺店通API服务实现V2 (符合新文档)
 /// </summary>
-public class WangDianTongApiServiceImplV2(HttpClient httpClient, ISettingsService settingsService) : IWangDianTongApiServiceV2
+public class WangDianTongApiServiceImplV2(HttpClient httpClient, ISettingsService settingsService)
+    : IWangDianTongApiServiceV2
 {
     // Cache JsonSerializerOptions for performance
     private static readonly JsonSerializerOptions JsonSerializerOptions = new()
@@ -67,9 +68,7 @@ public class WangDianTongApiServiceImplV2(HttpClient httpClient, ISettingsServic
 
             // 检查二选一必填 (针对原始请求对象进行检查)
             if (string.IsNullOrEmpty(businessObject.SrcOrderNo) && string.IsNullOrEmpty(businessObject.LogisticsNo))
-            {
                 throw new ArgumentException("仓储单号和物流单号二选一必填。");
-            }
 
             // 序列化业务参数为 JSON 字符串
             // 使用缓存的 options 实例
@@ -87,10 +86,7 @@ public class WangDianTongApiServiceImplV2(HttpClient httpClient, ISettingsServic
             var uriBuilder = new UriBuilder($"{settings.GetApiBaseUrl()}open_api/service.php");
             var query = HttpUtility.ParseQueryString(uriBuilder.Query); // 解析现有查询参数（可能没有）
 
-            foreach (var param in publicParameters)
-            {
-                query[param.Key] = param.Value;
-            }
+            foreach (var param in publicParameters) query[param.Key] = param.Value;
             uriBuilder.Query = query.ToString(); // 设置新的查询字符串
 
             apiUrl = uriBuilder.ToString();
@@ -122,15 +118,13 @@ public class WangDianTongApiServiceImplV2(HttpClient httpClient, ISettingsServic
             }
 
             if (result.IsSuccess)
-            {
-                Log.Information("旺店通重量回传成功V2: 物流单号={LogisticsNo}, 仓储单号={SrcOrderNo}, 重量={Weight}kg, 通道号={ExportNum}, 响应数据={@Response}",
+                Log.Information(
+                    "旺店通重量回传成功V2: 物流单号={LogisticsNo}, 仓储单号={SrcOrderNo}, 重量={Weight}kg, 通道号={ExportNum}, 响应数据={@Response}",
                     request.LogisticsNo, request.SrcOrderNo, request.Weight, result.ExportNum, result);
-            }
             else
-            {
-                Log.Warning("旺店通重量回传失败V2: 物流单号={LogisticsNo}, 仓储单号={SrcOrderNo}, 重量={Weight}kg, 错误码={Code}, 错误信息={Message}, 响应数据={@Response}",
+                Log.Warning(
+                    "旺店通重量回传失败V2: 物流单号={LogisticsNo}, 仓储单号={SrcOrderNo}, 重量={Weight}kg, 错误码={Code}, 错误信息={Message}, 响应数据={@Response}",
                     request.LogisticsNo, request.SrcOrderNo, request.Weight, result.Code, result.Message, result);
-            }
 
             return result;
         }
@@ -177,7 +171,8 @@ public class WangDianTongApiServiceImplV2(HttpClient httpClient, ISettingsServic
     /// <param name="businessJsonBody">业务参数的JSON字符串</param>
     /// <param name="secret">接口私钥 appsecret</param>
     /// <returns>32位MD5大写签名</returns>
-    private static string CalculateSign(Dictionary<string, string> publicParameters, string businessJsonBody, string secret)
+    private static string CalculateSign(Dictionary<string, string> publicParameters, string businessJsonBody,
+        string secret)
     {
         // 第一步：将公共参数的字段名字按字典序从小到大排序
         var sortedPublicParams = publicParameters.OrderBy(p => p.Key);

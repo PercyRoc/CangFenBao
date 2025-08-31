@@ -62,10 +62,7 @@ internal class UsbScannerService : IScannerService
     /// <summary>
     ///     提供条码事件流
     /// </summary>
-    public IObservable<string> BarcodeStream
-    {
-        get => _barcodeSubject.AsObservable();
-    }
+    public IObservable<string> BarcodeStream => _barcodeSubject.AsObservable();
 
     /// <summary>
     ///     启动扫码枪服务
@@ -215,11 +212,9 @@ internal class UsbScannerService : IScannerService
                     Log.Debug("条码有效，已入队：{Barcode}", barcode);
                     return 1;
                 }
+
                 Log.Warning("条码无效（回车触发）：{Barcode}，长度: {Length}", barcode, barcode.Length);
-                if (barcode.Length >= 3)
-                {
-                    return 1;
-                }
+                if (barcode.Length >= 3) return 1;
 
                 return CallNextHookEx(_hookId, nCode, wParam, lParam);
             }
@@ -254,10 +249,8 @@ internal class UsbScannerService : IScannerService
 
             // --- 详细日志 for VK_OEM_MINUS (保持) ---
             if (vkCode == VkOemMinus)
-            {
                 Log.Debug("[VK_OEM_MINUS 详细日志] 调用 ToUnicodeEx 之前的状态: Shift (基于追踪)={ShiftCorrected}, Caps={CapsState}",
                     shiftStateToUse, capsState);
-            }
             // --- 详细日志结束 ---
 
             // 数字键 Shift 强制UP (逻辑保留)
@@ -309,9 +302,11 @@ internal class UsbScannerService : IScannerService
                     Log.Debug("拦截按键 (扫描枪模式): '{Char}'", charToAdd);
                     return 1;
                 }
+
                 Log.Debug("不拦截按键 (手动模式): '{Char}'", charToAdd);
                 return CallNextHookEx(_hookId, nCode, wParam, lParam);
             }
+
             // ToUnicodeEx 转换失败
             Log.Debug("ToUnicodeEx 转换失败或未产生字符 (VKCode: {VKCode}, Result: {Result})", vkCode, result);
             if (InterceptAllInput)
@@ -319,9 +314,11 @@ internal class UsbScannerService : IScannerService
                 Log.Debug("拦截按键 (扫描枪模式, ToUnicodeEx失败): VKCode {VKCode}", vkCode);
                 return 1;
             }
+
             Log.Debug("不拦截按键 (手动模式, ToUnicodeEx失败): VKCode {VKCode}", vkCode);
             return CallNextHookEx(_hookId, nCode, wParam, lParam);
         } // 结束 if (wParam == WM_KEYDOWN)
+
         // --- 处理非 Shift 键的 KeyUp 事件 ---
         if (wParam == WmKeyup)
         {
@@ -449,7 +446,8 @@ internal class UsbScannerService : IScannerService
     /// </summary>
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] // 使用 Unicode 字符集以配合 StringBuilder
     private static extern int ToUnicodeEx(uint wVirtKey, uint wScanCode, byte[] lpKeyState,
-        [Out] [MarshalAs(UnmanagedType.LPWStr, SizeConst = 4)] StringBuilder pwszBuff, // 使用 StringBuilder 接收输出
+        [Out] [MarshalAs(UnmanagedType.LPWStr, SizeConst = 4)]
+        StringBuilder pwszBuff, // 使用 StringBuilder 接收输出
         int cchBuff, uint wFlags, IntPtr dwhkl); // dwhkl: 要使用的键盘布局句柄
 
     // 新增 GetAsyncKeyState

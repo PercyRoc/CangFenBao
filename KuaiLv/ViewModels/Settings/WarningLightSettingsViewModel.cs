@@ -1,5 +1,6 @@
 using Common.Services.Settings;
 using KuaiLv.Models.Settings.Warning;
+using Prism.Mvvm;
 
 namespace KuaiLv.ViewModels.Settings;
 

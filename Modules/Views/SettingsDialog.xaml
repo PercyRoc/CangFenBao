@@ -57,10 +57,43 @@
                         </ui:NavigationViewItem>
 
                         <ui:NavigationViewItem Content="格口规则设置"
-                                               Tag="TcpSettingsView"
-                                               Icon="{ui:SymbolIcon Box24}">
+                                               Tag="BarcodeChuteSettingsView"
+                                               Icon="{ui:SymbolIcon BoxSearch24}">
                             <ui:NavigationViewItem.TargetPageType>
-                                <x:Type Type="views:TcpSettingsView" />
+                                <x:Type Type="settings1:BarcodeChuteSettingsView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
+
+                        <!-- 快递 API 设置 -->
+                        <ui:NavigationViewItem Content="中通设置"
+                                               Tag="ZtoApiSettingsView"
+                                               Icon="{ui:SymbolIcon CloudArrowUp24}">
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="views:Zto.Settings.ZtoApiSettingsView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
+
+                        <ui:NavigationViewItem Content="申通设置"
+                                               Tag="StoApiSettingsView"
+                                               Icon="{ui:SymbolIcon CloudArrowUp24}">
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="views:Sto.Settings.StoApiSettingsView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
+
+                        <ui:NavigationViewItem Content="韵达设置"
+                                               Tag="YundaApiSettingsView"
+                                               Icon="{ui:SymbolIcon CloudArrowUp24}">
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="views:Yunda.Settings.YundaApiSettingsView" />
+                            </ui:NavigationViewItem.TargetPageType>
+                        </ui:NavigationViewItem>
+
+                        <ui:NavigationViewItem Content="极兔设置"
+                                               Tag="JituSettingsView"
+                                               Icon="{ui:SymbolIcon CloudArrowUp24}">
+                            <ui:NavigationViewItem.TargetPageType>
+                                <x:Type Type="views:Jitu.Settings.JituSettingsView" />
                             </ui:NavigationViewItem.TargetPageType>
                         </ui:NavigationViewItem>
                     </ui:NavigationView.MenuItems>

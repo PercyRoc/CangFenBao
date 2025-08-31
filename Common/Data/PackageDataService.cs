@@ -100,8 +100,8 @@ internal class PackageDataService : IPackageDataService
     private readonly string _connectionString;
     private readonly string _dbPath;
     private readonly SemaphoreSlim _initializationLock = new(1, 1);
-    private readonly DbContextOptions<PackageDbContext> _options;
     private readonly ConcurrentDictionary<string, Task> _initializationTasks = new();
+    private readonly DbContextOptions<PackageDbContext> _options;
     private bool _isInitialized;
 
     /// <summary>
@@ -115,10 +115,7 @@ internal class PackageDataService : IPackageDataService
 
         // 确保数据库目录存在（这是轻量级操作）
         var dbDirectory = Path.GetDirectoryName(_dbPath);
-        if (!Directory.Exists(dbDirectory))
-        {
-            Directory.CreateDirectory(dbDirectory!);
-        }
+        if (!Directory.Exists(dbDirectory)) Directory.CreateDirectory(dbDirectory!);
     }
 
     /// <inheritdoc />
@@ -142,7 +139,8 @@ internal class PackageDataService : IPackageDataService
 
             // 确保表初始化完成（原子操作）
             var tableName = GetTableName(record.CreateTime);
-            var initializationTask = _initializationTasks.GetOrAdd(tableName, _ => InitializeTableAsync(record.CreateTime));
+            var initializationTask =
+                _initializationTasks.GetOrAdd(tableName, _ => InitializeTableAsync(record.CreateTime));
             await initializationTask;
 
             // 使用原始SQL插入记录而不是EF Core的AddAsync，避免模型缓存问题
@@ -158,12 +156,9 @@ internal class PackageDataService : IPackageDataService
             var existingCount = Convert.ToInt32(await checkCommand.ExecuteScalarAsync());
 
             if (existingCount > 0)
-            {
                 // 如果条码已存在，可以考虑更新
                 Log.Debug("表 {TableName} 中已存在条码 {Barcode} 的记录，将添加新记录", tableName, record.Barcode);
-                // 这里选择添加新记录而不是更新，因为可能表示新的扫描
-            }
-
+            // 这里选择添加新记录而不是更新，因为可能表示新的扫描
             // 构建插入SQL - 加入托盘信息字段和SortPortCode字段
             var insertSql = $@"
                 INSERT INTO {tableName} (
@@ -305,12 +300,10 @@ internal class PackageDataService : IPackageDataService
             var endMonth = new DateTime(endTime.Year, endTime.Month, 1);
             var monthsToQuery = new List<DateTime>();
 
-            for (var month = startMonth; month <= endMonth; month = month.AddMonths(1))
-            {
-                monthsToQuery.Add(month);
-            }
+            for (var month = startMonth; month <= endMonth; month = month.AddMonths(1)) monthsToQuery.Add(month);
 
-            Log.Debug("Querying time range [{StartTime}, {EndTime}] across {MonthCount} potential months using UNION ALL.",
+            Log.Debug(
+                "Querying time range [{StartTime}, {EndTime}] across {MonthCount} potential months using UNION ALL.",
                 startTime.ToString("yyyy-MM-dd HH:mm:ss"),
                 endTime.ToString("yyyy-MM-dd HH:mm:ss"),
                 monthsToQuery.Count);
@@ -320,10 +313,7 @@ internal class PackageDataService : IPackageDataService
             foreach (var month in monthsToQuery)
             {
                 var tableName = GetTableName(month);
-                if (await TableExistsAsync(tableName))
-                {
-                    existingTableNames.Add(tableName);
-                }
+                if (await TableExistsAsync(tableName)) existingTableNames.Add(tableName);
             }
 
             if (!existingTableNames.Any())
@@ -336,10 +326,7 @@ internal class PackageDataService : IPackageDataService
             var sqlBuilder = new StringBuilder();
             for (var i = 0; i < existingTableNames.Count; i++)
             {
-                if (i > 0)
-                {
-                    sqlBuilder.AppendLine("UNION ALL");
-                }
+                if (i > 0) sqlBuilder.AppendLine("UNION ALL");
 
                 // 在每个子查询中就进行时间过滤，减少数据传输量
                 sqlBuilder.AppendLine($@"
@@ -394,10 +381,7 @@ internal class PackageDataService : IPackageDataService
             var endMonth = new DateTime(queryParams.EndTime.Year, queryParams.EndTime.Month, 1);
             var monthsToQuery = new List<DateTime>();
 
-            for (var month = startMonth; month <= endMonth; month = month.AddMonths(1))
-            {
-                monthsToQuery.Add(month);
-            }
+            for (var month = startMonth; month <= endMonth; month = month.AddMonths(1)) monthsToQuery.Add(month);
 
             Log.Debug("高效查询时间范围 [{StartTime}, {EndTime}]，跨越 {MonthCount} 个月，使用数据库层面过滤",
                 queryParams.StartTime.ToString("yyyy-MM-dd HH:mm:ss"),
@@ -409,10 +393,7 @@ internal class PackageDataService : IPackageDataService
             foreach (var month in monthsToQuery)
             {
                 var tableName = GetTableName(month);
-                if (await TableExistsAsync(tableName))
-                {
-                    existingTableNames.Add(tableName);
-                }
+                if (await TableExistsAsync(tableName)) existingTableNames.Add(tableName);
             }
 
             if (!existingTableNames.Any())
@@ -426,18 +407,9 @@ internal class PackageDataService : IPackageDataService
             {
                 "CreateTime >= @startTime AND CreateTime <= @endTime"
             };
-            if (!string.IsNullOrWhiteSpace(queryParams.Barcode))
-            {
-                whereClauses.Add("Barcode LIKE @barcode");
-            }
-            if (queryParams.ChuteNumber.HasValue)
-            {
-                whereClauses.Add("ChuteNumber = @chuteNumber");
-            }
-            if (queryParams.Status.HasValue)
-            {
-                whereClauses.Add("Status = @status");
-            }
+            if (!string.IsNullOrWhiteSpace(queryParams.Barcode)) whereClauses.Add("Barcode LIKE @barcode");
+            if (queryParams.ChuteNumber.HasValue) whereClauses.Add("ChuteNumber = @chuteNumber");
+            if (queryParams.Status.HasValue) whereClauses.Add("Status = @status");
 
             var whereClause = string.Join(" AND ", whereClauses);
 
@@ -445,10 +417,7 @@ internal class PackageDataService : IPackageDataService
             var sqlBuilder = new StringBuilder();
             for (var i = 0; i < existingTableNames.Count; i++)
             {
-                if (i > 0)
-                {
-                    sqlBuilder.AppendLine("UNION ALL");
-                }
+                if (i > 0) sqlBuilder.AppendLine("UNION ALL");
 
                 // 在每个子查询中应用所有WHERE条件，让数据库引擎进行优化
                 sqlBuilder.AppendLine($@"
@@ -473,17 +442,10 @@ internal class PackageDataService : IPackageDataService
             command.Parameters.AddWithValue("@endTime", queryParams.EndTime.ToString("yyyy-MM-dd HH:mm:ss"));
 
             if (!string.IsNullOrWhiteSpace(queryParams.Barcode))
-            {
                 command.Parameters.AddWithValue("@barcode", $"%{queryParams.Barcode}%");
-            }
             if (queryParams.ChuteNumber.HasValue)
-            {
                 command.Parameters.AddWithValue("@chuteNumber", queryParams.ChuteNumber.Value);
-            }
-            if (queryParams.Status.HasValue)
-            {
-                command.Parameters.AddWithValue("@status", (int)queryParams.Status.Value);
-            }
+            if (queryParams.Status.HasValue) command.Parameters.AddWithValue("@status", (int)queryParams.Status.Value);
 
             Log.Debug("执行高效UNION ALL查询，涉及 {TableCount} 个表，包含数据库层面过滤", existingTableNames.Count);
 
@@ -644,10 +606,7 @@ internal class PackageDataService : IPackageDataService
 
             // 尝试当前月份表
             var success = await TryUpdatePackageStatusInTableAsync(barcode, status, statusDisplay, recordTime.Value);
-            if (success)
-            {
-                return true; // 更新成功
-            }
+            if (success) return true; // 更新成功
 
             // 如果未找到，尝试跨表查询：先尝试前一个月
             var previousMonth = recordTime.Value.AddMonths(-1);
@@ -655,10 +614,7 @@ internal class PackageDataService : IPackageDataService
                 recordTime.Value.ToString("yyyy-MM"), barcode, previousMonth.ToString("yyyy-MM"));
 
             success = await TryUpdatePackageStatusInTableAsync(barcode, status, statusDisplay, previousMonth);
-            if (success)
-            {
-                return true; // 在前一个月表中找到并更新
-            }
+            if (success) return true; // 在前一个月表中找到并更新
 
             // 最后，尝试所有表 (从最新的开始)
             Log.Debug("在当前月和前一个月都未找到包裹 {Barcode}，尝试在所有表中查找", barcode);
@@ -669,17 +625,12 @@ internal class PackageDataService : IPackageDataService
 
             foreach (var tableName in tableNames)
             {
-                if (!TryParseDateFromTableName(tableName, out var tableDate))
-                {
-                    continue; // 跳过不符合格式的表名
-                }
+                if (!TryParseDateFromTableName(tableName, out var tableDate)) continue; // 跳过不符合格式的表名
 
                 // 跳过之前已尝试过的月份
-                if (tableDate.Year == recordTime.Value.Year && tableDate.Month == recordTime.Value.Month ||
-                    tableDate.Year == previousMonth.Year && tableDate.Month == previousMonth.Month)
-                {
+                if ((tableDate.Year == recordTime.Value.Year && tableDate.Month == recordTime.Value.Month) ||
+                    (tableDate.Year == previousMonth.Year && tableDate.Month == previousMonth.Month))
                     continue;
-                }
 
                 success = await TryUpdatePackageStatusInTableAsync(barcode, status, statusDisplay, tableDate);
                 if (success)
@@ -747,10 +698,7 @@ internal class PackageDataService : IPackageDataService
         try
         {
             // 检查表是否存在
-            if (!await TableExistsAsync(tableName))
-            {
-                return null;
-            }
+            if (!await TableExistsAsync(tableName)) return null;
 
             await using var dbContext = CreateDbContext();
 
@@ -872,13 +820,11 @@ internal class PackageDataService : IPackageDataService
             var tableNames = await GetAllPackageTableNamesAsync();
 
             foreach (var tableName in tableNames)
-            {
                 if (TryParseDateFromTableName(tableName, out var tableDate))
                 {
                     Log.Information("正在检查表 {TableName} 的结构", tableName);
                     await FixTableStructureAsync(tableDate);
                 }
-            }
 
             Log.Information("所有表结构检查完成");
         }
@@ -902,7 +848,7 @@ internal class PackageDataService : IPackageDataService
     private async Task InitializeTableAsync(DateTime date)
     {
         await EnsureMonthlyTableExists(date);
-        await EnsureTableSchemaIsCorrectAsync(date); 
+        await EnsureTableSchemaIsCorrectAsync(date);
     }
 
 
@@ -938,8 +884,6 @@ internal class PackageDataService : IPackageDataService
                 await CreateMonthlyTableAsync(dbContext, tableName);
             else
                 Log.Debug("数据表已存在：{TableName}", tableName);
-
-
         }
         catch (Exception ex)
         {
@@ -958,26 +902,26 @@ internal class PackageDataService : IPackageDataService
         var connection = dbContext.Database.GetDbConnection();
         await connection.OpenAsync();
 
-        var expectedColumns = new HashSet<string> { "Id", "PackageIndex", "Barcode", "SegmentCode", "Weight", "ChuteNumber", "SortPortCode", "Status", "StatusDisplay", "CreateTime", "Length", "Width", "Height", "Volume", "Information", "ErrorMessage", "ImagePath", "PalletName", "PalletWeight", "PalletLength", "PalletWidth", "PalletHeight" };
+        var expectedColumns = new HashSet<string>
+        {
+            "Id", "PackageIndex", "Barcode", "SegmentCode", "Weight", "ChuteNumber", "SortPortCode", "Status",
+            "StatusDisplay", "CreateTime", "Length", "Width", "Height", "Volume", "Information", "ErrorMessage",
+            "ImagePath", "PalletName", "PalletWeight", "PalletLength", "PalletWidth", "PalletHeight"
+        };
 
         var command = connection.CreateCommand();
         command.CommandText = $"PRAGMA table_info({tableName})";
-        
+
         var existingColumns = new HashSet<string>();
         await using (var reader = await command.ExecuteReaderAsync())
         {
-            while (await reader.ReadAsync())
-            {
-                existingColumns.Add(reader.GetString(1)); // 'name' is the second column
-            }
+            while (await reader.ReadAsync()) existingColumns.Add(reader.GetString(1)); // 'name' is the second column
         }
 
         if (!expectedColumns.SetEquals(existingColumns))
-        {
-            Log.Warning("Table {TableName} schema is not correct. Expected: {ExpectedColumns}, Actual: {ActualColumns}", 
+            Log.Warning("Table {TableName} schema is not correct. Expected: {ExpectedColumns}, Actual: {ActualColumns}",
                 tableName, string.Join(", ", expectedColumns), string.Join(", ", existingColumns));
-            // In a real-world scenario, you might want to run an ALTER TABLE script here.
-        }
+        // In a real-world scenario, you might want to run an ALTER TABLE script here.
     }
 
     private static async Task CreateMonthlyTableAsync(DbContext dbContext, string tableName)
@@ -1122,10 +1066,7 @@ internal class PackageDataService : IPackageDataService
             {
                 checkColumnCommand.CommandText = checkColumnSql;
                 await using var reader = await checkColumnCommand.ExecuteReaderAsync();
-                while (await reader.ReadAsync())
-                {
-                    columns.Add(reader.GetString(1)); // 列名在第二列
-                }
+                while (await reader.ReadAsync()) columns.Add(reader.GetString(1)); // 列名在第二列
             }
 
             // 定义所有必需的列
@@ -1202,7 +1143,6 @@ internal class PackageDataService : IPackageDataService
             // 检查并添加缺失的列
             var hasColumnChanges = false;
             foreach (var column in requiredColumns)
-            {
                 if (!columns.Contains(column.Key))
                 {
                     var addColumnSql = $"ALTER TABLE {tableName} ADD COLUMN {column.Key} {column.Value}";
@@ -1210,7 +1150,6 @@ internal class PackageDataService : IPackageDataService
                     Log.Information("已添加列 {Column} 到表：{TableName}", column.Key, tableName);
                     hasColumnChanges = true;
                 }
-            }
 
             // 检查是否需要删除ChuteName列
             if (columns.Contains("ChuteName"))
@@ -1271,7 +1210,8 @@ internal class PackageDataService : IPackageDataService
 
             // 创建索引（如果不存在）
             bool indexExists;
-            var checkIndexSql = $"SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='IX_{tableName}_CreateTime_Barcode'";
+            var checkIndexSql =
+                $"SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='IX_{tableName}_CreateTime_Barcode'";
 
             // 使用单独的命令检查索引是否存在
             await using (var checkIndexCommand = connection.CreateCommand())
@@ -1301,13 +1241,9 @@ internal class PackageDataService : IPackageDataService
             }
 
             if (hasColumnChanges)
-            {
                 Log.Information("表 {TableName} 的结构更新完成", tableName);
-            }
             else
-            {
                 Log.Debug("表 {TableName} 的结构已是最新", tableName);
-            }
         }
         catch (Exception ex)
         {
@@ -1339,10 +1275,7 @@ internal class PackageDataService : IPackageDataService
             command.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'Packages_%'";
 
             await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                tableNames.Add(reader.GetString(0));
-            }
+            while (await reader.ReadAsync()) tableNames.Add(reader.GetString(0));
         }
         catch (Exception ex)
         {
@@ -1393,15 +1326,20 @@ internal class PackageDataService : IPackageDataService
             {
                 var dateString = reader.GetString(createTimeOrdinal);
                 // 尝试多种可能的格式进行解析，增加健壮性
-                if (DateTime.TryParse(dateString, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var parsedDate) ||
-                    DateTime.TryParseExact(dateString, "yyyy-MM-dd HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out parsedDate) || // 带7位小数秒
-                    DateTime.TryParseExact(dateString, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out parsedDate)) // 不带小数秒
+                if (DateTime.TryParse(dateString, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal,
+                        out var parsedDate) ||
+                    DateTime.TryParseExact(dateString, "yyyy-MM-dd HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture,
+                        DateTimeStyles.AssumeLocal, out parsedDate) || // 带7位小数秒
+                    DateTime.TryParseExact(dateString, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture,
+                        DateTimeStyles.AssumeLocal, out parsedDate)) // 不带小数秒
                 {
                     record.CreateTime = parsedDate;
                 }
                 else
                 {
-                    Log.Warning("Could not parse CreateTime string '{DateString}' for Barcode {Barcode}. Using default.", dateString, record.Barcode);
+                    Log.Warning(
+                        "Could not parse CreateTime string '{DateString}' for Barcode {Barcode}. Using default.",
+                        dateString, record.Barcode);
                     record.CreateTime = DateTime.MinValue; // 或其他默认值
                 }
             }
@@ -1427,6 +1365,7 @@ internal class PackageDataService : IPackageDataService
             Log.Error(ex, "Failed to map SqliteDataReader row to PackageRecord. Barcode: {Barcode}", currentBarcode);
             // 返回部分填充的记录或根据需要处理错误
         }
+
         return record;
     }
 

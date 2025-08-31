@@ -1,4 +1,3 @@
-
 using NAudio.Wave;
 
 namespace Common.Services.Audio;

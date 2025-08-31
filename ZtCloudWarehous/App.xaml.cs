@@ -8,7 +8,7 @@ using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Hosting;
+using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 using SharedUI.ViewModels;
@@ -70,6 +70,7 @@ public partial class App
                 Environment.Exit(0); // 直接退出进程
                 return null!;
             }
+
             // 可以获取Mutex，说明前一个实例可能异常退出但Mutex已被释放或从未正确获取
             Log.Warning("成功获取已存在的Mutex，可能是上一个实例异常退出");
             _ownsMutex = true; // 明确拥有权
@@ -273,6 +274,7 @@ public partial class App
                         _mutex.ReleaseMutex();
                         Log.Information("Mutex已释放");
                     }
+
                     _mutex.Dispose();
                     _mutex = null;
                 }
@@ -281,6 +283,7 @@ public partial class App
             {
                 Log.Error(ex, "释放Mutex时发生错误");
             }
+
             base.OnExit(e);
         }
     }

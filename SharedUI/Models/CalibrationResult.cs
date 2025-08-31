@@ -15,17 +15,20 @@ public class CalibrationResult
     [UsedImplicitly] public double MeasuredDelay { get; set; }
 
     /// <summary>
-    /// 触发时间标定结果（触发信号 -> 包裹处理时间）
+    ///     触发时间标定结果（触发信号 -> 包裹处理时间）
     /// </summary>
-    [UsedImplicitly] public double TriggerTimeDelay { get; set; }
+    [UsedImplicitly]
+    public double TriggerTimeDelay { get; set; }
 
     /// <summary>
-    /// 分拣时间标定结果（触发信号 -> 分拣信号时间）
+    ///     分拣时间标定结果（触发信号 -> 分拣信号时间）
     /// </summary>
-    [UsedImplicitly] public double SortingTimeDelay { get; set; }
+    [UsedImplicitly]
+    public double SortingTimeDelay { get; set; }
 
     /// <summary>
-    /// 标定模式
+    ///     标定模式
     /// </summary>
-    [UsedImplicitly] public CalibrationMode Mode { get; set; }
-} 
+    [UsedImplicitly]
+    public CalibrationMode Mode { get; set; }
+}

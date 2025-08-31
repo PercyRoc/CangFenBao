@@ -14,6 +14,7 @@ public partial class SettingsDialog
         notificationService.Register("SettingWindowGrowl", GrowlPanel);
         Loaded += OnUserControlLoaded;
     }
+
     private void OnUserControlLoaded(object sender, RoutedEventArgs e)
     {
         RootNavigation?.Navigate(typeof(CameraSettingsView));

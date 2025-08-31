@@ -1,4 +1,5 @@
 using Common.Services.Settings;
+using Prism.Mvvm;
 
 namespace XinJuLi.Models.ASN;
 
@@ -20,6 +21,7 @@ public class AsnSettings : BindableBase
 
     private string _reviewServerUrl = "";
     private string _systemCode = "SH_FX";
+
     /// <summary>
     ///     系统编码
     /// </summary>
@@ -28,6 +30,7 @@ public class AsnSettings : BindableBase
         get => _systemCode;
         set => SetProperty(ref _systemCode, value);
     }
+
     /// <summary>
     ///     仓库编码
     /// </summary>
@@ -36,6 +39,7 @@ public class AsnSettings : BindableBase
         get => _houseCode;
         set => SetProperty(ref _houseCode, value);
     }
+
     /// <summary>
     ///     HTTP服务监听地址
     /// </summary>
@@ -44,6 +48,7 @@ public class AsnSettings : BindableBase
         get => _httpServerUrl;
         set => SetProperty(ref _httpServerUrl, value);
     }
+
     /// <summary>
     ///     应用名称
     /// </summary>
@@ -52,6 +57,7 @@ public class AsnSettings : BindableBase
         get => _applicationName;
         set => SetProperty(ref _applicationName, value);
     }
+
     /// <summary>
     ///     是否启用服务
     /// </summary>
@@ -60,6 +66,7 @@ public class AsnSettings : BindableBase
         get => _isEnabled;
         set => SetProperty(ref _isEnabled, value);
     }
+
     /// <summary>
     ///     扫码复核服务器地址
     /// </summary>
@@ -68,6 +75,7 @@ public class AsnSettings : BindableBase
         get => _reviewServerUrl;
         set => SetProperty(ref _reviewServerUrl, value);
     }
+
     /// <summary>
     ///     扫码复核月台
     /// </summary>

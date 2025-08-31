@@ -5,10 +5,21 @@ using Common.Models.Package;
 using Common.Services.Settings;
 using Serilog;
 using ShanghaiModuleBelt.Models;
+using ShanghaiModuleBelt.Services.Zto;
+using ShanghaiModuleBelt.Services.Sto;
+using ShanghaiModuleBelt.Services.Yunda;
+using ShanghaiModuleBelt.Services.Jitu;
+using ShanghaiModuleBelt.Models.Jitu;
 
 namespace ShanghaiModuleBelt.Services;
 
-internal class ModuleConnectionService(ISettingsService settingsService, ChutePackageRecordService chutePackageRecordService) : IModuleConnectionService
+internal class ModuleConnectionService(
+    ISettingsService settingsService,
+    ChutePackageRecordService chutePackageRecordService,
+    IZtoApiService ztoApiService,
+    IStoAutoReceiveService stoAutoReceiveService,
+    IYundaUploadWeightService yundaUploadWeightService,
+    IJituService jituService) : IModuleConnectionService
 {
     // 数据包相关常量
     private const byte StartCode = 0xF9; // 起始码 16#F9
@@ -19,6 +30,10 @@ internal class ModuleConnectionService(ISettingsService settingsService, ChutePa
     private const byte Checksum = 0xFF; // 固定校验位 16#FF
     private readonly object _bindingLock = new();
     private readonly ModuleConfig _config = settingsService.LoadSettings<ModuleConfig>();
+    private readonly IZtoApiService _ztoApiService = ztoApiService;
+    private readonly IStoAutoReceiveService _stoAutoReceiveService = stoAutoReceiveService;
+    private readonly IYundaUploadWeightService _yundaUploadWeightService = yundaUploadWeightService;
+    private readonly IJituService _jituService = jituService;
     private readonly ConcurrentDictionary<ushort, string> _packageBindings = new();
 
     // 包裹处理相关字段
@@ -31,10 +46,7 @@ internal class ModuleConnectionService(ISettingsService settingsService, ChutePa
     private CancellationTokenSource? _receiveCts;
     private TcpListener? _tcpListener;
 
-    public bool IsConnected
-    {
-        get => _connectedClient?.Connected ?? false;
-    }
+    public bool IsConnected => _connectedClient?.Connected ?? false;
 
     public event EventHandler<bool>? ConnectionStateChanged;
 
@@ -195,6 +207,8 @@ internal class ModuleConnectionService(ISettingsService settingsService, ChutePa
                 // 发送分拣指令
                 _ = SendSortingCommandAsync(packageNumber, (byte)package.ChuteNumber);
                 chutePackageRecordService.AddPackageRecord(package);
+                // 根据设置的条码前缀回传到对应快递API（异步执行，防止阻塞分拣流程）
+                _ = Task.Run(async () => await MaybeSendToCourierApis(package));
                 // 从等待队列中移除
                 _waitingPackages.TryRemove(packageNumber, out _);
                 return; // 找到匹配后直接返回
@@ -264,10 +278,7 @@ internal class ModuleConnectionService(ISettingsService settingsService, ChutePa
                         if (packageIndex == 0)
                         {
                             // 检查起始码
-                            if (buffer[i] == StartCode)
-                            {
-                                packageBuffer[packageIndex++] = buffer[i];
-                            }
+                            if (buffer[i] == StartCode) packageBuffer[packageIndex++] = buffer[i];
                         }
                         else
                         {
@@ -381,7 +392,7 @@ internal class ModuleConnectionService(ISettingsService settingsService, ChutePa
         try
         {
             // 解析包裹序号
-            var packageNumber = (ushort)(data[2] << 8 | data[3]);
+            var packageNumber = (ushort)((data[2] << 8) | data[3]);
             Log.Information("收到包裹触发信号: 序号={PackageNumber}", packageNumber);
 
             // 检查是否正在处理中
@@ -434,24 +445,17 @@ internal class ModuleConnectionService(ISettingsService settingsService, ChutePa
                         {
                             // 检查是否有绑定的条码
                             var boundBarcode = "无";
-                            if (_packageBindings.TryGetValue(packageNumber, out var barcode))
-                            {
-                                boundBarcode = barcode;
-                            }
+                            if (_packageBindings.TryGetValue(packageNumber, out var barcode)) boundBarcode = barcode;
 
                             Log.Warning("包裹等待超时: 序号={PackageNumber}, 最大等待时间={MaxWaitTime}ms, 绑定条码={Barcode}",
                                 packageNumber, _config.MaxWaitTime, boundBarcode);
 
                             // 修复：在发送指令前检查连接状态
                             if (IsConnected)
-                            {
                                 // 只有在连接时才发送
                                 await SendSortingCommandAsync(packageNumber, (byte)_config.ExceptionChute);
-                            }
                             else
-                            {
                                 Log.Warning("客户端已断开，无法为超时包裹 {PackageNumber} 发送异常指令。", packageNumber);
-                            }
                         }
                         else
                         {
@@ -483,7 +487,7 @@ internal class ModuleConnectionService(ISettingsService settingsService, ChutePa
             Log.Error(ex, "处理包裹序号数据包异常: {Data}", BitConverter.ToString(data));
             if (data.Length >= 4)
             {
-                var packageNumber = (ushort)(data[2] << 8 | data[3]);
+                var packageNumber = (ushort)((data[2] << 8) | data[3]);
                 _processingPackages.TryRemove(packageNumber, out _);
                 _packageBindings.TryRemove(packageNumber, out _);
             }
@@ -578,7 +582,7 @@ internal class ModuleConnectionService(ISettingsService settingsService, ChutePa
             var command = new byte[PackageLength];
             command[0] = StartCode; // 起始码
             command[1] = FunctionCodeSend; // 功能码
-            command[2] = (byte)(packageNumber >> 8 & 0xFF); // 包裹序号高字节
+            command[2] = (byte)((packageNumber >> 8) & 0xFF); // 包裹序号高字节
             command[3] = (byte)(packageNumber & 0xFF); // 包裹序号低字节
             command[4] = 0x00; // 预留
             command[5] = 0x00; // 预留
@@ -608,5 +612,98 @@ internal class ModuleConnectionService(ISettingsService settingsService, ChutePa
         public TaskCompletionSource<bool> ProcessCompleted { get; } = new();
         public TaskCompletionSource<bool>? FeedbackTask { get; } = new();
         public CancellationTokenSource? TimeoutCts { get; init; }
+    }
+
+    /// <summary>
+    ///     根据包裹条码前缀判断并回传给对应的快递API
+    /// </summary>
+    /// <param name="package">包裹信息</param>
+    private async Task MaybeSendToCourierApis(PackageInfo package)
+    {
+        try
+        {
+            // 加载各快递的设置
+            var ztoSettings = new SettingsService().LoadSettings<Models.Zto.Settings.ZtoApiSettings>();
+            var stoSettings = new SettingsService().LoadSettings<Models.Sto.Settings.StoApiSettings>();
+            var yundaSettings = new SettingsService().LoadSettings<Models.Yunda.Settings.YundaApiSettings>();
+            var jituSettings = new SettingsService().LoadSettings<Models.Jitu.Settings.JituApiSettings>();
+
+            var barcode = package.Barcode ?? string.Empty;
+
+            // 中通
+            if (!string.IsNullOrEmpty(ztoSettings.BarcodePrefixes) && ztoSettings.BarcodePrefixes.Split(';').Any(barcode.StartsWith))
+            {
+                var collectReq = new Models.Zto.CollectUploadRequest
+                {
+                    CollectUploadDtos =
+                    [
+                        new() { BillCode = barcode, Weight = (decimal)package.Weight }
+                    ]
+                };
+
+                await _ztoApiService.UploadCollectTraceAsync(collectReq);
+            }
+
+            // 申通
+            if (!string.IsNullOrEmpty(stoSettings.BarcodePrefixes) && stoSettings.BarcodePrefixes.Split(';').Any(barcode.StartsWith))
+            {
+                var stoReq = new Models.Sto.StoAutoReceiveRequest
+                {
+                    WhCode = stoSettings.WhCode,
+                    OrgCode = stoSettings.OrgCode,
+                    UserCode = stoSettings.UserCode,
+                    Packages =
+                    [
+                        new() { WaybillNo = barcode, Weight = package.Weight.ToString("F2"), OpTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") }
+                    ]
+                };
+
+                await _stoAutoReceiveService.SendAutoReceiveRequestAsync(stoReq);
+            }
+
+            // 韵达
+            if (!string.IsNullOrEmpty(yundaSettings.BarcodePrefixes) && yundaSettings.BarcodePrefixes.Split(';').Any(barcode.StartsWith))
+            {
+                var yundaReq = new Models.Yunda.YundaUploadWeightRequest
+                {
+                    PartnerId = yundaSettings.PartnerId,
+                    Password = yundaSettings.Password,
+                    Rc4Key = yundaSettings.Rc4Key,
+                    Orders = new Models.Yunda.YundaOrders
+                    {
+                        GunId = yundaSettings.GunId,
+                        RequestTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                        OrderList =
+                        [
+                            new() { Id = DateTime.Now.Ticks, DocId = long.Parse(barcode), ScanSite = yundaSettings.ScanSite, ScanTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), ScanMan = yundaSettings.ScanMan, ObjWei = (decimal)package.Weight }
+                        ]
+                    }
+                };
+
+                await _yundaUploadWeightService.SendUploadWeightRequestAsync(yundaReq);
+            }
+
+            // 极兔
+            if (!string.IsNullOrEmpty(jituSettings.BarcodePrefixes) && jituSettings.BarcodePrefixes.Split(';').Any(barcode.StartsWith))
+            {
+                var jituReq = new JituOpScanRequest
+                {
+                    Billcode = barcode,
+                    Weight = package.Weight,
+                    Length = 0,
+                    Width = 0,
+                    Height = 0,
+                    Devicecode = jituSettings.DeviceCode,
+                    Devicename = jituSettings.DeviceName,
+                    Imgpath = string.Empty
+                };
+
+                await _jituService.SendOpScanRequestAsync(jituReq);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "回传快递API时发生错误: {Barcode}", package.Barcode);
+        }
     }
 }

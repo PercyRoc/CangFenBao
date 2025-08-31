@@ -1,9 +1,9 @@
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Camera.RenJia;
-using DeviceService.DataSourceDevices.Rfid;
 using DeviceService.DataSourceDevices.Scanner;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.DataSourceDevices.Weight;
+using Prism.Ioc;
 
 namespace DeviceService.Extensions;
 
@@ -33,7 +33,7 @@ public static class ContainerRegistryExtensions
     /// </summary>
     public static void AddVolumeCamera(this IContainerRegistry containerRegistry)
     {
-        containerRegistry.RegisterSingleton<RenJiaCameraService>(static sp =>
+        containerRegistry.RegisterSingleton<RenJiaCameraService>(static sp =>   
             sp.Resolve<VolumeCameraStartupService>().GetCameraService());
     }
 
@@ -51,22 +51,11 @@ public static class ContainerRegistryExtensions
     /// </summary>
     public static void AddWeightScale(this IContainerRegistry containerRegistry)
     {
-        // 注册 WeightStartupService 为单例
-        containerRegistry.RegisterSingleton<WeightStartupService>();
-        
-        // 注册 SerialPortWeightService 为单例，确保通过 WeightStartupService 获取唯一实例
+        // 直接注册 SerialPortWeightService 为单例，移除对 WeightStartupService 的依赖
         containerRegistry.RegisterSingleton<SerialPortWeightService>(static sp =>
         {
-            var weightStartupService = sp.Resolve<WeightStartupService>();
-            return weightStartupService.GetWeightService();
+            var settings = sp.Resolve<Common.Services.Settings.ISettingsService>();
+            return new SerialPortWeightService(settings);
         });
-    }
-
-    /// <summary>
-    ///     添加Frid设备服务
-    /// </summary>
-    public static void AddFridDevice(this IContainerRegistry containerRegistry)
-    {
-        containerRegistry.RegisterSingleton<IFridService, FridService>();
     }
 }

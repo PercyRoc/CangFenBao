@@ -70,6 +70,7 @@ public partial class MainWindow
 
             // Dispose ViewModel in background
             if (DataContext is IDisposable viewModel)
+            {
                 Task.Run(() =>
                 {
                     try
@@ -91,6 +92,7 @@ public partial class MainWindow
                         });
                     }
                 });
+            }
             else
             {
                 // If no disposable ViewModel, shut down directly

@@ -1,5 +1,6 @@
 using System.IO.Ports;
 using Common.Services.Settings;
+using Prism.Mvvm;
 
 namespace DeviceService.DataSourceDevices.Belt;
 

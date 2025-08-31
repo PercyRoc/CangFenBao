@@ -25,42 +25,42 @@ public enum CalibrationMode
 }
 
 /// <summary>
-/// Represents a generic item that can be calibrated in the calibration dialog.
+///     Represents a generic item that can be calibrated in the calibration dialog.
 /// </summary>
 public class CalibrationTarget
 {
     /// <summary>
-    /// The type of calibration this target is for.
+    ///     The type of calibration this target is for.
     /// </summary>
     public CalibrationMode Mode { get; set; } = CalibrationMode.CompleteFlow;
 
     /// <summary>
-    /// A unique identifier for the target, used to match signals. e.g., "Trigger" or "Photoelectric1".
+    ///     A unique identifier for the target, used to match signals. e.g., "Trigger" or "Photoelectric1".
     /// </summary>
     public string Id { get; set; } = string.Empty;
 
     /// <summary>
-    /// The name to be displayed in the UI dropdown. e.g., "触发光电" or "分拣光电1 (格口 1-2)".
+    ///     The name to be displayed in the UI dropdown. e.g., "触发光电" or "分拣光电1 (格口 1-2)".
     /// </summary>
     public string DisplayName { get; set; } = string.Empty;
 
     /// <summary>
-    /// The lower bound of the valid time range for sorting, in milliseconds.
+    ///     The lower bound of the valid time range for sorting, in milliseconds.
     /// </summary>
     public double TimeRangeLower { get; set; }
 
     /// <summary>
-    /// The upper bound of the valid time range for sorting, in milliseconds.
+    ///     The upper bound of the valid time range for sorting, in milliseconds.
     /// </summary>
     public double TimeRangeUpper { get; set; }
 
     /// <summary>
-    /// The delay before the sorting action is executed, in milliseconds.
+    ///     The delay before the sorting action is executed, in milliseconds.
     /// </summary>
     public double SortingDelay { get; set; }
 
     /// <summary>
-    /// The delay before the sorting mechanism is reset, in milliseconds.
+    ///     The delay before the sorting mechanism is reset, in milliseconds.
     /// </summary>
     public double ResetDelay { get; set; }
-} 
+}

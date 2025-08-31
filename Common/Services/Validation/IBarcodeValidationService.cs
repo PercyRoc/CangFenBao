@@ -81,36 +81,35 @@ public enum BarcodeType
     /// <summary>
     ///     未知类型
     /// </summary>
-    [Description("未知类型")]
-    Unknown = 0,
+    [Description("未知类型")] Unknown = 0,
 
     /// <summary>
     ///     内部包裹流转码（9开头，10位数字）
     /// </summary>
-    [Description("内部包裹流转码")]
-    InternalPackage = 1,
+    [Description("内部包裹流转码")] InternalPackage = 1,
 
     /// <summary>
     ///     标准快递面单（8开头，13位数字）
     /// </summary>
-    [Description("标准快递面单")]
-    StandardExpress = 2,
+    [Description("标准快递面单")] StandardExpress = 2,
 
     /// <summary>
     ///     API直连电子面单（6开头，13位数字）
     /// </summary>
-    [Description("API直连电子面单")]
-    ApiDirectElectronic = 3,
+    [Description("API直连电子面单")] ApiDirectElectronic = 3,
 
     /// <summary>
     ///     吉时达电子面单（2开头13位或JS0开头15位）
     /// </summary>
-    [Description("吉时达电子面单")]
-    JishidaElectronic = 4,
+    [Description("吉时达电子面单")] JishidaElectronic = 4,
 
     /// <summary>
     ///     淘宝/菜鸟电子面单（67开头，13位数字，EAN-13校验）
     /// </summary>
-    [Description("淘宝/菜鸟电子面单")]
-    TaobaoElectronic = 5
+    [Description("淘宝/菜鸟电子面单")] TaobaoElectronic = 5,
+
+    /// <summary>
+    ///     BN新规则面单（BN开头，14位数字，基于前13位计算校验位）
+    /// </summary>
+    [Description("BN新规则面单")] BnElectronic = 6
 }

@@ -139,8 +139,8 @@ public class ChutePackageRecordService(HttpClient httpClient, ISettingsService s
                 packageCode = packageCodes,
                 chute_code = chuteNumber.ToString(),
                 Time = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
-                handlers,
-                siteCode = _config.SiteCode
+                handlers
+                // siteCode 已移除
             };
 
             // 序列化为JSON
@@ -158,7 +158,7 @@ public class ChutePackageRecordService(HttpClient httpClient, ISettingsService s
 
             // 设置请求头
             using var request = new HttpRequestMessage(HttpMethod.Post, ApiUrl);
-            request.Headers.Add("equickToken", _config.Token);
+            // Token 已移除，不再添加到请求头
             request.Content = content;
 
             var response = await httpClient.SendAsync(request, cts.Token);

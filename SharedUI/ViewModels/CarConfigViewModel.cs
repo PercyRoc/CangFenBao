@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using Common.Services.Settings;
+using Prism.Commands;
+using Prism.Mvvm;
 using SortingServices.Car.Models;
 
 namespace SharedUI.ViewModels;
@@ -30,10 +32,7 @@ public class CarConfigViewModel : BindableBase
     /// <summary>
     ///     小车配置集合
     /// </summary>
-    public ObservableCollection<CarConfig>? CarConfigs
-    {
-        get => _carConfigModel.CarConfigs;
-    }
+    public ObservableCollection<CarConfig>? CarConfigs => _carConfigModel.CarConfigs;
 
     /// <summary>
     ///     选中的小车配置
@@ -70,18 +69,12 @@ public class CarConfigViewModel : BindableBase
         _carConfigModel.CarConfigs!.Clear(); // Clear existing items
 
         if (settings.CarConfigs != null)
-        {
             foreach (var carConfig in settings.CarConfigs)
-            {
                 _carConfigModel.CarConfigs.Add(carConfig); // Add loaded items
-            }
-        }
 
         // 初始化选中项
         if (CarConfigs?.Count > 0) // CarConfigs returns _carConfigModel.CarConfigs
-        {
             SelectedCarConfig = CarConfigs[0];
-        }
     }
 
     /// <summary>

@@ -1,5 +1,7 @@
 using Common.Services.Settings;
 using HandyControl.Controls;
+using Prism.Commands;
+using Prism.Mvvm;
 using Serilog;
 using ShanghaiModuleBelt.Models.Sto.Settings;
 
@@ -16,7 +18,7 @@ public class StoApiSettingsViewModel : BindableBase
 
     public StoApiSettingsViewModel(ISettingsService settingsService
         // IDialogService dialogService
-        )
+    )
     {
         _settingsService = settingsService;
         // _dialogService = dialogService;

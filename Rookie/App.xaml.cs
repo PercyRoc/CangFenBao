@@ -6,6 +6,7 @@ using DeviceService.DataSourceDevices.Services;
 using DeviceService.Extensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+using Prism.Ioc;
 using Rookie.ViewModels.Settings;
 using Rookie.ViewModels.Windows;
 using Rookie.ViewModels.Windows.Dialogs;
@@ -49,15 +50,18 @@ public partial class App
                 Log.Information("获取到 Mutex. 正在创建 MainWindow.");
                 return Container.Resolve<MainWindow>();
             }
+
             Log.Warning("应用程序已在运行. 正在关闭.");
-            MessageBox.Show("Application is already running!", "Information", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("Application is already running!", "Information", MessageBoxButton.OK,
+                MessageBoxImage.Information);
             Environment.Exit(0);
             return null!;
         }
         catch (Exception ex)
         {
             Log.Fatal(ex, "Mutex 检查或 MainWindow 创建期间出错.");
-            MessageBox.Show($"Fatal error during startup: {ex.Message}", "Startup Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show($"Fatal error during startup: {ex.Message}", "Startup Error", MessageBoxButton.OK,
+                MessageBoxImage.Error);
             Environment.Exit(1);
             return null!;
         }
@@ -121,7 +125,9 @@ public partial class App
             Log.Fatal(ex, "服务初始化期间发生严重错误. 应用程序将关闭.");
             Current.Dispatcher.Invoke(() =>
             {
-                MessageBox.Show($"Failed to initialize background services. The application will close.\n\nError: {ex.Message}", "Startup Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(
+                    $"Failed to initialize background services. The application will close.\n\nError: {ex.Message}",
+                    "Startup Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 Current.Shutdown(1);
             });
         }
@@ -172,7 +178,10 @@ public partial class App
                 await Task.WhenAll(shutdownTasks);
                 Log.Information("所有等待的后台服务已停止.");
             }
-            else { Log.Information("未找到需要等待的可停止后台服务."); }
+            else
+            {
+                Log.Information("未找到需要等待的可停止后台服务.");
+            }
         }
         catch (Exception ex)
         {
@@ -224,7 +233,8 @@ public partial class App
 
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
-            Log.Fatal(args.ExceptionObject as Exception, "捕获到未处理的 AppDomain 异常. IsTerminating: {IsTerminating}", args.IsTerminating);
+            Log.Fatal(args.ExceptionObject as Exception, "捕获到未处理的 AppDomain 异常. IsTerminating: {IsTerminating}",
+                args.IsTerminating);
         };
         Log.Information("全局异常处理程序已注册");
     }
@@ -235,15 +245,20 @@ public partial class App
         {
             if (_mutex == null) return;
             if (_ownsMutex && _mutex.SafeWaitHandle is { IsClosed: false, IsInvalid: false })
-            {
                 try
                 {
                     _mutex.ReleaseMutex();
                     Log.Information("Mutex 已释放");
                 }
-                catch (ApplicationException ex) { Log.Warning(ex, "释放 Mutex 失败 (已释放?)"); }
-                catch (Exception ex) { Log.Error(ex, "释放 Mutex 出错"); }
-            }
+                catch (ApplicationException ex)
+                {
+                    Log.Warning(ex, "释放 Mutex 失败 (已释放?)");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "释放 Mutex 出错");
+                }
+
             _mutex.Dispose();
             _mutex = null;
             _ownsMutex = false;

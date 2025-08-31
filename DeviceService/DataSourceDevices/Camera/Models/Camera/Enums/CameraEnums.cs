@@ -10,20 +10,17 @@ public enum CameraManufacturer
     /// <summary>
     ///     华睿
     /// </summary>
-    [Description("华睿")]
-    HuaRay,
+    [Description("华睿")] HuaRay,
 
     /// <summary>
     ///     海康
     /// </summary>
-    [Description("海康")]
-    Hikvision,
+    [Description("海康")] Hikvision,
 
     /// <summary>
     ///     TCP相机
     /// </summary>
-    [Description("TCP")]
-    Tcp
+    [Description("TCP")] Tcp
 }
 
 /// <summary>
@@ -34,18 +31,15 @@ public enum CameraType
     /// <summary>
     ///     工业相机
     /// </summary>
-    [Description("工业相机")]
-    Industrial,
+    [Description("工业相机")] Industrial,
 
     /// <summary>
     ///     智能相机
     /// </summary>
-    [Description("智能相机")]
-    Smart,
+    [Description("智能相机")] Smart,
 
     /// <summary>
     ///     TCP相机
     /// </summary>
-    [Description("TCP相机")]
-    Tcp
+    [Description("TCP相机")] Tcp
 }

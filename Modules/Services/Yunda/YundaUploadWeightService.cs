@@ -32,7 +32,8 @@ public class YundaUploadWeightService(
         {
             Log.Error("韵达API配置不完整，请检查ApiUrl, AppKey, AppSecret, PartnerId, Password, Rc4Key。" +
                       "当前配置：ApiUrl={ApiUrl}, AppKey={AppKey}, AppSecret={AppSecret}, PartnerId={PartnerId}, Password={Password}, Rc4Key={Rc4Key}",
-                settings.ApiUrl, settings.AppKey, settings.AppSecret, settings.PartnerId, settings.Password, settings.Rc4Key);
+                settings.ApiUrl, settings.AppKey, settings.AppSecret, settings.PartnerId, settings.Password,
+                settings.Rc4Key);
             return new YundaUploadWeightResponse
             {
                 Result = false,
@@ -128,10 +129,7 @@ public class YundaUploadWeightService(
 
         // 将字节数组转换为十六进制字符串
         var sb = new StringBuilder();
-        foreach (var t in hashBytes)
-        {
-            sb.Append(t.ToString("x2")); // "x2" 表示两位小写十六进制
-        }
+        foreach (var t in hashBytes) sb.Append(t.ToString("x2")); // "x2" 表示两位小写十六进制
         return sb.ToString();
     }
 }

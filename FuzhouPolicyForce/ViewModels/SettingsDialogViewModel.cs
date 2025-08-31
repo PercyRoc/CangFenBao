@@ -1,5 +1,9 @@
 ﻿using Common.Services.Ui;
 using FuzhouPolicyForce.ViewModels.Settings;
+using Prism.Commands;
+using Prism.Dialogs;
+using Prism.Ioc;
+using Prism.Mvvm;
 using Serilog;
 using SharedUI.ViewModels.Settings;
 
@@ -7,6 +11,7 @@ namespace FuzhouPolicyForce.ViewModels;
 
 internal class SettingsDialogViewModel : BindableBase, IDialogAware
 {
+    private readonly AnttoWeightSettingsViewModel _anttoWeightSettingsViewModel;
     private readonly BalanceSortSettingsViewModel _balanceSortSettingsViewModel;
 
     private readonly BarcodeChuteSettingsViewModel _barcodeChuteSettingsViewModel;
@@ -15,7 +20,6 @@ internal class SettingsDialogViewModel : BindableBase, IDialogAware
     private readonly CameraSettingsViewModel _cameraSettingsViewModel;
     private readonly INotificationService _notificationService;
     private readonly WangDianTongSettingsViewModel _wangDianTongSettingsViewModel;
-    private readonly AnttoWeightSettingsViewModel _anttoWeightSettingsViewModel;
 
     public SettingsDialogViewModel(
         IContainerProvider containerProvider,

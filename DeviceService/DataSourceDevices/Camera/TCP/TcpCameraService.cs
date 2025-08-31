@@ -49,21 +49,13 @@ internal class TcpCameraService : ICameraService
 
     public bool IsConnected { get; private set; }
 
-    public IObservable<PackageInfo> PackageStream
-    {
-        get => _packageSubject.AsObservable();
-    }
+    public IObservable<PackageInfo> PackageStream => _packageSubject.AsObservable();
 
-    public IObservable<BitmapSource> ImageStream
-    {
-        get => _realtimeImageSubject.AsObservable(); // 保留，但当前未使用
-    }
+    public IObservable<BitmapSource> ImageStream => _realtimeImageSubject.AsObservable(); // 保留，但当前未使用
 
     // 实现 ImageStreamWithId，返回空流
-    public IObservable<(BitmapSource Image, string CameraId)> ImageStreamWithId
-    {
-        get => Observable.Empty<(BitmapSource Image, string CameraId)>();
-    }
+    public IObservable<(BitmapSource Image, string CameraId)> ImageStreamWithId =>
+        Observable.Empty<(BitmapSource Image, string CameraId)>();
 
     public event Action<string, bool>? ConnectionChanged;
 
@@ -117,7 +109,6 @@ internal class TcpCameraService : ICameraService
         // TCP service might not represent a specific camera model
         // Return a placeholder if connected
         if (IsConnected)
-        {
             return new List<CameraBasicInfo>
             {
                 new()
@@ -126,7 +117,6 @@ internal class TcpCameraService : ICameraService
                     Name = "TCP 数据源"
                 }
             };
-        }
         return [];
     }
 
@@ -156,6 +146,7 @@ internal class TcpCameraService : ICameraService
             {
                 _receiveBuffer.Clear();
             }
+
             Log.Debug("TCP 连接断开，接收缓冲区已清空");
         }
     }
@@ -222,7 +213,6 @@ internal class TcpCameraService : ICameraService
                     lock (_processLock)
                     {
                         if (!_processingPackage)
-                        {
                             try
                             {
                                 _processingPackage = true;
@@ -232,11 +222,8 @@ internal class TcpCameraService : ICameraService
                             {
                                 _processingPackage = false;
                             }
-                        }
                         else
-                        {
                             Log.Debug("正在处理其他包裹，跳过当前数据: {Data}", packet);
-                        }
                     }
                 }
                 else
@@ -251,10 +238,7 @@ internal class TcpCameraService : ICameraService
             }
         }
 
-        if (bufferModified)
-        {
-            Log.Debug("处理完成后，剩余缓冲区内容: {Content}", content);
-        }
+        if (bufferModified) Log.Debug("处理完成后，剩余缓冲区内容: {Content}", content);
     }
 
     private static (string? Packet, int ProcessedLength) ExtractFirstValidPacket(string bufferContent)
@@ -288,10 +272,7 @@ internal class TcpCameraService : ICameraService
         if (parts.Count == 0) return 0;
         var joinedString = string.Join(",", parts);
         var index = originalBuffer.IndexOf(joinedString, StringComparison.Ordinal);
-        if (index != -1)
-        {
-            return index + joinedString.Length;
-        }
+        if (index != -1) return index + joinedString.Length;
         return joinedString.Length + (parts.Count > 0 ? parts.Count - 1 : 0);
     }
 
@@ -308,7 +289,8 @@ internal class TcpCameraService : ICameraService
         if (!double.TryParse(packet[^2], out _)) return false;
 
         var firstBarcode = packet[0].Trim();
-        return !string.IsNullOrEmpty(firstBarcode) || string.Equals(firstBarcode, "noread", StringComparison.OrdinalIgnoreCase);
+        return !string.IsNullOrEmpty(firstBarcode) ||
+               string.Equals(firstBarcode, "noread", StringComparison.OrdinalIgnoreCase);
     }
 
     private void ProcessPackageData(string packetData)
@@ -330,13 +312,9 @@ internal class TcpCameraService : ICameraService
                 {
                     var currentTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                     if (unixTimestamp > currentTimestamp || unixTimestamp > 1000000000000)
-                    {
                         timestamp = DateTimeOffset.FromUnixTimeMilliseconds(unixTimestamp).LocalDateTime;
-                    }
                     else
-                    {
                         timestamp = DateTimeOffset.FromUnixTimeSeconds(unixTimestamp).LocalDateTime;
-                    }
                 }
                 catch (ArgumentOutOfRangeException ex)
                 {
@@ -367,10 +345,7 @@ internal class TcpCameraService : ICameraService
             if (length.HasValue && width.HasValue && height.HasValue)
             {
                 package.SetDimensions(length.Value, width.Value, height.Value);
-                if (volume.HasValue)
-                {
-                    package.SetVolume(volume.Value);
-                }
+                if (volume.HasValue) package.SetVolume(volume.Value);
             }
             else
             {
@@ -381,7 +356,8 @@ internal class TcpCameraService : ICameraService
             if (isNoRead)
             {
                 package.SetStatus(PackageStatus.Failed, "无法识别条码");
-                Log.Information("收到无法识别条码的包裹: 时间={Time}, 重量={Weight:F2}kg, 长={Length:F2}cm, 宽={Width:F2}cm, 高={Height:F2}cm, 体积={Volume:F3}m³",
+                Log.Information(
+                    "收到无法识别条码的包裹: 时间={Time}, 重量={Weight:F2}kg, 长={Length:F2}cm, 宽={Width:F2}cm, 高={Height:F2}cm, 体积={Volume:F3}m³",
                     timestamp, package.Weight, package.Length, package.Width, package.Height, package.Volume);
             }
             else
@@ -391,19 +367,20 @@ internal class TcpCameraService : ICameraService
                     var additionalBarcodes = string.Join(",", parts[1..^6].Select(b => b.Trim()));
                     Log.Information(
                         "收到包裹: 条码={Barcode}, 时间={Time}, 重量={Weight:F2}kg, 长={Length:F2}cm, 宽={Width:F2}cm, 高={Height:F2}cm, 体积={Volume:F3}m³, 额外条码={AdditionalBarcodes}",
-                        package.Barcode, timestamp, package.Weight, package.Length, package.Width, package.Height, package.Volume,
+                        package.Barcode, timestamp, package.Weight, package.Length, package.Width, package.Height,
+                        package.Volume,
                         additionalBarcodes);
                 }
                 else
                 {
                     Log.Information(
                         "收到包裹: 条码={Barcode}, 时间={Time}, 重量={Weight:F2}kg, 长={Length:F2}cm, 宽={Width:F2}cm, 高={Height:F2}cm, 体积={Volume:F3}m³",
-                        package.Barcode, timestamp, package.Weight, package.Length, package.Width, package.Height, package.Volume);
+                        package.Barcode, timestamp, package.Weight, package.Length, package.Width, package.Height,
+                        package.Volume);
                 }
             }
 
             _packageSubject.OnNext(package);
-
         }
         catch (Exception ex)
         {

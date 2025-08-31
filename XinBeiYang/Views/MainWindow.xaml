@@ -894,7 +894,7 @@
                         <Ellipse Stroke="#E0E0E0"
                                  StrokeThickness="8"
                                  Fill="Transparent" />
-                        
+
                         <!-- 进度圆环 -->
                         <ui:Arc Stroke="#2196F3"
                                 StrokeThickness="8"
@@ -902,7 +902,7 @@
                                 EndAngle="{Binding WaitingCountdownProgress, Converter={StaticResource ProgressToAngleConverter}}"
                                 Width="104"
                                 Height="104" />
-                        
+
                         <!-- 倒计时数字 -->
                         <TextBlock Text="{Binding WaitingCountdownSeconds}"
                                    FontSize="36"

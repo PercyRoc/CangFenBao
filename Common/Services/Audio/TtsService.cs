@@ -1,5 +1,6 @@
 using System.IO;
 using System.Speech.Synthesis;
+using System.Windows.Threading;
 using NAudio.Wave;
 using Serilog;
 
@@ -10,18 +11,21 @@ namespace Common.Services.Audio;
 /// </summary>
 public class TtsService : ITtsService
 {
-    private readonly SpeechSynthesizer _synthesizer;
+    private SpeechSynthesizer? _synthesizer;
     private readonly SemaphoreSlim _speakLock;
     private readonly Dictionary<AudioType, string> _presetTexts;
     private bool _disposed;
+    private readonly Dispatcher _dispatcher;
+    private bool _isProcessing;
+    private DateTime _lastProcessingStart;
 
     /// <summary>
     ///     构造函数
     /// </summary>
     public TtsService()
     {
-        _synthesizer = new SpeechSynthesizer();
         _speakLock = new SemaphoreSlim(1, 1);
+        _dispatcher = Dispatcher.CurrentDispatcher;
 
         _presetTexts = new Dictionary<AudioType, string>
         {
@@ -38,10 +42,34 @@ public class TtsService : ITtsService
             { AudioType.WeightAbnormal, "重量异常" }
         };
 
-        _synthesizer.SetOutputToDefaultAudioDevice();
-        SetChineseVoice();
+        // 延迟初始化 SpeechSynthesizer，避免线程问题
+        InitializeSynthesizer();
 
         Log.Information("TTS语音服务已初始化 (使用NAudio增强)");
+    }
+
+    /// <summary>
+    ///     延迟初始化 SpeechSynthesizer，确保在正确的线程中创建
+    /// </summary>
+    private void InitializeSynthesizer()
+    {
+        if (_dispatcher.CheckAccess())
+        {
+            // 在UI线程中，直接创建
+            _synthesizer = new SpeechSynthesizer();
+            _synthesizer.SetOutputToDefaultAudioDevice();
+            SetChineseVoice();
+        }
+        else
+        {
+            // 不在UI线程中，通过Dispatcher调度到UI线程
+            _dispatcher.Invoke(() =>
+            {
+                _synthesizer = new SpeechSynthesizer();
+                _synthesizer.SetOutputToDefaultAudioDevice();
+                SetChineseVoice();
+            });
+        }
     }
 
     /// <inheritdoc />
@@ -53,9 +81,25 @@ public class TtsService : ITtsService
             return false;
         }
 
-        Math.Clamp(rate, -10, 10);
-        Math.Clamp(volume, 0, 100);
+        rate = Math.Clamp(rate, -10, 10);
+        volume = Math.Clamp(volume, 0, 100);
         volumeMultiplier = Math.Max(0.0f, volumeMultiplier);
+
+        // 检查是否正在处理中，如果是则检查是否超时
+        if (_isProcessing)
+        {
+            var processingTime = DateTime.Now - _lastProcessingStart;
+            if (processingTime.TotalSeconds > 30) // 30秒超时
+            {
+                Log.Warning("TTS处理超时 {Seconds} 秒，强制重置状态", processingTime.TotalSeconds);
+                _isProcessing = false;
+            }
+            else
+            {
+                Log.Debug("TTS正在处理中，跳过本次请求: {Text}", text);
+                return false;
+            }
+        }
 
         if (!await _speakLock.WaitAsync(TimeSpan.FromSeconds(1)))
         {
@@ -63,72 +107,96 @@ public class TtsService : ITtsService
             return false;
         }
 
+        _isProcessing = true;
+        _lastProcessingStart = DateTime.Now;
+
         try
         {
-            
-            var tcs = new TaskCompletionSource<bool>();
-            
-            // 将合成器输出重定向到内存流
-            using var memoryStream = new MemoryStream();
-            _synthesizer.SetOutputToWaveStream(memoryStream);
-            
-            // 异步合成语音
-            _synthesizer.SpeakAsync(text);
-            
-            // 播放完成后的回调
-            _synthesizer.SpeakCompleted += async (_, e) =>
+            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            using var baseStream = new MemoryStream();
+            using var nonClosingStream = new NonClosingStreamWrapper(baseStream);
+
+            // 确保 SpeechSynthesizer 操作在正确的线程中执行
+            await _dispatcher.InvokeAsync(() =>
             {
-                // 确保我们在正确的线程上处理
-                await Task.Yield();
+                if (_synthesizer == null)
+                    throw new InvalidOperationException("SpeechSynthesizer 未初始化");
 
-                if (e.Error != null)
-                {
-                    Log.Error(e.Error, "TTS aac synthesis failed");
-                    tcs.TrySetResult(false);
-                    return;
-                }
+                _synthesizer.Rate = rate;
+                _synthesizer.Volume = volume;
+                _synthesizer.SetOutputToWaveStream(nonClosingStream);
 
-                try
+                EventHandler<SpeakCompletedEventArgs>? handler = null;
+                handler = async (_, e) =>
                 {
-                    memoryStream.Position = 0;
-                    using var waveReader = new WaveFileReader(memoryStream);
-                    var sampleProvider = new VolumeSampleProvider(waveReader.ToSampleProvider())
+                    try
                     {
-                        VolumeMultiplier = volumeMultiplier
-                    };
+                        // 移除事件处理器前检查对象状态
+                        await _dispatcher.InvokeAsync(() =>
+                        {
+                            if (_synthesizer != null && handler != null)
+                            {
+                                _synthesizer.SpeakCompleted -= handler;
+                            }
+                        });
+                        await Task.Yield();
 
-                    // 使用 using 确保 WaveOutEvent 被释放
-                    using var waveOut = new WaveOutEvent();
-                    var playbackFinishedTcs = new TaskCompletionSource<bool>();
-                    
-                    waveOut.PlaybackStopped += (sender, args) =>
+                    if (e.Error != null)
                     {
-                        if (args.Exception != null)
+                        Log.Error(e.Error, "TTS synthesis failed");
+                        tcs.TrySetResult(false);
+                        return;
+                    }
+
+                    try
+                    {
+                        baseStream.Position = 0;
+                        using var waveReader = new WaveFileReader(baseStream);
+                        var sampleProvider = new VolumeSampleProvider(waveReader.ToSampleProvider())
                         {
-                            Log.Error(args.Exception, "NAudio playback failed");
-                            playbackFinishedTcs.TrySetResult(false);
-                        }
-                        else
+                            VolumeMultiplier = volumeMultiplier
+                        };
+
+                        using var waveOut = new WaveOutEvent();
+                        var playbackFinishedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+                        waveOut.PlaybackStopped += (sender, args) =>
                         {
-                            playbackFinishedTcs.TrySetResult(true);
-                        }
-                    };
-                    
-                    waveOut.Init(sampleProvider);
-                    waveOut.Play();
-                    
-                    // 等待播放完成
-                    var result = await playbackFinishedTcs.Task;
-                    tcs.TrySetResult(result);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "NAudio playback preparation failed");
-                    tcs.TrySetResult(false);
-                }
-            };
-            
-            // 等待整个操作完成
+                            if (args.Exception != null)
+                            {
+                                Log.Error(args.Exception, "NAudio playback failed");
+                                playbackFinishedTcs.TrySetResult(false);
+                            }
+                            else
+                            {
+                                playbackFinishedTcs.TrySetResult(true);
+                            }
+                        };
+
+                        waveOut.Init(sampleProvider);
+                        waveOut.Play();
+
+                        var result = await playbackFinishedTcs.Task;
+                        tcs.TrySetResult(result);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "NAudio playback preparation failed");
+                        tcs.TrySetResult(false);
+                    }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "TTS事件处理器执行失败");
+                        tcs.TrySetResult(false);
+                    }
+                };
+
+                _synthesizer.SpeakCompleted += handler;
+                _synthesizer.SpeakAsync(text);
+            });
+
             return await tcs.Task;
         }
         catch (Exception ex)
@@ -138,7 +206,20 @@ public class TtsService : ITtsService
         }
         finally
         {
-            _synthesizer.SetOutputToDefaultAudioDevice();
+            try
+            {
+                _dispatcher.Invoke(() =>
+                {
+                    if (_synthesizer != null)
+                        _synthesizer.SetOutputToDefaultAudioDevice();
+                });
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "重置TTS输出设备失败");
+            }
+
+            _isProcessing = false;
             _speakLock.Release();
         }
     }
@@ -161,7 +242,11 @@ public class TtsService : ITtsService
     {
         try
         {
-            _synthesizer.SpeakAsyncCancelAll();
+            _dispatcher.Invoke(() =>
+            {
+                if (_synthesizer != null)
+                    _synthesizer.SpeakAsyncCancelAll();
+            });
             Log.Debug("已停止TTS语音播放");
         }
         catch (Exception ex)
@@ -175,7 +260,11 @@ public class TtsService : ITtsService
     {
         try
         {
-            _synthesizer.Pause();
+            _dispatcher.Invoke(() =>
+            {
+                if (_synthesizer != null)
+                    _synthesizer.Pause();
+            });
             Log.Debug("已暂停TTS语音播放");
         }
         catch (Exception ex)
@@ -189,7 +278,11 @@ public class TtsService : ITtsService
     {
         try
         {
-            _synthesizer.Resume();
+            _dispatcher.Invoke(() =>
+            {
+                if (_synthesizer != null)
+                    _synthesizer.Resume();
+            });
             Log.Debug("已恢复TTS语音播放");
         }
         catch (Exception ex)
@@ -203,7 +296,8 @@ public class TtsService : ITtsService
     {
         try
         {
-            return _synthesizer.GetInstalledVoices().Select(v => v.VoiceInfo);
+            return _dispatcher.Invoke(() =>
+                _synthesizer?.GetInstalledVoices().Select(v => v.VoiceInfo) ?? []);
         }
         catch (Exception ex)
         {
@@ -223,7 +317,11 @@ public class TtsService : ITtsService
 
         try
         {
-            _synthesizer.SelectVoice(voiceName);
+            _dispatcher.Invoke(() =>
+            {
+                if (_synthesizer != null)
+                    _synthesizer.SelectVoice(voiceName);
+            });
             Log.Information("已设置语音: {VoiceName}", voiceName);
             return true;
         }
@@ -238,7 +336,9 @@ public class TtsService : ITtsService
     {
         try
         {
-            var voices = GetInstalledVoices().ToList();
+            var voices = _dispatcher.Invoke(() =>
+                _synthesizer?.GetInstalledVoices().Select(v => v.VoiceInfo).ToList() ?? []);
+
             if (voices.Count == 0)
             {
                 Log.Warning("系统中未找到任何TTS语音");
@@ -253,7 +353,12 @@ public class TtsService : ITtsService
 
             if (chineseVoice != null)
             {
-                SetVoice(chineseVoice.Name);
+                _dispatcher.Invoke(() =>
+                {
+                    if (_synthesizer != null)
+                        _synthesizer.SelectVoice(chineseVoice.Name);
+                });
+                Log.Information("已设置中文语音: {VoiceName}", chineseVoice.Name);
             }
             else
             {
@@ -273,7 +378,11 @@ public class TtsService : ITtsService
 
         try
         {
-            _synthesizer.Dispose();
+            _dispatcher.Invoke(() =>
+            {
+                if (_synthesizer != null)
+                    _synthesizer.Dispose();
+            });
             _speakLock.Dispose();
         }
         catch (Exception ex)
@@ -285,3 +394,4 @@ public class TtsService : ITtsService
         GC.SuppressFinalize(this);
     }
 }
+

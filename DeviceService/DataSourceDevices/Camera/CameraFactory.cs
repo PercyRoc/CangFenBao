@@ -5,6 +5,7 @@ using DeviceService.DataSourceDevices.Camera.Models.Camera;
 using DeviceService.DataSourceDevices.Camera.Models.Camera.Enums;
 using DeviceService.DataSourceDevices.Camera.TCP;
 using Serilog;
+
 // using DeviceService.DataSourceDevices.Camera.Hikvision;
 // using DeviceService.DataSourceDevices.Camera.HikvisionSmartSdk;
 

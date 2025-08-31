@@ -3,6 +3,7 @@ using System.Text;
 using Common.Models.Settings.Sort.PendulumSort;
 using Common.Services.Settings;
 using DeviceService.DataSourceDevices.TCP;
+using Prism.Events;
 using Serilog;
 
 namespace SortingServices.Pendulum;
@@ -44,7 +45,7 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
                 configuration.TriggerPhotoelectric.Port,
                 ProcessTriggerData,
                 connected => UpdateDeviceConnectionState("触发光电", connected),
-                autoReconnect: false
+                false
             );
 
             try
@@ -68,7 +69,7 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
                     photoelectric.Port,
                     data => ProcessSortingData(data, photoelectric.Name),
                     connected => UpdateDeviceConnectionState(photoelectric.Name, connected),
-                    autoReconnect: false
+                    false
                 );
 
                 _sortingClients[photoelectric.Name] = client;
@@ -142,6 +143,9 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
                 Log.Error(ex, "向分拣光电发送启动命令失败");
             }
 
+            // 启动消费者任务
+            StartConsumer();
+
             // 启动超时检查定时器
             TimeoutCheckTimer.Start();
             Log.Debug("超时检查定时器已启动");
@@ -156,7 +160,6 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
                     Log.Debug("多光电多摆轮分拣服务主循环开始运行");
                     // 主循环
                     while (!CancellationTokenSource.Token.IsCancellationRequested)
-                    {
                         try
                         {
                             // 检查设备连接状态
@@ -186,7 +189,6 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
                             Log.Error(ex, "多光电多摆轮分拣服务主循环发生错误");
                             await Task.Delay(1000, CancellationTokenSource.Token); // 发生错误时等待一秒再继续
                         }
-                    }
                 }
                 catch (Exception ex)
                 {
@@ -199,10 +201,7 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
                 }
             }, CancellationTokenSource.Token).ContinueWith(t =>
             {
-                if (t is { IsFaulted: true, Exception: not null })
-                {
-                    Log.Warning(t.Exception, "多光电多摆轮分拣服务主循环任务发生未观察的异常");
-                }
+                if (t is { IsFaulted: true, Exception: not null }) Log.Warning(t.Exception, "多光电多摆轮分拣服务主循环任务发生未观察的异常");
             }, TaskContinuationOptions.OnlyOnFaulted);
 
             Log.Information("多光电多摆轮分拣服务启动完成");
@@ -228,7 +227,6 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
 
             // 先向所有分拣光电发送停止命令，确保在改变服务状态前发送
             foreach (var client in _sortingClients.Where(static client => client.Value.IsConnected()))
-            {
                 try
                 {
                     // 先发送停止命令
@@ -247,7 +245,6 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
                 {
                     Log.Error(ex, "向分拣光电 {Name} 发送停止命令失败", client.Key);
                 }
-            }
 
             // 停止主循环
             if (CancellationTokenSource != null)
@@ -255,6 +252,9 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
                 await CancellationTokenSource.CancelAsync();
                 Log.Debug("已发送取消信号到主循环");
             }
+
+            // 停止消费者任务
+            await StopConsumer();
 
             IsRunningFlag = false;
 
@@ -308,17 +308,14 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
 
             // 只处理高电平信号，忽略低电平和其他信号
             bool isHighLevelSignal;
-            string signalType;
-            
+
             if (message.Contains("OCCH1:1"))
             {
                 isHighLevelSignal = true;
-                signalType = "OCCH1高电平";
             }
             else if (message.Contains("OCCH2:1"))
             {
                 isHighLevelSignal = true;
-                signalType = "OCCH2高电平";
             }
             else if (message.Contains("OCCH1:0") || message.Contains("OCCH2:0"))
             {
@@ -351,31 +348,15 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
                         return; // 忽略此重复高电平信号
                     }
                 }
-                
+
                 // 更新上次信号时间（只对高电平信号更新）
                 LastSignalTimes[photoelectricName] = now;
-                
-                Log.Debug("分拣光电 {PhotoelectricName} 收到有效高电平信号: {SignalType} - {Message}", 
-                    photoelectricName, signalType, message);
 
-                var sortingTime = DateTime.Now;
-                Log.Information("分拣光电 {Name} 收到上升沿信号，开始匹配包裹", photoelectricName);
+                Log.Debug("分拣光电 {PhotoelectricName} 收到有效高电平信号，准备入队处理: {Message}",
+                    photoelectricName, message);
 
-                // 触发分拣光电信号事件
-                RaiseSortingPhotoelectricSignal(photoelectricName, sortingTime);
-
-                // 使用基类的匹配逻辑
-                var newPackage = MatchPackageForSorting(photoelectricName);
-                if (newPackage == null) return;
-
-                var matchTime = DateTime.Now;
-                var timeSinceTrigger = matchTime - newPackage.TriggerTimestamp;
-
-                Log.Information("分拣光电 {Name} 匹配到包裹 {Index}|{Barcode} (耗时: {MatchDuration:F2}ms)",
-                    photoelectricName, newPackage.Index, newPackage.Barcode, timeSinceTrigger.TotalMilliseconds);
-
-                // 直接执行分拣动作，不再包装成队列
-                _ = ExecuteSortingAction(newPackage, photoelectricName);
+                // 【生产者】将信号放入队列，由后台消费者任务处理
+                EnqueueSortingSignal(photoelectricName, now);
             }
         }
         catch (Exception ex)
@@ -403,14 +384,14 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
             if (TriggerClient != null)
             {
                 TriggerClient.Dispose();
-                            TriggerClient = new TcpClientService(
-                "触发光电",
-                _config.TriggerPhotoelectric.IpAddress,
-                _config.TriggerPhotoelectric.Port,
-                ProcessTriggerData,
-                connected => UpdateDeviceConnectionState("触发光电", connected),
-                autoReconnect: false
-            );
+                TriggerClient = new TcpClientService(
+                    "触发光电",
+                    _config.TriggerPhotoelectric.IpAddress,
+                    _config.TriggerPhotoelectric.Port,
+                    ProcessTriggerData,
+                    connected => UpdateDeviceConnectionState("触发光电", connected),
+                    false
+                );
                 TriggerClient.Connect();
             }
 
@@ -426,7 +407,7 @@ public class MultiPendulumSortService(ISettingsService settingsService, IEventAg
                     photoelectric.Port,
                     data => ProcessSortingData(data, photoelectric.Name),
                     connected => UpdateDeviceConnectionState(photoelectric.Name, connected),
-                    autoReconnect: false
+                    false
                 );
                 _sortingClients[photoelectric.Name] = newClient;
                 newClient.Connect();

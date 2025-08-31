@@ -59,11 +59,12 @@ internal class TcpConnectionHostedService(
                 return;
             }
 
-            // 连接触发光电
-            var triggerConfig =
-                new TcpConnectionConfig(_settings.TriggerPhotoelectricIp, _settings.TriggerPhotoelectricPort);
-            if (tcpConnectionService.TriggerPhotoelectricClient?.Connected != true)
-                await tcpConnectionService.ConnectTriggerPhotoelectricAsync(triggerConfig);
+            // 不再使用原本的触发光电连接逻辑，若存在旧连接则关闭
+            if (tcpConnectionService.TriggerPhotoelectricClient?.Connected == true)
+            {
+                Log.Information("关闭旧的触发光电TCP连接（仅使用 Modbus）");
+                tcpConnectionService.TriggerPhotoelectricClient.Close();
+            }
 
             // 连接TCP模块
             var tcpConfigs = _settings.Items

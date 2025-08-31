@@ -7,6 +7,9 @@ using System.Windows.Threading;
 using Common.Models.Package;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
+using Prism.Commands;
+using Prism.Dialogs;
+using Prism.Mvvm;
 using Rookie.Services;
 using Serilog;
 using SharedUI.Models;
@@ -40,7 +43,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     {
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
         _cameraService = cameraService ?? throw new ArgumentNullException(nameof(cameraService));
-        _rookieApiService = rookieApiService?? throw new ArgumentNullException(nameof(rookieApiService));
+        _rookieApiService = rookieApiService ?? throw new ArgumentNullException(nameof(rookieApiService));
         // packageTransferService is used directly in subscription setup
 
         OpenSettingsCommand = new DelegateCommand(ExecuteOpenSettings);
@@ -67,27 +70,29 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     imageData.Freeze();
                     Application.Current?.Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
                     {
-                        try { CurrentImage = imageData; }
-                        catch (Exception ex) { Log.Error(ex, "Error updating UI image."); }
+                        try
+                        {
+                            CurrentImage = imageData;
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error(ex, "Error updating UI image.");
+                        }
                     });
                 }
-                catch (Exception ex) { Log.Error(ex, "Error processing image stream."); }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Error processing image stream.");
+                }
             }, ex => Log.Error(ex, "Error in camera image stream subscription.")));
 
         if (packageTransferService != null)
-        {
             // Corrected: Use Dispatcher.BeginInvoke inside Subscribe like ZtCloudWarehous
             _subscriptions.Add(packageTransferService.PackageStream
-                .Subscribe(package =>
-                    {
-                        Application.Current?.Dispatcher.BeginInvoke(() => OnPackageInfo(package));
-                    },
+                .Subscribe(package => { Application.Current?.Dispatcher.BeginInvoke(() => OnPackageInfo(package)); },
                     ex => Log.Error(ex, "Error in package stream subscription.")));
-        }
         else
-        {
             Log.Warning("PackageTransferService not available or not injected, cannot subscribe to package stream.");
-        }
 
         Log.Information("Rookie MainWindowViewModel initialized.");
     }
@@ -132,7 +137,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private void ExecuteOpenSettings()
     {
         _dialogService.ShowDialog("SettingsDialog", new DialogParameters(), _ => { });
-
     }
 
     private void ExecuteOpenHistory()
@@ -217,7 +221,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 "Highest processing rate",
                 "Trophy24"
             ));
-
         }
         catch (Exception ex)
         {
@@ -252,7 +255,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 description: "Processing status",
                 icon: "Info24"
             ));
-
         }
         catch (Exception ex)
         {
@@ -273,7 +275,6 @@ public class MainWindowViewModel : BindableBase, IDisposable
                     cameraStatus.StatusColor = isConnected ? "#4CAF50" : "#F44336";
                     Log.Information("Camera connection status updated: {Status}", cameraStatus.Status);
                 }
-
             }
             catch (Exception ex)
             {
@@ -325,15 +326,16 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 }
                 else
                 {
-                    Log.Information("收到目的地信息: {Barcode}, Chute: {ChuteCode}, ErrorCode: {ErrorCode}, FinalBarcode: {FinalBarcode}",
-                        package.Barcode, destinationResult.ChuteCode, destinationResult.ErrorCode, destinationResult.FinalBarcode);
+                    Log.Information(
+                        "收到目的地信息: {Barcode}, Chute: {ChuteCode}, ErrorCode: {ErrorCode}, FinalBarcode: {FinalBarcode}",
+                        package.Barcode, destinationResult.ChuteCode, destinationResult.ErrorCode,
+                        destinationResult.FinalBarcode);
 
-                    if (!string.IsNullOrWhiteSpace(destinationResult.FinalBarcode) && destinationResult.FinalBarcode != package.Barcode)
-                    {
-                        Log.Information("DCS 返回不同的最终条码: {OldBarcode} -> {NewBarcode}", package.Barcode, destinationResult.FinalBarcode);
-                        // package.SetBarcode(destinationResult.FinalBarcode); // Use SetBarcode if needed
-                    }
-
+                    if (!string.IsNullOrWhiteSpace(destinationResult.FinalBarcode) &&
+                        destinationResult.FinalBarcode != package.Barcode)
+                        Log.Information("DCS 返回不同的最终条码: {OldBarcode} -> {NewBarcode}", package.Barcode,
+                            destinationResult.FinalBarcode);
+                    // package.SetBarcode(destinationResult.FinalBarcode); // Use SetBarcode if needed
                     if (destinationResult.ErrorCode == 0) // 0 = 正常
                     {
                         if (int.TryParse(destinationResult.ChuteCode, out var chuteNumber))
@@ -346,7 +348,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                         }
                         else
                         {
-                            Log.Error("无法解析目的地格口 '{ChuteCode}' 为整数: {Barcode}", destinationResult.ChuteCode, package.Barcode);
+                            Log.Error("无法解析目的地格口 '{ChuteCode}' 为整数: {Barcode}", destinationResult.ChuteCode,
+                                package.Barcode);
                             finalErrorMessage = $"无效格口: {destinationResult.ChuteCode}";
                             package.SetStatus(PackageStatus.Error, finalErrorMessage);
                             package.ErrorMessage = finalErrorMessage;
@@ -374,17 +377,15 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 package.Barcode,
                 finalChute,
                 package.Status == PackageStatus.Success, // Report based on final PackageStatus
-                package.Status == PackageStatus.Success ? null : package.ErrorMessage ?? finalErrorMessage); // Use actual error message if available
+                package.Status == PackageStatus.Success
+                    ? null
+                    : package.ErrorMessage ?? finalErrorMessage); // Use actual error message if available
 
             if (!reportSuccess)
-            {
                 Log.Error("上报分拣结果失败: {Barcode}", package.Barcode);
-                // Consider if this failure should change the package status or just be logged.
-            }
+            // Consider if this failure should change the package status or just be logged.
             else
-            {
                 Log.Information("分拣结果上报成功: {Barcode}", package.Barcode);
-            }
         }
         catch (Exception ex)
         {
@@ -396,7 +397,8 @@ public class MainWindowViewModel : BindableBase, IDisposable
                 package.ErrorMessage = finalErrorMessage;
             }
             catch
-            { /* Ignore */
+            {
+                /* Ignore */
             }
 
             // Attempt to report failure after exception
@@ -423,22 +425,14 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                 // Update statistics counters based on final package status
                 if (package.Status == PackageStatus.Success)
-                {
                     Interlocked.Increment(ref _successPackageCount);
-                }
                 else
-                {
                     Interlocked.Increment(ref _failedPackageCount);
-                }
                 UpdateStatistics();
 
                 // Add package to history list AFTER all processing and UI updates
                 PackageHistory.Insert(0, package);
-                if (PackageHistory.Count > 500)
-                {
-                    PackageHistory.RemoveAt(PackageHistory.Count - 1);
-                }
-
+                if (PackageHistory.Count > 500) PackageHistory.RemoveAt(PackageHistory.Count - 1);
             });
 
             package.ReleaseImage();
@@ -475,7 +469,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
     private void UpdatePackageInfoItems(PackageInfo package)
     {
         var weightItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Weight");
-        if (weightItem != null) { weightItem.Value = package.Weight.ToString("F2"); }
+        if (weightItem != null) weightItem.Value = package.Weight.ToString("F2");
 
         // Removed: Chute item update
         /*
@@ -484,7 +478,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
         */
 
         var timeItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Time");
-        if (timeItem != null) { timeItem.Value = package.CreateTime.ToString("HH:mm:ss"); }
+        if (timeItem != null) timeItem.Value = package.CreateTime.ToString("HH:mm:ss");
 
         var statusItem = PackageInfoItems.FirstOrDefault(i => i.Label == "Status");
         if (statusItem == null) return;
@@ -540,10 +534,7 @@ public class MainWindowViewModel : BindableBase, IDisposable
 
                 _cameraService.ConnectionChanged -= OnCameraConnectionChanged;
 
-                foreach (var subscription in _subscriptions)
-                {
-                    subscription.Dispose();
-                }
+                foreach (var subscription in _subscriptions) subscription.Dispose();
                 _subscriptions.Clear();
 
                 PackageHistory.Clear();

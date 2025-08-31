@@ -19,7 +19,7 @@
     <ItemGroup>
         <!-- Prism -->
         <PackageReference Include="Prism.Wpf"/>
-        <PackageReference Include="QRCoder" />
+        <PackageReference Include="QRCoder"/>
 
         <!-- Serilog -->
         <PackageReference Include="Serilog"/>

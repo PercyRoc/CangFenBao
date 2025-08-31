@@ -3,6 +3,8 @@ using System.IO.Ports;
 using Common.Services.Settings;
 using Common.Services.Ui;
 using DeviceService.DataSourceDevices.Weight;
+using Prism.Commands;
+using Prism.Mvvm;
 using Serilog;
 
 namespace XinBa.ViewModels.Settings;
@@ -36,26 +38,15 @@ public class WeightSettingsViewModel : BindableBase
         private set => SetProperty(ref _configuration, value);
     }
 
-    public static Array WeightTypes
-    {
-        get => Enum.GetValues(typeof(WeightType));
-    }
-    public static int[] BaudRates
-    {
-        get => [4800, 9600, 19200, 38400, 57600, 115200];
-    }
-    public static int[] DataBits
-    {
-        get => [7, 8];
-    }
-    public static Array StopBitOptions
-    {
-        get => Enum.GetValues(typeof(StopBits));
-    }
-    public static Array ParityOptions
-    {
-        get => Enum.GetValues(typeof(Parity));
-    }
+    public static Array WeightTypes => Enum.GetValues(typeof(WeightType));
+
+    public static int[] BaudRates => [4800, 9600, 19200, 38400, 57600, 115200];
+
+    public static int[] DataBits => [7, 8];
+
+    public static Array StopBitOptions => Enum.GetValues(typeof(StopBits));
+
+    public static Array ParityOptions => Enum.GetValues(typeof(Parity));
     public ObservableCollection<string> PortNames { get; } = [];
 
     public DelegateCommand RefreshPortsCommand { get; }

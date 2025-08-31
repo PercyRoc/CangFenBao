@@ -17,6 +17,7 @@ using KuaiLv.ViewModels.Settings;
 using KuaiLv.Views;
 using KuaiLv.Views.Dialogs;
 using KuaiLv.Views.Settings;
+using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 using SharedUI.ViewModels;
@@ -54,10 +55,7 @@ public partial class App
             _mutex = new Mutex(true, MutexName, out var createdNew);
             _ownsMutex = createdNew;
 
-            if (createdNew)
-            {
-                return Container.Resolve<MainWindow>();
-            }
+            if (createdNew) return Container.Resolve<MainWindow>();
 
             var canAcquire = _mutex.WaitOne(TimeSpan.Zero, false);
             if (!canAcquire)
@@ -67,6 +65,7 @@ public partial class App
                 Environment.Exit(0);
                 return null!;
             }
+
             _ownsMutex = true;
             return Container.Resolve<MainWindow>();
         }
@@ -336,7 +335,6 @@ public partial class App
                 if (_mutex != null)
                 {
                     if (_ownsMutex && _mutex.SafeWaitHandle is { IsClosed: false, IsInvalid: false })
-                    {
                         try
                         {
                             _mutex.ReleaseMutex();
@@ -345,7 +343,6 @@ public partial class App
                         {
                             // 忽略可能不拥有 mutex 的情况
                         }
-                    }
 
                     _mutex.Dispose();
                     _mutex = null;
@@ -362,10 +359,7 @@ public partial class App
 
     internal async Task ShutdownServicesAsync(IContainerProvider containerProvider)
     {
-        if (IsShuttingDown)
-        {
-            return;
-        }
+        if (IsShuttingDown) return;
 
         IsShuttingDown = true;
 

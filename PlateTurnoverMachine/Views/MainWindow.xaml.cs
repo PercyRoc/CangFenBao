@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using Common.Services.Ui;
 using Serilog;
 using MessageBox = HandyControl.Controls.MessageBox;
@@ -21,6 +22,29 @@ internal partial class MainWindow
 
         // 添加标题栏鼠标事件处理
         MouseDown += OnWindowMouseDown;
+    }
+
+    private void Window_Loaded(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            // 避免启动时直接设置 Maximized 导致 DPI/工作区计算偏差
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                try
+                {
+                    WindowState = WindowState.Maximized;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "切换窗口为最大化时发生错误");
+                }
+            }), DispatcherPriority.ApplicationIdle);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "窗口加载完成后切换最大化时出现异常");
+        }
     }
 
     private void OnWindowMouseDown(object sender, MouseButtonEventArgs e)
@@ -57,7 +81,6 @@ internal partial class MainWindow
 
         // 3. 同步释放 ViewModel (如果需要)
         if (DataContext is IDisposable viewModel)
-        {
             try
             {
                 viewModel.Dispose();
@@ -68,7 +91,6 @@ internal partial class MainWindow
                 Log.Error(vmEx, "释放ViewModel时发生错误");
                 // 仅记录错误，不阻止关闭
             }
-        }
 
         // 4. 在后台执行清理工作，不等待完成
         try

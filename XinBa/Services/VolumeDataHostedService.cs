@@ -36,14 +36,13 @@ public class VolumeDataHostedService : IHostedService
             {
                 Log.Warning("VolumeDataHostedService: 体积相机设置无效或未配置，VolumeDataService 未启动。");
             }
-
-
         }
         catch (Exception ex)
         {
             Log.Error(ex, "启动 VolumeDataHostedService 时发生错误。");
             // Decide if this error should prevent app startup
         }
+
         return Task.CompletedTask;
     }
 
@@ -60,6 +59,7 @@ public class VolumeDataHostedService : IHostedService
         {
             Log.Error(ex, "停止 VolumeDataHostedService 时发生错误。");
         }
+
         return Task.CompletedTask;
     }
 }

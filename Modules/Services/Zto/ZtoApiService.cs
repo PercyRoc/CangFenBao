@@ -68,8 +68,11 @@ public class ZtoApiService : IZtoApiService
                     Log.Information("ZTO揽收上传成功: {Message}", successResponse.Message);
                     return successResponse;
                 }
+
                 var errorResponse = JsonConvert.DeserializeObject<CollectUploadErrorResponse>(responseContent);
-                Log.Warning("ZTO揽收上传业务失败: Code={Code}, Message={Message}", errorResponse?.StatusCode ?? successResponse?.Code, errorResponse?.Message ?? successResponse?.Message);
+                Log.Warning("ZTO揽收上传业务失败: Code={Code}, Message={Message}",
+                    errorResponse?.StatusCode ?? successResponse?.Code,
+                    errorResponse?.Message ?? successResponse?.Message);
                 return new CollectUploadResponse
                 {
                     Status = false,
@@ -77,7 +80,9 @@ public class ZtoApiService : IZtoApiService
                     Message = errorResponse?.Message ?? successResponse?.Message
                 };
             }
-            Log.Error("ZTO揽收上传HTTP错误: Status Code={StatusCode}, Content={Content}", response.StatusCode, responseContent);
+
+            Log.Error("ZTO揽收上传HTTP错误: Status Code={StatusCode}, Content={Content}", response.StatusCode,
+                responseContent);
             return new CollectUploadResponse
             {
                 Status = false,

@@ -5,6 +5,7 @@ using Common.Models.Settings.Sort.PendulumSort;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.Extensions;
 using Microsoft.Extensions.Hosting;
+using Prism.Ioc;
 using Serilog;
 using SharedUI.Extensions;
 using SharedUI.ViewModels.Settings;
@@ -101,6 +102,7 @@ public partial class App
                 Environment.Exit(0); // 直接退出进程
                 return null!;
             }
+
             // 可以获取Mutex，说明前一个实例可能异常退出但Mutex已被释放或从未正确获取
             Log.Warning("成功获取已存在的Mutex，可能是上一个实例异常退出");
             _ownsMutex = true; // 明确拥有权
@@ -122,7 +124,8 @@ public partial class App
         containerRegistry.RegisterForNavigation<MainWindow, MainWindowViewModel>();
         containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>();
         // 新增对话框注册
-        containerRegistry.RegisterDialog<AsnOrderConfirmDialog, AsnOrderConfirmDialogViewModel>("AsnOrderConfirmDialog");
+        containerRegistry
+            .RegisterDialog<AsnOrderConfirmDialog, AsnOrderConfirmDialogViewModel>("AsnOrderConfirmDialog");
 
         // 注册公共服务
         containerRegistry.AddCommonServices();

@@ -45,10 +45,7 @@ public partial class App
             _mutex = new Mutex(true, MutexName, out var createdNew);
             _ownsMutex = createdNew;
 
-            if (createdNew)
-            {
-                return Container.Resolve<MainWindow>();
-            }
+            if (createdNew) return Container.Resolve<MainWindow>();
 
             // 尝试获取已存在的Mutex，如果无法获取，说明有一个正在运行的实例
             var canAcquire = _mutex.WaitOne(TimeSpan.Zero, false);
@@ -59,6 +56,7 @@ public partial class App
                 Environment.Exit(0); // 直接退出进程
                 return null!; // 虽然不会执行到这里，但需要满足返回类型
             }
+
             // 可以获取Mutex，说明前一个实例可能异常退出但Mutex已被释放
             _ownsMutex = true;
             return Container.Resolve<MainWindow>();
@@ -117,27 +115,20 @@ public partial class App
         // 注册格口包裹记录服务
         containerRegistry.RegisterSingleton<ChutePackageRecordService>();
 
-        // 注册申通自动揽收服务
-        // containerRegistry.RegisterSingleton<IStoAutoReceiveService, StoAutoReceiveService>();
-
-        // 注册韵达上传重量服务
-        // containerRegistry.RegisterSingleton<IYundaUploadWeightService, YundaUploadWeightService>();
-
-        // 注册中通API服务
-        // containerRegistry.RegisterSingleton<IZtoApiService, ZtoApiService>();
-
-        // 注册极兔API服务
-        // containerRegistry.RegisterSingleton<IJituService, JituService>();
+        // 注册快递 API 服务（中通、申通、韵达、极兔）
+        containerRegistry.RegisterSingleton<Services.Zto.IZtoApiService, Services.Zto.ZtoApiService>();
+        containerRegistry.RegisterSingleton<Services.Sto.IStoAutoReceiveService, Services.Sto.StoAutoReceiveService>();
+        containerRegistry.RegisterSingleton<Services.Yunda.IYundaUploadWeightService, Services.Yunda.YundaUploadWeightService>();
+        containerRegistry.RegisterSingleton<Services.Jitu.IJituService, Services.Jitu.JituService>();
 
         containerRegistry.RegisterForNavigation<ModuleConfigView, ModuleConfigViewModel>();
-        containerRegistry.RegisterForNavigation<TcpSettingsView, TcpSettingsViewModel>();
-        // containerRegistry.RegisterForNavigation<BarcodeChuteSettingsView, BarcodeChuteSettingsViewModel>();
-        // containerRegistry.RegisterForNavigation<StoApiSettingsView, StoApiSettingsViewModel>();
-        // containerRegistry.RegisterForNavigation<YundaApiSettingsView, YundaApiSettingsViewModel>();
-        // containerRegistry.RegisterForNavigation<ZtoApiSettingsView, ZtoApiSettingsViewModel>();
-
-        // 注册极兔设置界面
-        // containerRegistry.RegisterForNavigation<JituSettingsView, JituSettingsViewModel>();
+        // 注册 BarcodeChuteSettings 来自 SharedUI
+        containerRegistry.RegisterForNavigation<SharedUI.Views.Settings.BarcodeChuteSettingsView, SharedUI.ViewModels.Settings.BarcodeChuteSettingsViewModel>();
+        // 注册快递 API 设置页面导航
+        containerRegistry.RegisterForNavigation<Views.Zto.Settings.ZtoApiSettingsView, ViewModels.Zto.Settings.ZtoApiSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<Views.Sto.Settings.StoApiSettingsView, ViewModels.Sto.Settings.StoApiSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<Views.Yunda.Settings.YundaApiSettingsView, ViewModels.Yunda.Settings.YundaApiSettingsViewModel>();
+        containerRegistry.RegisterForNavigation<Views.Jitu.Settings.JituSettingsView, ViewModels.Jitu.Settings.JituSettingsViewModel>();
 
         // 注册设置窗口
         containerRegistry.RegisterDialog<SettingsDialog, SettingsDialogViewModel>("SettingsDialog");
@@ -188,9 +179,7 @@ public partial class App
             //     Log.Information("锁格托管服务启动成功");
             // });
 
-            // 初始化锁格服务
-            _ = Container.Resolve<LockingService>();
-            Log.Information("锁格服务初始化成功");
+            // 不再初始化锁格服务
         }
         catch (Exception ex)
         {

@@ -10,6 +10,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="JetBrains.Annotations"/>
         <PackageReference Include="Microsoft.Extensions.Hosting"/>
         <PackageReference Include="Prism.Wpf"/>
         <PackageReference Include="Prism.Unity"/>

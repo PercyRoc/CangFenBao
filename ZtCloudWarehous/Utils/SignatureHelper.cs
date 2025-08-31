@@ -35,9 +35,7 @@ internal static class SignatureHelper
             // 2. 拼接公共参数（参数名+参数值）
             var stringBuilder = new StringBuilder();
             foreach (var param in sortedParams.Where(static param => !string.IsNullOrEmpty(param.Value)))
-            {
                 stringBuilder.Append(param.Key).Append(param.Value);
-            }
 
             // 3. 添加业务参数JSON字符串
             var businessJson = JsonSerializer.Serialize(businessParams, JsonOptions);

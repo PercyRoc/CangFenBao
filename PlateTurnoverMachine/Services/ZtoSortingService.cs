@@ -144,7 +144,8 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
     /// <param name="trayCode">小车编号</param>
     /// <param name="weight">重量</param>
     /// <returns>分拣信息</returns>
-    public async Task<SortingInfoResponse?> GetSortingInfoAsync(string billCode, string pipeline, int turnNumber, string trayCode = "", float? weight = null)
+    public async Task<SortingInfoResponse?> GetSortingInfoAsync(string billCode, string pipeline, int turnNumber,
+        string trayCode = "", float? weight = null)
     {
         try
         {
@@ -181,7 +182,8 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
     /// <param name="turnNumber">扫描次数</param>
     /// <param name="trayCode">小车编号</param>
     /// <returns>分拣结果响应</returns>
-    public async Task<SortingResultResponse> ReportSortingResultAsync(PackageInfo package, string pipeline, int turnNumber, string trayCode = "")
+    public async Task<SortingResultResponse> ReportSortingResultAsync(PackageInfo package, string pipeline,
+        int turnNumber, string trayCode = "")
     {
         try
         {
@@ -192,7 +194,9 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
                 TurnNumber = turnNumber,
                 SortTime = DateTimeOffset.Now.ToUnixTimeMilliseconds(),
                 TrayCode = trayCode,
-                SortPortCode = !string.IsNullOrEmpty(package.SortPortCode) ? package.SortPortCode : package.ChuteNumber.ToString("D3"), // 优先使用完整格口代码，否则使用格式化数字
+                SortPortCode = !string.IsNullOrEmpty(package.SortPortCode)
+                    ? package.SortPortCode
+                    : package.ChuteNumber.ToString("D3"), // 优先使用完整格口代码，否则使用格式化数字
                 SortSource = package.Status == PackageStatus.Error ? "3" : "0" // 如果是异常状态，设置为异常件
             };
 
@@ -259,7 +263,8 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
             var content = new FormUrlEncodedContent(parameters);
 
             // 使用@符号标记原始字符串，避免Serilog错误解析大括号
-            Log.Debug("发送中通请求 -> URL: {ApiUrl}, MsgType: {MsgType}, Body: {@RequestBody}", apiUrl, msgType, content.ReadAsStringAsync().Result);
+            Log.Debug("发送中通请求 -> URL: {ApiUrl}, MsgType: {MsgType}, Body: {@RequestBody}", apiUrl, msgType,
+                content.ReadAsStringAsync().Result);
 
             var response = await _httpClient.PostAsync(apiUrl, content);
             response.EnsureSuccessStatusCode();
@@ -288,10 +293,7 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
         var hash = MD5.HashData(bytes);
         var sb = new StringBuilder();
 
-        foreach (var h in hash)
-        {
-            sb.Append(h.ToString("x2"));
-        }
+        foreach (var h in hash) sb.Append(h.ToString("x2"));
 
         return sb.ToString();
     }
@@ -304,10 +306,7 @@ public class ZtoSortingService : IZtoSortingService, IDisposable
     {
         if (_disposed) return;
 
-        if (disposing)
-        {
-            _httpClient.Dispose();
-        }
+        if (disposing) _httpClient.Dispose();
 
         _disposed = true;
     }

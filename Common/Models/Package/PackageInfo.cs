@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Windows.Media.Imaging;
 
 namespace Common.Models.Package;
@@ -20,8 +21,7 @@ public enum PackageSortState
     /// <summary>
     ///     分拣超时（已废弃，现在使用Error状态）
     /// </summary>
-    [Obsolete("已废弃，现在使用Error状态处理超时包裹")]
-    TimedOut,
+    [Obsolete("已废弃，现在使用Error状态处理超时包裹")] TimedOut,
 
     /// <summary>
     ///     分拣错误（包裹超时错过分拣点，已从处理队列移除）
@@ -80,6 +80,7 @@ public class PackageInfo : IDisposable
             PackageStatus.UploadFailed, "Upload Failed"
         }
     };
+
     private bool _disposed;
 
     /// <summary>
@@ -114,20 +115,15 @@ public class PackageInfo : IDisposable
     /// <summary>
     ///     重量显示
     /// </summary>
-    public string WeightDisplay
-    {
-        get => $"{Weight:F2}kg";
-    }
+    public string WeightDisplay => $"{Weight:F2}kg";
 
     /// <summary>
     ///     体积显示（毫米）
     /// </summary>
-    public string VolumeDisplay
-    {
-        get => Length.HasValue && Width.HasValue && Height.HasValue
+    public string VolumeDisplay =>
+        Length.HasValue && Width.HasValue && Height.HasValue
             ? $"{Length:F0}×{Width:F0}×{Height:F0}cm"
             : string.Empty;
-    }
 
     /// <summary>
     ///     格口号
@@ -366,11 +362,9 @@ public class PackageInfo : IDisposable
         Status = status;
         StatusDisplay = !string.IsNullOrEmpty(statusDisplay)
             ? statusDisplay
-            : DefaultStatusDisplays.GetValueOrDefault(status, status.ToString()); // Use default or enum name as fallback
-        if (status == PackageStatus.Error && string.IsNullOrEmpty(ErrorMessage))
-        {
-            ErrorMessage = StatusDisplay;
-        }
+            : DefaultStatusDisplays.GetValueOrDefault(status,
+                status.ToString()); // Use default or enum name as fallback
+        if (status == PackageStatus.Error && string.IsNullOrEmpty(ErrorMessage)) ErrorMessage = StatusDisplay;
     }
 
     /// <summary>
@@ -380,6 +374,19 @@ public class PackageInfo : IDisposable
     /// <param name="imagePath">图像文件路径</param>
     public void SetImage(BitmapSource? image, string? imagePath)
     {
+        // 如果可能，将 BitmapSource Freeze 以便在非 UI 线程上安全访问/保存
+        if (image != null && image is Freezable freezable && freezable.CanFreeze && !freezable.IsFrozen)
+        {
+            try
+            {
+                freezable.Freeze();
+            }
+            catch
+            {
+                // Freeze 失败不是致命的——在这种情况下，调用方应确保在 UI 线程上访问图像
+            }
+        }
+
         Image = image;
         ImagePath = imagePath;
     }
@@ -409,7 +416,8 @@ public class PackageInfo : IDisposable
     /// <param name="palletLength">托盘长度(cm)</param>
     /// <param name="palletWidth">托盘宽度(cm)</param>
     /// <param name="palletHeight">托盘高度(cm)</param>
-    public void SetPallet(string? palletName, double palletWeight, double palletLength = 0, double palletWidth = 0, double palletHeight = 0)
+    public void SetPallet(string? palletName, double palletWeight, double palletLength = 0, double palletWidth = 0,
+        double palletHeight = 0)
     {
         PalletName = palletName;
         PalletWeight = palletWeight;
@@ -419,12 +427,27 @@ public class PackageInfo : IDisposable
     }
 
     /// <summary>
-    ///     设置分拣状态
+    ///     设置分拣状态，并同步更新主状态和显示文本
     /// </summary>
     /// <param name="sortState">分拣状态</param>
-    public void SetSortState(PackageSortState sortState)
+    /// <param name="message">可选的关联消息（如错误信息）</param>
+    public void SetSortState(PackageSortState sortState, string? message = null)
     {
         SortState = sortState;
+
+        // 根据分拣状态，同步更新顶层状态和显示文本
+        switch (sortState)
+        {
+            case PackageSortState.Sorted:
+                // 只有当API处理也成功时，才最终标记为分拣成功
+                if (Status == PackageStatus.Success) StatusDisplay = message ?? "分拣成功";
+                break;
+            case PackageSortState.Error:
+                Status = PackageStatus.Error;
+                StatusDisplay = message ?? "分拣失败";
+                ErrorMessage = message;
+                break;
+        }
     }
 
     /// <summary>

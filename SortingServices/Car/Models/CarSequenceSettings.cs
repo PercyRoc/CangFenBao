@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Common.Services.Settings;
+using Prism.Mvvm;
 
 namespace SortingServices.Car.Models;
 
@@ -97,31 +98,22 @@ public class CarSequenceSettings : BindableBase
     {
         // 保留已有的格口配置
         var existingChutes = new Dictionary<int, ChuteCarSequence>();
-        foreach (var sequence in ChuteSequences)
-        {
-            existingChutes[sequence.ChuteNumber] = sequence;
-        }
+        foreach (var sequence in ChuteSequences) existingChutes[sequence.ChuteNumber] = sequence;
 
         // 重新创建格口集合
         ChuteSequences.Clear();
 
         // 添加格口配置
         for (var i = 1; i <= chuteCount; i++)
-        {
             if (existingChutes.TryGetValue(i, out var existingSequence))
-            {
                 // 使用已有配置
                 ChuteSequences.Add(existingSequence);
-            }
             else
-            {
                 // 创建新配置
                 ChuteSequences.Add(new ChuteCarSequence
                 {
                     ChuteNumber = i,
                     CarSequence = []
                 });
-            }
-        }
     }
 }

@@ -9,6 +9,9 @@ using Common.Services.Ui;
 using Microsoft.Win32;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
+using Prism.Commands;
+using Prism.Dialogs;
+using Prism.Mvvm;
 using Serilog;
 using WPFLocalizeExtension.Engine;
 using HorizontalAlignment = NPOI.SS.UserModel.HorizontalAlignment;
@@ -167,7 +170,8 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
 
     private static string GetLocString(string key, string? fallback = null)
     {
-        var value = LocalizeDictionary.Instance.DefaultProvider?.GetLocalizedObject(key, null, LocalizeDictionary.Instance.Culture) as string;
+        var value = LocalizeDictionary.Instance.DefaultProvider?.GetLocalizedObject(key, null,
+            LocalizeDictionary.Instance.Culture) as string;
         return value ?? fallback ?? key;
     }
 
@@ -254,7 +258,8 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
         {
             Filter = GetLocString("HistoryDialog_ExportFilter", "Excel Files|*.xlsx"),
             Title = GetLocString("HistoryDialog_ExportTitle", "Export Package Records"),
-            FileName = $"{GetLocString("HistoryDialog_ExportFileNamePrefix", "PackageRecords")}_{DateTime.Now:yyyyMMddHHmmss}.xlsx"
+            FileName =
+                $"{GetLocString("HistoryDialog_ExportFileNamePrefix", "PackageRecords")}_{DateTime.Now:yyyyMMddHHmmss}.xlsx"
         };
 
         if (dialog.ShowDialog() != true) return;
@@ -289,8 +294,18 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
 
                 var headers = new[]
                 {
-                    GetLocString("HistoryDialog_Header_Id", "ID"), GetLocString("HistoryDialog_Header_Barcode", "Barcode"), GetLocString("HistoryDialog_Header_Chute", "Chute"), GetLocString("HistoryDialog_Header_SortPortCode", "Sort Port Code"), GetLocString("HistoryDialog_Header_Weight", "Weight(kg)"), GetLocString("HistoryDialog_Header_Length", "Length(cm)"), GetLocString("HistoryDialog_Header_Width", "Width(cm)"),
-                    GetLocString("HistoryDialog_Header_Height", "Height(cm)"), GetLocString("HistoryDialog_Header_Volume", "Volume(cm³)"), GetLocString("HistoryDialog_Header_Status", "Status"), GetLocString("HistoryDialog_Header_Remarks", "Remarks"), GetLocString("HistoryDialog_Header_CreateTime", "Create Time")
+                    GetLocString("HistoryDialog_Header_Id", "ID"),
+                    GetLocString("HistoryDialog_Header_Barcode", "Barcode"),
+                    GetLocString("HistoryDialog_Header_Chute", "Chute"),
+                    GetLocString("HistoryDialog_Header_SortPortCode", "Sort Port Code"),
+                    GetLocString("HistoryDialog_Header_Weight", "Weight(kg)"),
+                    GetLocString("HistoryDialog_Header_Length", "Length(cm)"),
+                    GetLocString("HistoryDialog_Header_Width", "Width(cm)"),
+                    GetLocString("HistoryDialog_Header_Height", "Height(cm)"),
+                    GetLocString("HistoryDialog_Header_Volume", "Volume(cm³)"),
+                    GetLocString("HistoryDialog_Header_Status", "Status"),
+                    GetLocString("HistoryDialog_Header_Remarks", "Remarks"),
+                    GetLocString("HistoryDialog_Header_CreateTime", "Create Time")
                 };
 
                 var headerRow = worksheet.CreateRow(0);
@@ -335,17 +350,17 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
                     dateCell.CellStyle = dateStyle;
                 }
 
-                for (var i = 0; i < headers.Length; i++)
-                {
-                    worksheet.AutoSizeColumn(i);
-                }
+                for (var i = 0; i < headers.Length; i++) worksheet.AutoSizeColumn(i);
 
                 using var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write);
                 workbook.Write(fs);
             });
 
-            var successMsgFormat = GetLocString("HistoryDialog_ExportSuccessFormat", "{0} records exported successfully to {1}");
-            _notificationService.ShowSuccessWithToken(string.Format(successMsgFormat, PackageRecords.Count, Path.GetFileName(filePath)), "HistoryWindowGrowl");
+            var successMsgFormat = GetLocString("HistoryDialog_ExportSuccessFormat",
+                "{0} records exported successfully to {1}");
+            _notificationService.ShowSuccessWithToken(
+                string.Format(successMsgFormat, PackageRecords.Count, Path.GetFileName(filePath)),
+                "HistoryWindowGrowl");
         }
         catch (Exception ex)
         {
@@ -393,14 +408,16 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
             {
                 Log.Error("Image file not found at path: {ImagePath}", imagePath);
                 var notFoundMsgFormat = GetLocString("HistoryDialog_ImageNotFoundFormat", "Image file not found: {0}");
-                _notificationService.ShowErrorWithToken(string.Format(notFoundMsgFormat, imagePath), "HistoryWindowGrowl");
+                _notificationService.ShowErrorWithToken(string.Format(notFoundMsgFormat, imagePath),
+                    "HistoryWindowGrowl");
             }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to open image file: {ImagePath}", imagePath);
             var openFailedMsgFormat = GetLocString("HistoryDialog_ImageOpenFailedFormat", "Could not open image: {0}");
-            _notificationService.ShowErrorWithToken(string.Format(openFailedMsgFormat, ex.Message), "HistoryWindowGrowl");
+            _notificationService.ShowErrorWithToken(string.Format(openFailedMsgFormat, ex.Message),
+                "HistoryWindowGrowl");
         }
     }
 
@@ -431,10 +448,7 @@ public class HistoryDialogViewModel : BindableBase, IDialogAware
     /// </summary>
     private PackageStatus? GetStatusEnumValueFromSelection(string selectedStatus, string allOptionLocalized)
     {
-        if (selectedStatus == allOptionLocalized)
-        {
-            return null; // 表示查询所有状态
-        }
+        if (selectedStatus == allOptionLocalized) return null; // 表示查询所有状态
 
         // 遍历所有PackageStatus枚举值，找到匹配的本地化显示名称
         var matchingStatus = Enum.GetValues<PackageStatus>()

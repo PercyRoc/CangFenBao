@@ -1,4 +1,6 @@
-﻿namespace SharedUI.Models;
+﻿using Prism.Mvvm;
+
+namespace SharedUI.Models;
 
 /// <summary>
 ///     设备状态模型

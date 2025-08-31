@@ -98,15 +98,7 @@
             </DataGrid>
         </Border>
 
-        <!-- 重传数据按钮 -->
-        <StackPanel Grid.Row="3" HorizontalAlignment="Center" Margin="0,20,0,0">
-            <ui:Button Command="{Binding RetryFailedDataCommand}"
-                       Appearance="Primary"
-                       Icon="ArrowSyncCircle24"
-                       Content="重传失败数据"
-                       Padding="16,8"
-                       ToolTip="手动重传所有未成功的包裹数据" />
-        </StackPanel>
+        <!-- 重传数据功能已移除 -->
 
         <!-- 底部按钮 -->
         <StackPanel Grid.Row="4"

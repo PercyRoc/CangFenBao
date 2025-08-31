@@ -7,10 +7,7 @@ public class BooleanToEnvironmentConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (value is bool isProduction)
-        {
-            return isProduction ? "当前环境：正式环境" : "当前环境：测试环境";
-        }
+        if (value is bool isProduction) return isProduction ? "当前环境：正式环境" : "当前环境：测试环境";
         return string.Empty;
     }
 
