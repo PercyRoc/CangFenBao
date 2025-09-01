@@ -14,6 +14,7 @@ public class SerialPortWeightService(ISettingsService settingsService) : IDispos
     private const int MaxQueueSize = 50; // 重量队列最大长度
     private readonly List<byte> _receiveBuffer = [];
     private readonly Queue<(double Weight, DateTime Timestamp)> _weightQueue = new();
+    private readonly object _serialReadLock = new();
 
     private System.IO.Ports.SerialPort? _serialPort;
     private bool _disposed;
@@ -150,12 +151,26 @@ public class SerialPortWeightService(ISettingsService settingsService) : IDispos
                 return;
             }
 
-            // 读取所有可用数据
-            var bytesToRead = _serialPort.BytesToRead;
-            if (bytesToRead <= 0) return;
+            // 读取所有可用数据（加锁避免重入竞态；对超时进行局部吞并）
+            int bytesRead;
+            byte[] data;
+            lock (_serialReadLock)
+            {
+                var bytesToRead = _serialPort.BytesToRead;
+                if (bytesToRead <= 0) return;
 
-            var data = new byte[bytesToRead];
-            var bytesRead = _serialPort.Read(data, 0, data.Length);
+                data = new byte[bytesToRead];
+                try
+                {
+                    bytesRead = _serialPort.Read(data, 0, data.Length);
+                }
+                catch (TimeoutException tex)
+                {
+                    // 个别设备在 DataReceived 事件早到时会出现短暂超时，这里当作可恢复情况处理
+                    Log.Debug(tex, "WeightScale 串口读取超时，忽略本次事件");
+                    return;
+                }
+            }
 
             if (bytesRead <= 0) return;
 
@@ -219,7 +234,8 @@ public class SerialPortWeightService(ISettingsService settingsService) : IDispos
         {
             try
             {
-                Log.Fatal(ex, "HandleDataReceived 最终兜底捕获到异常");
+                // 降级为 Error，避免把可恢复异常当致命错误
+                Log.Error(ex, "HandleDataReceived 最终兜底捕获到异常");
             }
             catch
             {
@@ -450,6 +466,14 @@ public class SerialPortWeightService(ISettingsService settingsService) : IDispos
     /// <returns>最新的重量值（克），如果无有效数据则返回null</returns>
     public double? GetLatestWeight()
     {
+        // 检查重量融合是否启用
+        var weightSettings = settingsService.LoadSettings<WeightSettings>();
+        if (!weightSettings.EnableWeightFusion)
+        {
+            Log.Debug("重量融合已禁用，无法获取重量数据");
+            return null;
+        }
+
         if (_weightQueue.Count <= 0) return null;
         var latestWeight = _weightQueue.Last();
         // 检查重量是否有效（大于0且在合理范围内）

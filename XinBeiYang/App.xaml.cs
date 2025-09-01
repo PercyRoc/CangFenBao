@@ -6,6 +6,7 @@ using Common.Extensions;
 using DeviceService.DataSourceDevices.Camera;
 using DeviceService.DataSourceDevices.Services;
 using DeviceService.DataSourceDevices.Weight;
+using Common.Services.Settings;
 using DeviceService.Extensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -175,26 +176,37 @@ public partial class App
     {
         try
         {
-            // 1. 在UI线程中同步启动重量称服务，确保线程模型正确
+            // 1. 根据配置文件决定是否启动重量称服务
             var weightService = Container.Resolve<SerialPortWeightService>();
             try
             {
-                // 直接在当前线程（UI线程）启动重量称服务
-                Log.Information("正在UI线程中启动重量称服务...");
-                var weightStartResult = weightService.Start();
+                // 检查配置文件中的EnableWeightFusion设置
+                var weightSettings = Container.Resolve<ISettingsService>().LoadSettings<WeightSettings>();
 
-                if (weightStartResult)
+                if (weightSettings.EnableWeightFusion)
                 {
-                    Log.Information("重量称服务启动成功 (在UI线程中)");
+                    // 启用重量融合，启动重量称服务
+                    Log.Information("配置文件启用重量融合，正在UI线程中启动重量称服务...");
+                    var weightStartResult = weightService.Start();
+
+                    if (weightStartResult)
+                    {
+                        Log.Information("重量称服务启动成功 (在UI线程中)");
+                    }
+                    else
+                    {
+                        Log.Warning("重量称服务启动失败，返回false");
+                    }
                 }
                 else
                 {
-                    Log.Warning("重量称服务启动失败，返回false");
+                    // 禁用重量融合，跳过重量称服务启动
+                    Log.Information("配置文件禁用重量融合，跳过重量称服务启动");
                 }
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "在UI线程中启动重量称服务时发生错误");
+                Log.Error(ex, "处理重量称服务启动时发生错误");
                 // 重量称服务失败不应该阻止其他服务启动
             }
 
